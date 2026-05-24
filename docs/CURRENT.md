@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-24（Phase 2.6 lineage 闭环 + v7.10 P0/P1 优化落地复盘后）
+**最后更新**：2026-05-24（Phase 3 kickoff spec 固化后）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -8,7 +8,7 @@
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 2 + Phase 2.5 + Phase 2.6 全部完成。Phase 3 待启动
-- **当前目标**：开始 Phase 3 minimal analyzer + state 接口；把 EGS Tier1→Tier2 降级（OVERHEAT/追高）升级成 analyzer 层 deterministic veto
+- **当前目标**：等待指示后开始 Phase 3 minimal analyzer + state 接口；把 EGS Tier1→Tier2 降级升级成 analyzer 层 deterministic veto，并用回测量化边际贡献
 - **下一阶段大目标（Phase 3）**：建 analyzer veto 模块 + state 接口；不再追求"挑出更好的票"，转向"过滤更多坏票"
 
 ---
@@ -94,6 +94,7 @@
 - `docs/handoff/2026-05-24_phase2_6_datahub_guardrail_handoff.md` — Phase 2.6 边界
 - `docs/handoff/2026-05-24_phase2_tier1_count_warning_handoff.md` — schema 1.9.0 date_warnings
 - `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — schema 1.10.0 data_lineage 对象（Phase 2.6 lineage 闭环）
+- `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格：minimal veto analyzer + JSON state + replay/ablation 完成线
 
 ### 报告产出
 - `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.10.0, primary_subset=tier1_only
@@ -105,24 +106,25 @@
 
 ### P0 — Phase 3 主轴
 
-1. **Phase 3 minimal analyzer + state 接口** — `engine/analyzer/rule6_hard_veto.py` 起骨架；把 EGS 当前的 Tier1→Tier2 降级（OVERHEAT/追高/未知行业/ESP 非正）升级成 deterministic veto，让 backtest filler 也无法捡到这些票。state 接口同步初始化（即使返回空 dict 也算 Phase 3 minimal）
-2. **Rule 6 deterministic 字段补齐** — 当前多数 pending_data/pending_llm，让 analyzer veto 框架真正起作用
+1. **Phase 3 minimal analyzer + state 接口** — 详见 `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md`。`engine/analyzer/rule6_hard_veto.py` 必须真实返回 veto decision；state 接口可先返回空 dict / False。
+2. **第一批 hard veto** — `chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive` 四条都 hard veto，且各自独立 reason code + version；missing 不等于 negative，缺字段不自动 veto。
+3. **回测 replay 完成线** — `backtest_rank.py` 新增 `tier1_veto_passed` subset，保留 `all` / `tier1_only` baseline；schema 升 1.11.0，date_warnings 加 `low_tier1_veto_passed_count`；支持 `--veto-rules` 做 ablation。
 
 ### P1 — 短期跟进
 
-3. **撤回"Top 5 主分析"对外说法** — 改成"Top15 为观察池；Top5 用于 Phase 3 人工/analyzer 深度分析，不作实盘加仓信号"（文档面已完成；实盘说法对外口径同步）
-4. **LOCK 标记进入 analyzer veto 辅助 flag** — N=4 太小，先不硬过滤；扩样本到 N≥15 再决策
+4. **撤回"Top 5 主分析"对外说法** — 改成"Top15 为观察池；Top5 用于 Phase 3 人工/analyzer 深度分析，不作实盘加仓信号"（文档面已完成；实盘说法对外口径同步）
+5. **LOCK 标记进入 analyzer veto 辅助 flag** — N=4 太小，先不硬过滤；扩样本到 N≥15 再决策
 
 ### P2 — 待扩样本 / 中期
 
-5. **L3 snapshot 累积满 6 月后跑 pit 对照**（约 2026-12）— 测 L3 因子在 PIT 下边际贡献
-6. **扩 36 期+** — 覆盖 2023 段不同 regime；当前 2024+2025 偏强势
-7. **5-10 日持有周期作为 execution 回测 horizon target** — 24p 数据显示 5d 是唯一显著甜区
+6. **L3 snapshot 累积满 6 月后跑 pit 对照**（约 2026-12）— 测 L3 因子在 PIT 下边际贡献
+7. **扩 36 期+** — 覆盖 2023 段不同 regime；当前 2024+2025 偏强势
+8. **5-10 日持有周期作为 execution 回测 horizon target** — 24p 数据显示 5d 是唯一显著甜区
 
 ### P3 — 长期 / Phase 7
 
-8. **重新校准排序权重** — 等 36 期 + L3 PIT 数据齐备后再做，否则易过拟 24p
-9. **Phase 7 DataHub 实施** — ODS/DWD/DWS/factor 四层 + `engine/data/` + `engine/factors/`，详见 `docs/datahub_design.md`
+9. **重新校准排序权重** — 等 36 期 + L3 PIT 数据齐备后再做，否则易过拟 24p
+10. **Phase 7 DataHub 实施** — ODS/DWD/DWS/factor 四层 + `engine/data/` + `engine/factors/`，详见 `docs/datahub_design.md`
 
 ---
 

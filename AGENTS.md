@@ -134,7 +134,7 @@ Stock/
 
 ## 交接记录
 
-任何 AI 助手，包括 ChatGPT、Codex 或其他 LLM，继续 Phase 2、A 股短线筛选、rank 回测、`A-EGS/egs_main.py`、`runners/backtest_rank.py`、`analysis_input.json` 或 findings 相关工作前，**按时间顺序读取以下 handoff**：
+任何 AI 助手，包括 ChatGPT、Codex 或其他 LLM，继续 Phase 2 / Phase 3、A 股短线筛选、rank 回测、analyzer、state、`A-EGS/egs_main.py`、`runners/backtest_rank.py`、`analysis_input.json` 或 findings 相关工作前，**按时间顺序读取以下 handoff**：
 
 1. `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — EGS v7.8/v7.9 的脚本修改、正式周五实盘重跑、24 期 production 回测验收、当前有效 findings、下一步策略优化优先级
 2. `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Tier1-only 主口径切片实施、stats CSV 加 `subset` 列、schema 升 1.6.0、settings.primary_subset 字段
@@ -144,6 +144,7 @@ Stock/
 6. `docs/handoff/2026-05-24_phase2_24p_v710_results_handoff.md` — v7.10 24 期 production 实跑结果、schema 校验、核心 findings 和结论边界
 7. `docs/handoff/2026-05-24_phase2_tier1_count_warning_handoff.md` — rank backtest schema 1.9.0，report 增加日期级 Tier1-count 告警
 8. `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — rank backtest schema 1.10.0，新增 `data_lineage` 对象，Phase 2.6 lineage 闭环
+9. `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格：minimal veto analyzer + JSON state + replay/ablation 完成线
 
 完成一轮重要修改后，收尾时必须同步更新 handoff。**默认追加到同 phase 主 handoff，不要轻易新建文件**（2026-05-24 当天 8 个 handoff 是历史教训：碎片化让接手者读到第 5 个就开始跳读）。
 
@@ -188,6 +189,17 @@ Stock/
 
 **Phase 完成判定**：每个 Phase 必须有明确完成判定。Phase 1a 完成 = `schemas/analysis_input.schema.json` 通过 JSON Schema 校验且对 v14.2 M0-M6 字段覆盖率 ≥ 90%。
 
+## Phase 3 开工边界
+
+- Phase 3 = minimal veto analyzer + JSON state 接口 + rank 回测 replay；不是完整 analyzer，也不是 Phase 7 DataHub 重构。
+- 新 analyzer 直接放 `engine/analyzer/`，不要放进 `A-EGS/`；不得反向 import `A-EGS/egs_main.py`。
+- `rule6_hard_veto.py` 必须真实返回 veto decision；state manager 初版可以返回空 dict / False。
+- 第一批 hard veto：`chasing_high`、`overheat`、`l2_unknown`、`esp_non_positive`。四条都 hard veto，且各自独立 reason code + version。
+- missing 不等于 negative：字段缺失、空值、不可解析不自动触发 hard veto，除非 EGS 当前逻辑已明确把该缺失当作降级原因。
+- `LOCK` 暂不 hard veto，只做辅助 flag；扩样本到 N≥15 后再决策。
+- 回测必须新增 `tier1_veto_passed` subset，保留 `all` / `tier1_only` baseline；schema 预期升到 `1.11.0`，并加入 `low_tier1_veto_passed_count` date warning。
+- Phase 3 详细完成线见 `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md`。
+
 ## Phase 2 特别待办
 
 - rank 回测必须单独统计 Rule 6 各否决项的历史预测力。
@@ -217,6 +229,7 @@ Stock/
 - `docs/handoff/2026-05-24_phase2_24p_v710_results_handoff.md` — Phase 2 v7.10 24 期 production 实跑交接记录
 - `docs/handoff/2026-05-24_phase2_tier1_count_warning_handoff.md` — Phase 2 Tier1-count 日期告警交接记录
 - `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — Phase 2 data_lineage 交接记录（schema 1.10.0，Phase 2.6 闭环）
+- `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格交接记录（minimal veto analyzer + JSON state + replay/ablation）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_codex_24p_v7.10.md` — 当前有效 Phase 2 findings（Codex 24p v7.10 视角）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md` — 当前有效 Phase 2 findings（cc 互补合并版，含 OVERHEAT/entry_flag/LOCK 三个负信号 + 2024 vs 2025 regime 拆分）
 ## DataHub / Data Middle Platform Guardrail
