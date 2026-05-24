@@ -1,0 +1,127 @@
+# Phase 2 Git 初始化 Handoff
+
+生成时间：2026-05-24
+作者：cc (claude-opus-4-7)
+前置 handoff：
+1. [`2026-05-24_phase2_v7.9_handoff.md`](./2026-05-24_phase2_v7.9_handoff.md)
+2. [`2026-05-24_phase2_tier1only_subset_handoff.md`](./2026-05-24_phase2_tier1only_subset_handoff.md)
+
+## 读取说明
+
+本 handoff 在前两份之后。**项目首次进入 git 管理**，所有 LLM 接手时必须知道当前 git 状态和约束。
+
+## 本轮改动
+
+### 工程基础设施
+
+| 项 | 操作 |
+|---|---|
+| `git init` | 在 `D:\cnhea\Stock\` 初始化本地仓库 |
+| git identity | local-only：`cnhea <cnheatherwong@hotmail.com>`（仅本仓库，未污染全局 `git config --global`） |
+| `.gitignore` | 新建，排除大缓存 / 敏感文件 / 日志 / 临时文件 |
+| 首次 commit | hash `dca8367`，305 文件，包含全部源代码 + schemas + docs + handoffs + findings + skills + presets + 历史候选池 |
+| remote | **零** —— `git remote -v` 无输出 |
+
+### `.gitignore` 排除清单（重要：接手者必须知道）
+
+```text
+# Python
+__pycache__/, *.pyc, *.pyo, *.pyd
+
+# Sensitive
+.env, .env.*, *.token, credentials*, *.key, *.pem, secrets*
+
+# Large API caches (regenerable)
+A-EGS/Result/egs_cache/           # ~861 MB Tushare 缓存
+result/*/backtest/cache/          # ~121 MB forward_daily 缓存
+
+# L3 PIT snapshots (regenerable but ONLY forward-going)
+state/*/l3_snapshots/, state/l3_snapshots/
+
+# Logs / temp / OS / editor noise
+*.log, *.tmp, *.bak, *~, backup_*.zip
+.DS_Store, Thumbs.db, .vscode/, .idea/, *.swp
+
+# Claude Code local state
+.claude/
+
+# Intermediate scratch
+result/*/backtest/generated/_intermediate/
+```
+
+## 私密性约束（**严格遵守，不可绕过**）
+
+### 必须做的
+
+- ✅ 本地 commit 即可（默认私有）
+- ✅ 改完代码 + verify 通过后 commit，保留版本历史
+- ✅ 阶段性改动 commit 前先 `git status` + `git diff --cached` 检查
+
+### 绝对不要做的
+
+- ❌ **`git remote add origin <任何 url>`** —— 加 remote 是发布的第一步
+- ❌ **`git push`** —— 没 remote 会失败但仍提醒
+- ❌ **创建任何 GitHub / GitLab / Gitee 等远程仓库** 并指向本目录
+- ❌ **`git config --global ...`** —— 污染用户其他项目
+- ❌ commit `egs_cache/`、`forward_daily.pkl`、`*.log` 等被 .gitignore 排除的文件（除非你确认必要）
+- ❌ commit 任何含 `TUSHARE_TOKEN` 实际值的文件（token 永远只在 env var）
+
+### 如果用户将来要推到 GitHub private repo
+
+用户必须**手动**：
+1. 在 GitHub 创建 private 仓库
+2. `git remote add origin <url>`
+3. `git push -u origin master`
+
+**LLM 不可主动发起这三步**，必须等用户明确指令。
+
+## handoff 写入规则补充（git 角度）
+
+之前的 handoff 规则："涉及版本升级、回测重跑、schema 改动、策略结论变化、数据口径变化时必须写 handoff"。
+
+**追加规则**：
+
+- 涉及 git 基础设施改动（add remote / 修改 .gitignore / 修改 hook / 修改 user.email）必须写 handoff
+- 重大 commit（如版本升级 + 数据重跑）应在 handoff 末尾引用 commit hash 便于回溯
+- 日常 commit 不需要写 handoff（git log 本身就是记录）
+
+## 已 commit 内容（hash `dca8367`）
+
+代码 / schema / docs / findings 全部 305 文件。摘要见 commit message：
+
+```bash
+git -C D:\cnhea\Stock show --stat dca8367 | head -10
+git -C D:\cnhea\Stock log -1 --format=full dca8367
+```
+
+主要包含：
+- EGS v7.9 全套代码（含 SW 修复 / L3 PIT / source metadata）
+- backtest_rank.py v1.6.0 schema + Tier1-only 切片
+- 3 份 findings（cc 12p 已 INVALIDATED / cc 24p / codex 24p）
+- 两份前置 handoff
+- AGENTS.md + schemas + skills + presets + 历史候选池
+
+## 下次 LLM 接手应该做的
+
+1. **第一件事 read 本 handoff**（按 AGENTS.md 链按时间顺序读 3 份 handoff）
+2. **第二件事检查 git 状态**：`git status` / `git log --oneline -10`
+3. **改代码前 `git diff` 验证现状**，不基于记忆假设
+4. **改完后**：(a) verify (b) commit (c) **如属重大改动则写 handoff**
+
+## 文件状态提醒（git 角度）
+
+- 仓库根：`D:\cnhea\Stock\`
+- HEAD: `dca8367 Phase 2 v7.9 baseline: ...`
+- branch: `master`
+- remote: **none**（私密保证）
+- identity: local-only `cnhea <cnheatherwong@hotmail.com>`
+
+## 一个未决项
+
+本 handoff 本身（`2026-05-24_phase2_git_init_handoff.md`）以及对 `AGENTS.md` 的 handoff 链更新，**尚未 commit**。建议下个动作：
+
+```powershell
+cd D:\cnhea\Stock
+git add docs/handoff/2026-05-24_phase2_git_init_handoff.md AGENTS.md
+git commit -m "Add git init handoff; link in AGENTS.md"
+```

@@ -131,10 +131,11 @@ Stock/
 
 ## 交接记录
 
-任何 AI 助手，包括 ChatGPT、Codex 或其他 LLM，继续 Phase 2、A 股短线筛选、rank 回测、`A-EGS/egs_main.py`、`runners/backtest_rank.py`、`analysis_input.json` 或 findings 相关工作前，**按时间顺序读取以下两份 handoff**：
+任何 AI 助手，包括 ChatGPT、Codex 或其他 LLM，继续 Phase 2、A 股短线筛选、rank 回测、`A-EGS/egs_main.py`、`runners/backtest_rank.py`、`analysis_input.json` 或 findings 相关工作前，**按时间顺序读取以下三份 handoff**：
 
 1. `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — EGS v7.8/v7.9 的脚本修改、正式周五实盘重跑、24 期 production 回测验收、当前有效 findings、下一步策略优化优先级
 2. `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Tier1-only 主口径切片实施、stats CSV 加 `subset` 列、schema 升 1.6.0、settings.primary_subset 字段
+3. `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — **项目首次进入 git 管理**（私密本地仓库，不可 push / 不可 add remote）、`.gitignore` 排除清单、commit hash `dca8367`、git 私密性约束
 
 完成一轮重要修改后，收尾时必须同步更新 handoff：
 
@@ -188,5 +189,6 @@ Stock/
 - `schemas/analysis_input_coverage.md` — schema 覆盖率与修复记录
 - `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — Phase 2 v7.9 交接记录
 - `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Phase 2 Tier1-only 主口径切片交接记录
+- `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — Phase 2 git init 交接记录（私密本地仓库约束）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_codex.md` — 当前有效 Phase 2 findings（codex 视角）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md` — 当前有效 Phase 2 findings（cc 互补合并版，含 OVERHEAT/entry_flag/LOCK 三个负信号 + 2024 vs 2025 regime 拆分）
