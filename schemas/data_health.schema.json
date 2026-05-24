@@ -1,0 +1,194 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cnhea.local/stock/schemas/data_health.schema.json",
+  "title": "A-share short screening data health report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "trade_date",
+    "preset",
+    "market",
+    "source",
+    "overall_status",
+    "errors",
+    "warnings",
+    "metrics",
+    "outputs_checked",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "data_health"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "trade_date": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "preset": {
+      "const": "a_short"
+    },
+    "market": {
+      "const": "A"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "screening_engine",
+        "screening_engine_version",
+        "data_provider",
+        "api_families",
+        "l3_mode",
+        "l3_pit_strict"
+      ],
+      "properties": {
+        "screening_engine": {
+          "const": "egs_main.py"
+        },
+        "screening_engine_version": {
+          "type": "string"
+        },
+        "data_provider": {
+          "const": "tushare"
+        },
+        "api_families": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "l3_mode": {
+          "type": "string"
+        },
+        "l3_pit_strict": {
+          "type": "boolean"
+        }
+      }
+    },
+    "overall_status": {
+      "enum": ["ok", "warn", "error"]
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/issue"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/issue"
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_count",
+        "watch_count",
+        "final_count",
+        "tier1_count",
+        "close_missing_or_nonpositive_count",
+        "pe_missing_count",
+        "pb_missing_count",
+        "watch_l1_unknown_count",
+        "watch_l2_unknown_count",
+        "full_l2_unknown_count",
+        "completeness_score_min",
+        "completeness_score_below_95_count",
+        "completeness_score_below_75_count"
+      ],
+      "properties": {
+        "full_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "watch_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "final_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tier1_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "close_missing_or_nonpositive_count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "pe_missing_count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "pb_missing_count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "watch_l1_unknown_count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "watch_l2_unknown_count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "full_l2_unknown_count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "completeness_score_min": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "completeness_score_below_95_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "completeness_score_below_75_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "outputs_checked": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "issue": {
+      "type": "object",
+      "required": ["check", "message"],
+      "properties": {
+        "check": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

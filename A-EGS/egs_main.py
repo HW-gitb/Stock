@@ -818,7 +818,258 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     }
     write_json_atomic(snapshot_path, snapshot)
 
-    return analysis_path, snapshot_path, candidates_path
+    return analysis_path, snapshot_path, candidates_path, analysis_input
+
+
+DATA_HEALTH_SCHEMA_VERSION = "1.0.0"
+
+
+def _health_issue(check, message, **metrics):
+    issue = {"check": check, "message": message}
+    issue.update({k: _json_value(v) for k, v in metrics.items()})
+    return issue
+
+
+def _missing_or_nonpositive_count(df, column):
+    if df is None or df.empty or column not in df.columns:
+        return 0 if df is not None and not df.empty else None
+    values = pd.to_numeric(df[column], errors="coerce")
+    return int(values.isna().sum() + (values <= 0).sum())
+
+
+def _missing_count(df, column):
+    if df is None or df.empty or column not in df.columns:
+        return 0 if df is not None and not df.empty else None
+    values = df[column]
+    missing = values.isna()
+    if values.dtype == object:
+        missing = missing | values.astype(str).str.strip().isin(["", "nan", "None", "未知"])
+    return int(missing.sum())
+
+
+def _candidate_quality_scores(analysis_input):
+    scores = []
+    for candidate in (analysis_input or {}).get("candidates", []):
+        data_quality = candidate.get("data_quality", {}) if isinstance(candidate, dict) else {}
+        score = _json_float(data_quality.get("completeness_score"))
+        if score is not None:
+            scores.append(score)
+    return scores
+
+
+def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
+                      analysis_path, snapshot_path, candidates_path,
+                      tier1_csv_path, full_csv_path):
+    errors = []
+    warnings_ = []
+    watch_count = int(len(watch_df)) if watch_df is not None else 0
+    final_count = int(min(len(tier1_final), CONF["final_n"])) if tier1_final is not None else 0
+    tier1_count = 0
+    if watch_df is not None and not watch_df.empty and "tier" in watch_df.columns:
+        tier1_count = int((watch_df["tier"].astype(str) == "Tier1").sum())
+
+    quality_scores = _candidate_quality_scores(analysis_input)
+    low_quality_count = int(sum(score < 95 for score in quality_scores))
+    severe_quality_count = int(sum(score < 75 for score in quality_scores))
+    close_bad_count = _missing_or_nonpositive_count(watch_df, "close")
+    pe_missing_count = _missing_count(watch_df, "pe_ttm")
+    if pe_missing_count is None or pe_missing_count == watch_count:
+        pe_missing_count = _missing_count(watch_df, "pe")
+    pb_missing_count = _missing_count(watch_df, "pb")
+    l1_unknown_count = _missing_count(watch_df, "l1_name")
+    l2_unknown_count = _missing_count(watch_df, "l2_name")
+    full_l2_unknown_count = _missing_count(df_full, "l2_name")
+
+    if not isinstance(analysis_input, dict):
+        errors.append(_health_issue("analysis_input", "analysis_input is not a JSON object"))
+    else:
+        source = analysis_input.get("source", {})
+        if analysis_input.get("schema_name") != "analysis_input":
+            errors.append(_health_issue("analysis_input_schema", "analysis_input schema_name mismatch"))
+        if analysis_input.get("schema_version") != "1.1.0":
+            errors.append(_health_issue(
+                "analysis_input_version",
+                "analysis_input schema_version is not 1.1.0",
+                schema_version=analysis_input.get("schema_version"),
+            ))
+        if source.get("screening_engine_version") != EGS_VERSION:
+            errors.append(_health_issue(
+                "engine_version",
+                "analysis_input was not produced by the current EGS version",
+                expected=EGS_VERSION,
+                actual=source.get("screening_engine_version"),
+            ))
+        if source.get("data_provider") != "tushare":
+            errors.append(_health_issue(
+                "data_provider",
+                "analysis_input data_provider is not tushare",
+                actual=source.get("data_provider"),
+            ))
+
+    checked_paths = {
+        "analysis_input": analysis_path,
+        "snapshot": snapshot_path,
+        "candidates": candidates_path,
+        "tier1_csv": tier1_csv_path,
+        "full_rank": full_csv_path,
+    }
+    missing_outputs = [role for role, path in checked_paths.items() if path and not os.path.exists(path)]
+    if missing_outputs:
+        errors.append(_health_issue(
+            "output_files",
+            "one or more expected output files are missing",
+            missing=",".join(missing_outputs),
+        ))
+
+    if df_full is None or df_full.empty:
+        errors.append(_health_issue("full_universe", "full ranked universe is empty"))
+    elif len(df_full) < 1000:
+        warnings_.append(_health_issue(
+            "full_universe",
+            "full ranked universe is smaller than expected",
+            full_count=len(df_full),
+        ))
+
+    if watch_count == 0:
+        errors.append(_health_issue("watch_pool", "watch pool is empty"))
+    elif watch_count < int(CONF.get("watch_n", 15)):
+        warnings_.append(_health_issue(
+            "watch_pool",
+            "watch pool count is below configured watch_n",
+            watch_count=watch_count,
+            watch_n=CONF.get("watch_n"),
+        ))
+
+    if final_count == 0:
+        errors.append(_health_issue("final_pool", "final recommendation pool is empty"))
+    elif final_count < int(CONF.get("final_n", 5)):
+        warnings_.append(_health_issue(
+            "final_pool",
+            "final recommendation count is below configured final_n",
+            final_count=final_count,
+            final_n=CONF.get("final_n"),
+        ))
+
+    if tier1_count == 0:
+        errors.append(_health_issue("tier1_count", "no Tier1 candidates in watch pool"))
+    elif tier1_count < int(CONF.get("final_n", 5)):
+        warnings_.append(_health_issue(
+            "tier1_count",
+            "Tier1 count is below final_n",
+            tier1_count=tier1_count,
+            final_n=CONF.get("final_n"),
+        ))
+
+    if close_bad_count:
+        errors.append(_health_issue(
+            "close",
+            "watch pool contains missing or non-positive close values",
+            bad_count=close_bad_count,
+        ))
+    for column_name, missing_count in (("pe_ttm_or_pe", pe_missing_count), ("pb", pb_missing_count)):
+        if missing_count and watch_count and missing_count / watch_count > 0.2:
+            warnings_.append(_health_issue(
+                column_name,
+                "watch pool valuation missing rate is above 20%",
+                missing_count=missing_count,
+                watch_count=watch_count,
+            ))
+    for column_name, unknown_count in (("l1_name", l1_unknown_count), ("l2_name", l2_unknown_count)):
+        if unknown_count:
+            warnings_.append(_health_issue(
+                column_name,
+                "watch pool contains unknown industry labels",
+                unknown_count=unknown_count,
+            ))
+    if severe_quality_count:
+        errors.append(_health_issue(
+            "completeness_score",
+            "candidate data completeness score below 75",
+            severe_count=severe_quality_count,
+        ))
+    elif low_quality_count:
+        warnings_.append(_health_issue(
+            "completeness_score",
+            "candidate data completeness score below 95",
+            low_count=low_quality_count,
+        ))
+
+    status = "error" if errors else ("warn" if warnings_ else "ok")
+    return {
+        "schema_name": "data_health",
+        "schema_version": DATA_HEALTH_SCHEMA_VERSION,
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "trade_date": latest_td,
+        "preset": "a_short",
+        "market": "A",
+        "source": {
+            "screening_engine": "egs_main.py",
+            "screening_engine_version": EGS_VERSION,
+            "data_provider": "tushare",
+            "api_families": ["daily", "daily_basic", "fina_indicator", "index_*", "moneyflow", "concept_*"],
+            "l3_mode": CONF.get("l3_mode", "today"),
+            "l3_pit_strict": bool(CONF.get("l3_pit_strict", False)),
+        },
+        "overall_status": status,
+        "errors": errors,
+        "warnings": warnings_,
+        "metrics": {
+            "full_count": int(len(df_full)) if df_full is not None else 0,
+            "watch_count": watch_count,
+            "final_count": final_count,
+            "tier1_count": tier1_count,
+            "close_missing_or_nonpositive_count": close_bad_count,
+            "pe_missing_count": pe_missing_count,
+            "pb_missing_count": pb_missing_count,
+            "watch_l1_unknown_count": l1_unknown_count,
+            "watch_l2_unknown_count": l2_unknown_count,
+            "full_l2_unknown_count": full_l2_unknown_count,
+            "completeness_score_min": min(quality_scores) if quality_scores else None,
+            "completeness_score_below_95_count": low_quality_count,
+            "completeness_score_below_75_count": severe_quality_count,
+        },
+        "outputs_checked": checked_paths,
+        "limitations": [
+            "This is an internal Tushare output health check, not a second-source reconciliation.",
+            "It checks structural integrity, key field coverage, counts, industry labels, and data completeness.",
+            "AKShare canary remains optional because its Eastmoney endpoint is unstable in this environment.",
+        ],
+    }
+
+
+def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
+                       analysis_path, snapshot_path, candidates_path,
+                       tier1_csv_path, full_csv_path):
+    health = build_data_health(
+        df_full=df_full,
+        watch_df=watch_df,
+        tier1_final=tier1_final,
+        analysis_input=analysis_input,
+        latest_td=latest_td,
+        analysis_path=analysis_path,
+        snapshot_path=snapshot_path,
+        candidates_path=candidates_path,
+        tier1_csv_path=tier1_csv_path,
+        full_csv_path=full_csv_path,
+    )
+    health_path = os.path.join(os.path.dirname(analysis_path), "data_health.json")
+    write_json_atomic(health_path, health)
+    return health_path, health
+
+
+def log_data_health_summary(health_path, health):
+    status = str(health.get("overall_status", "error")).upper()
+    errors_count = len(health.get("errors", []))
+    warnings_count = len(health.get("warnings", []))
+    metrics = health.get("metrics", {})
+    message = (
+        f"[DATA_HEALTH] {status}: errors={errors_count}, warnings={warnings_count}, "
+        f"watch={metrics.get('watch_count')}, tier1={metrics.get('tier1_count')}, "
+        f"final={metrics.get('final_count')} -> {health_path}"
+    )
+    print(message)
+    log.info(message)
+
 
 def safe_api(fn, *a, default=None, retries=3, **kw):
     for i in range(retries):
@@ -2898,7 +3149,7 @@ def run_egs(backtest_mode=False, output_root=None):
     write_csv_atomic(watch_df[watch_cols], tier1_csv_path, index=False, encoding="utf-8-sig")
     save_ranked_xlsx(watch_df[watch_cols], tier1_xlsx_path, group_size=5)
     write_csv_atomic(df_full, full_csv_path, index=False, encoding="utf-8-sig")
-    analysis_path, snapshot_path, candidates_path = export_analysis_input(
+    analysis_path, snapshot_path, candidates_path, analysis_input = export_analysis_input(
         df_full=df_full,
         watch_df=watch_df,
         tier1_final=tier1_final,
@@ -2918,6 +3169,19 @@ def run_egs(backtest_mode=False, output_root=None):
     if backtest_mode:
         log.info("[BACKTEST] skip egs_last_selection tracking state")
         return tier1_final
+    health_path, health = export_data_health(
+        df_full=df_full,
+        watch_df=watch_df,
+        tier1_final=tier1_final,
+        analysis_input=analysis_input,
+        latest_td=latest_td,
+        analysis_path=analysis_path,
+        snapshot_path=snapshot_path,
+        candidates_path=candidates_path,
+        tier1_csv_path=tier1_csv_path,
+        full_csv_path=full_csv_path,
+    )
+    log_data_health_summary(health_path, health)
     log.info(f"[OK] 结果已保存至 {tier1_csv_path} / {tier1_xlsx_path} / {full_csv_path}")
 
     # ── 保存本次候选池记录供下次追踪（v7.5扩展至Top15）──────────────────────────
