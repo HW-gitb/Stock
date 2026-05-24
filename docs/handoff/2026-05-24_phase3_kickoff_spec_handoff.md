@@ -330,3 +330,98 @@ Tier1 hit distribution after v2:
 1. 保留 `esp_non_positive` v2，不回到 `<=0`。
 2. `tier1_veto_passed` 仍不能升级为 primary subset；`tier1_only` 继续是主 baseline。
 3. Phase 3 后续应寻找 Tier1 内仍有命中的坏票特征。当前四条中，`chasing_high` / `overheat` 已被 EGS v7.10 前置降级，`l2_unknown` 在 Tier1 内无命中，`esp_non_positive` v2 样本太少。
+
+---
+
+## 2026-05-24 追加：Phase 3.2 Tier1 坏票特征诊断
+
+### 改了什么
+
+- 新增 `runners/diagnose_tier1_bad_signals.py`。
+  - 只读取现有 `result/a_short/backtest/rank_samples.csv` 和 `generated/_intermediate/egs_full_YYYYMMDD.csv`。
+  - 不重跑 EGS，不改候选池，不改 `primary_subset`。
+  - 以 `20250101` 切 discovery / validation。
+  - 默认坏票定义：`t1_net <= -5%`。
+  - 输出 baseline、feature diagnostics、replay variants、bad sample list 和 Markdown 报告。
+- 新增/更新输出：
+  - `result/a_short/backtest/phase3_tier1_bad_signal_baseline.csv`
+  - `result/a_short/backtest/phase3_tier1_bad_signal_features.csv`
+  - `result/a_short/backtest/phase3_tier1_bad_signal_replay_variants.csv`
+  - `result/a_short/backtest/phase3_tier1_bad_signal_samples.csv`
+  - `result/a_short/backtest/Phase3_tier1_bad_signal_diagnostics.md`
+- 更新 `AGENTS.md`、`docs/CURRENT.md`、`runners/README.md` 指针。
+
+### 为什么改
+
+首批四条 veto 已经没有足够边际：
+
+- `chasing_high` / `overheat` / `l2_unknown` 在 Tier1 内无命中。
+- `esp_non_positive` v2 只命中 3 条。
+- `tier1_veto_passed` 接近 Tier1-only，不能作为新主口径。
+
+因此 Phase 3.2 转向 Tier1 内坏票特征挖掘，但必须用 discovery/validation 拆分防止过拟合。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; compile(Path('runners/diagnose_tier1_bad_signals.py').read_text(encoding='utf-8'), 'runners/diagnose_tier1_bad_signals.py', 'exec'); print('compile ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\diagnose_tier1_bad_signals.py
+```
+
+### 验证结果
+
+- Compile：`compile ok`。
+- Script run：success。
+- Loaded Tier1 samples：305。
+- Bad 20d samples (`t1_net <= -5%`)：85。
+- Candidate negative features passing conservative discovery + validation filter：3。
+
+### Baseline
+
+Tier1-only:
+
+| split | N | 5d t1_net | 10d t1_net | 20d t1_net | 20d bad rate |
+|---|---:|---:|---:|---:|---:|
+| all | 305 | +0.63 / t=0.91 / win 51.80% | +0.98 / t=1.04 / win 54.10% | +2.84 / t=1.60 / win 51.15% | 27.87% |
+| discovery | 131 | -0.39 / t=0.22 / win 44.27% | -0.08 / t=0.27 / win 49.62% | +2.49 / t=0.71 / win 45.80% | 30.53% |
+| validation | 174 | +1.39 / t=1.05 / win 57.47% | +1.77 / t=1.38 / win 57.47% | +3.10 / t=1.77 / win 55.17% | 25.86% |
+
+### Candidate negative features
+
+Three features passed the mechanical candidate filter:
+
+| feature | discovery N / bad20 / mean20 | validation N / bad20 / mean20 | judgment |
+|---|---:|---:|---|
+| `final_score_bucket_fine=lt_60` | 47 / 42.55% / +1.01 | 26 / 46.15% / -3.38 | strongest candidate; plausible absolute score floor |
+| `q1_dt_yoy=-100..-30` | 14 / 50.00% / +1.20 | 7 / 28.57% / +1.21 | N too small; observation only |
+| `q1_dt_yoy=30..100` | 29 / 44.83% / -0.40 | 47 / 38.30% / +2.43 | bad-rate elevated, but mean still positive; observation only |
+
+### Replay checks
+
+Quick replay variants from the diagnostic script:
+
+| variant | validation N | 5d t1_net | 10d t1_net | 20d t1_net |
+|---|---:|---:|---:|---:|
+| `tier1_only` | 174 | +1.39 / t=1.05 / win 57.47% | +1.77 / t=1.38 / win 57.47% | +3.10 / t=1.77 / win 55.17% |
+| `score_ge_60` | 149 | +1.83 / t=1.14 / win 61.74% | +2.60 / t=1.26 / win 63.09% | +4.39 / t=1.79 / win 59.06% |
+| `score_ge_65` | 135 | +1.93 / t=1.34 / win 62.22% | +2.47 / t=1.44 / win 62.22% | +4.21 / t=1.97 / win 57.78% |
+| `drop_q1_30_100` | 127 | +1.96 / t=1.37 / win 60.63% | +2.37 / t=1.86 / win 61.42% | +3.35 / t=1.80 / win 60.63% |
+| `drop_q1_neg_100_30` | 167 | +1.23 / t=1.03 / win 56.89% | +1.72 / t=1.41 / win 56.89% | +3.18 / t=1.78 / win 56.29% |
+
+Interpretation:
+
+- `score_ge_60` / `score_ge_65` are the most defensible next replay candidates.
+- `score_ge_60` keeps more names and improves all validation windows.
+- `score_ge_65` gives slightly better 5d/20d t-stat but cuts more names; risk of over-tightening is higher.
+- q1 buckets are not ready for hard veto; they are weaker and more likely to be sample/regime artifacts.
+
+### 失效旧结论
+
+- “首批四条 veto 继续调参即可找到 Tier1 内坏票”不成立；它们在 Tier1 内几乎没有命中。
+- “财务 yoy bucket 可以直接做 hard veto”不成立；当前 q1 bucket 信号不够稳定，最多 observation。
+
+### 下一步注意事项
+
+1. 下一步应把 `score_ge_60` / `score_ge_65` 作为 strategy variants 接入 `runners/backtest_rank.py`，生成正式 report/portfolio stats，而不是直接写进 analyzer hard veto。
+2. 如果正式 replay 仍改善 validation 且不过度降低每期候选数，再讨论是否进入 analyzer 的 `absolute_score_floor` rule。
+3. 保持 `tier1_only` 为 primary baseline；不要把 score floor subset 改成主口径。

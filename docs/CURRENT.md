@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-24（Phase 3 esp_non_positive v2 replay 完成后）
+**最后更新**：2026-05-24（Phase 3.2 Tier1 坏票诊断完成后）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -8,7 +8,7 @@
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 2 + Phase 2.5 + Phase 2.6 全部完成。Phase 3 minimal veto analyzer + state 接口 + rank replay 首轮已落地
-- **当前目标**：复核 Phase 3 `esp_non_positive` v2 replay 结果；v2 避免误杀 `esp_raw=0` 中性/数据不足样本，但整体仍未显著改善 Tier1-only baseline
+- **当前目标**：复核 Phase 3.2 Tier1 坏票诊断结果；当前最值得进入下一轮 replay 的候选是绝对分数地板 `final_score >= 60/65`，但尚未升级为 hard veto
 - **下一阶段大目标（Phase 3 后续）**：保留 analyzer veto 工程链路，继续用 replay/ablation 量化每条 veto 的边际贡献；不把首轮结果解释为策略签收
 
 ---
@@ -30,6 +30,7 @@
 - data canary 旁路对账（2026-05-24）：`runners/data_canary.py` 每周选股后抽 5 只对比 Tushare vs akshare 的 close/pe/pb/name；不阻断、不进打分、不比行业；输出 `logs/data_canary_<as_of>.json`
 - Phase 3 首轮（2026-05-24）：新增 `engine/analyzer/rule6_hard_veto.py`、`engine/analyzer/state_manager.py`、`tests/analyzer/`；`backtest_rank.py` 接入 analyzer replay，新增 `tier1_veto_passed` subset、`--veto-rules` ablation、schema 1.11.0、`low_tier1_veto_passed_count` warning；24p stats-only replay 已通过 schema 校验
 - Phase 3 v2 修正（2026-05-24）：`esp_non_positive` 升到 v2，只 hard veto 明确负 `esp_raw < 0`；`esp_raw == 0` 记录 `neutral_zero_not_vetoed` 诊断。原因：24p Tier1 中 78 条旧 v1 命中里 75 条是 `esp_raw=0`，多数为 `DATA-INC`，且该组 20d 表现反而更强
+- Phase 3.2 Tier1 坏票诊断（2026-05-24）：新增 `runners/diagnose_tier1_bad_signals.py`，输出 `Phase3_tier1_bad_signal_diagnostics.md` 与 4 份 CSV。诊断显示 `final_score < 60` 是当前最清晰的 Tier1 内坏票候选特征；`score_ge_60/65` replay 在 validation 的 5d/10d/20d 均优于 Tier1-only，但仍需正式接入 `backtest_rank.py` variant 后再决定是否进 analyzer
 
 ---
 
@@ -79,6 +80,7 @@
 ### 代码 / schema
 - `A-EGS/egs_main.py` — v7.10（v7.9 内存里仍有引用，以文件为准）
 - `runners/backtest_rank.py` — Phase 2 回测入口，subset=all+tier1_only 双跑
+- `runners/diagnose_tier1_bad_signals.py` — Phase 3.2 Tier1 坏票特征诊断入口
 - `engine/analyzer/rule6_hard_veto.py` — Phase 3 首轮 deterministic hard veto：`chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive`
 - `engine/analyzer/state_manager.py` — Phase 3 JSON state 接口与 atomic write helper
 - `schemas/analysis_input.schema.json` — v1.1.0
@@ -110,9 +112,9 @@
 
 ### P0 — Phase 3 主轴
 
-1. **Phase 3 v2 结果复核** — `tier1_veto_passed` N=302，5d/10d/20d `t1_net` 与 Tier1-only 基本持平，没有显著改善；不要宣称 analyzer 已改善策略。
-2. **保留 `esp_non_positive` v2** — v1 的 `esp_raw <= 0` 已证明过宽；v2 只杀 `esp_raw < 0`，避免把 `DATA-INC` / 中性 0 当成负预期。
-3. **下一步转向新候选规则** — chase/overheat/l2_unknown 在 Tier1 内无命中，esp v2 只命中 3 条；Phase 3 后续应寻找仍能在 Tier1 内命中的坏票特征，而不是继续调这四条。
+1. **正式 replay 绝对分数地板** — 把 `score_ge_60` / `score_ge_65` 作为 strategy variant 接进 `backtest_rank.py`，不要直接 hard veto；先确认 report/portfolio 级结果。
+2. **保持边界** — `final_score < 60` 是候选负特征，不是策略签收。当前证据支持“值得进一步 replay”，不支持直接实盘过滤。
+3. **保留 `esp_non_positive` v2** — v1 的 `esp_raw <= 0` 已证明过宽；v2 只杀 `esp_raw < 0`，避免把 `DATA-INC` / 中性 0 当成负预期。
 
 ### P1 — 短期跟进
 
