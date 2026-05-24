@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "generated_at": {
       "type": "string"
@@ -98,7 +98,7 @@
         "final_count",
         "tier1_count",
         "close_missing_or_nonpositive_count",
-        "pe_missing_count",
+        "pe_ttm_or_pe_missing_count",
         "pb_missing_count",
         "watch_l1_unknown_count",
         "watch_l2_unknown_count",
@@ -128,9 +128,10 @@
           "type": ["integer", "null"],
           "minimum": 0
         },
-        "pe_missing_count": {
+        "pe_ttm_or_pe_missing_count": {
           "type": ["integer", "null"],
-          "minimum": 0
+          "minimum": 0,
+          "description": "Missing count for valuation PE. Builder uses pe_ttm first; if pe_ttm is fully missing/absent it falls back to pe. The metric name reflects the union, not just one column."
         },
         "pb_missing_count": {
           "type": ["integer", "null"],

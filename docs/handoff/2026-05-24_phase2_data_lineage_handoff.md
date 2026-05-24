@@ -440,6 +440,54 @@ python runners/backtest_rank.py --mode production --stats-only --windows 5,10,20
 
 ---
 
+## 2026-05-24 追加：第二轮 audit 后的 LOW 修复 + 真实对账成功
+
+接 #1-#5 (MED+LOW) 修复后用户要求做第二轮 audit + 修剩下的 LOW 项。一并修复 7 项；其中第一次端到端跑出了真实成功对账。
+
+### LOW 修复
+
+| # | 项 | 改动 |
+|---|---|---|
+| #6 | `--as-of` 默认今天但今天非交易日 → 找不到 egs_full | `_find_latest_candidates_within(days=7)` 自动回退到最近一次实盘选股的 egs_full；payload 加 `requested_as_of` + `as_of_fallback_used` 字段保留审计 |
+| #7 | 成功 case 不存对账值 | `_compare_one` 在 rec 里始终存 `close_tushare` / `close_akshare`（em 源还存 pe/pb 值），调试时不用再跑两遍 |
+| #8 | metric `pe_missing_count` 语义不清 | rename `pe_ttm_or_pe_missing_count`（构造逻辑本就是 pe_ttm 先 fall-back pe），schema 升 1.0.0 → 1.1.0，egs_main `DATA_HEALTH_SCHEMA_VERSION` 同步升级 |
+| #9 | `hash()` PYTHONHASHSEED 加盐，非进程间确定 | 改 `hashlib.md5(...).digest()[:4]` int.from_bytes 取 32 位 seed |
+| #10 | `$ErrorActionPreference = 'Continue'` 对 python.exe 无效 | 去掉装饰行；补一段注释解释 `$LASTEXITCODE` 才是关键；wrapper 启动时 fail-fast 校验 `A-EGS\egs_main.py` 存在 |
+| #11 | BJ 假设 doc 不清 | `_find_candidates` docstring 注明 egs_main 在 L0 过滤 .BJ，因此 sina 不覆盖北交所不会触发；未来扩 BJ 要加 BJ 源 |
+| + bonus | 二轮 audit 新发现：两个 ts_code 都被 `_normalize_code` 归到空字符串时会通过 `ak_lookup.get("")` 错配 | `ak_lookup.pop("", None)` 防御 |
+
+### 真实成功对账（这次跑通了！）
+
+用户上次反映沙箱无法连 sina，但二轮 audit 沙箱内 `python runners/data_canary.py --as-of 20260522` 居然通了：
+
+```
+[OK] canary ok: 0 missing, 0 errors, 0 warnings (5 sampled from 49 Tier1 rows)
+```
+
+5 只 Tier1（小商品城/北方稀土/信质集团/杰克科技/工业富联）的 close 完全一致到分（13.35 / 51.09 / 22.73 / 43.36 / 67.16），name 也一字不差。这是 d12ab41 (sina 切换) 以来**第一次端到端成功对账**，所有 MED + LOW 修复都得到了真实数据路径的验证。
+
+### 验证
+
+```powershell
+python -c "from pathlib import Path; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in ['runners/data_canary.py','runners/backtest_rank.py','A-EGS/egs_main.py']]; print('syntax ok all 3')"
+python -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/data_health.schema.json',encoding='utf-8')); Draft7Validator.check_schema(s); print('schema 1.1.0 ok')"
+python runners/data_canary.py --as-of 20260522    # 端到端成功
+python runners/data_canary.py --as-of 19990101    # 走 skip 路径，无 fallback
+```
+
+全部通过。
+
+### 失效旧结论
+
+- 前两段 handoff 说"sina 真实对账分支需用户本地验证才能确认"——**已在沙箱直接验证成功**，不再 pending
+- data_health schema `1.0.0` 已被 `1.1.0` 取代（`pe_missing_count` → `pe_ttm_or_pe_missing_count`）；如果有用户本地遗留的 1.0.0 data_health.json，下次 egs_main 跑自然覆盖成 1.1.0 不需要手动迁移
+
+### Next
+
+第二轮 audit 没发现其他真实问题。canary + data_health + data_lineage + weekly wrapper 这条线 Phase 2.6 闭环可以认作正式收尾。下次开工建议直接进 Phase 3 minimal analyzer/state。
+
+---
+
 ## 2026-05-24 append: full script review fixes
 
 Full `A-EGS/egs_main.py` review found and fixed two deterministic robustness bugs:
@@ -461,3 +509,40 @@ Results:
 - Missing `close` health probe: `overall_status=error`, `close_missing_or_nonpositive_count=5`, errors include `check=close`.
 - Daily no-overlap probe: returns `(1, 15)` neutral stats columns instead of `(0, 0)`.
 - Existing 20260522 health builder remains `overall_status=ok`, schema validation errors `0`.
+
+---
+
+## 2026-05-24 append: full entrypoint debug continuation
+
+After the user's follow-up fixes, Codex resumed the interrupted full-script debug from the prior `egs_main.py` entrypoint runs.
+
+### Additional bug found
+
+`score_l3(..., l3_mode="today")` successfully wrote `state/l3_snapshots/l3_snapshot_<real_today>.pkl`, but did not copy that date into `CONF["l3_snapshot_date"]`. As a result, the exported `analysis_input.source.l3_snapshot_date` stayed `null` even when a fresh L3 snapshot was written.
+
+Fix in `A-EGS/egs_main.py`:
+
+- After `_write_l3_snapshot(real_today, ...)` succeeds, set `CONF["l3_snapshot_date"] = real_today`.
+- If snapshot writing fails, the existing exception path leaves the date unset, which is the correct behavior.
+
+### Full entrypoint paths covered
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe A-EGS\egs_main.py --as-of 20260522 --backtest-mode --l3-mode neutralize --output-root result\a_short\debug_full_egs_neutralize
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe A-EGS\egs_main.py --as-of 20260522 --backtest-mode --reuse-l3-cache --l3-mode today --output-root result\a_short\debug_full_egs_today_reuse
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe A-EGS\egs_main.py --as-of 20260522 --backtest-mode --l3-mode pit --output-root result\a_short\debug_full_egs_pit
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\data_canary.py --as-of 20260522
+```
+
+Results:
+
+- `neutralize`: full L0-L5 + backtest Stage3 + export completed; `analysis_input` schema errors `0`, candidates `15`, `l3_mode=neutralize`, `l3_snapshot_date=null`.
+- `today + reuse`: full L0-L5 + L3 today branch + snapshot write + export completed; after the fix, `analysis_input` schema errors `0`, candidates `15`, `l3_mode=today`, `l3_snapshot_date=20260524`.
+- `pit`: full L0-L5 + PIT branch completed; no snapshot `<=20260522` existed, so it gracefully fell back to neutral `cat_score=50`; `analysis_input` schema errors `0`, candidates `15`, `l3_mode=pit`, `l3_snapshot_date=null`.
+- `data_canary.py --as-of 20260522`: real sina default-source run completed; CLI reported `0 missing, 0 errors, 0 warnings`; log has top-level `status=ok`, `summary.overall_status=ok`, `source=sina`.
+
+### Notes
+
+- These were isolated backtest-mode entrypoint runs. They do not write official `egs_last_selection.json` and skip live Stage3 cninfo/news/DeepSeek checks.
+- `today + reuse` still writes/overwrites the real-world L3 snapshot `state/l3_snapshots/l3_snapshot_20260524.pkl`; this is existing behavior and was part of the path being validated.
+- Debug output directories are intentionally under `result/a_short/debug_full_egs_*` and are not strategy artifacts.

@@ -22,9 +22,20 @@ param(
     [switch]$SkipCanary
 )
 
-$ErrorActionPreference = 'Continue'
-$ScriptRoot = Split-Path -Parent $PSScriptRoot
-Set-Location $ScriptRoot
+# We rely on $LASTEXITCODE from native exes (python.exe), not PowerShell
+# cmdlet error handling, so the default $ErrorActionPreference is fine —
+# explicit override removed (it was cosmetic and misled readers into
+# thinking it affected the Python subprocess exit semantics).
+#
+# $PSScriptRoot is the directory of THIS .ps1 file (runners/), so the
+# project root is one level up. If this script is ever moved, update
+# both the path math and the python invocations below.
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+if (-not (Test-Path (Join-Path $ProjectRoot 'A-EGS\egs_main.py'))) {
+    Write-Host "[FATAL] expected A-EGS\egs_main.py under $ProjectRoot but not found." -ForegroundColor Red
+    exit 1
+}
+Set-Location $ProjectRoot
 
 Write-Host "=== Weekly screening pipeline ===" -ForegroundColor Cyan
 Write-Host "as-of:         $AsOf"

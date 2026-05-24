@@ -30,9 +30,11 @@ Usage:
     python runners/data_canary.py --candidates A-EGS/Result/egs_full_20260522.csv
 """
 import argparse
+import hashlib
 import json
 import os
 import random
+import re
 import sys
 import tempfile
 from datetime import datetime
@@ -104,7 +106,13 @@ def _normalize_code(c) -> str:
 
 
 def _find_candidates(as_of: str) -> Path | None:
-    """Default: prefer 实盘 egs_full, fallback 回测 candidates."""
+    """Default: prefer 实盘 egs_full, fallback 回测 candidates.
+
+    Note on Beijing Stock Exchange (BJ): egs_main filters .BJ tickers at L0
+    (egs_main.py:1923), so candidates.csv never contains them — sina's
+    stock_zh_a_spot covers SH+SZ only and the missing-BJ edge case does
+    not fire today. If A-share scope ever expands to BJ, canary will need
+    a parallel BJ source (e.g., ak.stock_zh_bj_spot)."""
     p1 = ROOT / "A-EGS" / "Result" / f"egs_full_{as_of}.csv"
     if p1.exists():
         return p1
@@ -112,6 +120,40 @@ def _find_candidates(as_of: str) -> Path | None:
     if p2.exists():
         return p2
     return None
+
+
+def _find_latest_candidates_within(days: int = 7) -> tuple[Path | None, str | None]:
+    """Auto-fallback when --as-of defaults to today but today has no
+    egs_full (weekend, holiday, or screening not yet run). Scans
+    A-EGS/Result/egs_full_*.csv and picks the most recent YYYYMMDD
+    within the last `days` calendar days.
+
+    Returns (path, as_of_str) or (None, None) if nothing found.
+    Returning a stale candidates set is acceptable here because canary
+    is a sidecar check; the resulting log includes both the requested
+    as_of and the actual as_of used so the staleness is auditable."""
+    result_dir = ROOT / "A-EGS" / "Result"
+    if not result_dir.exists():
+        return None, None
+    pattern = re.compile(r"^egs_full_(\d{8})\.csv$")
+    today = datetime.now().date()
+    candidates = []
+    for p in result_dir.glob("egs_full_*.csv"):
+        m = pattern.match(p.name)
+        if not m:
+            continue
+        try:
+            d = datetime.strptime(m.group(1), "%Y%m%d").date()
+        except ValueError:
+            continue
+        delta = (today - d).days
+        if 0 <= delta <= days:
+            candidates.append((d, m.group(1), p))
+    if not candidates:
+        return None, None
+    candidates.sort(key=lambda t: t[0], reverse=True)
+    _, as_of_str, path = candidates[0]
+    return path, as_of_str
 
 
 def _write_log(payload: dict, as_of: str) -> Path:
@@ -208,16 +250,33 @@ def _compare_field(name: str, ts_val, ak_val, warn_pct: float,
     return None
 
 
+def _to_float_or_none(v):
+    """Coerce to float, return None on missing / unparseable.
+    Used so the rec carries the actual numeric value (not 'nan' / 'None'
+    strings) for downstream JSON consumers."""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(f):
+        return None
+    return f
+
+
 def _compare_one(row, ak_row, fields: dict, supports_pe_pb: bool) -> dict:
     rec = {
         "ts_code": str(row["ts_code"]),
         "name_tushare": str(row.get("name", "")),
+        "close_tushare": _to_float_or_none(row.get("close")),
     }
     if ak_row is None:
         rec["status"] = "missing_in_akshare"
         return rec
 
     rec["name_akshare"] = str(ak_row[fields["name"]])
+    rec["close_akshare"] = _to_float_or_none(ak_row[fields["close"]])
 
     diffs = []
 
@@ -235,6 +294,8 @@ def _compare_one(row, ak_row, fields: dict, supports_pe_pb: bool) -> dict:
     # pe/pb only if source carries them (em 源; sina 没有)
     if supports_pe_pb:
         pe_ts, pe_source = _pick_pe(row)
+        rec["pe_tushare"] = pe_ts
+        rec["pe_akshare"] = _to_float_or_none(ak_row[fields["pe"]])
         if pe_ts is not None:
             rec["pe_tushare_source"] = pe_source
             d = _compare_field("pe", pe_ts, ak_row[fields["pe"]], PE_PB_WARN_PCT)
@@ -242,6 +303,8 @@ def _compare_one(row, ak_row, fields: dict, supports_pe_pb: bool) -> dict:
                 d["note"] = (d.get("note") or "") + f"|ts_uses_{pe_source}|ak_uses_dynamic"
                 diffs.append(d)
 
+        rec["pb_tushare"] = _to_float_or_none(row.get("pb"))
+        rec["pb_akshare"] = _to_float_or_none(ak_row[fields["pb"]])
         d = _compare_field("pb", row.get("pb"), ak_row[fields["pb"]], PE_PB_WARN_PCT)
         if d:
             diffs.append(d)
@@ -280,14 +343,31 @@ def main() -> int:
         print(f"[SKIP] akshare not installed; wrote {out}")
         return 0
 
-    # Find candidates
-    cand_path = Path(args.candidates) if args.candidates else _find_candidates(args.as_of)
+    # Find candidates. If --as-of was defaulted to today AND today has no
+    # egs_full (weekend / holiday / screening not yet run), auto-fall-back
+    # to the most recent egs_full within the last week. Both the requested
+    # and the actual as_of are preserved in the log for auditability.
+    requested_as_of = args.as_of
+    fallback_used = False
+    if args.candidates:
+        cand_path = Path(args.candidates)
+    else:
+        cand_path = _find_candidates(args.as_of)
+        if cand_path is None and args.as_of == datetime.now().strftime("%Y%m%d"):
+            fallback_path, fallback_as_of = _find_latest_candidates_within(days=7)
+            if fallback_path is not None:
+                cand_path = fallback_path
+                args.as_of = fallback_as_of
+                fallback_used = True
+                print(f"[INFO] no egs_full for {requested_as_of}; "
+                      f"falling back to most recent: {fallback_as_of}")
     if cand_path is None or not cand_path.exists():
         out = _write_log(_skip_payload(
-            args.as_of,
+            requested_as_of,
             "skipped_no_candidates",
-            f"No candidates file found for as_of={args.as_of}.",
-        ), args.as_of)
+            f"No candidates file found for as_of={requested_as_of} "
+            f"(also no fallback within last 7 days under A-EGS/Result/).",
+        ), requested_as_of)
         print(f"[SKIP] no candidates; wrote {out}")
         return 0
 
@@ -343,11 +423,16 @@ def main() -> int:
             print(f"[SKIP] no rows after tier={args.tier}; wrote {out}")
             return 0
 
-    # Sample (deterministic seed = as_of date)
+    # Sample (deterministic seed = as_of date).
+    # When --as-of is YYYYMMDD numeric, use int() so the seed is obvious
+    # in the log. Otherwise (non-numeric token like "today"), use
+    # hashlib.md5 — Python's built-in hash() is PYTHONHASHSEED-salted
+    # per-process so it would NOT be reproducible across runs.
     try:
         seed = args.seed if args.seed is not None else int(args.as_of)
     except ValueError:
-        seed = abs(hash(args.as_of)) % (2 ** 32)
+        seed_bytes = hashlib.md5(args.as_of.encode("utf-8")).digest()
+        seed = int.from_bytes(seed_bytes[:4], "big")
     rng = random.Random(seed)
     sample_size = max(0, min(args.sample_size, len(df)))
     if sample_size == 0:
@@ -410,6 +495,12 @@ def main() -> int:
 
     ak_spot[source_fields["code"]] = ak_spot[source_fields["code"]].map(_normalize_code)
     ak_lookup = {row[source_fields["code"]]: row for _, row in ak_spot.iterrows()}
+    # Defend against bad-code dedup: if both a Tushare candidate's ts_code
+    # and an akshare row happened to normalize to "" (malformed codes),
+    # they'd "match" via ak_lookup.get("") and produce a meaningless
+    # comparison. Strip the empty key so such candidates fall to
+    # missing_in_akshare instead.
+    ak_lookup.pop("", None)
 
     comparisons = []
     missing = 0
@@ -452,6 +543,8 @@ def main() -> int:
 
     payload = {
         "as_of": args.as_of,
+        "requested_as_of": requested_as_of,
+        "as_of_fallback_used": fallback_used,
         "ran_at": _now_iso(),
         "status": overall,
         "candidates_source": _display_path(cand_path),

@@ -831,7 +831,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     return analysis_path, snapshot_path, candidates_path, analysis_input
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.0.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.1.0"
 
 
 def _health_issue(check, message, **metrics):
@@ -1033,7 +1033,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             "final_count": final_count,
             "tier1_count": tier1_count,
             "close_missing_or_nonpositive_count": close_bad_count,
-            "pe_missing_count": pe_missing_count,
+            "pe_ttm_or_pe_missing_count": pe_missing_count,
             "pb_missing_count": pb_missing_count,
             "watch_l1_unknown_count": l1_unknown_count,
             "watch_l2_unknown_count": l2_unknown_count,
@@ -2334,6 +2334,7 @@ def score_l3(df, trade_dates, all_daily):
                     f"(not as_of {TODAY}); future pit reads find it by snap_date"
                 )
             _write_l3_snapshot(real_today, concepts_df, market_stock_concepts, concept_members)
+            CONF["l3_snapshot_date"] = real_today
             cand_n, mkt_n = len(stock_concepts), len(market_stock_concepts)
             log.info(
                 f"L3 snapshot saved -> state/l3_snapshots/{L3_SNAPSHOT_PREFIX}{real_today}{L3_SNAPSHOT_SUFFIX} "

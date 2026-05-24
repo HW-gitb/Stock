@@ -79,6 +79,7 @@
 - `runners/backtest_rank.py` — Phase 2 回测入口，subset=all+tier1_only 双跑
 - `schemas/analysis_input.schema.json` — v1.1.0
 - `schemas/rank_backtest_report.schema.json` — v1.10.0（含 date_warnings + data_lineage）
+- `schemas/data_health.schema.json` — v1.1.0（每周实盘 egs_main 自动产 `data_health.json` 的契约；2026-05-24 第二轮 audit 时 `pe_missing_count` 字段语义不清，rename 为 `pe_ttm_or_pe_missing_count`）
 
 ### 当前有效 findings（**只读这两份，旧 12p findings 已 INVALIDATED**）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md` — cc 合并版（OVERHEAT/entry_flag/LOCK + 时间序列分析）
