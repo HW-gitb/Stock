@@ -32,7 +32,7 @@
 - Phase 3 v2 修正（2026-05-24）：`esp_non_positive` 升到 v2，只 hard veto 明确负 `esp_raw < 0`；`esp_raw == 0` 记录 `neutral_zero_not_vetoed` 诊断。原因：24p Tier1 中 78 条旧 v1 命中里 75 条是 `esp_raw=0`，多数为 `DATA-INC`，且该组 20d 表现反而更强
 - Phase 3.2 Tier1 坏票诊断（2026-05-24）：新增 `runners/diagnose_tier1_bad_signals.py`，输出 `Phase3_tier1_bad_signal_diagnostics.md` 与 4 份 CSV。诊断显示 `final_score < 60` 是当前最清晰的 Tier1 内坏票候选特征；`score_ge_60/65` replay 在 validation 的 5d/10d/20d 均优于 Tier1-only，但仍需正式接入 `backtest_rank.py` variant 后再决定是否进 analyzer
 - Phase 3 audit fixes（2026-05-24）：`_first_present` 改返回 `(value, path)` tuple；`_check_l2_unknown` 空串归 data_missing；`_check_esp_non_positive` `"nan"` 字符串归 data_unparseable；`_coerce_bool_column` 修 CSV bool round-trip latent bug；analyzer 与 backtest 的 `l2_unknown` 语义对齐；`--no-analyzer-veto` 或 0 命中时跳过冗余 veto subset
-- Phase 3 比较口径修正（2026-05-24）：新增 `all_veto_passed` subset（全样本去掉 vetoed）— 之前 `tier1_veto_passed` 只与 `tier1_only` 比，看不到 4 条 hard veto 的真实价值（它们设计上是过滤 Tier2 filler，不是 Tier1）。24p 实证：`all → all_veto_passed` 20d 月度 t 从 1.08 升到 1.56，**100% 清空 Tier2 filler (55/55)**
+- Phase 3 比较口径修正 + overlap 分析（2026-05-24）：新增 `all_veto_passed` subset，并对 analyzer 与 EGS v7.10 做了 overlap 分析。**关键发现**：4 条 hard veto 在当前 24p 的真实独立贡献仅 3 条 Tier1 `esp_non_positive` catch；`chasing_high` / `overheat` Tier1 命中 0（EGS 已前置降级），`l2_unknown` 命中 0（EGS 已过滤）。`all → all_veto_passed` 20d t 1.08→1.56 看似大胜，本质是 Tier2 被剔除（EGS 已能做），不是 analyzer 独立发现 — 详见 handoff "analyzer-EGS overlap 分析"节。重复部分保留作防御纵深
 - Phase 3 score_ge_60 variant（2026-05-24）：把 Phase 3.2 诊断的 `final_score >= 60` 升级为正式 strategy variant（不进 analyzer hard veto，因为 score floor 是 ranking 决策不是事件 veto）。24p portfolio_stats：discovery max_dd -18.75 → -16.59，validation max_dd -12.12 → -10.92；monthly_t 几乎不变（risk-mitigation，不是 alpha 增益）
 
 ---
@@ -115,10 +115,12 @@
 
 ### P0 — Phase 3 收官 / Phase 4 准备
 
-1. **在新 as_of 上观察 `all` vs `all_veto_passed`** — 4 条 hard veto 在当前 24p 把 Tier2 filler 100% 清空（55/55），20d t 1.08→1.56。新 as_of 上 Tier2 命中率会变；要长期监控。
-2. **在新 as_of 上观察 `score_ge_60`** — 当前 24p 显示 discovery/validation max_dd 和 win_rate 改善，但 monthly_t 几乎不变（risk-mitigation 而非 alpha）。新数据稳定后再讨论是否进 analyzer 的 `absolute_score_floor` rule。
-3. **不要急着加 `score_ge_65`** — 数据挖掘嫌疑；等 60 在更多 as_of 上稳定再决定。
-4. **保留 `esp_non_positive` v2** — v1 的 `esp_raw <= 0` 已证明过宽；v2 只杀 `esp_raw < 0`。
+1. **在新 as_of 上跟 overlap 分析** — 当前 24p 4 条 rule 的真实独立贡献只有 3 条 Tier1 esp_non_positive；`chasing_high` / `overheat` Tier1=0，`l2_unknown` 整体=0。新 as_of 上要重跑 overlap 分析看是否随 EGS 行为变化。
+2. **决策 esp_non_positive 归属**：把 `esp_raw < 0` 也放进 EGS Tier1→Tier2 降级（与 analyzer 一致），还是保留 analyzer 专属作为 EGS validator？看 Phase 4 Skill 路径需求。
+3. **观察 score_ge_60 在新 as_of**：当前 24p 显示 discovery/validation max_dd 和 win_rate 改善，但 monthly_t 几乎不变（risk-mitigation 而非 alpha）。
+4. **不要急着加 `score_ge_65`**：数据挖掘嫌疑；等 60 在更多 as_of 上稳定再决定。
+5. **保留 `l2_unknown` / `chasing_high` / `overheat` 三条休眠/重复 rule**：当前 24p 没独立贡献，但保留作 EGS 改阈值时的兜底；不要因为"没贡献"就移除。
+6. **保留 `esp_non_positive` v2**：v1 的 `esp_raw <= 0` 已证明过宽；v2 只杀 `esp_raw < 0`。
 
 ### P1 — 短期跟进
 

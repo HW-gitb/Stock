@@ -480,7 +480,7 @@ python runners\diagnose_tier1_bad_signals.py
 - `strategy_variant_meta` 包含 `score_ge_60`（N=290）。
 - `rank_samples.csv` `analyzer_vetoed` round-trip 正确（diagnose 脚本输出与之前一致：tier1 samples=305, bad20=85, candidate_features=3）。
 
-### 关键 replay 结果：四条 hard veto 的真实价值（all vs all_veto_passed）
+### 关键 replay 结果：subset 对比 + analyzer-EGS overlap 分析
 
 24p production stats-only，`period_split=all`，variant=`t1_net`：
 
@@ -491,16 +491,32 @@ python runners\diagnose_tier1_bad_signals.py
 | `tier1_only` | 305 | +0.63 / 0.91 / 51.80% | +0.98 / 1.04 / 54.10% | +2.84 / 1.60 / 51.15% |
 | `tier1_veto_passed` | 302 | +0.62 / 0.74 / 51.66% | +0.97 / 0.95 / 53.97% | +2.84 / 1.56 / 50.99% |
 
-Tier × analyzer_vetoed 交叉表：
+`all → all_veto_passed` 看上去 20d 月度 t 从 1.08 升到 1.56，像是大胜。但这是**结构性 overlap**，不是 analyzer 的独立发现 — 必须看 overlap 分析。
+
+#### analyzer-EGS overlap 分析（每条 rule × Tier）
+
+| rule | Tier1 命中 | Tier2 命中 | 合计 | 独立性判断 |
+|---|---:|---:|---:|---|
+| `chasing_high` | 0 | 46 | 46 | **0 独立贡献**。EGS v7.10 已在 `egs_main.py:2325` 把"追高风险"做 Tier1→Tier2 降级；analyzer 用同一 flag 在 Tier2 上重判一遍。纯防御纵深。 |
+| `overheat` | 0 | 28 | 28 | **0 独立贡献**。EGS v7.10 已在 `egs_main.py:2327` 把 OVERHEAT 做 Tier1→Tier2 降级；analyzer 同 flag 重判。纯防御纵深。 |
+| `l2_unknown` | 0 | 0 | **0** | **完全休眠**。EGS v7.10 已在 `egs_main.py:2843` 把 `l2_name="未知"` 从 Tier2 filler 排除；当前样本根本不会出现 `l2_name=="未知"`，rule 永远不触发。 |
+| `esp_non_positive` v2 | **3** | 36 | 39 | **唯一有独立贡献的 rule**。EGS 当前只对 ESP 做 cap@200 penalty，没有 `< 0` veto；这 3 条 Tier1 是 analyzer 独立 catch 的 esp_raw<0。Tier2 36 条是与其他 flag 共同命中。 |
+
+Tier × vetoed 交叉表（重新解读）：
 
 |  | passed | vetoed |
 |---|---:|---:|
-| Tier1 | 302 | 3 |
-| Tier2 | 0 | **55** |
+| Tier1 | 302 | **3** (全是 esp_non_positive，analyzer 独立贡献) |
+| Tier2 | 0 | **55** (其中 0 来自 l2_unknown，46 与 chasing_high 重叠，28 与 overheat 重叠，36 含 esp_non_positive；EGS 已经把这 55 条降级了) |
 
-**关键发现**：四条 hard veto 把 24p 数据里的 Tier2 filler **100% 杀干净**（55/55）；这正是这四条规则在设计上承担的角色 — 阻止 Tier2 把已降级的坏信号捡回样本。`all → all_veto_passed`：20d 月度 t 从 1.08 → 1.56，mean 从 1.97 → 2.84，win_rate 48.7% → 51.0%。
+**修正后的结论**：
 
-之前 `tier1_only` baseline 看不到这个效果，因为 EGS v7.10 已经在 Tier1 入口前置降级；用 `all_veto_passed` vs `all` 对比才是 phase 3 这批 veto 的正确评估口径。注意 `all_veto_passed` 在当前 24p 等价于 `tier1_veto_passed`（因为 0 Tier2 通过），但语义上它们是两个独立 subset，未来 EGS 阈值调整或 Tier2 入选规则变化时会分开。
+- 之前 handoff 写"4 条 hard veto 100% 清空 Tier2 (55/55)"会让人以为 analyzer 独立发现了 Tier2 是坏票。**错。** Tier2 的定义本身就是 "EGS 已经用这批 flag 标记并降级了的票"；analyzer 在 Tier2 上重判等于 EGS 已经做过的事。
+- 在 24p 上，**4 条规则的真实独立贡献只有 3 条 Tier1 esp_non_positive catch**。其他全部是 EGS 已经完成的工作的重复确认。
+- `all → all_veto_passed` 20d t 从 1.08 → 1.56 的提升，本质上等价于 `all → tier1_only`（1.08 → 1.60），微小差异（1.56 vs 1.60）来自那 3 条 esp_non_positive。
+- 但"重复确认"不是零价值 — 它是**防御纵深**：如果未来 EGS 改阈值或漏标，analyzer 这层是独立第二闸。`l2_unknown` 当前休眠是因为 EGS 提前过滤，rule 保留为未来 EGS 行为变化时的兜底。
+
+`all_veto_passed` 在当前 24p 与 `tier1_veto_passed` 完全相同（同 302 条 = 305 Tier1 - 3 esp_non_positive Tier1 vetoes + 0 Tier2 passed），这是 EGS 当前 Tier2 定义 ⊇ analyzer rule set 的结构性后果。未来 EGS 阈值或 Tier2 入选规则变化时它们会分开，所以两个 subset 都保留作为长期监控口径。
 
 ### 关键 replay 结果：score_ge_60 strategy variant
 
@@ -521,14 +537,21 @@ portfolio_stats，subset=`tier1_only`，variant=`t1_net`，window=20：
 
 ### 失效旧结论
 
-- “Phase 3 当前 4 条 hard veto 没产生边际改善”不再成立 — 在错的比较口径（tier1_only）上确实没有，但在 `all` vs `all_veto_passed` 正确口径下 20d t 从 1.08 升到 1.56，且 100% 清空 Tier2 filler。
-- “tier1_veto_passed 接近 tier1_only，所以这批 veto 没用”不成立 — 这是比较口径错位造成的错觉；valuable 在于过滤 Tier2，不是过滤 Tier1。
-- “score_ge_60 是 alpha 增益”过强 — portfolio_stats 显示这是 risk-mitigation（max_dd + win_rate），不是 monthly_t 增益。
+- ~~“Phase 3 当前 4 条 hard veto 没产生边际改善”~~ — 部分失效。在 24p 上 4 条 rule 的**独立**贡献只有 3 条 Tier1 esp_non_positive catch（见 overlap 分析）；其余都与 EGS v7.10 已有的 Tier1→Tier2 降级机制完全重合。`all_veto_passed` 看上去比 `all` 强是因为 Tier2 被剔除，而 EGS 自己就能做这件事。
+- ~~"tier1_veto_passed 接近 tier1_only，所以这批 veto 没用"~~ — 也部分失效。"接近"在 24p 上是因为 EGS 已经在 Tier1 入口前置降级；analyzer 在 Tier1 内的独立 catch 仅有 3 条 esp_non_positive。
+- ~~"四条 hard veto 100% 清空 Tier2 filler 是 phase 3 的关键价值"~~ — **本节修正**。Tier2 的定义本身就包含这些 flag；100% 命中是循环。真实独立贡献是 3 条 Tier1 esp_non_positive。
+- "score_ge_60 是 alpha 增益"过强 — portfolio_stats 显示这是 risk-mitigation（max_dd + win_rate），不是 monthly_t 增益。
 
 ### 下一步注意事项
 
 1. **不要把 `all_veto_passed` 或 `score_ge_60` 提为 primary_subset**；`tier1_only` 仍是主 baseline。当前 schema 1.11.0 的 `primary_subset` enum 已经包含 `tier1_veto_passed`，但实盘报告口径不动。
-2. `score_ge_60` 已经接进 strategy_variant，下一步是观察后续 12 期更多数据；不要急着加 `score_ge_65`。`65` 加进来会有数据挖掘嫌疑，等 60 的 portfolio_stats 在新一批 as_of 上稳定再决定。
-3. 4 条 hard veto 在 Tier2 filler 上 100% 命中率是当前 24p 的事实，未来 EGS 改阈值（如把 Tier2 入选条件放宽）会让这个比例变化；reporting 时 `all` vs `all_veto_passed` 应一直保留作监控口径。
-4. 如果以后做 `LOCK` veto，要重跑 `all_veto_passed` 对比，确认 LOCK 在 Tier2 / Tier1 上的命中和边际贡献。LOCK 当前 N=4 不足，下次扩到 N≥15 时再看。
-5. 旧 handoff 中"四条 hard veto 全开没有改善 Tier1-only baseline"措辞保留，但本节澄清这是口径错位；不要回去改旧节。
+2. **`l2_unknown` rule 当前 24p 触发 0 次**（EGS `egs_main.py:2843` 已提前过滤）。不要因为"它没贡献"就移除 — 它是 EGS 改行为时的兜底，保留为防御纵深。但要在监控里盯：如果未来 N 期还是 0 命中，可以考虑降级到 soft flag 或加 audit warning。
+3. **`chasing_high` / `overheat` rule 当前在 Tier1 内 catch 0 次**。同上，保留为防御纵深；不要据此放宽 EGS 的 Tier1→Tier2 降级。
+4. **`esp_non_positive` v2 是当前唯一在 Tier1 有独立贡献的 rule**（3 条 catch）。下一步可以考虑：
+   - 把 EGS 也加入 `esp_raw < 0` 的 Tier1→Tier2 降级，让 analyzer 和 EGS 一致；或
+   - 反过来，把 `esp_non_positive` 留作 analyzer 专属 rule 验证 EGS。
+   两种选哪个看 Phase 4 Skill 路径需求。
+5. `score_ge_60` 已经接进 strategy_variant，下一步是观察后续 12 期更多数据；**不要急着加 `score_ge_65`**。65 加进来会有数据挖掘嫌疑，等 60 的 portfolio_stats 在新一批 as_of 上稳定再决定。
+6. 长期监控口径：每次新 as_of 都跑 `all` vs `all_veto_passed` vs `tier1_only` vs `tier1_veto_passed` 四个 subset，看 overlap 分析的 4 行表是否随时间变化。如果未来 EGS 阈值松动导致 `chasing_high` / `overheat` 在 Tier1 开始有命中，那才是 analyzer 真正发挥独立价值的时刻。
+7. 如果以后做 `LOCK` veto，要重跑 overlap 分析，确认 LOCK 是 EGS 已经处理过的还是 analyzer 独立产出。LOCK 当前 N=4 不足，下次扩到 N≥15 时再看。
+8. 旧 handoff 中"四条 hard veto 全开没有改善 Tier1-only baseline"措辞保留；不要回去改旧节，加批注即可。
