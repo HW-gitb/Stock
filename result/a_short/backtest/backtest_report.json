@@ -1,7 +1,7 @@
 {
   "schema_name": "rank_backtest_report",
-  "schema_version": "1.6.0",
-  "generated_at": "2026-05-24T10:12:46+08:00",
+  "schema_version": "1.9.0",
+  "generated_at": "2026-05-24T14:36:23+08:00",
   "preset": "a_short",
   "mode": "production",
   "engineering_smoke": false,
@@ -22,7 +22,8 @@
     "end_date": "20260301",
     "l3_mode": "neutralize",
     "l3_pit_strict": false,
-    "primary_subset": "tier1_only"
+    "primary_subset": "tier1_only",
+    "split_date": "20250101"
   },
   "windows": [
     5,
@@ -55,6 +56,38 @@
     "20251031",
     "20251128",
     "20251231"
+  ],
+  "date_warnings": [
+    {
+      "trade_date": "20240430",
+      "warning_type": "low_tier1_count",
+      "severity": "warning",
+      "threshold": 5,
+      "sample_count": 15,
+      "tier1_count": 3,
+      "tier2_count": 12,
+      "message": "Tier1 candidate count 3 is below 5; treat Tier2 filler and this date's headline strategy contribution as observation only."
+    },
+    {
+      "trade_date": "20240930",
+      "warning_type": "low_tier1_count",
+      "severity": "critical",
+      "threshold": 5,
+      "sample_count": 15,
+      "tier1_count": 0,
+      "tier2_count": 15,
+      "message": "Tier1 candidate count 0 is below 5; treat Tier2 filler and this date's headline strategy contribution as observation only."
+    },
+    {
+      "trade_date": "20241231",
+      "warning_type": "low_tier1_count",
+      "severity": "warning",
+      "threshold": 5,
+      "sample_count": 15,
+      "tier1_count": 3,
+      "tier2_count": 12,
+      "message": "Tier1 candidate count 3 is below 5; treat Tier2 filler and this date's headline strategy contribution as observation only."
+    }
   ],
   "immature_included_dates": [],
   "immature_skipped_dates": [],
@@ -93,27 +126,75 @@
       "csi300",
       "csi1000"
     ],
-    "fetched_at": "2026-05-24T04:21:06",
+    "fetched_at": "2026-05-24T11:25:21",
     "stock_rows": 2681523,
-    "stock_codes": 5564
+    "stock_codes": 5564,
+    "limit_rows": 3513895
   },
   "outputs": {
     "rank_samples": "result\\a_short\\backtest\\rank_samples.csv",
     "summary_by_window": "result\\a_short\\backtest\\summary_by_window.csv",
     "factor_group_stats": "result\\a_short\\backtest\\factor_group_stats.csv",
     "rule6_stats": "result\\a_short\\backtest\\rule6_stats.csv",
-    "monthly_stats": "result\\a_short\\backtest\\monthly_stats.csv"
+    "monthly_stats": "result\\a_short\\backtest\\monthly_stats.csv",
+    "eligible_benchmark": "result\\a_short\\backtest\\eligible_benchmark.csv",
+    "strategy_variant_stats": "result\\a_short\\backtest\\strategy_variant_stats.csv",
+    "strategy_variant_monthly": "result\\a_short\\backtest\\strategy_variant_monthly.csv",
+    "portfolio_period_returns": "result\\a_short\\backtest\\portfolio_period_returns.csv",
+    "portfolio_stats": "result\\a_short\\backtest\\portfolio_stats.csv"
   },
+  "strategy_variants": [
+    {
+      "strategy_variant": "baseline",
+      "sample_count": 360
+    },
+    {
+      "strategy_variant": "no_chase",
+      "sample_count": 314
+    },
+    {
+      "strategy_variant": "no_overheat",
+      "sample_count": 332
+    },
+    {
+      "strategy_variant": "no_low_base",
+      "sample_count": 311
+    },
+    {
+      "strategy_variant": "tier1_only",
+      "sample_count": 305
+    },
+    {
+      "strategy_variant": "no_tier2_unknown",
+      "sample_count": 360
+    },
+    {
+      "strategy_variant": "no_lock",
+      "sample_count": 354
+    },
+    {
+      "strategy_variant": "combined_p0",
+      "sample_count": 259
+    },
+    {
+      "strategy_variant": "esp_cap_200_rerank",
+      "sample_count": 360
+    }
+  ],
   "return_variants": {
     "close": "qfq close-to-close (no T+1, no cost). Reference only.",
     "t1": "qfq T+1 open entry to close of T+W. Gross of cost.",
     "t1_net": "qfq T+1 open entry minus round-trip cost (default 0.16%).",
     "excess_csi300": "t1 minus CSI300 same-window return (entry_date to exit_date).",
-    "excess_csi1000": "t1 minus CSI1000 same-window return."
+    "excess_csi1000": "t1 minus CSI1000 same-window return.",
+    "excess_eligible": "t1 minus same-date eligible universe equal-weight t1 return. Eligible universe is Tier1+Tier2 rows from generated/_intermediate/egs_full_YYYYMMDD.csv."
   },
   "limitations": [
     "Backtest writes generated candidate pools and intermediate EGS CSV/XLSX artifacts under result/a_short/backtest/generated/ (isolated from official output).",
     "Forward returns are qfq-adjusted via Tushare adj_factor; transaction cost defaults to 0.16% round-trip.",
+    "T+1 entry is marked pending_no_entry_limit_up when Tushare stk_limit says entry open is at/near up_limit; falls back to board-specific limit rules only when stk_limit is unavailable.",
+    "Eligible benchmark uses the generated full-rank Tier1+Tier2 pool for the same as_of date; it is an internal opportunity-set benchmark, not a tradable market index.",
+    "Strategy variants use post-hoc filters except esp_cap_200_rerank, which replays score_l5-style ranking from generated/_intermediate/egs_full_YYYYMMDD.csv; variants are for validation before promotion into official EGS rules.",
     "Benchmark excess returns compare stock T+1 open-to-close returns against benchmark close-to-close returns over the same entry/exit dates; this can introduce a small intraday entry-basis difference.",
     "Backtest mode skips cninfo, web news, and DeepSeek Stage3 checks, so historical candidate pools do not include the same regulatory/policy veto layer as production screening.",
     "Adjacent as-of dates with overlapping forward windows correlate; variance is therefore not iid -- use monthly freq for max_window=20 or apply --dedup-mode.",

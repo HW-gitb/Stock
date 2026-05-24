@@ -1,7 +1,7 @@
 {
   "schema_name": "snapshot",
   "schema_version": "1.0.0",
-  "generated_at": "2026-05-24T04:14:08+08:00",
+  "generated_at": "2026-05-24T11:14:57+08:00",
   "trade_date": "20250930",
   "preset": "a_short",
   "analysis_input": "result\\a_short\\backtest\\generated\\20250930\\analysis_input.json",
@@ -116,6 +116,7 @@
       "overheat_flag",
       "z_group",
       "esp_raw_w",
+      "low_base_growth_flag",
       "esp_z",
       "esp_score",
       "egs_base",
@@ -123,6 +124,8 @@
       "deduct",
       "final_score",
       "tier",
+      "downgrade_reasons",
+      "score_penalty_reasons",
       "entry_flag",
       "cninfo_flag",
       "run_date"
@@ -211,13 +214,16 @@
       "overheat_flag",
       "z_group",
       "esp_raw_w",
+      "low_base_growth_flag",
       "esp_z",
       "esp_score",
       "egs_base",
       "mult",
       "deduct",
       "final_score",
-      "tier"
+      "tier",
+      "downgrade_reasons",
+      "score_penalty_reasons"
     ]
   }
 }

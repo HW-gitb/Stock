@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-EGS v7.9 量化选股框架 — 周频增强版 + as-of backtest mode (2026.05.24)
+EGS v7.10 量化选股框架 — 周频增强版 + as-of backtest mode (2026.05.24)
+
+v7.10 changelog (从 v7.9):
+- ESP 极端低基数增长 cap：esp_raw_w 上限 200，降低低基数同比暴涨对排序的污染
+- backtest Tier2 filler 排除未知行业，避免为凑满 watch_n 混入无行业参照系样本
+- 输出 downgrade_reasons / score_penalty_reasons，便于回测和复盘追踪过滤原因
 
 v7.9 changelog (从 v7.8):
 - data_quality.completeness_score 改为按候选股实际字段缺失动态计算，不再硬编码 60
@@ -121,6 +126,7 @@ CONF = {
     "max_concepts_per_stock":   5,
     "overheat_5d":      8.0,   # 5日涨幅超过此值触发过热标记
     "overheat_20d":     22.0,  # 20日涨幅超过此值且仍近高位触发过热标记
+    "esp_raw_cap":      200.0, # 低基数同比暴涨 cap，防止 esp_raw 极端值污染排序
     "l3_cache_mode":    "refresh",  # formal runs refresh L3; tests may set reuse
 }
 
@@ -155,7 +161,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("EGS")
 
-EGS_VERSION = "v7.9"
+EGS_VERSION = "v7.10"
 REALTIME_CACHE_TTL = CONF["cache_ttl"]
 BACKTEST_CACHE_TTL = 10 * 365 * 24 * 3600
 TODAY    = datetime.now().strftime("%Y%m%d")
@@ -2227,10 +2233,12 @@ def score_l5(df, sw_map):
     valid_esp = df["esp_raw"].dropna()
     if not valid_esp.empty:
         p1, p99 = valid_esp.quantile(0.01), valid_esp.quantile(0.99)
-        df["esp_raw_w"] = df["esp_raw"].clip(p1, p99)
+        upper = min(float(p99), float(CONF.get("esp_raw_cap", 200.0)))
+        df["esp_raw_w"] = df["esp_raw"].clip(p1, upper)
     else:
         df["esp_raw_w"] = df["esp_raw"].copy()
     df["esp_raw_w"] = df["esp_raw_w"].fillna(0.0)
+    df["low_base_growth_flag"] = pd.to_numeric(df["esp_raw"], errors="coerce") > float(CONF.get("esp_raw_cap", 200.0))
 
     cov_mask = df["l2_flags"].str.contains("COV-LOW", na=False)
     df_cov   = df[cov_mask].copy()
@@ -2321,6 +2329,26 @@ def score_l5(df, sw_map):
     df.loc[df["l4_flag"].str.contains("TIER2_FORCED", na=False), "tier"] = "Tier2"
     # 行业未知的股票 ESP 评分无参照系，降至 Tier2
     df.loc[(df["tier"] == "Tier1") & (df["l2_name"] == "未知"), "tier"] = "Tier2"
+
+    def _join_reasons(reasons):
+        reasons = [r for r in reasons if r]
+        return "|".join(reasons) if reasons else ""
+
+    df["downgrade_reasons"] = ""
+    df["score_penalty_reasons"] = ""
+    df.loc[ch_mask, "downgrade_reasons"] = df.loc[ch_mask].apply(
+        lambda r: _join_reasons([r.get("downgrade_reasons"), "chasing_high"]), axis=1)
+    df.loc[oh_mask, "downgrade_reasons"] = df.loc[oh_mask].apply(
+        lambda r: _join_reasons([r.get("downgrade_reasons"), "overheat"]), axis=1)
+    df.loc[df["l4_flag"].str.contains("TIER2_FORCED", na=False), "downgrade_reasons"] = \
+        df.loc[df["l4_flag"].str.contains("TIER2_FORCED", na=False)].apply(
+            lambda r: _join_reasons([r.get("downgrade_reasons"), "l4_score_zero"]), axis=1)
+    df.loc[df["l2_name"] == "未知", "downgrade_reasons"] = df.loc[df["l2_name"] == "未知"].apply(
+        lambda r: _join_reasons([r.get("downgrade_reasons"), "unknown_industry"]), axis=1)
+    if fin_coverage >= 0.70:
+        df.loc[esp_neg_mask, "downgrade_reasons"] = df.loc[esp_neg_mask].apply(
+            lambda r: _join_reasons([r.get("downgrade_reasons"), "esp_raw_non_positive"]), axis=1)
+    df.loc[df["low_base_growth_flag"], "score_penalty_reasons"] = "esp_raw_cap_200"
 
     tier1 = df[df["tier"] == "Tier1"].sort_values(
         ["final_score", "l4_score", "pct_20d_n"],
@@ -2813,6 +2841,7 @@ def run_egs(backtest_mode=False, output_root=None):
     if backtest_mode and len(watch_df) < watch_n:
         existing_codes = set(watch_df["ts_code"].tolist()) if "ts_code" in watch_df.columns else set()
         tier2_fill = df_full[(df_full["tier"] == "Tier2") &
+                             (df_full["l2_name"] != "未知") &
                              (~df_full["ts_code"].isin(existing_codes))] \
             .sort_values(["final_score", "l4_score", "pct_20d_n"],
                          ascending=[False, False, False]) \
@@ -2830,7 +2859,8 @@ def run_egs(backtest_mode=False, output_root=None):
     watch_cols = ["ts_code","name","l2_name","final_score","tier",
                   "pct_20d_n","pct_5d_n","pct_60d","drawdown_20d",
                   "cat_score","l4_score","esp_score",
-                  "l4_flag","cninfo_flag","entry_flag"]
+                  "l4_flag","cninfo_flag","entry_flag",
+                  "downgrade_reasons","score_penalty_reasons"]
     watch_cols = [c for c in watch_cols if c in watch_df.columns]
 
     print("\n" + "═" * 60)
@@ -2849,6 +2879,7 @@ def run_egs(backtest_mode=False, output_root=None):
                 "pct_20d_n","pct_5d_n","pct_60d","drawdown_20d",
                 "big_ratio","ind_mom_cnt",
                 "l2_flags","l4_flag","cninfo_flag","entry_flag",
+                "downgrade_reasons","score_penalty_reasons",
                 "reduce_penalty","val_bonus","val_penalty"]
     out_cols = [c for c in out_cols if c in tier1_final.columns]
 

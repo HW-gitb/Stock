@@ -1,0 +1,180 @@
+# Stock 项目 — 当前状态快照
+
+**最后更新**：2026-05-24（cc 24p findings 对比 + 优化优先级合并后）
+**文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
+
+---
+
+## 1. 当前 Phase 与目标
+
+- **当前 Phase**：Phase 2 收尾 + Phase 2.5 已完成（auto stats 指标）+ Phase 2.6 待启动（DataHub 设计文档）
+- **当前目标**：把 24 期 v7.10 production 回测识别出的 P0 veto 信号落地到 EGS 规则，准备进入 Phase 3（minimal analyzer + state 接口）
+- **下一阶段大目标（Phase 3）**：建 analyzer veto 模块 + state 接口；不再追求"挑出更好的票"，转向"过滤更多坏票"
+
+---
+
+## 2. 已完成事项（不重做）
+
+- Phase 1a/1b：`analysis_input.schema.json` v1.1.0、`egs_main.py` 输出三件套（candidates/snapshot/analysis_input）
+- Phase 2 工程链路：`runners/backtest_rank.py` 跑通 24 期 production；T+1 入场、双边 0.16% 摩擦、CSI300/CSI1000/eligible 三层 benchmark
+- Phase A+B 修复（2026-05-22）：A1 qfq、A4 benchmark、A5-A11 全部、B2 退市股 PIT、B3a 行业图 PIT、B3b 财务 PIT
+- L3 PIT 三模式（2026-05-23）：`--l3-mode {pit,today,neutralize}`，production 默认 neutralize，snapshot 累计中
+- v7.10 升级（2026-05-24）：SW 行业 v5 fix、L1 mapping fix、completeness_score 动态化
+- Tier1-only 主口径切片（2026-05-24）：`backtest_rank.py` 双跑 subset=all/tier1_only，schema 升 1.6.0，settings.primary_subset="tier1_only"
+- Phase 2.5 auto stats（2026-05-24）：`monthly_t/sharpe_m/win_rate` 直接产出在 summary/factor_group/monthly_stats CSV，免手算
+- git init（2026-05-24，commit `dca8367`）：**私密本地仓库，禁止 push / 禁止 add remote**
+- 报告 schema 1.8.0：含 strategy_variant_stats、portfolio_stats、eligible_benchmark、reason observability
+
+---
+
+## 3. 当前有效结论（24 期 v7.10 production，Tier1-only 主口径）
+
+### 3.1 工程层
+
+✅ 框架代码健康。SW + L1 修复有效，L3 三模式工作，schema 校验全通过。**Phase 2 工程签收。**
+
+### 3.2 策略层（基于 24p Tier1-only N≈305）
+
+- **20d 对 benchmark 几乎无显著超额**（t1_net t=1.60, excess_csi300 t=0.57, excess_csi1000 t=0.17）
+- **5d excess_csi1000 t=+2.88**：**唯一统计显著的正 alpha 信号**，且只在 5 日窗口
+- **三个统计显著的强负信号（按 |t| 排序）**：
+  1. `entry_flag=追高风险，周一确认`：N=40, **t=-2.36**, 20d -6.35%, win 27.5%（**24p 最强可执行负信号**）
+  2. OVERHEAT：N=25, **t=-2.34**, win 16%
+  3. Tier2：N=58, **t=-2.27**, mean -4.71%
+- **方向性但样本不足**：
+  - `esp_raw>200` / `q0_dt_yoy>200`：t≈-1.5（ESP 低基数噪音）
+  - LOCK：N=4 全亏（mean -13.42%, win 0%），需扩样本验证
+- **final_score 不单调**：70-75 是甜区，75-85 反而弱；85+ 样本太少
+
+### 3.3 框架本质判断
+
+**"过滤坏票" > "挑出好票"**。强右偏分布（多数 trade 亏损、靠少数大涨拉平均）。**目前不具备可实盘部署的 alpha 强度。**
+
+---
+
+## 4. 已失效 / 已撤回结论
+
+| 结论 | 失效原因 |
+|---|---|
+| 12 期 "Top 5 monthly_t=+2.18 显著" | 24p 重测 t=+1.19（all subset） / t=+1.61（tier1_only），失去显著性 |
+| 12 期 "Top 5 主分析"建议 | 24p Top11-15 反而优于 Top1-5，rank monotonicity 不成立 |
+| 12 期 "突破型 -6.31% 反向信号" | 24p N=13 无显著性，可能是 12p SW 污染所致 |
+| 12 期 "OVERHEAT 弱负不显著" | 24p N=25, t=-2.34 显著负 |
+| 12 期 "Tier2 略正 +2.14%" | 24p t=-2.27 显著负 |
+| 旧 `_cc.md` 整体结论 | INVALIDATED，基于 12p + SW 污染数据 |
+| v7.9 之前的 `completeness_score` 分组结论 | v7.9 之前硬编码 60 无判别力 |
+| "重新校准排序权重"（外部建议）作为 P0 | 决策：降级到 P3 长期方向。理由：框架核心问题是结构性（强右偏），重调权重未必能根治；且当前数据量易过拟。先走 veto 路径性价比高 |
+| "重点验证 5-10 日持有周期"（外部建议）作为独立 P0 | 决策：合并到 Phase 3 设计文档作为执行回测的 horizon target，不单独立项 |
+
+---
+
+## 5. 关键文件
+
+### 代码 / schema
+- `A-EGS/egs_main.py` — v7.10（v7.9 内存里仍有引用，以文件为准）
+- `runners/backtest_rank.py` — Phase 2 回测入口，subset=all+tier1_only 双跑
+- `schemas/analysis_input.schema.json` — v1.1.0
+- `schemas/rank_backtest_report.schema.json` — v1.8.0
+
+### 当前有效 findings（**只读这两份，旧 12p findings 已 INVALIDATED**）
+- `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md` — cc 合并版（OVERHEAT/entry_flag/LOCK + 时间序列分析）
+- `result/a_short/backtest/Phase2_rank_backtest_findings_codex_24p_v7.10.md` — codex 24p v7.10 视角
+
+### 最新 handoff（按需读，不要全量展开）
+- `docs/handoff/2026-05-24_phase2_24p_v710_results_handoff.md` — v7.10 24p 实跑结果
+- `docs/handoff/2026-05-24_phase2_validation_tooling_handoff.md` — schema 1.8.0 + 验证工具
+- `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Tier1-only 主口径
+- `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — v7.8/v7.9 修改
+- `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — **git 私密性约束（必读）**
+- `docs/handoff/2026-05-24_phase2_6_datahub_guardrail_handoff.md` — Phase 2.6 边界
+
+### 报告产出
+- `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.8.0, primary_subset=tier1_only
+- `result/a_short/backtest/{summary_by_window,factor_group_stats,monthly_stats,strategy_variant_stats,portfolio_stats}.csv`
+
+---
+
+## 6. 下一步（按优先级 P0 → P3）
+
+### P0 — 立即可做（24p 统计证据强）
+
+1. **追高风险硬过滤 / 退出 Tier1** — `entry_flag=追高风险，周一确认` 直接否决（证据：t=-2.36, win 27.5%, 5/10/20d 全亏）
+2. **OVERHEAT 硬过滤** — 加入 EGS 否决逻辑（证据：t=-2.34, win 16%）
+3. **Tier2 不上实盘** — 主口径已切 Tier1-only；实盘选股逻辑同步限制只用 Tier1
+4. **ESP 模型加低基数 winsorize / cap @ 200** — `esp_raw` 计算引入低基数惩罚（证据：t≈-1.5；AGENTS.md Phase 2 待办已列）
+
+### P1 — 短期跟进
+
+5. **撤回"Top 5 主分析"对外说法** — 改成"Top15 为观察池；Top5 用于 Phase 3 人工/analyzer 深度分析，不作实盘加仓信号"
+6. **Tier2 filler 排除 `l2_name="未知"`** — 24p 有 14 条 filler 行业未知，影响 Tier2 子集判读
+7. **SW 覆盖率监控日志** — 每次 SW fetch 后 log `active_count`，v5 cache 本周 3426 接近 3000 阈值
+
+### P2 — 待扩样本
+
+8. **LOCK 标记进入 analyzer veto 辅助 flag** — N=4 太小，先不硬过滤；扩样本到 N≥15 再决策
+9. **Phase 2.6 DataHub 设计文档** — `docs/datahub_design.md` 完善 + 报告 lineage 字段补齐
+
+### P3 — 长期 / Phase 3+
+
+10. **Phase 3 minimal analyzer + state 接口** — veto 模块优先（OVERHEAT/Tier2/ESP 低基数/追高风险四大硬过滤）
+11. **Rule 6 deterministic 字段补齐** — 当前多数 pending_data/pending_llm，让 risk veto 真正起作用
+12. **L3 snapshot 累积满 6 月后跑 pit 对照**（约 2026-12）— 测 L3 因子在 PIT 下边际贡献
+13. **扩 36 期+** — 覆盖 2023 段不同 regime；当前 2024+2025 偏强势
+14. **5-10 日持有周期作为 execution 回测 horizon target** — 24p 数据显示 5d 是唯一显著甜区
+15. **重新校准排序权重** — 等 36 期 + L3 PIT 数据齐备后再做，否则易过拟 24p
+
+---
+
+## 7. 运行命令（常用）
+
+### 正式回测（24 期 production）
+```powershell
+python runners\backtest_rank.py --mode production --periods 24 --freq monthly --end-date 20260301 --split-date 20250101 --refresh-forward-daily
+```
+
+### Stats-only 重统计（不重跑候选池）
+```powershell
+python runners\backtest_rank.py --stats-only --mode production --periods 24 --freq monthly --end-date 20260301
+```
+
+### 实时选股（每周五）
+```powershell
+python A-EGS\egs_main.py --as-of <YYYYMMDD>
+```
+（默认 `--l3-mode today`，自动落 snapshot 到 `state/l3_snapshots/`）
+
+### Smoke 测试
+```powershell
+python runners\backtest_rank.py --mode smoke --periods 3 --freq monthly --windows 1,3,5 --stats-only --include-immature
+```
+
+---
+
+## 8. 注意事项 / 雷区
+
+### 不可碰
+- **不可 `git push`，不可 `git remote add`**（私密本地仓库，commit `dca8367` 之后所有提交同规则）
+- **不可改 v14.2 原文档**（已迁到 `skills/a_short_analysis/reference/v14.2_spec.md` 作设计参考）
+- **不可写到 `result/a_short/YYYYMMDD/`**（回测必须用 `result/a_short/backtest/generated/YYYYMMDD/`）
+
+### 易错点
+- **production 模式拒绝 `--reuse-l3-cache` + `--include-immature`**（设计如此，不要绕过）
+- **`--stats-only` 强制读 `analysis_input.json:source.l3_mode`**，不一致会 SystemExit
+- **report `settings.l3_mode` 决定 L3 解读**：neutralize=无 lookahead/反映 L1+L2+L4+ESP；today=有 lookahead（仅 smoke）；pit=未来路径
+- **引用收益**优先 `t1_net` 或 `excess_*`，不用 `close`（已废）
+- **多维分析铁律**：时间序列 + 横截面 + 分布三类切片都要做，禁止单维聚合得结论
+- **AGENTS.md 写入需谨慎**：跨 LLM 共享文档，2026-05-24 解除 off-limits
+
+### 数据限制
+- Tushare 财务返回最新修订版（非原始披露），ann_date 过滤无法解决
+- L3 概念无 as_of 参数，PIT 模式靠 snapshot 累积
+- Backtest 模式跳过 cninfo / 网络新闻 / DeepSeek Stage3 检查
+
+---
+
+## 维护规则
+
+- **每轮重要修改后更新本文件**（小修：直接改；大修：加新 handoff 并在本文件 §5 更新指针）
+- **本文件保持 < 300 行**，超出说明该归档到 handoff 了
+- **失效结论搬到 §4**，不在 §3 留旧版
+- **新 handoff 命名**：`docs/handoff/YYYY-MM-DD_short-topic_handoff.md`

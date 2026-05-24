@@ -71,6 +71,9 @@ BENCHMARKS = {
     "csi1000": "000852.SH",
 }
 
+ELIGIBLE_BENCHMARK = "eligible"
+ESP_CAP_VALUE = 200.0
+
 
 # ============================================================
 # Generic helpers
@@ -132,6 +135,9 @@ def flatten_candidate(trade_date, source_path, candidate):
         "source_file": str(source_path.relative_to(ROOT)),
         "ts_code": candidate.get("ts_code"),
         "name": candidate.get("name"),
+        "l1_name": candidate.get("industry", {}).get("sw_l1_name"),
+        "l2_name": candidate.get("industry", {}).get("sw_l2_name"),
+        "board": candidate.get("board"),
         "rank": selection.get("rank"),
         "tier": selection.get("tier"),
         "final_score": scores.get("final_score"),
@@ -295,11 +301,13 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
     Returns:
         dict with keys:
             "stocks"     -> DataFrame[ts_code, trade_date, open, close, adj_factor]
+            "limits"     -> DataFrame[ts_code, trade_date, up_limit, down_limit]
             "benchmarks" -> dict[name -> DataFrame[trade_date, close]]
             "meta"       -> dict with date range / fetched_at / shape
     """
     if not asof_dates:
         return {"stocks": pd.DataFrame(columns=["ts_code", "trade_date", "open", "close", "adj_factor"]),
+                "limits": pd.DataFrame(columns=["ts_code", "trade_date", "up_limit", "down_limit"]),
                 "benchmarks": {},
                 "meta": {"status": "no_asof"}}
 
@@ -322,14 +330,16 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
             meta = cached.get("meta", {})
             stocks = cached.get("stocks")
             benches = cached.get("benchmarks", {})
+            limits = cached.get("limits")
             sig_ok = (meta.get("start_date", "") <= start and meta.get("end_date", "") >= end
                       and meta.get("adj") == cache_signature["adj"]
                       and set(benches.keys()) >= set(BENCHMARKS.keys())
-                      and isinstance(stocks, pd.DataFrame) and not stocks.empty)
+                      and isinstance(stocks, pd.DataFrame) and not stocks.empty
+                      and isinstance(limits, pd.DataFrame) and not limits.empty)
             if sig_ok:
                 print(f"[CACHE] forward_daily reused: {meta.get('start_date')}..{meta.get('end_date')} "
                       f"rows={len(stocks)} benchmarks={list(benches.keys())}")
-                return {"stocks": stocks, "benchmarks": benches, "meta": meta}
+                return {"stocks": stocks, "limits": limits, "benchmarks": benches, "meta": meta}
         except Exception as e:
             print(f"[CACHE] forward_daily ignored ({e}); will refetch.")
 
@@ -341,6 +351,7 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
 
     stock_frames = []
     adj_frames = []
+    limit_frames = []
     for td in trade_dates:
         df = _ts_call(pro.daily, trade_date=td, fields="ts_code,trade_date,open,close")
         if df is not None and not df.empty:
@@ -348,6 +359,9 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
         adj = _ts_call(pro.adj_factor, trade_date=td, fields="ts_code,trade_date,adj_factor")
         if adj is not None and not adj.empty:
             adj_frames.append(adj)
+        lim = _ts_call(pro.stk_limit, trade_date=td, fields="ts_code,trade_date,up_limit,down_limit")
+        if lim is not None and not lim.empty:
+            limit_frames.append(lim)
 
     if not stock_frames:
         raise RuntimeError("Tushare pro.daily returned no rows for the forward window")
@@ -366,6 +380,13 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
     stocks["adj_factor"] = stocks.groupby("ts_code")["adj_factor"].ffill()
     stocks["adj_factor"] = stocks["adj_factor"].fillna(1.0)
 
+    limits = pd.concat(limit_frames, ignore_index=True) if limit_frames else \
+        pd.DataFrame(columns=["ts_code", "trade_date", "up_limit", "down_limit"])
+    if not limits.empty:
+        limits["trade_date"] = limits["trade_date"].astype(str)
+        limits = limits.drop_duplicates(subset=["ts_code", "trade_date"], keep="last")
+        limits = limits.sort_values(["ts_code", "trade_date"]).reset_index(drop=True)
+
     benches = {}
     for name, ts_code in BENCHMARKS.items():
         bdf = _ts_call(pro.index_daily, ts_code=ts_code, start_date=start, end_date=end,
@@ -383,13 +404,14 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
             "benchmarks": list(BENCHMARKS.keys()),
             "fetched_at": datetime.now().isoformat(timespec="seconds"),
             "stock_rows": int(len(stocks)),
-            "stock_codes": int(stocks["ts_code"].nunique())}
+            "stock_codes": int(stocks["ts_code"].nunique()),
+            "limit_rows": int(len(limits))}
 
     with FORWARD_DAILY_CACHE.open("wb") as f:
-        pickle.dump({"meta": meta, "stocks": stocks, "benchmarks": benches}, f)
+        pickle.dump({"meta": meta, "stocks": stocks, "limits": limits, "benchmarks": benches}, f)
     print(f"[FETCH] forward_daily saved stocks={len(stocks)} codes={meta['stock_codes']} "
-          f"benchmarks={list(benches.keys())} -> {FORWARD_DAILY_CACHE.relative_to(ROOT)}")
-    return {"stocks": stocks, "benchmarks": benches, "meta": meta}
+          f"limits={len(limits)} benchmarks={list(benches.keys())} -> {FORWARD_DAILY_CACHE.relative_to(ROOT)}")
+    return {"stocks": stocks, "limits": limits, "benchmarks": benches, "meta": meta}
 
 
 # ============================================================
@@ -407,9 +429,36 @@ def _benchmark_returns(bench_df, base_date, future_date):
     return (float(f) / float(b) - 1.0) * 100.0
 
 
+def _fallback_limit_ratio(ts_code, name=None, board=None):
+    symbol = str(ts_code).split(".")[0]
+    name = "" if name is None else str(name)
+    board = "" if board is None else str(board).lower()
+    if "ST" in name.upper() or name.startswith("*ST"):
+        return 1.05
+    if board == "bj" or symbol.startswith(("8", "4", "920")):
+        return 1.30
+    if board in ("chinext", "star") or symbol.startswith(("300", "301", "688", "689")):
+        return 1.20
+    return 1.10
+
+
+def _is_entry_limit_up(ts_code, name, board, trade_date, entry_open, base_close, limit_lookup):
+    """Return (blocked, source). Prefer Tushare stk_limit; fallback to board rules."""
+    lim = limit_lookup.get((ts_code, trade_date))
+    if lim is not None and not pd.isna(lim) and float(lim) > 0:
+        return float(entry_open) >= float(lim) * 0.999, "stk_limit"
+    if base_close is None or pd.isna(base_close) or float(base_close) <= 0:
+        return False, "missing_limit"
+    ratio = _fallback_limit_ratio(ts_code, name=name, board=board)
+    return float(entry_open) >= float(base_close) * ratio * 0.999, "fallback_board_rule"
+
+
 def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COST_PCT):
     samples = samples.copy()
+    samples["entry_date"] = pd.NA
+    samples["entry_unbuyable_reason"] = pd.NA
     for window in windows:
+        samples[f"ret_{window}d_exit_date"] = pd.NA
         samples[f"ret_{window}d_close"] = pd.NA
         samples[f"ret_{window}d_t1"] = pd.NA
         samples[f"ret_{window}d_t1_net"] = pd.NA
@@ -419,6 +468,7 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
             samples[f"ret_{window}d_excess_{bname}"] = pd.NA
 
     stocks = daily_payload.get("stocks", pd.DataFrame())
+    limits = daily_payload.get("limits", pd.DataFrame())
     benches = daily_payload.get("benchmarks", {})
     if samples.empty or stocks.empty:
         return samples
@@ -430,6 +480,10 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
     lookup = {}
     for row in stocks[cols].itertuples(index=False):
         lookup[(row.ts_code, row.trade_date)] = (row.open, row.close, row.adj_factor)
+    limit_lookup = {}
+    if isinstance(limits, pd.DataFrame) and not limits.empty:
+        for row in limits[["ts_code", "trade_date", "up_limit"]].itertuples(index=False):
+            limit_lookup[(row.ts_code, str(row.trade_date))] = row.up_limit
 
     for idx, row in samples.iterrows():
         trade_date = str(row["trade_date"])
@@ -452,6 +506,7 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
                 samples.at[idx, f"ret_{window}d_status"] = "pending_no_entry_price"
             continue
         entry_open, _entry_close, entry_adj = entry_row
+        samples.at[idx, "entry_date"] = entry_date
         # base close (for close-to-close reference)
         base_row = lookup.get((ts_code, trade_date))
         base_close = base_row[1] if base_row else None
@@ -459,6 +514,21 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
         if base_close is None or pd.isna(base_close) or float(base_close) == 0:
             base_close = row.get("close")
             base_adj = entry_adj  # fallback
+
+        blocked, block_source = _is_entry_limit_up(
+            ts_code,
+            row.get("name"),
+            row.get("board"),
+            entry_date,
+            entry_open,
+            base_close,
+            limit_lookup,
+        )
+        if blocked:
+            samples.at[idx, "entry_unbuyable_reason"] = f"limit_up:{block_source}"
+            for window in windows:
+                samples.at[idx, f"ret_{window}d_status"] = "pending_no_entry_limit_up"
+            continue
 
         for window in windows:
             # T+1 open entry, then close on the Nth trading day after as_of.
@@ -468,6 +538,7 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
                 samples.at[idx, f"ret_{window}d_status"] = "pending_immature_asof"
                 continue
             exit_date = trade_dates[exit_idx]
+            samples.at[idx, f"ret_{window}d_exit_date"] = exit_date
             exit_row = lookup.get((ts_code, exit_date))
             if exit_row is None or pd.isna(exit_row[1]) or pd.isna(exit_row[2]):
                 samples.at[idx, f"ret_{window}d_status"] = "pending_missing_future_close"
@@ -505,7 +576,7 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
 # Stats
 # ============================================================
 
-RET_VARIANTS = ["close", "t1", "t1_net"] + [f"excess_{b}" for b in BENCHMARKS]
+RET_VARIANTS = ["close", "t1", "t1_net"] + [f"excess_{b}" for b in BENCHMARKS] + [f"excess_{ELIGIBLE_BENCHMARK}"]
 
 
 MIN_MONTHLY_OBS_FOR_T = 3  # 2 months gives std n-1=1 → wildly unstable t/Sharpe
@@ -539,10 +610,11 @@ def _cluster_stats(sub):
     return out
 
 
-def summarize_returns(samples, windows, subset="all"):
-    """Aggregate stats per (window, variant). `subset` is a label that goes
-    into the output's `subset` column so multiple slices (all / tier1_only)
-    can share one CSV without losing identity."""
+def summarize_returns(samples, windows, subset="all", period_split="all"):
+    """Aggregate stats per (window, variant). `subset` and `period_split` are
+    labels that go into the output's identity columns so multiple slices
+    (all / tier1_only × all / discovery / validation) can share one CSV
+    without losing identity."""
     rows = []
     for window in windows:
         ok_status = samples[f"ret_{window}d_status"] == "ok"
@@ -555,6 +627,7 @@ def summarize_returns(samples, windows, subset="all"):
             stats = _cluster_stats(sub)
             rows.append({
                 "subset": subset,
+                "period_split": period_split,
                 "window": window,
                 "variant": variant,
                 "sample_count": int(len(samples)),
@@ -570,7 +643,8 @@ def summarize_returns(samples, windows, subset="all"):
     return pd.DataFrame(rows)
 
 
-def group_stats(samples, windows, group_col, label, variant="t1_net", subset="all"):
+def group_stats(samples, windows, group_col, label, variant="t1_net",
+                subset="all", period_split="all"):
     rows = []
     if group_col not in samples.columns:
         return rows
@@ -585,6 +659,7 @@ def group_stats(samples, windows, group_col, label, variant="t1_net", subset="al
             stats = _cluster_stats(sub)
             rows.append({
                 "subset": subset,
+                "period_split": period_split,
                 "group_type": label,
                 "group_field": group_col,
                 "group_value": gv,
@@ -602,7 +677,7 @@ def group_stats(samples, windows, group_col, label, variant="t1_net", subset="al
     return rows
 
 
-def monthly_stats(samples, windows, subset="all"):
+def monthly_stats(samples, windows, subset="all", period_split="all"):
     """Per (trade_date × variant × window) aggregates. Long format. Lets readers
     spot single-month dominance (e.g., Dec 2025 carrying the annual mean) and
     regime shifts (negative months clustered in H1) without re-computing.
@@ -626,6 +701,7 @@ def monthly_stats(samples, windows, subset="all"):
                 ok = pd.to_numeric(dgrp.loc[ok_status, col], errors="coerce").dropna()
                 rows.append({
                     "subset": subset,
+                    "period_split": period_split,
                     "trade_date": str(trade_date),
                     "window": window,
                     "variant": variant,
@@ -656,6 +732,7 @@ def build_group_columns(samples):
     samples["q0_dt_yoy_gt_200"] = pd.to_numeric(samples["q0_dt_yoy"], errors="coerce") > 200
     samples["q1_dt_yoy_gt_200"] = pd.to_numeric(samples["q1_dt_yoy"], errors="coerce") > 200
     samples["esp_raw_gt_200"] = pd.to_numeric(samples["esp_raw"], errors="coerce") > 200
+    samples["l2_unknown"] = samples.get("l2_name", pd.Series("", index=samples.index)).fillna("").astype(str).isin(["未知", "unknown", ""])
     samples["final_score_bucket"] = pd.cut(
         pd.to_numeric(samples["final_score"], errors="coerce"),
         bins=[-1, 70, 80, 90, 101],
@@ -671,10 +748,97 @@ def build_group_columns(samples):
         bins=[-1, 75, 90, 101],
         labels=["lt_75", "75_90", "90_plus"],
     )
+    samples["risk_reasons"] = samples.apply(_risk_reasons_for_row, axis=1)
     return samples
 
 
+def _risk_reasons_for_row(row):
+    reasons = []
+    if bool(row.get("chasing_high")) or str(row.get("entry_flag_group", "")) == "追高风险，周一确认":
+        reasons.append("chasing_high")
+    if bool(row.get("has_l4_overheat")) or bool(row.get("overheat_flag")):
+        reasons.append("overheat")
+    if bool(row.get("has_l4_lock")) or bool(row.get("is_lock")):
+        reasons.append("lock")
+    if bool(row.get("q0_dt_yoy_gt_200")) or bool(row.get("q1_dt_yoy_gt_200")) or bool(row.get("esp_raw_gt_200")):
+        reasons.append("low_base_growth")
+    if str(row.get("tier_group", "")) == "Tier2":
+        reasons.append("tier2")
+    if bool(row.get("l2_unknown")):
+        reasons.append("unknown_industry")
+    return "|".join(reasons) if reasons else "none"
+
+
 PRIMARY_SUBSET = "tier1_only"  # main reporting view: Tier2 filler dilutes signal
+LOW_TIER1_COUNT_THRESHOLD = 5
+
+
+def build_date_warnings(samples, selected_dates,
+                        low_tier1_threshold=LOW_TIER1_COUNT_THRESHOLD):
+    """Build date-level health warnings for the JSON report.
+
+    The primary report subset is Tier1-only. A selected date with very few
+    Tier1 names is still useful for engineering validation, but should not be
+    silently mixed into headline strategy interpretation.
+    """
+    warnings_out = []
+    if samples is None or samples.empty:
+        for trade_date in selected_dates:
+            warnings_out.append({
+                "trade_date": str(trade_date),
+                "warning_type": "no_samples",
+                "severity": "critical",
+                "threshold": int(low_tier1_threshold),
+                "sample_count": 0,
+                "tier1_count": 0,
+                "tier2_count": 0,
+                "message": "Selected date has no loaded samples; report statistics cannot represent this period.",
+            })
+        return warnings_out
+
+    df = samples.copy()
+    if "tier_group" not in df.columns:
+        df["tier_group"] = df.get("tier", pd.Series("unknown", index=df.index)).fillna("unknown").astype(str)
+    selected_set = {str(d) for d in selected_dates}
+    grouped_dates = set()
+
+    for trade_date, dgrp in df.groupby("trade_date", dropna=True):
+        trade_date = str(trade_date)
+        grouped_dates.add(trade_date)
+        if selected_set and trade_date not in selected_set:
+            continue
+        tier1_count = int((dgrp["tier_group"] == "Tier1").sum())
+        tier2_count = int((dgrp["tier_group"] == "Tier2").sum())
+        sample_count = int(len(dgrp))
+        if tier1_count < low_tier1_threshold:
+            severity = "critical" if tier1_count == 0 else "warning"
+            warnings_out.append({
+                "trade_date": trade_date,
+                "warning_type": "low_tier1_count",
+                "severity": severity,
+                "threshold": int(low_tier1_threshold),
+                "sample_count": sample_count,
+                "tier1_count": tier1_count,
+                "tier2_count": tier2_count,
+                "message": (
+                    f"Tier1 candidate count {tier1_count} is below "
+                    f"{low_tier1_threshold}; treat Tier2 filler and this date's "
+                    "headline strategy contribution as observation only."
+                ),
+            })
+
+    for trade_date in sorted(selected_set - grouped_dates):
+        warnings_out.append({
+            "trade_date": trade_date,
+            "warning_type": "no_samples",
+            "severity": "critical",
+            "threshold": int(low_tier1_threshold),
+            "sample_count": 0,
+            "tier1_count": 0,
+            "tier2_count": 0,
+            "message": "Selected date has no loaded samples; report statistics cannot represent this period.",
+        })
+    return warnings_out
 
 
 def _factor_group_specs():
@@ -689,6 +853,7 @@ def _factor_group_specs():
         ("final_score_bucket", "score"),
         ("final_score_bucket_fine", "score"),
         ("data_quality_bucket", "data_quality"),
+        ("l2_unknown", "data_quality"),
         ("overheat_flag", "risk_flag"),
         ("q0_dt_yoy_gt_200", "low_base_growth"),
         ("q1_dt_yoy_gt_200", "low_base_growth"),
@@ -696,48 +861,503 @@ def _factor_group_specs():
     ]
 
 
-def _build_stats_for_subset(samples, windows, subset_label):
-    """Compute summary / factor / rule6 / monthly for ONE subset slice."""
-    summary = summarize_returns(samples, windows, subset=subset_label)
+def _build_stats_for_slice(samples, windows, subset_label, period_split_label):
+    """Compute summary / factor / rule6 / monthly for ONE (subset, period_split) slice."""
+    summary = summarize_returns(samples, windows, subset=subset_label, period_split=period_split_label)
     factor_rows = []
     for group_col, label in _factor_group_specs():
-        factor_rows.extend(group_stats(samples, windows, group_col, label, subset=subset_label))
+        factor_rows.extend(group_stats(samples, windows, group_col, label,
+                                       subset=subset_label, period_split=period_split_label))
     rule6_rows = []
     rule6_status_cols = [c for c in samples.columns if c.startswith("rule6_") and c.endswith("_status")]
     for col in sorted(rule6_status_cols):
-        rule6_rows.extend(group_stats(samples, windows, col, "rule6_status", subset=subset_label))
-    monthly_df = monthly_stats(samples, windows, subset=subset_label)
+        rule6_rows.extend(group_stats(samples, windows, col, "rule6_status",
+                                      subset=subset_label, period_split=period_split_label))
+    monthly_df = monthly_stats(samples, windows, subset=subset_label, period_split=period_split_label)
     return summary, pd.DataFrame(factor_rows), pd.DataFrame(rule6_rows), monthly_df
 
 
-def build_stats(samples, windows):
-    """Build stats for two subsets and stack them:
+def _period_split_masks(samples, split_date):
+    """Return [(label, mask)] for the period_split dimension.
+
+    Always includes 'all'. If split_date is a YYYYMMDD string, also emits
+    'discovery' (trade_date < split_date) and 'validation' (trade_date >=
+    split_date). Skips a split if its subset is empty.
+    """
+    td = pd.to_numeric(samples["trade_date"], errors="coerce")
+    masks = [("all", pd.Series([True] * len(samples), index=samples.index))]
+    if not split_date:
+        return masks
+    try:
+        cutoff = int(str(split_date))
+    except (TypeError, ValueError):
+        return masks
+    discovery_mask = td < cutoff
+    validation_mask = td >= cutoff
+    if discovery_mask.any():
+        masks.append(("discovery", discovery_mask))
+    if validation_mask.any():
+        masks.append(("validation", validation_mask))
+    return masks
+
+
+def build_stats(samples, windows, split_date=None):
+    """Build stats for cross-product of subsets × period_splits and stack them.
+
+    Subsets:
       - 'all'         : every sample (Tier1 + Tier2 filler)
       - 'tier1_only'  : Tier == 'Tier1' subset (primary reporting view)
 
-    Reason: 24-period evidence (t=-2.27) shows Tier2 filler is a significant
-    negative-alpha pool; mixing it into 'all' aggregate dilutes the real
-    Tier1 strategy signal. Tier1-only is now the headline reporting view.
-    See findings_cc_24p §9 for the rationale.
+    Period splits (only emitted when split_date is set):
+      - 'all'         : full date range (always emitted)
+      - 'discovery'   : trade_date < split_date (in-sample rule discovery)
+      - 'validation'  : trade_date >= split_date (out-of-sample validation)
+
+    Reason for splits: avoid the data-mining trap of discovering AND validating
+    rules on the same 24p sample. See findings_cc_24p §5 / reviewer suggestion.
     """
     samples = build_group_columns(samples)
+    period_masks = _period_split_masks(samples, split_date)
 
-    # All-subset stats (legacy headline; kept for transparency / regression compare)
-    sum_all, fac_all, rul_all, mon_all = _build_stats_for_subset(samples, windows, "all")
-
-    # Tier1-only subset (new primary view)
-    tier1_samples = samples[samples["tier_group"] == "Tier1"].copy()
+    subset_specs = [("all", samples)]
+    tier1_samples = samples[samples["tier_group"] == "Tier1"]
     if len(tier1_samples):
-        sum_t1, fac_t1, rul_t1, mon_t1 = _build_stats_for_subset(tier1_samples, windows, "tier1_only")
-    else:
-        sum_t1 = fac_t1 = rul_t1 = mon_t1 = pd.DataFrame()
+        subset_specs.append(("tier1_only", tier1_samples))
 
-    summary = pd.concat([sum_all, sum_t1], ignore_index=True)
-    factor_stats = pd.concat([fac_all, fac_t1], ignore_index=True)
-    rule6_stats = pd.concat([rul_all, rul_t1], ignore_index=True)
-    monthly_df = pd.concat([mon_all, mon_t1], ignore_index=True)
+    summaries, factors, rule6s, monthlies = [], [], [], []
+    for subset_label, subset_df in subset_specs:
+        for split_label, split_mask in period_masks:
+            mask_on_subset = split_mask.reindex(subset_df.index, fill_value=False)
+            sliced = subset_df[mask_on_subset]
+            if len(sliced) == 0:
+                continue
+            sum_d, fac_d, rul_d, mon_d = _build_stats_for_slice(
+                sliced, windows, subset_label, split_label)
+            summaries.append(sum_d)
+            factors.append(fac_d)
+            rule6s.append(rul_d)
+            monthlies.append(mon_d)
+
+    summary = pd.concat(summaries, ignore_index=True) if summaries else pd.DataFrame()
+    factor_stats = pd.concat(factors, ignore_index=True) if factors else pd.DataFrame()
+    rule6_stats = pd.concat(rule6s, ignore_index=True) if rule6s else pd.DataFrame()
+    monthly_df = pd.concat(monthlies, ignore_index=True) if monthlies else pd.DataFrame()
 
     return summary, factor_stats, rule6_stats, monthly_df, samples
+
+
+# ============================================================
+# Eligible universe benchmark / strategy variants / portfolio stats
+# ============================================================
+
+def _board_from_code(ts_code):
+    symbol = str(ts_code).split(".")[0]
+    if symbol.startswith(("300", "301")):
+        return "chinext"
+    if symbol.startswith(("688", "689")):
+        return "star"
+    if symbol.startswith(("8", "4", "920")):
+        return "bj"
+    return "main"
+
+
+def _full_rank_path(source_root, trade_date):
+    return source_root / "_intermediate" / f"egs_full_{trade_date}.csv"
+
+
+def _row_to_sample(row, trade_date, source_file, rank):
+    l4_flag = "" if pd.isna(row.get("l4_flag")) else str(row.get("l4_flag"))
+    return {
+        "trade_date": str(trade_date),
+        "source_file": str(source_file.relative_to(ROOT)) if hasattr(source_file, "relative_to") else str(source_file),
+        "ts_code": row.get("ts_code"),
+        "name": row.get("name"),
+        "l1_name": row.get("l1_name"),
+        "l2_name": row.get("l2_name"),
+        "board": _board_from_code(row.get("ts_code")),
+        "rank": rank,
+        "tier": row.get("tier"),
+        "final_score": row.get("final_score"),
+        "esp_score": row.get("esp_score"),
+        "cat_score": row.get("cat_score"),
+        "l4_score": row.get("l4_score"),
+        "l2_flags": row.get("l2_flags"),
+        "l4_flag": row.get("l4_flag"),
+        "entry_flag": row.get("entry_flag"),
+        "overheat_flag": row.get("overheat_flag"),
+        "chasing_high": row.get("chasing_high"),
+        "has_crash_veto": row.get("has_crash_veto"),
+        "is_lock": row.get("is_lock"),
+        "is_breakout": row.get("is_breakout"),
+        "hard_veto": row.get("hard_veto", False),
+        "close": row.get("close"),
+        "pct_20d": row.get("pct_20d"),
+        "pct_20d_n": row.get("pct_20d_n"),
+        "drawdown_20d": row.get("drawdown_20d"),
+        "q0_dt_yoy": row.get("q0_dt_yoy"),
+        "q1_dt_yoy": row.get("q1_dt_yoy"),
+        "esp_raw": row.get("esp_raw"),
+        "completeness_score": row.get("completeness_score", pd.NA),
+        "rule6_any_status": "not_available_full_rank",
+        "rule6_any_triggered": pd.NA,
+        "variant_source": "full_rank",
+    }
+
+
+def _entry_flag_from_full(row):
+    if bool(row.get("overheat_flag")) or bool(row.get("chasing_high")):
+        return "追高风险，周一确认"
+    br = pd.to_numeric(row.get("big_ratio"), errors="coerce")
+    if not pd.isna(br) and br < -0.05:
+        return "资金流背离"
+    cs = pd.to_numeric(row.get("cat_score"), errors="coerce")
+    p5 = pd.to_numeric(row.get("pct_5d_n"), errors="coerce")
+    if not pd.isna(cs) and cs > 85 and not pd.isna(p5) and p5 > 5:
+        return "题材过热"
+    if "LOCK" in str(row.get("l4_flag", "")):
+        return "需周一确认"
+    return "可直接观察"
+
+
+def _cap_l2_for_variant(t1_df, cap=15, threshold=20):
+    if t1_df.empty or "l2_name" not in t1_df.columns:
+        return t1_df
+    l2_counts = t1_df["l2_name"].value_counts()
+    overflow = set(l2_counts[l2_counts > threshold].index)
+    if not overflow:
+        return t1_df
+    l2_seen, keep_idx = {}, []
+    for idx, row in t1_df.iterrows():
+        l2 = row.get("l2_name")
+        cnt = l2_seen.get(l2, 0)
+        if l2 in overflow and cnt >= cap:
+            continue
+        keep_idx.append(idx)
+        l2_seen[l2] = cnt + 1
+    return t1_df.loc[keep_idx]
+
+
+def _diversified_top_for_variant(tier1, top_n=50):
+    selected, l1c, l2c = [], {}, {}
+    for _, row in tier1.iterrows():
+        l1, l2 = row.get("l1_name"), row.get("l2_name")
+        l1_key = l2 if l1 == "未知" else l1
+        n = max(len(selected), 1)
+        if l1c.get(l1_key, 0) / n > 0.4:
+            continue
+        if l2c.get(l2, 0) / n > 0.3:
+            continue
+        selected.append(row)
+        l1c[l1_key] = l1c.get(l1_key, 0) + 1
+        l2c[l2] = l2c.get(l2, 0) + 1
+    return pd.DataFrame(selected, columns=tier1.columns).head(top_n)
+
+
+def _recalc_esp_cap_scores(df, cap=ESP_CAP_VALUE):
+    """Experimental rerank: replay score_l5 with an upper cap on esp_raw.
+
+    This is intentionally local to backtest variants so we can validate the
+    rule out-of-sample before promoting it into official EGS scoring.
+    """
+    df = df.copy()
+    def _series(name, default=False):
+        if name in df.columns:
+            return df[name]
+        return pd.Series(default, index=df.index)
+    df["l2_flags"] = df.get("l2_flags", "").fillna("").astype(str)
+    df["cat_flag"] = df.get("cat_flag", "").fillna("").astype(str)
+    df["l4_flag"] = df.get("l4_flag", "").fillna("").astype(str)
+    df["esp_raw_w"] = pd.to_numeric(df.get("esp_raw"), errors="coerce").clip(upper=cap).fillna(0.0)
+    cov_mask = df["l2_flags"].str.contains("COV-LOW", na=False)
+    df["esp_z"] = 0.0
+    for mask in [~cov_mask, cov_mask]:
+        sub_idx = df[mask].index
+        for grp_name, idx in df.loc[sub_idx].groupby("z_group").groups.items():
+            if grp_name == "独立池":
+                continue
+            vals = df.loc[idx, "esp_raw_w"]
+            if len(vals) < 2:
+                continue
+            mu, sig = vals.mean(), vals.std()
+            if pd.isna(sig) or sig < 1e-9:
+                continue
+            df.loc[idx, "esp_z"] = (df.loc[idx, "esp_raw_w"] - mu) / sig
+
+    indep_mask = df["z_group"] == "独立池"
+    df["esp_score"] = 0.0
+    if indep_mask.any():
+        x = df.loc[indep_mask, "esp_raw_w"]
+        rng = x.max() - x.min()
+        df.loc[indep_mask, "esp_score"] = ((x - x.min()) / rng * 50) if rng > 0 else 25.0
+
+    def z2s(z):
+        if pd.isna(z):
+            return 50.0
+        if z < -2.5:
+            return 5
+        if z < -1.5:
+            return 12
+        if z < -0.5:
+            return 22
+        if z < 0:
+            return 32
+        if z < 1:
+            return 50
+        if z < 2:
+            return 68
+        if z < 3:
+            return 82
+        return min(100, 95 + (z - 3) * 3)
+
+    non_indep = ~indep_mask
+    df.loc[non_indep, "esp_score"] = df.loc[non_indep, "esp_z"].apply(z2s)
+    df.loc[cov_mask & non_indep, "esp_score"] = df.loc[cov_mask & non_indep, "esp_score"].clip(upper=50)
+    df["egs_base"] = df["esp_score"] * 0.20 + df["cat_score"] * 0.30 + df["l4_score"] * 0.50
+    df["mult"] = 1.0
+    df.loc[df["l2_flags"].str.contains("ESP-Q", na=False), "mult"] *= 0.7
+    df.loc[df["cat_flag"].str.contains("CAT-0", na=False), "mult"] *= 0.5
+    df["deduct"] = 0.0
+    df.loc[df.get("l1_flag") == "ITF-2", "deduct"] += 15
+    df.loc[df.get("itf_adj") == True, "deduct"] += 10
+    df["deduct"] += pd.to_numeric(df.get("reduce_penalty", 0), errors="coerce").fillna(0)
+    df["deduct"] += pd.to_numeric(df.get("val_penalty", 0), errors="coerce").fillna(0)
+    val_bonus = pd.to_numeric(df.get("val_bonus", 0), errors="coerce").fillna(0)
+    df["final_score"] = ((df["egs_base"] * df["mult"]).clip(lower=df["egs_base"] * 0.3)
+                         + val_bonus - df["deduct"]).clip(lower=0).round(2)
+    p75 = df["final_score"].quantile(0.75)
+    p55 = df["final_score"].quantile(0.55)
+    df["tier"] = "Other"
+    df.loc[df["final_score"] >= p55, "tier"] = "Tier2"
+    df.loc[df["final_score"] >= p75, "tier"] = "Tier1"
+    df.loc[df["final_score"] < 50, "tier"] = "Other"
+
+    fin_coverage = pd.to_numeric(df.get("q0_dt_yoy"), errors="coerce").notna().sum() / max(len(df), 1)
+    if fin_coverage >= 0.70:
+        df.loc[(df["tier"] == "Tier1") & (pd.to_numeric(df["esp_raw"], errors="coerce").fillna(0) <= 0), "tier"] = "Tier2"
+    df.loc[(df["tier"] == "Tier1") & _series("chasing_high").fillna(False).astype(bool), "tier"] = "Tier2"
+    df.loc[(df["tier"] == "Tier1") & _series("overheat_flag").fillna(False).astype(bool), "tier"] = "Tier2"
+    df.loc[df["l4_flag"].str.contains("TIER2_FORCED", na=False), "tier"] = "Tier2"
+    df.loc[(df["tier"] == "Tier1") & (df["l2_name"] == "未知"), "tier"] = "Tier2"
+    return df
+
+
+def load_eligible_universe(source_root, selected_dates):
+    rows = []
+    for d in selected_dates:
+        path = _full_rank_path(source_root, d)
+        if not path.exists():
+            print(f"[WARN] eligible universe missing {path.relative_to(ROOT)}")
+            continue
+        df = pd.read_csv(path)
+        df = df[df["tier"].isin(["Tier1", "Tier2"])].copy()
+        df = df.sort_values(["final_score", "l4_score", "pct_20d_n"], ascending=[False, False, False])
+        for rank, (_, row) in enumerate(df.iterrows(), start=1):
+            rows.append(_row_to_sample(row, d, path, rank))
+    out = pd.DataFrame(rows)
+    if not out.empty:
+        out["variant_source"] = "eligible_universe"
+    return out
+
+
+def load_esp_cap_rerank_samples(source_root, selected_dates, watch_n=15):
+    rows = []
+    for d in selected_dates:
+        path = _full_rank_path(source_root, d)
+        if not path.exists():
+            continue
+        df = pd.read_csv(path)
+        df = _recalc_esp_cap_scores(df, cap=ESP_CAP_VALUE)
+        tier1 = df[df["tier"] == "Tier1"].sort_values(
+            ["final_score", "l4_score", "pct_20d_n"], ascending=[False, False, False]
+        )
+        tier1 = _cap_l2_for_variant(tier1)
+        top = _diversified_top_for_variant(tier1).head(watch_n).copy()
+        if len(top) < watch_n:
+            existing = set(top["ts_code"].tolist()) if "ts_code" in top.columns else set()
+            fill = df[(df["tier"] == "Tier2") & (~df["ts_code"].isin(existing))] \
+                .sort_values(["final_score", "l4_score", "pct_20d_n"], ascending=[False, False, False]) \
+                .head(watch_n - len(top))
+            if not fill.empty:
+                top = pd.concat([top, fill[top.columns]], ignore_index=True)
+        if top.empty:
+            continue
+        top["entry_flag"] = top.apply(_entry_flag_from_full, axis=1)
+        for rank, (_, row) in enumerate(top.iterrows(), start=1):
+            sample = _row_to_sample(row, d, path, rank)
+            sample["strategy_variant"] = "esp_cap_200_rerank"
+            rows.append(sample)
+    return pd.DataFrame(rows)
+
+
+def attach_eligible_excess(samples, eligible_samples, windows):
+    samples = samples.copy()
+    if eligible_samples.empty:
+        return samples, pd.DataFrame()
+    bench_rows = []
+    for trade_date, dgrp in eligible_samples.groupby("trade_date", dropna=True):
+        for window in windows:
+            status_col = f"ret_{window}d_status"
+            ret_col = f"ret_{window}d_t1"
+            net_col = f"ret_{window}d_t1_net"
+            if status_col not in dgrp.columns:
+                continue
+            ok_mask = dgrp[status_col] == "ok"
+            vals = pd.to_numeric(dgrp.loc[ok_mask, ret_col], errors="coerce").dropna()
+            net_vals = pd.to_numeric(dgrp.loc[ok_mask, net_col], errors="coerce").dropna()
+            bench_rows.append({
+                "trade_date": str(trade_date),
+                "window": window,
+                "eligible_count": int(len(dgrp)),
+                "available_count": int(len(vals)),
+                "mean_t1_pct": float(vals.mean()) if len(vals) else None,
+                "mean_t1_net_pct": float(net_vals.mean()) if len(net_vals) else None,
+                "median_t1_pct": float(vals.median()) if len(vals) else None,
+                "win_rate_pct": float((vals > 0).mean() * 100) if len(vals) else None,
+            })
+    bench_df = pd.DataFrame(bench_rows)
+    if bench_df.empty:
+        return samples, bench_df
+    for window in windows:
+        key = bench_df[bench_df["window"] == window].set_index("trade_date")["mean_t1_pct"].to_dict()
+        samples[f"ret_{window}d_{ELIGIBLE_BENCHMARK}"] = samples["trade_date"].astype(str).map(key)
+        base = pd.to_numeric(samples[f"ret_{window}d_t1"], errors="coerce")
+        bench = pd.to_numeric(samples[f"ret_{window}d_{ELIGIBLE_BENCHMARK}"], errors="coerce")
+        samples[f"ret_{window}d_excess_{ELIGIBLE_BENCHMARK}"] = base - bench
+    return samples, bench_df
+
+
+def _variant_mask(samples, name):
+    s = build_group_columns(samples)
+    mask = pd.Series([True] * len(s), index=s.index)
+    if name == "baseline":
+        return mask
+    if name == "no_chase":
+        return mask & ~(s["entry_flag_group"].eq("追高风险，周一确认") | s["chasing_high"].fillna(False).astype(bool))
+    if name == "no_overheat":
+        return mask & ~(s["has_l4_overheat"].fillna(False).astype(bool) | s["overheat_flag"].fillna(False).astype(bool))
+    if name == "no_low_base":
+        return mask & ~(s["q0_dt_yoy_gt_200"] | s["q1_dt_yoy_gt_200"] | s["esp_raw_gt_200"])
+    if name == "tier1_only":
+        return mask & s["tier_group"].eq("Tier1")
+    if name == "no_tier2_unknown":
+        return mask & ~(s["tier_group"].eq("Tier2") & s["l2_unknown"])
+    if name == "no_lock":
+        return mask & ~s["has_l4_lock"].fillna(False).astype(bool)
+    if name == "combined_p0":
+        return (mask & s["tier_group"].eq("Tier1")
+                & ~(s["entry_flag_group"].eq("追高风险，周一确认") | s["chasing_high"].fillna(False).astype(bool))
+                & ~(s["has_l4_overheat"].fillna(False).astype(bool) | s["overheat_flag"].fillna(False).astype(bool))
+                & ~(s["q0_dt_yoy_gt_200"] | s["q1_dt_yoy_gt_200"] | s["esp_raw_gt_200"]))
+    return mask
+
+
+STRATEGY_VARIANTS = [
+    "baseline",
+    "no_chase",
+    "no_overheat",
+    "no_low_base",
+    "tier1_only",
+    "no_tier2_unknown",
+    "no_lock",
+    "combined_p0",
+]
+
+
+def build_strategy_variant_stats(samples, windows, split_date=None, extra_variants=None):
+    frames = []
+    variant_sources = [(name, samples[_variant_mask(samples, name)].copy()) for name in STRATEGY_VARIANTS]
+    for name, df in (extra_variants or {}).items():
+        variant_sources.append((name, df.copy()))
+    for name, df in variant_sources:
+        if df.empty:
+            continue
+        summary, _factor, _rule6, monthly, shaped = build_stats(df, windows, split_date=split_date)
+        summary.insert(0, "strategy_variant", name)
+        monthly.insert(0, "strategy_variant", name)
+        frames.append((summary, monthly, name, len(shaped)))
+    if not frames:
+        return pd.DataFrame(), pd.DataFrame(), []
+    summary_df = pd.concat([x[0] for x in frames], ignore_index=True)
+    monthly_df = pd.concat([x[1] for x in frames], ignore_index=True)
+    meta = [{"strategy_variant": name, "sample_count": count} for *_unused, name, count in frames]
+    return summary_df, monthly_df, meta
+
+
+def _max_drawdown_from_returns(returns_pct):
+    equity = 1.0
+    peak = 1.0
+    max_dd = 0.0
+    for r in returns_pct:
+        equity *= (1.0 + float(r) / 100.0)
+        peak = max(peak, equity)
+        dd = equity / peak - 1.0
+        max_dd = min(max_dd, dd)
+    return max_dd * 100.0
+
+
+def build_portfolio_stats(samples, windows, split_date=None, strategy_variant="baseline"):
+    samples = build_group_columns(samples)
+    period_masks = _period_split_masks(samples, split_date)
+    subset_specs = [("all", samples)]
+    tier1 = samples[samples["tier_group"] == "Tier1"]
+    if len(tier1):
+        subset_specs.append(("tier1_only", tier1))
+
+    period_rows, stat_rows = [], []
+    for subset_label, subset_df in subset_specs:
+        for split_label, split_mask in period_masks:
+            sliced = subset_df[split_mask.reindex(subset_df.index, fill_value=False)]
+            if sliced.empty:
+                continue
+            for window in windows:
+                status_col = f"ret_{window}d_status"
+                for variant in RET_VARIANTS:
+                    col = f"ret_{window}d_{variant}"
+                    if col not in sliced.columns:
+                        continue
+                    series_rows = []
+                    for trade_date, dgrp in sliced.groupby("trade_date", dropna=True):
+                        ok = pd.to_numeric(dgrp.loc[dgrp[status_col] == "ok", col], errors="coerce").dropna()
+                        if not len(ok):
+                            continue
+                        r = float(ok.mean())
+                        period_rows.append({
+                            "strategy_variant": strategy_variant,
+                            "subset": subset_label,
+                            "period_split": split_label,
+                            "trade_date": str(trade_date),
+                            "window": window,
+                            "variant": variant,
+                            "holding_count": int(len(ok)),
+                            "return_pct": r,
+                            "win_rate_pct": float((ok > 0).mean() * 100),
+                        })
+                        series_rows.append({"trade_date": str(trade_date), "value": r})
+                    if not series_rows:
+                        continue
+                    sub = pd.DataFrame(series_rows)
+                    vals = sub["value"]
+                    stats = _cluster_stats(sub.rename(columns={"value": "value"}))
+                    compounded = float((np.prod(1 + vals / 100.0) - 1.0) * 100.0)
+                    stat_rows.append({
+                        "strategy_variant": strategy_variant,
+                        "subset": subset_label,
+                        "period_split": split_label,
+                        "window": window,
+                        "variant": variant,
+                        "period_count": int(len(vals)),
+                        "mean_period_return_pct": float(vals.mean()),
+                        "median_period_return_pct": float(vals.median()),
+                        "compounded_return_pct": compounded,
+                        "max_drawdown_pct": _max_drawdown_from_returns(vals.tolist()),
+                        "worst_period_return_pct": float(vals.min()),
+                        "best_period_return_pct": float(vals.max()),
+                        "win_rate_pct": float((vals > 0).mean() * 100),
+                        "std_pct": stats["std_pct"],
+                        "monthly_t": stats["monthly_t"],
+                        "sharpe_monthly": stats["sharpe_monthly"],
+                    })
+    return pd.DataFrame(period_rows), pd.DataFrame(stat_rows)
 
 
 # ============================================================
@@ -1052,17 +1672,38 @@ def _validate_report_or_raise(report, report_path):
 
 def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windows,
                   source_root, selected_dates, immature_included, immature_skipped,
-                  forward_meta, mode, settings):
+                  forward_meta, mode, settings, eligible_benchmark=None,
+                  strategy_variant_stats=None, strategy_variant_monthly=None,
+                  portfolio_period_returns=None, portfolio_stats=None,
+                  variant_meta=None):
     BACKTEST_DIR.mkdir(parents=True, exist_ok=True)
+    if isinstance(forward_meta, dict) and forward_meta.get("status") is None:
+        forward_meta = dict(forward_meta)
+        forward_meta.setdefault("limit_rows", 0)
     samples.to_csv(BACKTEST_DIR / "rank_samples.csv", index=False, encoding="utf-8-sig")
     summary.to_csv(BACKTEST_DIR / "summary_by_window.csv", index=False, encoding="utf-8-sig")
     factor_stats.to_csv(BACKTEST_DIR / "factor_group_stats.csv", index=False, encoding="utf-8-sig")
     rule6_stats.to_csv(BACKTEST_DIR / "rule6_stats.csv", index=False, encoding="utf-8-sig")
     monthly_df.to_csv(BACKTEST_DIR / "monthly_stats.csv", index=False, encoding="utf-8-sig")
+    if eligible_benchmark is None:
+        eligible_benchmark = pd.DataFrame()
+    if strategy_variant_stats is None:
+        strategy_variant_stats = pd.DataFrame()
+    if strategy_variant_monthly is None:
+        strategy_variant_monthly = pd.DataFrame()
+    if portfolio_period_returns is None:
+        portfolio_period_returns = pd.DataFrame()
+    if portfolio_stats is None:
+        portfolio_stats = pd.DataFrame()
+    eligible_benchmark.to_csv(BACKTEST_DIR / "eligible_benchmark.csv", index=False, encoding="utf-8-sig")
+    strategy_variant_stats.to_csv(BACKTEST_DIR / "strategy_variant_stats.csv", index=False, encoding="utf-8-sig")
+    strategy_variant_monthly.to_csv(BACKTEST_DIR / "strategy_variant_monthly.csv", index=False, encoding="utf-8-sig")
+    portfolio_period_returns.to_csv(BACKTEST_DIR / "portfolio_period_returns.csv", index=False, encoding="utf-8-sig")
+    portfolio_stats.to_csv(BACKTEST_DIR / "portfolio_stats.csv", index=False, encoding="utf-8-sig")
 
     report = {
         "schema_name": "rank_backtest_report",
-        "schema_version": "1.6.0",
+        "schema_version": "1.9.0",
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "preset": "a_short",
         "mode": mode,
@@ -1071,6 +1712,7 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
         "windows": windows,
         "sample_count": int(len(samples)),
         "selected_dates": selected_dates,
+        "date_warnings": build_date_warnings(samples, selected_dates),
         "immature_included_dates": immature_included,
         "immature_skipped_dates": immature_skipped,
         "trade_dates": sorted(samples["trade_date"].dropna().astype(str).unique().tolist()) if not samples.empty else [],
@@ -1082,17 +1724,27 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
             "factor_group_stats": str((BACKTEST_DIR / "factor_group_stats.csv").relative_to(ROOT)),
             "rule6_stats": str((BACKTEST_DIR / "rule6_stats.csv").relative_to(ROOT)),
             "monthly_stats": str((BACKTEST_DIR / "monthly_stats.csv").relative_to(ROOT)),
+            "eligible_benchmark": str((BACKTEST_DIR / "eligible_benchmark.csv").relative_to(ROOT)),
+            "strategy_variant_stats": str((BACKTEST_DIR / "strategy_variant_stats.csv").relative_to(ROOT)),
+            "strategy_variant_monthly": str((BACKTEST_DIR / "strategy_variant_monthly.csv").relative_to(ROOT)),
+            "portfolio_period_returns": str((BACKTEST_DIR / "portfolio_period_returns.csv").relative_to(ROOT)),
+            "portfolio_stats": str((BACKTEST_DIR / "portfolio_stats.csv").relative_to(ROOT)),
         },
+        "strategy_variants": variant_meta or [],
         "return_variants": {
             "close": "qfq close-to-close (no T+1, no cost). Reference only.",
             "t1": "qfq T+1 open entry to close of T+W. Gross of cost.",
             "t1_net": "qfq T+1 open entry minus round-trip cost (default 0.16%).",
             "excess_csi300": "t1 minus CSI300 same-window return (entry_date to exit_date).",
             "excess_csi1000": "t1 minus CSI1000 same-window return.",
+            "excess_eligible": "t1 minus same-date eligible universe equal-weight t1 return. Eligible universe is Tier1+Tier2 rows from generated/_intermediate/egs_full_YYYYMMDD.csv.",
         },
         "limitations": [
             "Backtest writes generated candidate pools and intermediate EGS CSV/XLSX artifacts under result/a_short/backtest/generated/ (isolated from official output).",
             "Forward returns are qfq-adjusted via Tushare adj_factor; transaction cost defaults to 0.16% round-trip.",
+            "T+1 entry is marked pending_no_entry_limit_up when Tushare stk_limit says entry open is at/near up_limit; falls back to board-specific limit rules only when stk_limit is unavailable.",
+            "Eligible benchmark uses the generated full-rank Tier1+Tier2 pool for the same as_of date; it is an internal opportunity-set benchmark, not a tradable market index.",
+            "Strategy variants use post-hoc filters except esp_cap_200_rerank, which replays score_l5-style ranking from generated/_intermediate/egs_full_YYYYMMDD.csv; variants are for validation before promotion into official EGS rules.",
             "Benchmark excess returns compare stock T+1 open-to-close returns against benchmark close-to-close returns over the same entry/exit dates; this can introduce a small intraday entry-basis difference.",
             "Backtest mode skips cninfo, web news, and DeepSeek Stage3 checks, so historical candidate pools do not include the same regulatory/policy veto layer as production screening.",
             "Adjacent as-of dates with overlapping forward windows correlate; variance is therefore not iid -- use monthly freq for max_window=20 or apply --dedup-mode.",
@@ -1139,6 +1791,7 @@ def enforce_mode(args):
         "l3_mode": args.l3_mode,
         "l3_pit_strict": bool(args.l3_pit_strict),
         "primary_subset": PRIMARY_SUBSET,
+        "split_date": args.split_date,
     }
 
 
@@ -1178,9 +1831,18 @@ def main():
                              "today when --mode=smoke. pit reads state/l3_snapshots/*<=as_of.")
     parser.add_argument("--l3-pit-strict", action="store_true",
                         help="With --l3-mode=pit: fail if no snapshot <= as_of (default: warn + cat_score=50).")
+    parser.add_argument("--split-date", dest="split_date", default=None,
+                        help="YYYYMMDD boundary for in-sample/out-of-sample period_split. "
+                             "trade_date < split_date -> 'discovery'; >= -> 'validation'. "
+                             "Without this flag, only 'all' rows are emitted. "
+                             "Use e.g. --split-date 20250101 to develop rules on 2024 and "
+                             "validate on 2025, avoiding data-mining overfit.")
     args = parser.parse_args()
     if args.l3_mode is None:
         args.l3_mode = "neutralize" if args.mode == "production" else "today"
+    if args.split_date:
+        if not (isinstance(args.split_date, str) and len(args.split_date) == 8 and args.split_date.isdigit()):
+            raise SystemExit(f"[FATAL] --split-date must be YYYYMMDD, got {args.split_date!r}")
 
     settings = enforce_mode(args)
     windows = settings["windows"]
@@ -1291,16 +1953,53 @@ def main():
     samples = apply_dedup(samples, effective_dedup_mode)
 
     forward_meta = {"status": "skipped_no_samples"}
+    eligible_benchmark = pd.DataFrame()
+    extra_variants = {}
     if not samples.empty:
         asof_set = sorted(samples["trade_date"].dropna().astype(str).unique().tolist())
         payload = fetch_forward_daily(asof_set, max_window, refresh=args.refresh_forward_daily)
         forward_meta = payload.get("meta", {})
         samples = attach_forward_returns(samples, windows, payload, cost_pct=effective_cost_pct)
+        eligible_samples = load_eligible_universe(source_root, selected_dates)
+        if not eligible_samples.empty:
+            eligible_samples = attach_forward_returns(eligible_samples, windows, payload, cost_pct=effective_cost_pct)
+            samples, eligible_benchmark = attach_eligible_excess(samples, eligible_samples, windows)
+        esp_cap_samples = load_esp_cap_rerank_samples(source_root, selected_dates)
+        if not esp_cap_samples.empty:
+            esp_cap_samples = attach_forward_returns(esp_cap_samples, windows, payload, cost_pct=effective_cost_pct)
+            if not eligible_samples.empty:
+                esp_cap_samples, _ = attach_eligible_excess(esp_cap_samples, eligible_samples, windows)
+            extra_variants["esp_cap_200_rerank"] = esp_cap_samples
 
-    summary, factor_stats, rule6_stats, monthly_df, samples = build_stats(samples, windows)
+    summary, factor_stats, rule6_stats, monthly_df, samples = build_stats(
+        samples, windows, split_date=settings.get("split_date"))
+    strategy_variant_stats, strategy_variant_monthly, variant_meta = build_strategy_variant_stats(
+        samples, windows, split_date=settings.get("split_date"), extra_variants=extra_variants)
+    portfolio_period_frames, portfolio_stat_frames = [], []
+    variant_for_portfolio = {"baseline": samples}
+    for name in STRATEGY_VARIANTS:
+        variant_for_portfolio[name] = samples[_variant_mask(samples, name)].copy()
+    variant_for_portfolio.update(extra_variants)
+    for name, vdf in variant_for_portfolio.items():
+        if vdf.empty:
+            continue
+        p_period, p_stats = build_portfolio_stats(
+            vdf, windows, split_date=settings.get("split_date"), strategy_variant=name)
+        if not p_period.empty:
+            portfolio_period_frames.append(p_period)
+        if not p_stats.empty:
+            portfolio_stat_frames.append(p_stats)
+    portfolio_period_returns = pd.concat(portfolio_period_frames, ignore_index=True) if portfolio_period_frames else pd.DataFrame()
+    portfolio_stats_df = pd.concat(portfolio_stat_frames, ignore_index=True) if portfolio_stat_frames else pd.DataFrame()
     write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windows,
                   source_root, selected_dates, immature_included, immature_skipped,
-                  forward_meta, effective_mode, settings)
+                  forward_meta, effective_mode, settings,
+                  eligible_benchmark=eligible_benchmark,
+                  strategy_variant_stats=strategy_variant_stats,
+                  strategy_variant_monthly=strategy_variant_monthly,
+                  portfolio_period_returns=portfolio_period_returns,
+                  portfolio_stats=portfolio_stats_df,
+                  variant_meta=variant_meta)
 
     print(f"[OK] mode={effective_mode}  samples={len(samples)}  dedup={effective_dedup_mode}  cost={effective_cost_pct}%")
     print(f"[OK] backtest outputs: {BACKTEST_DIR}")

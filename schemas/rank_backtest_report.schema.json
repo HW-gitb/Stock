@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/rank_backtest_report/1.6.0/schema.json",
+  "$id": "https://stock.local/schemas/rank_backtest_report/1.9.0/schema.json",
   "title": "Rank Backtest Report",
   "description": "Machine-readable manifest emitted by runners/backtest_rank.py.",
   "type": "object",
@@ -16,12 +16,14 @@
     "windows",
     "sample_count",
     "selected_dates",
+    "date_warnings",
     "immature_included_dates",
     "immature_skipped_dates",
     "trade_dates",
     "candidate_source_root",
     "forward_daily",
     "outputs",
+    "strategy_variants",
     "return_variants",
     "limitations"
   ],
@@ -65,7 +67,8 @@
         "end_date",
         "l3_mode",
         "l3_pit_strict",
-        "primary_subset"
+        "primary_subset",
+        "split_date"
       ],
       "properties": {
         "mode": {
@@ -123,6 +126,11 @@
           "type": "string",
           "enum": ["all", "tier1_only"],
           "description": "Recommended reporting subset. Stats CSVs include a 'subset' column with both 'all' and 'tier1_only' rows; this field declares which one is the headline. Default 'tier1_only' since 24p evidence (t=-2.27) shows Tier2 filler dilutes the real signal."
+        },
+        "split_date": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{8}$",
+          "description": "YYYYMMDD boundary for the period_split dimension. When set, stats CSVs include 'discovery' (trade_date < split_date) and 'validation' (>=) rows alongside the default 'all' rows, enabling in-sample/out-of-sample separation to avoid data-mining overfit. Null means only 'all' is emitted."
         }
       }
     },
@@ -143,6 +151,58 @@
       "items": {
         "type": "string",
         "pattern": "^[0-9]{8}$"
+      }
+    },
+    "date_warnings": {
+      "type": "array",
+      "description": "Date-level sample health warnings. Added in v1.9.0 so low Tier1-count dates are visible in the machine-readable report instead of only in findings notes.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "trade_date",
+          "warning_type",
+          "severity",
+          "threshold",
+          "sample_count",
+          "tier1_count",
+          "tier2_count",
+          "message"
+        ],
+        "properties": {
+          "trade_date": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          },
+          "warning_type": {
+            "type": "string",
+            "enum": ["low_tier1_count", "no_samples"]
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["warning", "critical"]
+          },
+          "threshold": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sample_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tier1_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tier2_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     },
     "immature_included_dates": {
@@ -177,7 +237,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["start_date", "end_date", "adj", "benchmarks", "fetched_at", "stock_rows", "stock_codes"],
+          "required": ["start_date", "end_date", "adj", "benchmarks", "fetched_at", "stock_rows", "stock_codes", "limit_rows"],
           "properties": {
             "start_date": {
               "type": "string",
@@ -205,6 +265,10 @@
             "stock_codes": {
               "type": "integer",
               "minimum": 0
+            },
+            "limit_rows": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         },
@@ -224,7 +288,18 @@
     "outputs": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rank_samples", "summary_by_window", "factor_group_stats", "rule6_stats", "monthly_stats"],
+      "required": [
+        "rank_samples",
+        "summary_by_window",
+        "factor_group_stats",
+        "rule6_stats",
+        "monthly_stats",
+        "eligible_benchmark",
+        "strategy_variant_stats",
+        "strategy_variant_monthly",
+        "portfolio_period_returns",
+        "portfolio_stats"
+      ],
       "properties": {
         "rank_samples": {"type": "string"},
         "summary_by_window": {"type": "string"},
@@ -233,19 +308,38 @@
         "monthly_stats": {
           "type": "string",
           "description": "Long-format CSV with per (trade_date, variant, window) aggregates. Added in v1.5.0 to support time-series stability inspection without re-grouping rank_samples."
+        },
+        "eligible_benchmark": {"type": "string"},
+        "strategy_variant_stats": {"type": "string"},
+        "strategy_variant_monthly": {"type": "string"},
+        "portfolio_period_returns": {"type": "string"},
+        "portfolio_stats": {"type": "string"}
+      }
+    },
+    "strategy_variants": {
+      "type": "array",
+      "description": "Post-hoc and rerank validation variants emitted by backtest_rank.py.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["strategy_variant", "sample_count"],
+        "properties": {
+          "strategy_variant": {"type": "string"},
+          "sample_count": {"type": "integer", "minimum": 0}
         }
       }
     },
     "return_variants": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["close", "t1", "t1_net", "excess_csi300", "excess_csi1000"],
+      "required": ["close", "t1", "t1_net", "excess_csi300", "excess_csi1000", "excess_eligible"],
       "properties": {
         "close": {"type": "string"},
         "t1": {"type": "string"},
         "t1_net": {"type": "string"},
         "excess_csi300": {"type": "string"},
-        "excess_csi1000": {"type": "string"}
+        "excess_csi1000": {"type": "string"},
+        "excess_eligible": {"type": "string"}
       }
     },
     "limitations": {
