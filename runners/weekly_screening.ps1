@@ -17,6 +17,7 @@
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
 
 param(
+    [ValidatePattern('^\d{8}$')]
     [string]$AsOf = (Get-Date -Format 'yyyyMMdd'),
     [ValidateSet('sina', 'em')]
     [string]$CanarySource = 'sina',
@@ -33,8 +34,8 @@ param(
 # project root is one level up. If this script is ever moved, update
 # both the path math and the python invocations below.
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-if (-not (Test-Path (Join-Path $ProjectRoot 'A-EGS\egs_main.py'))) {
-    Write-Host "[FATAL] expected A-EGS\egs_main.py under $ProjectRoot but not found." -ForegroundColor Red
+if (-not (Test-Path (Join-Path $ProjectRoot 'A-EGS\egs_main.py') -PathType Leaf)) {
+    Write-Host "[FATAL] expected A-EGS\egs_main.py (as a file) under $ProjectRoot." -ForegroundColor Red
     exit 1
 }
 if (-not (Get-Command $PythonExe -ErrorAction SilentlyContinue)) {

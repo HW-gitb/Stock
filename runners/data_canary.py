@@ -159,21 +159,24 @@ def _find_latest_candidates_within(days: int = 7) -> tuple[Path | None, str | No
 def _write_log(payload: dict, as_of: str) -> Path:
     """Atomic write: tmp file + os.replace, so Ctrl+C / OOM mid-write
     leaves either the old file intact or the new file complete; never
-    a truncated half-file."""
+    a truncated half-file. `finally` cleanup covers KeyboardInterrupt /
+    SystemExit too (Exception alone would orphan the .tmp on Ctrl+C)."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     out = LOG_DIR / f"data_canary_{as_of}.json"
     fd, tmp_path = tempfile.mkstemp(prefix=f".data_canary_{as_of}_",
                                     suffix=".json.tmp", dir=str(LOG_DIR))
+    replaced = False
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
         os.replace(tmp_path, out)
-    except Exception:
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
-        raise
+        replaced = True
+    finally:
+        if not replaced:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
     return out
 
 

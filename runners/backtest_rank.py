@@ -61,34 +61,39 @@ def _current_egs_version():
 
 
 def _current_egs_api_families():
-    """Read EGS_API_FAMILIES list literal from egs_main.py via regex + ast.
+    """Read EGS_API_FAMILIES list literal from egs_main.py via ast.parse.
+
     Single source of truth ensures data_health.json and backtest_report.json
-    data_lineage.api_families.candidate_generation match. Returns the list,
-    or a hardcoded fallback if parse fails (which would itself flag drift
-    on next data_health check). Fallback is intentionally kept in sync; if
-    you see this fallback get used, update both EGS_API_FAMILIES (canonical)
-    and the fallback below."""
-    import re, ast
+    data_lineage.api_families.candidate_generation match. Uses ast.parse on
+    the whole module instead of a regex over `[^\\]]+` because a regex would
+    silently truncate at the first `]` character (e.g. a comment containing
+    `]`, or any future string entry with `]` inside).
+
+    On parse failure: returns a marker entry so data_lineage shows the
+    breakage visibly. Returning a stale hardcoded fallback would silently
+    write the wrong API list into a Phase 2.6 audit artifact, which is
+    exactly what the Phase 2.6 lineage object exists to prevent."""
+    import ast
     try:
         text = EGS_SCRIPT.read_text(encoding="utf-8")
-    except OSError:
-        text = ""
-    m = re.search(r'^EGS_API_FAMILIES\s*=\s*(\[[^\]]+\])', text, re.MULTILINE)
-    if m:
-        try:
-            parsed = ast.literal_eval(m.group(1))
-            if isinstance(parsed, list) and all(isinstance(x, str) for x in parsed):
-                return parsed
-        except (ValueError, SyntaxError):
-            pass
-    # Fallback: must match egs_main.py:EGS_API_FAMILIES
-    return [
-        "daily", "daily_basic", "fina_indicator", "index_daily",
-        "moneyflow", "moneyflow_hsgt", "margin_detail",
-        "share_float", "stk_holdertrade", "stock_basic", "trade_cal",
-        "index_member_all", "index_member", "index_classify",
-        "concept", "concept_detail",
-    ]
+        tree = ast.parse(text)
+    except (OSError, SyntaxError):
+        return ["__egs_main_parse_failed__"]
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "EGS_API_FAMILIES":
+                try:
+                    value = ast.literal_eval(node.value)
+                except (ValueError, SyntaxError):
+                    return ["__egs_main_literal_eval_failed__"]
+                if (isinstance(value, list)
+                        and all(isinstance(x, str) for x in value)
+                        and value):
+                    return list(value)
+                return ["__egs_main_unexpected_type__"]
+    return ["__egs_api_families_not_found__"]
 
 # A-share transaction cost defaults (double-sided, in pct):
 #   buy commission 0.025% + sell commission 0.025% + stamp duty (sell) 0.05%
