@@ -546,3 +546,44 @@ Results:
 - These were isolated backtest-mode entrypoint runs. They do not write official `egs_last_selection.json` and skip live Stage3 cninfo/news/DeepSeek checks.
 - `today + reuse` still writes/overwrites the real-world L3 snapshot `state/l3_snapshots/l3_snapshot_20260524.pkl`; this is existing behavior and was part of the path being validated.
 - Debug output directories are intentionally under `result/a_short/debug_full_egs_*` and are not strategy artifacts.
+
+---
+
+## 2026-05-24 append: data lineage + weekly wrapper full-script debug fixes
+
+The follow-up full-script debug found two additional real bugs that survived the prior review.
+
+### Bugs fixed
+
+1. `EGS_API_FAMILIES` drifted from the real `A-EGS/egs_main.py` Tushare calls.
+   - It still included backtest-forward APIs (`stk_limit`, `adj_factor`) that belong to `runners/backtest_rank.py` forward-return construction, not candidate generation.
+   - It missed actual candidate-generation APIs: `index_daily`, `moneyflow_hsgt`, `margin_detail`, `share_float`, `stk_holdertrade`.
+   - Fixed canonical `A-EGS/egs_main.py:EGS_API_FAMILIES` and the `runners/backtest_rank.py::_current_egs_api_families()` fallback list to the same 16 API family names.
+
+2. `runners/weekly_screening.ps1` could fail unclearly or incorrectly when `python` was not on `PATH`.
+   - In the Codex shell, bare `python` is not available. The old wrapper reached the native-command failure path instead of validating this upfront.
+   - Added `-PythonExe` parameter, a fail-fast `Get-Command` check, invocation via `& $PythonExe`, and `$LASTEXITCODE` null guards for both EGS and canary stages.
+
+### Validation
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "from pathlib import Path; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in ['A-EGS/egs_main.py','runners/backtest_rank.py','runners/data_canary.py']]; print('syntax ok all 3')"
+powershell -NoProfile -ExecutionPolicy Bypass -File runners\weekly_screening.ps1 -AsOf 19990101 -SkipCanary
+powershell -NoProfile -ExecutionPolicy Bypass -File runners\weekly_screening.ps1 -AsOf 19990101 -SkipCanary -PythonExe C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\backtest_rank.py --mode production --stats-only --windows 5,10,20 --split-date 20250101
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; schema=json.load(open('schemas/rank_backtest_report.schema.json',encoding='utf-8')); report=json.load(open('result/a_short/backtest/backtest_report.json',encoding='utf-8')); errors=list(Draft7Validator(schema).iter_errors(report)); print('report_schema_errors', len(errors)); print('schema_version', report.get('schema_version')); print('sample_count', report.get('sample_count')); print('candidate_generation', len(report['data_lineage']['api_families']['candidate_generation']), report['data_lineage']['api_families']['candidate_generation'])"
+```
+
+Additional static check covered both direct `safe_api(pro.xxx, ...)` calls and dynamic `getattr(pro, "index_member_all")`; result: 16 API families, 16 detected candidate-generation API references, `missing=[]`, `extra=[]`.
+
+Results:
+
+- Syntax compile: ok for `A-EGS/egs_main.py`, `runners/backtest_rank.py`, and `runners/data_canary.py`.
+- Weekly wrapper without PATH python: fail-fast exit 1 with `[FATAL] Python executable not found: python`.
+- Weekly wrapper with explicit `-PythonExe` and invalid non-trading `19990101`: EGS error propagates as exit 1 and canary is skipped.
+- `backtest_report.json`: schema validation errors `0`, schema version `1.10.0`, sample_count `360`, `data_lineage.api_families.candidate_generation` now has the corrected 16 API families.
+
+### Notes
+
+- The regenerated `result/a_short/backtest/backtest_report.json` only changes `generated_at` and the candidate-generation API family list; rank stats and sample count are unchanged.
+- This does not rerun live Stage3 cninfo/news/DeepSeek. It covers the deterministic script paths involved in Phase 2 / 2.5 / 2.6: EGS metadata, data health lineage, rank report lineage, data canary unit behavior, and weekly wrapper process/error handling.

@@ -10,15 +10,17 @@
 # - 整体 exit code 取 egs_main 的 exit code
 #
 # Usage:
-#   .\runners\weekly_screening.ps1                 # as-of = 今天
+#   .\runners\weekly_screening.ps1                                   # as-of = 今天
 #   .\runners\weekly_screening.ps1 -AsOf 20260522
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -CanarySource em
-#   .\runners\weekly_screening.ps1 -SkipCanary     # 只跑选股
+#   .\runners\weekly_screening.ps1 -PythonExe C:\Path\To\python.exe   # python 不在 PATH 时
+#   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
 
 param(
     [string]$AsOf = (Get-Date -Format 'yyyyMMdd'),
     [ValidateSet('sina', 'em')]
     [string]$CanarySource = 'sina',
+    [string]$PythonExe = 'python',
     [switch]$SkipCanary
 )
 
@@ -35,6 +37,11 @@ if (-not (Test-Path (Join-Path $ProjectRoot 'A-EGS\egs_main.py'))) {
     Write-Host "[FATAL] expected A-EGS\egs_main.py under $ProjectRoot but not found." -ForegroundColor Red
     exit 1
 }
+if (-not (Get-Command $PythonExe -ErrorAction SilentlyContinue)) {
+    Write-Host "[FATAL] Python executable not found: $PythonExe" -ForegroundColor Red
+    Write-Host "        Pass -PythonExe C:\Path\To\python.exe or add python to PATH." -ForegroundColor Red
+    exit 1
+}
 Set-Location $ProjectRoot
 
 Write-Host "=== Weekly screening pipeline ===" -ForegroundColor Cyan
@@ -45,8 +52,9 @@ Write-Host ""
 
 # --- Stage 1: egs_main ---
 Write-Host "[1/2] Running A-EGS\egs_main.py --as-of $AsOf ..." -ForegroundColor Yellow
-python A-EGS\egs_main.py --as-of $AsOf
+& $PythonExe A-EGS\egs_main.py --as-of $AsOf
 $EgsExitCode = $LASTEXITCODE
+if ($null -eq $EgsExitCode) { $EgsExitCode = 1 }
 
 if ($EgsExitCode -ne 0) {
     Write-Host ""
@@ -63,8 +71,9 @@ if ($SkipCanary) {
 
 Write-Host ""
 Write-Host "[2/2] Running runners\data_canary.py --as-of $AsOf --source $CanarySource ..." -ForegroundColor Yellow
-python runners\data_canary.py --as-of $AsOf --source $CanarySource
+& $PythonExe runners\data_canary.py --as-of $AsOf --source $CanarySource
 $CanaryExitCode = $LASTEXITCODE
+if ($null -eq $CanaryExitCode) { $CanaryExitCode = 1 }
 
 if ($CanaryExitCode -ne 0) {
     # canary 本身设计为永远 exit 0；非 0 说明 Python 进程崩了，不是数据问题

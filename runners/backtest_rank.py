@@ -83,10 +83,11 @@ def _current_egs_api_families():
             pass
     # Fallback: must match egs_main.py:EGS_API_FAMILIES
     return [
-        "daily", "daily_basic", "moneyflow", "fina_indicator",
-        "stk_limit", "stock_basic", "trade_cal",
+        "daily", "daily_basic", "fina_indicator", "index_daily",
+        "moneyflow", "moneyflow_hsgt", "margin_detail",
+        "share_float", "stk_holdertrade", "stock_basic", "trade_cal",
         "index_member_all", "index_member", "index_classify",
-        "adj_factor", "concept", "concept_detail",
+        "concept", "concept_detail",
     ]
 
 # A-share transaction cost defaults (double-sided, in pct):

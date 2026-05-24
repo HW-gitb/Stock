@@ -167,10 +167,11 @@ EGS_VERSION = "v7.10"
 # backtest_rank's data_lineage) read one truth via _current_egs_api_families()
 # regex parsing. When adding a new Tushare call, update this list.
 EGS_API_FAMILIES = [
-    "daily", "daily_basic", "moneyflow", "fina_indicator",
-    "stk_limit", "stock_basic", "trade_cal",
+    "daily", "daily_basic", "fina_indicator", "index_daily",
+    "moneyflow", "moneyflow_hsgt", "margin_detail",
+    "share_float", "stk_holdertrade", "stock_basic", "trade_cal",
     "index_member_all", "index_member", "index_classify",
-    "adj_factor", "concept", "concept_detail",
+    "concept", "concept_detail",
 ]
 REALTIME_CACHE_TTL = CONF["cache_ttl"]
 BACKTEST_CACHE_TTL = 10 * 365 * 24 * 3600
