@@ -1,15 +1,15 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-24（Phase 3 kickoff spec 固化后）
+**最后更新**：2026-05-24（Phase 3 minimal veto replay 首轮完成后）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 2 + Phase 2.5 + Phase 2.6 全部完成。Phase 3 待启动
-- **当前目标**：等待指示后开始 Phase 3 minimal analyzer + state 接口；把 EGS Tier1→Tier2 降级升级成 analyzer 层 deterministic veto，并用回测量化边际贡献
-- **下一阶段大目标（Phase 3）**：建 analyzer veto 模块 + state 接口；不再追求"挑出更好的票"，转向"过滤更多坏票"
+- **当前 Phase**：Phase 2 + Phase 2.5 + Phase 2.6 全部完成。Phase 3 minimal veto analyzer + state 接口 + rank replay 首轮已落地
+- **当前目标**：复核 Phase 3 首轮 replay 结果；四条 hard veto 全开没有改善 Tier1-only baseline，下一步重点是拆解 `esp_non_positive` 语义是否过宽
+- **下一阶段大目标（Phase 3 后续）**：保留 analyzer veto 工程链路，继续用 replay/ablation 量化每条 veto 的边际贡献；不把首轮结果解释为策略签收
 
 ---
 
@@ -28,6 +28,7 @@
 - v7.10 P0/P1 优化全部落地（2026-05-24）：追高（egs_main.py:2325）/OVERHEAT（egs_main.py:2327）做 Tier1→Tier2 降级；ESP 低基数 cap@200（egs_main.py:2233 + score_penalty_reasons="esp_raw_cap_200"）；Tier2 filler 排除 `l2_name="未知"`（egs_main.py:2843）；SW 覆盖率三段回退 + active_count 监控（egs_main.py:1144-1175）。**注**：追高/OVERHEAT 当前是 Tier 降级（filler 路径仍可能以 Tier2 身份出现），完整 deterministic veto 留到 Phase 3 analyzer
 - Phase 2.6 完成（2026-05-24）：`docs/datahub_design.md` + AGENTS guardrail + 报告 schema 1.10.0 增加 `data_lineage` 对象（data_provider/api_families/forward_return_adjustment_mode/benchmark_sources/pit_limitations）
 - data canary 旁路对账（2026-05-24）：`runners/data_canary.py` 每周选股后抽 5 只对比 Tushare vs akshare 的 close/pe/pb/name；不阻断、不进打分、不比行业；输出 `logs/data_canary_<as_of>.json`
+- Phase 3 首轮（2026-05-24）：新增 `engine/analyzer/rule6_hard_veto.py`、`engine/analyzer/state_manager.py`、`tests/analyzer/`；`backtest_rank.py` 接入 analyzer replay，新增 `tier1_veto_passed` subset、`--veto-rules` ablation、schema 1.11.0、`low_tier1_veto_passed_count` warning；24p stats-only replay 已通过 schema 校验
 
 ---
 
@@ -77,8 +78,10 @@
 ### 代码 / schema
 - `A-EGS/egs_main.py` — v7.10（v7.9 内存里仍有引用，以文件为准）
 - `runners/backtest_rank.py` — Phase 2 回测入口，subset=all+tier1_only 双跑
+- `engine/analyzer/rule6_hard_veto.py` — Phase 3 首轮 deterministic hard veto：`chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive`
+- `engine/analyzer/state_manager.py` — Phase 3 JSON state 接口与 atomic write helper
 - `schemas/analysis_input.schema.json` — v1.1.0
-- `schemas/rank_backtest_report.schema.json` — v1.10.0（含 date_warnings + data_lineage）
+- `schemas/rank_backtest_report.schema.json` — v1.11.0（含 date_warnings + data_lineage + analyzer veto replay settings）
 - `schemas/data_health.schema.json` — v1.1.0（每周实盘 egs_main 自动产 `data_health.json` 的契约；2026-05-24 第二轮 audit 时 `pe_missing_count` 字段语义不清，rename 为 `pe_ttm_or_pe_missing_count`）
 
 ### 当前有效 findings（**只读这两份，旧 12p findings 已 INVALIDATED**）
@@ -106,9 +109,9 @@
 
 ### P0 — Phase 3 主轴
 
-1. **Phase 3 minimal analyzer + state 接口** — 详见 `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md`。`engine/analyzer/rule6_hard_veto.py` 必须真实返回 veto decision；state 接口可先返回空 dict / False。
-2. **第一批 hard veto** — `chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive` 四条都 hard veto，且各自独立 reason code + version；missing 不等于 negative，缺字段不自动 veto。
-3. **回测 replay 完成线** — `backtest_rank.py` 新增 `tier1_veto_passed` subset，保留 `all` / `tier1_only` baseline；schema 升 1.11.0，date_warnings 加 `low_tier1_veto_passed_count`；支持 `--veto-rules` 做 ablation。
+1. **Phase 3 首轮结果复核** — 四条全开后 `tier1_veto_passed` N=227，5d/10d/20d `t1_net` 均弱于 Tier1-only；不要宣称 analyzer 已改善策略。
+2. **拆解 `esp_non_positive`** — 当前 `esp_raw <= 0` hard veto 过滤 87 条 `esp_non_positive` + 多个组合 reason，是首轮样本收缩主因；下一步需要确认是否应区分“真实非正 ESP”和“回测 neutralize/独立池导致的 0”。
+3. **保留 chase/overheat ablation 结论** — `analyzer_veto_chase_overheat` 对 Tier1-only 无边际影响，因为 v7.10 已把追高/OVERHEAT 从 Tier1 降到 Tier2；这支持“工程链路有效”，不支持“新增 alpha 改善”。
 
 ### P1 — 短期跟进
 

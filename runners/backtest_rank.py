@@ -38,6 +38,12 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from engine.analyzer.rule6_hard_veto import DEFAULT_RULES as DEFAULT_VETO_RULES
+from engine.analyzer.rule6_hard_veto import run_veto
+
 RESULT_ROOT = ROOT / "result" / "a_short"
 BACKTEST_DIR = RESULT_ROOT / "backtest"
 GENERATED_DIR = BACKTEST_DIR / "generated"
@@ -769,6 +775,12 @@ def build_group_columns(samples):
     samples["q1_dt_yoy_gt_200"] = pd.to_numeric(samples["q1_dt_yoy"], errors="coerce") > 200
     samples["esp_raw_gt_200"] = pd.to_numeric(samples["esp_raw"], errors="coerce") > 200
     samples["l2_unknown"] = samples.get("l2_name", pd.Series("", index=samples.index)).fillna("").astype(str).isin(["未知", "unknown", ""])
+    if "analyzer_vetoed" not in samples.columns:
+        samples["analyzer_vetoed"] = False
+    samples["analyzer_vetoed"] = samples["analyzer_vetoed"].fillna(False).astype(bool)
+    if "analyzer_veto_codes" not in samples.columns:
+        samples["analyzer_veto_codes"] = "none"
+    samples["analyzer_veto_codes"] = samples["analyzer_veto_codes"].fillna("none").astype(str)
     samples["final_score_bucket"] = pd.cut(
         pd.to_numeric(samples["final_score"], errors="coerce"),
         bins=[-1, 70, 80, 90, 101],
@@ -807,10 +819,67 @@ def _risk_reasons_for_row(row):
 
 PRIMARY_SUBSET = "tier1_only"  # main reporting view: Tier2 filler dilutes signal
 LOW_TIER1_COUNT_THRESHOLD = 5
+LOW_TIER1_VETO_PASSED_COUNT_THRESHOLD = 5
+CRITICAL_TIER1_VETO_PASSED_COUNT_THRESHOLD = 3
+
+
+def parse_veto_rules(value):
+    if value is None:
+        return list(DEFAULT_VETO_RULES)
+    if isinstance(value, (list, tuple)):
+        parts = []
+        for item in value:
+            parts.extend(parse_veto_rules(item))
+        return parts
+    text = str(value).strip()
+    if not text:
+        return []
+    rules = [part.strip() for part in text.split(",") if part.strip()]
+    # run_veto validates unknown rules; call once here so CLI errors early.
+    run_veto({}, enabled_rules=rules)
+    return rules
+
+
+def apply_analyzer_veto(samples, enabled_rules):
+    """Replay Phase 3 analyzer veto on flattened rank samples."""
+    samples = samples.copy()
+    rules = list(enabled_rules or [])
+    if not rules:
+        samples["analyzer_vetoed"] = False
+        samples["analyzer_veto_codes"] = "none"
+        samples["analyzer_veto_reason_count"] = 0
+        samples["analyzer_veto_diagnostics"] = ""
+        samples["tier1_veto_passed"] = samples.get("tier", pd.Series("", index=samples.index)).astype(str).eq("Tier1")
+        return samples
+
+    vetoed, codes, reason_counts, diagnostics = [], [], [], []
+    for row in samples.to_dict(orient="records"):
+        result = run_veto(row, enabled_rules=rules)
+        reasons = result.get("reasons") or []
+        diag = result.get("diagnostics") or []
+        reason_codes = [str(r.get("code")) for r in reasons if r.get("code")]
+        diag_codes = [
+            f"{d.get('code')}:{d.get('status')}"
+            for d in diag if d.get("code") and d.get("status")
+        ]
+        vetoed.append(bool(result.get("vetoed")))
+        codes.append("|".join(reason_codes) if reason_codes else "none")
+        reason_counts.append(int(len(reasons)))
+        diagnostics.append("|".join(diag_codes))
+
+    samples["analyzer_vetoed"] = vetoed
+    samples["analyzer_veto_codes"] = codes
+    samples["analyzer_veto_reason_count"] = reason_counts
+    samples["analyzer_veto_diagnostics"] = diagnostics
+    tier1 = samples.get("tier", pd.Series("", index=samples.index)).astype(str).eq("Tier1")
+    samples["tier1_veto_passed"] = tier1 & ~samples["analyzer_vetoed"].fillna(False).astype(bool)
+    return samples
 
 
 def build_date_warnings(samples, selected_dates,
-                        low_tier1_threshold=LOW_TIER1_COUNT_THRESHOLD):
+                        low_tier1_threshold=LOW_TIER1_COUNT_THRESHOLD,
+                        low_tier1_veto_passed_threshold=LOW_TIER1_VETO_PASSED_COUNT_THRESHOLD,
+                        critical_tier1_veto_passed_threshold=CRITICAL_TIER1_VETO_PASSED_COUNT_THRESHOLD):
     """Build date-level health warnings for the JSON report.
 
     The primary report subset is Tier1-only. A selected date with very few
@@ -862,6 +931,32 @@ def build_date_warnings(samples, selected_dates,
                     "headline strategy contribution as observation only."
                 ),
             })
+        if "analyzer_vetoed" in dgrp.columns:
+            tier1_veto_passed_count = int(
+                ((dgrp["tier_group"] == "Tier1")
+                 & ~dgrp["analyzer_vetoed"].fillna(False).astype(bool)).sum()
+            )
+            if tier1_veto_passed_count < low_tier1_veto_passed_threshold:
+                severity = (
+                    "critical"
+                    if tier1_veto_passed_count < critical_tier1_veto_passed_threshold
+                    else "warning"
+                )
+                warnings_out.append({
+                    "trade_date": trade_date,
+                    "warning_type": "low_tier1_veto_passed_count",
+                    "severity": severity,
+                    "threshold": int(low_tier1_veto_passed_threshold),
+                    "sample_count": sample_count,
+                    "tier1_count": tier1_count,
+                    "tier2_count": tier2_count,
+                    "tier1_veto_passed_count": tier1_veto_passed_count,
+                    "message": (
+                        f"Tier1 analyzer-veto-passed count {tier1_veto_passed_count} is below "
+                        f"{low_tier1_veto_passed_threshold}; treat this date's Phase 3 veto subset "
+                        "as low-sample evidence."
+                    ),
+                })
 
     for trade_date in sorted(selected_set - grouped_dates):
         warnings_out.append({
@@ -894,6 +989,8 @@ def _factor_group_specs():
         ("q0_dt_yoy_gt_200", "low_base_growth"),
         ("q1_dt_yoy_gt_200", "low_base_growth"),
         ("esp_raw_gt_200", "low_base_growth"),
+        ("analyzer_vetoed", "analyzer"),
+        ("analyzer_veto_codes", "analyzer"),
     ]
 
 
@@ -943,6 +1040,7 @@ def build_stats(samples, windows, split_date=None):
     Subsets:
       - 'all'         : every sample (Tier1 + Tier2 filler)
       - 'tier1_only'  : Tier == 'Tier1' subset (primary reporting view)
+      - 'tier1_veto_passed': Tier1 names that pass Phase 3 analyzer veto
 
     Period splits (only emitted when split_date is set):
       - 'all'         : full date range (always emitted)
@@ -959,6 +1057,10 @@ def build_stats(samples, windows, split_date=None):
     tier1_samples = samples[samples["tier_group"] == "Tier1"]
     if len(tier1_samples):
         subset_specs.append(("tier1_only", tier1_samples))
+        if "analyzer_vetoed" in tier1_samples.columns:
+            tier1_veto_passed = tier1_samples[~tier1_samples["analyzer_vetoed"].fillna(False).astype(bool)]
+            if len(tier1_veto_passed):
+                subset_specs.append(("tier1_veto_passed", tier1_veto_passed))
 
     summaries, factors, rule6s, monthlies = [], [], [], []
     for subset_label, subset_df in subset_specs:
@@ -1319,6 +1421,24 @@ def build_strategy_variant_stats(samples, windows, split_date=None, extra_varian
     return summary_df, monthly_df, meta
 
 
+def build_analyzer_ablation_variants(samples, analyzer_enabled=True):
+    if not analyzer_enabled or samples.empty:
+        return {}
+    variants = {}
+    ablations = {
+        "analyzer_veto_chase_overheat": ["chasing_high", "overheat"],
+        "analyzer_veto_all_rules": list(DEFAULT_VETO_RULES),
+    }
+    for name, rules in ablations.items():
+        replayed = apply_analyzer_veto(samples, rules)
+        if "tier1_veto_passed" not in replayed.columns:
+            continue
+        passed = replayed[replayed["tier1_veto_passed"].fillna(False).astype(bool)].copy()
+        if not passed.empty:
+            variants[name] = passed
+    return variants
+
+
 def _max_drawdown_from_returns(returns_pct):
     equity = 1.0
     peak = 1.0
@@ -1338,6 +1458,10 @@ def build_portfolio_stats(samples, windows, split_date=None, strategy_variant="b
     tier1 = samples[samples["tier_group"] == "Tier1"]
     if len(tier1):
         subset_specs.append(("tier1_only", tier1))
+        if "analyzer_vetoed" in tier1.columns:
+            tier1_veto_passed = tier1[~tier1["analyzer_vetoed"].fillna(False).astype(bool)]
+            if len(tier1_veto_passed):
+                subset_specs.append(("tier1_veto_passed", tier1_veto_passed))
 
     period_rows, stat_rows = [], []
     for subset_label, subset_df in subset_specs:
@@ -1739,7 +1863,7 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
 
     report = {
         "schema_name": "rank_backtest_report",
-        "schema_version": "1.10.0",
+        "schema_version": "1.11.0",
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "preset": "a_short",
         "mode": mode,
@@ -1853,6 +1977,8 @@ def enforce_mode(args):
         "l3_pit_strict": bool(args.l3_pit_strict),
         "primary_subset": PRIMARY_SUBSET,
         "split_date": args.split_date,
+        "analyzer_veto": bool(args.analyzer_veto),
+        "veto_rules": parse_veto_rules(args.veto_rules),
     }
 
 
@@ -1898,6 +2024,11 @@ def main():
                              "Without this flag, only 'all' rows are emitted. "
                              "Use e.g. --split-date 20250101 to develop rules on 2024 and "
                              "validate on 2025, avoiding data-mining overfit.")
+    parser.add_argument("--no-analyzer-veto", dest="analyzer_veto", action="store_false", default=True,
+                        help="Disable Phase 3 analyzer veto replay. Baseline all/tier1_only stats are unchanged either way.")
+    parser.add_argument("--veto-rules", default=",".join(DEFAULT_VETO_RULES),
+                        help="Comma-separated Phase 3 analyzer veto rules for the tier1_veto_passed subset. "
+                             "Default: chasing_high,overheat,l2_unknown,esp_non_positive.")
     args = parser.parse_args()
     if args.l3_mode is None:
         args.l3_mode = "neutralize" if args.mode == "production" else "today"
@@ -1958,6 +2089,11 @@ def main():
         if stats_source == "last-report" and isinstance(last_report.get("settings"), dict):
             prior = last_report["settings"]
             settings.update(prior)
+            # Analyzer replay is Phase 3 analysis configuration, not a property
+            # of the generated pools. Let the current CLI/default drive it even
+            # when older report settings are inherited for data-generation facts.
+            settings["analyzer_veto"] = bool(args.analyzer_veto)
+            settings["veto_rules"] = parse_veto_rules(args.veto_rules)
             windows = list(settings.get("windows") or windows)
             max_window = max(windows) if windows else max_window
             print("[INFO] stats-only mode: inherited settings from previous backtest_report.json")
@@ -2031,6 +2167,11 @@ def main():
             if not eligible_samples.empty:
                 esp_cap_samples, _ = attach_eligible_excess(esp_cap_samples, eligible_samples, windows)
             extra_variants["esp_cap_200_rerank"] = esp_cap_samples
+        if settings.get("analyzer_veto", True):
+            samples = apply_analyzer_veto(samples, settings.get("veto_rules") or DEFAULT_VETO_RULES)
+            extra_variants.update(build_analyzer_ablation_variants(samples, analyzer_enabled=True))
+        else:
+            samples = apply_analyzer_veto(samples, [])
 
     summary, factor_stats, rule6_stats, monthly_df, samples = build_stats(
         samples, windows, split_date=settings.get("split_date"))

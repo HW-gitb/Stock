@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/rank_backtest_report/1.10.0/schema.json",
+  "$id": "https://stock.local/schemas/rank_backtest_report/1.11.0/schema.json",
   "title": "Rank Backtest Report",
   "description": "Machine-readable manifest emitted by runners/backtest_rank.py.",
   "type": "object",
@@ -69,7 +69,9 @@
         "l3_mode",
         "l3_pit_strict",
         "primary_subset",
-        "split_date"
+        "split_date",
+        "analyzer_veto",
+        "veto_rules"
       ],
       "properties": {
         "mode": {
@@ -125,13 +127,25 @@
         },
         "primary_subset": {
           "type": "string",
-          "enum": ["all", "tier1_only"],
+          "enum": ["all", "tier1_only", "tier1_veto_passed"],
           "description": "Recommended reporting subset. Stats CSVs include a 'subset' column with both 'all' and 'tier1_only' rows; this field declares which one is the headline. Default 'tier1_only' since 24p evidence (t=-2.27) shows Tier2 filler dilutes the real signal."
         },
         "split_date": {
           "type": ["string", "null"],
           "pattern": "^[0-9]{8}$",
           "description": "YYYYMMDD boundary for the period_split dimension. When set, stats CSVs include 'discovery' (trade_date < split_date) and 'validation' (>=) rows alongside the default 'all' rows, enabling in-sample/out-of-sample separation to avoid data-mining overfit. Null means only 'all' is emitted."
+        },
+        "analyzer_veto": {
+          "type": "boolean",
+          "description": "Whether Phase 3 analyzer hard-veto replay was applied to emit the tier1_veto_passed subset. Baseline all/tier1_only samples remain unchanged."
+        },
+        "veto_rules": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["chasing_high", "overheat", "l2_unknown", "esp_non_positive"]
+          },
+          "description": "Enabled Phase 3 hard-veto rule codes used for tier1_veto_passed replay."
         }
       }
     },
@@ -177,7 +191,7 @@
           },
           "warning_type": {
             "type": "string",
-            "enum": ["low_tier1_count", "no_samples"]
+            "enum": ["low_tier1_count", "low_tier1_veto_passed_count", "no_samples"]
           },
           "severity": {
             "type": "string",
@@ -196,6 +210,10 @@
             "minimum": 0
           },
           "tier2_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tier1_veto_passed_count": {
             "type": "integer",
             "minimum": 0
           },

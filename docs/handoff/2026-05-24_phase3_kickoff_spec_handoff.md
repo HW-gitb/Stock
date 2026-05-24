@@ -159,3 +159,95 @@ Phase 3 replay 的目的不是证明策略已经可实盘，而是验证 determi
 - 不要重跑 `A-EGS/egs_main.py` 才开始 Phase 3；第一版可以基于已有 24p generated artifacts 做 stats-only replay。
 - 不要改写 DataHub / ODS / DWD / DWS；那是 Phase 7。
 - 完成 Phase 3 后需要更新 `docs/CURRENT.md`，并按本 handoff 或新实现 handoff 记录验证命令和结果。
+
+---
+
+## 2026-05-24 追加：Phase 3 minimal veto replay 首轮落地
+
+### 改了什么
+
+- 新增 `engine/analyzer/rule6_hard_veto.py`。
+  - `run_veto(candidate_dict, enabled_rules=None)` 支持嵌套 `analysis_input` candidate 和扁平 `rank_samples` row。
+  - 四条 hard veto：`chasing_high@v1`、`overheat@v1`、`l2_unknown@v1`、`esp_non_positive@v1`。
+  - reason code 与 version 分离；missing / unparseable 只进 diagnostics，不自动 veto。
+- 新增 `engine/analyzer/state_manager.py`。
+  - 提供 JSON state loader、`atomic_write_json()`、`append_veto_record()`、`has_position()`、`is_circuit_breaker_active()` 等 Phase 3 稳定接口。
+  - 现有 `state/a_short/*.json` stub 保持 JSON，不引入 SQLite。
+- 新增 `tests/analyzer/`。
+  - 每条 veto rule 覆盖 positive + negative fixture。
+  - 覆盖 missing 不触发 veto、未知 rule 报错。
+- 修改 `runners/backtest_rank.py`。
+  - 默认开启 analyzer veto replay；新增 `--no-analyzer-veto` 和 `--veto-rules`。
+  - stats-only 继承上一份 report 设置时，`analyzer_veto` / `veto_rules` 仍以当前 CLI 为准，因为它们是 replay 配置，不是 generated pool 的数据事实。
+  - `rank_samples.csv` 增加 `analyzer_vetoed`、`analyzer_veto_codes`、`analyzer_veto_reason_count`、`analyzer_veto_diagnostics`、`tier1_veto_passed`。
+  - stats/portfolio 新增 `tier1_veto_passed` subset；保留 `all` / `tier1_only` baseline，`primary_subset` 仍为 `tier1_only`。
+  - `strategy_variant_stats.csv` 增加 `analyzer_veto_chase_overheat` 与 `analyzer_veto_all_rules`，用于核心 ablation。
+- 修改 `schemas/rank_backtest_report.schema.json`。
+  - `1.10.0 -> 1.11.0`。
+  - `settings` 增加 `analyzer_veto` / `veto_rules`。
+  - `settings.primary_subset` enum 增加 `tier1_veto_passed`。
+  - `date_warnings.warning_type` 增加 `low_tier1_veto_passed_count`，并允许 `tier1_veto_passed_count` 字段。
+- 更新 `docs/CURRENT.md` 和 `AGENTS.md` 的当前状态 / schema 版本引用。
+
+### 为什么改
+
+Phase 2 结论是工程签收，不是策略签收。v7.10 已把追高 / OVERHEAT 等坏信号从 Tier1 降到 Tier2，但 filler 仍可能捡回坏票。Phase 3 首轮目标是把这些信号升级成 analyzer 层 deterministic veto，并在不改变 baseline 样本口径的前提下量化边际贡献。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in ['engine/analyzer/rule6_hard_veto.py','engine/analyzer/state_manager.py','runners/backtest_rank.py']]; print('compile ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/rank_backtest_report.schema.json',encoding='utf-8')); Draft7Validator.check_schema(s); print('schema ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\backtest_rank.py --mode production --stats-only --windows 5,10,20 --split-date 20250101
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/rank_backtest_report.schema.json',encoding='utf-8')); r=json.load(open('result/a_short/backtest/backtest_report.json',encoding='utf-8')); errs=list(Draft7Validator(s).iter_errors(r)); print('errors', len(errs)); print('schema_version', r['schema_version'])"
+```
+
+### 验证结果
+
+- Compile：`compile ok`。
+- Unit tests：10 tests passed。
+- Schema meta-validation：`schema ok`。
+- 24p stats-only replay：成功；复用 forward cache；`backtest_report.json` 通过 `rank_backtest_report v1.11.0` 校验。
+- 独立 report validation：`errors 0`，`schema_version 1.11.0`。
+- Report settings：`primary_subset=tier1_only`，`analyzer_veto=True`，`veto_rules=['chasing_high','overheat','l2_unknown','esp_non_positive']`。
+- `date_warnings`：11 条；新增 warning 覆盖低 `tier1_veto_passed_count` 日期。
+
+### 首轮 replay 关键结果
+
+24p production stats-only，`period_split=all`，variant=`t1_net`：
+
+| subset | N | 5d mean / t / win | 10d mean / t / win | 20d mean / t / win |
+|---|---:|---:|---:|---:|
+| `tier1_only` | 305 | +0.63 / 0.91 / 51.80% | +0.98 / 1.04 / 54.10% | +2.84 / 1.60 / 51.15% |
+| `tier1_veto_passed` | 227 | +0.27 / 0.13 / 48.46% | +0.85 / 0.64 / 51.54% | +2.41 / 0.55 / 50.66% |
+
+结论：四条 hard veto 全开后没有改善 Tier1-only baseline。不能宣称 analyzer 首轮策略有效。
+
+Rule hit 分布（`rank_samples.csv`）：
+
+| analyzer_veto_codes | count |
+|---|---:|
+| `none` | 227 |
+| `esp_non_positive` | 87 |
+| `chasing_high|overheat|esp_non_positive` | 19 |
+| `chasing_high|esp_non_positive` | 9 |
+| `chasing_high` | 9 |
+| `chasing_high|overheat` | 9 |
+
+核心 ablation：
+
+- `analyzer_veto_chase_overheat` 对 Tier1-only 无边际影响：N=305，数字等于 `tier1_only`。原因是 v7.10 已把追高 / OVERHEAT 从 Tier1 降到 Tier2。
+- `analyzer_veto_all_rules` 等于当前 `tier1_veto_passed`：N=227，表现弱于 Tier1-only。
+
+### 失效旧结论
+
+- “四条 hard veto 全开会改善 Tier1-only baseline”不成立。首轮 replay 结果相反。
+- “chasing_high / overheat analyzer replay 会在 Tier1-only 内产生明显边际贡献”不成立；v7.10 已在 EGS 层先降级，Tier1 内没有可过滤样本。
+
+### 下一步注意事项
+
+1. 优先拆解 `esp_non_positive`：当前 `esp_raw <= 0` hard veto 大量过滤早期 Tier1，其中可能混有 `neutralize` / 独立池 / 数据不足导致的 0，不能直接等同“真实非正预期”。
+2. 保留 analyzer 工程链路；后续只调整 rule 语义和启用组合，不要回滚 replay 框架。
+3. 不要把 `tier1_veto_passed` 提升为 primary subset；`tier1_only` 仍是主 baseline。
+4. 如继续 Phase 3，下一轮应先跑 `--veto-rules chasing_high,overheat,l2_unknown` 和单规则 ablation，验证是否只是 `esp_non_positive` 语义过宽造成首轮变差。

@@ -197,7 +197,7 @@ Stock/
 - 第一批 hard veto：`chasing_high`、`overheat`、`l2_unknown`、`esp_non_positive`。四条都 hard veto，且各自独立 reason code + version。
 - missing 不等于 negative：字段缺失、空值、不可解析不自动触发 hard veto，除非 EGS 当前逻辑已明确把该缺失当作降级原因。
 - `LOCK` 暂不 hard veto，只做辅助 flag；扩样本到 N≥15 后再决策。
-- 回测必须新增 `tier1_veto_passed` subset，保留 `all` / `tier1_only` baseline；schema 预期升到 `1.11.0`，并加入 `low_tier1_veto_passed_count` date warning。
+- 回测已新增 `tier1_veto_passed` subset，保留 `all` / `tier1_only` baseline；schema 已升到 `1.11.0`，并加入 `low_tier1_veto_passed_count` date warning。
 - Phase 3 详细完成线见 `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md`。
 
 ## Phase 2 特别待办
@@ -219,7 +219,7 @@ Stock/
 - `skills/us_short_analysis/reference/us_short_analysis_spec.md` — 美股短线分析框架资料
 - `skills/us_short_analysis/reference/us_short_screening_spec.md` — 美股短线预测/筛选框架资料
 - `schemas/analysis_input.schema.json` — analysis_input 契约，当前 `1.1.0`，JSON Schema Draft 7
-- `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.10.0`（含 date_warnings + data_lineage）
+- `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.11.0`（含 date_warnings + data_lineage + analyzer veto replay）
 - `schemas/analysis_input_coverage.md` — schema 覆盖率与修复记录
 - `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — Phase 2 v7.9 交接记录
 - `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Phase 2 Tier1-only 主口径切片交接记录
