@@ -198,3 +198,124 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\data_c
 失效旧结论：
 
 - “真实对账分支只能等用户本地验证”这句话需要细化：比较逻辑已用伪 akshare 本地验证；真实 akshare 网络源仍需用户在非代理受限环境跑一次确认。
+
+---
+
+## 2026-05-24 append: Tushare internal data health
+
+AKShare/Eastmoney proved unreliable in the user's normal environment, so the P0 data insurance path moved to an internal Tushare health check. This is not a second provider and does not change scoring, ranking, candidates, or backtest conclusions.
+
+### Changed files
+
+- `A-EGS/egs_main.py`
+  - `export_analysis_input(...)` now returns the in-memory `analysis_input` dict in addition to file paths.
+  - Added `build_data_health(...)`, `export_data_health(...)`, and `log_data_health_summary(...)`.
+  - Official non-backtest runs now write `result/a_short/<trade_date>/data_health.json` after `analysis_input.json`, `snapshot.json`, and `candidates.csv` are written.
+  - Official non-backtest runs print/log a one-line summary: `[DATA_HEALTH] OK|WARN|ERROR: errors=N, warnings=N, watch=N, tier1=N, final=N -> <path>`.
+  - `--backtest-mode` skips `data_health.json` to avoid polluting generated 24-period backtest artifact directories.
+- `schemas/data_health.schema.json`
+  - New Draft 7 contract for the `data_health.json` output, schema version `1.0.0`.
+
+### Checks covered
+
+- `analysis_input` schema identity/version and current `EGS_VERSION`.
+- `source.data_provider == tushare`.
+- Required output files exist.
+- Full universe is non-empty and not unusually small.
+- Watch pool, final pool, and Tier1 counts are non-empty and below-threshold cases are surfaced.
+- Watch-pool close is present and positive.
+- PE/PB missing-rate warning when above 20%.
+- Watch-pool SW L1/L2 unknown labels.
+- Candidate `data_quality.completeness_score` warning below 95 and error below 75.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; compile(Path('A-EGS/egs_main.py').read_text(encoding='utf-8'), 'A-EGS/egs_main.py', 'exec'); print('egs syntax ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; schema=json.load(open('schemas/data_health.schema.json',encoding='utf-8')); Draft7Validator.check_schema(schema); print('data_health schema ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import sys,json,importlib.util,pandas as pd; from jsonschema import Draft7Validator; sys.argv=['egs_main.py','--help']; spec=importlib.util.spec_from_file_location('egs_main','A-EGS/egs_main.py'); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); df_full=pd.read_csv('A-EGS/Result/egs_full_20260522.csv'); cand=pd.read_csv('result/a_short/20260522/candidates.csv'); codes=cand['ts_code'].astype(str).tolist(); df_full['ts_code']=df_full['ts_code'].astype(str); watch=df_full[df_full['ts_code'].isin(codes)].copy(); watch['order']=watch['ts_code'].map({c:i for i,c in enumerate(codes)}); watch=watch.sort_values('order').drop(columns=['order']); tier1=watch[watch['tier'].astype(str).eq('Tier1')].copy(); ai=json.load(open('result/a_short/20260522/analysis_input.json',encoding='utf-8')); ai['source']['screening_engine_version']=mod.EGS_VERSION; health=mod.build_data_health(df_full,watch,tier1,ai,'20260522','result/a_short/20260522/analysis_input.json','result/a_short/20260522/snapshot.json','result/a_short/20260522/candidates.csv','A-EGS/Result/egs_tier1_20260522.csv','A-EGS/Result/egs_full_20260522.csv'); schema=json.load(open('schemas/data_health.schema.json',encoding='utf-8')); errors=list(Draft7Validator(schema).iter_errors(health)); print(health['overall_status'], health['metrics']); print('validation_errors', len(errors)); print('errors', health['errors']); print('warnings', health['warnings'][:3])"
+```
+
+### Validation result
+
+- Syntax validation: `egs syntax ok`.
+- Schema meta-validation on local Python 3.13: `data_health schema ok` (`jsonschema` is not installed in bundled Python).
+- Builder validation on 20260522 existing artifacts with current-version source metadata: `overall_status=ok`, schema validation errors `0`.
+- Metrics observed: `full_count=1307`, `watch_count=15`, `tier1_count=15`, `final_count=5`, `close_missing_or_nonpositive_count=0`, `pe_missing_count=1`, `pb_missing_count=0`, `watch_l1_unknown_count=0`, `watch_l2_unknown_count=0`, `completeness_score_min=95.65`.
+- Errors: `[]`; warnings: `[]`.
+
+### Invalidated old notes
+
+- The previous P0 suggestion "use AKShare canary as weekly insurance" is no longer the *sole* primary recommendation. Internal data_health is now the **always-on primary check**; akshare canary becomes a **complementary second-source check** (see the sina switch append below — sina endpoint is stable, was rescued, and gives independent cross-source signal that internal health alone cannot).
+- "Need user local real AKShare reconciliation before closing data insurance" is updated: real reconciliation is now working via `--source=sina` (see append below). Phase 2.6 lineage closure now relies on TWO complementary layers.
+
+---
+
+## 2026-05-24 追加：data_canary --source sina（akshare 切新浪源，VPN-agnostic）
+
+### 背景
+
+用户本地实测：akshare 的东财源 `stock_zh_a_spot_em()` 在用户网络环境下不稳定——
+- 不连 VPN：东财对默认 requests 客户端的 TLS 指纹反爬，连接被 reset (`RemoteDisconnected`)
+- 连 VPN：本地代理把国内域名 `*.eastmoney.com` 错误路由到海外节点 → `ProxyError`
+
+但 akshare 的新浪源 `stock_zh_a_spot()` 连不连 VPN 都通（返回 5521 只全市场），字段虽然没有 pe/pb，但**最关键的 close + name 是有的**。close + name 能拦行情错 / 复权错 / 代码对应错 / 退市误标 / 停牌误判，这些才是数据 bug 高频场景；pe/pb 因为口径不同（Tushare TTM vs 东财动态）容差本来就放宽到 10%，实际拦截力有限。
+
+### 改动
+
+- `runners/data_canary.py`
+  - 加 `AK_SOURCES` 字典：`sina`（默认，close+name only）+ `em`（含 pe/pb，需 VPN split-tunnel）
+  - 加 `--source {sina,em}` CLI 选项（默认 `sina`）
+  - `_compare_one()` 接收 `supports_pe_pb` 参数，sina 源跳过 pe/pb 对账
+  - `_normalize_code()` 抽取数字 + zfill(6)，兼容 sina 可能返回的 `sh600000` 前缀格式（实测当前 sina 返回纯 6 位，但防御保留）
+  - 报告 `limitations` 根据所选源动态调整（sina 时提示"如需 pe/pb 切 --source=em"）
+  - 报告新增 `source` 字段标识所选源
+- 同主题不另建 handoff（按 AGENTS.md §交接记录 新门槛规则）
+
+### 设计 trade-off
+
+| 维度 | sina（默认） | em |
+|---|---|---|
+| close 对账 | ✅ | ✅ |
+| name 对账 | ✅ | ✅ |
+| pe/pb 对账 | ❌ | ✅ |
+| VPN 依赖 | 无 | 必须 split-tunnel `*.eastmoney.com` |
+| 反爬风险 | 低 | 高 |
+| 周五跑稳定性 | 高 | 不稳定 |
+
+选 sina 作默认的核心理由：**稳定性 > 字段完整性**。canary 是周度旁路检查，能不能跑过比检查多少字段重要。pe/pb 不在 canary 拦截也没关系——内置 `data_health.json` 已经会 warn pe/pb 缺失率 > 20%，相当于在 Tushare 自己输出上做 sanity check，覆盖了 canary 失去的 pe/pb 那块。
+
+### 验证
+
+```powershell
+python D:\cnhea\Stock\runners\data_canary.py --as-of 20260522
+```
+
+用户本地实测输出：
+```
+[INFO] fetching akshare stock_zh_a_spot via --source=sina (5 candidates to check)...
+[OK] canary ok: 0 missing, 0 errors, 0 warnings (5 sampled from 49 Tier1 rows) -> logs\data_canary_20260522.json
+```
+
+5 只 Tier1 抽样（小商品城 / 北方稀土 / 信质集团 / 杰克科技 / 工业富联）的 close + name 在 Tushare 和 sina 之间完全一致，包括"工业富联"这种容易乱码的名字。Phase 2.6 lineage 闭环真正落地——从此 canary 是可以每周跑得通的工具，不是"理论上可跑、实际挂"的形式主义。
+
+### 双层数据保险定位（与上一段 Codex internal health 协同）
+
+| 层 | 工具 | 触发 | 检查什么 | 优势 |
+|---|---|---|---|---|
+| 第一层（默认开） | `data_health.json`（egs_main.py 自动写） | 每次实盘选股 | Tushare 自己输出的 sanity（completeness_score / pe 缺失率 / 行业未知率 / 候选池大小） | 不依赖第二个源，永远跑得通 |
+| 第二层（按需） | `data_canary.py --source sina` | 选股后手动跑 | Tushare ↔ sina **跨源**对账 close + name | 拦内置 health 看不到的"两个源都说有数但值不同"的数据漂移 |
+
+两层互补，不重复：
+- 内置 health 能拦 Tushare 单源内部不一致（如行业全是"未知"那类塌方）
+- canary 能拦"Tushare 的数自洽但其实错了"（如 SW v4 那次：tushare 返回不完整但每个值看着都对）
+
+### 失效旧结论
+
+- 上一段 Codex internal health 里的"AKShare endpoint/proxy path is unstable"——**em 源仍不稳定**，但 sina 源稳定，这条结论范围需细化。已修订上一段措辞。
+- 上一段"akshare canary 降级为 optional"——更准确说法是"akshare canary 是 secondary cross-source check，complementary 不 redundant"。
+
+### Next
+
+- 周五选股流程：先跑 `egs_main.py`（自动产 data_health.json），再可选跑 `data_canary.py --source sina` 做跨源验证。不强制同时跑，但同时跑可拦更多类型的 bug
+- 如果未来用户调好 VPN split-tunnel 让东财通了，跑 `data_canary.py --source em` 可启用 pe/pb 对账
