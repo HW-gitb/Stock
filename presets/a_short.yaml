@@ -1,0 +1,14 @@
+preset: a_short
+market: A
+horizon: short
+schema_version: 1.0.0
+data_provider: tushare
+status: active
+
+paths:
+  result_dir: result/a_short
+  state_dir: state/a_short
+
+notes:
+  - Phase 1 uses A-EGS/egs_main.py as the current screening entry.
+  - Detailed thresholds will be filled before Phase 3 analyzer implementation.

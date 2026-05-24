@@ -1,0 +1,10 @@
+preset: a_long
+market: A
+horizon: long
+schema_version: 1.0.0
+data_provider: tushare
+status: reserved_phase_9
+
+paths:
+  result_dir: result/a_long
+  state_dir: state/a_long

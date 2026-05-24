@@ -1,0 +1,178 @@
+[
+  {
+    "ts_code": "600415.SH",
+    "name": "小商品城",
+    "final_score": 95.36,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 13.54,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "601799.SH",
+    "name": "星宇股份",
+    "final_score": 90.55,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 141.26,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "601995.SH",
+    "name": "中金公司",
+    "final_score": 86.63,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 34.14,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "603127.SH",
+    "name": "昭衍新药",
+    "final_score": 85.97,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 42.77,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "000567.SZ",
+    "name": "海德股份",
+    "final_score": 83.94,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 6.18,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "002111.SZ",
+    "name": "威海广泰",
+    "final_score": 83.51,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 10.87,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "000006.SZ",
+    "name": "深振业Ａ",
+    "final_score": 79.57,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 10.46,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "603950.SH",
+    "name": "长源东谷",
+    "final_score": 79.13,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 66.29,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "002833.SZ",
+    "name": "弘亚数控",
+    "final_score": 78.85,
+    "tier": "Tier1",
+    "entry_flag": "资金流背离",
+    "cninfo_flag": "通过",
+    "close": 20.1,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "600605.SH",
+    "name": "汇通能源",
+    "final_score": 77.64,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 31.47,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "002196.SZ",
+    "name": "方正电机",
+    "final_score": 76.12,
+    "tier": "Tier1",
+    "entry_flag": "题材过热",
+    "cninfo_flag": "通过",
+    "close": 16.46,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "600366.SH",
+    "name": "宁波韵升",
+    "final_score": 73.99,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 12.74,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "603259.SH",
+    "name": "药明康德",
+    "final_score": 71.06,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 104.23,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "002752.SZ",
+    "name": "昇兴股份",
+    "final_score": 69.03,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 7.02,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "603337.SH",
+    "name": "杰克科技",
+    "final_score": 68.85,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 41.2,
+    "run_date": "20260522",
+    "still_in_pool": true
+  },
+  {
+    "ts_code": "002283.SZ",
+    "name": "天润工业",
+    "final_score": 87.49,
+    "tier": "Tier1",
+    "entry_flag": "可直接观察",
+    "cninfo_flag": "通过",
+    "close": 11.48,
+    "run_date": "20260521",
+    "still_in_pool": false
+  }
+]

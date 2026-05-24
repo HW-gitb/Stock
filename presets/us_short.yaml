@@ -1,0 +1,10 @@
+preset: us_short
+market: US
+horizon: short
+schema_version: 1.0.0
+data_provider: us_provider
+status: reserved_phase_8
+
+paths:
+  result_dir: result/us_short
+  state_dir: state/us_short

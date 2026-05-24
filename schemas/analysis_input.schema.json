@@ -1,0 +1,1999 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/analysis_input/1.1.0/schema.json",
+  "title": "Stock Analysis Input",
+  "description": "Contract file passed from screening/ranking into the deterministic analyzer and analysis Skill.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "trade_date",
+    "preset",
+    "market",
+    "horizon",
+    "source",
+    "universe_summary",
+    "market_context",
+    "account_context",
+    "state_refs",
+    "candidates"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Semantic version of this schema contract.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trade_date": {
+      "$ref": "#/$defs/date8"
+    },
+    "preset": {
+      "type": "string",
+      "enum": [
+        "a_short",
+        "us_short",
+        "a_long",
+        "us_long"
+      ]
+    },
+    "market": {
+      "type": "string",
+      "enum": [
+        "A",
+        "US"
+      ]
+    },
+    "horizon": {
+      "type": "string",
+      "enum": [
+        "short",
+        "long"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "screening_engine",
+        "screening_engine_version",
+        "data_provider",
+        "input_files"
+      ],
+      "properties": {
+        "screening_engine": {
+          "type": "string"
+        },
+        "screening_engine_version": {
+          "type": "string",
+          "description": "Engine version. Use vMAJOR.MINOR or vMAJOR.MINOR.PATCH, for example v7.5 or v7.6.1.",
+          "pattern": "^v[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+        },
+        "data_provider": {
+          "type": "string",
+          "enum": [
+            "tushare",
+            "manual",
+            "mixed"
+          ]
+        },
+        "l3_mode": {
+          "type": "string",
+          "enum": ["pit", "today", "neutralize"],
+          "description": "Which L3 cat_score source was used to rank this pool. Absence = legacy file (pre-v1.1); treat as 'today' for backward compat."
+        },
+        "l3_pit_strict": {
+          "type": "boolean",
+          "description": "With l3_mode=pit, whether missing snapshot was a fatal error (true) or a soft fallback to cat_score=50 (false)."
+        },
+        "l3_snapshot_date": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{8}$",
+          "description": "When l3_mode=pit, the actual snapshot date used (max(snap_date) <= as_of). Null for today/neutralize."
+        },
+        "input_files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fileRef"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "universe_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_count",
+        "watch_count",
+        "final_count"
+      ],
+      "properties": {
+        "listed_count": {
+          "$ref": "#/$defs/nonNegativeIntegerNullable",
+          "description": "Unit: stocks."
+        },
+        "after_l0_count": {
+          "$ref": "#/$defs/nonNegativeIntegerNullable",
+          "description": "Unit: stocks."
+        },
+        "full_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Unit: stocks."
+        },
+        "watch_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Unit: stocks."
+        },
+        "final_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Unit: stocks."
+        },
+        "excluded_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "default": {}
+        }
+      }
+    },
+    "market_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trade_calendar",
+        "market_regime",
+        "volatility",
+        "breadth",
+        "liquidity",
+        "northbound"
+      ],
+      "properties": {
+        "trade_calendar": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "latest_trade_date",
+            "next_trade_date"
+          ],
+          "properties": {
+            "latest_trade_date": {
+              "$ref": "#/$defs/date8"
+            },
+            "next_trade_date": {
+              "$ref": "#/$defs/date8Nullable"
+            },
+            "is_pre_holiday_window": {
+              "type": "boolean"
+            },
+            "holiday_days_ahead": {
+              "$ref": "#/$defs/nonNegativeIntegerNullable",
+              "description": "Unit: days."
+            }
+          }
+        },
+        "market_regime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "confidence",
+            "position_cap_single_pct",
+            "position_cap_total_pct",
+            "min_reward_risk"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "attack",
+                "shock",
+                "defense",
+                "contraction",
+                "unknown"
+              ]
+            },
+            "confidence": {
+              "$ref": "#/$defs/confidence"
+            },
+            "position_cap_single_pct": {
+              "$ref": "#/$defs/percentNullable",
+              "description": "Unit: percent, 1 means 1%."
+            },
+            "position_cap_total_pct": {
+              "$ref": "#/$defs/percentNullable",
+              "description": "Unit: percent, 1 means 1%."
+            },
+            "min_reward_risk": {
+              "$ref": "#/$defs/ratioNullable",
+              "description": "Unit: multiple."
+            },
+            "triggers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/trigger"
+              },
+              "default": []
+            }
+          }
+        },
+        "volatility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "iv_percentile_252d",
+            "rule3_status",
+            "awakening_status"
+          ],
+          "properties": {
+            "iv_symbol": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": "50ETF"
+            },
+            "iv_value": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent or index points depending on IV source."
+            },
+            "iv_percentile_252d": {
+              "$ref": "#/$defs/percentNullable",
+              "description": "Unit: percentile, 0-100."
+            },
+            "iv_change_abs_1d_pctpt": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percentage points."
+            },
+            "rule3_status": {
+              "type": "string",
+              "enum": [
+                "normal",
+                "reduce_new_position_50pct",
+                "no_trade",
+                "unknown"
+              ]
+            },
+            "awakening_status": {
+              "type": "string",
+              "enum": [
+                "inactive",
+                "active",
+                "cooldown",
+                "unknown"
+              ]
+            },
+            "cash_reclaim_pct": {
+              "$ref": "#/$defs/percentNullable",
+              "description": "Unit: percent, 1 means 1%."
+            }
+          }
+        },
+        "breadth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "limit_up_count": {
+              "$ref": "#/$defs/nonNegativeIntegerNullable",
+              "description": "Unit: stocks."
+            },
+            "limit_down_count": {
+              "$ref": "#/$defs/nonNegativeIntegerNullable",
+              "description": "Unit: stocks."
+            },
+            "limit_up_index_pct_change": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, 1 means 1%."
+            },
+            "consecutive_board_height": {
+              "$ref": "#/$defs/nonNegativeIntegerNullable",
+              "description": "Unit: boards."
+            },
+            "csi300_pct_change_window": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, 1 means 1%."
+            }
+          }
+        },
+        "liquidity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "market_turnover_amount": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares."
+            },
+            "median_amount_20d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares."
+            }
+          }
+        },
+        "northbound": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "net_flow_5d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY."
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "inflow",
+                "outflow",
+                "flat",
+                "unknown"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "account_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "available_cash",
+        "total_equity",
+        "current_gross_exposure",
+        "positions"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "new_entry",
+            "position_review",
+            "mixed",
+            "backtest"
+          ]
+        },
+        "available_cash": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: CNY for A-share preset accounts."
+        },
+        "total_equity": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: CNY for A-share preset accounts."
+        },
+        "current_gross_exposure": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: CNY for A-share preset accounts."
+        },
+        "positions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/position"
+          }
+        }
+      }
+    },
+    "state_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "positions",
+        "veto_log",
+        "circuit_breaker",
+        "execution_log"
+      ],
+      "properties": {
+        "positions": {
+          "type": "string"
+        },
+        "veto_log": {
+          "type": "string"
+        },
+        "circuit_breaker": {
+          "type": "string"
+        },
+        "execution_log": {
+          "type": "string"
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    },
+    "schema_name": {
+      "type": "string",
+      "const": "analysis_input"
+    }
+  },
+  "allOf": [
+    {
+      "description": "Files emitted under schema_version 1.1.0 must include L3 mode metadata. Legacy 1.0.0 files remain valid for read-back.",
+      "if": {
+        "properties": {
+          "schema_version": { "const": "1.1.0" }
+        },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "required": [
+              "screening_engine",
+              "screening_engine_version",
+              "data_provider",
+              "input_files",
+              "l3_mode",
+              "l3_pit_strict",
+              "l3_snapshot_date"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts_code",
+        "name",
+        "exchange",
+        "board",
+        "analysis_role",
+        "selection",
+        "quote",
+        "industry",
+        "scores",
+        "technical",
+        "fundamental",
+        "capital_flow",
+        "event_risk",
+        "catalyst",
+        "liquidity",
+        "volatility",
+        "analyst",
+        "portfolio_impact",
+        "derived_flags",
+        "llm_tasks",
+        "data_quality"
+      ],
+      "properties": {
+        "ts_code": {
+          "$ref": "#/$defs/tsCode"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exchange": {
+          "type": "string",
+          "enum": [
+            "SH",
+            "SZ",
+            "NYSE",
+            "NASDAQ",
+            "AMEX",
+            "OTC",
+            "UNKNOWN"
+          ]
+        },
+        "board": {
+          "type": "string",
+          "enum": [
+            "main",
+            "sme",
+            "chinext",
+            "star",
+            "bj",
+            "nyse",
+            "nasdaq",
+            "amex",
+            "otc",
+            "unknown"
+          ]
+        },
+        "analysis_role": {
+          "type": "string",
+          "enum": [
+            "watch",
+            "final",
+            "position",
+            "backtest_sample"
+          ]
+        },
+        "selection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rank",
+            "tier",
+            "entry_flag",
+            "still_in_pool"
+          ],
+          "properties": {
+            "rank": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Unit: rank; integer, 1 is highest."
+            },
+            "tier": {
+              "type": "string",
+              "enum": [
+                "Tier1",
+                "Tier2",
+                "Other",
+                "Rejected",
+                "Unknown"
+              ]
+            },
+            "entry_flag": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cninfo_flag": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "still_in_pool": {
+              "type": "boolean"
+            }
+          }
+        },
+        "quote": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "close",
+            "current_price",
+            "price_source",
+            "price_time",
+            "adjustment"
+          ],
+          "properties": {
+            "close": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+            },
+            "current_price": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+            },
+            "open": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+            },
+            "high": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+            },
+            "low": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+            },
+            "pre_close": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+            },
+            "pct_change": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, 1 means 1%."
+            },
+            "price_source": {
+              "type": "string",
+              "enum": [
+                "tushare_eod",
+                "manual_realtime",
+                "web_realtime",
+                "unknown"
+              ]
+            },
+            "price_time": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time",
+              "description": "ISO 8601 timestamp for the quoted price. EOD A-share examples use 15:00:00+08:00."
+            },
+            "adjustment": {
+              "type": "string",
+              "enum": [
+                "qfq",
+                "hfq",
+                "raw",
+                "forward_adj",
+                "backward_adj",
+                "none",
+                "unknown"
+              ]
+            },
+            "ex_rights_30d": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "industry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sw_l1_name",
+            "sw_l2_name"
+          ],
+          "properties": {
+            "sw_l1_code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sw_l1_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sw_l2_code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sw_l2_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "industry_trend": {
+              "type": "string",
+              "enum": [
+                "tailwind",
+                "neutral",
+                "headwind",
+                "unknown",
+                "pending_llm"
+              ]
+            },
+            "industry_trend_evidence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/evidence"
+              },
+              "default": []
+            }
+          }
+        },
+        "scores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "final_score",
+            "egs_base",
+            "esp_score",
+            "cat_score",
+            "l4_score"
+          ],
+          "properties": {
+            "final_score": {
+              "$ref": "#/$defs/scoreNullable",
+              "description": "Unit: points, 0-100."
+            },
+            "egs_base": {
+              "$ref": "#/$defs/scoreNullable",
+              "description": "Unit: points, 0-100."
+            },
+            "esp_score": {
+              "$ref": "#/$defs/scoreNullable",
+              "description": "Unit: points, 0-100."
+            },
+            "cat_score": {
+              "$ref": "#/$defs/scoreNullable",
+              "description": "Unit: points, 0-100."
+            },
+            "l4_score": {
+              "$ref": "#/$defs/scoreNullable",
+              "description": "Unit: points, 0-100."
+            },
+            "l1_score": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: EGS internal points."
+            },
+            "l2_flags": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "l4_flag": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cat_flag": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "deduct": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: points."
+            },
+            "multiplier": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: multiple."
+            }
+          }
+        },
+        "technical": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pct_5d",
+            "pct_20d",
+            "pct_5d_n",
+            "pct_20d_n",
+            "pct_60d",
+            "drawdown_20d",
+            "avg_amount_5d",
+            "avg_amount_20d",
+            "support",
+            "resistance",
+            "atr",
+            "moving_averages",
+            "direction_lock"
+          ],
+          "properties": {
+            "pct_5d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, 1 means 1%. Raw 5-trading-day return."
+            },
+            "pct_20d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, 1 means 1%. Raw 20-trading-day return."
+            },
+            "pct_60d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, 1 means 1%."
+            },
+            "drawdown_20d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, negative means drawdown from 20-day high."
+            },
+            "high_20d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+            },
+            "low_20d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+            },
+            "avg_amount_5d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares; recent 5-trading-day average traded amount."
+            },
+            "avg_amount_20d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares; recent 20-trading-day average traded amount."
+            },
+            "yesterday_amount": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares; previous trading day traded amount."
+            },
+            "volume_ratio_5d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: multiple."
+            },
+            "amplitude": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, 1 means 1%."
+            },
+            "close_position_in_range": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: ratio, 0-1."
+            },
+            "support": {
+              "$ref": "#/$defs/priceLevel"
+            },
+            "resistance": {
+              "$ref": "#/$defs/priceLevel"
+            },
+            "atr": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "atr_14",
+                "atr_window",
+                "ex_rights_adjusted"
+              ],
+              "properties": {
+                "atr_14": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                },
+                "atr_window": {
+                  "$ref": "#/$defs/nonNegativeIntegerNullable",
+                  "description": "Unit: trading days."
+                },
+                "ex_rights_adjusted": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "moving_averages": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "ma5": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                },
+                "ma10": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                },
+                "ma20": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                },
+                "ma60": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                }
+              }
+            },
+            "rsi_14": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: indicator value, 0-100."
+            },
+            "macd": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "dif": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: indicator value."
+                },
+                "dea": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: indicator value."
+                },
+                "hist": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: indicator value."
+                }
+              }
+            },
+            "bollinger": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "upper": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                },
+                "middle": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                },
+                "lower": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                }
+              }
+            },
+            "limit_up_count_10d": {
+              "$ref": "#/$defs/nonNegativeIntegerNullable",
+              "description": "Unit: times in the last 10 trading days."
+            },
+            "limit_up_count_20d": {
+              "$ref": "#/$defs/nonNegativeIntegerNullable",
+              "description": "Unit: times in the last 20 trading days."
+            },
+            "direction_lock": {
+              "type": "string",
+              "enum": [
+                "breakout",
+                "pullback",
+                "watch",
+                "blocked",
+                "unknown"
+              ]
+            },
+            "coarse_reward_risk": {
+              "$ref": "#/$defs/ratioNullable",
+              "description": "Unit: multiple."
+            },
+            "precise_reward_risk": {
+              "$ref": "#/$defs/ratioNullable",
+              "description": "Unit: multiple."
+            },
+            "pct_5d_n": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, 1 means 1%. EGS normalized/processed 5-trading-day return used for scoring."
+            },
+            "pct_20d_n": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent, 1 means 1%. EGS normalized/processed 20-trading-day return used for scoring."
+            }
+          }
+        },
+        "fundamental": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "valuation",
+            "profitability",
+            "quality",
+            "expectation"
+          ],
+          "properties": {
+            "valuation": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "pe": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: multiple."
+                },
+                "pe_ttm": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: multiple."
+                },
+                "pb": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: multiple."
+                },
+                "peg": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: multiple."
+                },
+                "total_mv": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: 10k CNY, Tushare daily_basic.total_mv."
+                },
+                "circ_mv": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: 10k CNY, Tushare daily_basic.circ_mv."
+                },
+                "val_bonus": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: points."
+                },
+                "val_penalty": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: points."
+                }
+              }
+            },
+            "profitability": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "roe": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "q0_dt_yoy": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "q1_dt_yoy": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "q0_profit_dedt": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY."
+                },
+                "q0_net_income": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY."
+                },
+                "ttm_profit_dedt": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY."
+                }
+              }
+            },
+            "quality": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "ttm_ocf_ratio": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: ratio."
+                },
+                "q0_dt_profit_ratio": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: Tushare source convention; exporter does not normalize."
+                },
+                "cash_debt_high_risk": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "ar_growth_gt_revenue_growth_2q": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "contract_liability_exemption": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "expectation": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "ind_median_profit_growth": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "esp_raw": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: EGS internal raw expectation score."
+                },
+                "consensus_profit_growth": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "earnings_report_date": {
+                  "$ref": "#/$defs/date8Nullable"
+                },
+                "earnings_less_than_24h": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "good_data_bad_reaction": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "guidance_credibility_damaged": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "capital_flow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "moneyflow",
+            "margin",
+            "northbound",
+            "block_trade"
+          ],
+          "properties": {
+            "moneyflow": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "big_order_ratio": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: ratio, 1 means 100%."
+                },
+                "net_inflow_5d": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY."
+                },
+                "divergence_flag": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "margin": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "balance": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY."
+                },
+                "balance_change_5d_pct": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "balance_change_10d_pct": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "balance_to_float_mv_pct": {
+                  "$ref": "#/$defs/percentNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "extreme_accumulation": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "northbound": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "holding_ratio": {
+                  "$ref": "#/$defs/percentNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "consecutive_net_sell_days": {
+                  "$ref": "#/$defs/nonNegativeIntegerNullable",
+                  "description": "Unit: days."
+                },
+                "net_sell_to_total_share_pct": {
+                  "$ref": "#/$defs/percentNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                }
+              }
+            },
+            "block_trade": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "discount_trade_count_10d": {
+                  "$ref": "#/$defs/nonNegativeIntegerNullable",
+                  "description": "Unit: trades."
+                },
+                "avg_discount_pct": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: percent; negative means discount."
+                },
+                "amount_10d": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY."
+                }
+              }
+            }
+          }
+        },
+        "event_risk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rule6_checks",
+            "regulatory",
+            "holder_reduction",
+            "unlock",
+            "suspension",
+            "delisting"
+          ],
+          "properties": {
+            "rule6_checks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ruleCheck"
+              }
+            },
+            "regulatory": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "has_inquiry_or_concern_48h": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "negative_depth": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high",
+                    "unknown",
+                    "pending_llm"
+                  ]
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/evidence"
+                  },
+                  "default": []
+                }
+              }
+            },
+            "holder_reduction": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "active_plan": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "completed_3m_pct_share": {
+                  "$ref": "#/$defs/percentNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "completed_3m_amount": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: CNY."
+                },
+                "reduce_penalty": {
+                  "$ref": "#/$defs/numberNullable",
+                  "description": "Unit: points."
+                }
+              }
+            },
+            "unlock": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "unlock_pct": {
+                  "$ref": "#/$defs/percentNullable",
+                  "description": "Unit: percent, 1 means 1%."
+                },
+                "unlock_date": {
+                  "$ref": "#/$defs/date8Nullable"
+                },
+                "large_unlock_flag": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "suspension": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "is_suspended": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "recent_suspension_5d": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "delisting": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "st_flag": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "delisting_warning": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "non_standard_audit": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "negative_net_asset": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "catalyst": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "concepts",
+            "policy_news",
+            "earnings",
+            "time_window"
+          ],
+          "properties": {
+            "concepts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "concept_strength_score": {
+              "$ref": "#/$defs/scoreNullable",
+              "description": "Unit: points, 0-100."
+            },
+            "policy_news": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/evidence"
+              }
+            },
+            "earnings": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "has_recent_report": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "is_primary_catalyst": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "time_window": {
+              "type": "string",
+              "enum": [
+                "1-3 trading days",
+                "1-3 weeks",
+                "wait_for_catalyst",
+                "unknown"
+              ]
+            }
+          }
+        },
+        "liquidity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "avg_amount_5d",
+            "avg_amount_20d",
+            "turnover_rate",
+            "spread_pct",
+            "one_minute_capacity"
+          ],
+          "properties": {
+            "avg_amount_5d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares; recent 5-trading-day average traded amount."
+            },
+            "avg_amount_20d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares; recent 20-trading-day average traded amount."
+            },
+            "yesterday_amount": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares; previous trading day traded amount."
+            },
+            "spread_pct": {
+              "$ref": "#/$defs/percentNullable",
+              "description": "Unit: percent, 1 means 1%."
+            },
+            "one_minute_capacity": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares."
+            },
+            "position_amount_cap": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY for A-shares."
+            },
+            "split_order_required": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "turnover_rate": {
+              "$ref": "#/$defs/percentNullable",
+              "description": "Unit: percent, 1 means 1%. Tushare daily_basic.turnover_rate."
+            }
+          }
+        },
+        "volatility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "hv_252d",
+            "iv_hv_ratio",
+            "iv_hv_position_cut_pct"
+          ],
+          "properties": {
+            "hv_252d": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: percent."
+            },
+            "iv_hv_ratio": {
+              "$ref": "#/$defs/ratioNullable",
+              "description": "Unit: multiple."
+            },
+            "iv_hv_position_cut_pct": {
+              "$ref": "#/$defs/percentNullable",
+              "description": "Unit: percent, 1 means 1%."
+            }
+          }
+        },
+        "analyst": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "coverage_count",
+            "target_price_mean",
+            "downgrade_count_1m"
+          ],
+          "properties": {
+            "coverage_count": {
+              "$ref": "#/$defs/nonNegativeIntegerNullable",
+              "description": "Unit: institutions."
+            },
+            "target_price_mean": {
+              "$ref": "#/$defs/numberNullable",
+              "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+            },
+            "downgrade_count_1m": {
+              "$ref": "#/$defs/nonNegativeIntegerNullable",
+              "description": "Unit: institutions."
+            },
+            "target_below_current": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "portfolio_impact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "same_sw_l2_exposure_after_buy_pct",
+            "factor_exposures",
+            "correlation_action"
+          ],
+          "properties": {
+            "same_sw_l2_exposure_after_buy_pct": {
+              "$ref": "#/$defs/percentNullable",
+              "description": "Unit: percent, 1 means 1%."
+            },
+            "factor_exposures": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/factorExposure"
+              }
+            },
+            "correlation_action": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "replace",
+                "reject",
+                "skip_no_positions",
+                "unknown"
+              ]
+            }
+          }
+        },
+        "derived_flags": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chasing_high",
+            "overheat_flag",
+            "has_crash_veto",
+            "is_lock",
+            "is_breakout"
+          ],
+          "properties": {
+            "chasing_high": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "overheat_flag": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "has_crash_veto": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "is_lock": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "is_breakout": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "m4_review_required": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "hard_veto": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "llm_tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/llmTask"
+          }
+        },
+        "data_quality": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "completeness_score",
+            "missing_fields",
+            "pending_fields"
+          ],
+          "properties": {
+            "completeness_score": {
+              "$ref": "#/$defs/scoreNullable",
+              "description": "Unit: points, 0-100."
+            },
+            "missing_fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "pending_fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rule11_required": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts_code",
+        "name",
+        "shares",
+        "entry_price",
+        "entry_date",
+        "current_price",
+        "floating_pnl_pct",
+        "stop_loss",
+        "take_profit_1",
+        "take_profit_2"
+      ],
+      "properties": {
+        "ts_code": {
+          "$ref": "#/$defs/tsCode"
+        },
+        "name": {
+          "type": "string"
+        },
+        "shares": {
+          "$ref": "#/$defs/nonNegativeIntegerNullable",
+          "description": "Unit: shares."
+        },
+        "entry_price": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+        },
+        "entry_date": {
+          "$ref": "#/$defs/date8Nullable"
+        },
+        "current_price": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+        },
+        "floating_pnl_pct": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: percent, 1 means 1%."
+        },
+        "stop_loss": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+        },
+        "take_profit_1": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+        },
+        "take_profit_2": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+        }
+      }
+    },
+    "ruleCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "group",
+        "status",
+        "severity"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string",
+          "enum": [
+            "pre_veto",
+            "post_veto",
+            "review",
+            "risk_note"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/checkStatus"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "none",
+            "watch",
+            "review",
+            "hard_veto"
+          ]
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean",
+              "null"
+            ]
+          },
+          "default": {}
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "default": []
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "llmTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "prompt",
+        "status"
+      ],
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string",
+          "enum": [
+            "industry_trend",
+            "regulatory_check",
+            "policy_news",
+            "earnings_bad_reaction",
+            "cross_market_linkage",
+            "hidden_risk"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/checkStatus"
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean",
+              "null"
+            ]
+          },
+          "default": {}
+        }
+      }
+    },
+    "factorExposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factor",
+        "value",
+        "threshold",
+        "status"
+      ],
+      "properties": {
+        "factor": {
+          "type": "string",
+          "enum": [
+            "northbound_holding_ratio",
+            "margin_balance_to_float_mv",
+            "index_component",
+            "small_float_mv",
+            "sw_l2_industry",
+            "custom"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: depends on factor."
+        },
+        "threshold": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: depends on factor."
+        },
+        "status": {
+          "$ref": "#/$defs/checkStatus"
+        }
+      }
+    },
+    "priceLevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "price",
+        "method"
+      ],
+      "properties": {
+        "price": {
+          "$ref": "#/$defs/numberNullable",
+          "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "20d_close_range",
+            "manual",
+            "technical",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/checkStatus"
+        },
+        "value": {
+          "type": [
+            "number",
+            "string",
+            "boolean",
+            "null"
+          ],
+          "description": "Unit: depends on factor."
+        },
+        "threshold": {
+          "type": [
+            "number",
+            "string",
+            "boolean",
+            "null"
+          ],
+          "description": "Unit: depends on factor."
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "title"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "published_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "fileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "path"
+      ],
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "checkStatus": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "unknown",
+        "not_applicable",
+        "pending_data",
+        "pending_llm"
+      ]
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "unknown"
+      ]
+    },
+    "tsCode": {
+      "type": "string",
+      "description": "A-share Tushare code such as 600000.SH/000001.SZ, or US ticker such as AAPL/BRK.B.",
+      "pattern": "^([0-9]{6}\\.(SH|SZ)|[A-Z][A-Z0-9.\\-]{0,9})$"
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "date8Nullable": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9]{8}$"
+    },
+    "numberNullable": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Nullable number. Field-level description defines the unit."
+    },
+    "ratioNullable": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Nullable non-negative ratio. Field-level description defines the unit."
+    },
+    "scoreNullable": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Nullable score, unit: points, valid range 0-100."
+    },
+    "percentNullable": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Nullable percentage. Convention: 1 means 1%, not 100%."
+    },
+    "nonNegativeIntegerNullable": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Nullable non-negative integer. Field-level description defines the unit."
+    }
+  }
+}

@@ -1,0 +1,257 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/rank_backtest_report/1.6.0/schema.json",
+  "title": "Rank Backtest Report",
+  "description": "Machine-readable manifest emitted by runners/backtest_rank.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "preset",
+    "mode",
+    "engineering_smoke",
+    "settings",
+    "windows",
+    "sample_count",
+    "selected_dates",
+    "immature_included_dates",
+    "immature_skipped_dates",
+    "trade_dates",
+    "candidate_source_root",
+    "forward_daily",
+    "outputs",
+    "return_variants",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "type": "string",
+      "const": "rank_backtest_report"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "preset": {
+      "type": "string",
+      "enum": ["a_short"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["smoke", "production"]
+    },
+    "engineering_smoke": {
+      "type": "boolean"
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "reuse_l3_cache",
+        "include_immature",
+        "cost_pct",
+        "dedup_mode",
+        "windows",
+        "freq",
+        "periods",
+        "start_date",
+        "end_date",
+        "l3_mode",
+        "l3_pit_strict",
+        "primary_subset"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["smoke", "production"]
+        },
+        "reuse_l3_cache": {
+          "type": "boolean"
+        },
+        "include_immature": {
+          "type": "boolean"
+        },
+        "cost_pct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "dedup_mode": {
+          "type": "string",
+          "enum": ["none", "by_ts_code", "by_ts_and_date"]
+        },
+        "windows": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 1
+        },
+        "freq": {
+          "type": "string",
+          "enum": ["daily", "weekly", "monthly"]
+        },
+        "periods": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start_date": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{8}$"
+        },
+        "end_date": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "l3_mode": {
+          "type": "string",
+          "enum": ["pit", "today", "neutralize"],
+          "description": "L3 cat_score source passed to egs_main."
+        },
+        "l3_pit_strict": {
+          "type": "boolean",
+          "description": "With l3_mode=pit, fail-fast if no snapshot <= as_of (otherwise warn + cat_score=50)."
+        },
+        "primary_subset": {
+          "type": "string",
+          "enum": ["all", "tier1_only"],
+          "description": "Recommended reporting subset. Stats CSVs include a 'subset' column with both 'all' and 'tier1_only' rows; this field declares which one is the headline. Default 'tier1_only' since 24p evidence (t=-2.27) shows Tier2 filler dilutes the real signal."
+        }
+      }
+    },
+    "windows": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 1
+    },
+    "sample_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "selected_dates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]{8}$"
+      }
+    },
+    "immature_included_dates": {
+      "type": "array",
+      "description": "Immature as-of dates that WERE selected (only when --include-immature is on).",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]{8}$"
+      }
+    },
+    "immature_skipped_dates": {
+      "type": "array",
+      "description": "Immature as-of dates that were NOT selected.",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]{8}$"
+      }
+    },
+    "trade_dates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]{8}$"
+      }
+    },
+    "candidate_source_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "forward_daily": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start_date", "end_date", "adj", "benchmarks", "fetched_at", "stock_rows", "stock_codes"],
+          "properties": {
+            "start_date": {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            },
+            "end_date": {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            },
+            "adj": {
+              "type": "string",
+              "enum": ["qfq_via_adj_factor", "none"]
+            },
+            "benchmarks": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "fetched_at": {
+              "type": "string"
+            },
+            "stock_rows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "stock_codes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["skipped_no_samples"]
+            }
+          }
+        }
+      ]
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank_samples", "summary_by_window", "factor_group_stats", "rule6_stats", "monthly_stats"],
+      "properties": {
+        "rank_samples": {"type": "string"},
+        "summary_by_window": {"type": "string"},
+        "factor_group_stats": {"type": "string"},
+        "rule6_stats": {"type": "string"},
+        "monthly_stats": {
+          "type": "string",
+          "description": "Long-format CSV with per (trade_date, variant, window) aggregates. Added in v1.5.0 to support time-series stability inspection without re-grouping rank_samples."
+        }
+      }
+    },
+    "return_variants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["close", "t1", "t1_net", "excess_csi300", "excess_csi1000"],
+      "properties": {
+        "close": {"type": "string"},
+        "t1": {"type": "string"},
+        "t1_net": {"type": "string"},
+        "excess_csi300": {"type": "string"},
+        "excess_csi1000": {"type": "string"}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1
+    }
+  }
+}

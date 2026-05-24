@@ -1,0 +1,63 @@
+# ============================================================
+# .gitignore — local private repo, never push
+# ============================================================
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# --- Sensitive (defensive — TUSHARE_TOKEN should only live in env) ---
+.env
+.env.*
+*.token
+credentials*
+*.key
+*.pem
+secrets*
+
+# --- Large API caches (regenerable from Tushare) ---
+# Tushare daily/financial/concept caches (~860MB)
+A-EGS/Result/egs_cache/
+
+# Forward daily price cache for backtest (~120MB)
+result/*/backtest/cache/
+
+# --- L3 snapshots (regenerable, grows ~600KB/week) ---
+# These accumulate over time. Important for PIT but reproducible
+# only as long as Tushare API exists. Back up separately if you
+# need long-term PIT history.
+state/*/l3_snapshots/
+state/l3_snapshots/
+
+# --- Logs (regenerable + can grow large) ---
+*.log
+
+# --- Temp / backup ---
+*.tmp
+*.bak
+*~
+backup_*.zip
+
+# --- OS noise ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Claude Code local state (per-project; private) ---
+.claude/
+
+# --- Intermediate / generated artifacts that are reproducible ---
+# (Keep generated/YYYYMMDD/*.json as historical pool records;
+#  exclude _intermediate large CSV/XLSX scratch dumps if any)
+result/*/backtest/generated/_intermediate/
