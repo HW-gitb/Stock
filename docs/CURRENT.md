@@ -184,3 +184,4 @@ python runners\backtest_rank.py --mode smoke --periods 3 --freq monthly --window
 - **本文件保持 < 300 行**，超出说明该归档到 handoff 了
 - **失效结论搬到 §4**，不在 §3 留旧版
 - **新 handoff 命名**：`docs/handoff/YYYY-MM-DD_short-topic_handoff.md`
+- **handoff 写作门槛 = `AGENTS.md §交接记录`**（2026-05-24 收紧）：默认**追加到 phase 主 handoff** 末尾的 `## YYYY-MM-DD 追加：<topic>` 小节；新建独立 handoff 仅在 4 类高门槛情况：跨 phase 转换 / breaking change（schema major、口径反转、findings INVALIDATED）/ 新数据源或新模块 / 一次性强约束事件（git init、安全口径变化）。schema minor+patch / 同主题迭代 / 工程增量 一律追加，不另建文件。**旧 handoff 不重组**
