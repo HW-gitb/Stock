@@ -166,3 +166,35 @@ python runners/data_canary.py --as-of 20260522   # 沙箱无网会落 error_aksh
 2. 周五选股流程末尾加一行 canary 调用（手工 / 脚本 / scheduler 都可，不强制）
 3. 第一次跑出 warning 时复查阈值是否合适，再决定是否调整
 
+## 2026-05-24 追加：data canary debug hardening
+
+Codex 本地 debug 后修复 `runners/data_canary.py` 的几个旁路健壮性问题：
+
+- 手工传入 repo 外候选文件时，不再因 `Path.relative_to(ROOT)` 抛异常。
+- 候选 CSV 读取失败 / 缺必需列时，写 log 后 exit 0。
+- `--tier ''` 现在真正允许禁用 tier 过滤，不再强制要求 `tier` 列。
+- `--sample-size 0` 或负数解析后会 graceful skip。
+- akshare 返回字段缺失时，写 `error_akshare_schema_mismatch` 后 exit 0。
+- akshare 代码列统一 `zfill(6)`，避免数值型代码丢前导 0 后误判缺失。
+- 所有 skip/error 分支补 `summary.overall_status`，便于后续自动读取。
+
+验证命令：
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; compile(Path('runners/data_canary.py').read_text(encoding='utf-8'), 'runners/data_canary.py', 'exec'); print('syntax ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\data_canary.py --as-of 19990101
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\data_canary.py --as-of 20260522
+```
+
+额外用伪 akshare DataFrame 覆盖了真实对账分支、akshare schema mismatch、`--sample-size 0`、`--tier ''` 分支。
+
+验证结果：
+
+- syntax ok。
+- bundled Python 未安装 akshare，输出 `skipped_akshare_not_installed`，exit 0。
+- Python 3.13 已安装 akshare，但 Codex 环境访问东财代理失败，输出 `error_akshare_fetch_failed`，exit 0，符合“不阻断选股”约束。
+- 伪 akshare 真实对账分支输出 `overall_status=ok`，5 只样本 comparison 结构完整。
+
+失效旧结论：
+
+- “真实对账分支只能等用户本地验证”这句话需要细化：比较逻辑已用伪 akshare 本地验证；真实 akshare 网络源仍需用户在非代理受限环境跑一次确认。

@@ -54,6 +54,8 @@ AK_SPOT_FIELDS = {
     "pb": "市净率",
 }
 
+REQUIRED_CANDIDATE_COLUMNS = ("ts_code", "name", "close")
+
 
 def _normalize_name(name) -> str:
     if name is None or (isinstance(name, float) and pd.isna(name)):
@@ -68,7 +70,7 @@ def _normalize_name(name) -> str:
 
 def _ts_code_to_akshare(ts_code: str) -> str:
     """000001.SZ -> 000001"""
-    return str(ts_code).split(".")[0]
+    return str(ts_code).split(".")[0].zfill(6)
 
 
 def _find_candidates(as_of: str) -> Path | None:
@@ -88,6 +90,25 @@ def _write_log(payload: dict, as_of: str) -> Path:
     with out.open("w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
     return out
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _skip_payload(as_of: str, status: str, message: str, **extra) -> dict:
+    payload = {
+        "as_of": as_of,
+        "ran_at": _now_iso(),
+        "status": status,
+        "summary": {"overall_status": status},
+        "message": message,
+    }
+    payload.update(extra)
+    return payload
 
 
 def _now_iso() -> str:
@@ -203,56 +224,95 @@ def main() -> int:
 
     # Graceful skip: akshare not installed
     if ak is None:
-        out = _write_log({
-            "as_of": args.as_of,
-            "ran_at": _now_iso(),
-            "status": "skipped_akshare_not_installed",
-            "message": "akshare not installed; run `pip install akshare` to enable canary.",
-        }, args.as_of)
+        out = _write_log(_skip_payload(
+            args.as_of,
+            "skipped_akshare_not_installed",
+            "akshare not installed; run `pip install akshare` to enable canary.",
+        ), args.as_of)
         print(f"[SKIP] akshare not installed; wrote {out}")
         return 0
 
     # Find candidates
     cand_path = Path(args.candidates) if args.candidates else _find_candidates(args.as_of)
     if cand_path is None or not cand_path.exists():
-        out = _write_log({
-            "as_of": args.as_of,
-            "ran_at": _now_iso(),
-            "status": "skipped_no_candidates",
-            "message": f"No candidates file found for as_of={args.as_of}.",
-        }, args.as_of)
+        out = _write_log(_skip_payload(
+            args.as_of,
+            "skipped_no_candidates",
+            f"No candidates file found for as_of={args.as_of}.",
+        ), args.as_of)
         print(f"[SKIP] no candidates; wrote {out}")
         return 0
 
-    df = pd.read_csv(cand_path)
+    try:
+        df = pd.read_csv(cand_path)
+    except Exception as e:
+        out = _write_log(_skip_payload(
+            args.as_of,
+            "skipped_candidates_read_failed",
+            f"{type(e).__name__}: {e}",
+            candidates_source=_display_path(cand_path),
+        ), args.as_of)
+        print(f"[SKIP] candidates read failed; wrote {out}")
+        return 0
+
     if df.empty:
-        out = _write_log({
-            "as_of": args.as_of,
-            "ran_at": _now_iso(),
-            "status": "skipped_empty_candidates",
-            "candidates_source": str(cand_path.relative_to(ROOT)),
-        }, args.as_of)
+        out = _write_log(_skip_payload(
+            args.as_of,
+            "skipped_empty_candidates",
+            "Candidates file is empty.",
+            candidates_source=_display_path(cand_path),
+        ), args.as_of)
         print(f"[SKIP] empty candidates; wrote {out}")
+        return 0
+
+    required_cols = list(REQUIRED_CANDIDATE_COLUMNS)
+    if args.tier:
+        required_cols.append("tier")
+    missing_cols = [c for c in required_cols if c not in df.columns]
+    if missing_cols:
+        out = _write_log(_skip_payload(
+            args.as_of,
+            "skipped_candidates_schema_mismatch",
+            "Candidates file missing required columns.",
+            candidates_source=_display_path(cand_path),
+            missing_columns=missing_cols,
+            available_columns=list(df.columns),
+        ), args.as_of)
+        print(f"[SKIP] candidates schema mismatch; wrote {out}")
         return 0
 
     # Tier filter
     if args.tier and "tier" in df.columns:
         df = df[df["tier"] == args.tier].copy()
         if df.empty:
-            out = _write_log({
-                "as_of": args.as_of,
-                "ran_at": _now_iso(),
-                "status": "skipped_no_rows_after_tier_filter",
-                "candidates_source": str(cand_path.relative_to(ROOT)),
-                "tier_filter": args.tier,
-            }, args.as_of)
+            out = _write_log(_skip_payload(
+                args.as_of,
+                "skipped_no_rows_after_tier_filter",
+                f"No rows after tier={args.tier} filter.",
+                candidates_source=_display_path(cand_path),
+                tier_filter=args.tier,
+            ), args.as_of)
             print(f"[SKIP] no rows after tier={args.tier}; wrote {out}")
             return 0
 
     # Sample (deterministic seed = as_of date)
-    seed = args.seed if args.seed is not None else int(args.as_of)
+    try:
+        seed = args.seed if args.seed is not None else int(args.as_of)
+    except ValueError:
+        seed = abs(hash(args.as_of)) % (2 ** 32)
     rng = random.Random(seed)
-    sample_size = min(args.sample_size, len(df))
+    sample_size = max(0, min(args.sample_size, len(df)))
+    if sample_size == 0:
+        out = _write_log(_skip_payload(
+            args.as_of,
+            "skipped_zero_sample_size",
+            "No rows sampled because --sample-size resolved to 0.",
+            candidates_source=_display_path(cand_path),
+            tier_filter=args.tier or None,
+            available_rows=int(len(df)),
+        ), args.as_of)
+        print(f"[SKIP] zero sample size; wrote {out}")
+        return 0
     sample_idx = rng.sample(range(len(df)), sample_size)
     sample = df.iloc[sample_idx].reset_index(drop=True)
 
@@ -266,12 +326,27 @@ def main() -> int:
             "ran_at": _now_iso(),
             "status": "error_akshare_fetch_failed",
             "message": f"{type(e).__name__}: {e}",
-            "candidates_source": str(cand_path.relative_to(ROOT)),
+            "summary": {"overall_status": "error_akshare_fetch_failed"},
+            "candidates_source": _display_path(cand_path),
         }, args.as_of)
         print(f"[ERROR] akshare fetch failed: {e}; wrote {out} (not blocking)")
         return 0
 
+    missing_ak_cols = [v for v in AK_SPOT_FIELDS.values() if v not in ak_spot.columns]
+    if missing_ak_cols:
+        out = _write_log(_skip_payload(
+            args.as_of,
+            "error_akshare_schema_mismatch",
+            "akshare stock_zh_a_spot_em missing expected columns.",
+            candidates_source=_display_path(cand_path),
+            missing_columns=missing_ak_cols,
+            available_columns=list(ak_spot.columns),
+        ), args.as_of)
+        print(f"[ERROR] akshare schema mismatch; wrote {out} (not blocking)")
+        return 0
+
     ak_spot[AK_SPOT_FIELDS["code"]] = ak_spot[AK_SPOT_FIELDS["code"]].astype(str)
+    ak_spot[AK_SPOT_FIELDS["code"]] = ak_spot[AK_SPOT_FIELDS["code"]].str.zfill(6)
     ak_lookup = {row[AK_SPOT_FIELDS["code"]]: row for _, row in ak_spot.iterrows()}
 
     comparisons = []
@@ -304,7 +379,7 @@ def main() -> int:
     payload = {
         "as_of": args.as_of,
         "ran_at": _now_iso(),
-        "candidates_source": str(cand_path.relative_to(ROOT)),
+        "candidates_source": _display_path(cand_path),
         "tier_filter": args.tier or None,
         "sample_size": sample_size,
         "sample_seed": seed,
