@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-24（Phase 3 minimal veto replay 首轮完成后）
+**最后更新**：2026-05-24（Phase 3 esp_non_positive v2 replay 完成后）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -8,7 +8,7 @@
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 2 + Phase 2.5 + Phase 2.6 全部完成。Phase 3 minimal veto analyzer + state 接口 + rank replay 首轮已落地
-- **当前目标**：复核 Phase 3 首轮 replay 结果；四条 hard veto 全开没有改善 Tier1-only baseline，下一步重点是拆解 `esp_non_positive` 语义是否过宽
+- **当前目标**：复核 Phase 3 `esp_non_positive` v2 replay 结果；v2 避免误杀 `esp_raw=0` 中性/数据不足样本，但整体仍未显著改善 Tier1-only baseline
 - **下一阶段大目标（Phase 3 后续）**：保留 analyzer veto 工程链路，继续用 replay/ablation 量化每条 veto 的边际贡献；不把首轮结果解释为策略签收
 
 ---
@@ -29,6 +29,7 @@
 - Phase 2.6 完成（2026-05-24）：`docs/datahub_design.md` + AGENTS guardrail + 报告 schema 1.10.0 增加 `data_lineage` 对象（data_provider/api_families/forward_return_adjustment_mode/benchmark_sources/pit_limitations）
 - data canary 旁路对账（2026-05-24）：`runners/data_canary.py` 每周选股后抽 5 只对比 Tushare vs akshare 的 close/pe/pb/name；不阻断、不进打分、不比行业；输出 `logs/data_canary_<as_of>.json`
 - Phase 3 首轮（2026-05-24）：新增 `engine/analyzer/rule6_hard_veto.py`、`engine/analyzer/state_manager.py`、`tests/analyzer/`；`backtest_rank.py` 接入 analyzer replay，新增 `tier1_veto_passed` subset、`--veto-rules` ablation、schema 1.11.0、`low_tier1_veto_passed_count` warning；24p stats-only replay 已通过 schema 校验
+- Phase 3 v2 修正（2026-05-24）：`esp_non_positive` 升到 v2，只 hard veto 明确负 `esp_raw < 0`；`esp_raw == 0` 记录 `neutral_zero_not_vetoed` 诊断。原因：24p Tier1 中 78 条旧 v1 命中里 75 条是 `esp_raw=0`，多数为 `DATA-INC`，且该组 20d 表现反而更强
 
 ---
 
@@ -109,9 +110,9 @@
 
 ### P0 — Phase 3 主轴
 
-1. **Phase 3 首轮结果复核** — 四条全开后 `tier1_veto_passed` N=227，5d/10d/20d `t1_net` 均弱于 Tier1-only；不要宣称 analyzer 已改善策略。
-2. **拆解 `esp_non_positive`** — 当前 `esp_raw <= 0` hard veto 过滤 87 条 `esp_non_positive` + 多个组合 reason，是首轮样本收缩主因；下一步需要确认是否应区分“真实非正 ESP”和“回测 neutralize/独立池导致的 0”。
-3. **保留 chase/overheat ablation 结论** — `analyzer_veto_chase_overheat` 对 Tier1-only 无边际影响，因为 v7.10 已把追高/OVERHEAT 从 Tier1 降到 Tier2；这支持“工程链路有效”，不支持“新增 alpha 改善”。
+1. **Phase 3 v2 结果复核** — `tier1_veto_passed` N=302，5d/10d/20d `t1_net` 与 Tier1-only 基本持平，没有显著改善；不要宣称 analyzer 已改善策略。
+2. **保留 `esp_non_positive` v2** — v1 的 `esp_raw <= 0` 已证明过宽；v2 只杀 `esp_raw < 0`，避免把 `DATA-INC` / 中性 0 当成负预期。
+3. **下一步转向新候选规则** — chase/overheat/l2_unknown 在 Tier1 内无命中，esp v2 只命中 3 条；Phase 3 后续应寻找仍能在 Tier1 内命中的坏票特征，而不是继续调这四条。
 
 ### P1 — 短期跟进
 

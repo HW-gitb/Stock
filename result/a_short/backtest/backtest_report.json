@@ -1,7 +1,7 @@
 {
   "schema_name": "rank_backtest_report",
   "schema_version": "1.11.0",
-  "generated_at": "2026-05-24T20:40:53+08:00",
+  "generated_at": "2026-05-24T20:53:56+08:00",
   "preset": "a_short",
   "mode": "production",
   "engineering_smoke": false,
@@ -66,39 +66,6 @@
   ],
   "date_warnings": [
     {
-      "trade_date": "20240131",
-      "warning_type": "low_tier1_veto_passed_count",
-      "severity": "critical",
-      "threshold": 5,
-      "sample_count": 15,
-      "tier1_count": 15,
-      "tier2_count": 0,
-      "tier1_veto_passed_count": 0,
-      "message": "Tier1 analyzer-veto-passed count 0 is below 5; treat this date's Phase 3 veto subset as low-sample evidence."
-    },
-    {
-      "trade_date": "20240229",
-      "warning_type": "low_tier1_veto_passed_count",
-      "severity": "critical",
-      "threshold": 5,
-      "sample_count": 15,
-      "tier1_count": 15,
-      "tier2_count": 0,
-      "tier1_veto_passed_count": 1,
-      "message": "Tier1 analyzer-veto-passed count 1 is below 5; treat this date's Phase 3 veto subset as low-sample evidence."
-    },
-    {
-      "trade_date": "20240329",
-      "warning_type": "low_tier1_veto_passed_count",
-      "severity": "critical",
-      "threshold": 5,
-      "sample_count": 15,
-      "tier1_count": 15,
-      "tier2_count": 0,
-      "tier1_veto_passed_count": 2,
-      "message": "Tier1 analyzer-veto-passed count 2 is below 5; treat this date's Phase 3 veto subset as low-sample evidence."
-    },
-    {
       "trade_date": "20240430",
       "warning_type": "low_tier1_count",
       "severity": "warning",
@@ -160,28 +127,6 @@
       "tier2_count": 12,
       "tier1_veto_passed_count": 3,
       "message": "Tier1 analyzer-veto-passed count 3 is below 5; treat this date's Phase 3 veto subset as low-sample evidence."
-    },
-    {
-      "trade_date": "20250127",
-      "warning_type": "low_tier1_veto_passed_count",
-      "severity": "critical",
-      "threshold": 5,
-      "sample_count": 15,
-      "tier1_count": 15,
-      "tier2_count": 0,
-      "tier1_veto_passed_count": 0,
-      "message": "Tier1 analyzer-veto-passed count 0 is below 5; treat this date's Phase 3 veto subset as low-sample evidence."
-    },
-    {
-      "trade_date": "20250228",
-      "warning_type": "low_tier1_veto_passed_count",
-      "severity": "critical",
-      "threshold": 5,
-      "sample_count": 15,
-      "tier1_count": 15,
-      "tier2_count": 0,
-      "tier1_veto_passed_count": 0,
-      "message": "Tier1 analyzer-veto-passed count 0 is below 5; treat this date's Phase 3 veto subset as low-sample evidence."
     }
   ],
   "immature_included_dates": [],
@@ -281,7 +226,7 @@
     },
     {
       "strategy_variant": "analyzer_veto_all_rules",
-      "sample_count": 227
+      "sample_count": 302
     }
   ],
   "return_variants": {

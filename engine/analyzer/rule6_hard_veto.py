@@ -15,7 +15,7 @@ RULE_VERSIONS = {
     "chasing_high": 1,
     "overheat": 1,
     "l2_unknown": 1,
-    "esp_non_positive": 1,
+    "esp_non_positive": 2,
 }
 
 DEFAULT_RULES = tuple(RULE_VERSIONS.keys())
@@ -172,8 +172,10 @@ def _check_esp_non_positive(candidate: Mapping[str, Any]):
     parsed = _parse_float(value)
     if parsed is None:
         return None, [_diag("esp_non_positive", _last_field(candidate), "data_unparseable", value)]
-    if parsed <= 0:
+    if parsed < 0:
         return _reason("esp_non_positive", _last_field(candidate), value), []
+    if parsed == 0:
+        return None, [_diag("esp_non_positive", _last_field(candidate), "neutral_zero_not_vetoed", value)]
     return None, []
 
 
@@ -243,4 +245,3 @@ def _jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
-

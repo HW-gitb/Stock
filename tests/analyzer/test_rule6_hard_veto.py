@@ -35,13 +35,18 @@ class Rule6HardVetoTests(unittest.TestCase):
         result = run_veto({"industry": {"sw_l2_name": "专用设备"}})
         self.assertFalse(result["vetoed"])
 
-    def test_esp_non_positive_positive_zero(self):
-        result = run_veto({"fundamental": {"expectation": {"esp_raw": 0}}})
+    def test_esp_non_positive_positive_negative_value(self):
+        result = run_veto({"fundamental": {"expectation": {"esp_raw": -1.5}}}, enabled_rules=["esp_non_positive"])
         self.assertTrue(result["vetoed"])
         self.assertIn("esp_non_positive", codes(result))
 
+    def test_esp_zero_is_diagnostic_not_veto(self):
+        result = run_veto({"fundamental": {"expectation": {"esp_raw": 0}}}, enabled_rules=["esp_non_positive"])
+        self.assertFalse(result["vetoed"])
+        self.assertEqual(result["diagnostics"][0]["status"], "neutral_zero_not_vetoed")
+
     def test_esp_non_positive_negative_positive_value(self):
-        result = run_veto({"esp_raw": 18.5})
+        result = run_veto({"esp_raw": 18.5}, enabled_rules=["esp_non_positive"])
         self.assertFalse(result["vetoed"])
 
     def test_missing_fields_are_diagnostics_not_vetoes(self):
@@ -57,4 +62,3 @@ class Rule6HardVetoTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

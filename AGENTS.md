@@ -194,7 +194,7 @@ Stock/
 - Phase 3 = minimal veto analyzer + JSON state 接口 + rank 回测 replay；不是完整 analyzer，也不是 Phase 7 DataHub 重构。
 - 新 analyzer 直接放 `engine/analyzer/`，不要放进 `A-EGS/`；不得反向 import `A-EGS/egs_main.py`。
 - `rule6_hard_veto.py` 必须真实返回 veto decision；state manager 初版可以返回空 dict / False。
-- 第一批 hard veto：`chasing_high`、`overheat`、`l2_unknown`、`esp_non_positive`。四条都 hard veto，且各自独立 reason code + version。
+- 第一批 hard veto：`chasing_high`、`overheat`、`l2_unknown`、`esp_non_positive`。四条都 hard veto，且各自独立 reason code + version。`esp_non_positive` 已升 v2：只对明确负 `esp_raw < 0` hard veto；`esp_raw == 0` 视为中性/数据不足诊断，不再 hard veto。
 - missing 不等于 negative：字段缺失、空值、不可解析不自动触发 hard veto，除非 EGS 当前逻辑已明确把该缺失当作降级原因。
 - `LOCK` 暂不 hard veto，只做辅助 flag；扩样本到 N≥15 后再决策。
 - 回测已新增 `tier1_veto_passed` subset，保留 `all` / `tier1_only` baseline；schema 已升到 `1.11.0`，并加入 `low_tier1_veto_passed_count` date warning。

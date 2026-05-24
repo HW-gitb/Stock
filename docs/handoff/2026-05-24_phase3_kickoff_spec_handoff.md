@@ -251,3 +251,82 @@ Rule hit 分布（`rank_samples.csv`）：
 2. 保留 analyzer 工程链路；后续只调整 rule 语义和启用组合，不要回滚 replay 框架。
 3. 不要把 `tier1_veto_passed` 提升为 primary subset；`tier1_only` 仍是主 baseline。
 4. 如继续 Phase 3，下一轮应先跑 `--veto-rules chasing_high,overheat,l2_unknown` 和单规则 ablation，验证是否只是 `esp_non_positive` 语义过宽造成首轮变差。
+
+---
+
+## 2026-05-24 追加：esp_non_positive v2 修正与 ablation
+
+### 改了什么
+
+- `engine/analyzer/rule6_hard_veto.py`
+  - `esp_non_positive` 版本从 1 升到 2。
+  - v2 只对明确负值 `esp_raw < 0` hard veto。
+  - `esp_raw == 0` 改为 diagnostic：`neutral_zero_not_vetoed`，不再 hard veto。
+- `tests/analyzer/test_rule6_hard_veto.py`
+  - 新增/调整 v2 单测：负值触发，0 不触发，正值不触发。
+- 重新生成 `result/a_short/backtest/*` stats/report，仍为 schema 1.11.0。
+- 更新 `AGENTS.md` 和 `docs/CURRENT.md` 的当前 rule 语义。
+
+### 为什么改
+
+按首轮结果继续做 ablation 后，问题集中在 `esp_non_positive`：
+
+- `chasing_high,overheat,l2_unknown` 在 Tier1 内命中 0 条，完全不改变 Tier1-only。
+- 旧 v1 的 `esp_non_positive` 单独命中 78 条 Tier1，且结果与四条全开完全相同。
+- 这 78 条里 75 条是 `esp_raw=0`，73 条带 `DATA-INC`，不是明确负预期，更像数据不足/中性占位。
+- 被 v1 杀掉的 78 条 20d `t1_net` 反而更强：mean +4.08%，monthly_t 2.16，win 52.56%。
+
+结论：`esp_raw == 0` 不能等同 negative；v1 违反“missing 不等于 negative”的精神，应升版本修正。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in ['engine/analyzer/rule6_hard_veto.py','runners/backtest_rank.py']]; print('compile ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\backtest_rank.py --mode production --stats-only --windows 5,10,20 --split-date 20250101
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/rank_backtest_report.schema.json',encoding='utf-8')); r=json.load(open('result/a_short/backtest/backtest_report.json',encoding='utf-8')); errs=list(Draft7Validator(s).iter_errors(r)); print('errors', len(errs)); print('schema_version', r['schema_version'])"
+```
+
+### 验证结果
+
+- Compile：`compile ok`。
+- Unit tests：11 tests passed。
+- 24p stats-only replay：成功；复用 forward cache；`backtest_report.json` 通过 `rank_backtest_report v1.11.0` 校验。
+- 独立 report validation：`errors 0`，`schema_version 1.11.0`。
+- `date_warnings`：旧 v1 11 条，v2 后 6 条。
+
+### Ablation 结果
+
+快速 ablation（Tier1-only 内）：
+
+| ruleset | Tier1 passed N | 结论 |
+|---|---:|---|
+| baseline `tier1_only` | 305 | 主 baseline |
+| `chasing_high,overheat,l2_unknown` | 305 | Tier1 内命中 0 条，无边际影响 |
+| old v1 `esp_non_positive` (`esp_raw <= 0`) | 227 | 误杀 78 条，显著弱于 baseline |
+| v2 `esp_non_positive` (`esp_raw < 0`) | 302 | 只杀 3 条，接近 baseline |
+
+最终 v2 report，`period_split=all`，variant=`t1_net`：
+
+| subset | N | 5d mean / t / win | 10d mean / t / win | 20d mean / t / win |
+|---|---:|---:|---:|---:|
+| `tier1_only` | 305 | +0.63 / 0.91 / 51.80% | +0.98 / 1.04 / 54.10% | +2.84 / 1.60 / 51.15% |
+| `tier1_veto_passed` | 302 | +0.62 / 0.74 / 51.66% | +0.97 / 0.95 / 53.97% | +2.84 / 1.56 / 50.99% |
+
+Tier1 hit distribution after v2:
+
+| analyzer_veto_codes | count |
+|---|---:|
+| `none` | 302 |
+| `esp_non_positive` | 3 |
+
+### 失效旧结论
+
+- “`esp_raw <= 0` 应作为 hard veto”失效；当前证据显示这会误杀大量 `DATA-INC` / 中性 0 样本。
+- “四条 hard veto 全开明显过滤坏票”仍不成立；v2 后几乎等同 Tier1-only，未形成可用边际改善。
+
+### 下一步注意事项
+
+1. 保留 `esp_non_positive` v2，不回到 `<=0`。
+2. `tier1_veto_passed` 仍不能升级为 primary subset；`tier1_only` 继续是主 baseline。
+3. Phase 3 后续应寻找 Tier1 内仍有命中的坏票特征。当前四条中，`chasing_high` / `overheat` 已被 EGS v7.10 前置降级，`l2_unknown` 在 Tier1 内无命中，`esp_non_positive` v2 样本太少。
