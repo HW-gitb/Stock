@@ -162,6 +162,16 @@ logging.basicConfig(
 log = logging.getLogger("EGS")
 
 EGS_VERSION = "v7.10"
+# Canonical list of Tushare API endpoints egs_main consumes during a
+# screening run. Sourced here so downstream consumers (data_health,
+# backtest_rank's data_lineage) read one truth via _current_egs_api_families()
+# regex parsing. When adding a new Tushare call, update this list.
+EGS_API_FAMILIES = [
+    "daily", "daily_basic", "moneyflow", "fina_indicator",
+    "stk_limit", "stock_basic", "trade_cal",
+    "index_member_all", "index_member", "index_classify",
+    "adj_factor", "concept", "concept_detail",
+]
 REALTIME_CACHE_TTL = CONF["cache_ttl"]
 BACKTEST_CACHE_TTL = 10 * 365 * 24 * 3600
 TODAY    = datetime.now().strftime("%Y%m%d")
@@ -1010,7 +1020,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             "screening_engine": "egs_main.py",
             "screening_engine_version": EGS_VERSION,
             "data_provider": "tushare",
-            "api_families": ["daily", "daily_basic", "fina_indicator", "index_*", "moneyflow", "concept_*"],
+            "api_families": list(EGS_API_FAMILIES),
             "l3_mode": CONF.get("l3_mode", "today"),
             "l3_pit_strict": bool(CONF.get("l3_pit_strict", False)),
         },
@@ -1036,7 +1046,8 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
         "limitations": [
             "This is an internal Tushare output health check, not a second-source reconciliation.",
             "It checks structural integrity, key field coverage, counts, industry labels, and data completeness.",
-            "AKShare canary remains optional because its Eastmoney endpoint is unstable in this environment.",
+            "AKShare canary (runners/data_canary.py) now uses sina (stock_zh_a_spot) by default and works reliably; "
+            "the em source needs VPN split-tunnel for *.eastmoney.com if pe/pb reconciliation is required.",
         ],
     }
 

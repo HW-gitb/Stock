@@ -362,6 +362,84 @@ powershell -NoProfile -File D:\cnhea\Stock\runners\weekly_screening.ps1 -AsOf 20
 
 ---
 
+## 2026-05-24 追加：canary + data_health 全量审查后的 bug 修复
+
+用户要求"从头到尾"审查脚本。发现 4 个 MED + 1 个 LOW 的真实问题，全部修复。
+
+### 修复 1：data_canary 顶层 `status` 字段，统一 happy / skip 两条路径
+
+**问题**：skip / error 分支的 payload 有顶层 `status`，成功路径只有 `summary.overall_status`。下游脚本想"读一个键判断 canary 是否完全 OK"，写不出统一 grep。
+
+**修复**：`runners/data_canary.py` 成功路径 payload 加 `"status": overall` 与 `summary.overall_status` 同值。skip/error 分支已有该字段，不动。
+
+### 修复 2：EGS_API_FAMILIES 提为模块常量，data_health + data_lineage 共享
+
+**问题**：`A-EGS/egs_main.py:1013` 写死 `["daily", "daily_basic", "fina_indicator", "index_*", "moneyflow", "concept_*"]`（6 个，含通配符）；`runners/backtest_rank.py` 的 data_lineage 写死 13 个具体名。两个都声称"egs_main 用了什么 Tushare API"，结果不一致。Phase 7 DataHub 想要单一真相源，这是伏笔。
+
+**修复**：
+- `A-EGS/egs_main.py` 加 module-level `EGS_API_FAMILIES = [...]`（13 个，与 backtest_rank 的完整版对齐），`build_data_health()` 改读这个常量
+- `runners/backtest_rank.py` 加 `_current_egs_api_families()` regex + ast 读取 egs_main 的常量（同 `_current_egs_version()` 模式），运行时保证两边永远一致
+- `_current_egs_api_families()` 解析失败时回落到 hardcoded 13 个名（与常量内容同步），且 fallback 触发的话下次 data_health check 会标 drift
+
+### 修复 3：data_health limitations 措辞过时
+
+**问题**：`A-EGS/egs_main.py:1039` 写"AKShare canary remains optional because its Eastmoney endpoint is unstable in this environment."——这句话是 Codex 在 sina 切换之前写的。每次实盘选股会写到 `data_health.json`，下次用户/LLM 看 log 会被误导以为 canary 完全不可用。
+
+**修复**：改成 "AKShare canary (runners/data_canary.py) now uses sina (stock_zh_a_spot) by default and works reliably; the em source needs VPN split-tunnel for *.eastmoney.com if pe/pb reconciliation is required."
+
+### 修复 4：data_canary 非原子写
+
+**问题**：`_write_log` 直接 `open("w")` + `json.dump`。Ctrl+C / OOM / 断电时会留下截断的无效 JSON。egs_main 旁边 `write_json_atomic` 已经用 tmpfile + os.replace 做对了，canary 没保持一致。
+
+**修复**：`_write_log` 改成 `tempfile.mkstemp` 写完后 `os.replace` 原子替换；失败时清理 tmp 文件。
+
+### 修复 5：`_normalize_code` 对 >6 位数字截断方向错误（LOW）
+
+**问题**：`return digits.zfill(6)[-6:]` 对 `"1234567"` 取后 6 位 `"234567"`，**丢前导 1 错配到另一只票**。A 股不会出现 >6 位，但港股 5 位 / 美股 / 未来扩展可能踩到。
+
+**修复**：`>6 位直接返回 ""`，让对账归到 `missing_in_akshare`（旁路约束允许这种 graceful 失败），不做错误猜测。
+
+### 验证
+
+```powershell
+# 1. 语法
+python -c "from pathlib import Path; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in ['runners/data_canary.py','runners/backtest_rank.py','A-EGS/egs_main.py']]; print('syntax ok all 3')"
+
+# 2. EGS_API_FAMILIES regex 解析
+python -c "import sys; sys.path.insert(0,'runners'); from backtest_rank import _current_egs_api_families; fams = _current_egs_api_families(); assert len(fams)==13 and 'stk_limit' in fams; print('PASS')"
+
+# 3. _normalize_code 边界 case
+python -c "import sys; sys.path.insert(0,'runners'); from data_canary import _normalize_code; assert _normalize_code('1234567')=='' and _normalize_code('sh600000')=='600000' and _normalize_code('1')=='000001'; print('PASS')"
+
+# 4. data_canary skip 路径写 log 含顶层 status
+python runners/data_canary.py --as-of 19990101
+# log 含 "status": "skipped_no_candidates"
+
+# 5. stats-only 重生成 backtest_report
+python runners/backtest_rank.py --mode production --stats-only --windows 5,10,20 --split-date 20250101
+```
+
+验证结果：
+- 全部 syntax ok
+- `_current_egs_api_families()` 正确解析出 13 个 API 名
+- `_normalize_code` 10 个 case 全过（含新加的 '1234567' -> '' reject 行为）
+- canary skip 路径写出顶层 `status` 字段
+- 重生成的 `backtest_report.json` schema 1.10.0、validator 0 errors、`data_lineage.api_families.candidate_generation` = 13 个名 (与 egs_main EGS_API_FAMILIES 完全一致)、sample_count 360 不变
+
+### 失效旧结论
+
+- 上一段说 "AKShare canary remains optional because its Eastmoney endpoint is unstable" — 现在 data_health.json 的 limitations 字段已更新措辞
+- 此前 data_health api_families = 6 个含通配符的不准确版本 — 现在 = 13 个精确名
+
+### Next
+
+下次周五用户跑 `weekly_screening.ps1` 时：
+- `data_health.json` limitations 第 3 条会显示新措辞
+- `data_canary.json` 含顶层 status 字段
+- 任何重跑的 backtest report 的 `data_lineage.api_families.candidate_generation` 自动跟 egs_main 同步
+
+---
+
 ## 2026-05-24 append: full script review fixes
 
 Full `A-EGS/egs_main.py` review found and fixed two deterministic robustness bugs:

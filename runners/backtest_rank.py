@@ -59,6 +59,36 @@ def _current_egs_version():
     m = re.search(r'^EGS_VERSION\s*=\s*"([^"]+)"', text, re.MULTILINE)
     return m.group(1) if m else None
 
+
+def _current_egs_api_families():
+    """Read EGS_API_FAMILIES list literal from egs_main.py via regex + ast.
+    Single source of truth ensures data_health.json and backtest_report.json
+    data_lineage.api_families.candidate_generation match. Returns the list,
+    or a hardcoded fallback if parse fails (which would itself flag drift
+    on next data_health check). Fallback is intentionally kept in sync; if
+    you see this fallback get used, update both EGS_API_FAMILIES (canonical)
+    and the fallback below."""
+    import re, ast
+    try:
+        text = EGS_SCRIPT.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    m = re.search(r'^EGS_API_FAMILIES\s*=\s*(\[[^\]]+\])', text, re.MULTILINE)
+    if m:
+        try:
+            parsed = ast.literal_eval(m.group(1))
+            if isinstance(parsed, list) and all(isinstance(x, str) for x in parsed):
+                return parsed
+        except (ValueError, SyntaxError):
+            pass
+    # Fallback: must match egs_main.py:EGS_API_FAMILIES
+    return [
+        "daily", "daily_basic", "moneyflow", "fina_indicator",
+        "stk_limit", "stock_basic", "trade_cal",
+        "index_member_all", "index_member", "index_classify",
+        "adj_factor", "concept", "concept_detail",
+    ]
+
 # A-share transaction cost defaults (double-sided, in pct):
 #   buy commission 0.025% + sell commission 0.025% + stamp duty (sell) 0.05%
 #   + transfer fee 0.001%*2 + slippage ~0.05%*2.
@@ -1755,12 +1785,7 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
         "data_lineage": {
             "data_provider": "tushare",
             "api_families": {
-                "candidate_generation": [
-                    "daily", "daily_basic", "moneyflow", "fina_indicator",
-                    "stk_limit", "stock_basic", "trade_cal",
-                    "index_member_all", "index_member", "index_classify",
-                    "adj_factor", "concept", "concept_detail",
-                ],
+                "candidate_generation": _current_egs_api_families(),
                 "forward_evaluation": [
                     "daily", "adj_factor", "stk_limit", "index_daily", "trade_cal",
                 ],

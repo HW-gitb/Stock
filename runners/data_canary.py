@@ -31,8 +31,10 @@ Usage:
 """
 import argparse
 import json
+import os
 import random
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -90,11 +92,15 @@ def _ts_code_to_akshare(ts_code: str) -> str:
 
 
 def _normalize_code(c) -> str:
-    """Strip non-digits and left-pad to 6, so 'sh600000' / 'SH600000' /
-    600000 (int) / '1' all normalize to '600000' / '000001'.
-    sina sometimes returns 'sh600000' style; em returns bare 6-digit."""
+    """Strip non-digits and pad/validate to A-share 6-digit format.
+    'sh600000' / 'SH600000' / 600000 (int) / '1' -> '600000' / '000001'.
+    Codes longer than 6 digits (港股 5 位 / 美股 / 未来扩展) return "" so
+    they fall through to missing_in_akshare rather than silently matching
+    a wrong stock via truncation."""
     digits = "".join(ch for ch in str(c) if ch.isdigit())
-    return digits.zfill(6)[-6:] if digits else ""
+    if not digits or len(digits) > 6:
+        return ""
+    return digits.zfill(6)
 
 
 def _find_candidates(as_of: str) -> Path | None:
@@ -109,10 +115,23 @@ def _find_candidates(as_of: str) -> Path | None:
 
 
 def _write_log(payload: dict, as_of: str) -> Path:
+    """Atomic write: tmp file + os.replace, so Ctrl+C / OOM mid-write
+    leaves either the old file intact or the new file complete; never
+    a truncated half-file."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     out = LOG_DIR / f"data_canary_{as_of}.json"
-    with out.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+    fd, tmp_path = tempfile.mkstemp(prefix=f".data_canary_{as_of}_",
+                                    suffix=".json.tmp", dir=str(LOG_DIR))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+        os.replace(tmp_path, out)
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
     return out
 
 
@@ -434,6 +453,7 @@ def main() -> int:
     payload = {
         "as_of": args.as_of,
         "ran_at": _now_iso(),
+        "status": overall,
         "candidates_source": _display_path(cand_path),
         "tier_filter": args.tier or None,
         "sample_size": sample_size,

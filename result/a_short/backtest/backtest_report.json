@@ -1,7 +1,7 @@
 {
   "schema_name": "rank_backtest_report",
   "schema_version": "1.10.0",
-  "generated_at": "2026-05-24T15:04:14+08:00",
+  "generated_at": "2026-05-24T17:12:22+08:00",
   "preset": "a_short",
   "mode": "production",
   "engineering_smoke": false,
