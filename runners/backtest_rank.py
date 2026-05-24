@@ -757,6 +757,27 @@ def monthly_stats(samples, windows, subset="all", period_split="all"):
     return pd.DataFrame(rows)
 
 
+def _coerce_bool_column(series):
+    """Coerce a Series to bool while respecting 'True'/'False' strings.
+
+    pandas.Series.astype(bool) on an object dtype treats any non-empty string
+    as True, so "False" silently becomes True. CSV round-trips of bool columns
+    (rank_samples.csv → diagnostics scripts) hit exactly this trap. This
+    helper maps known string literals first, then falls back to astype(bool)
+    for actual bool/0/1 inputs.
+    """
+    if series.dtype == bool:
+        return series.fillna(False)
+    mapped = series.map({
+        "True": True, "False": False,
+        "true": True, "false": False,
+        "1": True, "0": False,
+        1: True, 0: False,
+        True: True, False: False,
+    })
+    return mapped.fillna(False).astype(bool)
+
+
 def build_group_columns(samples):
     samples = samples.copy()
     samples["rank_bucket"] = pd.cut(
@@ -774,10 +795,15 @@ def build_group_columns(samples):
     samples["q0_dt_yoy_gt_200"] = pd.to_numeric(samples["q0_dt_yoy"], errors="coerce") > 200
     samples["q1_dt_yoy_gt_200"] = pd.to_numeric(samples["q1_dt_yoy"], errors="coerce") > 200
     samples["esp_raw_gt_200"] = pd.to_numeric(samples["esp_raw"], errors="coerce") > 200
-    samples["l2_unknown"] = samples.get("l2_name", pd.Series("", index=samples.index)).fillna("").astype(str).isin(["未知", "unknown", ""])
+    # Aligned with engine/analyzer/rule6_hard_veto._check_l2_unknown: empty
+    # string is data_missing, not an explicit "未知" label. Previously this
+    # included "" so Tier2 filler with no industry was counted as unknown
+    # downstream, but that semantics now diverged from the analyzer; the
+    # two definitions must agree so reason attribution stays consistent.
+    samples["l2_unknown"] = samples.get("l2_name", pd.Series("", index=samples.index)).fillna("").astype(str).isin(["未知", "unknown"])
     if "analyzer_vetoed" not in samples.columns:
         samples["analyzer_vetoed"] = False
-    samples["analyzer_vetoed"] = samples["analyzer_vetoed"].fillna(False).astype(bool)
+    samples["analyzer_vetoed"] = _coerce_bool_column(samples["analyzer_vetoed"])
     if "analyzer_veto_codes" not in samples.columns:
         samples["analyzer_veto_codes"] = "none"
     samples["analyzer_veto_codes"] = samples["analyzer_veto_codes"].fillna("none").astype(str)
@@ -1034,13 +1060,47 @@ def _period_split_masks(samples, split_date):
     return masks
 
 
+def _veto_subset_specs(samples):
+    """Build Phase 3 veto-aware subsets, in canonical reporting order.
+
+    Returns a list of (label, df). Phase 3 audit (2026-05-24) added
+    `all_veto_passed` so the four hard-veto rules can be compared against the
+    `all` baseline — chasing_high / overheat / l2_unknown were defined to act
+    on Tier2 filler, and the Tier1-only baseline cannot show that effect
+    because EGS v7.10 already downgraded those signals before they entered
+    Tier1.
+
+    A subset is skipped when it equals the parent (redundant) or is empty.
+    """
+    veto_active = (
+        "analyzer_vetoed" in samples.columns
+        and "analyzer_veto_codes" in samples.columns
+        and samples["analyzer_veto_codes"].astype(str).ne("none").any()
+    )
+    specs = [("all", samples)]
+    if veto_active:
+        not_vetoed = ~_coerce_bool_column(samples["analyzer_vetoed"])
+        all_veto_passed = samples[not_vetoed]
+        if 0 < len(all_veto_passed) < len(samples):
+            specs.append(("all_veto_passed", all_veto_passed))
+    tier1_samples = samples[samples["tier_group"] == "Tier1"]
+    if len(tier1_samples):
+        specs.append(("tier1_only", tier1_samples))
+        if veto_active:
+            tier1_veto_passed = tier1_samples[~_coerce_bool_column(tier1_samples["analyzer_vetoed"])]
+            if 0 < len(tier1_veto_passed) < len(tier1_samples):
+                specs.append(("tier1_veto_passed", tier1_veto_passed))
+    return specs
+
+
 def build_stats(samples, windows, split_date=None):
     """Build stats for cross-product of subsets × period_splits and stack them.
 
-    Subsets:
-      - 'all'         : every sample (Tier1 + Tier2 filler)
-      - 'tier1_only'  : Tier == 'Tier1' subset (primary reporting view)
-      - 'tier1_veto_passed': Tier1 names that pass Phase 3 analyzer veto
+    Subsets (emitted only when non-empty and not redundant with the parent):
+      - 'all'                : every sample (Tier1 + Tier2 filler)
+      - 'all_veto_passed'    : full sample minus Phase 3 analyzer-vetoed rows
+      - 'tier1_only'         : Tier == 'Tier1' subset (primary reporting view)
+      - 'tier1_veto_passed'  : Tier1 names that pass Phase 3 analyzer veto
 
     Period splits (only emitted when split_date is set):
       - 'all'         : full date range (always emitted)
@@ -1052,15 +1112,7 @@ def build_stats(samples, windows, split_date=None):
     """
     samples = build_group_columns(samples)
     period_masks = _period_split_masks(samples, split_date)
-
-    subset_specs = [("all", samples)]
-    tier1_samples = samples[samples["tier_group"] == "Tier1"]
-    if len(tier1_samples):
-        subset_specs.append(("tier1_only", tier1_samples))
-        if "analyzer_vetoed" in tier1_samples.columns:
-            tier1_veto_passed = tier1_samples[~tier1_samples["analyzer_vetoed"].fillna(False).astype(bool)]
-            if len(tier1_veto_passed):
-                subset_specs.append(("tier1_veto_passed", tier1_veto_passed))
+    subset_specs = _veto_subset_specs(samples)
 
     summaries, factors, rule6s, monthlies = [], [], [], []
     for subset_label, subset_df in subset_specs:
@@ -1386,6 +1438,15 @@ def _variant_mask(samples, name):
                 & ~(s["entry_flag_group"].eq("追高风险，周一确认") | s["chasing_high"].fillna(False).astype(bool))
                 & ~(s["has_l4_overheat"].fillna(False).astype(bool) | s["overheat_flag"].fillna(False).astype(bool))
                 & ~(s["q0_dt_yoy_gt_200"] | s["q1_dt_yoy_gt_200"] | s["esp_raw_gt_200"]))
+    if name == "score_ge_60":
+        # Phase 3.2 candidate: diagnose_tier1_bad_signals identified
+        # final_score < 60 as a Tier1 bad-signal feature with discovery
+        # bad20_lift +12pp and validation bad20_lift +20pp. Promote to a
+        # strategy variant (not a hard veto) so portfolio_stats with
+        # discovery/validation splits can verify it before any analyzer
+        # change. Discovery 20d t-stat barely moves (0.71 → 0.74), so the
+        # validation improvement is provisional and may be regime-driven.
+        return mask & (pd.to_numeric(s["final_score"], errors="coerce") >= 60)
     return mask
 
 
@@ -1398,6 +1459,7 @@ STRATEGY_VARIANTS = [
     "no_tier2_unknown",
     "no_lock",
     "combined_p0",
+    "score_ge_60",
 ]
 
 
@@ -1454,14 +1516,7 @@ def _max_drawdown_from_returns(returns_pct):
 def build_portfolio_stats(samples, windows, split_date=None, strategy_variant="baseline"):
     samples = build_group_columns(samples)
     period_masks = _period_split_masks(samples, split_date)
-    subset_specs = [("all", samples)]
-    tier1 = samples[samples["tier_group"] == "Tier1"]
-    if len(tier1):
-        subset_specs.append(("tier1_only", tier1))
-        if "analyzer_vetoed" in tier1.columns:
-            tier1_veto_passed = tier1[~tier1["analyzer_vetoed"].fillna(False).astype(bool)]
-            if len(tier1_veto_passed):
-                subset_specs.append(("tier1_veto_passed", tier1_veto_passed))
+    subset_specs = _veto_subset_specs(samples)
 
     period_rows, stat_rows = [], []
     for subset_label, subset_df in subset_specs:

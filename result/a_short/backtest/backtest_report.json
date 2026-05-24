@@ -1,7 +1,7 @@
 {
   "schema_name": "rank_backtest_report",
   "schema_version": "1.11.0",
-  "generated_at": "2026-05-24T20:53:56+08:00",
+  "generated_at": "2026-05-24T21:35:40+08:00",
   "preset": "a_short",
   "mode": "production",
   "engineering_smoke": false,
@@ -215,6 +215,10 @@
     {
       "strategy_variant": "combined_p0",
       "sample_count": 259
+    },
+    {
+      "strategy_variant": "score_ge_60",
+      "sample_count": 290
     },
     {
       "strategy_variant": "esp_cap_200_rerank",

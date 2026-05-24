@@ -59,6 +59,40 @@ class Rule6HardVetoTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             run_veto({}, enabled_rules=["overheat", "lock"])
 
+    def test_diagnostic_field_records_path_that_was_checked(self):
+        # Phase 3 audit (2026-05-24): previously _first_present stashed the
+        # last-resolved path on a function attribute, so a diagnostic written
+        # for a missing field could silently inherit the path from a prior
+        # call. Now each check pulls its own (value, path) tuple.
+        result = run_veto(
+            {"selection": {"entry_flag": "可直接观察"}},
+            enabled_rules=["overheat"],
+        )
+        self.assertFalse(result["vetoed"])
+        self.assertEqual(len(result["diagnostics"]), 1)
+        diag = result["diagnostics"][0]
+        self.assertEqual(diag["code"], "overheat")
+        self.assertEqual(diag["status"], "data_missing")
+        # Field should list overheat's own probe paths, not entry_flag.
+        self.assertIn("overheat_flag", diag["field"])
+        self.assertNotIn("entry_flag", diag["field"])
+
+    def test_esp_nan_string_is_diagnostic_not_silent_pass(self):
+        # float("nan") parses but every comparison is False; without the
+        # parsed!=parsed guard the rule would silently fall through with no
+        # diagnostic and no veto, hiding bad input.
+        result = run_veto({"esp_raw": "nan"}, enabled_rules=["esp_non_positive"])
+        self.assertFalse(result["vetoed"])
+        self.assertEqual(result["diagnostics"][0]["status"], "data_unparseable")
+
+    def test_l2_empty_string_is_missing_not_unknown(self):
+        # Backtest's build_group_columns flags "" as unknown for stats
+        # coverage, but the analyzer must treat "" as data_missing, not as
+        # an explicit "未知" label (Phase 3 spec: missing != negative).
+        result = run_veto({"l2_name": ""}, enabled_rules=["l2_unknown"])
+        self.assertFalse(result["vetoed"])
+        self.assertEqual(result["diagnostics"][0]["status"], "data_missing")
+
 
 if __name__ == "__main__":
     unittest.main()

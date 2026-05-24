@@ -425,3 +425,110 @@ Interpretation:
 1. 下一步应把 `score_ge_60` / `score_ge_65` 作为 strategy variants 接入 `runners/backtest_rank.py`，生成正式 report/portfolio stats，而不是直接写进 analyzer hard veto。
 2. 如果正式 replay 仍改善 validation 且不过度降低每期候选数，再讨论是否进入 analyzer 的 `absolute_score_floor` rule。
 3. 保持 `tier1_only` 为 primary baseline；不要把 score floor subset 改成主口径。
+
+---
+
+## 2026-05-24 追加：Phase 3 audit fixes + all_veto_passed subset + score_ge_60 variant
+
+### 改了什么
+
+工程修复（基于本日审计的 §2 / §3）：
+
+- `engine/analyzer/rule6_hard_veto.py`
+  - `_first_present` 改为返回 `(value, path)` tuple；删除函数属性 `last_field`（隐式全局状态，非线程安全，且会让 missing 的 diagnostic 错误地继承上一次成功路径的 field 名）。
+  - `_check_l2_unknown`：空 / 纯空白字符串归类为 `data_missing` diagnostic，不再硅默 fall through；分开 CJK / ASCII 字面量，去掉对中文做 `.lower()` 的噪音。
+  - `_check_esp_non_positive`：`float("nan")` 解析成功但所有比较都为 False，旧逻辑会硅默返回 `(None, [])`；现在显式判 `parsed != parsed`，输出 `data_unparseable` diagnostic。
+- `runners/backtest_rank.py`
+  - 新增 `_coerce_bool_column()`：`pd.Series.astype(bool)` 对 object dtype 的 `"False"` 字符串会判 True（CSV 回读的经典坑）。`build_group_columns` 改用 `_coerce_bool_column` 处理 `analyzer_vetoed`，确保 `rank_samples.csv` round-trip 仍正确。
+  - `build_group_columns` 的 `l2_unknown` 列去掉 `""`，与 analyzer 的 `_check_l2_unknown` 对齐（同名两边语义统一，便于 reason attribution）。
+  - 抽出 `_veto_subset_specs()`：统一 `build_stats` / `build_portfolio_stats` 的 subset 顺序；新增 `all_veto_passed` subset（全样本去掉 vetoed）。
+  - subset emit 加上 `0 < len < parent_len` 守卫：veto disabled 或 0 命中时跳过 `tier1_veto_passed` / `all_veto_passed`，避免产出与父集完全相同的冗余行。
+- 新增 strategy variant `score_ge_60`（`_variant_mask` + `STRATEGY_VARIANTS`）：mask=`final_score >= 60`，按 Phase 3.2 诊断把 score floor 升级为正式 strategy variant；不进 analyzer hard veto，因为这是 ranking subset 决策不是事件型 veto。
+  - 先只加 `score_ge_60`；`score_ge_65` 等 60 的 portfolio_stats 通过 discovery + validation 双向证据后再讨论。
+- `tests/analyzer/test_rule6_hard_veto.py` 新增 3 条单测：
+  - `test_diagnostic_field_records_path_that_was_checked` — 守住 `_first_present` tuple 契约，防止旧的函数属性 bug 复发。
+  - `test_esp_nan_string_is_diagnostic_not_silent_pass` — 守住 `"nan"` 字符串触发 diagnostic 而不是硅默放行。
+  - `test_l2_empty_string_is_missing_not_unknown` — 守住空字符串归类为 `data_missing`，不是 `未知` 字面量。
+
+### 为什么改
+
+Phase 3 audit（2026-05-24）发现：
+
+1. **比较口径错位**（设计层 §1 张力）：四条 hard veto 是基于 24p 全样本 finding 选的，但 EGS v7.10 已在 Tier1 内把 `chasing_high`/`overheat` 前置降级。在 `tier1_only` baseline 上 replay 几乎无命中是**预期的**，不是 bug — 它们真正的目标是阻止 Tier2 filler 把坏票捡回来。当前 `tier1_veto_passed` subset 结构上看不到这批 veto 的真实价值；需要 `all_veto_passed` 与 `all` baseline 直接对比才是正确口径。
+2. `_first_present` 函数属性是反模式（§2a），未来扩展规则数会越来越脆弱。
+3. `_check_l2_unknown` 与 backtest `l2_unknown` 列对 `""` 的处理不一致（§2b），两个同名定义未来 attribution 会对不上。
+4. CSV bool round-trip 的 latent bug（§3a）：主回测流程没踩，但 `diagnose_tier1_bad_signals.py` 间接调用 `build_group_columns`，未来基于 `analyzer_vetoed` 做事的脚本必踩。
+5. `esp_non_positive` 收到 `"nan"` 字符串的硅默 fall through（§3b）：极小概率但悄无声息，写一条 diagnostic 守住。
+6. score_ge_60 / score_ge_65 是 Phase 3.2 诊断结论，但当时只有 stats CSV，没正式 portfolio_stats / max_dd / sharpe。把 60 升级为 strategy variant 才能用完整口径验证。
+
+### 验证命令
+
+```powershell
+python -c "from pathlib import Path; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in ['engine/analyzer/rule6_hard_veto.py','engine/analyzer/state_manager.py','runners/backtest_rank.py']]; print('compile ok')"
+python -m unittest discover -s tests -p "test_*.py" -v
+python runners\backtest_rank.py --mode production --stats-only --windows 5,10,20 --split-date 20250101
+python -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/rank_backtest_report.schema.json',encoding='utf-8')); r=json.load(open('result/a_short/backtest/backtest_report.json',encoding='utf-8')); errs=list(Draft7Validator(s).iter_errors(r)); print('errors', len(errs)); print('schema_version', r['schema_version'])"
+python runners\diagnose_tier1_bad_signals.py
+```
+
+### 验证结果
+
+- Compile：`compile ok`。
+- Unit tests：**14 tests passed**（原 11 + 新增 3）。
+- 24p stats-only replay：成功；复用 forward cache；schema 仍为 1.11.0（subset 是 freeform CSV 列，加 `all_veto_passed` 不需要升 schema）。
+- 独立 report validation：`errors 0`，`schema_version 1.11.0`。
+- `strategy_variant_meta` 包含 `score_ge_60`（N=290）。
+- `rank_samples.csv` `analyzer_vetoed` round-trip 正确（diagnose 脚本输出与之前一致：tier1 samples=305, bad20=85, candidate_features=3）。
+
+### 关键 replay 结果：四条 hard veto 的真实价值（all vs all_veto_passed）
+
+24p production stats-only，`period_split=all`，variant=`t1_net`：
+
+| subset | N | 5d mean / t / win | 10d mean / t / win | 20d mean / t / win |
+|---|---:|---:|---:|---:|
+| `all` | 360 | +0.49 / 0.70 / 50.83% | +0.83 / 0.81 / 52.50% | +1.97 / 1.08 / 48.71% |
+| `all_veto_passed` | 302 | +0.62 / 0.74 / 51.66% | +0.97 / 0.95 / 53.97% | **+2.84 / 1.56 / 50.99%** |
+| `tier1_only` | 305 | +0.63 / 0.91 / 51.80% | +0.98 / 1.04 / 54.10% | +2.84 / 1.60 / 51.15% |
+| `tier1_veto_passed` | 302 | +0.62 / 0.74 / 51.66% | +0.97 / 0.95 / 53.97% | +2.84 / 1.56 / 50.99% |
+
+Tier × analyzer_vetoed 交叉表：
+
+|  | passed | vetoed |
+|---|---:|---:|
+| Tier1 | 302 | 3 |
+| Tier2 | 0 | **55** |
+
+**关键发现**：四条 hard veto 把 24p 数据里的 Tier2 filler **100% 杀干净**（55/55）；这正是这四条规则在设计上承担的角色 — 阻止 Tier2 把已降级的坏信号捡回样本。`all → all_veto_passed`：20d 月度 t 从 1.08 → 1.56，mean 从 1.97 → 2.84，win_rate 48.7% → 51.0%。
+
+之前 `tier1_only` baseline 看不到这个效果，因为 EGS v7.10 已经在 Tier1 入口前置降级；用 `all_veto_passed` vs `all` 对比才是 phase 3 这批 veto 的正确评估口径。注意 `all_veto_passed` 在当前 24p 等价于 `tier1_veto_passed`（因为 0 Tier2 通过），但语义上它们是两个独立 subset，未来 EGS 阈值调整或 Tier2 入选规则变化时会分开。
+
+### 关键 replay 结果：score_ge_60 strategy variant
+
+portfolio_stats，subset=`tier1_only`，variant=`t1_net`，window=20：
+
+| variant | split | period_n | compounded% | max_dd% | monthly_t | sharpe_m | win_rate% |
+|---|---|---:|---:|---:|---:|---:|---:|
+| baseline | discovery | 11 | +18.42 | **-18.75** | 0.71 | 0.21 | 36.4 |
+| score_ge_60 | discovery | 11 | +18.70 | **-16.59** | 0.74 | 0.22 | **45.5** |
+| baseline | validation | 12 | +37.26 | -12.12 | 1.77 | 0.51 | 58.3 |
+| score_ge_60 | validation | 12 | +39.45 | **-10.92** | 1.79 | 0.52 | **66.7** |
+
+**解读**：
+- 月度 t / sharpe 几乎不变（discovery 0.71→0.74，validation 1.77→1.79）。score_ge_60 不是 alpha 增益。
+- max_drawdown 改善：discovery -18.75 → -16.59，validation -12.12 → -10.92。这是 score floor 的真实价值 — **风险控制**，不是收益。
+- 期间 win_rate 改善：discovery 36→46，validation 58→67。
+- 配合 `final_score < 60` 在 validation bad20_lift +20pp（Phase 3.2 finding），score floor 是真实的"少踩雷"信号，但效果中等且 discovery 期改善有限。
+
+### 失效旧结论
+
+- “Phase 3 当前 4 条 hard veto 没产生边际改善”不再成立 — 在错的比较口径（tier1_only）上确实没有，但在 `all` vs `all_veto_passed` 正确口径下 20d t 从 1.08 升到 1.56，且 100% 清空 Tier2 filler。
+- “tier1_veto_passed 接近 tier1_only，所以这批 veto 没用”不成立 — 这是比较口径错位造成的错觉；valuable 在于过滤 Tier2，不是过滤 Tier1。
+- “score_ge_60 是 alpha 增益”过强 — portfolio_stats 显示这是 risk-mitigation（max_dd + win_rate），不是 monthly_t 增益。
+
+### 下一步注意事项
+
+1. **不要把 `all_veto_passed` 或 `score_ge_60` 提为 primary_subset**；`tier1_only` 仍是主 baseline。当前 schema 1.11.0 的 `primary_subset` enum 已经包含 `tier1_veto_passed`，但实盘报告口径不动。
+2. `score_ge_60` 已经接进 strategy_variant，下一步是观察后续 12 期更多数据；不要急着加 `score_ge_65`。`65` 加进来会有数据挖掘嫌疑，等 60 的 portfolio_stats 在新一批 as_of 上稳定再决定。
+3. 4 条 hard veto 在 Tier2 filler 上 100% 命中率是当前 24p 的事实，未来 EGS 改阈值（如把 Tier2 入选条件放宽）会让这个比例变化；reporting 时 `all` vs `all_veto_passed` 应一直保留作监控口径。
+4. 如果以后做 `LOCK` veto，要重跑 `all_veto_passed` 对比，确认 LOCK 在 Tier2 / Tier1 上的命中和边际贡献。LOCK 当前 N=4 不足，下次扩到 N≥15 时再看。
+5. 旧 handoff 中"四条 hard veto 全开没有改善 Tier1-only baseline"措辞保留，但本节澄清这是口径错位；不要回去改旧节。

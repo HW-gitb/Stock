@@ -1,15 +1,15 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-24（Phase 3.2 Tier1 坏票诊断完成后）
+**最后更新**：2026-05-24（Phase 3 audit fixes + all_veto_passed subset + score_ge_60 variant）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 2 + Phase 2.5 + Phase 2.6 全部完成。Phase 3 minimal veto analyzer + state 接口 + rank replay 首轮已落地
-- **当前目标**：复核 Phase 3.2 Tier1 坏票诊断结果；当前最值得进入下一轮 replay 的候选是绝对分数地板 `final_score >= 60/65`，但尚未升级为 hard veto
-- **下一阶段大目标（Phase 3 后续）**：保留 analyzer veto 工程链路，继续用 replay/ablation 量化每条 veto 的边际贡献；不把首轮结果解释为策略签收
+- **当前 Phase**：Phase 3 进行中。minimal analyzer + state 接口 + audit fixes + 比较口径修正（`all_veto_passed`）+ `score_ge_60` strategy variant 已落地
+- **当前目标**：在后续 as_of 上观察 `all` vs `all_veto_passed`（4 条 hard veto 对 Tier2 filler 的过滤稳定性）和 `score_ge_60` 的 max_dd / win_rate 改善是否持续；**不要急着加 `score_ge_65`**（数据挖掘嫌疑）
+- **下一阶段大目标**：Phase 4 minimal Skill（读 `analysis_input.json` → 调 analyzer → 出 M6.7）；扩 36 期 + 新 regime 后再考虑 `LOCK` veto 和 `score_ge_65`
 
 ---
 
@@ -31,6 +31,9 @@
 - Phase 3 首轮（2026-05-24）：新增 `engine/analyzer/rule6_hard_veto.py`、`engine/analyzer/state_manager.py`、`tests/analyzer/`；`backtest_rank.py` 接入 analyzer replay，新增 `tier1_veto_passed` subset、`--veto-rules` ablation、schema 1.11.0、`low_tier1_veto_passed_count` warning；24p stats-only replay 已通过 schema 校验
 - Phase 3 v2 修正（2026-05-24）：`esp_non_positive` 升到 v2，只 hard veto 明确负 `esp_raw < 0`；`esp_raw == 0` 记录 `neutral_zero_not_vetoed` 诊断。原因：24p Tier1 中 78 条旧 v1 命中里 75 条是 `esp_raw=0`，多数为 `DATA-INC`，且该组 20d 表现反而更强
 - Phase 3.2 Tier1 坏票诊断（2026-05-24）：新增 `runners/diagnose_tier1_bad_signals.py`，输出 `Phase3_tier1_bad_signal_diagnostics.md` 与 4 份 CSV。诊断显示 `final_score < 60` 是当前最清晰的 Tier1 内坏票候选特征；`score_ge_60/65` replay 在 validation 的 5d/10d/20d 均优于 Tier1-only，但仍需正式接入 `backtest_rank.py` variant 后再决定是否进 analyzer
+- Phase 3 audit fixes（2026-05-24）：`_first_present` 改返回 `(value, path)` tuple；`_check_l2_unknown` 空串归 data_missing；`_check_esp_non_positive` `"nan"` 字符串归 data_unparseable；`_coerce_bool_column` 修 CSV bool round-trip latent bug；analyzer 与 backtest 的 `l2_unknown` 语义对齐；`--no-analyzer-veto` 或 0 命中时跳过冗余 veto subset
+- Phase 3 比较口径修正（2026-05-24）：新增 `all_veto_passed` subset（全样本去掉 vetoed）— 之前 `tier1_veto_passed` 只与 `tier1_only` 比，看不到 4 条 hard veto 的真实价值（它们设计上是过滤 Tier2 filler，不是 Tier1）。24p 实证：`all → all_veto_passed` 20d 月度 t 从 1.08 升到 1.56，**100% 清空 Tier2 filler (55/55)**
+- Phase 3 score_ge_60 variant（2026-05-24）：把 Phase 3.2 诊断的 `final_score >= 60` 升级为正式 strategy variant（不进 analyzer hard veto，因为 score floor 是 ranking 决策不是事件 veto）。24p portfolio_stats：discovery max_dd -18.75 → -16.59，validation max_dd -12.12 → -10.92；monthly_t 几乎不变（risk-mitigation，不是 alpha 增益）
 
 ---
 
@@ -103,18 +106,19 @@
 - `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格：minimal veto analyzer + JSON state + replay/ablation 完成线
 
 ### 报告产出
-- `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.10.0, primary_subset=tier1_only
+- `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.11.0, primary_subset=tier1_only
 - `result/a_short/backtest/{summary_by_window,factor_group_stats,monthly_stats,strategy_variant_stats,portfolio_stats}.csv`
 
 ---
 
 ## 6. 下一步（按优先级 P0 → P3）
 
-### P0 — Phase 3 主轴
+### P0 — Phase 3 收官 / Phase 4 准备
 
-1. **正式 replay 绝对分数地板** — 把 `score_ge_60` / `score_ge_65` 作为 strategy variant 接进 `backtest_rank.py`，不要直接 hard veto；先确认 report/portfolio 级结果。
-2. **保持边界** — `final_score < 60` 是候选负特征，不是策略签收。当前证据支持“值得进一步 replay”，不支持直接实盘过滤。
-3. **保留 `esp_non_positive` v2** — v1 的 `esp_raw <= 0` 已证明过宽；v2 只杀 `esp_raw < 0`，避免把 `DATA-INC` / 中性 0 当成负预期。
+1. **在新 as_of 上观察 `all` vs `all_veto_passed`** — 4 条 hard veto 在当前 24p 把 Tier2 filler 100% 清空（55/55），20d t 1.08→1.56。新 as_of 上 Tier2 命中率会变；要长期监控。
+2. **在新 as_of 上观察 `score_ge_60`** — 当前 24p 显示 discovery/validation max_dd 和 win_rate 改善，但 monthly_t 几乎不变（risk-mitigation 而非 alpha）。新数据稳定后再讨论是否进 analyzer 的 `absolute_score_floor` rule。
+3. **不要急着加 `score_ge_65`** — 数据挖掘嫌疑；等 60 在更多 as_of 上稳定再决定。
+4. **保留 `esp_non_positive` v2** — v1 的 `esp_raw <= 0` 已证明过宽；v2 只杀 `esp_raw < 0`。
 
 ### P1 — 短期跟进
 

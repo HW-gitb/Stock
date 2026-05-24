@@ -95,102 +95,104 @@ def _diag(code: str, field: str, status: str, value: Any = None) -> dict[str, An
 
 def _check_chasing_high(candidate: Mapping[str, Any]):
     diagnostics = []
-    value = _first_present(candidate, [
-        "chasing_high",
-        "derived_flags.chasing_high",
-    ])
+    bool_paths = ["chasing_high", "derived_flags.chasing_high"]
+    value, field = _first_present(candidate, bool_paths)
     if value is not MISSING:
         parsed = _parse_bool(value)
         if parsed is True:
-            return _reason("chasing_high", _last_field(candidate), value), diagnostics
+            return _reason("chasing_high", field, value), diagnostics
         if parsed is None:
-            diagnostics.append(_diag("chasing_high", _last_field(candidate), "data_unparseable", value))
+            diagnostics.append(_diag("chasing_high", field, "data_unparseable", value))
 
-    entry = _first_present(candidate, [
-        "entry_flag",
-        "entry_flag_group",
-        "selection.entry_flag",
-    ])
+    entry_paths = ["entry_flag", "entry_flag_group", "selection.entry_flag"]
+    entry, entry_field = _first_present(candidate, entry_paths)
     if entry is not MISSING:
-        text = str(entry)
-        if "追高风险" in text:
-            return _reason("chasing_high", _last_field(candidate), entry), diagnostics
+        if "追高风险" in str(entry):
+            return _reason("chasing_high", entry_field, entry), diagnostics
         return None, diagnostics
 
-    diagnostics.append(_diag("chasing_high", "chasing_high|selection.entry_flag", "data_missing"))
+    diagnostics.append(_diag("chasing_high", "|".join(bool_paths + entry_paths), "data_missing"))
     return None, diagnostics
 
 
 def _check_overheat(candidate: Mapping[str, Any]):
     diagnostics = []
-    value = _first_present(candidate, [
-        "overheat_flag",
-        "derived_flags.overheat_flag",
-    ])
+    bool_paths = ["overheat_flag", "derived_flags.overheat_flag"]
+    value, field = _first_present(candidate, bool_paths)
     if value is not MISSING:
         parsed = _parse_bool(value)
         if parsed is True:
-            return _reason("overheat", _last_field(candidate), value), diagnostics
+            return _reason("overheat", field, value), diagnostics
         if parsed is None:
-            diagnostics.append(_diag("overheat", _last_field(candidate), "data_unparseable", value))
+            diagnostics.append(_diag("overheat", field, "data_unparseable", value))
 
-    flag = _first_present(candidate, [
-        "l4_flag",
-        "l4_flag_group",
-        "scores.l4_flag",
-    ])
+    flag_paths = ["l4_flag", "l4_flag_group", "scores.l4_flag"]
+    flag, flag_field = _first_present(candidate, flag_paths)
     if flag is not MISSING:
-        text = str(flag).upper()
-        if "OVERHEAT" in text:
-            return _reason("overheat", _last_field(candidate), flag), diagnostics
+        if "OVERHEAT" in str(flag).upper():
+            return _reason("overheat", flag_field, flag), diagnostics
         return None, diagnostics
 
-    diagnostics.append(_diag("overheat", "overheat_flag|scores.l4_flag", "data_missing"))
+    diagnostics.append(_diag("overheat", "|".join(bool_paths + flag_paths), "data_missing"))
     return None, diagnostics
 
 
+# Treat these literals as "industry name explicitly unknown".
+# Backtest's build_group_columns has historically also flagged "" as unknown
+# for downstream stats coverage, but the analyzer stays stricter: missing or
+# empty strings are not equivalent to an explicit "未知" label and must not
+# trigger a hard veto. See Phase 3 spec §3: "missing 不等于 negative".
+_L2_UNKNOWN_LITERALS_CJK = {"未知"}
+_L2_UNKNOWN_LITERALS_ASCII = {"unknown", "unk"}
+
+
 def _check_l2_unknown(candidate: Mapping[str, Any]):
-    value = _first_present(candidate, [
-        "l2_name",
-        "industry.sw_l2_name",
-    ])
+    paths = ["l2_name", "industry.sw_l2_name"]
+    value, field = _first_present(candidate, paths)
     if value is MISSING:
-        return None, [_diag("l2_unknown", "l2_name|industry.sw_l2_name", "data_missing")]
+        return None, [_diag("l2_unknown", "|".join(paths), "data_missing")]
     text = str(value).strip()
-    if text.lower() in {"未知", "unknown", "unk"}:
-        return _reason("l2_unknown", _last_field(candidate), value), []
+    if not text:
+        # Empty / whitespace-only string is data_missing, not an explicit
+        # "未知" label. _is_missing_value only catches None / NaN, so the
+        # empty-string case is filtered here.
+        return None, [_diag("l2_unknown", field, "data_missing", value)]
+    if text in _L2_UNKNOWN_LITERALS_CJK or text.lower() in _L2_UNKNOWN_LITERALS_ASCII:
+        return _reason("l2_unknown", field, value), []
     return None, []
 
 
 def _check_esp_non_positive(candidate: Mapping[str, Any]):
-    value = _first_present(candidate, [
-        "esp_raw",
-        "fundamental.expectation.esp_raw",
-    ])
+    paths = ["esp_raw", "fundamental.expectation.esp_raw"]
+    value, field = _first_present(candidate, paths)
     if value is MISSING:
-        return None, [_diag("esp_non_positive", "esp_raw|fundamental.expectation.esp_raw", "data_missing")]
+        return None, [_diag("esp_non_positive", "|".join(paths), "data_missing")]
     parsed = _parse_float(value)
     if parsed is None:
-        return None, [_diag("esp_non_positive", _last_field(candidate), "data_unparseable", value)]
+        return None, [_diag("esp_non_positive", field, "data_unparseable", value)]
+    # float("nan") parses successfully but every comparison is False; treat as
+    # data_unparseable so the diagnostic surfaces instead of silently dropping.
+    if parsed != parsed:
+        return None, [_diag("esp_non_positive", field, "data_unparseable", value)]
     if parsed < 0:
-        return _reason("esp_non_positive", _last_field(candidate), value), []
+        return _reason("esp_non_positive", field, value), []
     if parsed == 0:
-        return None, [_diag("esp_non_positive", _last_field(candidate), "neutral_zero_not_vetoed", value)]
+        return None, [_diag("esp_non_positive", field, "neutral_zero_not_vetoed", value)]
     return None, []
 
 
-def _first_present(candidate: Mapping[str, Any], paths: list[str]) -> Any:
+def _first_present(candidate: Mapping[str, Any], paths: list[str]) -> tuple[Any, str]:
+    """Return (value, path) for the first path that resolves to a real value.
+
+    Returns (MISSING, "") if no path resolves. The path is returned alongside
+    the value so reasons/diagnostics can record exactly which field fired —
+    previously this was stored on a function attribute (implicit global state).
+    """
     for path in paths:
         value = _get_path(candidate, path)
         if value is not MISSING and not _is_missing_value(value):
-            _first_present.last_field = path
-            return value
-    _first_present.last_field = paths[0] if paths else ""
-    return MISSING
-
-
-def _last_field(_candidate: Mapping[str, Any]) -> str:
-    return getattr(_first_present, "last_field", "")
+            return value, path
+    return MISSING, ""
 
 
 def _get_path(obj: Mapping[str, Any], path: str) -> Any:
