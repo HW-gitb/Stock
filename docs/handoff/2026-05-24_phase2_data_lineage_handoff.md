@@ -359,3 +359,27 @@ powershell -NoProfile -File D:\cnhea\Stock\runners\weekly_screening.ps1 -AsOf 20
 
 - 用户下次周五（实盘日）跑 `.\runners\weekly_screening.ps1` 验证完整路径
 - 如果未来加 Phase 3 analyzer，按相同模式扩展 wrapper：egs_main → analyzer → canary（仍保留 canary 旁路语义）
+
+---
+
+## 2026-05-24 append: full script review fixes
+
+Full `A-EGS/egs_main.py` review found and fixed two deterministic robustness bugs:
+
+- `data_health` missing-column handling was too permissive. A non-empty watch DataFrame without `close`/`pb`/industry columns was previously counted as `0` missing values. Missing columns now count as all rows missing, so missing `close` becomes `overall_status=error`.
+- `precompute_stock_stats(...)` returned an empty no-column DataFrame when `all_daily` was non-empty but had no matching `ts_code` with the stock universe. Downstream `build_master(...)` then risked `KeyError: pct_20d`. It now returns the same neutral stats table used for severely insufficient daily data.
+
+Validation:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; compile(Path('A-EGS/egs_main.py').read_text(encoding='utf-8'), 'A-EGS/egs_main.py', 'exec'); print('compile ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "import sys, importlib.util, pandas as pd; sys.argv=['egs_main.py','--help']; spec=importlib.util.spec_from_file_location('egs_main','A-EGS/egs_main.py'); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); watch=pd.DataFrame({'ts_code':['000001.SZ']*5,'tier':['Tier1']*5,'pb':[1]*5,'l1_name':['银行']*5,'l2_name':['银行']*5}); full=watch.copy(); ai={'schema_name':'analysis_input','schema_version':'1.1.0','source':{'screening_engine_version':mod.EGS_VERSION,'data_provider':'tushare'},'candidates':[{'data_quality':{'completeness_score':100}} for _ in range(5)]}; h=mod.build_data_health(full,watch,watch,ai,'20260522','','','','',''); print(h['overall_status']); print(h['metrics']['close_missing_or_nonpositive_count']); print(h['errors'])"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "import sys,importlib.util,pandas as pd; sys.argv=['egs_main.py','--help']; spec=importlib.util.spec_from_file_location('egs_main','A-EGS/egs_main.py'); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); all_daily=pd.DataFrame({'ts_code':['999999.SZ']*1001,'trade_date':['20260522']*1001,'close':[1.0]*1001,'high':[1.0]*1001,'low':[1.0]*1001,'pre_close':[1.0]*1001,'pct_chg':[0.0]*1001,'amount':[1.0]*1001}); stats=mod.precompute_stock_stats({'000001.SZ'}, all_daily); print(stats.shape); print(list(stats.columns))"
+```
+
+Results:
+
+- Syntax compile: ok.
+- Missing `close` health probe: `overall_status=error`, `close_missing_or_nonpositive_count=5`, errors include `check=close`.
+- Daily no-overlap probe: returns `(1, 15)` neutral stats columns instead of `(0, 0)`.
+- Existing 20260522 health builder remains `overall_status=ok`, schema validation errors `0`.

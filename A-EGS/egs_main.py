@@ -831,15 +831,19 @@ def _health_issue(check, message, **metrics):
 
 
 def _missing_or_nonpositive_count(df, column):
-    if df is None or df.empty or column not in df.columns:
-        return 0 if df is not None and not df.empty else None
+    if df is None or df.empty:
+        return None
+    if column not in df.columns:
+        return int(len(df))
     values = pd.to_numeric(df[column], errors="coerce")
     return int(values.isna().sum() + (values <= 0).sum())
 
 
 def _missing_count(df, column):
-    if df is None or df.empty or column not in df.columns:
-        return 0 if df is not None and not df.empty else None
+    if df is None or df.empty:
+        return None
+    if column not in df.columns:
+        return int(len(df))
     values = df[column]
     missing = values.isna()
     if values.dtype == object:
@@ -1815,19 +1819,23 @@ def get_holder_reductions():
 # ═══════════════════════════════════════════════════
 # §3 预计算统计量
 # ═══════════════════════════════════════════════════
+def _neutral_stats_df(codes):
+    basic = pd.DataFrame({"ts_code": list(codes)})
+    for col in ["pct_20d","pct_5d","pct_60d","avg_amount_20d","avg_amount_5d","high_20d","low_20d","drawdown_20d"]:
+        basic[col] = np.nan
+    basic["vol_confirm"]    = True
+    basic["limit_20d"]      = 0
+    basic["limit_10d"]      = 0
+    basic["is_lock"]        = False
+    basic["is_breakout"]    = False
+    basic["has_crash_veto"] = False
+    return basic
+
+
 def precompute_stock_stats(codes, all_daily):
     if all_daily.empty or len(all_daily) < 1000:
         log.warning("日线数据严重不足，使用默认中性统计量")
-        basic = pd.DataFrame({"ts_code": list(codes)})
-        for col in ["pct_20d","pct_5d","pct_60d","avg_amount_20d","avg_amount_5d","high_20d","low_20d","drawdown_20d"]:
-            basic[col] = np.nan
-        basic["vol_confirm"]    = True
-        basic["limit_20d"]      = 0
-        basic["limit_10d"]      = 0
-        basic["is_lock"]        = False
-        basic["is_breakout"]    = False
-        basic["has_crash_veto"] = False
-        return basic
+        return _neutral_stats_df(codes)
 
     ad = all_daily[all_daily["ts_code"].isin(codes)].copy()
     ad = ad.sort_values(["ts_code","trade_date"], ascending=[True, False])
@@ -1899,6 +1907,9 @@ def precompute_stock_stats(codes, all_daily):
             "drawdown_20d":   drawdown_20d,
             "has_crash_veto": has_crash_veto,
         })
+    if not rows:
+        log.warning("日线数据与股票池无匹配代码，使用默认中性统计量")
+        return _neutral_stats_df(codes)
     return pd.DataFrame(rows)
 
 
