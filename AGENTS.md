@@ -140,14 +140,28 @@ Stock/
 5. `docs/handoff/2026-05-24_phase2_6_datahub_guardrail_handoff.md` — Phase 2.6 DataHub guardrail，固定“先补 lineage、不做大重构”的边界
 6. `docs/handoff/2026-05-24_phase2_24p_v710_results_handoff.md` — v7.10 24 期 production 实跑结果、schema 校验、核心 findings 和结论边界
 7. `docs/handoff/2026-05-24_phase2_tier1_count_warning_handoff.md` — rank backtest schema 1.9.0，report 增加日期级 Tier1-count 告警
+8. `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — rank backtest schema 1.10.0，新增 `data_lineage` 对象，Phase 2.6 lineage 闭环
 
-完成一轮重要修改后，收尾时必须同步更新 handoff：
+完成一轮重要修改后，收尾时必须同步更新 handoff。**默认追加到同 phase 主 handoff，不要轻易新建文件**（2026-05-24 当天 8 个 handoff 是历史教训：碎片化让接手者读到第 5 个就开始跳读）。
 
-- 小修改：更新当前最新 handoff 文件。
-- 阶段性或重要修改：新建新的 handoff 文件，命名格式为 `docs/handoff/YYYY-MM-DD_short-topic_handoff.md`。
-- 涉及版本升级、回测重跑、schema 改动、策略结论变化、数据口径变化时，必须写 handoff。
-- 只改错别字、解释文档、临时检查时，可以不写 handoff。
-- handoff 必须记录：改了什么、为什么改、验证命令、验证结果、失效旧结论、下一步注意事项。
+**何时新建独立 handoff**（高门槛，只有以下情况）：
+
+- 跨 phase 转换（Phase 2 → Phase 3、Phase 6 → Phase 7 等）
+- breaking change：schema major 升级（1.x → 2.0）、数据口径反转、findings 整体 INVALIDATED、移除 / 重命名公共字段
+- 接入新数据源或新模块（美股 provider、analyzer 首版、execution 回测首版）
+- 一次性强约束事件（git init、私密性规则、安全口径变化）
+
+**何时追加到同 phase 主 handoff**（默认）：
+
+- schema minor / patch 升级（纯加可选字段、加 warning 数组、加 lineage 元数据）
+- 同主题的迭代改动（同一周里多次报告增强 / 多次过滤器调优 / 多次 EGS 小版本）
+- 验证工具、CSV 列、日志改进等"工程增量"
+
+**追加格式**：在主 handoff 末尾加 `## YYYY-MM-DD 追加：<short topic>` 小节，沿用同一份"改了什么 / 为什么 / 验证命令 / 验证结果 / 失效旧结论"结构。schema 演进链一并在该节展开（1.8.0 → 1.9.0 → 1.10.0 写在一处更清楚）。
+
+**何时不写 handoff**：错别字、注释、文档解释、临时探索、CURRENT.md 文案微调。
+
+**通用要求**：所有 handoff（无论新建或追加）必须记录改了什么、为什么改、验证命令、验证结果、失效旧结论、下一步注意事项。旧 handoff 不重组（git 历史已固化）。
 
 **用户身份**：Python 熟手，AI 工具链如 Skill、Codex、MCP 入门。代码细节可以放心讨论，AI 工具链概念按需展开。
 
@@ -189,7 +203,7 @@ Stock/
 - `skills/us_short_analysis/reference/us_short_analysis_spec.md` — 美股短线分析框架资料
 - `skills/us_short_analysis/reference/us_short_screening_spec.md` — 美股短线预测/筛选框架资料
 - `schemas/analysis_input.schema.json` — analysis_input 契约，当前 `1.1.0`，JSON Schema Draft 7
-- `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.9.0`（日期级 Tier1-count 告警）
+- `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.10.0`（含 date_warnings + data_lineage）
 - `schemas/analysis_input_coverage.md` — schema 覆盖率与修复记录
 - `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — Phase 2 v7.9 交接记录
 - `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Phase 2 Tier1-only 主口径切片交接记录
@@ -198,6 +212,7 @@ Stock/
 - `docs/handoff/2026-05-24_phase2_6_datahub_guardrail_handoff.md` — Phase 2.6 DataHub guardrail 交接记录
 - `docs/handoff/2026-05-24_phase2_24p_v710_results_handoff.md` — Phase 2 v7.10 24 期 production 实跑交接记录
 - `docs/handoff/2026-05-24_phase2_tier1_count_warning_handoff.md` — Phase 2 Tier1-count 日期告警交接记录
+- `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — Phase 2 data_lineage 交接记录（schema 1.10.0，Phase 2.6 闭环）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_codex_24p_v7.10.md` — 当前有效 Phase 2 findings（Codex 24p v7.10 视角）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md` — 当前有效 Phase 2 findings（cc 互补合并版，含 OVERHEAT/entry_flag/LOCK 三个负信号 + 2024 vs 2025 regime 拆分）
 ## DataHub / Data Middle Platform Guardrail

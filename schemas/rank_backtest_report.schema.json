@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/rank_backtest_report/1.9.0/schema.json",
+  "$id": "https://stock.local/schemas/rank_backtest_report/1.10.0/schema.json",
   "title": "Rank Backtest Report",
   "description": "Machine-readable manifest emitted by runners/backtest_rank.py.",
   "type": "object",
@@ -25,7 +25,8 @@
     "outputs",
     "strategy_variants",
     "return_variants",
-    "limitations"
+    "limitations",
+    "data_lineage"
   ],
   "properties": {
     "schema_name": {
@@ -346,6 +347,63 @@
       "type": "array",
       "items": {"type": "string"},
       "minItems": 1
+    },
+    "data_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Phase 2.6 lineage object. Centralizes data provider identity, API surface, forward-return adjustment mode, benchmark sources, and PIT limitations so downstream readers do not have to derive them from scattered fields. Added in v1.10.0.",
+      "required": [
+        "data_provider",
+        "api_families",
+        "forward_return_adjustment_mode",
+        "benchmark_sources",
+        "pit_limitations"
+      ],
+      "properties": {
+        "data_provider": {
+          "type": "string",
+          "description": "Primary upstream data provider. Currently always 'tushare'."
+        },
+        "api_families": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["candidate_generation", "forward_evaluation"],
+          "properties": {
+            "candidate_generation": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Tushare API endpoint names consumed by A-EGS/egs_main.py when building each as-of candidate pool."
+            },
+            "forward_evaluation": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Tushare API endpoint names consumed by runners/backtest_rank.py when fetching forward returns, benchmark prices, and limit-up state."
+            }
+          }
+        },
+        "forward_return_adjustment_mode": {
+          "type": "string",
+          "enum": ["qfq_via_adj_factor", "none"],
+          "description": "Adjustment applied to forward close prices before computing window returns. Must match forward_daily.adj."
+        },
+        "benchmark_sources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["csi300", "csi1000", "eligible"],
+          "properties": {
+            "csi300": {"type": "string"},
+            "csi1000": {"type": "string"},
+            "eligible": {"type": "string"}
+          },
+          "description": "Concrete source identifiers for the three benchmarks referenced in return_variants.excess_*."
+        },
+        "pit_limitations": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "description": "Point-in-time limitations centralized for Phase 2.6. The dynamic l3_mode-specific note remains in the top-level 'limitations' array."
+        }
+      }
     }
   }
 }

@@ -1,14 +1,14 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-24（cc 24p findings 对比 + 优化优先级合并后）
+**最后更新**：2026-05-24（Phase 2.6 lineage 闭环 + v7.10 P0/P1 优化落地复盘后）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 2 收尾 + Phase 2.5 已完成（auto stats 指标）+ Phase 2.6 待启动（DataHub 设计文档）
-- **当前目标**：把 24 期 v7.10 production 回测识别出的 P0 veto 信号落地到 EGS 规则，准备进入 Phase 3（minimal analyzer + state 接口）
+- **当前 Phase**：Phase 2 + Phase 2.5 + Phase 2.6 全部完成。Phase 3 待启动
+- **当前目标**：开始 Phase 3 minimal analyzer + state 接口；把 EGS Tier1→Tier2 降级（OVERHEAT/追高）升级成 analyzer 层 deterministic veto
 - **下一阶段大目标（Phase 3）**：建 analyzer veto 模块 + state 接口；不再追求"挑出更好的票"，转向"过滤更多坏票"
 
 ---
@@ -24,6 +24,9 @@
 - Phase 2.5 auto stats（2026-05-24）：`monthly_t/sharpe_m/win_rate` 直接产出在 summary/factor_group/monthly_stats CSV，免手算
 - git init（2026-05-24，commit `dca8367`）：**私密本地仓库，禁止 push / 禁止 add remote**
 - 报告 schema 1.8.0：含 strategy_variant_stats、portfolio_stats、eligible_benchmark、reason observability
+- 报告 schema 1.9.0（2026-05-24）：date_warnings 数组，`tier1_count<5` 自动告警
+- v7.10 P0/P1 优化全部落地（2026-05-24）：追高（egs_main.py:2325）/OVERHEAT（egs_main.py:2327）做 Tier1→Tier2 降级；ESP 低基数 cap@200（egs_main.py:2233 + score_penalty_reasons="esp_raw_cap_200"）；Tier2 filler 排除 `l2_name="未知"`（egs_main.py:2843）；SW 覆盖率三段回退 + active_count 监控（egs_main.py:1144-1175）。**注**：追高/OVERHEAT 当前是 Tier 降级（filler 路径仍可能以 Tier2 身份出现），完整 deterministic veto 留到 Phase 3 analyzer
+- Phase 2.6 完成（2026-05-24）：`docs/datahub_design.md` + AGENTS guardrail + 报告 schema 1.10.0 增加 `data_lineage` 对象（data_provider/api_families/forward_return_adjustment_mode/benchmark_sources/pit_limitations）
 
 ---
 
@@ -74,7 +77,7 @@
 - `A-EGS/egs_main.py` — v7.10（v7.9 内存里仍有引用，以文件为准）
 - `runners/backtest_rank.py` — Phase 2 回测入口，subset=all+tier1_only 双跑
 - `schemas/analysis_input.schema.json` — v1.1.0
-- `schemas/rank_backtest_report.schema.json` — v1.8.0
+- `schemas/rank_backtest_report.schema.json` — v1.10.0（含 date_warnings + data_lineage）
 
 ### 当前有效 findings（**只读这两份，旧 12p findings 已 INVALIDATED**）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md` — cc 合并版（OVERHEAT/entry_flag/LOCK + 时间序列分析）
@@ -87,41 +90,37 @@
 - `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — v7.8/v7.9 修改
 - `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — **git 私密性约束（必读）**
 - `docs/handoff/2026-05-24_phase2_6_datahub_guardrail_handoff.md` — Phase 2.6 边界
+- `docs/handoff/2026-05-24_phase2_tier1_count_warning_handoff.md` — schema 1.9.0 date_warnings
+- `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — schema 1.10.0 data_lineage 对象（Phase 2.6 lineage 闭环）
 
 ### 报告产出
-- `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.8.0, primary_subset=tier1_only
+- `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.10.0, primary_subset=tier1_only
 - `result/a_short/backtest/{summary_by_window,factor_group_stats,monthly_stats,strategy_variant_stats,portfolio_stats}.csv`
 
 ---
 
 ## 6. 下一步（按优先级 P0 → P3）
 
-### P0 — 立即可做（24p 统计证据强）
+### P0 — Phase 3 主轴
 
-1. **追高风险硬过滤 / 退出 Tier1** — `entry_flag=追高风险，周一确认` 直接否决（证据：t=-2.36, win 27.5%, 5/10/20d 全亏）
-2. **OVERHEAT 硬过滤** — 加入 EGS 否决逻辑（证据：t=-2.34, win 16%）
-3. **Tier2 不上实盘** — 主口径已切 Tier1-only；实盘选股逻辑同步限制只用 Tier1
-4. **ESP 模型加低基数 winsorize / cap @ 200** — `esp_raw` 计算引入低基数惩罚（证据：t≈-1.5；AGENTS.md Phase 2 待办已列）
+1. **Phase 3 minimal analyzer + state 接口** — `engine/analyzer/rule6_hard_veto.py` 起骨架；把 EGS 当前的 Tier1→Tier2 降级（OVERHEAT/追高/未知行业/ESP 非正）升级成 deterministic veto，让 backtest filler 也无法捡到这些票。state 接口同步初始化（即使返回空 dict 也算 Phase 3 minimal）
+2. **Rule 6 deterministic 字段补齐** — 当前多数 pending_data/pending_llm，让 analyzer veto 框架真正起作用
 
 ### P1 — 短期跟进
 
-5. **撤回"Top 5 主分析"对外说法** — 改成"Top15 为观察池；Top5 用于 Phase 3 人工/analyzer 深度分析，不作实盘加仓信号"
-6. **Tier2 filler 排除 `l2_name="未知"`** — 24p 有 14 条 filler 行业未知，影响 Tier2 子集判读
-7. **SW 覆盖率监控日志** — 每次 SW fetch 后 log `active_count`，v5 cache 本周 3426 接近 3000 阈值
+3. **撤回"Top 5 主分析"对外说法** — 改成"Top15 为观察池；Top5 用于 Phase 3 人工/analyzer 深度分析，不作实盘加仓信号"（文档面已完成；实盘说法对外口径同步）
+4. **LOCK 标记进入 analyzer veto 辅助 flag** — N=4 太小，先不硬过滤；扩样本到 N≥15 再决策
 
-### P2 — 待扩样本
+### P2 — 待扩样本 / 中期
 
-8. **LOCK 标记进入 analyzer veto 辅助 flag** — N=4 太小，先不硬过滤；扩样本到 N≥15 再决策
-9. **Phase 2.6 DataHub 设计文档** — `docs/datahub_design.md` 完善 + 报告 lineage 字段补齐
+5. **L3 snapshot 累积满 6 月后跑 pit 对照**（约 2026-12）— 测 L3 因子在 PIT 下边际贡献
+6. **扩 36 期+** — 覆盖 2023 段不同 regime；当前 2024+2025 偏强势
+7. **5-10 日持有周期作为 execution 回测 horizon target** — 24p 数据显示 5d 是唯一显著甜区
 
-### P3 — 长期 / Phase 3+
+### P3 — 长期 / Phase 7
 
-10. **Phase 3 minimal analyzer + state 接口** — veto 模块优先（OVERHEAT/Tier2/ESP 低基数/追高风险四大硬过滤）
-11. **Rule 6 deterministic 字段补齐** — 当前多数 pending_data/pending_llm，让 risk veto 真正起作用
-12. **L3 snapshot 累积满 6 月后跑 pit 对照**（约 2026-12）— 测 L3 因子在 PIT 下边际贡献
-13. **扩 36 期+** — 覆盖 2023 段不同 regime；当前 2024+2025 偏强势
-14. **5-10 日持有周期作为 execution 回测 horizon target** — 24p 数据显示 5d 是唯一显著甜区
-15. **重新校准排序权重** — 等 36 期 + L3 PIT 数据齐备后再做，否则易过拟 24p
+8. **重新校准排序权重** — 等 36 期 + L3 PIT 数据齐备后再做，否则易过拟 24p
+9. **Phase 7 DataHub 实施** — ODS/DWD/DWS/factor 四层 + `engine/data/` + `engine/factors/`，详见 `docs/datahub_design.md`
 
 ---
 

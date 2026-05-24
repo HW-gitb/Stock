@@ -1703,7 +1703,7 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
 
     report = {
         "schema_name": "rank_backtest_report",
-        "schema_version": "1.9.0",
+        "schema_version": "1.10.0",
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "preset": "a_short",
         "mode": mode,
@@ -1752,6 +1752,36 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
             "Financial data filtered by ann_date<=as_of; Tushare returns the latest revision of each quarter rather than the originally-disclosed version (Tushare API limitation, not fixable here).",
             _l3_limitation_line(settings),
         ],
+        "data_lineage": {
+            "data_provider": "tushare",
+            "api_families": {
+                "candidate_generation": [
+                    "daily", "daily_basic", "moneyflow", "fina_indicator",
+                    "stk_limit", "stock_basic", "trade_cal",
+                    "index_member_all", "index_member", "index_classify",
+                    "adj_factor", "concept", "concept_detail",
+                ],
+                "forward_evaluation": [
+                    "daily", "adj_factor", "stk_limit", "index_daily", "trade_cal",
+                ],
+            },
+            "forward_return_adjustment_mode": (
+                forward_meta.get("adj", "qfq_via_adj_factor")
+                if isinstance(forward_meta, dict) and forward_meta.get("status") != "skipped_no_samples"
+                else "qfq_via_adj_factor"
+            ),
+            "benchmark_sources": {
+                "csi300": "tushare:index_daily/000300.SH",
+                "csi1000": "tushare:index_daily/000852.SH",
+                "eligible": "internal:generated/_intermediate/egs_full_YYYYMMDD.csv Tier1+Tier2 equal-weight",
+            },
+            "pit_limitations": [
+                "Tushare financials are filtered by ann_date<=as_of but returned values reflect latest revisions, not as-originally-disclosed (Tushare API limitation, not fixable here).",
+                "L3 concept catalysts have no native as-of parameter; PIT support is via locally accumulated state/l3_snapshots/ snapshots (only effective once coverage is meaningful).",
+                "SW industry membership applies in_date/out_date PIT filtering (B3a fix).",
+                "Stock universe includes delisted stocks per as_of (B2 fix).",
+            ],
+        },
     }
     report_path = BACKTEST_DIR / "backtest_report.json"
     with report_path.open("w", encoding="utf-8") as f:
