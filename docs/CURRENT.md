@@ -147,7 +147,15 @@ python A-EGS\egs_main.py --as-of <YYYYMMDD>
 ```powershell
 python runners\data_canary.py --as-of <YYYYMMDD>
 ```
-（输出 `logs/data_canary_<as_of>.json`；不阻断；akshare 未装时 graceful skip）
+（默认 `--source sina`：close+name 跨源对账，不受 VPN 影响；输出 `logs/data_canary_<as_of>.json`；不阻断；akshare 未装时 graceful skip）
+
+### 周五一键（推荐）
+```powershell
+.\runners\weekly_screening.ps1                 # as-of=今天
+.\runners\weekly_screening.ps1 -AsOf 20260530
+.\runners\weekly_screening.ps1 -SkipCanary     # 只跑选股
+```
+（依次跑 `egs_main.py` + `data_canary.py`；egs_main 失败时跳过 canary；canary 失败不影响整体 exit code，符合旁路约束）
 
 ### Smoke 测试
 ```powershell

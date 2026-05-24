@@ -319,3 +319,43 @@ python D:\cnhea\Stock\runners\data_canary.py --as-of 20260522
 
 - 周五选股流程：先跑 `egs_main.py`（自动产 data_health.json），再可选跑 `data_canary.py --source sina` 做跨源验证。不强制同时跑，但同时跑可拦更多类型的 bug
 - 如果未来用户调好 VPN split-tunnel 让东财通了，跑 `data_canary.py --source em` 可启用 pe/pb 对账
+
+---
+
+## 2026-05-24 追加：weekly_screening.ps1 一键 wrapper
+
+### 背景
+
+双层数据保险（data_health + canary）落地后，用户问能不能"自动同时跑"。直接把 canary 调用嵌进 egs_main.py 违反 canary 的旁路约束（不进入打分、不阻断选股），所以采用极薄 wrapper 方案：~60 行 PowerShell，串两个独立 Python 入口，互不耦合。
+
+### 改动
+
+- 新增 `runners/weekly_screening.ps1`
+- `runners/README.md` 加入口说明
+- `docs/CURRENT.md §7` 加运行命令
+- 同主题追加，不另建 handoff
+
+### 设计要点
+
+| 决策 | 理由 |
+|---|---|
+| egs_main 失败时**跳过** canary | 没有当次 candidates，对账无意义；exit code 透传 egs_main |
+| canary 失败时**不影响**整体 exit code | 旁路约束第一条：永不阻断选股；canary 自己 graceful skip 已经处理数据/网络问题，wrapper 这里多兜底 Python 进程崩溃 |
+| 默认 `--source sina` | 与 canary 默认对齐；VPN-agnostic |
+| 支持 `-SkipCanary` switch | 紧急情况下只跑选股 |
+| 支持 `-CanarySource em` | 未来 VPN split-tunnel 调好时可切回东财源（pe/pb 对账） |
+| 不把 egs_main 重写成被 wrapper 调用的库 | 维持入口独立性，下次 Codex 改 egs_main 不会踩 wrapper 雷 |
+
+### 验证
+
+```powershell
+# 沙箱内只跑参数解析 + stage1 启动确认（不跑完整 egs_main）
+powershell -NoProfile -File D:\cnhea\Stock\runners\weekly_screening.ps1 -AsOf 20260522 -SkipCanary
+```
+
+输出表头 + "[1/2] Running A-EGS\egs_main.py --as-of 20260522 ..."，证明工作目录切换、参数解析、stage 路由都对。完整端到端跑（含 stage 2 canary）由用户每周五自然触发。
+
+### Next
+
+- 用户下次周五（实盘日）跑 `.\runners\weekly_screening.ps1` 验证完整路径
+- 如果未来加 Phase 3 analyzer，按相同模式扩展 wrapper：egs_main → analyzer → canary（仍保留 canary 旁路语义）

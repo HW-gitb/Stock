@@ -1,0 +1,66 @@
+# weekly_screening.ps1 — 周五实盘选股 + 数据保险一键脚本
+#
+# 顺序：
+#   1) A-EGS\egs_main.py          (主选股；产 data_health.json by Codex layer)
+#   2) runners\data_canary.py     (旁路跨源对账；sina 默认，VPN-agnostic)
+#
+# 设计约束：
+# - canary 在 egs_main 失败时不跑（拿不到当次 candidates，对账无意义）
+# - canary 自身失败不影响整体 exit code（旁路约束：不阻断选股）
+# - 整体 exit code 取 egs_main 的 exit code
+#
+# Usage:
+#   .\runners\weekly_screening.ps1                 # as-of = 今天
+#   .\runners\weekly_screening.ps1 -AsOf 20260522
+#   .\runners\weekly_screening.ps1 -AsOf 20260522 -CanarySource em
+#   .\runners\weekly_screening.ps1 -SkipCanary     # 只跑选股
+
+param(
+    [string]$AsOf = (Get-Date -Format 'yyyyMMdd'),
+    [ValidateSet('sina', 'em')]
+    [string]$CanarySource = 'sina',
+    [switch]$SkipCanary
+)
+
+$ErrorActionPreference = 'Continue'
+$ScriptRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $ScriptRoot
+
+Write-Host "=== Weekly screening pipeline ===" -ForegroundColor Cyan
+Write-Host "as-of:         $AsOf"
+Write-Host "canary source: $CanarySource"
+Write-Host "skip canary:   $SkipCanary"
+Write-Host ""
+
+# --- Stage 1: egs_main ---
+Write-Host "[1/2] Running A-EGS\egs_main.py --as-of $AsOf ..." -ForegroundColor Yellow
+python A-EGS\egs_main.py --as-of $AsOf
+$EgsExitCode = $LASTEXITCODE
+
+if ($EgsExitCode -ne 0) {
+    Write-Host ""
+    Write-Host "[SKIP] egs_main exit $EgsExitCode -> skipping canary (no fresh candidates to reconcile)" -ForegroundColor Red
+    exit $EgsExitCode
+}
+
+# --- Stage 2: data_canary ---
+if ($SkipCanary) {
+    Write-Host ""
+    Write-Host "[2/2] -SkipCanary set, canary not run" -ForegroundColor DarkGray
+    exit 0
+}
+
+Write-Host ""
+Write-Host "[2/2] Running runners\data_canary.py --as-of $AsOf --source $CanarySource ..." -ForegroundColor Yellow
+python runners\data_canary.py --as-of $AsOf --source $CanarySource
+$CanaryExitCode = $LASTEXITCODE
+
+if ($CanaryExitCode -ne 0) {
+    # canary 本身设计为永远 exit 0；非 0 说明 Python 进程崩了，不是数据问题
+    # 仍然不让它影响主流程退出码（旁路约束）
+    Write-Host "[WARN] canary process exit $CanaryExitCode (unexpected; check logs/data_canary_$AsOf.json)" -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "=== Pipeline done ===" -ForegroundColor Cyan
+exit 0
