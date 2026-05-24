@@ -199,6 +199,7 @@ Stock/
 
 - `A-EGS/egs_main.py` — A 股短线筛选引擎，当前 v7.10
 - `runners/backtest_rank.py` — Phase 2 rank 回测入口
+- `runners/data_canary.py` — Phase 2.6 旁路数据对账（Tushare vs akshare），不阻断选股，输出 `logs/data_canary_<as_of>.json`
 - `skills/a_short_analysis/reference/v14.2_spec.md` — A 股短线分析框架规格说明书
 - `skills/us_short_analysis/reference/us_short_analysis_spec.md` — 美股短线分析框架资料
 - `skills/us_short_analysis/reference/us_short_screening_spec.md` — 美股短线预测/筛选框架资料

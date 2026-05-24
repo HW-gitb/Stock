@@ -103,3 +103,66 @@ No strategy conclusion changes. Phase 2 strategy boundary unchanged: engineering
 
 - Future schema changes that introduce a new data source (e.g., 美股扩展时引入 polygon/alpaca) must extend `data_provider` enum and add to `api_families`. Treat any new external API endpoint as a `data_lineage` change requiring schema version bump.
 - Phase 3 analyzer/state work should be the next handoff. The Phase 2.6 work is now considered fully closed.
+
+---
+
+## 2026-05-24 追加：data canary 旁路对账脚本
+
+新建 `runners/data_canary.py`：每周选股后跑一次，对 Tier1 候选随机抽 5 只，对比 close/pe/pb/name 在 Tushare（egs_main.py 落盘）和 akshare（实时快照）是否一致。属于 Phase 2.6 lineage 收尾的最后一块拼图——data_lineage 元数据说"我们用了什么源"，canary 验证"这个源没有静默漂移"。
+
+### 改动文件
+
+- 新增 `runners/data_canary.py`（~230 行）
+- 修改 `.gitignore` 加 `logs/`（canary 输出目录）
+- 修改 AGENTS.md 文件参考
+- 修改 CURRENT.md §2/§7
+
+### 设计约束（违反则不应合入）
+
+- **不进入打分**：不写 `analysis_input.json`、不动 candidates.csv、不改 EGS Tier 划分
+- **不阻断选股**：任何异常（akshare 未装 / 抓取失败 / 候选缺失）都只写 `logs/data_canary_<as_of>.json` 并 exit 0
+- **不对比行业**：Tushare 用 SW 申万，akshare 默认东财/同花顺，体系不一致硬比会大量误报
+- **阈值收紧**：close 差异 > 0.5% warning / > 5% error；pe/pb 差异 > 10% 才 warning；name 忽略 ST/*ST/PT 前缀
+
+### 三个 graceful 分支
+
+| 分支 | 触发 | 验证状态 |
+|---|---|---|
+| `skipped_akshare_not_installed` | akshare 未装 | 已沙箱验证 |
+| `skipped_no_candidates` | 找不到 egs_full_<as_of>.csv 也找不到 backtest candidates | 路径分支已加 |
+| `error_akshare_fetch_failed` | akshare API 异常（限速 / 网络 / 接口变更） | 已沙箱验证（沙箱无法连东财，正好验证不阻断逻辑） |
+| `ok / warn / error_drift / error_missing` | 真实对账 | **需用户本地（非沙箱）跑一次验证** |
+
+### 使用
+
+```powershell
+# 默认：auto-find A-EGS/Result/egs_full_<today>.csv，过滤 Tier1，随机抽 5 只
+python runners/data_canary.py
+
+# 指定 as-of
+python runners/data_canary.py --as-of 20260522
+
+# 手工指定候选源
+python runners/data_canary.py --candidates A-EGS/Result/egs_full_20260522.csv
+```
+
+输出：`logs/data_canary_<as_of>.json`。结构含 `summary.overall_status`（ok/warn/error_drift/error_missing）、`comparisons` 数组（每只票的 diff）、`thresholds`、`limitations`。
+
+### 失效旧结论
+
+无。canary 是旁路新增工具，不改任何已有结论或数据流。
+
+### 验证命令
+
+```powershell
+python -c "from pathlib import Path; compile(Path('runners/data_canary.py').read_text(encoding='utf-8'), 'runners/data_canary.py', 'exec'); print('syntax ok')"
+python runners/data_canary.py --as-of 20260522 --help
+python runners/data_canary.py --as-of 20260522   # 沙箱无网会落 error_akshare_fetch_failed，符合预期
+```
+
+### 下一步
+
+1. 用户本地（非沙箱）跑一次 `python runners/data_canary.py --as-of 20260522` 验证真实对账分支；如果 5 只里 close 差异都 < 0.5% 且 name 一致 → 收尾完成
+2. 周五选股流程末尾加一行 canary 调用（手工 / 脚本 / scheduler 都可，不强制）
+3. 第一次跑出 warning 时复查阈值是否合适，再决定是否调整
+

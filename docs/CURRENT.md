@@ -27,6 +27,7 @@
 - 报告 schema 1.9.0（2026-05-24）：date_warnings 数组，`tier1_count<5` 自动告警
 - v7.10 P0/P1 优化全部落地（2026-05-24）：追高（egs_main.py:2325）/OVERHEAT（egs_main.py:2327）做 Tier1→Tier2 降级；ESP 低基数 cap@200（egs_main.py:2233 + score_penalty_reasons="esp_raw_cap_200"）；Tier2 filler 排除 `l2_name="未知"`（egs_main.py:2843）；SW 覆盖率三段回退 + active_count 监控（egs_main.py:1144-1175）。**注**：追高/OVERHEAT 当前是 Tier 降级（filler 路径仍可能以 Tier2 身份出现），完整 deterministic veto 留到 Phase 3 analyzer
 - Phase 2.6 完成（2026-05-24）：`docs/datahub_design.md` + AGENTS guardrail + 报告 schema 1.10.0 增加 `data_lineage` 对象（data_provider/api_families/forward_return_adjustment_mode/benchmark_sources/pit_limitations）
+- data canary 旁路对账（2026-05-24）：`runners/data_canary.py` 每周选股后抽 5 只对比 Tushare vs akshare 的 close/pe/pb/name；不阻断、不进打分、不比行业；输出 `logs/data_canary_<as_of>.json`
 
 ---
 
@@ -141,6 +142,12 @@ python runners\backtest_rank.py --stats-only --mode production --periods 24 --fr
 python A-EGS\egs_main.py --as-of <YYYYMMDD>
 ```
 （默认 `--l3-mode today`，自动落 snapshot 到 `state/l3_snapshots/`）
+
+### 数据对账 canary（选股后跑，可选）
+```powershell
+python runners\data_canary.py --as-of <YYYYMMDD>
+```
+（输出 `logs/data_canary_<as_of>.json`；不阻断；akshare 未装时 graceful skip）
 
 ### Smoke 测试
 ```powershell

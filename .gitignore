@@ -36,6 +36,7 @@ state/l3_snapshots/
 
 # --- Logs (regenerable + can grow large) ---
 *.log
+logs/
 
 # --- Temp / backup ---
 *.tmp
