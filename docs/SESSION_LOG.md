@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-05-25 — Codex (approved review fixes for short aliases and Phase 5 kickoff)
+
+**Commits**: this commit (self-referential hash intentionally omitted; use `git log -1` for the final hash)
+
+**Relationship to prior session(s)**:
+- Builds on the Claude review entry immediately below, whose Required fixes and Optional suggestions were approved by the user.
+- Refines the Review Packet workflow: `docs/REVIEW_PACKET.md` remains required for review but is intentionally short-lived and gitignored.
+- Refines Phase 5 kickoff ordering: deterministic report schema v1.1.0 comes before execution report schema.
+
+**Worked on**:
+1. Applied approved Required fixes R1/R2 from the latest Claude review.
+2. Applied approved Optional suggestions O1-O4 from the latest Claude review.
+3. Kept the existing alias rename (`修改` -> `审查`) and did not touch business code.
+
+**Key decisions**:
+- Next code task is no longer `schemas/execution_backtest_report.schema.json`; first upgrade `schemas/deterministic_report.schema.json` to v1.1.0 with lineage / enrichment fields, then proceed to execution schema.
+- `docs/REVIEW_PACKET.md` is gitignored and overwritten each review round; Claude must still read the working-tree file before reviewing.
+- Phase 5 v1 should default to the conservative input path from `analysis_input.json` + analyzer/state because Phase 4 v1 reports have `exit_plan.stop_loss=null`.
+
+**Alternatives considered and rejected**:
+- "Keep REVIEW_PACKET tracked" — rejected per user-approved O1; packet churn should not become permanent git history.
+- "Leave Phase 5 schema v1.1.0 decision for later" — rejected per user-approved R1 direction b.
+- "Start execution schema in this repair turn" — rejected because `修复` only covers approved review fixes.
+
+**Open questions handed off**:
+- Claude should verify that R1/R2/O1-O4 were applied exactly and that no unapproved Optional work slipped in.
+
+**Next natural step from my view**:
+1. Claude reviews this repair using `审查`.
+2. If it passes, checkpoint commit can stand and the next `执行` should start deterministic report schema v1.1.0, not execution schema.
+
+---
+
 ## 2026-05-25 — Claude review (REVIEW_PACKET + short aliases + Phase 5 kickoff) — APPROVED by user 2026-05-25 (post-alias-rename)
 
 **Commits**: none (review-only entry; reviews uncommitted REVIEW_PACKET + aliases work + committed `6c90f56` `d5075a1` Phase 5 kickoff handoff)

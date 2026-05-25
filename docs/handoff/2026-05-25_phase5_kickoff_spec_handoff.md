@@ -70,6 +70,8 @@ date_warnings
 limitations
 ```
 
+`settings` 的具体字段由 `schemas/execution_backtest_report.schema.json` 任务定义；本 handoff 只锁定必须承载的语义范围。
+
 其中 `execution_assumptions` 必须显式描述：
 
 - entry timing：默认 T+1 open，且沿用 limit-up unbuyable 约束
@@ -129,6 +131,7 @@ Phase 5 不能只复用 rank 回测的 `ret_5d/10d/20d_t1_net`。完成线必须
 2. **Stop loss**
    - 至少支持固定 stop price 或 schema 中声明的 stop rule。
    - 若输入没有 stop，则交易必须 skipped 或标 `missing_stop`, 不能默认无止损。
+   - Phase 4 v1 的 `exit_plan.stop_loss` 恒为 `null` / `not_implemented_phase4`；若 Phase 5 v1 直接消费 Phase 4 report，将在 `missing_stop` 规则下 100% skipped。因此 §4 的保守路径（默认从 `analysis_input.json` + analyzer/state 构造 execution candidate）是 v1 默认路径。
 3. **Time stop**
    - 到期未触发止盈止损时按 time stop exit。
 4. **Take profit**
@@ -146,19 +149,15 @@ Phase 5 不能只复用 rank 回测的 `ret_5d/10d/20d_t1_net`。完成线必须
 
 ## 7. 与 Phase 4 schema v1.1.0 的关系
 
-Claude audit 留下的 Phase 4 schema v1.1.0 设计点仍未决：
+Claude audit 留下的 Phase 4 schema v1.1.0 设计点已定为 Phase 5 前置：
 
 - `data_lineage.l3_mode`
 - `data_lineage.enrichment_applied`
 - `data_lineage.enrichment_source`
 
-Phase 5 schema 设计时必须显式处理这个问题：
+Phase 5 schema 任务开始前，先单独升级 `schemas/deterministic_report.schema.json` 到 v1.1.0，补齐以上 lineage / enrichment 字段，并同步 runner 输出与测试。完成后再进入 `schemas/execution_backtest_report.schema.json`。
 
-- 要么把这些字段纳入 `execution_backtest_report.data_lineage`；
-- 要么先单独升级 deterministic report schema；
-- 要么记录为 deferred limitation。
-
-不能在 runner 里隐式假设这些字段存在。
+不能在 execution runner 里隐式假设这些字段存在，也不能只在 `execution_backtest_report.data_lineage` 中局部补字段而让 Phase 4 deterministic report contract 继续缺口。
 
 ---
 
@@ -177,8 +176,9 @@ C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\p
 
 ## 9. 下一步注意事项
 
-1. 下一步只做 `schemas/execution_backtest_report.schema.json` + 最小 schema 测试。
-2. 不要在 schema 任务里新建 simulator。
-3. 不要改变 rank backtest 输出口径。
-4. 不要把 Phase 4 `watch` 当成 Phase 5 `buy`。
-5. Claude 需要重点审查：schema 字段是否足够承载 execution 完成线、Phase 4 schema v1.1.0 是否必须先做、输出目录是否与现有 backtest 目录隔离。
+1. 下一步先做 deterministic report schema v1.1.0 lineage / enrichment 字段升级。
+2. 再做 `schemas/execution_backtest_report.schema.json` + 最小 schema 测试。
+3. 不要在 schema 任务里新建 simulator。
+4. 不要改变 rank backtest 输出口径。
+5. 不要把 Phase 4 `watch` 当成 Phase 5 `buy`。
+6. Claude 需要重点审查：schema 字段是否足够承载 execution 完成线、Phase 4 schema v1.1.0 升级是否完整、输出目录是否与现有 backtest 目录隔离。

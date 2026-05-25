@@ -143,7 +143,22 @@ The user remains the Final Approver.
 
 Detailed review workflow is defined in `docs/AI_REVIEW_PROTOCOL.md`.
 
+Codex writes the current review handoff packet to `docs/REVIEW_PACKET.md`; Claude reads it before reviewing the actual diff when repo access is available.
+
 `AGENTS.md` remains the highest-level project rule. If `docs/AI_REVIEW_PROTOCOL.md` conflicts with this file, `AGENTS.md` wins.
+
+## Short Command Aliases
+
+This project supports short command aliases defined in `docs/AI_REVIEW_PROTOCOL.md`.
+Detailed command expansions live only in `docs/AI_REVIEW_PROTOCOL.md` to avoid drift.
+
+Common aliases:
+- `执行` = Codex executes the next approved smallest task and updates `docs/REVIEW_PACKET.md`.
+- `审查` = Claude reviews the current change using `docs/REVIEW_PACKET.md` and git diff; Claude must not directly modify business code.
+- `批准修改` = User approves pending Required fixes.
+- `修复` = Codex fixes only user-approved Required fixes and updates `docs/REVIEW_PACKET.md`.
+
+`AGENTS.md` remains the highest-level project rule. If any alias conflicts with `AGENTS.md`, `AGENTS.md` wins.
 
 ## 交接记录
 
