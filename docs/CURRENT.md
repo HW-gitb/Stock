@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（Phase 3+4 audit + 4 批 fix sweep；下一步等用户决定 schema v1.1.0 / Phase 5 启动）
+**最后更新**：2026-05-25（建立 Codex 设计执行 + Claude 独立审查流程）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -9,6 +9,7 @@
 
 - **当前 Phase**：Phase 4 minimal 已完成；`deterministic_report` schema、runner v1、coverage doc、Skill 使用文档、prompt 骨架、LLM enrichment patch schema/example、两只真实样本 smoke 已落地
 - **当前目标**：Phase 5 execution 回测边界设计；先定义 execution 输入/输出 contract 和完成线，不直接写大实现
+- **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
 ---
@@ -28,6 +29,7 @@
 - Session log discipline + validation 依赖（2026-05-25，commits `1b8af8f` `7448118` `0927218`）：`docs/SESSION_LOG.md` + AGENTS.md 规则；`requirements-dev.txt`。详 SESSION_LOG.md 顶部。
 - **Phase 4 minimal 收口**（2026-05-25，Codex）：Phase 4 完成线满足：schema + runner + coverage + Skill + prompt 骨架 + enrichment patch/example + 真实 smoke + tests。下一步进入 Phase 5 execution 回测边界设计，不直接开大实现。
 - **Phase 3+4 audit + 4-batch fix sweep**（2026-05-25，Claude，commits `a312e57` `9476d4c` `278f917` `911e49b`）：analyzer 加固（pd.NA / OVERHEAT token match / numeric bool）+ runner robustness（as_of check / empty-candidates 区分 / deep copy / comma-join）+ tracker const 重命名 + analyzer `normalize_rules` 公开 API + skill 测试 fixture 化（脱离 `result/a_short/20260522/`）。34 tests pass。Schema v1.1.0 设计改进暂搁等用户拍板。详 SESSION_LOG 顶部 entry。
+- **AI review protocol**（2026-05-25，Codex）：新增 `docs/AI_REVIEW_PROTOCOL.md`，明确 Codex 设计执行、Claude 独立审查、用户最终确认；Codex 不直接执行 Claude 建议，需用户确认。
 
 更早事项（Phase 1a/1b、Phase 2 工程链路、Phase A+B 修复、L3 PIT 三模式、v7.10 升级、Phase 2.5/2.6、git init、Phase 3 首轮等约 16 条）→ 见 `AGENTS.md §交接记录` 完整 handoff 列表 + `git log --all`。
 
@@ -81,6 +83,9 @@
 - `runners/backtest_rank.py` — Phase 2 回测入口，subset=all+tier1_only 双跑
 - `runners/run_analysis_report.py` — Phase 4 单票 deterministic report runner，schema 校验后输出 JSON + Markdown
 - `runners/diagnose_tier1_bad_signals.py` — Phase 3.2 Tier1 坏票特征诊断入口
+- `runners/forward_tracker.py` — Phase 3.5 forward tracker；后台累计实盘样本
+- `runners/weekly_screening.ps1` — 每周筛选脚本；筛选后自动 capture forward tracker
+- `runners/data_canary.py` — 旁路数据对账；不阻断主流程
 - `engine/analyzer/rule6_hard_veto.py` — Phase 3 首轮 deterministic hard veto：`chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive`
 - `engine/analyzer/state_manager.py` — Phase 3 JSON state 接口与 atomic write helper
 - `tests/analyzer/test_state_manager.py` / `tests/test_backtest_rank_phase3.py` — Phase 3 state expiry、l2 normalization、analyzer ablation 命名回归测试
@@ -108,6 +113,7 @@
 - `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — schema 1.10.0 data_lineage 对象（Phase 2.6 lineage 闭环）
 - `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格：minimal veto analyzer + JSON state + replay/ablation 完成线
 - `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md` — Phase 4 开工规格：deterministic_report schema first + runner-as-executor + Skill-as-doc
+- `docs/AI_REVIEW_PROTOCOL.md` — Codex / Claude / 用户三方审查流程
 
 ### 报告产出
 - `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.11.0, primary_subset=tier1_only
@@ -125,7 +131,8 @@
 
 1. **Phase 5 kickoff spec** — 先写 execution 回测 handoff/设计边界：输入、输出 schema、撮合假设、止损/时间止损/熔断/仓位限制/冷静期完成线。
 2. **execution report schema-first** — 设计 `schemas/execution_backtest_report.schema.json` 或同等 contract，再写 runner。
-3. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
+3. **Claude 审查点** — Phase 5 kickoff spec、execution schema、撮合假设、是否需要 Phase 4 schema v1.1.0，均需 Claude 独立审查后由用户确认。
+4. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）
 

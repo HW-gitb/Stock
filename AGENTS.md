@@ -133,6 +133,13 @@ Stock/
 
 ## AI 协作者在本项目中的工作守则
 
+## 多 LLM 审查分工
+
+- **Codex = Designer + Implementer**：负责方案设计、代码/文档实现、验证与交接更新。
+- **Claude = Independent Reviewer**：负责独立审查 Codex 的设计与实现，提出问题、风险和修复建议。
+- **用户 = Final Approver**：负责最终决策；Codex 不得直接执行 Claude 的建议，必须等用户确认。
+- 详细审查流程见 `docs/AI_REVIEW_PROTOCOL.md`。
+
 ## 交接记录
 
 任何 AI 助手，包括 ChatGPT、Codex 或其他 LLM，继续 Phase 2 / Phase 3、A 股短线筛选、rank 回测、analyzer、state、`A-EGS/egs_main.py`、`runners/backtest_rank.py`、`analysis_input.json` 或 findings 相关工作前，**按时间顺序读取以下 handoff**：
