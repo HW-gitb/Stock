@@ -8,6 +8,61 @@
 
 ---
 
+## 2026-05-25 — Claude review (REVIEW_PACKET + short aliases + Phase 5 kickoff) — pending user approval
+
+**Commits**: none (review-only entry; reviews uncommitted REVIEW_PACKET + aliases work + committed `6c90f56` `d5075a1` Phase 5 kickoff handoff)
+
+**Status**: REVIEW VERDICT RECORDED. **Required fixes below are PENDING USER APPROVAL.** Codex must not execute them until the user explicitly approves each item, per `docs/AI_REVIEW_PROTOCOL.md` §Standard Workflow #10-11.
+
+**Invocation**: User typed `修改` — invoked as the binding short command alias per the new (uncommitted but in-effect) AI_REVIEW_PROTOCOL.md §Short Command Aliases.
+
+**Relationship / References**:
+- Reviews two coupled Codex change sets in one round:
+  - (uncommitted, in working tree) REVIEW_PACKET.md creation + AI_REVIEW_PROTOCOL.md & AGENTS.md additions for Review Packet rule + 4 short command aliases
+  - (committed) `6c90f56` Phase 5 kickoff spec handoff + `d5075a1` SESSION_LOG hash update
+- Supersedes the previous Claude review entry (`Required fixes #1+#2` applied in `e0e27cd`; `#3` actioned in `6c90f56`).
+
+**Verdict**: Pass with fixes.
+
+**Required fixes (PENDING USER APPROVAL — Codex must not execute without explicit user approval)**:
+
+1. **Phase 5 kickoff handoff §7 ("与 Phase 4 schema v1.1.0 的关系") must pick a direction**, not just list three options and defer to "schema design time". The three options are: (a) include the v1.1.0 fields in `execution_backtest_report.data_lineage`; (b) first upgrade deterministic_report schema to v1.1.0; (c) record as deferred limitation. Pick one before the schema task begins, or escalate as "user must decide" explicitly. As written, the schema task author has to design the dependency under unclear contract.
+
+2. **REVIEW_PACKET.md §Current Review Round L12 "User approval status: Approved by user request in this turn" cannot be independently verified by Claude**. Claude sees user instructions only via chat; the user's "修改" command authorized a review, not approval of the REVIEW_PACKET design. Either provide explicit evidence (which user message approved this) or downgrade wording to "Drafted in this turn pending Claude review and user approval". This matters because the approval-status field is a primary trust signal for downstream LLMs.
+
+**Optional suggestions**:
+
+1. **REVIEW_PACKET.md tracking policy**: file is described as "short-lived" but currently untracked. Decision needed: gitignore (and overwrite each round) vs track-and-churn (every round mutates git history with the new packet). If overwrite is intent, `.gitignore` it. If diffable history is intent, document the policy.
+2. **Phase 5 §6.2 stop loss handling for Phase 4 null output**: Phase 4 v1 always emits `exit_plan.stop_loss=null` (it's `not_implemented_phase4`). §6.2 says "no stop → skipped or marked `missing_stop`". Combined this means Phase 5 v1 simulator with Phase 4 deterministic_report as input would skip 100% of candidates. §4 conservative path (consume `analysis_input.json` directly, not Phase 4 report) avoids this — but §6.2 should explicitly note the degenerate interaction.
+3. **AGENTS.md §Short Command Aliases duplicates content** with AI_REVIEW_PROTOCOL.md §Short Command Aliases. AGENTS.md could be reduced to a single pointer ("aliases defined in docs/AI_REVIEW_PROTOCOL.md, current list: 执行 / 修改 / 批准修改 / 修复"). Minor drift risk if both stay full.
+4. **Phase 5 §3 schema field `settings`** is under-specified at kickoff level. Acceptable for kickoff (schema task will define), but mention "see schema task for concrete fields" to prevent ambiguity.
+
+**Documentation issues**:
+- REVIEW_PACKET.md L12 approval claim (see Required fix #2).
+- Phase 5 handoff §7 decision deferral (see Required fix #1).
+- No business-code regressions or schema conflicts. AGENTS.md remains highest-rule (confirmed in both new sections via "AGENTS.md wins" clauses).
+
+**Key procedural judgment**:
+- REVIEW_PACKET workflow is a real improvement closing the gap from previous Claude review (review output only in chat, Codex couldn't see).
+- Short command aliases are well-defined, each expansion explicitly preserves full-protocol enforcement.
+- Phase 5 kickoff handoff content is largely sound; §7 ambiguity is the main blocker.
+- Codex remains NOT cleared to start `schemas/execution_backtest_report.schema.json` work until Required fix #1 is resolved.
+
+**Open questions handed to user**:
+1. Required fix #1: which §7 direction? My recommendation: (b) first upgrade deterministic_report schema to v1.1.0 — keeps the two schemas coherent and prevents drift. But (a) or (c) are defensible too. User decides.
+2. Required fix #2: was REVIEW_PACKET design explicitly approved earlier, or is the L12 wording overstated?
+3. Optional #1: REVIEW_PACKET.md should be gitignored or tracked? (Affects this turn's commit scope.)
+
+**Next natural step from my view** (informational; not a directive):
+1. User reviews this entry.
+2. For Required fix #1, user picks direction (a/b/c) or punts to "decide later".
+3. For Required fix #2, user clarifies REVIEW_PACKET.md L12.
+4. Once both resolved, Codex commits the uncommitted REVIEW_PACKET + alias work, then begins `schemas/execution_backtest_report.schema.json` task per Phase 5 §3.
+
+This entry is for cross-LLM continuity. It is NOT a direct execution order to Codex.
+
+---
+
 ## 2026-05-25 — Codex (Phase 5 kickoff spec)
 
 **Commits**: 6c90f56
