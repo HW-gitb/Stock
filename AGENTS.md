@@ -133,12 +133,17 @@ Stock/
 
 ## AI 协作者在本项目中的工作守则
 
-## 多 LLM 审查分工
+## Multi-LLM Review Protocol
 
-- **Codex = Designer + Implementer**：负责方案设计、代码/文档实现、验证与交接更新。
-- **Claude = Independent Reviewer**：负责独立审查 Codex 的设计与实现，提出问题、风险和修复建议。
-- **用户 = Final Approver**：负责最终决策；Codex 不得直接执行 Claude 的建议，必须等用户确认。
-- 详细审查流程见 `docs/AI_REVIEW_PROTOCOL.md`。
+Codex acts as the Designer + Implementer.
+
+Claude acts as the Independent Reviewer.
+
+The user remains the Final Approver.
+
+Detailed review workflow is defined in `docs/AI_REVIEW_PROTOCOL.md`.
+
+`AGENTS.md` remains the highest-level project rule. If `docs/AI_REVIEW_PROTOCOL.md` conflicts with this file, `AGENTS.md` wins.
 
 ## 交接记录
 
