@@ -1,14 +1,14 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（Phase 4 runner v1：schema-validated deterministic report 可生成）
+**最后更新**：2026-05-25（Phase 4 coverage + Skill 使用文档落地）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 进行中；`schemas/deterministic_report.schema.json` v1.0.0 和 `runners/run_analysis_report.py` v1 已落地并通过真实样本校验
-- **当前目标**：Phase 4 minimal 下一步写 `schemas/deterministic_report_coverage.md` 和 `skills/a_short_analysis/SKILL.md`；runner 纯 Python 不调 LLM，Skill 是使用文档不是执行入口；v1 必须本地可复现，缺 LLM 判断的字段标 `unknown + requires_llm`
+- **当前 Phase**：Phase 4 进行中；`schemas/deterministic_report.schema.json` v1.0.0、`runners/run_analysis_report.py` v1、coverage doc、Skill 使用文档、prompt 骨架已落地
+- **当前目标**：Phase 4 minimal 下一步收口 LLM enrich 的输入/输出边界；runner 纯 Python 不调 LLM，Skill 是使用文档不是执行入口；v1 必须本地可复现，缺 LLM 判断的字段标 `unknown + requires_llm`
 - **下一阶段大目标**：Phase 5 execution 回测（需 Phase 4 schema-validated report 作 contract）；Phase 3.5 forward tracker 继续后台累积，不阻塞
 
 ---
@@ -26,7 +26,7 @@
 - **Phase 4 启动规格**（2026-05-25，commit `54e61dc`）：[phase4 handoff](handoff/2026-05-25_phase4_kickoff_spec_handoff.md) — deterministic_report schema first / runner-as-executor / Skill-as-doc。§8 已拍板：字段范围沿用 §3.1，输出目录用 `result/a_short/<as_of>/reports/`。
 - **Phase 3.6 收尾 audit**（2026-05-25，commit `e342452`，Codex）：analyzer ablation 重命名 `{all,tier1}_analyzer_veto_*`；`l2_unknown` 归一化对齐；`is_circuit_breaker_active()` 尊重 `expires_at`；测试增至 21 个。详 phase3 handoff "2026-05-25 追加" 节。
 - Session log discipline + validation 依赖（2026-05-25，commits `1b8af8f` `7448118` `0927218`）：`docs/SESSION_LOG.md` + AGENTS.md 规则；`requirements-dev.txt`。详 SESSION_LOG.md 顶部。
-- **Phase 4 runner v1**（2026-05-25，Codex）：新增 `runners/run_analysis_report.py` + `tests/skill/test_run_analysis_report.py`；单票读取 `analysis_input.json`，调用 Phase 3 analyzer/state，输出 schema-validated JSON + Markdown 到 `result/a_short/<as_of>/reports/`；真实样本 `20260522/600415.SH` 已通过本机 Python 3.13 E2E。
+- **Phase 4 coverage + Skill 使用文档**（2026-05-25，Codex）：新增 `schemas/deterministic_report_coverage.md`、`skills/a_short_analysis/SKILL.md` 正式说明、6 个 `prompts/*.md` enrichment 骨架；明确 Skill 只做调用/阅读/可选 enrich 指引，不覆盖 deterministic runner。
 
 更早事项（Phase 1a/1b、Phase 2 工程链路、Phase A+B 修复、L3 PIT 三模式、v7.10 升级、Phase 2.5/2.6、git init、Phase 3 首轮等约 16 条）→ 见 `AGENTS.md §交接记录` 完整 handoff 列表 + `git log --all`。
 
@@ -85,6 +85,7 @@
 - `tests/analyzer/test_state_manager.py` / `tests/test_backtest_rank_phase3.py` — Phase 3 state expiry、l2 normalization、analyzer ablation 命名回归测试
 - `schemas/analysis_input.schema.json` — v1.1.0
 - `schemas/deterministic_report.schema.json` — v1.0.0（Phase 4 minimal report contract；runner 输出 JSON 必须先过它）
+- `schemas/deterministic_report_coverage.md` — Phase 4 v1 对 v14.2 M0-M6 / M6.7 的覆盖矩阵与 unknown 原因约定
 - `schemas/rank_backtest_report.schema.json` — v1.11.0（含 date_warnings + data_lineage + analyzer veto replay settings）
 - `schemas/data_health.schema.json` — v1.1.0（每周实盘 egs_main 自动产 `data_health.json` 的契约；2026-05-24 第二轮 audit 时 `pe_missing_count` 字段语义不清，rename 为 `pe_ttm_or_pe_missing_count`）
 - `requirements-dev.txt` — validation-only 依赖；当前至少包含 `jsonschema>=4.0`
@@ -119,8 +120,8 @@
 
 ### P0 — Phase 4 启动
 
-1. **coverage doc** — 写 `schemas/deterministic_report_coverage.md`，记录 v14.2 哪些字段已 deterministic、哪些是 `requires_llm` / `requires_external` / `not_implemented_phase4`。
-2. **Skill 使用文档** — 写 `skills/a_short_analysis/SKILL.md`，说明如何调用 runner、读取 JSON/Markdown、执行可选 LLM enrich，并保持 runner 是执行入口。
+1. **enrich contract 收口** — 若要把 LLM enrich 写回 JSON，先定义补充输入/patch 文件格式；不要手改 deterministic 字段。
+2. **Phase 4 smoke 样例** — 用真实 `analysis_input.json` 跑 1-2 只不同 veto 状态股票，确认 Markdown 和 `unknowns` 对人工 review 足够清楚。
 3. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / runner v1 只输出 `skip/watch`。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）

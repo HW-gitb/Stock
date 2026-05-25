@@ -2,7 +2,7 @@
 
 **日期**：2026-05-25
 **范围**：Phase 4 minimal Skill 启动规格
-**状态**：实施中。schema v1.0.0 与 runner v1 已落地；coverage doc / Skill 文档待做。
+**状态**：实施中。schema v1.0.0、runner v1、coverage doc、Skill 使用文档与 prompt 骨架已落地；LLM enrich 写回机制待定。
 **前置 handoff**：`docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md`（Phase 3 完整实施记录，含 audit fixes / 3.3 / 3.4 / 3.5）
 
 ---
@@ -172,13 +172,13 @@ Markdown 报告还要包含 v14.2 §6.7 "精简结论区"（当前环境 / 波�
      - 其它 → `watch`（v1 不做 `buy` 决策；buy 需要 Phase 5 的仓位公式 + 入场价计算）
    - 缺 LLM 判断的字段全标 `unknown + requires_llm`
    - 落盘前 JSON Schema 校验通过
-3. **`schemas/deterministic_report_coverage.md`** — 类比 `schemas/analysis_input_coverage.md`，记录 v14.2 五段拆解里哪些已实现、哪些 `requires_llm` / `requires_external` / `not_implemented_phase4`
-4. **`skills/a_short_analysis/SKILL.md`** — AI 协作者**使用文档**：
+3. ✅ **`schemas/deterministic_report_coverage.md`** — 类比 `schemas/analysis_input_coverage.md`，记录 v14.2 五段拆解里哪些已实现、哪些 `requires_llm` / `requires_external` / `not_implemented_phase4`
+4. ✅ **`skills/a_short_analysis/SKILL.md`** — AI 协作者**使用文档**：
    - 怎么调 runner
    - 怎么读 JSON / Markdown
    - 哪些字段需要 LLM enrich + 如何调 prompts/
    - enrich 后如何把结果合并回报告（重新跑 runner + 提供 enrich JSON 作为补充输入）
-5. **`skills/a_short_analysis/prompts/*.md`** — v14.2 各 LLM 判断子任务的 prompt 文件（M2.1 板块联动 / M2.4 跨市场 / M2.5 隐蔽风险 / 行业景气 / 48h 监管识别 / 政策新闻解读 / 季报"无利好修复"判断）。**v1 这些 prompt 文件可以先写骨架占位，不强制实现内容**——只要 SKILL.md 知道每个 LLM 子任务对应哪个 prompt 文件即可
+5. ✅ **`skills/a_short_analysis/prompts/*.md`** — v14.2 各 LLM 判断子任务的 prompt 文件（M2.1 板块联动 / M2.4 跨市场 / M2.5 隐蔽风险 / 行业景气 / 48h 监管识别 / 政策新闻解读 / 季报"无利好修复"判断）。**v1 这些 prompt 文件可以先写骨架占位，不强制实现内容**——只要 SKILL.md 知道每个 LLM 子任务对应哪个 prompt 文件即可
 6. **`tests/skill/test_run_analysis_report.py`** — at least one fixture end-to-end：
    - 拿 24p 里某个 as_of + ts_code 跑 runner
    - 验证 JSON 输出过 schema 校验
@@ -409,3 +409,55 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import tem
 1. 写 `schemas/deterministic_report_coverage.md`，明确 v14.2 覆盖率和 unknown 原因分布。
 2. 写 `skills/a_short_analysis/SKILL.md`，把 runner 调用、报告读取、LLM enrich 边界写成 AI 协作者使用文档。
 3. Runner v1 继续只输出 `skip/watch`；Phase 5 前不要把 `buy` 逻辑塞进 Skill 自由文本。
+
+
+---
+
+## 2026-05-25 追加：coverage doc + Skill 使用文档
+
+### 改了什么
+
+- 新增 `schemas/deterministic_report_coverage.md`。
+  - 记录 `deterministic_report` v1.0.0 顶级字段的来源和状态。
+  - 按 v14.2 Rule/M0-M6 映射 Phase 4 v1 已实现、`requires_llm`、`requires_external`、`data_missing`、`not_implemented_phase4`。
+  - 明确 v1 验收线：schema meta-validation、runner 落盘前校验、真实样本可生成、v1 不输出 `buy`。
+- 更新 `skills/a_short_analysis/SKILL.md`。
+  - 加 YAML frontmatter，定位为 A 股短线单票分析 Skill。
+  - 明确 executor 是 `runners/run_analysis_report.py`，Skill 只负责调用、阅读和可选 LLM enrich 指引。
+  - 明确 deterministic 字段不得手改，LLM enrich 不得覆盖 analyzer veto，也不得把解释变成 `decision.action=buy`。
+- 新增 6 个 prompt 骨架：
+  - `industry_trend.md`
+  - `regulatory_48h.md`
+  - `policy_news.md`
+  - `earnings_no_good_repair.md`
+  - `cross_market_linkage.md`
+  - `hidden_risk.md`
+- 更新 `AGENTS.md` 与 `docs/CURRENT.md`，把下一步从 coverage/Skill 推进到 enrich contract 收口和 smoke 样例。
+
+### 为什么改
+
+Runner 和 schema 已经提供 deterministic contract，但接手者还需要知道 v14.2 哪些部分在 v1 已覆盖、哪些部分仍是未知项，以及 Skill 应该如何安全使用 runner 输出。否则后续 LLM 很容易把 Skill 写成自由文本执行入口，或把未验证的新闻/行业判断写进 deterministic 决策字段。
+
+Prompt 骨架本轮只做最小占位，是为了让 `SKILL.md` 的 enrichment 引用不指向空目录；它们不接入 runner，不改变 JSON schema，也不改变 Phase 3 analyzer 规则。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['skills/a_short_analysis/SKILL.md','schemas/deterministic_report_coverage.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('docs utf8 ok')"
+```
+
+### 验证结果
+
+- Unit tests：24 tests passed，1 skipped（bundled Python 缺 `jsonschema`，schema 写入测试按设计 skip）。
+- Docs UTF-8 read：`docs utf8 ok`。
+
+### 失效旧结论
+
+无。此改动不改变 Phase 4 schema v1.0.0、不改变 runner 输出字段、不改变 analyzer 决策。
+
+### 下一步注意事项
+
+1. 如果要把 LLM enrich 写回 JSON，先定义补充输入/patch 文件格式，不能手工覆盖 deterministic 字段。
+2. 用 1-2 只不同 veto 状态股票跑 smoke，检查 Markdown 和 `unknowns` 对人工 review 是否足够清楚。
+3. Phase 4 v1 仍保持 `skip/watch`，不要把 prompt 输出升级成买入决策。

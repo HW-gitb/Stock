@@ -1,12 +1,113 @@
+---
+name: a_short_analysis
+description: Use for A-share short-term single-stock analysis after screening. Generates or reads Phase 4 deterministic reports via runners/run_analysis_report.py, then optionally enriches LLM-only sections without changing analyzer veto decisions.
+---
+
 # A Short Analysis
 
-Status: reserved for Phase 4 minimal Skill.
+This Skill is a usage guide. It is not the deterministic executor.
 
-Current contract:
+The executor is `runners/run_analysis_report.py`. It reads `analysis_input.json`, calls the Phase 3 analyzer/state layer, validates `deterministic_report.schema.json`, and writes JSON + Markdown.
 
-- Input: `result/a_short/YYYYMMDD/analysis_input.json`
-- Deterministic logic: future `engine/analyzer/`
-- State: `state/a_short/`
-- Reference spec: `reference/v14.2_spec.md`
+## Inputs
 
-Important rule: `v14.2_spec.md` is a specification document, not a runtime prompt.
+- `result/a_short/<as_of>/analysis_input.json`
+- `state/a_short/*.json`
+- `schemas/deterministic_report.schema.json`
+- Optional: user-provided current news, regulatory, industry, or cross-market context for LLM enrichment
+
+## Quick Start
+
+Generate one deterministic report:
+
+```powershell
+python runners\run_analysis_report.py --as-of 20260522 --ts-code 600415.SH
+```
+
+Expected outputs:
+
+- `result/a_short/<as_of>/reports/<ts_code>.json`
+- `result/a_short/<as_of>/reports/<ts_code>.md`
+
+Use the project Python with `jsonschema` installed for report generation:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+```
+
+The bundled Codex Python may run compile/unit tests but may not have `jsonschema`.
+
+## Deterministic Boundary
+
+Do not edit deterministic fields by hand:
+
+- `decision`
+- `veto`
+- `entry_plan`
+- `exit_plan`
+- `position_size`
+- `risk_flags`
+- `evidence`
+- `data_lineage`
+- `analyzer_invocations`
+
+For Phase 4 v1, `decision.action` should remain `skip` or `watch`. Do not turn an LLM interpretation into `buy`.
+
+If the report has a hard veto, treat it as a hard stop unless analyzer code changes in `engine/analyzer/` and tests pass.
+
+## Reading The Report
+
+Use JSON for machine decisions and Markdown for human review.
+
+Priority reading order:
+
+1. `decision`
+2. `veto.reasons`
+3. `risk_flags`
+4. `unknowns`
+5. `evidence`
+6. `llm_notes`
+7. Markdown M6.7 table
+
+If a field is `unknown`, respect the paired reason in `unknowns`. Do not fill missing values from memory.
+
+## Optional LLM Enrichment
+
+LLM enrichment is optional and separate from deterministic output. It may update `llm_notes.sections` or produce a separate patch proposal, but it must not override analyzer decisions.
+
+Use these prompt files only when the user asks for deeper analysis or when a downstream workflow explicitly needs LLM notes:
+
+- `prompts/industry_trend.md`
+- `prompts/regulatory_48h.md`
+- `prompts/policy_news.md`
+- `prompts/earnings_no_good_repair.md`
+- `prompts/cross_market_linkage.md`
+- `prompts/hidden_risk.md`
+
+For each enrichment section, record:
+
+- source/date checked, or state that no live source was checked
+- status
+- confidence
+- concise evidence chain
+
+If live/external data was not checked, output `unknown`, not `clear`.
+
+## Reference Files
+
+- `reference/v14.2_spec.md` is the design specification, not a runtime prompt.
+- `schemas/deterministic_report_coverage.md` records what Phase 4 v1 covers and what remains unknown.
+
+## Validation
+
+Run unit tests after changing runner, schema, or this Skill workflow:
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+Run one real sample before claiming the workflow is usable:
+
+```powershell
+python runners\run_analysis_report.py --as-of 20260522 --ts-code 600415.SH
+```
