@@ -8,6 +8,50 @@
 
 ---
 
+## 2026-05-25 — Claude (protocol simplification: remove REVIEW_PACKET + add Lightweight Track)
+
+**Commits**: pending in this session (user explicit instructions: option B remove REVIEW_PACKET + Yes lightweight track + commit)
+
+**Relationship to prior session(s)**:
+- User asked whether the current handoff stack (AGENTS / CURRENT / SESSION_LOG / handoff / REVIEW_PACKET) was over-engineered. Claude analyzed overlap and proposed three options. User picked B (remove REVIEW_PACKET) and Yes (add lightweight track exemption).
+- Builds on the just-committed `a9efce7` Pattern B base + the in-flight PASS-only rule from the previous Claude transitional implementer round.
+
+**Worked on (Claude as transitional Implementer per §Review Packet Rule's now-deleted Claude-as-transitional clause; user explicitly directed this)**:
+1. Deleted `docs/REVIEW_PACKET.md` file.
+2. Removed `docs/REVIEW_PACKET.md` from `.gitignore` (no longer needed).
+3. Rewrote `docs/AI_REVIEW_PROTOCOL.md`:
+   - Deleted §Review Packet Rule section entirely
+   - Removed REVIEW_PACKET mentions from Codex Responsibilities, Claude Responsibilities, Required Reading Order
+   - Updated Standard Workflow (now 11 steps, was 12) — step 7 removed (was "update REVIEW_PACKET"); step 8 (now step 7) says "Codex's SESSION_LOG entry IS the handoff to Claude"
+   - Updated `执行` / `审查` / `批准修改` / `修复` alias expansions to remove REVIEW_PACKET steps and outputs
+   - Documentation Rules updated: SESSION_LOG top entry doubles as Codex-to-Claude review handoff
+   - Added §Lightweight Track Exemption for trivial changes (typos / formatting / cosmetic doc edits)
+   - Added §Review Continuity Without Packet explaining how handoff still works
+   - (Earlier in this turn) added §Review Recording PASS-only rule + minimal template
+4. Rewrote `AGENTS.md` §Short Command Aliases bullets: 执行 / 审查 / 修复 no longer mention REVIEW_PACKET; pointer paragraph updated to reflect "SESSION_LOG entry is the handoff".
+5. Wrote retroactive PASS-only entry for `a9efce7` per the new PASS-only rule.
+
+**Key decisions**:
+- **REVIEW_PACKET removed (option B)**: ~60-80% content overlap with Codex's own SESSION_LOG entry. Codex was writing two near-identical artifacts per round. By eliminating REVIEW_PACKET, Codex's SESSION_LOG entry becomes the single source of truth for the current round's handoff.
+- **Lightweight Track added (user "Yes")**: `[trivial]`-prefixed commits bypass `执行 → 审查 → 提交` cycle for typos / formatting / cosmetic doc edits. Hard exclusions: AGENTS.md / AI_REVIEW_PROTOCOL.md / business code / schemas / state / handoff files always go through standard cycle.
+- **PASS-only entry rule established**: pure Pass verdicts now still write a minimal SESSION_LOG entry, so Codex `提交` step 3 (verify latest verdict is Pass) can find evidence. Without this, Pass-in-chat is invisible to next-session Codex.
+
+**Alternatives considered and rejected**:
+- "Option A keep REVIEW_PACKET as belt-and-suspenders" — rejected because project is private-local with one user + two LLMs; redundancy cost > safety value.
+- "Option C minimize REVIEW_PACKET to 3 fields" — rejected because the file's existence itself adds cognitive load even if minimal.
+- "Don't allow `[trivial]` bypass; everything goes through full cycle" — rejected because overhead-vs-value ratio is poor for 1-line doc fixes.
+- "Allow `[trivial]` to include AGENTS.md / AI_REVIEW_PROTOCOL.md edits" — rejected because the protocol itself is the safety mechanism; bypassing review on protocol changes is dangerous.
+
+**Open questions handed off**:
+- Codex may want to confirm: when Codex's `执行` / `修复` output template says "SESSION_LOG entry prepended: Yes / No" — this implies Codex always writes an entry. Is that intended for ALL execution rounds, or only non-trivial ones? Current text says "if there is a non-trivial change...", which leaves trivial rounds without an entry. Consistent with the discipline rule already in AGENTS.md §Session log discipline.
+
+**Next natural step from my view**:
+1. User accepts this commit directly (since "commit" was the third item in user's instruction).
+2. Subsequent rounds use the simplified protocol: Codex's SESSION_LOG entry IS the review handoff; no REVIEW_PACKET.
+3. Next real work: user invokes `执行` for Phase 5 next-task (`schemas/deterministic_report.schema.json` v1.1.0 lineage / enrichment fields, per Phase 5 kickoff handoff §9 #1).
+
+---
+
 ## 2026-05-25 — Claude review — Pass (Pattern B base + O1-O5 refinements, committed as `a9efce7`)
 
 **Commits**: none (review-only entry; reviews the working tree state that became commit `a9efce7 Document Pattern B review commit flow` — covers AGENTS.md alias annotations, AI_REVIEW_PROTOCOL.md §Commit Timing Rule + §提交 alias + §Review Packet Rule transitional clause, CURRENT.md §2 Pattern B line, SESSION_LOG.md Codex 修复 entry)

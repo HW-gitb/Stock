@@ -38,9 +38,6 @@ state/l3_snapshots/
 *.log
 logs/
 
-# --- Short-lived multi-LLM review packet ---
-docs/REVIEW_PACKET.md
-
 # --- Temp / backup ---
 *.tmp
 *.bak

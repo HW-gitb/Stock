@@ -22,7 +22,6 @@ Codex is responsible for:
 - proposing the next smallest safe task
 - implementing one approved task at a time
 - running relevant checks or tests
-- updating docs/REVIEW_PACKET.md after each implementation task before Claude review
 - updating docs/CURRENT.md after meaningful changes
 - prepending docs/SESSION_LOG.md when there is a non-trivial commit, key judgement, failed attempt, or open issue
 
@@ -40,9 +39,7 @@ Codex must not:
 
 Claude is responsible for:
 - independently reviewing Codex's plan
-- reading docs/REVIEW_PACKET.md before reviewing Codex's diff
-- independently reviewing Codex's diff
-- inspecting the actual git diff directly when Claude can access the repo, instead of relying only on pasted chat output
+- independently reviewing Codex's diff (read the actual git diff directly when repo access is available)
 - checking whether Codex followed AGENTS.md
 - checking whether docs/CURRENT.md matches the actual project state
 - checking bugs, edge cases, tests, security risks, and data risks
@@ -81,8 +78,7 @@ For Claude:
 3. docs/CURRENT.md
 4. docs/SESSION_LOG.md top 1-3 entries
 5. relevant docs/handoff files
-6. docs/REVIEW_PACKET.md
-7. Codex plan or diff
+6. Codex plan or diff (read git diff directly)
 
 ## Standard Workflow
 
@@ -92,12 +88,11 @@ For Claude:
 4. Codex implements only that task.
 5. Codex runs checks or tests.
 6. Codex updates docs/CURRENT.md when the change is meaningful.
-7. Codex updates docs/REVIEW_PACKET.md before Claude review.
-8. Codex prepends docs/SESSION_LOG.md if the change is non-trivial.
-9. Claude reads docs/REVIEW_PACKET.md, then reviews the actual git diff when repo access is available. When the review contains Required fixes, Optional suggestions, open questions, a non-trivial verdict, or a phase/process decision, Claude prepends a review entry to `docs/SESSION_LOG.md` and clearly marks pending user approval items (see §Review Recording below).
-10. The user decides whether to accept, request fixes, or defer.
-11. Codex fixes only user-approved Required fixes.
-12. After Claude returns Pass on the latest iteration, the user invokes `提交`; Codex commits the reviewed working tree as a single coherent commit. Codex must not commit during `执行` or `修复` (see §Commit Timing Rule below).
+7. Codex prepends docs/SESSION_LOG.md if the change is non-trivial (Codex's entry IS the handoff to Claude; there is no separate REVIEW_PACKET).
+8. Claude reviews the actual git diff plus the top SESSION_LOG entry. When the review contains Required fixes, Optional suggestions, open questions, a non-trivial verdict, or a phase/process decision, Claude prepends a review entry to `docs/SESSION_LOG.md` and clearly marks pending user approval items (see §Review Recording below). A pure Pass writes a minimal PASS-only entry (see §Review Recording).
+9. The user decides whether to accept, request fixes, or defer.
+10. Codex fixes only user-approved Required fixes.
+11. After Claude returns Pass on the latest iteration, the user invokes `提交`; Codex commits the reviewed working tree as a single coherent commit. Codex must not commit during `执行` or `修复` (see §Commit Timing Rule below).
 
 ## Review Verdicts
 
@@ -143,7 +138,7 @@ No `Required fixes`, `Optional suggestions`, `Open questions`, `Worked on`, `Alt
 Pattern B: commit happens **after** Claude returns Pass, not during `执行` or `修复`.
 
 - `执行` and `修复` modify the working tree only. They must not run `git commit`.
-- `审查` reviews the working tree diff (uncommitted) plus `docs/REVIEW_PACKET.md`.
+- `审查` reviews the working tree diff (uncommitted) plus the top SESSION_LOG entry written by Codex.
 - After Claude returns Pass (or Pass with all Required fixes resolved via approved `修复` rounds reaching a clean Pass), the user invokes `提交` and Codex commits.
 
 Rationale:
@@ -153,35 +148,47 @@ Rationale:
 
 Exception (must be explicitly stated by the user): a work block too large for one review round may use checkpoint commits prefixed with `WIP:`. Default is no exception.
 
-## Review Packet Rule
+## Lightweight Track Exemption
 
-Codex must update docs/REVIEW_PACKET.md after every implementation task and before Claude review.
+For trivial changes the standard review cycle is over-engineered. Codex may self-route to the lightweight track:
 
-docs/REVIEW_PACKET.md must include:
-- current task
-- user approval status
-- files modified
-- files intentionally not touched
-- change summary
-- diff summary
-- test or check results
-- documentation updates
-- open issues
-- questions for Claude
+Criteria (ALL must hold):
+- No business logic touched
+- No schema / contract change
+- No new files (small docs OK)
+- No new code paths added or removed
+- Roughly <20 lines diff
 
-Claude must read docs/REVIEW_PACKET.md before reviewing the current diff.
+Procedure:
+- Codex executes the fix immediately. No `执行` alias needed, no `修复` alias needed.
+- Codex commits directly with message prefixed `[trivial]` (e.g., `[trivial] Fix typo in CURRENT.md L11`). This is the only case where Codex commits without a prior Claude `审查` Pass.
+- SESSION_LOG entry may be skipped for purely cosmetic changes. If the change includes any meaningful clarification, write a one-line SESSION_LOG entry.
 
-If Claude can access the repo, Claude must inspect the actual git diff directly instead of relying only on pasted chat output.
+Claude behavior:
+- Claude does not review `[trivial]` commits during normal `审查`. User reviews via git log periodically.
+- If Claude is invoked for `审查` and the top recent commits are all `[trivial]`, Claude says "no review-eligible work since last Pass".
 
-docs/REVIEW_PACKET.md is short-lived and only represents the latest review round.
+Hard exclusions (never `[trivial]`, must use standard cycle):
+- AGENTS.md changes (highest rule, always reviewed)
+- AI_REVIEW_PROTOCOL.md changes (workflow itself, always reviewed)
+- Business code in `A-EGS/` `engine/` `runners/`
+- Schema files in `schemas/`
+- State files in `state/`
+- Handoff files in `docs/handoff/`
+- Any change touching commit-flow / role-separation logic
 
-docs/REVIEW_PACKET.md is intentionally gitignored. Codex should overwrite it for each review round instead of preserving packet history in git.
+Safety: if Codex is uncertain whether a change qualifies as `[trivial]`, default to standard cycle.
 
-If Claude is the transitional Implementer (for example, for protocol-level edits the user directs Claude to make), Claude may either skip the REVIEW_PACKET.md update or fill it with minimal Claude-implementer fields. The SESSION_LOG entry remains the canonical record for that change.
+User override: user may revert any `[trivial]` commit with `git revert` if they disagree.
 
-docs/SESSION_LOG.md remains the long-term cross-LLM cognitive log.
+## Review Continuity Without Packet
 
-Claude review results with Required fixes, Optional suggestions, open questions, or process decisions must still be recorded in docs/SESSION_LOG.md and marked pending user approval.
+After removing the short-lived REVIEW_PACKET document (decision 2026-05-25), all Codex-to-Claude handoff information lives in the SESSION_LOG entry written by Codex after each `执行` or `修复`. Claude reads:
+
+1. SESSION_LOG.md top 1-3 entries
+2. git diff (working tree vs HEAD)
+
+That is sufficient for Claude to review. There is no separate short-lived file to consult or update.
 
 Codex must not execute Claude review suggestions unless the user approves them.
 
@@ -214,16 +221,15 @@ Codex must automatically do all of the following:
 11. Do not modify files outside the approved task.
 12. Run relevant tests or checks.
 13. Update docs/CURRENT.md if the current state changed.
-14. Update docs/REVIEW_PACKET.md completely for Claude review.
-15. Prepend docs/SESSION_LOG.md only if there is a non-trivial change, key judgement, failed attempt, open issue, or process decision.
-16. Do not create or update handoff files unless this is a phase or major milestone change.
-17. Do not commit. Commit is a separate step after Claude `审查` returns Pass; user invokes `提交`. See §Commit Timing Rule.
+14. Prepend docs/SESSION_LOG.md if there is a non-trivial change, key judgement, failed attempt, open issue, or process decision. This entry IS the handoff to Claude (no separate REVIEW_PACKET).
+15. Do not create or update handoff files unless this is a phase or major milestone change.
+16. Do not commit. Commit is a separate step after Claude `审查` returns Pass; user invokes `提交`. See §Commit Timing Rule.
 
 After finishing, Codex must output only a concise summary:
 - Task completed
 - Files changed
 - Tests/checks run
-- docs/REVIEW_PACKET.md updated: Yes / No
+- SESSION_LOG entry prepended: Yes / No
 - Working tree uncommitted (per Commit Timing Rule): Yes
 - Ready for Claude review: Yes / No
 
@@ -244,15 +250,15 @@ Claude must automatically do all of the following:
 3. Read docs/CURRENT.md.
 4. Read the top 1-3 entries of docs/SESSION_LOG.md.
 5. Read the relevant docs/handoff files for the current phase.
-6. Read docs/REVIEW_PACKET.md.
-7. Inspect the current git diff directly if available.
+6. Read the top SESSION_LOG entry written by Codex for this round.
+7. Inspect the current git diff directly.
 8. Review whether Codex followed the approved task.
 9. Review whether Codex modified files outside scope.
 10. Review whether existing working logic was broken.
 11. Review bugs, edge cases, tests, security, data, and state risks.
-12. Review whether docs/CURRENT.md and docs/REVIEW_PACKET.md were updated correctly.
+12. Review whether docs/CURRENT.md and the SESSION_LOG entry were updated correctly.
 13. Output Verdict: Pass / Pass with fixes / Fail.
-14. If there are Required fixes, Optional suggestions, open questions, or process decisions, write the review result into docs/SESSION_LOG.md and mark it pending user approval.
+14. If there are Required fixes, Optional suggestions, open questions, or process decisions, write the review result into docs/SESSION_LOG.md and mark it pending user approval. For pure Pass, write a minimal PASS-only entry (see §Review Recording).
 15. Do not directly modify business code.
 16. Do not directly instruct Codex to execute fixes.
 17. Do not expand the project scope.
@@ -281,8 +287,7 @@ It means:
 3. Codex may only repair the approved Required fixes.
 4. Codex must not expand scope.
 5. Codex must not execute Optional suggestions.
-6. Codex must update docs/REVIEW_PACKET.md after fixing.
-7. If the fix is non-trivial, Codex must prepend docs/SESSION_LOG.md.
+6. If the fix is non-trivial, Codex must prepend docs/SESSION_LOG.md (this is the handoff for Claude re-review).
 
 If the user wants partial approval, they may type:
 
@@ -312,25 +317,23 @@ Codex must automatically do all of the following:
 2. Read docs/AI_REVIEW_PROTOCOL.md.
 3. Read docs/CURRENT.md.
 4. Read docs/SESSION_LOG.md top 1-3 entries.
-5. Read docs/REVIEW_PACKET.md.
-6. Identify which Required fixes are approved by the user.
-7. Repair only approved Required fixes.
-8. Do not repair unapproved Required fixes.
-9. Do not execute Optional suggestions.
-10. Do not add new features.
-11. Do not refactor unrelated code.
-12. Do not modify files outside the fix scope.
-13. Run relevant tests or checks.
-14. Update docs/CURRENT.md if needed.
-15. Update docs/REVIEW_PACKET.md for Claude re-review.
-16. Prepend docs/SESSION_LOG.md if the fix is non-trivial.
-17. Do not commit. Commit is a separate step after Claude `审查` returns Pass; user invokes `提交`. See §Commit Timing Rule.
+5. Identify which Required fixes are approved by the user.
+6. Repair only approved Required fixes.
+7. Do not repair unapproved Required fixes.
+8. Do not execute Optional suggestions.
+9. Do not add new features.
+10. Do not refactor unrelated code.
+11. Do not modify files outside the fix scope.
+12. Run relevant tests or checks.
+13. Update docs/CURRENT.md if needed.
+14. Prepend docs/SESSION_LOG.md if the fix is non-trivial (this entry IS the handoff to Claude for re-review).
+15. Do not commit. Commit is a separate step after Claude `审查` returns Pass; user invokes `提交`. See §Commit Timing Rule.
 
 After finishing, Codex must output only a concise summary:
 - Approved fixes repaired
 - Files changed
 - Tests/checks run
-- docs/REVIEW_PACKET.md updated: Yes / No
+- SESSION_LOG entry prepended: Yes / No
 - Working tree uncommitted (per Commit Timing Rule): Yes
 - Ready for Claude re-review: Yes / No
 
@@ -374,8 +377,7 @@ If a short command is ambiguous or unsafe, stop and ask the user for confirmatio
 ## Documentation Rules
 
 - docs/CURRENT.md is the current state snapshot.
-- docs/REVIEW_PACKET.md is the short-lived Codex-to-Claude review handoff for the current review round. It is intentionally gitignored and may be overwritten each round.
-- docs/SESSION_LOG.md is for cross-LLM cognitive continuity.
+- docs/SESSION_LOG.md is for cross-LLM cognitive continuity. The top entry written by Codex after each `执行` / `修复` doubles as the Codex-to-Claude review handoff (no separate REVIEW_PACKET file as of 2026-05-25).
 - docs/handoff files are for phase or major milestone handoff only.
 - Claude memory is not shared with Codex.
 - Cross-LLM shared information must be written to AGENTS.md or docs/.

@@ -143,7 +143,7 @@ The user remains the Final Approver.
 
 Detailed review workflow is defined in `docs/AI_REVIEW_PROTOCOL.md`.
 
-Codex writes the current review handoff packet to `docs/REVIEW_PACKET.md`; Claude reads it before reviewing the actual diff when repo access is available.
+Codex-to-Claude review handoff lives in the top SESSION_LOG entry written by Codex after each `执行` / `修复`; no separate review packet file (as of 2026-05-25).
 
 `AGENTS.md` remains the highest-level project rule. If `docs/AI_REVIEW_PROTOCOL.md` conflicts with this file, `AGENTS.md` wins.
 
@@ -153,10 +153,10 @@ This project supports short command aliases defined in `docs/AI_REVIEW_PROTOCOL.
 Detailed command expansions live only in `docs/AI_REVIEW_PROTOCOL.md` to avoid drift.
 
 Common aliases:
-- `执行` = Codex executes the next approved smallest task and updates `docs/REVIEW_PACKET.md`. Does not commit.
-- `审查` = Claude reviews the current uncommitted working tree using `docs/REVIEW_PACKET.md` and git diff; Claude must not directly modify business code.
+- `执行` = Codex executes the next approved smallest task and prepends a SESSION_LOG entry. Does not commit.
+- `审查` = Claude reviews the current uncommitted working tree using the top SESSION_LOG entry and git diff; Claude must not directly modify business code.
 - `批准修改` = User approves pending Required fixes.
-- `修复` = Codex fixes only user-approved Required fixes and updates `docs/REVIEW_PACKET.md`. Does not commit.
+- `修复` = Codex fixes only user-approved Required fixes and prepends a SESSION_LOG entry. Does not commit.
 - `提交` = Codex commits the reviewed working tree as a single coherent commit after Claude `审查` returns Pass. Not used during `执行` / `修复`. See `docs/AI_REVIEW_PROTOCOL.md` §Commit Timing Rule.
 
 `AGENTS.md` remains the highest-level project rule. If any alias conflicts with `AGENTS.md`, `AGENTS.md` wins.
