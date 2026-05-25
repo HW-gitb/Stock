@@ -5,6 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# Self-contained fixture; tests must not depend on live result/ data because
+# that directory churns each weekly run and would break CI / fresh clones.
+FIXTURE_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "analysis_input_minimal.json"
+
 from engine.analyzer import state_manager
 from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
 from runners.run_analysis_report import (
@@ -40,8 +44,8 @@ class RunAnalysisReportTest(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_build_report_replays_phase3_analyzer(self) -> None:
-        payload = load_analysis_input("20260522")
-        candidate = find_candidate(payload, "600415.SH")
+        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
             candidate,
@@ -50,7 +54,7 @@ class RunAnalysisReportTest(unittest.TestCase):
 
         self.assertEqual(report["schema_name"], "deterministic_report")
         self.assertEqual(report["schema_version"], "1.0.0")
-        self.assertEqual(report["ts_code"], "600415.SH")
+        self.assertEqual(report["ts_code"], "600000.SH")
         self.assertEqual(report["veto"], run_veto(candidate))
         self.assertEqual(
             {item["code"] for item in report["data_lineage"]["analyzer_rules"]},
@@ -64,8 +68,8 @@ class RunAnalysisReportTest(unittest.TestCase):
         )
 
     def test_markdown_renders_m67_table(self) -> None:
-        payload = load_analysis_input("20260522")
-        candidate = find_candidate(payload, "600415.SH")
+        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
             candidate,
@@ -74,17 +78,19 @@ class RunAnalysisReportTest(unittest.TestCase):
 
         markdown = render_markdown(report)
 
-        self.assertIn("# M6.7 Deterministic Report - 600415.SH", markdown)
+        self.assertIn("# M6.7 Deterministic Report - 600000.SH", markdown)
         self.assertIn("## M6.7 Table", markdown)
         self.assertIn("| target | action | shares | entry/tp1/tp2/stop |", markdown)
         self.assertIn("pending_llm_enrich", markdown)
 
     def test_llm_tasks_map_to_prompt_sections(self) -> None:
-        payload = load_analysis_input(
-            "20260522",
-            input_path=Path("result/a_short/backtest/generated/20260522/analysis_input.json"),
-        )
-        candidate = find_candidate(payload, "603298.SH")
+        # Uses the fixture's second candidate (FIXT_L2_UNKNOWN_WITH_TASKS),
+        # which carries the same three llm_tasks as the historical backtest
+        # generated fixture used to: industry_trend, regulatory_check (aliased
+        # to prompts/regulatory_48h.md), and policy_news. Also has l2_name="未知"
+        # to exercise the l2_unknown veto path.
+        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        candidate = find_candidate(payload, "600001.SH")
         report = build_report(
             payload,
             candidate,
@@ -104,8 +110,8 @@ class RunAnalysisReportTest(unittest.TestCase):
         self.assertIn("analyzer_hard_veto:l2_unknown", markdown)
 
     def test_apply_enrichment_only_replaces_llm_notes(self) -> None:
-        payload = load_analysis_input("20260522")
-        candidate = find_candidate(payload, "600415.SH")
+        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
             candidate,
@@ -115,7 +121,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         enrichment = {
             "target": {
                 "as_of": "20260522",
-                "ts_code": "600415.SH",
+                "ts_code": "600000.SH",
                 "report_schema_version": "1.0.0",
             },
             "llm_notes": {
@@ -145,15 +151,15 @@ class RunAnalysisReportTest(unittest.TestCase):
         from runners.run_analysis_report import find_candidate
 
         with self.assertRaisesRegex(ValueError, "no candidates"):
-            find_candidate({"candidates": []}, "600415.SH")
+            find_candidate({"candidates": []}, "600000.SH")
         with self.assertRaisesRegex(ValueError, "no candidates"):
-            find_candidate({}, "600415.SH")
+            find_candidate({}, "600000.SH")
         with self.assertRaisesRegex(ValueError, "not in analysis_input"):
-            find_candidate({"candidates": [{"ts_code": "000001.SZ"}]}, "600415.SH")
+            find_candidate({"candidates": [{"ts_code": "000001.SZ"}]}, "600000.SH")
 
     def test_apply_enrichment_returns_deep_copy(self) -> None:
-        payload = load_analysis_input("20260522")
-        candidate = find_candidate(payload, "600415.SH")
+        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
             candidate,
@@ -162,7 +168,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         enrichment = {
             "target": {
                 "as_of": "20260522",
-                "ts_code": "600415.SH",
+                "ts_code": "600000.SH",
                 "report_schema_version": "1.0.0",
             },
             "llm_notes": {"enabled": True, "sections": []},
@@ -181,8 +187,8 @@ class RunAnalysisReportTest(unittest.TestCase):
     def test_decision_reason_code_uses_comma_join(self) -> None:
         # B5: reason_code separator changed from '|' to ',' since '|' collides
         # with Markdown table cells. esp_non_positive < 0 should fire here.
-        payload = load_analysis_input("20260522")
-        candidate = dict(find_candidate(payload, "600415.SH"))
+        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        candidate = dict(find_candidate(payload, "600000.SH"))
         # Inject esp_raw < 0 to trigger esp_non_positive veto deterministically.
         fundamental = dict(candidate.get("fundamental") or {})
         expectation = dict(fundamental.get("expectation") or {})
@@ -199,8 +205,8 @@ class RunAnalysisReportTest(unittest.TestCase):
         self.assertNotIn("|", report["decision"]["reason_code"])
 
     def test_apply_enrichment_rejects_target_mismatch(self) -> None:
-        payload = load_analysis_input("20260522")
-        candidate = find_candidate(payload, "600415.SH")
+        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
             candidate,
@@ -209,7 +215,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         enrichment = {
             "target": {
                 "as_of": "20260522",
-                "ts_code": "600000.SH",
+                "ts_code": "999999.SH",  # mismatch vs report ts_code 600000.SH
                 "report_schema_version": "1.0.0",
             },
             "llm_notes": {"enabled": True, "sections": []},
@@ -224,8 +230,8 @@ class RunAnalysisReportTest(unittest.TestCase):
         except ModuleNotFoundError as exc:
             raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
 
-        payload = load_analysis_input("20260522")
-        candidate = find_candidate(payload, "600415.SH")
+        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
             candidate,
@@ -237,7 +243,7 @@ class RunAnalysisReportTest(unittest.TestCase):
             with json_path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            self.assertEqual(data["ts_code"], "600415.SH")
+            self.assertEqual(data["ts_code"], "600000.SH")
             self.assertTrue(md_path.exists())
 
     def test_enrichment_example_validates_when_jsonschema_available(self) -> None:

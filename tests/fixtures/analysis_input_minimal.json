@@ -1,0 +1,57 @@
+{
+  "schema_name": "analysis_input",
+  "schema_version": "1.1.0",
+  "generated_at": "2026-05-22T16:00:00+08:00",
+  "trade_date": "20260522",
+  "preset": "a_short",
+  "market": "a_share",
+  "horizon": "short_term",
+  "source": {
+    "screening_engine": "EGS",
+    "screening_engine_version": "v7.10",
+    "data_provider": "tushare",
+    "l3_mode": "today",
+    "l3_pit_strict": false,
+    "l3_snapshot_date": "20260522",
+    "input_files": [],
+    "notes": "synthetic fixture for tests; not real candidates"
+  },
+  "candidates": [
+    {
+      "ts_code": "600000.SH",
+      "name": "FIXT_CLEAN_TIER1",
+      "exchange": "SSE",
+      "board": "main",
+      "analysis_role": "primary",
+      "selection": {"rank": 1, "tier": "Tier1", "entry_flag": "可直接观察", "cninfo_flag": "通过", "still_in_pool": true},
+      "quote": {"close": 13.35, "current_price": 13.35, "adjustment": "qfq", "price_source": "tushare_eod", "price_time": "2026-05-22T15:00:00+08:00"},
+      "industry": {"sw_l1_code": "450000", "sw_l1_name": "商业贸易", "sw_l2_code": "801203.SI", "sw_l2_name": "一般零售"},
+      "scores": {"final_score": 75.0, "egs_base": 70.0, "esp_score": 50.0, "cat_score": 60.0, "l4_score": 100.0, "l1_score": 1.0, "l2_flags": "", "l4_flag": "", "cat_flag": "", "deduct": 0.0, "multiplier": 1.0},
+      "technical": {"support": {"price": 12.5, "method": "ma20", "confidence": "low"}, "resistance": {"price": 14.2, "method": "high20", "confidence": "low"}, "atr": {"atr_14": null}, "rsi_14": null, "macd": {"dif": null}},
+      "fundamental": {"valuation": {"pe": 17.4}, "profitability": {"q0_dt_yoy": 18.87, "q1_dt_yoy": 30.5}, "expectation": {"esp_raw": 18.0}, "quality": {}},
+      "derived_flags": {"chasing_high": false, "overheat_flag": false, "hard_veto": false},
+      "llm_tasks": [],
+      "data_quality": {"completeness_score": 100.0, "missing_fields": [], "pending_fields": [], "rule11_required": false}
+    },
+    {
+      "ts_code": "600001.SH",
+      "name": "FIXT_L2_UNKNOWN_WITH_TASKS",
+      "exchange": "SSE",
+      "board": "main",
+      "analysis_role": "primary",
+      "selection": {"rank": 2, "tier": "Tier1", "entry_flag": "可直接观察", "cninfo_flag": "通过", "still_in_pool": true},
+      "quote": {"close": 20.0, "current_price": 20.0, "adjustment": "qfq", "price_source": "tushare_eod", "price_time": "2026-05-22T15:00:00+08:00"},
+      "industry": {"sw_l1_code": "000000", "sw_l1_name": "未知", "sw_l2_code": "000000.SI", "sw_l2_name": "未知"},
+      "scores": {"final_score": 70.0, "egs_base": 65.0, "esp_score": 50.0, "cat_score": 50.0, "l4_score": 75.0, "l1_score": 1.0, "l2_flags": "", "l4_flag": "", "cat_flag": "", "deduct": 0.0, "multiplier": 1.0},
+      "technical": {"support": {"price": 19.0, "method": "ma20", "confidence": "low"}, "resistance": {"price": 21.5, "method": "high20", "confidence": "low"}, "atr": {"atr_14": null}, "rsi_14": null, "macd": {"dif": null}},
+      "fundamental": {"valuation": {"pe": 25.0}, "profitability": {"q0_dt_yoy": 8.0, "q1_dt_yoy": 12.0}, "expectation": {"esp_raw": 5.0}, "quality": {}},
+      "derived_flags": {"chasing_high": false, "overheat_flag": false, "hard_veto": false},
+      "llm_tasks": [
+        {"task_id": "t1", "prompt": "industry_trend", "status": "pending", "inputs": {}},
+        {"task_id": "t2", "prompt": "regulatory_check", "status": "pending", "inputs": {}},
+        {"task_id": "t3", "prompt": "policy_news", "status": "pending", "inputs": {}}
+      ],
+      "data_quality": {"completeness_score": 90.0, "missing_fields": [], "pending_fields": [], "rule11_required": false}
+    }
+  ]
+}
