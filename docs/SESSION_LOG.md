@@ -8,11 +8,22 @@
 
 ---
 
-## 2026-05-25 — Claude review (REVIEW_PACKET + short aliases + Phase 5 kickoff) — pending user approval
+## 2026-05-25 — Claude review (REVIEW_PACKET + short aliases + Phase 5 kickoff) — APPROVED by user 2026-05-25 (post-alias-rename)
 
 **Commits**: none (review-only entry; reviews uncommitted REVIEW_PACKET + aliases work + committed `6c90f56` `d5075a1` Phase 5 kickoff handoff)
 
-**Status**: REVIEW VERDICT RECORDED. **Required fixes below are PENDING USER APPROVAL.** Codex must not execute them until the user explicitly approves each item, per `docs/AI_REVIEW_PROTOCOL.md` §Standard Workflow #10-11.
+**Status**: **APPROVED 2026-05-25**. User approved Required #1 (direction b — first upgrade deterministic_report to v1.1.0) + Required #2 (Claude's recommendation) + all four Optional suggestions O1-O4 (per "按你推荐"). Codex may now execute these via `修复` alias.
+
+**User-approved action items for Codex** (Codex executes in next `修复` turn; sequence flexible):
+- **R1**: Phase 5 kickoff handoff §7 — commit to direction (b): first upgrade deterministic_report schema to v1.1.0 (add `data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source`), then proceed to execution_backtest_report schema.
+- **R2**: REVIEW_PACKET.md L12 — change "Approved by user request in this turn" to "Drafted in this turn pending Claude review and user approval".
+- **O1**: Add `docs/REVIEW_PACKET.md` to `.gitignore` (overwrite each round, no version history); document the policy in AI_REVIEW_PROTOCOL.md §Documentation Rules.
+- **O2**: Phase 5 kickoff §6.2 — add note that Phase 4 v1 always emits `exit_plan.stop_loss=null`, so consuming Phase 4 reports would skip-100% under the `missing_stop` rule; §4 conservative path (consume analysis_input directly) is the v1 default.
+- **O3**: AGENTS.md §Short Command Aliases — reduce to pointer + alias list; move full expansions to AI_REVIEW_PROTOCOL.md only.
+- **O4**: Phase 5 kickoff §3 — annotate `settings` field with "具体字段由 schema 任务定" or equivalent.
+- **Plus**: commit the currently-uncommitted alias rename work (AGENTS.md + AI_REVIEW_PROTOCOL.md modified + REVIEW_PACKET.md untracked) along with the above fixes in a single coherent commit.
+
+**Earlier alias-rename verification by Claude (post-`修改` → `审查` rename done by Codex)**: confirmed correct and consistent in AGENTS.md L156, AI_REVIEW_PROTOCOL.md L194/198/202, REVIEW_PACKET.md L11/61. `批准修改` / `暂缓修改` / `修复` deliberately preserved per user spec.
 
 **Invocation**: User typed `修改` — invoked as the binding short command alias per the new (uncommitted but in-effect) AI_REVIEW_PROTOCOL.md §Short Command Aliases.
 
