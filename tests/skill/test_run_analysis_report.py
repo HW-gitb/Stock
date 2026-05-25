@@ -77,6 +77,30 @@ class RunAnalysisReportTest(unittest.TestCase):
         self.assertIn("| target | action | shares | entry/tp1/tp2/stop |", markdown)
         self.assertIn("pending_llm_enrich", markdown)
 
+    def test_llm_tasks_map_to_prompt_sections(self) -> None:
+        payload = load_analysis_input(
+            "20260522",
+            input_path=Path("result/a_short/backtest/generated/20260522/analysis_input.json"),
+        )
+        candidate = find_candidate(payload, "603298.SH")
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+        sections = {item["code"]: item for item in report["llm_notes"]["sections"]}
+        markdown = render_markdown(report)
+
+        self.assertEqual(
+            set(sections),
+            {"industry_trend", "regulatory_check", "policy_news"},
+        )
+        self.assertEqual(
+            sections["regulatory_check"]["prompt_ref"],
+            "skills/a_short_analysis/prompts/regulatory_48h.md",
+        )
+        self.assertIn("analyzer_hard_veto:l2_unknown", markdown)
+
     def test_apply_enrichment_only_replaces_llm_notes(self) -> None:
         payload = load_analysis_input("20260522")
         candidate = find_candidate(payload, "600415.SH")

@@ -31,6 +31,9 @@ SCHEMA_PATH = ROOT / "schemas" / "deterministic_report.schema.json"
 ENRICHMENT_SCHEMA_PATH = ROOT / "schemas" / "deterministic_report_enrichment.schema.json"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
 REPORT_SCHEMA_VERSION = "1.0.0"
+PROMPT_REF_ALIASES = {
+    "regulatory_check": "regulatory_48h",
+}
 
 
 def load_analysis_input(as_of: str, input_path: Path | None = None) -> dict[str, Any]:
@@ -235,11 +238,15 @@ def _build_llm_sections(candidate: dict[str, Any]) -> list[dict[str, Any]]:
     for task in tasks:
         if not isinstance(task, dict):
             continue
-        code = str(task.get("id") or task.get("code") or "llm_task")
+        prompt_name = str(task.get("prompt") or "").strip()
+        code = str(task.get("id") or task.get("code") or prompt_name or task.get("task_id") or "llm_task")
         prompt_ref = task.get("prompt_ref")
+        if prompt_ref is None and prompt_name:
+            prompt_file = PROMPT_REF_ALIASES.get(prompt_name, prompt_name)
+            prompt_ref = f"skills/a_short_analysis/prompts/{prompt_file}.md"
         sections.append({
             "code": code,
-            "title": str(task.get("title") or code),
+            "title": str(task.get("title") or prompt_name or code),
             "status": "unknown",
             "prompt_ref": None if prompt_ref is None else str(prompt_ref),
             "content": None,
@@ -348,6 +355,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         _fmt_unknown(exit_plan.get("take_profit_2")),
         _fmt_unknown(exit_plan.get("stop_loss")),
     ])
+    trigger = entry.get("condition")
+    if not trigger or trigger == "unknown":
+        trigger = decision["reason_code"]
+
     table = [
         "| target | action | shares | entry/tp1/tp2/stop | type | priority | trigger |",
         "|---|---|---:|---|---|---|---|",
@@ -355,7 +366,7 @@ def render_markdown(report: dict[str, Any]) -> str:
             f"| {report['ts_code']} {report['name']} | {decision['action']} | "
             f"{_fmt_unknown(position.get('shares'))} | {price_block} | "
             f"{entry.get('type') or 'unknown'} | pending_llm_enrich | "
-            f"{entry.get('condition') or decision['reason_code']} |"
+            f"{trigger} |"
         ),
     ]
 

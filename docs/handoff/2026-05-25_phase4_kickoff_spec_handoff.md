@@ -515,3 +515,51 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "<enrichmen
 
 1. 补真实样本 enrichment E2E 验证结果。
 2. 用 1-2 只不同 veto 状态股票做 Phase 4 smoke，检查 Markdown 可读性。
+
+
+---
+
+## 2026-05-25 追加：Phase 4 smoke fixes
+
+### 改了什么
+
+- 用两个真实样本跑 Phase 4 runner smoke：
+  - `20260522 / 600415.SH`：non-veto，输出 `decision.action=watch`，reason=`phase4_v1_no_buy_decision`。
+  - `20260522 / 603298.SH`：vetoed，输入来自 `result/a_short/backtest/generated/20260522/analysis_input.json`，输出 `decision.action=skip`，reason=`analyzer_hard_veto:l2_unknown`。
+- 修复 `runners/run_analysis_report.py` Markdown M6.7 table：
+  - 当 `entry_plan.condition` 是 `unknown` 时，trigger 列改用 `decision.reason_code`，避免 hard-veto 报告表格里仍显示 `unknown`。
+- 修复 `llm_tasks` 映射：
+  - 识别 `task.prompt` / `task.task_id`，不再把所有 section 都写成 `llm_task`。
+  - `regulatory_check` prompt alias 映射到 `skills/a_short_analysis/prompts/regulatory_48h.md`。
+- 增加测试：
+  - `test_llm_tasks_map_to_prompt_sections`
+  - smoke 相关 trigger fallback 由该测试覆盖。
+
+### 为什么改
+
+真实 smoke 暴露出两个使用层问题：hard veto 的 Markdown 表格触发条件不够可读，以及现有 `analysis_input.json` 的 `llm_tasks` 字段实际使用 `prompt/task_id` 而不是 runner 先前假设的 `id/code`。这不影响 JSON schema，但会影响人工 review 和 Skill enrich 的可用性，所以在 Phase 4 收口前修掉。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['runners/run_analysis_report.py','tests/skill/test_run_analysis_report.py']; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in files]; print('compile ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "<two-case Phase 4 smoke: 600415.SH watch + 603298.SH skip>"
+```
+
+### 验证结果
+
+- Compile：`compile ok`。
+- Unit tests：27 tests passed，1 skipped。
+- Smoke：
+  - `600415.SH`：rc=0，action=`watch`，vetoed=`False`，llm_codes=`industry_trend/regulatory_check/policy_news`，trigger reason 出现在 Markdown，unknowns=8。
+  - `603298.SH`：rc=0，action=`skip`，vetoed=`True`，reason=`analyzer_hard_veto:l2_unknown`，llm_codes=`industry_trend/regulatory_check/policy_news`，trigger reason 出现在 Markdown，unknowns=8。
+
+### 失效旧结论
+
+无。此改动不改变 schema、不改变 analyzer 决策、不改变 runner 的 default deterministic boundary。
+
+### 下一步注意事项
+
+1. 补 enrichment example fixture。
+2. 对照 Phase 4 handoff §4 做 minimal 收口判断。
