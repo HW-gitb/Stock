@@ -563,3 +563,45 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "<two-case 
 
 1. 补 enrichment example fixture。
 2. 对照 Phase 4 handoff §4 做 minimal 收口判断。
+
+
+---
+
+## 2026-05-25 追加：enrichment example fixture
+
+### 改了什么
+
+- 新增 `schemas/examples/deterministic_report_enrichment.example.json`。
+  - target 指向 `20260522 / 600415.SH / report_schema_version=1.0.0`。
+  - 包含 `industry_trend`、`regulatory_check`、`policy_news` 三个 `llm_notes.sections` 示例。
+  - 内容保持 `unknown/null`，避免样例伪造真实新闻或行业判断。
+- 更新 `tests/skill/test_run_analysis_report.py`。
+  - 新增 `test_enrichment_example_validates_when_jsonschema_available`。
+- 更新 `docs/CURRENT.md` 与 `schemas/deterministic_report_coverage.md`。
+
+### 为什么改
+
+enrichment patch contract 已有 schema 和 runner merge，但缺一个 repo-visible 的最小样例。样例可以降低后续 LLM/人工手写 patch 时的格式错误概率，同时仍然保持 Phase 4 原则：未知就标 unknown，不伪造实时外部判断。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['tests/skill/test_run_analysis_report.py','schemas/examples/deterministic_report_enrichment.example.json']; [Path(f).read_text(encoding='utf-8') for f in files]; print('example utf8 ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.skill.test_run_analysis_report.RunAnalysisReportTest.test_enrichment_example_validates_when_jsonschema_available -v
+```
+
+### 验证结果
+
+- Example UTF-8 read：`example utf8 ok`。
+- Bundled Python unit tests：28 tests passed，2 skipped（两项 jsonschema 写入/样例校验在 bundled Python 下按设计 skip）。
+- 本机 Python 3.13 targeted schema test：`test_enrichment_example_validates_when_jsonschema_available ... ok`。
+
+### 失效旧结论
+
+无。此改动不改变 runner 默认行为、不改变 deterministic report schema、不改变 analyzer 决策。
+
+### 下一步注意事项
+
+1. 对照 Phase 4 handoff §4 做 minimal 收口判断。
+2. 若收口通过，下一步进入 Phase 5 execution 回测边界设计，不要直接跳到大实现。

@@ -8,6 +8,7 @@ Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再
 
 - `schemas/deterministic_report.schema.json`
 - `schemas/deterministic_report_enrichment.schema.json`
+- `schemas/examples/deterministic_report_enrichment.example.json`
 - `schemas/deterministic_report_coverage.md`
 - `runners/run_analysis_report.py`
 - `tests/skill/test_run_analysis_report.py`
@@ -105,6 +106,7 @@ It must also declare:
 - `schemas/deterministic_report.schema.json` 通过 JSON Schema meta-validation。
 - `runners/run_analysis_report.py` 落盘前强制 schema 校验。
 - Optional LLM enrichment patches validate against `deterministic_report_enrichment.schema.json` and merge only `llm_notes`.
+- `schemas/examples/deterministic_report_enrichment.example.json` validates against the enrichment schema.
 - 测试覆盖 analyzer replay、Markdown M6.7 table、schema write path。
 - 真实样本 `20260522 / 600415.SH` 可生成 JSON + Markdown。
 - v1 不输出 `buy`，不把 LLM 判断伪装成 deterministic 结果。

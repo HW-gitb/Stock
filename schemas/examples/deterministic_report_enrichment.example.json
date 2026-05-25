@@ -1,0 +1,48 @@
+{
+  "schema_name": "deterministic_report_enrichment",
+  "schema_version": "1.0.0",
+  "target": {
+    "as_of": "20260522",
+    "ts_code": "600415.SH",
+    "report_schema_version": "1.0.0"
+  },
+  "generated_at": "2026-05-25T00:00:00+08:00",
+  "source": {
+    "kind": "llm",
+    "model": "manual-example",
+    "prompt_refs": [
+      "skills/a_short_analysis/prompts/industry_trend.md",
+      "skills/a_short_analysis/prompts/regulatory_48h.md",
+      "skills/a_short_analysis/prompts/policy_news.md"
+    ]
+  },
+  "llm_notes": {
+    "enabled": true,
+    "sections": [
+      {
+        "code": "industry_trend",
+        "title": "Industry Trend",
+        "status": "unknown",
+        "prompt_ref": "skills/a_short_analysis/prompts/industry_trend.md",
+        "content": null,
+        "confidence": "unknown"
+      },
+      {
+        "code": "regulatory_check",
+        "title": "48h Regulatory Risk",
+        "status": "unknown",
+        "prompt_ref": "skills/a_short_analysis/prompts/regulatory_48h.md",
+        "content": null,
+        "confidence": "unknown"
+      },
+      {
+        "code": "policy_news",
+        "title": "Policy And News",
+        "status": "unknown",
+        "prompt_ref": "skills/a_short_analysis/prompts/policy_news.md",
+        "content": null,
+        "confidence": "unknown"
+      }
+    ]
+  }
+}

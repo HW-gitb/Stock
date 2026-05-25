@@ -12,7 +12,9 @@ from runners.run_analysis_report import (
     build_report,
     find_candidate,
     load_analysis_input,
+    load_enrichment,
     render_markdown,
+    validate_enrichment,
     write_report,
 )
 
@@ -177,6 +179,18 @@ class RunAnalysisReportTest(unittest.TestCase):
 
             self.assertEqual(data["ts_code"], "600415.SH")
             self.assertTrue(md_path.exists())
+
+    def test_enrichment_example_validates_when_jsonschema_available(self) -> None:
+        try:
+            import jsonschema  # noqa: F401
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        enrichment = load_enrichment(
+            Path("schemas/examples/deterministic_report_enrichment.example.json")
+        )
+
+        validate_enrichment(enrichment)
 
 
 if __name__ == "__main__":
