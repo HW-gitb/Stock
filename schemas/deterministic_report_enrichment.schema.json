@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/deterministic_report_enrichment/1.0.0/schema.json",
+  "title": "Deterministic Report LLM Enrichment Patch",
+  "description": "Optional Phase 4 patch input for merging LLM-only notes into deterministic_report without changing analyzer or decision fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "target",
+    "generated_at",
+    "source",
+    "llm_notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "type": "string",
+      "const": "deterministic_report_enrichment"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "as_of",
+        "ts_code",
+        "report_schema_version"
+      ],
+      "properties": {
+        "as_of": {
+          "$ref": "#/$defs/date8"
+        },
+        "ts_code": {
+          "$ref": "#/$defs/tsCode"
+        },
+        "report_schema_version": {
+          "type": "string",
+          "const": "1.0.0"
+        }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "prompt_refs"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["llm", "manual"]
+        },
+        "model": {
+          "type": ["string", "null"]
+        },
+        "prompt_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "llm_notes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "sections"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "const": true
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/llmSection"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "llmSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "title",
+        "status",
+        "prompt_ref",
+        "content",
+        "confidence"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["unknown", "skipped", "completed"]
+        },
+        "prompt_ref": {
+          "type": ["string", "null"]
+        },
+        "content": {
+          "type": ["string", "null"]
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "unknown"]
+        }
+      }
+    },
+    "tsCode": {
+      "type": "string",
+      "pattern": "^[0-9]{6}\\.(SH|SZ)$"
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    }
+  }
+}

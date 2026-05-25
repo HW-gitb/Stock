@@ -7,6 +7,7 @@ Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再
 ## 已建立文件
 
 - `schemas/deterministic_report.schema.json`
+- `schemas/deterministic_report_enrichment.schema.json`
 - `schemas/deterministic_report_coverage.md`
 - `runners/run_analysis_report.py`
 - `tests/skill/test_run_analysis_report.py`
@@ -31,6 +32,25 @@ Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再
 | `llm_notes` | optional enrichment placeholder | `enabled=false` in v1 |
 | `data_lineage` | runner + analyzer rule versions + state digests | deterministic |
 | `analyzer_invocations` | `run_veto()` replay result | deterministic |
+
+## LLM enrichment patch
+
+`schemas/deterministic_report_enrichment.schema.json` v1.0.0 is the only supported patch format for writing LLM notes back through the runner.
+
+The patch can target only:
+
+- `llm_notes.enabled`
+- `llm_notes.sections[]`
+
+It must also declare:
+
+- `target.as_of`
+- `target.ts_code`
+- `target.report_schema_version`
+- `source.kind`
+- `source.prompt_refs`
+
+`runners/run_analysis_report.py --enrichment-path <patch.json>` validates the patch, verifies the target matches the freshly generated report, then merges only `llm_notes`. It must not patch `decision`, `veto`, `risk_flags`, `entry_plan`, `exit_plan`, `position_size`, `evidence`, `data_lineage`, or `analyzer_invocations`.
 
 ## v14.2 映射
 
@@ -84,6 +104,7 @@ Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再
 
 - `schemas/deterministic_report.schema.json` 通过 JSON Schema meta-validation。
 - `runners/run_analysis_report.py` 落盘前强制 schema 校验。
+- Optional LLM enrichment patches validate against `deterministic_report_enrichment.schema.json` and merge only `llm_notes`.
 - 测试覆盖 analyzer replay、Markdown M6.7 table、schema write path。
 - 真实样本 `20260522 / 600415.SH` 可生成 JSON + Markdown。
 - v1 不输出 `buy`，不把 LLM 判断伪装成 deterministic 结果。

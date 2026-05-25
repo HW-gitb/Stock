@@ -28,6 +28,7 @@ from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
 
 
 SCHEMA_PATH = ROOT / "schemas" / "deterministic_report.schema.json"
+ENRICHMENT_SCHEMA_PATH = ROOT / "schemas" / "deterministic_report_enrichment.schema.json"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
 REPORT_SCHEMA_VERSION = "1.0.0"
 
@@ -275,22 +276,60 @@ def _build_analyzer_invocations(veto: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_report(report: dict[str, Any], schema_path: Path = SCHEMA_PATH) -> None:
+    _validate_json_object(
+        report,
+        schema_path,
+        error_prefix="deterministic_report schema validation failed",
+    )
+
+
+def load_enrichment(path: Path) -> dict[str, Any]:
+    with Path(path).open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def validate_enrichment(enrichment: dict[str, Any],
+                        schema_path: Path = ENRICHMENT_SCHEMA_PATH) -> None:
+    _validate_json_object(
+        enrichment,
+        schema_path,
+        error_prefix="deterministic_report_enrichment schema validation failed",
+    )
+
+
+def apply_enrichment(report: dict[str, Any], enrichment: dict[str, Any]) -> dict[str, Any]:
+    target = enrichment.get("target") or {}
+    mismatches = []
+    for field in ("as_of", "ts_code"):
+        if str(target.get(field)) != str(report.get(field)):
+            mismatches.append(field)
+    if str(target.get("report_schema_version")) != str(report.get("schema_version")):
+        mismatches.append("report_schema_version")
+    if mismatches:
+        raise ValueError(f"enrichment target mismatch: {', '.join(mismatches)}")
+
+    merged = dict(report)
+    merged["llm_notes"] = enrichment["llm_notes"]
+    return merged
+
+
+def _validate_json_object(obj: dict[str, Any], schema_path: Path, error_prefix: str) -> None:
     try:
         from jsonschema import Draft7Validator
     except ModuleNotFoundError as exc:
         raise RuntimeError(
-            "jsonschema is required to validate deterministic_report. "
+            "jsonschema is required to validate Phase 4 report contracts. "
             "Install with: python -m pip install -r requirements-dev.txt"
         ) from exc
 
     with Path(schema_path).open("r", encoding="utf-8") as f:
         schema = json.load(f)
     Draft7Validator.check_schema(schema)
-    errors = sorted(Draft7Validator(schema).iter_errors(report), key=lambda e: list(e.path))
+    errors = sorted(Draft7Validator(schema).iter_errors(obj), key=lambda e: list(e.path))
     if errors:
         first = errors[0]
         path = "$" + "".join(f"[{repr(p)}]" for p in first.path)
-        raise ValueError(f"deterministic_report schema validation failed at {path}: {first.message}")
+        raise ValueError(f"{error_prefix} at {path}: {first.message}")
 
 
 def render_markdown(report: dict[str, Any]) -> str:
@@ -301,6 +340,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     flags = report.get("risk_flags") or []
     unknowns = report.get("unknowns") or []
     veto = report.get("veto") or {}
+    llm_notes = report.get("llm_notes") or {}
 
     price_block = " / ".join([
         _fmt_unknown(entry.get("price")),
@@ -348,7 +388,12 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append("- none")
     lines.extend(["", "## Unknowns", ""])
     lines.extend(f"- `{u['field']}`: {u['reason']} - {u['note']}" for u in unknowns)
-    lines.extend(["", "## LLM Notes", "", "- enabled: false"])
+    lines.extend(["", "## LLM Notes", "", f"- enabled: {str(bool(llm_notes.get('enabled'))).lower()}"])
+    for section in llm_notes.get("sections") or []:
+        lines.append(
+            f"- `{section.get('code')}` [{section.get('status')}/"
+            f"{section.get('confidence')}]: {_fmt_unknown(section.get('content'))}"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -410,6 +455,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--as-of", required=True, help="YYYYMMDD result directory date.")
     parser.add_argument("--ts-code", required=True, help="Candidate ts_code, e.g. 600415.SH.")
     parser.add_argument("--input-path", help="Optional explicit analysis_input.json path.")
+    parser.add_argument(
+        "--enrichment-path",
+        help="Optional deterministic_report_enrichment JSON path. Only llm_notes are merged.",
+    )
     parser.add_argument("--out-dir", help="Output directory. Default: result/a_short/<as-of>/reports")
     args = parser.parse_args(argv)
 
@@ -417,6 +466,10 @@ def main(argv: list[str] | None = None) -> int:
     payload = load_analysis_input(args.as_of, input_path=input_path)
     candidate = find_candidate(payload, args.ts_code)
     report = build_report(payload, candidate)
+    if args.enrichment_path:
+        enrichment = load_enrichment(Path(args.enrichment_path))
+        validate_enrichment(enrichment)
+        report = apply_enrichment(report, enrichment)
     out_dir = Path(args.out_dir) if args.out_dir else LIVE_RESULT_ROOT / args.as_of / "reports"
     json_path, md_path = write_report(report, out_dir)
     print(f"[OK] wrote {json_path.relative_to(ROOT) if json_path.is_relative_to(ROOT) else json_path}")

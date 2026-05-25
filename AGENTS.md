@@ -17,7 +17,7 @@
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
 - ✅ Phase 2：`runners/backtest_rank.py` 已跑通 24 期 production rank 回测；工程链路通过，策略优化继续推进
 - ✅ L3 概念缓存：正式运行默认刷新 L3；搭建/测试阶段可用 `--reuse-l3-cache` 复用共享缓存加速
-- ✅ Phase 4 minimal 基础：`deterministic_report` schema、纯 Python runner、coverage doc、Skill 使用文档与 prompts 骨架已落地
+- ✅ Phase 4 minimal 基础：`deterministic_report` schema、纯 Python runner、coverage doc、Skill 使用文档、prompts 骨架、LLM enrichment patch schema 已落地
 
 ## 三条不可动摇的原则
 

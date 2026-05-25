@@ -8,6 +8,7 @@ from pathlib import Path
 from engine.analyzer import state_manager
 from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
 from runners.run_analysis_report import (
+    apply_enrichment,
     build_report,
     find_candidate,
     load_analysis_input,
@@ -75,6 +76,61 @@ class RunAnalysisReportTest(unittest.TestCase):
         self.assertIn("## M6.7 Table", markdown)
         self.assertIn("| target | action | shares | entry/tp1/tp2/stop |", markdown)
         self.assertIn("pending_llm_enrich", markdown)
+
+    def test_apply_enrichment_only_replaces_llm_notes(self) -> None:
+        payload = load_analysis_input("20260522")
+        candidate = find_candidate(payload, "600415.SH")
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+        original_decision = report["decision"]
+        enrichment = {
+            "target": {
+                "as_of": "20260522",
+                "ts_code": "600415.SH",
+                "report_schema_version": "1.0.0",
+            },
+            "llm_notes": {
+                "enabled": True,
+                "sections": [{
+                    "code": "industry_trend",
+                    "title": "Industry Trend",
+                    "status": "completed",
+                    "prompt_ref": "skills/a_short_analysis/prompts/industry_trend.md",
+                    "content": "neutral",
+                    "confidence": "low",
+                }],
+            },
+        }
+
+        merged = apply_enrichment(report, enrichment)
+
+        self.assertEqual(merged["decision"], original_decision)
+        self.assertTrue(merged["llm_notes"]["enabled"])
+        self.assertEqual(merged["llm_notes"]["sections"][0]["code"], "industry_trend")
+        self.assertIn("- enabled: true", render_markdown(merged))
+
+    def test_apply_enrichment_rejects_target_mismatch(self) -> None:
+        payload = load_analysis_input("20260522")
+        candidate = find_candidate(payload, "600415.SH")
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+        enrichment = {
+            "target": {
+                "as_of": "20260522",
+                "ts_code": "600000.SH",
+                "report_schema_version": "1.0.0",
+            },
+            "llm_notes": {"enabled": True, "sections": []},
+        }
+
+        with self.assertRaisesRegex(ValueError, "ts_code"):
+            apply_enrichment(report, enrichment)
 
     def test_write_report_validates_schema_when_jsonschema_available(self) -> None:
         try:

@@ -2,7 +2,7 @@
 
 **日期**：2026-05-25
 **范围**：Phase 4 minimal Skill 启动规格
-**状态**：实施中。schema v1.0.0、runner v1、coverage doc、Skill 使用文档与 prompt 骨架已落地；LLM enrich 写回机制待定。
+**状态**：实施中。schema v1.0.0、runner v1、coverage doc、Skill 使用文档、prompt 骨架、LLM enrichment patch schema 已落地；真实样本 smoke 待补。
 **前置 handoff**：`docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md`（Phase 3 完整实施记录，含 audit fixes / 3.3 / 3.4 / 3.5）
 
 ---
@@ -461,3 +461,57 @@ C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\p
 1. 如果要把 LLM enrich 写回 JSON，先定义补充输入/patch 文件格式，不能手工覆盖 deterministic 字段。
 2. 用 1-2 只不同 veto 状态股票跑 smoke，检查 Markdown 和 `unknowns` 对人工 review 是否足够清楚。
 3. Phase 4 v1 仍保持 `skip/watch`，不要把 prompt 输出升级成买入决策。
+
+
+---
+
+## 2026-05-25 追加：LLM enrichment patch contract
+
+### 改了什么
+
+- 新增 `schemas/deterministic_report_enrichment.schema.json` v1.0.0。
+  - 只定义可选 LLM notes patch，不承载 deterministic 决策。
+  - 必须声明 `target.as_of`、`target.ts_code`、`target.report_schema_version`，以及 `source.kind` / `source.prompt_refs`。
+  - 只允许写 `llm_notes.enabled=true` 和 `llm_notes.sections[]`。
+- 更新 `runners/run_analysis_report.py`。
+  - 新增 `--enrichment-path` 参数。
+  - 读取并校验 enrichment patch 后，先核对 target 与新生成 report 是否一致，再只合并 `llm_notes`。
+  - Markdown 的 `## LLM Notes` 会反映 `enabled=true/false` 和 section 状态。
+- 更新 `tests/skill/test_run_analysis_report.py`。
+  - 覆盖 enrichment 合并后 deterministic `decision` 不变。
+  - 覆盖 target mismatch 会拒绝。
+- 更新 `schemas/deterministic_report_coverage.md`、`skills/a_short_analysis/SKILL.md`、`AGENTS.md`、`docs/CURRENT.md`。
+
+### 为什么改
+
+上一轮已经明确 Skill 可以做可选 LLM enrich，但没有定义 enrich 如何写回 JSON。没有 patch contract 的情况下，后续 LLM 很容易直接手改 report JSON，误伤 `decision/veto/risk_flags/entry_plan/exit_plan/position_size` 等 deterministic 字段。
+
+本轮把写回面压缩到 `llm_notes`，让 runner 仍然是唯一合并入口，并让 schema 拒绝任何多余字段。这样 Phase 4 能保留 LLM notes，同时不破坏 Phase 5 execution 回测所需的 deterministic contract。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['runners/run_analysis_report.py','tests/skill/test_run_analysis_report.py']; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in files]; print('compile ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['skills/a_short_analysis/SKILL.md','schemas/deterministic_report_coverage.md','schemas/deterministic_report_enrichment.schema.json']; [Path(f).read_text(encoding='utf-8') for f in files]; print('docs utf8 ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "<enrichment schema meta-validation + runner --enrichment-path E2E sample>"
+```
+
+### 验证结果
+
+- Compile：`compile ok`。
+- Unit tests：26 tests passed，1 skipped（bundled Python 缺 `jsonschema`，schema 写入测试按设计 skip）。
+- Docs/schema UTF-8 read：`docs utf8 ok`。
+- 本机 Python 3.13 enrichment E2E：
+  - enrichment schema meta-validation：`schema ok`
+  - runner `--enrichment-path` 生成 `600415.SH.json` 和 `600415.SH.md`
+  - 输出 JSON 中 `llm_notes.enabled=True`，section code=`industry_trend`
+
+### 失效旧结论
+
+无。此改动不改变 deterministic report schema v1.0.0，不改变 analyzer 规则，不改变 runner 默认无 enrichment 输出。
+
+### 下一步注意事项
+
+1. 补真实样本 enrichment E2E 验证结果。
+2. 用 1-2 只不同 veto 状态股票做 Phase 4 smoke，检查 Markdown 可读性。

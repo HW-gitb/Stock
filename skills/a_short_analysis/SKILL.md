@@ -37,6 +37,12 @@ python -m pip install -r requirements-dev.txt
 
 The bundled Codex Python may run compile/unit tests but may not have `jsonschema`.
 
+Generate with an enrichment patch:
+
+```powershell
+python runners\run_analysis_report.py --as-of 20260522 --ts-code 600415.SH --enrichment-path path\to\enrichment.json
+```
+
 ## Deterministic Boundary
 
 Do not edit deterministic fields by hand:
@@ -73,7 +79,14 @@ If a field is `unknown`, respect the paired reason in `unknowns`. Do not fill mi
 
 ## Optional LLM Enrichment
 
-LLM enrichment is optional and separate from deterministic output. It may update `llm_notes.sections` or produce a separate patch proposal, but it must not override analyzer decisions.
+LLM enrichment is optional and separate from deterministic output. If it is written back to JSON, it must use `schemas/deterministic_report_enrichment.schema.json` and runner `--enrichment-path`.
+
+The enrichment patch may only update:
+
+- `llm_notes.enabled`
+- `llm_notes.sections[]`
+
+It must not override analyzer decisions.
 
 Use these prompt files only when the user asks for deeper analysis or when a downstream workflow explicitly needs LLM notes:
 
