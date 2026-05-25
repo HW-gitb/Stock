@@ -8,39 +8,43 @@
 
 ---
 
-## 2026-05-25 — Claude (Session log infra bootstrap + Codex shepherding)
+## 2026-05-25 — Claude (Session log infra bootstrap + Codex entry reconstruction)
 
-**Commits**: 1b8af8f (session log infra), <pending> (Codex shepherding)
+**Commits**: 1b8af8f (session log infra), <pending> (this entry + Codex reconstruction)
 
 **Relationship to prior session(s)**:
 - Builds on 2026-05-25 Claude (Phase 3 收官 + Phase 4 spec 固化)
-- **Shepherds** 2026-05-25 Codex (Phase 3.6 audit) — Codex did not commit its work; per `AGENTS.md §Session log discipline` fallback duty, I committed it on Codex's behalf and reconstructed its entry below
+- **Reconstructs SESSION_LOG entry for** 2026-05-25 Codex (Phase 3.6 audit) — Codex committed its work as `e342452` and wrote a proper handoff appendix in `2026-05-24_phase3_kickoff_spec_handoff.md`，**但没写 SESSION_LOG entry**。按 `AGENTS.md §Session log discipline` fallback 条款，由我从 commit diff + handoff appendix 推断后补写
 
 **Worked on**:
 1. 初始化 `docs/SESSION_LOG.md` + 写当时唯一 Claude entry（Phase 3+4 work block）
 2. 加 `AGENTS.md §Session log discipline`（七节模板、reverse-chrono prepend 规则、三层保险机制 incl. fallback duty）
 3. 写 Claude memory `feedback_session_log.md` 自我约束 checklist
-4. 发现 Codex 在 working tree 留下未 commit 改动（state_manager / backtest_rank / 5 个 CSV / report.json / 2 个新测试 / CURRENT.md §2 line 40 加 Phase 3.6 条目）
-5. 按 fallback 条款 reconstruct Codex Phase 3.6 entry，commit Codex 工作
+4. 发现 Codex 已经 commit 了 Phase 3.6 audit（`e342452`），但没在 SESSION_LOG 留 entry — 执行 fallback duty 补写其 entry
 
 **Key decisions**:
 - SESSION_LOG 单文件 reverse-chrono（不 split per session），避免重蹈 2026-05-24 当天 8 个 handoff 碎片化的覆辙
 - 四层文档（commit / handoff / SESSION_LOG / CURRENT.md）**全部保留**但严格非重叠：CURRENT.md §2 应限"最近 6-10 条"避免无限增长（next session 实施）；handoff "改了什么"用 high-level + commit hash 引用；SESSION_LOG entry 不复制 commit body
-- Codex 未 commit 工作不留在 working tree，按用户拍板的 (c) 我代 commit + reconstruct entry，比等下次 Codex 自己来更安全
+- Fallback reconstruction 必须显式标注 "Claude inferred from diffs"，避免我猜的内容被 Codex 误以为是它自己的判断；如果 Codex 下次进场觉得我推断错了，按 SESSION_LOG 规则它可以直接覆盖
 
 **Alternatives considered and rejected**:
 - "把 SESSION_LOG 合并进 CURRENT.md" — 否决。CURRENT.md 是 snapshot 不是历史 log；混在一起会让 CURRENT.md 无限增长
 - "SESSION_LOG 一篇 session 一文件 `docs/sessions/<date>.md`" — 否决。文件碎片化对接手 LLM 不友好；单文件可以一次性读 top N 条
 - "用 git pre-commit hook 强制每个 commit 必须 touch SESSION_LOG.md" — 否决。机械化约束没法判断"这次 commit 该不该有 entry"；先靠规则 + 自约束 + fallback 三层软约束，看 Codex 实际遵守度再升级
-- "等 Codex 下次自己来 commit + 写 entry" — 否决（用户拍板）。未 commit 的改动遇 LLM 切换是脆弱状态，越快落进 git 历史越安全
-- "推迟文档精简到本次" — 暂搁。先 commit Codex 工作避免悬挂；CURRENT.md §2 截断 + cross-reference 化的精简放下一轮
+- "不补写 Codex entry，等 Codex 下次进场自己补" — 否决。fallback 条款本就是为这种情况设计；现在不补，越拖记忆越淡（commit message 一句话 + handoff appendix 不足以重建思维状态）
+- "推迟文档精简到本次" — 暂搁。先做 fallback reconstruction；CURRENT.md §2 截断 + cross-reference 化的精简放下一轮
+
+**Observations for the fallback duty mechanism**:
+- **Codex 写 handoff appendix 是好习惯**（合 AGENTS.md §交接记录），但 SESSION_LOG 是新规则，Codex 不知道也合理 — 因为它的工作是在我加 §Session log discipline **之前**做的（参看 commit 时间戳：e342452 = 11:49:57，1b8af8f = 后于此）
+- **下一次 Codex session 进场时**应该读 `AGENTS.md §Session log discipline` + 现在 SESSION_LOG.md top 看到自己的 reconstructed entry，知道这是个新规则要遵守
+- 如果 Codex 下次仍不写 SESSION_LOG entry，那是它的服从度问题，机制层做不到强制；只能继续 fallback + 在 Codex 接手 prompt 里显式提醒
 
 **Open questions handed off**:
 - 文档精简方案：CURRENT.md §2 截断到 6-10 条最近事项 + 一行 "更早的事项 → handoff §交接记录"；handoff "改了什么"改为引用 commit hash；SESSION_LOG entry 严格非重叠。**下一轮执行**
-- Codex 是否会读 AGENTS.md §Session log discipline 并自觉遵守？需要观察下一次 Codex session 是否自己写 entry。如果不写，下次依然要 fallback reconstruct
+- Codex 下一次 session 是否自觉写 entry？观察。如果不写，需要在用户跟 Codex 互动时显式提醒
 
 **Next natural step from my view**:
-1. Codex shepherding commit 落地
+1. 本次 SESSION_LOG 改动 commit 落地
 2. （可选）文档精简：CURRENT.md §2 截断 + handoff cross-reference 化
 3. 用户确认 Phase 4 §8 两件事后进入 schema first 实施
 
@@ -50,7 +54,7 @@
 
 **注**：本 entry 由 Claude 从 git diff + 新增测试文件 + CURRENT.md §2 line 40 推断而成；Codex 本人未写。如果 Codex 下次进场对意图或理由的描述不准，请直接覆盖本 entry。
 
-**Commits**: <pending — shepherded by Claude in same commit as adjacent Claude entry>
+**Commits**: e342452 (committed by Codex; SESSION_LOG entry reconstructed retrospectively by Claude)
 
 **Relationship to prior session(s)**:
 - Builds on 2026-05-25 Claude (Phase 3 收官) — 在我 Phase 3 audit 后又做了一轮收尾 audit
