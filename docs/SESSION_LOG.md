@@ -10,7 +10,7 @@
 
 ## 2026-05-25 — Codex (Phase 5 kickoff spec)
 
-**Commits**: pending in this session
+**Commits**: 6c90f56
 
 **Relationship to prior session(s)**:
 - Builds on the Claude review entry above, especially Required fix #3: Phase 4 -> Phase 5 requires a kickoff handoff before any Phase 5 schema or code.
