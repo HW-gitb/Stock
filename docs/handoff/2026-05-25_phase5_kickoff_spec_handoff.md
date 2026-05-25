@@ -234,3 +234,109 @@ C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\p
 1. 先让 Claude 审查本轮 uncommitted diff。
 2. 通过并提交后，再进入 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation。
 3. 不要在 execution schema 任务里回头改 Phase 4 `watch/skip` 语义；Phase 4 runner v1 仍不产生 `buy`。
+
+## 2026-05-25 追加：execution_backtest_report v1.0.0 schema-first
+
+### 改了什么
+
+- 新增 `schemas/execution_backtest_report.schema.json`，JSON Schema Draft 7，schema id:
+  `https://stock.local/schemas/execution_backtest_report/1.0.0/schema.json`。
+- 顶层 contract 固定为：
+  - `schema_name = execution_backtest_report`
+  - `schema_version = 1.0.0`
+  - required fields: `schema_name`, `schema_version`, `generated_at`, `preset`, `mode`, `settings`, `inputs`, `execution_assumptions`, `data_lineage`, `outputs`, `metrics`, `date_warnings`, `limitations`
+- `execution_assumptions` 明确承载 Phase 5 完成线需要审查的撮合语义：
+  - T+1 open entry
+  - limit-up unbuyable -> `entry_unbuyable`
+  - qfq via adj_factor / none
+  - transaction cost `cost_pct`
+  - missing stop -> `skip_trade` or `mark_missing_stop`
+  - take profit / time stop trigger order
+  - position sizing cap / cash constraint
+  - portfolio circuit breaker
+  - cooldown
+  - event log required event codes
+- `inputs` 明确 v1 默认 primary input 为 `analysis_input`；`deterministic_reports` 只能作为可选 JSON refs，必须 version-guard，不能读取 Markdown。
+- `outputs` 固定 Phase 5 目录下五个产物名：`execution_report`, `trades`, `daily_equity`, `order_events`, `skipped_candidates`。
+- 新增 `tests/schema/test_execution_backtest_report_schema.py` 与 `tests/schema/__init__.py`，只做 schema meta-validation 和关键 contract block 名称护栏，不实现 runner / simulator。
+- 更新 `docs/CURRENT.md`：deterministic report v1.1.0 已提交，当前待审查对象切换为 execution report schema v1.0.0。
+
+### 为什么改
+
+Phase 5 必须先把 execution-level report 的机器契约固定下来，再写 runner / simulator。这样 Claude 可以先独立审查撮合假设、输入边界、输出目录和 lineage 字段是否足够承载后续 execution 回测，而不会被实现细节掩盖 schema 缺口。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/execution_backtest_report.schema.json',encoding='utf-8')); Draft7Validator.check_schema(s); print('schema ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; import json; json.load(open('schemas/execution_backtest_report.schema.json',encoding='utf-8')); print('json parse ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v
+```
+
+### 验证结果
+
+- Schema meta-validation：`schema ok`
+- Bundled Python JSON parse：`json parse ok`
+- `tests.schema.test_execution_backtest_report_schema`：2 tests passed
+
+### 失效旧结论
+
+- `docs/CURRENT.md` 中“deterministic_report v1.1.0 待 Claude 审查 / execution schema 尚未开始”的状态已失效；`da26a2b` 已提交 deterministic report lineage contract，本轮待审查对象是 execution report schema v1.0.0。
+- Phase 5 schema 任务不再是“下一步”；当前工作树已经实现 schema-first 合同。后续必须先完成 Claude review + 用户提交，再进入 runner / simulator。
+
+### 下一步注意事项
+
+1. 先让 Claude 审查本轮 uncommitted diff，重点看 `execution_assumptions` 是否足够承载 Phase 5 完成线。
+2. 通过并提交后，再实现最小 runner / simulator；不要在 review 前抢跑实现。
+3. 后续 runner 只能输出 JSON 并先通过 `schemas/execution_backtest_report.schema.json`，不得读取 Phase 4 Markdown。
+
+## 2026-05-25 追加：execution_backtest_report Optional contract hardening
+
+### 改了什么
+
+- `settings` 删除与 `execution_assumptions` 重复的执行参数：
+  - `cost_pct`
+  - `max_position_pct`
+  - `max_positions`
+  - `time_stop_days`
+- `execution_assumptions` 继续作为撮合规则的单一权威来源：
+  - cost 只在 `transaction_cost.cost_pct`
+  - position cap 只在 `position_sizing.max_position_pct` / `position_sizing.max_positions`
+  - time stop days 只在 `time_stop.days`
+- `settings.primary_input` 从单值 `enum: ["analysis_input"]` 改为 `const: "analysis_input"`。
+- `execution_assumptions.event_log.event_codes` 加强为：
+  - `minItems: 2`
+  - `allOf + contains` 强制包含 `entry` 与 `exit`
+  - description 明确最小事件行要求
+- `$defs.stringList` 加 `minItems: 1`，从而约束 `data_lineage.api_families.candidate_generation` / `execution_price` / `state_replay` 不能为空数组。
+- `tests/schema/test_execution_backtest_report_schema.py` 增加断言，覆盖以上 contract hardening。
+- `docs/CURRENT.md` 更新为 Optional 修复后待 Claude 复审状态。
+
+### 为什么改
+
+这些改动来自 Claude 对 schema-first diff 的 4 条 Optional 建议，用户已批准。核心目标是减少 contract drift：执行参数只保留在实际撮合假设中；lineage 不允许语义为空；事件日志至少声明 entry / exit 两个基本事件。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/execution_backtest_report.schema.json',encoding='utf-8')); Draft7Validator.check_schema(s); print('schema ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; import json; json.load(open('schemas/execution_backtest_report.schema.json',encoding='utf-8')); print('json parse ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v
+```
+
+### 验证结果
+
+- Schema meta-validation：`schema ok`
+- Bundled Python JSON parse：`json parse ok`
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed
+
+### 失效旧结论
+
+- 旧 schema 草案中 `settings` 同时记录 cost / position cap / time stop days 的方式已失效；后续 runner 必须从 `execution_assumptions` 读取这些实际撮合参数。
+- 旧 schema 草案中 `event_log.event_codes` 只需 1 个事件码、`api_families.*` 可以为空数组的宽松口径已失效。
+
+### 下一步注意事项
+
+1. 先让 Claude 复审 Optional 修复后的 uncommitted diff。
+2. 通过并提交后，再实现最小 runner / simulator skeleton。
+3. 后续 runner 写入 report 时，必须让 `settings` 只表达 run-level 设置，撮合细节统一写入 `execution_assumptions`。

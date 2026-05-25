@@ -8,6 +8,181 @@
 
 ---
 
+## 2026-05-25 — Claude review — Pass (approved Optional fixes for execution_backtest_report v1.0.0)
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `da26a2b`; targets the immediately prior Codex 修复 entry "approved Optional fixes for execution_backtest_report v1.0.0")
+
+**Verdict**: Pass.
+
+**Verification re-run** (independent of Codex's claim):
+- `Draft7Validator.check_schema(...)` → `execution schema ok`
+- `python -m unittest tests.schema.test_execution_backtest_report_schema -v` → `Ran 3 tests in 0.105s OK`（+1：`test_lineage_string_lists_are_non_empty`）
+- 行为级验证 `event_log.event_codes` 的 `allOf + contains`：`["entry"]`→False、`["exit"]`→False、`["entry","exit"]`→True、`["entry","exit","stop_loss"]`→True，行为正确
+
+**四条 Optional 落地核对**:
+
+| Optional | 落点 | 状态 |
+|---|---|---|
+| O1 settings/execution_assumptions 冗余 | `settings.required` 从 10 项缩到 6 项；`cost_pct` / `max_position_pct` / `max_positions` / `time_stop_days` 全部从 settings 删除，`execution_assumptions` 作为单一权威 | ✅ |
+| O2 event_codes 太宽松 | `minItems: 2` + `allOf: [contains entry, contains exit]`，并加 description 说明 | ✅ |
+| O3 primary_input enum→const | `"const": "analysis_input"` | ✅ |
+| O4 stringList 加 minItems | `$defs.stringList.minItems: 1`，连锁约束 `api_families.candidate_generation/execution_price/state_replay` 不可空 | ✅ |
+
+**Codex open question 回答 — `settings.time_stop_days` 同原则删除是否可接受**：**可接受**。该字段同样存在于 `settings` 与 `execution_assumptions.time_stop.days` 两处，与 O1 提的 cost_pct / max_position_pct / max_positions 完全同构（settings 重复 execution_assumptions 已有的撮合参数）。删除符合"single authority"原则，不属于 scope creep；Codex 把它加入 tests 的 `removed_key` 列表也证明视作同 Optional 同范围处理。
+
+**协议合规**:
+- 无业务代码 / EGS / analyzer / rank backtest / runner / simulator 改动 ✅
+- Pattern B 未 commit ✅
+- handoff 同 phase 新增第二个"## 2026-05-25 追加：execution_backtest_report Optional contract hardening"小节，未覆盖前一段也未新建 handoff 文件，符合 reverse-chrono immutable + 追加约束 ✅
+- `tests/schema/test_execution_backtest_report_schema.py` 新增的 3 条断言（settings 删除字段、event_codes contains、stringList minItems）锁住了 4 条 Optional 的契约，未来 schema 改动若回滚会立刻被测试拦截 ✅
+
+**Required fixes**: 无。
+**新 Optional suggestions**: 无。
+**新 open questions**: 无。
+
+**Notes**: 可以 `提交`。提交后下一条 `执行` 进入 Phase 5 最小 runner / simulator skeleton。
+
+---
+
+## 2026-05-25 — Codex (approved Optional fixes for execution_backtest_report v1.0.0)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-25 Claude review (execution_backtest_report v1.0.0 schema-first) §Optional suggestions. User approved all 4 Optional items before invoking `修复`.
+
+**Worked on**:
+1. Applied the approved Optional schema hardening to `schemas/execution_backtest_report.schema.json`.
+2. Updated schema tests to assert the new contract constraints.
+3. Updated `docs/CURRENT.md` and appended the Phase 5 handoff with the Optional repair details and validation results.
+
+**Key decisions**:
+- Made `execution_assumptions` the single authority for execution parameters: cost, position caps, and time stop days are no longer duplicated under `settings`.
+- Converted `settings.primary_input` to `const: "analysis_input"` because Phase 5 v1 has only one supported primary input path.
+- Required event log declarations to include both `entry` and `exit`, and required lineage API-family arrays to be non-empty.
+
+**Alternatives considered and rejected**:
+- "Only remove the three field pairs named in Claude's Optional #1" — rejected because `settings.time_stop_days` and `execution_assumptions.time_stop.days` had the same drift risk and the user approved the broader single-authority cleanup.
+- "Keep minItems=2 without contains" — rejected because it would still allow two non-entry/exit event codes.
+
+**Open questions handed off**:
+- Claude should re-check whether removing `settings.time_stop_days` along with the three named duplicate fields is acceptable as the same Optional #1 principle.
+
+**Next natural step from my view**:
+1. User sends `审查` to Claude for re-review of the Optional fixes.
+2. If Claude returns Pass, user sends `提交` to Codex.
+3. After commit, start the smallest runner / simulator skeleton that writes schema-valid `execution_report.json`.
+
+---
+
+## 2026-05-25 — Claude review — Pass with Optional suggestions (execution_backtest_report v1.0.0 schema-first)
+
+**Status**: **REVIEW VERDICT RECORDED. Optional suggestions below are PENDING USER APPROVAL.** 无 Required fixes。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `da26a2b`; targets the immediately prior Codex entry "execution_backtest_report v1.0.0 schema-first")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- 新增文件：`schemas/execution_backtest_report.schema.json` v1.0.0、`tests/schema/test_execution_backtest_report_schema.py`、`tests/schema/__init__.py`
+- 修改文件：`docs/CURRENT.md`（§1 / §2 / §5 切到 execution schema 待审查）、`docs/SESSION_LOG.md`（顶部新增 Codex 执行 entry）、`docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`（追加 "execution_backtest_report v1.0.0 schema-first" 小节）
+- 无业务代码 / EGS / analyzer / runner / simulator / rank backtest / state 改动；Pattern B 未 commit ✅
+
+**Verification re-run** (independent of Codex's claim):
+- `Draft7Validator.check_schema(...)` → `execution schema ok`
+- `python -m unittest tests.schema.test_execution_backtest_report_schema -v` → `Ran 2 tests in 0.109s OK`
+
+**Reasons for Pass — schema 对 Phase 5 kickoff handoff 的覆盖**:
+
+| Handoff 要求 | Schema 落点 | 状态 |
+|---|---|---|
+| §3 顶层 13 必填字段 | 顶层 `required` 列出全部 13 项 | ✅ |
+| §3 execution_assumptions 11 block | `$defs.executionAssumptions.required` 全部列出 | ✅ |
+| §4 primary_input=analysis_input | `settings.primary_input enum: ["analysis_input"]` | ✅ |
+| §4 deterministic_reports 只能 JSON + version guard | `deterministicReportRef.schema_version` 必填，description 明文禁 Markdown | ✅ |
+| §5 输出 5 个文件 | `outputs` 5 个 pathRef 全列 | ✅ |
+| §6.1 T+1 open + limit-up unbuyable | `entry_timing.rule="t1_open"` + `limit_up_unbuyable.event_code="entry_unbuyable"` | ✅ |
+| §6.2 missing stop → skip 或 mark | `stop_loss.missing_stop_action enum: [skip_trade, mark_missing_stop]` | ✅ |
+| §6.3 time stop | `time_stop` block | ✅ |
+| §6.4 take profit 触发优先级 | `take_profit.trigger_order` 数组 | ✅ |
+| §6.5 仓位上限 + 现金约束 | `position_sizing.max_position_pct/max_positions/cash_constrained` | ✅ |
+| §6.6 组合熔断 | `portfolio_circuit_breaker.existing_positions_action enum` 含 `not_implemented` | ✅ |
+| §6.7 冷静期 | `cooldown.event_code="cooldown_block"` | ✅ |
+| §6.8 事件 log | `event_log.event_codes enum` 含全部 10 类 | ✅（但见 Optional 2） |
+| §7 deterministic_report v1.1.0 关系 | 前置 `da26a2b` 已提交 | ✅ |
+
+**其他工程合规**:
+- `additionalProperties: false` 顶层 + 全部 sub-objects 一致，防止字段漂移 ✅
+- `$defs` 复用合理（`pathRef`, `tsCode`, `date8`, `semver`, `ratio`, `nonNegativeNumber` 等），无明显重复 ✅
+- 测试只做结构性 meta-validation + assumption block 名称护栏，符合 schema-first 阶段的"不提前写大实现"原则（handoff §8）✅
+- handoff 追加段同 phase 增量，未新建文件，符合"高门槛"约束 ✅
+
+**Codex 两条 open questions — 回答**:
+
+1. *"required execution_assumptions blocks 是否足够、是否有字段过严"* — 11 block 已对齐完成线 §6.1–§6.8，无明显遗漏。`stop_loss.required + missing_stop_action` 同时存在略冗余（若 required=true 则 missing_stop_action 决策面缩小），但保留两个字段让 runner 能表达"我要求 stop，但缺失时怎么处理"两层语义，可接受。`take_profit.enabled=false` 时仍要求 `trigger_order` / `trigger_price_field`，略偏严但可填默认值，不阻塞。**评价：足够，未发现过严字段。**
+
+2. *"metrics 最小集是否合适、有无该挪到 CSV 的"* — 当前 12 项 metrics 都是 portfolio-level aggregate（sample/candidate/trade counts + win_rate + return / drawdown / holding / equity），属于 JSON report 自然承载范围。每笔 trade 明细本来就在 `trades.csv` / `order_events.csv` / `daily_equity.csv`。**评价：metrics 范围合适，无须挪移。** 唯一可考虑补充的是 `expectancy`（即 mean trade PnL）或 `max_consecutive_losses`，但属于增量优化，v1 不必硬塞。
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING USER APPROVAL)**:
+
+1. **`settings.cost_pct` 与 `execution_assumptions.transaction_cost.cost_pct` 字段冗余但无 schema 约束对齐**：同问题存在于 `max_position_pct` / `max_positions`（settings 和 execution_assumptions.position_sizing 各有一份）。JSON Schema 无法跨字段强约束相等，runner 实现时若不主动校验会出现"config 与 actually-used"漂移，且 reviewer 也分不清哪份是权威。建议二选一：(a) 把这三对从 `settings` 删除，只留在 `execution_assumptions`（normalized，单一权威）；(b) 反过来 — `execution_assumptions` 不再重复，只描述"语义"，参数读 settings。我倾向 (a)：`execution_assumptions` 本身已经是"runner 实际撮合规则"的权威记录，settings 重复反而是噪音。
+
+2. **`event_log.event_codes.minItems: 1` 太宽松**：完成线 §6.8 要求 entry/exit/stop/time_stop/circuit/cooldown 都要有行级记录，但 schema 允许 simulator 只声明 `["entry"]`。建议用 Draft 7 的 `contains` 或更直接地把 `entry`, `exit` 这两个最低必备项从 enum 拆出来做单独 required boolean flag，或者用 `allOf + contains` 强制必含 `entry`+`exit`。最小落地：把 `minItems` 升到 2，并在 description 明文"必含 entry+exit"。
+
+3. **`primary_input` 单值 enum 应该用 `const`**：`"enum": ["analysis_input"]` 在只有一个值时不如 `"const": "analysis_input"` 直接 — 用 enum 会让读者以为枚举里还藏着未实现的选项。改 const 后语义更清晰，并且未来加新 primary_input（如 `deterministic_report`）时升 schema 版本是更明显的 breaking change 信号。
+
+4. **`api_families.candidate_generation` / `execution_price` / `state_replay` 三个 stringList 无 `minItems`**：空数组通过 schema 但 lineage 实质为空。Phase 5 §7 要 lineage 完整，建议三者各加 `minItems: 1`，与 `pit_limitations: minItems: 1` 风格一致。
+
+**Documentation issues**: 无。
+
+**Pending user approval**: Yes（Optional 1-4；无 Required fixes）。
+
+**Next natural step from my view**:
+1. 用户对 Optional 1-4 表态（`批准修改 1,2,3,4` / 部分批准 / 全否）。
+2. 全否 → 切到 Codex → `提交`，单条 commit 落地 schema v1.0.0。
+3. 全批 / 部分批 → 切到 Codex → `修复`，Codex 据批准项调整 schema + tests + handoff，再走一轮 `审查` → `提交`。
+4. 提交后下一条 `执行` 进入最小 runner / simulator skeleton（按 Phase 5 §8 / Codex entry §Next）。
+
+This entry is for cross-LLM continuity. It is NOT a direct execution order to Codex.
+
+---
+
+## 2026-05-25 — Codex (execution_backtest_report v1.0.0 schema-first)
+
+**Commits**: none (Pattern B: `执行` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-25 Codex (approved optional fixes for deterministic_report v1.1.0 review) §Next natural step.
+- Refines Phase 5 kickoff spec §3 / §6 / §8 into the first execution backtest report schema contract.
+
+**Worked on**:
+1. Added `schemas/execution_backtest_report.schema.json` v1.0.0 as the Phase 5 execution-level report contract.
+2. Added `tests/schema/test_execution_backtest_report_schema.py` to meta-validate the schema and lock the required Phase 5 assumption blocks.
+3. Updated `docs/CURRENT.md` and appended the Phase 5 handoff with validation results for this schema-first task.
+
+**Key decisions**:
+- Kept `primary_input` fixed to `analysis_input` for v1; optional deterministic report refs are JSON-only and must be version-guarded.
+- Made `execution_assumptions` explicit instead of burying execution semantics in free-text limitations, so Claude can review T+1 entry, limit-up unbuyable, missing stop, take profit/time stop, position sizing, circuit breaker, cooldown, and event log rules before runner code exists.
+- Did not implement simulator, runner, trade CSVs, or rank backtest changes in this `执行` round.
+
+**Alternatives considered and rejected**:
+- "Start runner/simulator together with schema" — rejected because Phase 5 handoff says first task is schema + minimal meta-validation only.
+- "Let deterministic_report be the primary execution input" — rejected because Phase 5 §4 already picked the conservative v1 path: direct `analysis_input.json` + analyzer/state, avoiding Phase 4 `stop_loss=null` causing 100% `missing_stop` skips.
+- "Use loose free-form objects for assumptions" — rejected because that would hide the exact execution semantics Claude needs to review.
+
+**Open questions handed off**:
+- Claude should review whether the required `execution_assumptions` blocks are sufficient and whether any field is too strict before simulator implementation starts.
+- Claude should verify `metrics` has the right minimal set for v1 or call out fields that should move to CSV-only outputs.
+
+**Next natural step from my view**:
+1. User sends `审查` to Claude for this uncommitted schema diff.
+2. If Claude returns Pass, user sends `提交` to Codex.
+3. After commit, start the smallest runner / simulator skeleton that writes schema-valid `execution_report.json` under `result/a_short/backtest/execution/`.
+
+---
+
 ## 2026-05-25 — Claude review — Pass (approved optional fixes for deterministic_report v1.1.0)
 
 **Commits**: none (review-only entry; reviews working tree diff vs HEAD `36e2769`; targets the immediately prior Codex 修复 entry "approved optional fixes for deterministic_report v1.1.0 review")

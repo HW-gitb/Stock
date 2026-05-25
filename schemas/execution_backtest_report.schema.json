@@ -1,0 +1,723 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/execution_backtest_report/1.0.0/schema.json",
+  "title": "Execution Backtest Report",
+  "description": "Phase 5 machine-readable contract for execution-level backtest reports. This schema defines the report surface before the simulator/runner implementation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "preset",
+    "mode",
+    "settings",
+    "inputs",
+    "execution_assumptions",
+    "data_lineage",
+    "outputs",
+    "metrics",
+    "date_warnings",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "type": "string",
+      "const": "execution_backtest_report"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "preset": {
+      "type": "string",
+      "enum": ["a_short"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["smoke", "production"]
+    },
+    "settings": {
+      "$ref": "#/$defs/settings"
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "execution_assumptions": {
+      "$ref": "#/$defs/executionAssumptions"
+    },
+    "data_lineage": {
+      "$ref": "#/$defs/dataLineage"
+    },
+    "outputs": {
+      "$ref": "#/$defs/outputs"
+    },
+    "metrics": {
+      "$ref": "#/$defs/metrics"
+    },
+    "date_warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dateWarning"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "start_date",
+        "end_date",
+        "initial_capital",
+        "primary_input",
+        "deterministic_report_required"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["smoke", "production"]
+        },
+        "start_date": {
+          "$ref": "#/$defs/date8Nullable"
+        },
+        "end_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "initial_capital": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "primary_input": {
+          "type": "string",
+          "const": "analysis_input"
+        },
+        "deterministic_report_required": {
+          "type": "boolean",
+          "description": "Phase 5 v1 is expected to use analysis_input directly. If true, deterministic reports are additional guarded inputs, not Markdown-derived trading signals."
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_root",
+        "analysis_inputs",
+        "deterministic_reports",
+        "state_refs",
+        "price_data"
+      ],
+      "properties": {
+        "candidate_root": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "analysis_inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/analysisInputRef"
+          },
+          "minItems": 1
+        },
+        "deterministic_reports": {
+          "type": "array",
+          "description": "Optional Phase 4 report references. Execution v1 must not read Markdown and must version-guard JSON reports before use.",
+          "items": {
+            "$ref": "#/$defs/deterministicReportRef"
+          }
+        },
+        "state_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stateRef"
+          }
+        },
+        "price_data": {
+          "$ref": "#/$defs/priceDataRef"
+        }
+      }
+    },
+    "executionAssumptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_timing",
+        "limit_up_unbuyable",
+        "price_adjustment",
+        "transaction_cost",
+        "stop_loss",
+        "take_profit",
+        "time_stop",
+        "position_sizing",
+        "portfolio_circuit_breaker",
+        "cooldown",
+        "event_log"
+      ],
+      "properties": {
+        "entry_timing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rule", "price_field"],
+          "properties": {
+            "rule": {
+              "type": "string",
+              "enum": ["t1_open"]
+            },
+            "price_field": {
+              "type": "string",
+              "enum": ["open_qfq"]
+            }
+          }
+        },
+        "limit_up_unbuyable": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "event_code"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "event_code": {
+              "type": "string",
+              "const": "entry_unbuyable"
+            }
+          }
+        },
+        "price_adjustment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "source"],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["qfq_via_adj_factor", "none"]
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "transaction_cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cost_pct", "applies_to"],
+          "properties": {
+            "cost_pct": {
+              "$ref": "#/$defs/nonNegativeNumber"
+            },
+            "applies_to": {
+              "type": "string",
+              "enum": ["entry_and_exit"]
+            }
+          }
+        },
+        "stop_loss": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "missing_stop_action", "trigger_price_field"],
+          "properties": {
+            "required": {
+              "type": "boolean"
+            },
+            "missing_stop_action": {
+              "type": "string",
+              "enum": ["skip_trade", "mark_missing_stop"]
+            },
+            "trigger_price_field": {
+              "type": "string",
+              "enum": ["low_qfq", "close_qfq"]
+            }
+          }
+        },
+        "take_profit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "trigger_order", "trigger_price_field"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "trigger_order": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["stop_loss", "take_profit", "time_stop"]
+              },
+              "minItems": 1
+            },
+            "trigger_price_field": {
+              "type": "string",
+              "enum": ["high_qfq", "close_qfq"]
+            }
+          }
+        },
+        "time_stop": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "days", "exit_price_field"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "days": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "exit_price_field": {
+              "type": "string",
+              "enum": ["close_qfq", "next_open_qfq"]
+            }
+          }
+        },
+        "position_sizing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "max_position_pct", "max_positions", "cash_constrained"],
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["equal_weight", "risk_budget", "fixed_pct"]
+            },
+            "max_position_pct": {
+              "$ref": "#/$defs/ratio"
+            },
+            "max_positions": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "cash_constrained": {
+              "type": "boolean"
+            }
+          }
+        },
+        "portfolio_circuit_breaker": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "new_entries_blocked", "existing_positions_action"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "new_entries_blocked": {
+              "type": "boolean"
+            },
+            "existing_positions_action": {
+              "type": "string",
+              "enum": ["hold_until_exit_rule", "force_exit_next_open", "not_implemented"]
+            }
+          }
+        },
+        "cooldown": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "event_code"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "event_code": {
+              "type": "string",
+              "const": "cooldown_block"
+            }
+          }
+        },
+        "event_log": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "event_codes"],
+          "properties": {
+            "required": {
+              "type": "boolean"
+            },
+            "event_codes": {
+              "type": "array",
+              "description": "Required row-level event code coverage. At minimum every execution report must declare entry and exit event rows.",
+              "allOf": [
+                {
+                  "contains": {
+                    "const": "entry"
+                  }
+                },
+                {
+                  "contains": {
+                    "const": "exit"
+                  }
+                }
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "candidate_seen",
+                  "entry",
+                  "entry_unbuyable",
+                  "missing_stop",
+                  "stop_loss",
+                  "take_profit",
+                  "time_stop",
+                  "circuit_breaker",
+                  "cooldown_block",
+                  "exit"
+                ]
+              },
+              "minItems": 2,
+              "uniqueItems": true
+            }
+          }
+        }
+      }
+    },
+    "dataLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "data_provider",
+        "api_families",
+        "forward_return_adjustment_mode",
+        "benchmark_sources",
+        "pit_limitations",
+        "analysis_input_schema_version",
+        "deterministic_report_schema_version",
+        "analyzer_rules",
+        "l3_mode"
+      ],
+      "properties": {
+        "data_provider": {
+          "type": "string",
+          "enum": ["tushare"]
+        },
+        "api_families": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["candidate_generation", "execution_price", "state_replay"],
+          "properties": {
+            "candidate_generation": {
+              "$ref": "#/$defs/stringList"
+            },
+            "execution_price": {
+              "$ref": "#/$defs/stringList"
+            },
+            "state_replay": {
+              "$ref": "#/$defs/stringList"
+            }
+          }
+        },
+        "forward_return_adjustment_mode": {
+          "type": "string",
+          "enum": ["qfq_via_adj_factor", "none"]
+        },
+        "benchmark_sources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["csi300", "csi1000"],
+          "properties": {
+            "csi300": {
+              "type": "string",
+              "minLength": 1
+            },
+            "csi1000": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "pit_limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "analysis_input_schema_version": {
+          "$ref": "#/$defs/semver"
+        },
+        "deterministic_report_schema_version": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Null when deterministic_report_required=false and no deterministic report JSON is consumed."
+        },
+        "analyzer_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/analyzerRuleRef"
+          }
+        },
+        "l3_mode": {
+          "type": "string",
+          "enum": ["pit", "today", "neutralize"]
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_report",
+        "trades",
+        "daily_equity",
+        "order_events",
+        "skipped_candidates"
+      ],
+      "properties": {
+        "execution_report": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "trades": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "daily_equity": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "order_events": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "skipped_candidates": {
+          "$ref": "#/$defs/pathRef"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_count",
+        "candidate_count",
+        "trade_count",
+        "skipped_count",
+        "entry_unbuyable_count",
+        "missing_stop_count",
+        "win_rate",
+        "total_return",
+        "annualized_return",
+        "max_drawdown",
+        "avg_holding_days",
+        "ending_equity"
+      ],
+      "properties": {
+        "sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trade_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entry_unbuyable_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_stop_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "win_rate": {
+          "$ref": "#/$defs/ratioNullable"
+        },
+        "total_return": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "annualized_return": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "max_drawdown": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "avg_holding_days": {
+          "$ref": "#/$defs/nonNegativeNumberNullable"
+        },
+        "ending_equity": {
+          "$ref": "#/$defs/nonNegativeNumberNullable"
+        }
+      }
+    },
+    "dateWarning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trade_date", "warning_type", "severity", "message"],
+      "properties": {
+        "trade_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "warning_type": {
+          "type": "string",
+          "enum": [
+            "low_candidate_count",
+            "no_executable_candidates",
+            "missing_price_data",
+            "state_replay_gap"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["warning", "critical"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "analysisInputRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of", "path", "schema_version", "candidate_count"],
+      "properties": {
+        "as_of": {
+          "$ref": "#/$defs/date8"
+        },
+        "path": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "schema_version": {
+          "$ref": "#/$defs/semver"
+        },
+        "candidate_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "deterministicReportRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of", "ts_code", "path", "schema_version", "used"],
+      "properties": {
+        "as_of": {
+          "$ref": "#/$defs/date8"
+        },
+        "ts_code": {
+          "$ref": "#/$defs/tsCode"
+        },
+        "path": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "schema_version": {
+          "$ref": "#/$defs/semver"
+        },
+        "used": {
+          "type": "boolean"
+        }
+      }
+    },
+    "stateRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["positions", "veto_log", "circuit_breaker", "execution_log"]
+        },
+        "path": {
+          "$ref": "#/$defs/pathRef"
+        }
+      }
+    },
+    "priceDataRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date", "adj", "path"],
+      "properties": {
+        "start_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "end_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "adj": {
+          "type": "string",
+          "enum": ["qfq_via_adj_factor", "none"]
+        },
+        "path": {
+          "$ref": "#/$defs/pathRef"
+        }
+      }
+    },
+    "analyzerRuleRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "version"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["chasing_high", "overheat", "l2_unknown", "esp_non_positive"]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "pathRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tsCode": {
+      "type": "string",
+      "pattern": "^[0-9]{6}\\.(SH|SZ)$"
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "date8Nullable": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{8}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "ratioNullable": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "numberNullable": {
+      "type": ["number", "null"]
+    },
+    "nonNegativeNumber": {
+      "type": "number",
+      "minimum": 0
+    },
+    "nonNegativeNumberNullable": {
+      "type": ["number", "null"],
+      "minimum": 0
+    }
+  }
+}

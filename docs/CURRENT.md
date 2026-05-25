@@ -1,14 +1,14 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（Phase 5 deterministic_report v1.1.0 待 Claude 审查）
+**最后更新**：2026-05-25（Phase 5 execution_backtest_report v1.0.0 Optional 修复待 Claude 复审）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 前置 deterministic report v1.1.0 已在工作树中实现，待 Claude 审查后提交；execution schema / runner / simulator 尚未开始
-- **当前目标**：先让 Claude 审查 deterministic report v1.1.0 改动。通过并提交后，下一条最小代码任务是 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试。
+- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 前置 deterministic report v1.1.0 已提交；execution report schema v1.0.0 已在工作树中实现并应用 Claude Optional 修复，待 Claude 复审；runner / simulator 尚未开始
+- **当前目标**：先让 Claude 复审 `schemas/execution_backtest_report.schema.json` v1.0.0 Optional 修复。通过并提交后，再进入 Phase 5 runner / simulator 的下一条最小实现任务。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -19,7 +19,9 @@
 本节只保留当前接续需要的 high-level snapshot；争议、被否方案、review verdict、pending fixes 统一查 `docs/SESSION_LOG.md` 顶部 1-3 条。
 
 - **协作协议精简**（2026-05-25，commits `ef12fbf` `e9a2b18`）：`docs/REVIEW_PACKET.md` 已移除；Codex 的 SESSION_LOG 顶部 entry 作为 review handoff；`[trivial]` 轻量通道已启用。详 `docs/AI_REVIEW_PROTOCOL.md`。
-- **Phase 5 kickoff spec**（2026-05-25，commit `6c90f56`）：新增 [phase5 handoff](handoff/2026-05-25_phase5_kickoff_spec_handoff.md)。Phase 5 代码未开始；下一步先做 deterministic report schema v1.1.0。
+- **Phase 5 execution report schema-first**（2026-05-25，当前工作树待复审）：新增 `schemas/execution_backtest_report.schema.json` v1.0.0 与最小 schema meta-validation 测试，并应用 Claude 4 条 Optional contract 加固；未实现 runner / simulator。
+- **deterministic report v1.1.0 前置升级**（2026-05-25，commit `da26a2b`）：deterministic report / enrichment patch contract 已对齐 L3 与 enrichment lineage。
+- **Phase 5 kickoff spec**（2026-05-25，commit `6c90f56`）：新增 [phase5 handoff](handoff/2026-05-25_phase5_kickoff_spec_handoff.md)。Phase 5 边界已锁定：schema first，再 runner / simulator。
 - **Phase 4 minimal 收口**（2026-05-25）：deterministic report schema + runner + coverage + Skill + prompt 骨架 + enrichment patch/example + smoke/tests 已完成。
 - **Phase 3+4 audit fix sweep**（2026-05-25，commits `a312e57` `9476d4c` `278f917` `911e49b`）：analyzer / runner / tracker / Skill fixture 加固；34 tests pass。
 - **Phase 3.6 收尾 audit**（2026-05-25，commit `e342452`）：analyzer ablation 命名、`l2_unknown` 归一化、circuit breaker expiry、测试增至 21 个。
@@ -90,6 +92,7 @@
 - `schemas/deterministic_report_enrichment.schema.json` — v1.1.0（可选 LLM notes patch；只允许合并 `llm_notes`，target report version 对齐 deterministic_report v1.1.0）
 - `schemas/examples/deterministic_report_enrichment.example.json` — enrichment patch 最小样例
 - `schemas/deterministic_report_coverage.md` — Phase 4 v1 对 v14.2 M0-M6 / M6.7 的覆盖矩阵与 unknown 原因约定
+- `schemas/execution_backtest_report.schema.json` — v1.0.0（Phase 5 execution backtest report contract；当前工作树已应用 Optional 加固，待 Claude 复审；runner / simulator 尚未实现）
 - `schemas/rank_backtest_report.schema.json` — v1.11.0（含 date_warnings + data_lineage + analyzer veto replay settings）
 - `schemas/data_health.schema.json` — v1.1.0（每周实盘 egs_main 自动产 `data_health.json` 的契约；2026-05-24 第二轮 audit 时 `pe_missing_count` 字段语义不清，rename 为 `pe_ttm_or_pe_missing_count`）
 - `requirements-dev.txt` — validation-only 依赖；当前至少包含 `jsonschema>=4.0`
@@ -126,9 +129,9 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **deterministic report schema v1.1.0** — 已在当前工作树实现，待 Claude 审查；通过后提交。
-2. **execution report schema-first** — deterministic report v1.1.0 通过审查并提交后，设计 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试，再写 runner。
-3. **Claude 审查点** — deterministic report v1.1.0、execution schema、撮合假设均需 Claude 独立审查后由用户确认。
+1. **execution report schema-first** — `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试已在当前工作树实现并应用 Optional 修复，待 Claude 复审；通过后提交。
+2. **下一条最小任务** — 提交 schema 后，再实现 Phase 5 runner / simulator 的最小骨架；不得在当前 schema review 前抢跑。
+3. **Claude 审查点** — execution schema、撮合假设、输出目录隔离均需 Claude 独立审查后由用户确认。
 4. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）
