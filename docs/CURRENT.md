@@ -1,15 +1,15 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（Phase 3.5 实盘 forward tracker 落地；累积 ~12 期后可对比 backtest 结论）
+**最后更新**：2026-05-25（Phase 4 启动规格 handoff 落地；deterministic_report schema first）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 3 进行中。minimal analyzer + state 接口 + audit fixes + 比较口径修正（`all_veto_passed`）+ `score_ge_60` strategy variant 已落地
-- **当前目标**：在后续 as_of 上观察 `all` vs `all_veto_passed`（4 条 hard veto 对 Tier2 filler 的过滤稳定性）和 `score_ge_60` 的 max_dd / win_rate 改善是否持续；**不要急着加 `score_ge_65`**（数据挖掘嫌疑）
-- **下一阶段大目标**：Phase 4 minimal Skill（读 `analysis_input.json` → 调 analyzer → 出 M6.7）；扩 36 期 + 新 regime 后再考虑 `LOCK` veto 和 `score_ge_65`
+- **当前 Phase**：Phase 3 全部子阶段（3.0-3.5）完成；**Phase 4 启动规格已固化**（见 `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md`），待用户拍板 §8 两件事后开工
+- **当前目标**：Phase 4 minimal — deterministic_report schema first，runner 纯 Python 不调 LLM，Skill 是使用文档不是执行入口；v1 必须本地可复现，缺 LLM 判断的字段标 `unknown + requires_llm`
+- **下一阶段大目标**：Phase 5 execution 回测（需 Phase 4 schema-validated report 作 contract）；Phase 3.5 forward tracker 继续后台累积，不阻塞
 
 ---
 
@@ -107,6 +107,7 @@
 - `docs/handoff/2026-05-24_phase2_tier1_count_warning_handoff.md` — schema 1.9.0 date_warnings
 - `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — schema 1.10.0 data_lineage 对象（Phase 2.6 lineage 闭环）
 - `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格：minimal veto analyzer + JSON state + replay/ablation 完成线
+- `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md` — Phase 4 开工规格：deterministic_report schema first + runner-as-executor + Skill-as-doc
 
 ### 报告产出
 - `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.11.0, primary_subset=tier1_only
