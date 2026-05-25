@@ -12,6 +12,7 @@ It does not call an LLM.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import sys
@@ -43,10 +44,23 @@ def load_analysis_input(as_of: str, input_path: Path | None = None) -> dict[str,
 
 
 def find_candidate(payload: dict[str, Any], ts_code: str) -> dict[str, Any]:
-    for candidate in payload.get("candidates") or []:
+    candidates = payload.get("candidates")
+    if not candidates:
+        # Distinguish "input has zero candidates" from "ts_code not in candidates"
+        # so the user can tell whether to re-run egs_main vs check their ts_code.
+        raise ValueError(
+            f"analysis_input has no candidates (candidates field is "
+            f"{'missing' if candidates is None else 'empty'}); "
+            f"re-run egs_main for this as_of?"
+        )
+    for candidate in candidates:
         if str(candidate.get("ts_code")) == str(ts_code):
             return candidate
-    raise ValueError(f"candidate not found in analysis_input: {ts_code}")
+    available = [str(c.get("ts_code")) for c in candidates if isinstance(c, dict)]
+    raise ValueError(
+        f"candidate ts_code {ts_code!r} not in analysis_input "
+        f"(available: {', '.join(available[:10])}{'...' if len(available) > 10 else ''})"
+    )
 
 
 def build_report(payload: dict[str, Any], candidate: dict[str, Any],
@@ -113,9 +127,11 @@ def build_report(payload: dict[str, Any], candidate: dict[str, Any],
 
 def _build_decision(veto: dict[str, Any], has_position: bool, circuit_active: bool) -> dict[str, str]:
     if veto.get("vetoed"):
-        reason = "analyzer_hard_veto:" + "|".join(
-            str(r.get("code")) for r in (veto.get("reasons") or []) if r.get("code")
-        )
+        # Comma-separated (RULE_VERSIONS codes never contain commas) instead of
+        # pipe — pipes are reserved for downstream Markdown table cells where
+        # they would need escaping. Comma is safer for embedding in CSV/MD.
+        codes = sorted({str(r.get("code")) for r in (veto.get("reasons") or []) if r.get("code")})
+        reason = "analyzer_hard_veto:" + ",".join(codes)
         return {"action": "skip", "reason_code": reason, "confidence": "high"}
     if circuit_active:
         return {"action": "skip", "reason_code": "state_circuit_breaker_active", "confidence": "high"}
@@ -315,8 +331,11 @@ def apply_enrichment(report: dict[str, Any], enrichment: dict[str, Any]) -> dict
     if mismatches:
         raise ValueError(f"enrichment target mismatch: {', '.join(mismatches)}")
 
-    merged = dict(report)
-    merged["llm_notes"] = enrichment["llm_notes"]
+    # Deep copy so downstream mutations of the returned report can't reach
+    # back into the caller's report (e.g. mutating merged["risk_flags"] would
+    # otherwise mutate the original list since dict() is a shallow copy).
+    merged = copy.deepcopy(report)
+    merged["llm_notes"] = copy.deepcopy(enrichment["llm_notes"])
     return merged
 
 
@@ -475,6 +494,15 @@ def main(argv: list[str] | None = None) -> int:
 
     input_path = Path(args.input_path) if args.input_path else None
     payload = load_analysis_input(args.as_of, input_path=input_path)
+    # Sanity: CLI --as-of must match the file's trade_date when --input-path is
+    # explicit. Without this guard, a typo'd --input-path pointing at the wrong
+    # day silently produces a report under the wrong as_of directory.
+    payload_trade_date = str(payload.get("trade_date") or "")
+    if payload_trade_date and payload_trade_date != str(args.as_of):
+        raise SystemExit(
+            f"[FATAL] --as-of {args.as_of} mismatches analysis_input.trade_date "
+            f"{payload_trade_date!r}; check --input-path or rerun egs_main."
+        )
     candidate = find_candidate(payload, args.ts_code)
     report = build_report(payload, candidate)
     if args.enrichment_path:

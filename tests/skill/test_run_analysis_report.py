@@ -138,6 +138,66 @@ class RunAnalysisReportTest(unittest.TestCase):
         self.assertEqual(merged["llm_notes"]["sections"][0]["code"], "industry_trend")
         self.assertIn("- enabled: true", render_markdown(merged))
 
+    def test_find_candidate_empty_candidates_distinguishable_error(self) -> None:
+        # Phase 3 audit (2026-05-25): distinguish "input has zero candidates"
+        # from "ts_code not found among candidates" so the user can route the
+        # fix correctly (re-run egs_main vs check ts_code spelling).
+        from runners.run_analysis_report import find_candidate
+
+        with self.assertRaisesRegex(ValueError, "no candidates"):
+            find_candidate({"candidates": []}, "600415.SH")
+        with self.assertRaisesRegex(ValueError, "no candidates"):
+            find_candidate({}, "600415.SH")
+        with self.assertRaisesRegex(ValueError, "not in analysis_input"):
+            find_candidate({"candidates": [{"ts_code": "000001.SZ"}]}, "600415.SH")
+
+    def test_apply_enrichment_returns_deep_copy(self) -> None:
+        payload = load_analysis_input("20260522")
+        candidate = find_candidate(payload, "600415.SH")
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+        enrichment = {
+            "target": {
+                "as_of": "20260522",
+                "ts_code": "600415.SH",
+                "report_schema_version": "1.0.0",
+            },
+            "llm_notes": {"enabled": True, "sections": []},
+        }
+        merged = apply_enrichment(report, enrichment)
+
+        # Mutating merged should not bleed back into the source report.
+        merged["risk_flags"].append({"code": "synthetic", "severity": "info",
+                                     "source": "llm", "detail": {}})
+        self.assertNotIn(
+            "synthetic",
+            {f.get("code") for f in report["risk_flags"]},
+            "apply_enrichment leaked a shared list reference",
+        )
+
+    def test_decision_reason_code_uses_comma_join(self) -> None:
+        # B5: reason_code separator changed from '|' to ',' since '|' collides
+        # with Markdown table cells. esp_non_positive < 0 should fire here.
+        payload = load_analysis_input("20260522")
+        candidate = dict(find_candidate(payload, "600415.SH"))
+        # Inject esp_raw < 0 to trigger esp_non_positive veto deterministically.
+        fundamental = dict(candidate.get("fundamental") or {})
+        expectation = dict(fundamental.get("expectation") or {})
+        expectation["esp_raw"] = -10
+        fundamental["expectation"] = expectation
+        candidate["fundamental"] = fundamental
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+        self.assertEqual(report["decision"]["action"], "skip")
+        self.assertIn("esp_non_positive", report["decision"]["reason_code"])
+        self.assertNotIn("|", report["decision"]["reason_code"])
+
     def test_apply_enrichment_rejects_target_mismatch(self) -> None:
         payload = load_analysis_input("20260522")
         candidate = find_candidate(payload, "600415.SH")
