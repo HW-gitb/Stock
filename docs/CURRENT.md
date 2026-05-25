@@ -8,7 +8,7 @@
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 schema / runner / simulator 代码尚未开始
-- **当前目标**：先由 Claude 审查 `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`。通过后，下一条最小代码任务是 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试
+- **当前目标**：Phase 5 kickoff spec 已通过协议确认。下一条最小代码任务是先升级 `schemas/deterministic_report.schema.json` 到 v1.1.0，补齐 `data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source`，同步 runner 输出与测试；完成后再做 `schemas/execution_backtest_report.schema.json` v1.0.0。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -133,9 +133,9 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **Claude review Phase 5 kickoff spec** — 审查 `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 的边界、输入/输出 contract、撮合假设、止损/时间止损/熔断/仓位限制/冷静期完成线。
-2. **execution report schema-first** — Claude / 用户确认后，设计 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试，再写 runner。
-3. **Claude 审查点** — Phase 5 kickoff spec、execution schema、撮合假设、是否需要 Phase 4 schema v1.1.0，均需 Claude 独立审查后由用户确认。
+1. **deterministic report schema v1.1.0** — 先升级 `schemas/deterministic_report.schema.json`，补齐 lineage / enrichment 字段，并同步 runner 输出与测试。
+2. **execution report schema-first** — deterministic report v1.1.0 完成后，设计 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试，再写 runner。
+3. **Claude 审查点** — deterministic report v1.1.0、execution schema、撮合假设均需 Claude 独立审查后由用户确认。
 4. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）

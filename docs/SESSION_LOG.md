@@ -10,7 +10,7 @@
 
 ## 2026-05-25 — Claude (protocol simplification: remove REVIEW_PACKET + add Lightweight Track)
 
-**Commits**: pending in this session (user explicit instructions: option B remove REVIEW_PACKET + Yes lightweight track + commit)
+**Commits**: ef12fbf
 
 **Relationship to prior session(s)**:
 - User asked whether the current handoff stack (AGENTS / CURRENT / SESSION_LOG / handoff / REVIEW_PACKET) was over-engineered. Claude analyzed overlap and proposed three options. User picked B (remove REVIEW_PACKET) and Yes (add lightweight track exemption).
