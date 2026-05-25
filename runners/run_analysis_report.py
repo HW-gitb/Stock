@@ -1,0 +1,428 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Phase 4 deterministic single-stock analysis report runner.
+
+This runner is intentionally pure Python and deterministic. It reads one
+candidate from ``analysis_input.json``, replays the Phase 3 analyzer veto,
+checks JSON state, validates the report against
+``schemas/deterministic_report.schema.json``, then writes JSON + Markdown.
+It does not call an LLM.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from engine.analyzer import state_manager
+from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
+
+
+SCHEMA_PATH = ROOT / "schemas" / "deterministic_report.schema.json"
+LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
+REPORT_SCHEMA_VERSION = "1.0.0"
+
+
+def load_analysis_input(as_of: str, input_path: Path | None = None) -> dict[str, Any]:
+    path = input_path or (LIVE_RESULT_ROOT / as_of / "analysis_input.json")
+    with Path(path).open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def find_candidate(payload: dict[str, Any], ts_code: str) -> dict[str, Any]:
+    for candidate in payload.get("candidates") or []:
+        if str(candidate.get("ts_code")) == str(ts_code):
+            return candidate
+    raise ValueError(f"candidate not found in analysis_input: {ts_code}")
+
+
+def build_report(payload: dict[str, Any], candidate: dict[str, Any],
+                 generated_at: str | None = None) -> dict[str, Any]:
+    generated_at = generated_at or datetime.now().astimezone().isoformat(timespec="seconds")
+    as_of = str(payload.get("trade_date") or "")
+    ts_code = str(candidate.get("ts_code") or "")
+    name = str(candidate.get("name") or ts_code)
+    veto = run_veto(candidate)
+    has_position = state_manager.has_position(ts_code)
+    circuit_active = state_manager.is_circuit_breaker_active()
+    decision = _build_decision(veto, has_position, circuit_active)
+
+    report = {
+        "schema_name": "deterministic_report",
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "preset": str(payload.get("preset") or "a_short"),
+        "as_of": as_of,
+        "ts_code": ts_code,
+        "name": name,
+        "decision": decision,
+        "veto": veto,
+        "entry_plan": {
+            "price": None,
+            "condition": "unknown",
+            "type": "unknown",
+            "requires_llm": True,
+        },
+        "exit_plan": {
+            "stop_loss": None,
+            "take_profit_1": None,
+            "take_profit_2": None,
+            "time_stop_days": None,
+            "requires_llm": True,
+        },
+        "position_size": {
+            "shares": None,
+            "pct_of_capital": None,
+            "rationale": "not_implemented_phase4",
+            "requires_llm": True,
+        },
+        "risk_flags": _build_risk_flags(candidate, veto, has_position, circuit_active),
+        "evidence": _build_evidence(payload, candidate),
+        "unknowns": _build_unknowns(candidate),
+        "llm_notes": {
+            "enabled": False,
+            "sections": _build_llm_sections(candidate),
+        },
+        "data_lineage": {
+            "egs_version": str(_get(payload, "source", "screening_engine_version", default="v0.0")),
+            "analyzer_rules": [
+                {"code": code, "version": version}
+                for code, version in RULE_VERSIONS.items()
+            ],
+            "state_snapshot_ref": _state_snapshot_ref(),
+            "analysis_input_schema_version": str(payload.get("schema_version") or "0.0.0"),
+            "generated_at": generated_at,
+        },
+        "analyzer_invocations": _build_analyzer_invocations(veto),
+    }
+    return report
+
+
+def _build_decision(veto: dict[str, Any], has_position: bool, circuit_active: bool) -> dict[str, str]:
+    if veto.get("vetoed"):
+        reason = "analyzer_hard_veto:" + "|".join(
+            str(r.get("code")) for r in (veto.get("reasons") or []) if r.get("code")
+        )
+        return {"action": "skip", "reason_code": reason, "confidence": "high"}
+    if circuit_active:
+        return {"action": "skip", "reason_code": "state_circuit_breaker_active", "confidence": "high"}
+    if has_position:
+        return {"action": "watch", "reason_code": "state_existing_position", "confidence": "medium"}
+    return {"action": "watch", "reason_code": "phase4_v1_no_buy_decision", "confidence": "unknown"}
+
+
+def _build_risk_flags(candidate: dict[str, Any], veto: dict[str, Any],
+                      has_position: bool, circuit_active: bool) -> list[dict[str, Any]]:
+    flags: list[dict[str, Any]] = []
+    for reason in veto.get("reasons") or []:
+        flags.append({
+            "code": str(reason.get("code") or "analyzer_veto"),
+            "severity": "critical",
+            "source": "analyzer",
+            "detail": reason.get("detail") or {},
+        })
+    for diag in veto.get("diagnostics") or []:
+        flags.append({
+            "code": f"{diag.get('code')}:{diag.get('status')}",
+            "severity": "info",
+            "source": "analyzer",
+            "detail": diag,
+        })
+    if circuit_active:
+        flags.append({
+            "code": "circuit_breaker_active",
+            "severity": "critical",
+            "source": "state",
+            "detail": state_manager.load_circuit_breaker(),
+        })
+    if has_position:
+        flags.append({
+            "code": "existing_position",
+            "severity": "info",
+            "source": "state",
+            "detail": {"ts_code": candidate.get("ts_code")},
+        })
+    tier = _get(candidate, "selection", "tier")
+    final_score = _get(candidate, "scores", "final_score")
+    if tier is not None or final_score is not None:
+        flags.append({
+            "code": "egs_selection_context",
+            "severity": "info",
+            "source": "egs",
+            "detail": {"tier": tier, "final_score": final_score},
+        })
+    return flags
+
+
+def _build_evidence(payload: dict[str, Any], candidate: dict[str, Any]) -> list[dict[str, Any]]:
+    evidence: list[dict[str, Any]] = [
+        {"field_path": "analysis_input.schema_version", "value": payload.get("schema_version"), "source": "analysis_input"},
+        {"field_path": "source.screening_engine_version", "value": _get(payload, "source", "screening_engine_version"), "source": "analysis_input"},
+        {"field_path": "candidate.ts_code", "value": candidate.get("ts_code"), "source": "analysis_input"},
+        {"field_path": "selection.rank", "value": _get(candidate, "selection", "rank"), "source": "analysis_input"},
+        {"field_path": "selection.tier", "value": _get(candidate, "selection", "tier"), "source": "analysis_input"},
+        {"field_path": "selection.entry_flag", "value": _get(candidate, "selection", "entry_flag"), "source": "analysis_input"},
+        {"field_path": "quote.close", "value": _get(candidate, "quote", "close"), "source": "analysis_input"},
+        {"field_path": "scores.final_score", "value": _get(candidate, "scores", "final_score"), "source": "analysis_input"},
+        {"field_path": "scores.esp_score", "value": _get(candidate, "scores", "esp_score"), "source": "analysis_input"},
+        {"field_path": "scores.cat_score", "value": _get(candidate, "scores", "cat_score"), "source": "analysis_input"},
+        {"field_path": "scores.l4_score", "value": _get(candidate, "scores", "l4_score"), "source": "analysis_input"},
+        {"field_path": "technical.support.price", "value": _get(candidate, "technical", "support", "price"), "source": "analysis_input"},
+        {"field_path": "technical.resistance.price", "value": _get(candidate, "technical", "resistance", "price"), "source": "analysis_input"},
+        {"field_path": "industry.sw_l1_name", "value": _get(candidate, "industry", "sw_l1_name"), "source": "analysis_input"},
+        {"field_path": "industry.sw_l2_name", "value": _get(candidate, "industry", "sw_l2_name"), "source": "analysis_input"},
+    ]
+    return [item for item in evidence if item["value"] is not None]
+
+
+def _build_unknowns(candidate: dict[str, Any]) -> list[dict[str, str]]:
+    unknowns = [
+        {
+            "field": "entry_plan.price",
+            "reason": "not_implemented_phase4",
+            "note": "Phase 4 v1 does not compute deterministic entry price.",
+        },
+        {
+            "field": "exit_plan.stop_loss",
+            "reason": "not_implemented_phase4",
+            "note": "ATR/technical stop-loss engine is out of Phase 4 minimal scope.",
+        },
+        {
+            "field": "exit_plan.take_profit_1",
+            "reason": "not_implemented_phase4",
+            "note": "Take-profit levels are reserved for later analyzer/execution phases.",
+        },
+        {
+            "field": "position_size.shares",
+            "reason": "not_implemented_phase4",
+            "note": "M6.3 position sizing is reserved for Phase 5 execution work.",
+        },
+        {
+            "field": "llm_notes.sections",
+            "reason": "requires_llm",
+            "note": "Industry trend, regulation, policy/news and hidden-risk interpretation require optional LLM enrichment.",
+        },
+    ]
+    for field, path in [
+        ("technical.atr.atr_14", ("technical", "atr", "atr_14")),
+        ("technical.rsi_14", ("technical", "rsi_14")),
+        ("technical.macd", ("technical", "macd", "dif")),
+    ]:
+        if _get(candidate, *path) is None:
+            unknowns.append({
+                "field": field,
+                "reason": "data_missing",
+                "note": "analysis_input does not contain this technical value.",
+            })
+    return unknowns
+
+
+def _build_llm_sections(candidate: dict[str, Any]) -> list[dict[str, Any]]:
+    tasks = candidate.get("llm_tasks")
+    if not isinstance(tasks, list):
+        return []
+    sections = []
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        code = str(task.get("id") or task.get("code") or "llm_task")
+        prompt_ref = task.get("prompt_ref")
+        sections.append({
+            "code": code,
+            "title": str(task.get("title") or code),
+            "status": "unknown",
+            "prompt_ref": None if prompt_ref is None else str(prompt_ref),
+            "content": None,
+            "confidence": "unknown",
+        })
+    return sections
+
+
+def _build_analyzer_invocations(veto: dict[str, Any]) -> list[dict[str, Any]]:
+    reasons_by_code = {str(r.get("code")): r for r in (veto.get("reasons") or []) if r.get("code")}
+    diagnostics_by_code: dict[str, list[dict[str, Any]]] = {}
+    for diag in veto.get("diagnostics") or []:
+        code = str(diag.get("code"))
+        diagnostics_by_code.setdefault(code, []).append(diag)
+
+    invocations = []
+    for code in veto.get("enabled_rules") or []:
+        if code in reasons_by_code:
+            status = "fired"
+            detail = reasons_by_code[code].get("detail") or {}
+        elif code in diagnostics_by_code:
+            status = "diagnostic"
+            detail = {"diagnostics": diagnostics_by_code[code]}
+        else:
+            status = "passed"
+            detail = {}
+        invocations.append({
+            "code": code,
+            "version": int(RULE_VERSIONS[code]),
+            "status": status,
+            "detail": detail,
+        })
+    return invocations
+
+
+def validate_report(report: dict[str, Any], schema_path: Path = SCHEMA_PATH) -> None:
+    try:
+        from jsonschema import Draft7Validator
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "jsonschema is required to validate deterministic_report. "
+            "Install with: python -m pip install -r requirements-dev.txt"
+        ) from exc
+
+    with Path(schema_path).open("r", encoding="utf-8") as f:
+        schema = json.load(f)
+    Draft7Validator.check_schema(schema)
+    errors = sorted(Draft7Validator(schema).iter_errors(report), key=lambda e: list(e.path))
+    if errors:
+        first = errors[0]
+        path = "$" + "".join(f"[{repr(p)}]" for p in first.path)
+        raise ValueError(f"deterministic_report schema validation failed at {path}: {first.message}")
+
+
+def render_markdown(report: dict[str, Any]) -> str:
+    decision = report["decision"]
+    entry = report["entry_plan"]
+    exit_plan = report["exit_plan"]
+    position = report["position_size"]
+    flags = report.get("risk_flags") or []
+    unknowns = report.get("unknowns") or []
+    veto = report.get("veto") or {}
+
+    price_block = " / ".join([
+        _fmt_unknown(entry.get("price")),
+        _fmt_unknown(exit_plan.get("take_profit_1")),
+        _fmt_unknown(exit_plan.get("take_profit_2")),
+        _fmt_unknown(exit_plan.get("stop_loss")),
+    ])
+    table = [
+        "| target | action | shares | entry/tp1/tp2/stop | type | priority | trigger |",
+        "|---|---|---:|---|---|---|---|",
+        (
+            f"| {report['ts_code']} {report['name']} | {decision['action']} | "
+            f"{_fmt_unknown(position.get('shares'))} | {price_block} | "
+            f"{entry.get('type') or 'unknown'} | pending_llm_enrich | "
+            f"{entry.get('condition') or decision['reason_code']} |"
+        ),
+    ]
+
+    lines = [
+        f"# M6.7 Deterministic Report - {report['ts_code']} {report['name']}",
+        "",
+        f"- as_of: `{report['as_of']}`",
+        f"- decision: `{decision['action']}` (`{decision['reason_code']}`, confidence={decision['confidence']})",
+        f"- analyzer_vetoed: `{veto.get('vetoed')}`",
+        "",
+        "## M6.7 Table",
+        "",
+        *table,
+        "",
+        "## Deterministic Summary",
+        "",
+        "- current_environment: unknown",
+        "- volatility_state: unknown",
+        "- current_price_and_cost: see `evidence.quote.close`",
+        "- veto_review: " + ("hard veto fired" if veto.get("vetoed") else "passed or diagnostic only"),
+        "- sector_fund_event: requires_llm",
+        "- risk_control_trigger: not_implemented_phase4",
+        "",
+        "## Risk Flags",
+        "",
+    ]
+    if flags:
+        lines.extend(f"- `{f['code']}` [{f['severity']}/{f['source']}]" for f in flags)
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Unknowns", ""])
+    lines.extend(f"- `{u['field']}`: {u['reason']} - {u['note']}" for u in unknowns)
+    lines.extend(["", "## LLM Notes", "", "- enabled: false"])
+    return "\n".join(lines) + "\n"
+
+
+def write_report(report: dict[str, Any], out_dir: Path) -> tuple[Path, Path]:
+    validate_report(report)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stem = str(report["ts_code"])
+    json_path = out_dir / f"{stem}.json"
+    md_path = out_dir / f"{stem}.md"
+    with json_path.open("w", encoding="utf-8", newline="\n") as f:
+        json.dump(report, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    with md_path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(render_markdown(report))
+    return json_path, md_path
+
+
+def _get(obj: Any, *keys: str, default=None):
+    cur = obj
+    for key in keys:
+        if not isinstance(cur, dict):
+            return default
+        cur = cur.get(key)
+        if cur is None:
+            return default
+    return cur
+
+
+def _fmt_unknown(value: Any) -> str:
+    if value is None:
+        return "unknown"
+    return str(value)
+
+
+def _state_snapshot_ref() -> str:
+    refs = []
+    for label, path in [
+        ("positions", state_manager.POSITIONS_PATH),
+        ("veto_log", state_manager.VETO_LOG_PATH),
+        ("circuit_breaker", state_manager.CIRCUIT_BREAKER_PATH),
+    ]:
+        refs.append(f"{label}:{_file_digest(path)}")
+    return ";".join(refs)
+
+
+def _file_digest(path: Path) -> str:
+    path = Path(path)
+    if not path.exists():
+        return "missing"
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()[:16]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Generate one deterministic Phase 4 analysis report.")
+    parser.add_argument("--as-of", required=True, help="YYYYMMDD result directory date.")
+    parser.add_argument("--ts-code", required=True, help="Candidate ts_code, e.g. 600415.SH.")
+    parser.add_argument("--input-path", help="Optional explicit analysis_input.json path.")
+    parser.add_argument("--out-dir", help="Output directory. Default: result/a_short/<as-of>/reports")
+    args = parser.parse_args(argv)
+
+    input_path = Path(args.input_path) if args.input_path else None
+    payload = load_analysis_input(args.as_of, input_path=input_path)
+    candidate = find_candidate(payload, args.ts_code)
+    report = build_report(payload, candidate)
+    out_dir = Path(args.out_dir) if args.out_dir else LIVE_RESULT_ROOT / args.as_of / "reports"
+    json_path, md_path = write_report(report, out_dir)
+    print(f"[OK] wrote {json_path.relative_to(ROOT) if json_path.is_relative_to(ROOT) else json_path}")
+    print(f"[OK] wrote {md_path.relative_to(ROOT) if md_path.is_relative_to(ROOT) else md_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from engine.analyzer import state_manager
+from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
+from runners.run_analysis_report import (
+    build_report,
+    find_candidate,
+    load_analysis_input,
+    render_markdown,
+    write_report,
+)
+
+class RunAnalysisReportTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        state_root = Path(self._tmp.name)
+        self._original_paths = (
+            state_manager.POSITIONS_PATH,
+            state_manager.VETO_LOG_PATH,
+            state_manager.CIRCUIT_BREAKER_PATH,
+        )
+        state_manager.POSITIONS_PATH = state_root / "positions.json"
+        state_manager.VETO_LOG_PATH = state_root / "veto_log.json"
+        state_manager.CIRCUIT_BREAKER_PATH = state_root / "circuit_breaker.json"
+
+    def tearDown(self) -> None:
+        (
+            state_manager.POSITIONS_PATH,
+            state_manager.VETO_LOG_PATH,
+            state_manager.CIRCUIT_BREAKER_PATH,
+        ) = self._original_paths
+        self._tmp.cleanup()
+
+    def test_build_report_replays_phase3_analyzer(self) -> None:
+        payload = load_analysis_input("20260522")
+        candidate = find_candidate(payload, "600415.SH")
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+
+        self.assertEqual(report["schema_name"], "deterministic_report")
+        self.assertEqual(report["schema_version"], "1.0.0")
+        self.assertEqual(report["ts_code"], "600415.SH")
+        self.assertEqual(report["veto"], run_veto(candidate))
+        self.assertEqual(
+            {item["code"] for item in report["data_lineage"]["analyzer_rules"]},
+            set(RULE_VERSIONS),
+        )
+        self.assertIn(report["decision"]["action"], {"skip", "watch"})
+        self.assertFalse(report["llm_notes"]["enabled"])
+        self.assertIn(
+            "entry_plan.price",
+            {item["field"] for item in report["unknowns"]},
+        )
+
+    def test_markdown_renders_m67_table(self) -> None:
+        payload = load_analysis_input("20260522")
+        candidate = find_candidate(payload, "600415.SH")
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+
+        markdown = render_markdown(report)
+
+        self.assertIn("# M6.7 Deterministic Report - 600415.SH", markdown)
+        self.assertIn("## M6.7 Table", markdown)
+        self.assertIn("| target | action | shares | entry/tp1/tp2/stop |", markdown)
+        self.assertIn("pending_llm_enrich", markdown)
+
+    def test_write_report_validates_schema_when_jsonschema_available(self) -> None:
+        try:
+            import jsonschema  # noqa: F401
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        payload = load_analysis_input("20260522")
+        candidate = find_candidate(payload, "600415.SH")
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path, md_path = write_report(report, Path(tmp))
+
+            with json_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            self.assertEqual(data["ts_code"], "600415.SH")
+            self.assertTrue(md_path.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

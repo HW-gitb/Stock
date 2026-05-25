@@ -2,7 +2,7 @@
 
 **日期**：2026-05-25
 **范围**：Phase 4 minimal Skill 启动规格
-**状态**：待开工。本文是 Phase 4 开工边界，不是实现记录。
+**状态**：实施中。schema v1.0.0 与 runner v1 已落地；coverage doc / Skill 文档待做。
 **前置 handoff**：`docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md`（Phase 3 完整实施记录，含 audit fixes / 3.3 / 3.4 / 3.5）
 
 ---
@@ -160,7 +160,7 @@ Markdown 报告还要包含 v14.2 §6.7 "精简结论区"（当前环境 / 波�
 ## 4. 启动顺序（schema first）
 
 1. **`schemas/deterministic_report.schema.json` v1.0.0** — JSON Schema Draft 7；schema first
-2. **`runners/run_analysis_report.py`** — CLI 入口
+2. ✅ **`runners/run_analysis_report.py`** — CLI 入口
    - 参数：`--as-of YYYYMMDD --ts-code CODE [--out-dir]`
    - 读 `result/a_short/<as_of>/analysis_input.json` 找 candidate
    - 调 `engine.analyzer.rule6_hard_veto.run_veto(candidate)` 得 veto 决策
@@ -360,3 +360,52 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "<minimal s
 2. Runner 必须在落盘前校验输出符合 `schemas/deterministic_report.schema.json`。
 3. Runner v1 的 `decision.action` 只应输出 `skip/watch`；不要在 Phase 4 v1 里硬做 `buy`。
 4. 输出目录固定为 `result/a_short/<as_of>/reports/<ts_code>.json` 和 `.md`。
+
+
+---
+
+## 2026-05-25 追加：run_analysis_report runner v1
+
+### 改了什么
+
+- 新增 `runners/run_analysis_report.py`。
+  - CLI：`--as-of YYYYMMDD --ts-code CODE [--input-path] [--out-dir]`。
+  - 默认读取 `result/a_short/<as_of>/analysis_input.json`，按 `ts_code` 找单个 candidate。
+  - 调用 Phase 3 `engine.analyzer.rule6_hard_veto.run_veto(candidate)`，并读取 `state_manager.has_position()` / `is_circuit_breaker_active()`。
+  - 落盘前调用 `schemas/deterministic_report.schema.json` 校验，输出 JSON + Markdown。
+  - 默认输出目录固定为 `result/a_short/<as_of>/reports/`。
+- 新增 `tests/skill/test_run_analysis_report.py`。
+  - 验证 runner 构造的 `veto` 与直接 `run_veto(candidate)` 一致。
+  - 验证 Markdown 包含 M6.7 table。
+  - 若当前 interpreter 安装了 `jsonschema`，验证 `write_report()` 的 schema 校验 + 文件输出；bundled Python 缺依赖时该项 skip。
+- 更新 `runners/README.md`、`AGENTS.md`、`docs/CURRENT.md` 指向 runner v1 状态。
+
+### 为什么改
+
+Phase 4 schema-first 已经固定 contract；下一步必须有纯 Python、可复现的执行入口，把 `analysis_input.json + analyzer + state` 合成为机器可读报告。Skill 仍保持使用文档定位，不作为执行入口；LLM enrich 仍为后续可选层，不进入 v1 runner。
+
+本轮没有实现 `buy`、仓位公式、ATR 止损、止盈位、联网新闻/监管判断。对应字段继续输出 `unknown` / `requires_llm` / `not_implemented_phase4`，避免 Phase 4 v1 硬编不可回测的默认值。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['runners/run_analysis_report.py','tests/skill/test_run_analysis_report.py']; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in files]; print('compile ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import tempfile; from pathlib import Path; from runners.run_analysis_report import main; d=tempfile.mkdtemp(prefix='phase4_report_'); rc=main(['--as-of','20260522','--ts-code','600415.SH','--out-dir',d]); print('rc', rc); print(sorted(p.name for p in Path(d).iterdir()))"
+```
+
+### 验证结果
+
+- Compile：`compile ok`。
+- Unit tests：24 tests passed，1 skipped（bundled Python 缺 `jsonschema`，schema 写入测试按设计 skip）。
+- 本机 Python 3.13 E2E：`20260522 / 600415.SH` 成功生成 `600415.SH.json` 和 `600415.SH.md`，返回码 `0`，schema 校验通过。
+
+### 失效旧结论
+
+无。此改动不改变 Phase 3 analyzer 规则、不改变 rank 回测结论、不改变 Phase 4 schema v1.0.0。
+
+### 下一步注意事项
+
+1. 写 `schemas/deterministic_report_coverage.md`，明确 v14.2 覆盖率和 unknown 原因分布。
+2. 写 `skills/a_short_analysis/SKILL.md`，把 runner 调用、报告读取、LLM enrich 边界写成 AI 协作者使用文档。
+3. Runner v1 继续只输出 `skip/watch`；Phase 5 前不要把 `buy` 逻辑塞进 Skill 自由文本。
