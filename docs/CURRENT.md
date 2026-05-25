@@ -1,14 +1,14 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（Phase 5 kickoff spec 已建立，代码未开始）
+**最后更新**：2026-05-25（Phase 5 deterministic_report v1.1.0 待 Claude 审查）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 schema / runner / simulator 代码尚未开始
-- **当前目标**：Phase 5 kickoff spec 已通过协议确认。下一条最小代码任务是先升级 `schemas/deterministic_report.schema.json` 到 v1.1.0，补齐 `data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source`，同步 runner 输出与测试；完成后再做 `schemas/execution_backtest_report.schema.json` v1.0.0。
+- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 前置 deterministic report v1.1.0 已在工作树中实现，待 Claude 审查后提交；execution schema / runner / simulator 尚未开始
+- **当前目标**：先让 Claude 审查 deterministic report v1.1.0 改动。通过并提交后，下一条最小代码任务是 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -86,8 +86,8 @@
 - `engine/analyzer/state_manager.py` — Phase 3 JSON state 接口与 atomic write helper
 - `tests/analyzer/test_state_manager.py` / `tests/test_backtest_rank_phase3.py` — Phase 3 state expiry、l2 normalization、analyzer ablation 命名回归测试
 - `schemas/analysis_input.schema.json` — v1.1.0
-- `schemas/deterministic_report.schema.json` — v1.0.0（Phase 4 minimal report contract；runner 输出 JSON 必须先过它）
-- `schemas/deterministic_report_enrichment.schema.json` — v1.0.0（可选 LLM notes patch；只允许合并 `llm_notes`）
+- `schemas/deterministic_report.schema.json` — v1.1.0（Phase 4 minimal report contract；runner 输出 JSON 必须先过它；含 L3/enrichment lineage）
+- `schemas/deterministic_report_enrichment.schema.json` — v1.1.0（可选 LLM notes patch；只允许合并 `llm_notes`，target report version 对齐 deterministic_report v1.1.0）
 - `schemas/examples/deterministic_report_enrichment.example.json` — enrichment patch 最小样例
 - `schemas/deterministic_report_coverage.md` — Phase 4 v1 对 v14.2 M0-M6 / M6.7 的覆盖矩阵与 unknown 原因约定
 - `schemas/rank_backtest_report.schema.json` — v1.11.0（含 date_warnings + data_lineage + analyzer veto replay settings）
@@ -126,8 +126,8 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **deterministic report schema v1.1.0** — 先升级 `schemas/deterministic_report.schema.json`，补齐 lineage / enrichment 字段，并同步 runner 输出与测试。
-2. **execution report schema-first** — deterministic report v1.1.0 完成后，设计 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试，再写 runner。
+1. **deterministic report schema v1.1.0** — 已在当前工作树实现，待 Claude 审查；通过后提交。
+2. **execution report schema-first** — deterministic report v1.1.0 通过审查并提交后，设计 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试，再写 runner。
 3. **Claude 审查点** — deterministic report v1.1.0、execution schema、撮合假设均需 Claude 独立审查后由用户确认。
 4. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
 

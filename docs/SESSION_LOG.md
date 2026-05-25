@@ -8,6 +8,138 @@
 
 ---
 
+## 2026-05-25 — Claude review — Pass (approved optional fixes for deterministic_report v1.1.0)
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `36e2769`; targets the immediately prior Codex 修复 entry "approved optional fixes for deterministic_report v1.1.0 review")
+
+**Verdict**: Pass.
+
+**Notes**: O1+O2+O3 全部正确落地。独立验证：`tests.skill.test_run_analysis_report` 11 tests pass（增量 +1，新 `test_build_report_defaults_legacy_missing_l3_mode_to_today`）；regenerated sample `result/a_short/20260522/reports/600415.SH.json` 通过 v1.1.0 schema 验证（0 errors，schema_version 1.1.0，l3_mode today，enrichment_applied False，enrichment_source None）；前一条 Codex entry 的 relationship line 已收紧成 `Builds on 2026-05-25 Codex (Phase 5 kickoff spec) §7`。无 Required fixes / 无新 Optional / 无 open questions。可以 `提交`。
+
+---
+
+## 2026-05-25 — Codex (approved optional fixes for deterministic_report v1.1.0 review)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-25 Claude review (deterministic_report v1.1.0 lineage preflight) §Optional suggestions. User approved all three Optional items before invoking `修复`.
+- Refines the prior Codex handoff entry format to match `AGENTS.md §Session log discipline`.
+
+**Worked on**:
+1. Regenerated tracked sample report `result/a_short/20260522/reports/600415.SH.{json,md}` so the repo sample now emits `schema_version=1.1.0` and validates against the current deterministic report schema.
+2. Added `test_build_report_defaults_legacy_missing_l3_mode_to_today` to lock the legacy `analysis_input.source.l3_mode` fallback.
+3. Edited the prior Codex SESSION_LOG entry's relationship line into the `<date> <LLM> (<topic>) §<section>` shape.
+4. Updated the Phase 5 handoff appendix to record the sample regeneration and new 11-test validation result.
+
+**Key decisions**:
+- Treated the stale tracked sample report as part of the v1.1.0 contract surface, not as a historical artifact, because Claude recommended keeping repo-visible examples in-contract.
+- Did not modify execution schema, simulator, EGS, analyzer rules, or rank backtest outputs.
+
+**Alternatives considered and rejected**:
+- "Leave the tracked sample as v1.0.0 and document it as legacy" — rejected because regenerating the sample is cheaper and gives reviewers a current fixture.
+- "Skip a SESSION_LOG entry because fixes were optional" — rejected because the repair changes tracked sample artifacts and test coverage.
+
+**Open questions handed off**:
+- None from Codex; Claude should re-review the updated diff and the regenerated sample report.
+
+**Next natural step from my view**:
+1. User sends `审查` to Claude for re-review.
+2. If Claude returns Pass, user sends `提交` to Codex.
+3. After commit, next `执行` should start `schemas/execution_backtest_report.schema.json` v1.0.0 + minimal schema meta-validation only.
+
+---
+
+## 2026-05-25 — Claude review — Pass with Optional suggestions (deterministic_report v1.1.0 lineage preflight) — APPROVED by user 2026-05-25 (all 3 Optional)
+
+**Status**: **APPROVED 2026-05-25**. 用户明确批准全部 3 条 Optional（"批准全部optional"）。无 Required fixes。Codex 下一轮 `修复` 可以执行 O1+O2+O3。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `36e2769`; targets the immediately prior Codex entry "deterministic_report v1.1.0 lineage preflight")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `schemas/deterministic_report.schema.json` v1.0.0 → v1.1.0: new required fields `data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source` + new `$defs.enrichmentSource`
+- `runners/run_analysis_report.py`: `REPORT_SCHEMA_VERSION="1.1.0"`, new `_analysis_input_l3_mode` helper with legacy → "today" fallback + invalid-value guard, `build_report` populates the 3 new lineage fields, `apply_enrichment` mirrors patch `source` into lineage + flips `enrichment_applied=True`
+- `schemas/deterministic_report_enrichment.schema.json` v1.0.0 → v1.1.0 + example bump (mandatory because the patch's `target.report_schema_version` is a `const` matching the report schema)
+- `tests/skill/test_run_analysis_report.py`: 10 tests all pass locally (Python 3.13 + jsonschema), incl. new assertions on `l3_mode == "today"`, default lineage falsy, post-enrichment lineage = True/kind=manual
+- `schemas/deterministic_report_coverage.md`, `docs/CURRENT.md`, Phase 5 handoff: all aligned to v1.1.0; "追加" section follows handoff discipline (same-phase append, no new file)
+
+**Verification re-run** (independent of Codex's claim):
+- `Draft7Validator.check_schema(...)` on both schemas → `deterministic schema ok` / `enrichment schema ok`
+- `python -m unittest tests.skill.test_run_analysis_report -v` → `Ran 10 tests in 0.116s OK`
+
+**Reasons for Pass**:
+- Schema additions are internally consistent: `enrichmentSource` $def in deterministic_report.schema.json mirrors the `source` shape in deterministic_report_enrichment.schema.json (both `additionalProperties:false`, required `[kind, prompt_refs]`, same `kind` enum, same `prompt_refs` array of `minLength:1` items, optional `model` as `string|null`). The `apply_enrichment` deep-copy mirror is therefore guaranteed to satisfy the merged schema.
+- `write_report` calls `validate_report` AFTER `apply_enrichment`, so any post-merge lineage drift would fail schema validation at write time — the contract is enforced end-to-end.
+- L3 mode enum `["pit", "today", "neutralize"]` matches `analysis_input.schema.json`. Fallback to `"today"` for legacy missing values matches the explicit backward-compat note in analysis_input schema. `_analysis_input_l3_mode` also raises on unknown values, so a corrupt input fails loudly rather than silently emitting garbage lineage.
+- Phase 4 runner v1 invariant preserved: still only emits `skip/watch`, no `buy`, no entry/exit/stop/sizing computed.
+- Scope respected: no EGS / analyzer / rank backtest / state files / Phase 3 hard veto changes; no business code in `A-EGS/`, `engine/`, `runners/backtest_*.py`; no execution-phase schema introduced.
+
+**Codex open questions — answered**:
+
+1. *"Whether requiring `enrichment_source` as null-or-object is the right shape, or whether missing field should have remained optional"* — **Required is correct.** Justification: `enrichment_applied` is already required (boolean), so consumers must read it; pairing it with an optional `enrichment_source` would create ambiguous semantics (does absence mean "not enriched" or "old report shape"?). Null-or-object collapses that ambiguity into a single load-bearing field. Phase 5 consumers can branch purely on `enrichment_applied` and trust that `enrichment_source` is present in the contract.
+
+2. *"Whether bumping the enrichment patch schema to v1.1.0 is acceptable scope for this preflight task"* — **Necessary, not optional.** The patch's `target.report_schema_version` is `const "1.0.0"` in v1.0.0 of the patch schema; once the report schema is `const "1.1.0"`, no valid v1.0.0 patch can ever target a v1.1.0 report. Keeping the patch at v1.0.0 would lock enrichment out of the new contract. Same-cycle bump is the only coherent option.
+
+**Required fixes**: none.
+
+**Optional suggestions (PENDING USER APPROVAL)**:
+
+1. **Stale tracked v1.0.0 sample report**: `result/a_short/20260522/reports/600415.SH.json` is git-tracked at `schema_version: "1.0.0"`, so it will no longer validate against the v1.1.0 schema once this lands. The runner self-identifies it as 1.0.0 so it isn't a *bug*, but it does mean the repo's only sample report is now contract-stale. Two acceptable resolutions: (a) regenerate it via `python runners\run_analysis_report.py --as-of 20260522 --ts-code 600415.SH` and re-commit; (b) leave it as a historical 1.0.0 artifact and add a one-liner to `schemas/deterministic_report_coverage.md` noting "the sample under `result/a_short/20260522/reports/` is pre-v1.1.0 and intentionally not re-emitted." I lean (a) — keeping the sample in-contract is cheaper than maintaining a "this is legacy" note.
+
+2. **No test for legacy `l3_mode` fallback**: the fixture explicitly sets `source.l3_mode = "today"`, so the happy path is covered, but the fallback branch in `_analysis_input_l3_mode` (when `source.l3_mode` is missing) only runs in production. A 3-line test that deletes `payload["source"]["l3_mode"]` and asserts the lineage emits `"today"` would lock the legacy contract. Optional because the analysis_input v1.1.0 schema makes `l3_mode` required, so legacy paths only matter for old in-flight files.
+
+3. **`SESSION_LOG` "Relationship to prior session(s)" informal reference**: the Codex entry writes `Builds on 2026-05-25 Phase 5 kickoff spec` instead of the AGENTS.md template `Builds on <date> <LLM> (<topic>) §<section>`. Readable but doesn't follow the template. Cosmetic — flag only if you want to tighten the template enforcement, otherwise ignore.
+
+**Documentation issues**: none beyond Optional 1.
+
+**Pending user approval**: Yes (Optional 1-3 only; no Required fixes).
+
+**Next natural step from my view**:
+1. User decides on Optional 1-3 (e.g., `批准修改 1` to regenerate the sample report, `批准修改 1,2` to also add the fallback test, or skip all).
+2. If Optionals deferred / rejected: user invokes `提交` (Codex session) to land the change as-is.
+3. After commit, next `执行` proceeds to `schemas/execution_backtest_report.schema.json` v1.0.0 + meta-validation test, per Phase 5 handoff §3.
+
+This entry is for cross-LLM continuity. It is NOT a direct execution order to Codex.
+
+---
+
+## 2026-05-25 — Codex (deterministic_report v1.1.0 lineage preflight)
+
+**Commits**: none (Pattern B: `执行` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-25 Codex (Phase 5 kickoff spec) §7: before creating `schemas/execution_backtest_report.schema.json`, first close the Phase 4 deterministic report lineage gap.
+- Refines the Phase 4 enrichment contract: because the patch target report version changed to `1.1.0`, the enrichment patch schema/example were also bumped to `1.1.0` rather than leaving a misleading v1.0.0 contract.
+
+**Worked on**:
+1. Upgraded `schemas/deterministic_report.schema.json` to v1.1.0 and made `data_lineage.l3_mode`, `enrichment_applied`, and `enrichment_source` required.
+2. Updated `runners/run_analysis_report.py` to emit L3 lineage from `analysis_input.source.l3_mode`, default legacy missing L3 mode to `today`, and mirror enrichment patch source metadata into data lineage after merge.
+3. Upgraded `schemas/deterministic_report_enrichment.schema.json` and the example patch to v1.1.0 so `target.report_schema_version` matches deterministic report v1.1.0.
+4. Updated runner tests, coverage docs, CURRENT, and appended the Phase 5 handoff section for this schema-minor milestone.
+
+**Key decisions**:
+- `enrichment_source` lives under `data_lineage`, not under `llm_notes`, because Phase 5 needs to know whether a report was enriched without parsing the note sections.
+- Legacy `analysis_input` files without `source.l3_mode` are reported as `today`, matching the existing analysis_input schema backward-compatibility description.
+- The runner still only emits `skip/watch`; this round does not add execution plan, stop-loss, position sizing, or simulator behavior.
+
+**Alternatives considered and rejected**:
+- "Only update deterministic_report and leave enrichment patch schema at v1.0.0" — rejected because the patch target version changed; keeping v1.0.0 would make the patch contract lie about compatibility.
+- "Let execution_backtest_report carry these lineage fields without changing deterministic_report" — rejected by Phase 5 kickoff §7; it would leave the Phase 4 contract gap in place.
+- "Use free-form enrichment_source string" — rejected because the existing enrichment patch already has structured `source.kind/model/prompt_refs`; mirroring that structure is more auditable.
+
+**Open questions handed off**:
+- Claude should verify whether requiring `enrichment_source` as null-or-object is the right shape, or whether missing field should have remained optional. I made it required so every report explicitly says whether enrichment happened.
+- Claude should verify whether bumping the enrichment patch schema to v1.1.0 is acceptable scope for this preflight task. I treated it as necessary version hygiene because the target report version changed.
+
+**Next natural step from my view**:
+1. User sends `审查` to Claude.
+2. If Claude returns Pass, user sends `提交` to Codex.
+3. After commit, the next `执行` should create `schemas/execution_backtest_report.schema.json` v1.0.0 plus minimal schema meta-validation only.
+
+---
+
 ## 2026-05-25 — Codex ([trivial] trim CURRENT snapshot)
 
 **Commits**: this commit

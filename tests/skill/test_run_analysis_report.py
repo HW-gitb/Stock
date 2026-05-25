@@ -53,9 +53,12 @@ class RunAnalysisReportTest(unittest.TestCase):
         )
 
         self.assertEqual(report["schema_name"], "deterministic_report")
-        self.assertEqual(report["schema_version"], "1.0.0")
+        self.assertEqual(report["schema_version"], "1.1.0")
         self.assertEqual(report["ts_code"], "600000.SH")
         self.assertEqual(report["veto"], run_veto(candidate))
+        self.assertEqual(report["data_lineage"]["l3_mode"], "today")
+        self.assertFalse(report["data_lineage"]["enrichment_applied"])
+        self.assertIsNone(report["data_lineage"]["enrichment_source"])
         self.assertEqual(
             {item["code"] for item in report["data_lineage"]["analyzer_rules"]},
             set(RULE_VERSIONS),
@@ -66,6 +69,19 @@ class RunAnalysisReportTest(unittest.TestCase):
             "entry_plan.price",
             {item["field"] for item in report["unknowns"]},
         )
+
+    def test_build_report_defaults_legacy_missing_l3_mode_to_today(self) -> None:
+        payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        payload["source"].pop("l3_mode")
+        candidate = find_candidate(payload, "600000.SH")
+
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+
+        self.assertEqual(report["data_lineage"]["l3_mode"], "today")
 
     def test_markdown_renders_m67_table(self) -> None:
         payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
@@ -122,7 +138,12 @@ class RunAnalysisReportTest(unittest.TestCase):
             "target": {
                 "as_of": "20260522",
                 "ts_code": "600000.SH",
-                "report_schema_version": "1.0.0",
+                "report_schema_version": "1.1.0",
+            },
+            "source": {
+                "kind": "manual",
+                "model": None,
+                "prompt_refs": ["skills/a_short_analysis/prompts/industry_trend.md"],
             },
             "llm_notes": {
                 "enabled": True,
@@ -141,6 +162,8 @@ class RunAnalysisReportTest(unittest.TestCase):
 
         self.assertEqual(merged["decision"], original_decision)
         self.assertTrue(merged["llm_notes"]["enabled"])
+        self.assertTrue(merged["data_lineage"]["enrichment_applied"])
+        self.assertEqual(merged["data_lineage"]["enrichment_source"]["kind"], "manual")
         self.assertEqual(merged["llm_notes"]["sections"][0]["code"], "industry_trend")
         self.assertIn("- enabled: true", render_markdown(merged))
 
@@ -169,7 +192,12 @@ class RunAnalysisReportTest(unittest.TestCase):
             "target": {
                 "as_of": "20260522",
                 "ts_code": "600000.SH",
-                "report_schema_version": "1.0.0",
+                "report_schema_version": "1.1.0",
+            },
+            "source": {
+                "kind": "manual",
+                "model": None,
+                "prompt_refs": [],
             },
             "llm_notes": {"enabled": True, "sections": []},
         }
@@ -216,7 +244,12 @@ class RunAnalysisReportTest(unittest.TestCase):
             "target": {
                 "as_of": "20260522",
                 "ts_code": "999999.SH",  # mismatch vs report ts_code 600000.SH
-                "report_schema_version": "1.0.0",
+                "report_schema_version": "1.1.0",
+            },
+            "source": {
+                "kind": "manual",
+                "model": None,
+                "prompt_refs": [],
             },
             "llm_notes": {"enabled": True, "sections": []},
         }

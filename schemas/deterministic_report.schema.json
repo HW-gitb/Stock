@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/deterministic_report/1.0.0/schema.json",
+  "$id": "https://stock.local/schemas/deterministic_report/1.1.0/schema.json",
   "title": "Deterministic Analysis Report",
   "description": "Phase 4 machine-readable contract emitted by runners/run_analysis_report.py before any optional LLM enrichment.",
   "type": "object",
@@ -32,7 +32,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.0.0",
+      "const": "1.1.0",
       "description": "Semantic version of this deterministic report contract."
     },
     "generated_at": {
@@ -423,6 +423,9 @@
         "analyzer_rules",
         "state_snapshot_ref",
         "analysis_input_schema_version",
+        "l3_mode",
+        "enrichment_applied",
+        "enrichment_source",
         "generated_at"
       ],
       "properties": {
@@ -443,6 +446,26 @@
         "analysis_input_schema_version": {
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "l3_mode": {
+          "type": "string",
+          "enum": ["pit", "today", "neutralize"],
+          "description": "L3 cat_score mode copied from analysis_input.source.l3_mode; legacy missing values are emitted as today."
+        },
+        "enrichment_applied": {
+          "type": "boolean",
+          "description": "True only after a validated deterministic_report_enrichment patch has been merged."
+        },
+        "enrichment_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/enrichmentSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Source metadata for the merged enrichment patch, or null when no enrichment was applied."
         },
         "generated_at": {
           "type": "string",
@@ -496,6 +519,30 @@
     "analyzerRuleCode": {
       "type": "string",
       "enum": ["chasing_high", "overheat", "l2_unknown", "esp_non_positive"]
+    },
+    "enrichmentSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "prompt_refs"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["llm", "manual"]
+        },
+        "model": {
+          "type": ["string", "null"]
+        },
+        "prompt_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     },
     "reportSource": {
       "type": "string",

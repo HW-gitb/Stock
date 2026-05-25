@@ -1,7 +1,7 @@
 {
   "schema_name": "deterministic_report",
-  "schema_version": "1.0.0",
-  "generated_at": "2026-05-25T15:03:53+08:00",
+  "schema_version": "1.1.0",
+  "generated_at": "2026-05-25T21:03:05+08:00",
   "preset": "a_short",
   "as_of": "20260522",
   "ts_code": "600415.SH",
@@ -222,7 +222,10 @@
     ],
     "state_snapshot_ref": "positions:1853bafb5074d793;veto_log:9254b3d1754e8abb;circuit_breaker:8474ffacdcd63c8b",
     "analysis_input_schema_version": "1.1.0",
-    "generated_at": "2026-05-25T15:03:53+08:00"
+    "l3_mode": "today",
+    "enrichment_applied": false,
+    "enrichment_source": null,
+    "generated_at": "2026-05-25T21:03:05+08:00"
   },
   "analyzer_invocations": [
     {

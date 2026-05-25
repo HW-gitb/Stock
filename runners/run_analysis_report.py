@@ -31,7 +31,7 @@ from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
 SCHEMA_PATH = ROOT / "schemas" / "deterministic_report.schema.json"
 ENRICHMENT_SCHEMA_PATH = ROOT / "schemas" / "deterministic_report_enrichment.schema.json"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
-REPORT_SCHEMA_VERSION = "1.0.0"
+REPORT_SCHEMA_VERSION = "1.1.0"
 PROMPT_REF_ALIASES = {
     "regulatory_check": "regulatory_48h",
 }
@@ -118,6 +118,9 @@ def build_report(payload: dict[str, Any], candidate: dict[str, Any],
             ],
             "state_snapshot_ref": _state_snapshot_ref(),
             "analysis_input_schema_version": str(payload.get("schema_version") or "0.0.0"),
+            "l3_mode": _analysis_input_l3_mode(payload),
+            "enrichment_applied": False,
+            "enrichment_source": None,
             "generated_at": generated_at,
         },
         "analyzer_invocations": _build_analyzer_invocations(veto),
@@ -336,6 +339,8 @@ def apply_enrichment(report: dict[str, Any], enrichment: dict[str, Any]) -> dict
     # otherwise mutate the original list since dict() is a shallow copy).
     merged = copy.deepcopy(report)
     merged["llm_notes"] = copy.deepcopy(enrichment["llm_notes"])
+    merged["data_lineage"]["enrichment_applied"] = True
+    merged["data_lineage"]["enrichment_source"] = copy.deepcopy(enrichment["source"])
     return merged
 
 
@@ -456,6 +461,13 @@ def _fmt_unknown(value: Any) -> str:
     if value is None:
         return "unknown"
     return str(value)
+
+
+def _analysis_input_l3_mode(payload: dict[str, Any]) -> str:
+    l3_mode = str(_get(payload, "source", "l3_mode", default="today") or "today")
+    if l3_mode not in {"pit", "today", "neutralize"}:
+        raise ValueError(f"unsupported analysis_input.source.l3_mode: {l3_mode!r}")
+    return l3_mode
 
 
 def _state_snapshot_ref() -> str:

@@ -182,3 +182,55 @@ C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\p
 4. 不要改变 rank backtest 输出口径。
 5. 不要把 Phase 4 `watch` 当成 Phase 5 `buy`。
 6. Claude 需要重点审查：schema 字段是否足够承载 execution 完成线、Phase 4 schema v1.1.0 升级是否完整、输出目录是否与现有 backtest 目录隔离。
+
+## 2026-05-25 追加：deterministic_report v1.1.0 前置升级
+
+### 改了什么
+
+- `schemas/deterministic_report.schema.json`：v1.0.0 -> v1.1.0，`data_lineage` 新增必填字段：
+  - `l3_mode`
+  - `enrichment_applied`
+  - `enrichment_source`
+- `runners/run_analysis_report.py`：
+  - `REPORT_SCHEMA_VERSION` 升到 `1.1.0`。
+  - 默认输出 `data_lineage.l3_mode`，来源为 `analysis_input.source.l3_mode`；legacy 缺失时按 analysis_input schema 约定 fallback 为 `today`。
+  - 默认输出 `enrichment_applied=false` / `enrichment_source=null`。
+  - 合并 enrichment patch 后，只替换 `llm_notes`，同时把 patch `source` 镜像到 `data_lineage.enrichment_source` 并置 `enrichment_applied=true`。
+- `schemas/deterministic_report_enrichment.schema.json` 与 example：同步升到 v1.1.0，`target.report_schema_version` 对齐 deterministic report v1.1.0。
+- `tests/skill/test_run_analysis_report.py`：覆盖 v1.1.0 schema_version、L3 mode lineage、legacy 缺失 L3 mode fallback、无 enrichment 默认 lineage、enrichment source lineage。
+- `result/a_short/20260522/reports/600415.SH.{json,md}`：重生成 tracked sample report，避免 repo 内样例停留在 v1.0.0 contract。
+- `schemas/deterministic_report_coverage.md` 与 `docs/CURRENT.md`：同步当前 contract 口径。
+
+### 为什么改
+
+Phase 5 execution schema 不能在自己的 `data_lineage` 里局部补字段，同时让 Phase 4 deterministic report contract 继续缺口。先补 `deterministic_report` v1.1.0，可以让后续 execution schema 明确引用同一套 L3 / enrichment lineage 口径。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/deterministic_report.schema.json',encoding='utf-8')); Draft7Validator.check_schema(s); print('deterministic schema ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/deterministic_report_enrichment.schema.json',encoding='utf-8')); Draft7Validator.check_schema(s); print('enrichment schema ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.skill.test_run_analysis_report -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\run_analysis_report.py --as-of 20260522 --ts-code 600415.SH
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; schema=json.load(open('schemas/deterministic_report.schema.json',encoding='utf-8')); report=json.load(open('result/a_short/20260522/reports/600415.SH.json',encoding='utf-8')); errors=list(Draft7Validator(schema).iter_errors(report)); print('sample_schema_errors', len(errors)); print('schema_version', report.get('schema_version')); print('l3_mode', report['data_lineage'].get('l3_mode')); print('enrichment_applied', report['data_lineage'].get('enrichment_applied')); print('enrichment_source', report['data_lineage'].get('enrichment_source'))"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['schemas/deterministic_report.schema.json','schemas/deterministic_report_enrichment.schema.json','schemas/examples/deterministic_report_enrichment.example.json','schemas/deterministic_report_coverage.md','docs/CURRENT.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok')"
+```
+
+### 验证结果
+
+- deterministic report schema meta-validation：`deterministic schema ok`
+- enrichment schema meta-validation：`enrichment schema ok`
+- `tests.skill.test_run_analysis_report`：11 tests passed
+- sample report schema validation：`sample_schema_errors 0`, `schema_version 1.1.0`, `l3_mode today`, `enrichment_applied False`, `enrichment_source None`
+- UTF-8 read check：`utf8 ok`
+
+### 失效旧结论
+
+- `deterministic_report.schema.json` 当前版本不再是 v1.0.0；后续 Phase 5 设计必须按 v1.1.0 读取 `data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source`。
+- `deterministic_report_enrichment.schema.json` 当前版本不再是 v1.0.0；patch 的 `target.report_schema_version` 必须是 `1.1.0`。
+
+### 下一步注意事项
+
+1. 先让 Claude 审查本轮 uncommitted diff。
+2. 通过并提交后，再进入 `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation。
+3. 不要在 execution schema 任务里回头改 Phase 4 `watch/skip` 语义；Phase 4 runner v1 仍不产生 `buy`。

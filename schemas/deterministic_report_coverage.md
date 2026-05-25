@@ -1,8 +1,8 @@
-# deterministic_report 1.0.0 覆盖率说明
+# deterministic_report 1.1.0 覆盖率说明
 
 Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再让 Skill 和可选 LLM enrich 在这个契约外层工作。
 
-当前结论：`deterministic_report.schema.json` v1.0.0 已覆盖 v14.2 M6.7 报告所需的最小结构；`runners/run_analysis_report.py` 已能从 `analysis_input.json + analyzer + state` 生成 schema-validated JSON + Markdown。v1 仍然是 minimal runner，真实入场价、止损止盈、仓位、星级和新闻/监管/行业判断不硬编，统一显式标记为 `unknown`、`requires_llm` 或 `not_implemented_phase4`。
+当前结论：`deterministic_report.schema.json` v1.1.0 已覆盖 v14.2 M6.7 报告所需的最小结构；`runners/run_analysis_report.py` 已能从 `analysis_input.json + analyzer + state` 生成 schema-validated JSON + Markdown。v1.1.0 在 v1.0.0 基础上补齐 `data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source`，为 Phase 5 execution contract 消除 lineage 缺口。v1 仍然是 minimal runner，真实入场价、止损止盈、仓位、星级和新闻/监管/行业判断不硬编，统一显式标记为 `unknown`、`requires_llm` 或 `not_implemented_phase4`。
 
 ## 已建立文件
 
@@ -31,12 +31,12 @@ Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再
 | `evidence` | `analysis_input.json` 关键字段 | deterministic |
 | `unknowns` | runner | deterministic |
 | `llm_notes` | optional enrichment placeholder | `enabled=false` in v1 |
-| `data_lineage` | runner + analyzer rule versions + state digests | deterministic |
+| `data_lineage` | runner + analyzer rule versions + state digests + L3/enrichment metadata | deterministic |
 | `analyzer_invocations` | `run_veto()` replay result | deterministic |
 
 ## LLM enrichment patch
 
-`schemas/deterministic_report_enrichment.schema.json` v1.0.0 is the only supported patch format for writing LLM notes back through the runner.
+`schemas/deterministic_report_enrichment.schema.json` v1.1.0 is the only supported patch format for writing LLM notes back through the runner.
 
 The patch can target only:
 
@@ -47,11 +47,11 @@ It must also declare:
 
 - `target.as_of`
 - `target.ts_code`
-- `target.report_schema_version`
+- `target.report_schema_version` = `1.1.0`
 - `source.kind`
 - `source.prompt_refs`
 
-`runners/run_analysis_report.py --enrichment-path <patch.json>` validates the patch, verifies the target matches the freshly generated report, then merges only `llm_notes`. It must not patch `decision`, `veto`, `risk_flags`, `entry_plan`, `exit_plan`, `position_size`, `evidence`, `data_lineage`, or `analyzer_invocations`.
+`runners/run_analysis_report.py --enrichment-path <patch.json>` validates the patch, verifies the target matches the freshly generated report, then merges only `llm_notes` and mirrors patch source metadata into `data_lineage.enrichment_applied/source`. It must not patch `decision`, `veto`, `risk_flags`, `entry_plan`, `exit_plan`, `position_size`, `evidence`, or `analyzer_invocations`.
 
 ## v14.2 映射
 
