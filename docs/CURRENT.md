@@ -14,27 +14,20 @@
 
 ---
 
-## 2. 已完成事项（最近 8 条；更早事项见底部 handoff 链）
+## 2. 已完成事项（最近 8 条；过程细节见 SESSION_LOG）
 
-只保留最近 8 个 substantive milestone 的 high-level 概述；详情查对应 handoff（链接 §5）或 `git log`。
+本节只保留当前接续需要的 high-level snapshot；争议、被否方案、review verdict、pending fixes 统一查 `docs/SESSION_LOG.md` 顶部 1-3 条。
 
-- **Pattern B commit-timing protocol**（2026-05-25，Claude + 用户）：`执行` / `修复` 只改 working tree、不 commit；Claude `审查` 通过后由用户显式输入 `提交` 才落本地 commit。详 `docs/AI_REVIEW_PROTOCOL.md §Commit Timing Rule`。
-- **协议简化**（2026-05-25，Claude + 用户）：删除 `docs/REVIEW_PACKET.md`（与 Codex SESSION_LOG entry 重叠 60-80%）；Codex 的 SESSION_LOG entry 直接作为 Codex-to-Claude review handoff。新增 §Lightweight Track Exemption — `[trivial]` 前缀 commit 跳过 `执行→审查→提交` 周期（typo / 注释 / 格式微调；hard 排除 AGENTS / PROTOCOL / 业务代码 / schemas / state / handoff）。新增 §Review Recording PASS-only rule —— pure Pass 仍写极简 entry 作为 Codex `提交` 查 Pass 的依据。详 `docs/AI_REVIEW_PROTOCOL.md`。
-- **Phase 3 audit fixes**（2026-05-24，commit `5b7a2a3`）：`_first_present` tuple return / esp NaN diagnostic / CSV bool round-trip / l2_unknown 对齐 / `--no-analyzer-veto` skip 冗余 subset。详 [phase3 handoff](handoff/2026-05-24_phase3_kickoff_spec_handoff.md) "audit fixes" 节。
-- **Phase 3 比较口径 + overlap**（2026-05-24，commit `f17be25`）：新增 `all_veto_passed` subset；overlap 分析揭示 4 条 hard veto 在 24p 真实独立贡献仅 3 条 Tier1 `esp_non_positive` catch（chasing/overheat/l2_unknown 与 EGS Tier1→Tier2 重叠或休眠）。详 phase3 handoff "overlap 分析" 节。
-- **Phase 3 score_ge_60 variant**（2026-05-24，commit `5b7a2a3`）：`final_score >= 60` 接入 strategy_variant；24p portfolio_stats max_dd discovery -18.75→-16.59 / validation -12.12→-10.92；monthly_t 几乎不变（risk-mitigation 非 alpha 增益）。
-- **Phase 3.3 子分数预测力**（2026-05-25，commit `2a4f46f`）：新 `runners/diagnose_subscore_predictive.py`。BACKTEST scope 下 `cat_score` 全 50 是 `l3_mode=neutralize` artifact；`esp_score` 反向预测；`l4_score` regime-dependent；`final_score < 60` validation 20d t=-3.82。
-- **Phase 3.4 ESP 反向 PIT 调查**（2026-05-25，commit `f18f282`）：纯诊断。EGS 代码 PIT filter 正确；Tushare API 限制结构性不可验证；24p cohort 不支持 PIT 单调衰减假说。最可能机制：priced-in + 2024Q4-2025Q1 regime event。
-- **Phase 3.5 实盘 forward tracker**（2026-05-25，commit `17fb70e`）：`runners/forward_tracker.py` capture + backfill；`weekly_screening.ps1` Stage 3 自动 capture；复用 `attach_forward_returns` 同口径；累积 ~12 期后可对比 backtest 结论。
-- **Phase 4 启动规格**（2026-05-25，commit `54e61dc`）：[phase4 handoff](handoff/2026-05-25_phase4_kickoff_spec_handoff.md) — deterministic_report schema first / runner-as-executor / Skill-as-doc。§8 已拍板：字段范围沿用 §3.1，输出目录用 `result/a_short/<as_of>/reports/`。
-- **Phase 3.6 收尾 audit**（2026-05-25，commit `e342452`，Codex）：analyzer ablation 重命名 `{all,tier1}_analyzer_veto_*`；`l2_unknown` 归一化对齐；`is_circuit_breaker_active()` 尊重 `expires_at`；测试增至 21 个。详 phase3 handoff "2026-05-25 追加" 节。
-- Session log discipline + validation 依赖（2026-05-25，commits `1b8af8f` `7448118` `0927218`）：`docs/SESSION_LOG.md` + AGENTS.md 规则；`requirements-dev.txt`。详 SESSION_LOG.md 顶部。
-- **Phase 4 minimal 收口**（2026-05-25，Codex）：Phase 4 完成线满足：schema + runner + coverage + Skill + prompt 骨架 + enrichment patch/example + 真实 smoke + tests。下一步进入 Phase 5 execution 回测边界设计，不直接开大实现。
-- **Phase 3+4 audit + 4-batch fix sweep**（2026-05-25，Claude，commits `a312e57` `9476d4c` `278f917` `911e49b`）：analyzer 加固（pd.NA / OVERHEAT token match / numeric bool）+ runner robustness（as_of check / empty-candidates 区分 / deep copy / comma-join）+ tracker const 重命名 + analyzer `normalize_rules` 公开 API + skill 测试 fixture 化（脱离 `result/a_short/20260522/`）。34 tests pass。Schema v1.1.0 设计改进暂搁等用户拍板。详 SESSION_LOG 顶部 entry。
-- **AI review protocol**（2026-05-25，Codex）：新增 `docs/AI_REVIEW_PROTOCOL.md`，明确 Codex 设计执行、Claude 独立审查、用户最终确认；Codex 不直接执行 Claude 建议，需用户确认。
-- **Phase 5 kickoff spec**（2026-05-25，Codex）：新增 `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`。只定义 execution backtest 边界、输入/输出 contract、完成线和下一条 schema-first 任务；未写 Phase 5 代码。
+- **协作协议精简**（2026-05-25，commits `ef12fbf` `e9a2b18`）：`docs/REVIEW_PACKET.md` 已移除；Codex 的 SESSION_LOG 顶部 entry 作为 review handoff；`[trivial]` 轻量通道已启用。详 `docs/AI_REVIEW_PROTOCOL.md`。
+- **Phase 5 kickoff spec**（2026-05-25，commit `6c90f56`）：新增 [phase5 handoff](handoff/2026-05-25_phase5_kickoff_spec_handoff.md)。Phase 5 代码未开始；下一步先做 deterministic report schema v1.1.0。
+- **Phase 4 minimal 收口**（2026-05-25）：deterministic report schema + runner + coverage + Skill + prompt 骨架 + enrichment patch/example + smoke/tests 已完成。
+- **Phase 3+4 audit fix sweep**（2026-05-25，commits `a312e57` `9476d4c` `278f917` `911e49b`）：analyzer / runner / tracker / Skill fixture 加固；34 tests pass。
+- **Phase 3.6 收尾 audit**（2026-05-25，commit `e342452`）：analyzer ablation 命名、`l2_unknown` 归一化、circuit breaker expiry、测试增至 21 个。
+- **Phase 3.5 forward tracker**（2026-05-25，commit `17fb70e`）：`forward_tracker.py` capture + backfill；`weekly_screening.ps1` Stage 3 自动 capture。
+- **Phase 3.4 ESP 反向 PIT 调查**（2026-05-25，commit `f18f282`）：EGS PIT filter 正确；Tushare revision history 不可验证；priced-in + 2024Q4-2025Q1 regime event 是当前最可能解释。
+- **Phase 3.3 子分数预测力**（2026-05-25，commit `2a4f46f`）：`esp_score` 反向预测、`l4_score` regime-dependent、`final_score < 60` validation 20d t=-3.82。
 
-更早事项（Phase 1a/1b、Phase 2 工程链路、Phase A+B 修复、L3 PIT 三模式、v7.10 升级、Phase 2.5/2.6、git init、Phase 3 首轮等约 16 条）→ 见 `AGENTS.md §交接记录` 完整 handoff 列表 + `git log --all`。
+更早事项（Phase 1a/1b、Phase 2 工程链路、v7.10、Phase 2.5/2.6、git init、Phase 3 首轮等）→ 见 `AGENTS.md §交接记录`、相关 handoff 与 `git log --all`。
 
 ---
 

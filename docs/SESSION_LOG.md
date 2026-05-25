@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-05-25 — Codex ([trivial] trim CURRENT snapshot)
+
+**Commits**: this commit
+
+**Notes**: `docs/CURRENT.md §2` was trimmed to 8 high-level milestones; process/review detail remains in `docs/SESSION_LOG.md`.
+
+---
+
 ## 2026-05-25 — Claude (protocol simplification: remove REVIEW_PACKET + add Lightweight Track)
 
 **Commits**: ef12fbf
