@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-24（Phase 3 audit fixes + all_veto_passed subset + score_ge_60 variant）
+**最后更新**：2026-05-25（Phase 3.3 子分数预测力分析 — backtest scope；ESP 反向 + cat_score 是 backtest artifact）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -34,6 +34,7 @@
 - Phase 3 audit fixes（2026-05-24）：`_first_present` 改返回 `(value, path)` tuple；`_check_l2_unknown` 空串归 data_missing；`_check_esp_non_positive` `"nan"` 字符串归 data_unparseable；`_coerce_bool_column` 修 CSV bool round-trip latent bug；analyzer 与 backtest 的 `l2_unknown` 语义对齐；`--no-analyzer-veto` 或 0 命中时跳过冗余 veto subset
 - Phase 3 比较口径修正 + overlap 分析（2026-05-24）：新增 `all_veto_passed` subset，并对 analyzer 与 EGS v7.10 做了 overlap 分析。**关键发现**：4 条 hard veto 在当前 24p 的真实独立贡献仅 3 条 Tier1 `esp_non_positive` catch；`chasing_high` / `overheat` Tier1 命中 0（EGS 已前置降级），`l2_unknown` 命中 0（EGS 已过滤）。`all → all_veto_passed` 20d t 1.08→1.56 看似大胜，本质是 Tier2 被剔除（EGS 已能做），不是 analyzer 独立发现 — 详见 handoff "analyzer-EGS overlap 分析"节。重复部分保留作防御纵深
 - Phase 3 score_ge_60 variant（2026-05-24）：把 Phase 3.2 诊断的 `final_score >= 60` 升级为正式 strategy variant（不进 analyzer hard veto，因为 score floor 是 ranking 决策不是事件 veto）。24p portfolio_stats：discovery max_dd -18.75 → -16.59，validation max_dd -12.12 → -10.92；monthly_t 几乎不变（risk-mitigation，不是 alpha 增益）
+- Phase 3.3 子分数预测力分析（2026-05-25）：新增 `runners/diagnose_subscore_predictive.py`。**关键发现**：(1) backtest 下 `cat_score` 全部硬编码 50（`egs_main.py:2202`，`l3_mode=neutralize` 设计）— 不是 EGS 不能区分，是 backtest 数据路径决定；cat_score 真实预测力需等 L3 PIT 累积满 6 月（~2026-12）；(2) `esp_score` 在 backtest 下呈**反向预测力**（low > neutral > high 跨 5d/10d/20d，validation 5d Spearman=-1.0），是 EGS scoring 体系的潜在 sign 错误，Phase 7 需调查；(3) `l4_score` 是 backtest validation 主驱动 (l4=100 vs <70 在 20d 上 +4.12 vs -4.74)，但 discovery 反向 — regime-dependent；(4) `final_score < 60` 在 validation 20d 是 -4.57 / t=-3.82（比 chasing_high 的 t=-2.36 还强），验证 score_ge_60 选择正确
 
 ---
 
@@ -108,6 +109,8 @@
 ### 报告产出
 - `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.11.0, primary_subset=tier1_only
 - `result/a_short/backtest/{summary_by_window,factor_group_stats,monthly_stats,strategy_variant_stats,portfolio_stats}.csv`
+- `result/a_short/backtest/Phase3_3_subscore_predictive.md` + `phase3_3_subscore_{detail,monotonicity}.csv` — Phase 3.3 子分数预测力（BACKTEST scope）
+- `runners/diagnose_subscore_predictive.py` — Phase 3.3 诊断脚本
 
 ---
 
@@ -115,12 +118,14 @@
 
 ### P0 — Phase 3 收官 / Phase 4 准备
 
-1. **在新 as_of 上跟 overlap 分析** — 当前 24p 4 条 rule 的真实独立贡献只有 3 条 Tier1 esp_non_positive；`chasing_high` / `overheat` Tier1=0，`l2_unknown` 整体=0。新 as_of 上要重跑 overlap 分析看是否随 EGS 行为变化。
-2. **决策 esp_non_positive 归属**：把 `esp_raw < 0` 也放进 EGS Tier1→Tier2 降级（与 analyzer 一致），还是保留 analyzer 专属作为 EGS validator？看 Phase 4 Skill 路径需求。
-3. **观察 score_ge_60 在新 as_of**：当前 24p 显示 discovery/validation max_dd 和 win_rate 改善，但 monthly_t 几乎不变（risk-mitigation 而非 alpha）。
-4. **不要急着加 `score_ge_65`**：数据挖掘嫌疑；等 60 在更多 as_of 上稳定再决定。
-5. **保留 `l2_unknown` / `chasing_high` / `overheat` 三条休眠/重复 rule**：当前 24p 没独立贡献，但保留作 EGS 改阈值时的兜底；不要因为"没贡献"就移除。
-6. **保留 `esp_non_positive` v2**：v1 的 `esp_raw <= 0` 已证明过宽；v2 只杀 `esp_raw < 0`。
+1. **讨论 ESP 反向信号怎么处理**：backtest 下 esp_score high (>50) 全 period × window 跑输 low/neutral。可能是 EGS 评分体系 sign 错误，可能是经济上的真规律（priced-in）。决定要不要进 Phase 7 调查 ESP 权重 / 方向；当前 Phase 3 **不应擅自加 `esp_score_le_50` strategy variant 绕开问题** — 这不是工程修补，是设计层信号。
+2. **不在 backtest 数据上下任何 cat_score 结论**：等 L3 PIT snapshots 累积 6 月（约 2026-12），再 `--l3-mode pit` 跑同样分析。
+3. **在新 as_of 上跟 overlap 分析** — 当前 24p 4 条 rule 的真实独立贡献只有 3 条 Tier1 esp_non_positive；`chasing_high` / `overheat` Tier1=0，`l2_unknown` 整体=0。新 as_of 上要重跑 overlap 分析看是否随 EGS 行为变化。
+4. **决策 esp_non_positive 归属**：把 `esp_raw < 0` 也放进 EGS Tier1→Tier2 降级（与 analyzer 一致），还是保留 analyzer 专属作为 EGS validator？看 Phase 4 Skill 路径需求。
+5. **观察 score_ge_60 在新 as_of**：当前 24p 显示 discovery/validation max_dd 和 win_rate 改善，但 monthly_t 几乎不变（risk-mitigation 而非 alpha）。
+6. **不要急着加 `score_ge_65`**：数据挖掘嫌疑；等 60 在更多 as_of 上稳定再决定。
+7. **保留 `l2_unknown` / `chasing_high` / `overheat` 三条休眠/重复 rule**：当前 24p 没独立贡献，但保留作 EGS 改阈值时的兜底；不要因为"没贡献"就移除。
+8. **保留 `esp_non_positive` v2**：v1 的 `esp_raw <= 0` 已证明过宽；v2 只杀 `esp_raw < 0`。
 
 ### P1 — 短期跟进
 

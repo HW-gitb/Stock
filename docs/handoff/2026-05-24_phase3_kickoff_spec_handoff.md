@@ -555,3 +555,121 @@ portfolio_stats，subset=`tier1_only`，variant=`t1_net`，window=20：
 6. 长期监控口径：每次新 as_of 都跑 `all` vs `all_veto_passed` vs `tier1_only` vs `tier1_veto_passed` 四个 subset，看 overlap 分析的 4 行表是否随时间变化。如果未来 EGS 阈值松动导致 `chasing_high` / `overheat` 在 Tier1 开始有命中，那才是 analyzer 真正发挥独立价值的时刻。
 7. 如果以后做 `LOCK` veto，要重跑 overlap 分析，确认 LOCK 是 EGS 已经处理过的还是 analyzer 独立产出。LOCK 当前 N=4 不足，下次扩到 N≥15 时再看。
 8. 旧 handoff 中"四条 hard veto 全开没有改善 Tier1-only baseline"措辞保留；不要回去改旧节，加批注即可。
+
+
+---
+
+## 2026-05-25 追加：Phase 3.3 子分数预测力分析（BACKTEST scope）
+
+### 改了什么
+
+- 新增 `runners/diagnose_subscore_predictive.py`。只读 `result/a_short/backtest/rank_samples.csv`，不重跑 EGS、不 fetch 新 forward daily。
+- 输出 `Phase3_3_subscore_predictive.md` + `phase3_3_subscore_detail.csv` + `phase3_3_subscore_monotonicity.csv`。
+- 对 final_score / esp_score / l4_score 在 Tier1 内按 hand-picked bin 分组，计算每组的 5d/10d/20d t1_net 统计；discovery / validation 切 20250101。
+- bin 边界按真实分布定（esp 58% 卡在默认 50、l4 75% 卡在 100），不用等 N quintile。
+
+### 为什么做
+
+24p Tier1 t1_net 20d 月度 t=1.60（接近显著但不到 2.0），对 CSI300/CSI1000 几乎无 excess。Phase 3 主轴"过滤坏票"在 24p 只给出 3 条 Tier1 esp_non_positive 独立 catch + risk-mitigation 级的 score_ge_60。需要先验证 EGS 的子分数是否各自携带可分离的预测力，再决定下一步走向（Phase 4 minimal Skill / Phase 7 引擎重构方向 / 继续过滤坏票）。
+
+### 关键发现（**全部限定在 BACKTEST `--l3-mode neutralize` 下**）
+
+**作用域警告**：`production` backtest 默认 `l3_mode=neutralize`，会硬编码 `cat_score = 50.0`（egs_main.py:2202），避开 L3 lookahead。所以：
+- `cat_score` 在 24p Tier1 全部 = 50，**不是 EGS 的真实 catalyst 信号**。本分析无法回答 cat_score 的预测力。
+- 在 backtest 下 `final_score ≈ 0.20*esp + 0.50*l4 + 15`（cat 项是常数）；实盘 `--l3-mode today` 下 `final_score = 0.20*esp + 0.30*cat + 0.50*l4`，**两种模式是两个不同的 scoring system**。
+- `esp_score` / `l4_score` 在 neutralize 下正常计算，下面的发现对 backtest 数据有效；但实盘 cat 真实进入打分后，esp/l4 与 final_score 的关系会变。
+
+**Finding A — ESP 子分数在 backtest 内呈反向预测力**
+
+esp_score 分组 (Tier1 N=305) → 20d t1_net mean / monthly_t / win_rate：
+
+| 分组 | N | all mean | all t | discovery mean | discovery t | validation mean | validation t |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| low (esp<50) | 55 | +2.91 | 1.41 | +1.90 | 0.84 | +4.04 | 1.08 |
+| neutral (esp=50) | 177 | +3.55 | **2.12** | +3.00 | 0.71 | +3.95 | **3.16** |
+| high (esp>50) | 73 | +1.06 | 0.13 | +1.69 | 0.03 | +0.69 | 0.15 |
+
+5d 同样反向：
+
+| 分组 | all mean / t | discovery mean / t | validation mean / t |
+|---|---:|---:|---:|
+| low | +1.22 / 1.53 | +0.25 / 0.52 | +2.29 / **2.17** |
+| neutral | +0.99 / 0.59 | -0.05 / 0.07 | +1.75 / 0.71 |
+| high | **-0.69 / -0.32** | **-2.00 / -2.05** | +0.08 / 0.24 |
+
+ESP Spearman monotonicity (negative = higher score wins LESS)：
+
+| score | window | all | discovery | validation |
+|---|---:|---:|---:|---:|
+| esp_score | 5 | -1.0 | -1.0 | -1.0 |
+| esp_score | 10 | +0.5 | +0.5 | -1.0 |
+| esp_score | 20 | -0.5 | -0.5 | -1.0 |
+
+5d 上 ESP 全 period 反向（low > neutral > high）；20d 上 validation 仍反向，但 discovery 是 neutral 拐点（low 不是最强）。**这是 backtest 视角下 EGS scoring 体系的潜在 sign 错误**。
+
+可能解释（待进 Phase 7 调查）：
+1. 高 ESP 名字已经 priced-in / momentum exhaustion — "市场已经预期到 good news"
+2. ESP 权重 0.20 比 catalyst / l4 小，但分组上的反向系统性强，不像噪音
+3. ESP 计算时 esp_raw 极大值（>200）已经被 cap 到 200，但 esp_score 在 Tier1 内仍呈反向 — 说明问题不是低基数 winsorize 没做干净，是 ESP 这个因子本身的方向
+
+**Finding B — L4 在 backtest 下是 validation 主驱动，但 discovery 反向**
+
+l4_score 分组：
+
+| 分组 | N | discovery 20d mean / t | validation 20d mean / t |
+|---|---:|---:|---:|
+| <70 | 43 | +1.32 / 0.23 | **-4.74 / -1.39** |
+| 70-99 | 33 | +4.67 / 0.07 | +4.53 / 1.48 |
+| =100 | 229 | +2.50 / 0.67 | +4.12 / **2.05** |
+
+5d：
+
+| 分组 | discovery 5d mean / t | validation 5d mean / t |
+|---|---:|---:|
+| <70 | +2.40 / -0.08 | **-2.12 / -1.36** |
+| 70-99 | -0.76 / -1.14 | -1.12 / -0.57 |
+| =100 | -0.97 / 0.35 | +2.38 / **1.62** |
+
+L4=100 在 validation 上是干净的正向；但 discovery 上 l4<70 反而是 +2.40 5d / +1.32 20d。这是 24p 内最明显的 regime-dependence：**2024 (discovery) 牛市风格走低技术分；2025 (validation) 风格反转**。
+
+**Finding C — final_score 60_70 反常优于 75_80（已在 CURRENT.md §4 失效结论里）**
+
+validation 20d t1_net：60_70 (+6.87) > ge_80 (+7.19) ≈ ge_80 > 75_80 (+3.29) > 70_75 (+1.37)。在 discovery 上 ge_80 N=7 反而是 -2.71/t=-1.64。
+
+|final_score group|N(disc)|disc 20d mean / t|N(val)|val 20d mean / t|
+|---|---:|---:|---:|---:|
+|lt_60|45|+0.30 / 0.60|25|**-4.57 / -3.82**|
+|60_70|15|+5.88 / 0.61|26|**+6.87** / 0.77|
+|70_75|12|+1.00 / 0.12|16|+1.37 / -0.61|
+|75_80|52|+4.45 / 0.59|81|+3.29 / 0.92|
+|ge_80|**7**|**-2.71 / -1.64**|26|**+7.19** / 1.97|
+
+`final_score lt_60` validation 20d 是 -4.57 / t=-3.82，比 `chasing_high t=-2.36` 还强 — 验证了 Phase 3.2 的 score_ge_60 决策，但同时暴露 EGS final_score 在 75_80 这一段（最多名字所在 bucket）效果反而弱。
+
+### 验证命令
+
+```powershell
+python runners\diagnose_subscore_predictive.py
+```
+
+### 验证结果
+
+- Tier1 N=305，全部分组覆盖到 discovery + validation。
+- monotonicity CSV 输出符合上表。
+- Markdown 报告含 backtest-scope warning + 解释边界。
+
+### 失效旧结论
+
+- 上一节关于"final_score 不单调，权重需要重新校准"的暗示**部分失效**：在 backtest neutralize 下 final_score 行为是 esp+l4 的复合，不代表实盘 final_score（含 cat 项）的行为。不能在 cat_score 缺失的情况下就下"权重错"的结论。
+- 上一节"cat_score 无判别力" — **失效**。是 backtest 数据路径硬编码，不是 EGS 不能区分。
+
+### 下一步注意事项
+
+1. **不在 backtest 数据上对 cat_score 下任何结论**。等 L3 PIT snapshots 累积 6 个月（约 2026-12，per CURRENT.md P2.6），再 `--l3-mode pit` 跑一遍同样的分析。
+2. **ESP 反向是 backtest 视角下的真信号**，但要先讨论：
+   - 是 EGS 评分体系 sign bug，还是经济上的真规律（priced-in）？
+   - 是否要在 Phase 7 重构时重新评估 ESP 权重 / 方向？
+   - 当前 Phase 3 不应该擅自加 `esp_score_le_50` strategy variant 绕开问题；这不是工程层修补，是设计层信号。
+3. **不要把 backtest 下"L4 主导 + ESP 反向"的发现直接搬到实盘解读**。实盘 cat_score 进入后整个分布可能变化。
+4. 实盘视角的快速旁证（不进主回测）：可以跑一次 `--l3-mode today` smoke（注意会有 lookahead，仅看实盘 cat_score 分布与 esp/l4 的真实相关结构），但不要拿这个结果做策略决策。
+5. 保留 `final_score lt_60` validation t=-3.82 / 20d -4.57% 的实证作为 Phase 3.2 score_ge_60 的额外证据；这条在 backtest 下稳定。
