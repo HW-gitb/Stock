@@ -83,7 +83,9 @@ SCHEMA_COLUMNS = [
 ]
 
 DEFAULT_WINDOWS = [5, 10, 20]
-MATURE_BUFFER_TRADING_DAYS = 3  # safety pad: window+3 trading days past as_of
+# Calendar-day pad beyond the trading-day window estimate. Lets the cache
+# refresh job land Tushare's close before tracker tries to read it.
+MATURE_BUFFER_CALENDAR_DAYS = 3
 
 
 # ============================================================
@@ -208,13 +210,13 @@ def _mature_as_ofs(df: pd.DataFrame, today: str, windows: list[int]) -> list[str
     sub-windows are still pending_immature_asof.
 
     Calendar-day approximation: 1 trading day ~ 1.4 calendar days; the
-    +MATURE_BUFFER_TRADING_DAYS pad accounts for weekends/holidays.
+    +MATURE_BUFFER_CALENDAR_DAYS pad accounts for weekends/holidays.
     """
     min_window = min(windows)
     today_dt = pd.to_datetime(today, format="%Y%m%d")
-    # 5 trading days span ~7 calendar days; we also add a small trading-day
-    # buffer so we don't poke the cache before today's close is published.
-    threshold_calendar_days = int(min_window * 1.4) + MATURE_BUFFER_TRADING_DAYS
+    # 5 trading days span ~7 calendar days; add a calendar-day buffer so we
+    # don't poke the cache before today's close is published.
+    threshold_calendar_days = int(min_window * 1.4) + MATURE_BUFFER_CALENDAR_DAYS
     pending_rows = []
     for w in windows:
         status_col = f"ret_{w}d_status"

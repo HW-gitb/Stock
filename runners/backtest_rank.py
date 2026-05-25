@@ -42,6 +42,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.analyzer.rule6_hard_veto import DEFAULT_RULES as DEFAULT_VETO_RULES
+from engine.analyzer.rule6_hard_veto import normalize_rules as _normalize_veto_rules
 from engine.analyzer.rule6_hard_veto import run_veto
 
 RESULT_ROOT = ROOT / "result" / "a_short"
@@ -860,20 +861,27 @@ CRITICAL_TIER1_VETO_PASSED_COUNT_THRESHOLD = 3
 
 
 def parse_veto_rules(value):
+    """Parse + validate a veto-rule CLI value via the analyzer's public API.
+
+    Phase 3 audit (2026-05-25): previously this called run_veto({}, ...) just
+    to trigger ValueError on unknown rules — wasteful for what's purely a
+    validation step. Now delegates to engine.analyzer.normalize_rules, which
+    is the same validator run_veto uses internally.
+    """
     if value is None:
         return list(DEFAULT_VETO_RULES)
     if isinstance(value, (list, tuple)):
         parts = []
         for item in value:
             parts.extend(parse_veto_rules(item))
-        return parts
+        # Validate the flattened list at the top level (recursive calls already
+        # validated each leaf, but a list of lists may surface inconsistent
+        # ordering — re-normalize once for determinism).
+        return list(_normalize_veto_rules(parts))
     text = str(value).strip()
     if not text:
         return []
-    rules = [part.strip() for part in text.split(",") if part.strip()]
-    # run_veto validates unknown rules; call once here so CLI errors early.
-    run_veto({}, enabled_rules=rules)
-    return rules
+    return list(_normalize_veto_rules(text))
 
 
 def apply_analyzer_veto(samples, enabled_rules):

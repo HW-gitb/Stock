@@ -32,7 +32,7 @@ def run_veto(candidate_dict: Mapping[str, Any], enabled_rules=None) -> dict[str,
         enabled_rules: Optional iterable of rule codes. Unknown codes raise
             ValueError because misspelled ablation flags would corrupt stats.
     """
-    rules = _normalize_rules(enabled_rules)
+    rules = normalize_rules(enabled_rules)
     reasons: list[dict[str, Any]] = []
     diagnostics: list[dict[str, Any]] = []
 
@@ -56,7 +56,14 @@ def run_veto(candidate_dict: Mapping[str, Any], enabled_rules=None) -> dict[str,
     }
 
 
-def _normalize_rules(enabled_rules) -> tuple[str, ...]:
+def normalize_rules(enabled_rules) -> tuple[str, ...]:
+    """Public API: parse and validate a rule list.
+
+    Accepts None (returns DEFAULT_RULES), a comma-separated str, or an
+    iterable of code strings. Raises ValueError on any unknown rule code.
+    Used both internally by run_veto and externally by CLI parsers in
+    runners/backtest_rank.py to fail fast on misspelled flags.
+    """
     if enabled_rules is None:
         return DEFAULT_RULES
     if isinstance(enabled_rules, str):
@@ -67,6 +74,10 @@ def _normalize_rules(enabled_rules) -> tuple[str, ...]:
     if unknown:
         raise ValueError(f"unknown veto rule(s): {', '.join(unknown)}")
     return tuple(parts)
+
+
+# Backwards-compat private alias; older imports may reference _normalize_rules.
+_normalize_rules = normalize_rules
 
 
 def _reason(code: str, field: str, value: Any) -> dict[str, Any]:
