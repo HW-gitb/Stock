@@ -18,6 +18,7 @@
 
 只保留最近 8 个 substantive milestone 的 high-level 概述；详情查对应 handoff（链接 §5）或 `git log`。
 
+- **Pattern B commit-timing protocol**（2026-05-25，Claude + 用户）：`执行` / `修复` 只改 working tree、不 commit；Claude `审查` 通过后由用户显式输入 `提交` 才落本地 commit。详 `docs/AI_REVIEW_PROTOCOL.md §Commit Timing Rule`。
 - **Phase 3 audit fixes**（2026-05-24，commit `5b7a2a3`）：`_first_present` tuple return / esp NaN diagnostic / CSV bool round-trip / l2_unknown 对齐 / `--no-analyzer-veto` skip 冗余 subset。详 [phase3 handoff](handoff/2026-05-24_phase3_kickoff_spec_handoff.md) "audit fixes" 节。
 - **Phase 3 比较口径 + overlap**（2026-05-24，commit `f17be25`）：新增 `all_veto_passed` subset；overlap 分析揭示 4 条 hard veto 在 24p 真实独立贡献仅 3 条 Tier1 `esp_non_positive` catch（chasing/overheat/l2_unknown 与 EGS Tier1→Tier2 重叠或休眠）。详 phase3 handoff "overlap 分析" 节。
 - **Phase 3 score_ge_60 variant**（2026-05-24，commit `5b7a2a3`）：`final_score >= 60` 接入 strategy_variant；24p portfolio_stats max_dd discovery -18.75→-16.59 / validation -12.12→-10.92；monthly_t 几乎不变（risk-mitigation 非 alpha 增益）。

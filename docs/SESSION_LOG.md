@@ -8,6 +8,143 @@
 
 ---
 
+## 2026-05-25 — Codex (Pattern B approved Optional fixes)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the latest Claude review entry immediately below, where the user approved all 5 Optional suggestions.
+- Preserves the uncommitted Pattern B base changes already in the working tree.
+
+**Worked on**:
+1. Applied O1-O3 in `docs/AI_REVIEW_PROTOCOL.md`: clarified unresolved Required fixes, switched `提交` staging to `git add -A`, and added clean-working-tree behavior.
+2. Applied O4 in `docs/CURRENT.md`: recorded Pattern B as the active commit-timing protocol.
+3. Applied O5 in `docs/AI_REVIEW_PROTOCOL.md`: documented Claude-as-transitional-Implementer handling for review packets.
+4. Refreshed `docs/REVIEW_PACKET.md` for Claude re-review.
+
+**Key decisions**:
+- `修复` did not commit. The next commit can only happen after Claude `审查` returns Pass and the user invokes `提交`.
+- `docs/REVIEW_PACKET.md` remains short-lived and gitignored; Claude must read it directly alongside git diff.
+
+**Alternatives considered and rejected**:
+- "Commit immediately after repair" — rejected by the newly adopted Pattern B rule.
+- "Skip SESSION_LOG because changes are documentation-only" — rejected because this is a process decision and a non-trivial protocol repair.
+
+**Open questions handed off**:
+- None from Codex; Claude should verify O1-O5 were applied exactly and that Pattern B remains coherent.
+
+**Next natural step from my view**:
+1. User sends `审查` to Claude.
+2. If Claude returns Pass, user sends `提交` to Codex.
+
+---
+
+## 2026-05-25 — Claude review (Pattern B commit-timing protocol — self-review) — APPROVED by user 2026-05-25 (all 5 Optional)
+
+**Commits**: none (review-only entry; reviews uncommitted working tree from the immediately prior Claude entry)
+
+**Status**: **APPROVED 2026-05-25**. User explicitly approved all 5 Optional suggestions ("批准全部 Optional"). No Required fixes existed. Codex may now apply O1-O5 via `修复` alias.
+
+**User-approved action items for Codex** (apply all five in next `修复` turn; Pattern B requires NOT committing during 修复):
+- **O1**: AI_REVIEW_PROTOCOL.md §提交 step 4 — clarify "unresolved Required fixes" as "fixes approved by user but not yet repaired AND Claude-re-passed".
+- **O2**: AI_REVIEW_PROTOCOL.md §提交 step 6 — replace "files modified by the latest 执行 / 修复 cycle" with "Run `git add -A` to stage all working tree changes (Pattern B guarantees they're all reviewed); skip files matching `.gitignore` automatically".
+- **O3**: AI_REVIEW_PROTOCOL.md §提交 — add a new step (after step 5 verify Pass) for clean working tree: "If `git status` shows nothing to stage, refuse and output `nothing to commit; no changes pending`".
+- **O4**: CURRENT.md §2 — add one line near top of the recent entries: "Pattern B commit-timing protocol established (2026-05-25, Claude + user)" with brief description referencing AI_REVIEW_PROTOCOL.md §Commit Timing Rule.
+- **O5**: AI_REVIEW_PROTOCOL.md §Review Packet Rule — add a paragraph: "If Claude is the transitional Implementer (e.g., for protocol-level edits the user directs Claude to make), Claude may either skip REVIEW_PACKET.md update or fill it with minimal Claude-implementer fields. The SESSION_LOG entry remains the canonical record for the change."
+- **Plus**: ensure the resulting working tree includes Pattern B base changes (already in tree) + O1-O5 refinements as a single coherent change set, ready for one final `审查` + `提交` cycle.
+
+**Caveat — self-review limitation**: User chose path A (dogfood) which required Claude to review Claude's own Pattern B implementation. Independent review by a different LLM (Codex via next session) would be stronger. Optional suggestions below may miss issues my own thinking baked in.
+
+**Verdict**: Pass with fixes.
+
+**Reasons for Pass**:
+- Pattern B is correctly canonicalized in AI_REVIEW_PROTOCOL.md §Commit Timing Rule with clear rule + rationale + exception
+- Standard Workflow step 12 references the new rule
+- `执行` / `修复` alias expansions get explicit "Do not commit" step 17 + output line — bilateral enforcement
+- New §提交 alias has 9-step expansion mirroring other aliases' structure (read AGENTS / read PROTOCOL / verify state / act / report)
+- AGENTS.md §Short Command Aliases list updated to include 提交 with timing-rule pointer
+- No business code, schema, runner, or handoff touched — scope respected
+- AGENTS.md still wins on conflict (confirmed by existing clause)
+
+**Required fixes**: none.
+
+**Optional suggestions (PENDING USER APPROVAL)**:
+
+1. **§提交 step 4 "unresolved Required fixes" needs definition**. Current text: "If Pass with unresolved Required fixes... refuse to commit." Ambiguity: does "unresolved" mean (a) user hasn't `批准修改` yet, (b) Codex hasn't `修复` yet, or (c) `修复` done but `审查` re-pass hasn't happened? Suggest: "unresolved = approved by user but not yet repaired-and-Claude-re-passed". Otherwise Codex might over-block or under-block.
+
+2. **§提交 step 6 "files modified by the latest 执行 / 修复 cycle"**: how does Codex identify which files? If user delayed 提交 across multiple `修复` cycles, working tree could contain accumulated changes. Suggest replacing with: "Run `git add -A` to stage all working tree changes (Pattern B guarantees they're all reviewed); skip files matching `.gitignore` automatically". Or explicit "Stage every file in `git status --short` minus those in `.gitignore`".
+
+3. **§提交 missing clean-working-tree case**: if `git status` shows nothing, §提交 has no behavior defined. Suggest adding step: "If working tree is clean before staging, refuse: 'nothing to commit; no changes pending'."
+
+4. **CURRENT.md §2 could record Pattern B adoption**. Currently §2 has 10 entries; adding a one-line "Pattern B commit-timing protocol (2026-05-25)" keeps the snapshot synced. Optional because the rule lives in AI_REVIEW_PROTOCOL.md which CURRENT.md §1 already points to.
+
+5. **Protocol gap: Claude-as-transitional-Implementer**. When Claude makes the change (like this turn), REVIEW_PACKET.md isn't updated by anyone — the §Review Packet Rule assumes Codex = Implementer. Suggest adding to §Review Packet Rule: "If Claude is the transitional Implementer (e.g., for protocol-level edits the user directs Claude to make), Claude may either skip REVIEW_PACKET update or fill it with minimal Claude-implementer fields. The SESSION_LOG entry remains the canonical record." Not blocking but tightens the protocol.
+
+**Documentation issues**:
+- CURRENT.md §2 doesn't yet record Pattern B (see Optional 4)
+- REVIEW_PACKET.md is stale (still reflects prior R1/R2/O1-O4 round) — this is the protocol gap from Optional 5
+- No business-code / schema risks
+
+**Key procedural observation**:
+- Self-review is inherently weaker than independent review. Future major protocol changes should ideally land via Codex implementation + Claude independent review, not Claude self-implementation. This turn was an exception because user said "现在就做" and Codex wasn't in session.
+- This is the first dogfood test of `审查` on uncommitted working tree. The mechanism works.
+
+**Open questions handed to user**:
+- For each Optional (1-5), decide: approve / defer / reject.
+- Should the very first invocation of `提交` (committing Pattern B itself) include the Optional fixes if approved, or commit pure Pattern B first and address Optionals in a separate cycle?
+
+**Next natural step from my view**:
+1. User decides on Optionals 1-5 individually or `批准修改 1,2,3` style.
+2. If Optionals approved: user switches to Codex session, invokes `修复` to address them.
+3. If Optionals deferred/rejected: user invokes `提交` (in Codex session) to commit current state.
+4. Either way: after final Pass, `提交` lands the change.
+
+This entry is for cross-LLM continuity. It is NOT a direct execution order to Codex.
+
+---
+
+## 2026-05-25 — Claude (Pattern B commit-timing protocol)
+
+**Commits**: pending in this session (user invoked Pattern B implementation directly; Claude applied the protocol edit; will be committed by user explicit instruction since Pattern B was the rule being established here)
+
+**Relationship to prior session(s)**:
+- Builds on the prior `审查` round (commit `cd3d5d5` Pass verdict) where I flagged commit timing ambiguity as a process observation.
+- User then said "Pattern B 现在就做" — direct user-approved protocol change, no review cycle needed since it codifies a rule about timing rather than a substantive design.
+
+**Worked on**:
+1. `docs/AI_REVIEW_PROTOCOL.md`:
+   - Added §Commit Timing Rule explicitly stating Pattern B (commit after Claude Pass, not during 执行/修复)
+   - Added Standard Workflow step 12 referencing the rule
+   - Added step 17 "Do not commit" to both `执行` and `修复` alias expansions
+   - Added new §提交 alias with full 9-step expansion + concise output template
+2. `AGENTS.md` §Short Command Aliases:
+   - Annotated `执行` / `修复` with "Does not commit"
+   - Annotated `审查` with "uncommitted working tree" clarification
+   - Added new `提交` alias bullet pointing to §Commit Timing Rule
+3. `docs/SESSION_LOG.md`: this entry.
+
+**Key decisions**:
+- Pattern B canonicalized: `执行` / `修复` modify working tree only; `提交` is the explicit commit step after `审查` Pass.
+- Exception clause: large work blocks may use `WIP:`-prefixed checkpoint commits, but only if user explicitly states so. Default = no checkpoint commits.
+- `提交` alias added in Chinese (consistent with other Chinese aliases). User can rename to `commit` later if preferred.
+- The commit establishing this rule itself follows transitional logic: I'm asking user to invoke `提交` to commit it, treating my doc edits as a `修复`-like task that needs user-driven finalization. Strictly, I (Claude) shouldn't commit per the Reviewer role; per Pattern B the user should invoke `提交` to have Codex commit. But because the change is purely doc-level protocol-establishment and Codex isn't in this session, the user can also choose to instruct me to commit as a one-off.
+
+**Alternatives considered and rejected**:
+- "Name the alias `commit` in English" — rejected for consistency with other Chinese aliases (`执行` / `审查` / `修复` / `批准修改`). Easy to rename later if user prefers.
+- "Don't add a new alias; just say 'user types git commit instructions inline'" — rejected. Inline instructions are loose; an explicit alias mirrors the other binding action verbs and avoids ambiguity for Codex.
+- "Have Codex implement this protocol change via `执行`" — rejected because user said "现在就做"; queueing for a separate `执行` round would have created the very lag Pattern B is designed to avoid.
+- "Auto-commit at Pass" — rejected. Explicit user `提交` action preserves user agency as Final Approver. Auto-commit on Pass might mis-fire if user wants to defer Optional or stack multiple Pass cycles.
+
+**Open questions handed off**:
+- Does user want `提交` to also write a SESSION_LOG entry recording the commit hash? Currently the §提交 alias outputs commit hash to chat but doesn't update SESSION_LOG. Codex's prior commit entries had self-referential hash workarounds; could be cleaner if `提交` post-commit updates the relevant SESSION_LOG entry with the actual hash.
+
+**Next natural step from my view**:
+1. User invokes `提交` (or asks Claude to commit directly as transitional) to land this Pattern B protocol change.
+2. After this, the standard cycle becomes: `审查` → Pass → `提交` → `执行` next task.
+3. First real test: user invokes `执行` for deterministic_report schema v1.1.0 (Phase 5 §9 #1).
+
+---
+
 ## 2026-05-25 — Codex (approved review fixes for short aliases and Phase 5 kickoff)
 
 **Commits**: this commit (self-referential hash intentionally omitted; use `git log -1` for the final hash)

@@ -153,10 +153,11 @@ This project supports short command aliases defined in `docs/AI_REVIEW_PROTOCOL.
 Detailed command expansions live only in `docs/AI_REVIEW_PROTOCOL.md` to avoid drift.
 
 Common aliases:
-- `执行` = Codex executes the next approved smallest task and updates `docs/REVIEW_PACKET.md`.
-- `审查` = Claude reviews the current change using `docs/REVIEW_PACKET.md` and git diff; Claude must not directly modify business code.
+- `执行` = Codex executes the next approved smallest task and updates `docs/REVIEW_PACKET.md`. Does not commit.
+- `审查` = Claude reviews the current uncommitted working tree using `docs/REVIEW_PACKET.md` and git diff; Claude must not directly modify business code.
 - `批准修改` = User approves pending Required fixes.
-- `修复` = Codex fixes only user-approved Required fixes and updates `docs/REVIEW_PACKET.md`.
+- `修复` = Codex fixes only user-approved Required fixes and updates `docs/REVIEW_PACKET.md`. Does not commit.
+- `提交` = Codex commits the reviewed working tree as a single coherent commit after Claude `审查` returns Pass. Not used during `执行` / `修复`. See `docs/AI_REVIEW_PROTOCOL.md` §Commit Timing Rule.
 
 `AGENTS.md` remains the highest-level project rule. If any alias conflicts with `AGENTS.md`, `AGENTS.md` wins.
 

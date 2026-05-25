@@ -97,6 +97,7 @@ For Claude:
 9. Claude reads docs/REVIEW_PACKET.md, then reviews the actual git diff when repo access is available. When the review contains Required fixes, Optional suggestions, open questions, a non-trivial verdict, or a phase/process decision, Claude prepends a review entry to `docs/SESSION_LOG.md` and clearly marks pending user approval items (see §Review Recording below).
 10. The user decides whether to accept, request fixes, or defer.
 11. Codex fixes only user-approved Required fixes.
+12. After Claude returns Pass on the latest iteration, the user invokes `提交`; Codex commits the reviewed working tree as a single coherent commit. Codex must not commit during `执行` or `修复` (see §Commit Timing Rule below).
 
 ## Review Verdicts
 
@@ -123,6 +124,21 @@ Review entries must clearly mark whether fixes are pending user approval (typica
 
 A pure Pass verdict with no fixes / no open questions / no process decision does not require a SESSION_LOG entry; the review can stay in chat or commit message.
 
+## Commit Timing Rule
+
+Pattern B: commit happens **after** Claude returns Pass, not during `执行` or `修复`.
+
+- `执行` and `修复` modify the working tree only. They must not run `git commit`.
+- `审查` reviews the working tree diff (uncommitted) plus `docs/REVIEW_PACKET.md`.
+- After Claude returns Pass (or Pass with all Required fixes resolved via approved `修复` rounds reaching a clean Pass), the user invokes `提交` and Codex commits.
+
+Rationale:
+- Git history contains only reviewed-and-passed work; bisect / revert never lands on intermediate dirty state.
+- Working tree IS the review artifact during `审查`; no need to commit-then-amend if review finds issues.
+- If `审查` returns Fail, `git checkout .` cleanly discards; no garbage commit to clean up.
+
+Exception (must be explicitly stated by the user): a work block too large for one review round may use checkpoint commits prefixed with `WIP:`. Default is no exception.
+
 ## Review Packet Rule
 
 Codex must update docs/REVIEW_PACKET.md after every implementation task and before Claude review.
@@ -146,6 +162,8 @@ If Claude can access the repo, Claude must inspect the actual git diff directly 
 docs/REVIEW_PACKET.md is short-lived and only represents the latest review round.
 
 docs/REVIEW_PACKET.md is intentionally gitignored. Codex should overwrite it for each review round instead of preserving packet history in git.
+
+If Claude is the transitional Implementer (for example, for protocol-level edits the user directs Claude to make), Claude may either skip the REVIEW_PACKET.md update or fill it with minimal Claude-implementer fields. The SESSION_LOG entry remains the canonical record for that change.
 
 docs/SESSION_LOG.md remains the long-term cross-LLM cognitive log.
 
@@ -185,12 +203,14 @@ Codex must automatically do all of the following:
 14. Update docs/REVIEW_PACKET.md completely for Claude review.
 15. Prepend docs/SESSION_LOG.md only if there is a non-trivial change, key judgement, failed attempt, open issue, or process decision.
 16. Do not create or update handoff files unless this is a phase or major milestone change.
+17. Do not commit. Commit is a separate step after Claude `审查` returns Pass; user invokes `提交`. See §Commit Timing Rule.
 
 After finishing, Codex must output only a concise summary:
 - Task completed
 - Files changed
 - Tests/checks run
 - docs/REVIEW_PACKET.md updated: Yes / No
+- Working tree uncommitted (per Commit Timing Rule): Yes
 - Ready for Claude review: Yes / No
 
 ### User command to Claude: 审查
@@ -290,13 +310,44 @@ Codex must automatically do all of the following:
 14. Update docs/CURRENT.md if needed.
 15. Update docs/REVIEW_PACKET.md for Claude re-review.
 16. Prepend docs/SESSION_LOG.md if the fix is non-trivial.
+17. Do not commit. Commit is a separate step after Claude `审查` returns Pass; user invokes `提交`. See §Commit Timing Rule.
 
 After finishing, Codex must output only a concise summary:
 - Approved fixes repaired
 - Files changed
 - Tests/checks run
 - docs/REVIEW_PACKET.md updated: Yes / No
+- Working tree uncommitted (per Commit Timing Rule): Yes
 - Ready for Claude re-review: Yes / No
+
+### User command to Codex: 提交
+
+Meaning:
+
+After Claude `审查` returns Pass, Codex commits the reviewed working tree as a single coherent commit. This finalizes the change set. Codex must not commit during `执行` or `修复`.
+
+When the user types only:
+
+提交
+
+Codex must automatically do all of the following:
+
+1. Read AGENTS.md.
+2. Read docs/AI_REVIEW_PROTOCOL.md.
+3. Read docs/SESSION_LOG.md top 1-3 entries to verify Claude's latest verdict is Pass.
+4. If the latest verdict is Fail, or Pass with unresolved Required fixes (meaning fixes approved by the user but not yet repaired and Claude-re-passed): refuse to commit. Output the reason and instruct user to run `批准修改` + `修复` first.
+5. If the latest verdict is Pass: run `git status` to see the change set.
+6. If `git status` shows nothing to stage, refuse and output `nothing to commit; no changes pending`.
+7. Run `git add -A` to stage all working tree changes. Pattern B assumes the whole working tree has been reviewed; files matching `.gitignore` are skipped automatically.
+8. Run `git commit` with a descriptive message that references the latest SESSION_LOG entry and lists the items in the change set.
+9. Run `git status` again to verify clean working tree.
+10. Do not push. Do not add remotes. Do not amend prior commits unless the user explicitly authorizes.
+
+After finishing, Codex must output only a concise summary:
+- Commit hash
+- Files committed
+- git status clean: Yes / No
+- Ready for next `执行`: Yes / No
 
 ## Safety Rule for Short Commands
 
