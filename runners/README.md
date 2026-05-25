@@ -11,6 +11,17 @@ Planned scripts:
 
 Current Phase 1/2 entry remains `A-EGS/egs_main.py`.
 
+Validation environment:
+
+- Use the project/local Python that has the repo's data stack installed for
+  schema-validating commands, for example:
+  `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`.
+- Install validation-only dependencies with:
+  `python -m pip install -r requirements-dev.txt`.
+- The Codex bundled Python runtime is acceptable for syntax checks and unit
+  tests, but it may not include `jsonschema`; do not treat bundled runtime
+  packages as the project's dependency source.
+
 Existing helpers:
 
 - `backtest_rank.py` — Phase 2 rank 回测入口

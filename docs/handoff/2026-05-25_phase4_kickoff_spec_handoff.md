@@ -252,3 +252,49 @@ Phase 6 实盘 1 季度需要：
 5. `skills/a_short_analysis/reference/v14.2_spec.md` — Phase 4 内容映射来源
 
 实施过程产生的 schema / runner / Skill / prompts / tests 改动按 AGENTS.md §交接记录约定记录：默认追加到 phase 主 handoff（本文件）末尾 `## YYYY-MM-DD 追加：<topic>` 小节，不轻易新建独立 handoff。
+
+
+---
+
+## 2026-05-25 追加：Validation 依赖声明
+
+### 改了什么
+
+- 新增 `requirements-dev.txt`。
+  - 当前只声明 validation/test 层必须的 `jsonschema>=4.0`。
+  - 不在本轮整理完整运行期依赖（pandas / tushare / numpy 等仍来自用户本机数据环境），避免把小修扩大成环境重构。
+- 更新 `runners/README.md`。
+  - 明确 schema-validating 命令应使用项目/本机 Python（当前常用 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`）。
+  - 明确安装命令：`python -m pip install -r requirements-dev.txt`。
+  - 明确 Codex bundled Python 可用于 compile / unit tests，但不作为项目依赖来源。
+- 更新 `docs/CURRENT.md`，把 validation 依赖声明加入当前状态和关键文件。
+
+### 为什么改
+
+Phase 3.6 stats-only 复核时，Codex bundled Python 可以跑 compile / unittest，但缺 `jsonschema`，导致 `backtest_rank.py` 在最终 `backtest_report.json` schema 校验处失败。项目此前一直用本机 Python 3.13 完成 schema 校验，但依赖没有 repo-visible 声明。
+
+Phase 4 会新增 `deterministic_report.schema.json`，schema 校验频率会更高。把 `jsonschema` 明确写入项目依赖声明，可以避免后续 LLM 或新终端把"本机刚好装了 jsonschema"误当作项目契约。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['runners/backtest_rank.py','engine/analyzer/state_manager.py']; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in files]; print('compile ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "from importlib.metadata import version; print(version('jsonschema'))"
+```
+
+### 验证结果
+
+- Unit tests：21 tests passed。
+- Compile：`compile ok`。
+- 本机 Python 3.13 可 import `jsonschema`。
+
+### 失效旧结论
+
+无。此改动不改变 Phase 3 / Phase 4 设计结论，也不改变任何回测结果。
+
+### 下一步注意事项
+
+1. 后续 schema-validating 命令统一使用项目/本机 Python，或先确保当前 Python 已安装 `requirements-dev.txt`。
+2. 不要往 Codex bundled Python 里安装项目依赖；它只作为工具运行时。
+3. 如果 Phase 4 增加新的 validation-only 依赖，追加到 `requirements-dev.txt`，不要散落在 handoff 的命令说明里。

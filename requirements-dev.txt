@@ -1,0 +1,7 @@
+# Development and validation dependencies.
+#
+# Runtime data dependencies (pandas, tushare, etc.) are currently provided by
+# the user's local Python environment. Keep this file focused on packages that
+# are required for deterministic project validation but may be missing from
+# tool-bundled Python runtimes.
+jsonschema>=4.0
