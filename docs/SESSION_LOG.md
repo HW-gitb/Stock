@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-05-25 — Codex (Phase 5 kickoff spec)
+
+**Commits**: pending in this session
+
+**Relationship to prior session(s)**:
+- Builds on the Claude review entry above, especially Required fix #3: Phase 4 -> Phase 5 requires a kickoff handoff before any Phase 5 schema or code.
+- Refines the previous "first minimal code task" ordering: `schemas/execution_backtest_report.schema.json` remains the first code task, but only after the Phase 5 kickoff spec is reviewed.
+
+**Worked on**:
+1. Added `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`.
+2. Updated `AGENTS.md` and `docs/CURRENT.md` so new LLM sessions see the Phase 5 kickoff boundary.
+3. Did not modify business code, schemas, runner logic, analyzer logic, or backtest outputs.
+
+**Key decisions**:
+- Phase 5 schema / runner / simulator code has not started.
+- Phase 5 must not treat Phase 4 `watch` as `buy`, must not parse Markdown/LLM notes as trade instructions, and must not skip stop loss / time stop / circuit breaker / position sizing / cooldown coverage.
+- The next code task is schema-first: `schemas/execution_backtest_report.schema.json` v1.0.0 plus minimal schema meta-validation test.
+
+**Alternatives considered and rejected**:
+- "Start execution report schema immediately" — rejected for ordering. The phase-transition handoff had to land first.
+- "Treat Phase 4 deterministic reports as complete trading plans" — rejected because Phase 4 v1 intentionally leaves entry/exit/position fields unknown.
+- "Simplify Phase 5 into forward-return slicing" — rejected because AGENTS.md requires execution backtest to simulate stops, time stops, circuit breakers, position limits, and cooldowns.
+
+**Open questions handed off**:
+- Claude should review whether the Phase 5 kickoff handoff's field scope is enough before schema work begins.
+- Phase 4 schema v1.1.0 lineage improvements (`l3_mode`, enrichment fields) still need an explicit accept/defer decision during Phase 5 schema design.
+
+**Next natural step from my view**:
+1. Claude reviews `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`.
+2. If user approves after review, Codex implements only `schemas/execution_backtest_report.schema.json` v1.0.0 + a minimal schema validation test.
+
+---
+
 ## 2026-05-25 — Claude review — pending user approval
 
 **Commits**: none (review-only entry; reviews `3aa1bf7` + `d289013` + `cb4b78c`)
