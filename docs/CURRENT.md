@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（Phase 4 启动规格 handoff 落地；deterministic_report schema first）
+**最后更新**：2026-05-25（Phase 4 启动规格 handoff 落地；Phase 3.6 收尾 audit 修复完成）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -37,6 +37,7 @@
 - Phase 3.3 子分数预测力分析（2026-05-25）：新增 `runners/diagnose_subscore_predictive.py`。**关键发现**：(1) backtest 下 `cat_score` 全部硬编码 50（`egs_main.py:2202`，`l3_mode=neutralize` 设计）— 不是 EGS 不能区分，是 backtest 数据路径决定；cat_score 真实预测力需等 L3 PIT 累积满 6 月（~2026-12）；(2) `esp_score` 在 backtest 下呈**反向预测力**（low > neutral > high 跨 5d/10d/20d，validation 5d Spearman=-1.0）— Phase 3.4 已排除是 EGS sign bug；(3) `l4_score` 是 backtest validation 主驱动 (l4=100 vs <70 在 20d 上 +4.12 vs -4.74)，但 discovery 反向 — regime-dependent；(4) `final_score < 60` 在 validation 20d 是 -4.57 / t=-3.82（比 chasing_high 的 t=-2.36 还强），验证 score_ge_60 选择正确
 - Phase 3.4 ESP 反向 PIT 调查（2026-05-25）：纯诊断无代码改动。结论：(a) EGS 代码 PIT filter 完全正确（`egs_main.py:1664` 用 `ann_date <= as_of`）；(b) Tushare API 行为限制（返回最新修订版数值）通过 API 单独**结构性不可验证**；(c) 24p 季度 cohort 检验 PIT 单调衰减假说**不被支持** — 反向强度集中在 2024Q4 + 2025Q1（-19.64 / -9.28 spread），不是从老到新单调减弱。最可能机制：行为金融 priced-in + 该段 regime event 共同作用。**PIT 不是主因**
 - Phase 3.5 实盘 forward tracker（2026-05-25）：新增 `runners/forward_tracker.py`（capture + backfill）+ `logs/forward_tracker.csv`（25 列 schema），`weekly_screening.ps1` 接 Stage 3。设计：旁路约束，capture 每周五自动跑（轻量），backfill 用户手动跑且 cache 不覆盖时主动 bail；复用 `attach_forward_returns` 保证与 backtest 同口径。已验证 3 个 as_of capture + idempotency + cache-coverage gate。累积 ~12 期实盘 as_of 后可跑 esp_score / score_ge_60 / veto overlap 分析对比 backtest 结论
+- Phase 3.6 收尾 audit 修复（2026-05-25）：修正 analyzer ablation 命名与输出，新增 `all_analyzer_veto_*` 和 `tier1_analyzer_veto_*`，避免旧 `analyzer_veto_* + subset=all` 被误读为全样本；`l2_unknown` 归一化与 analyzer 对齐（strip/lower，支持 `unknown`/`unk`）；`state_manager.is_circuit_breaker_active()` 开始尊重 `expires_at`；测试增至 21 个；24p stats-only 已重算并通过 schema 1.11.0 校验
 
 ---
 
@@ -89,6 +90,7 @@
 - `runners/diagnose_tier1_bad_signals.py` — Phase 3.2 Tier1 坏票特征诊断入口
 - `engine/analyzer/rule6_hard_veto.py` — Phase 3 首轮 deterministic hard veto：`chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive`
 - `engine/analyzer/state_manager.py` — Phase 3 JSON state 接口与 atomic write helper
+- `tests/analyzer/test_state_manager.py` / `tests/test_backtest_rank_phase3.py` — Phase 3 state expiry、l2 normalization、analyzer ablation 命名回归测试
 - `schemas/analysis_input.schema.json` — v1.1.0
 - `schemas/rank_backtest_report.schema.json` — v1.11.0（含 date_warnings + data_lineage + analyzer veto replay settings）
 - `schemas/data_health.schema.json` — v1.1.0（每周实盘 egs_main 自动产 `data_health.json` 的契约；2026-05-24 第二轮 audit 时 `pe_missing_count` 字段语义不清，rename 为 `pe_ttm_or_pe_missing_count`）

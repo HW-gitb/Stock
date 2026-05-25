@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ EXECUTION_LOG_PATH = STATE_ROOT / "execution_log.csv"
 
 
 def utc_now_iso() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -86,8 +86,45 @@ def has_position(ts_code: str) -> bool:
     return any(str(pos.get("ts_code")) == str(ts_code) for pos in positions if isinstance(pos, dict))
 
 
-def is_circuit_breaker_active() -> bool:
-    return bool(load_circuit_breaker().get("active", False))
+def is_circuit_breaker_active(now: datetime | str | None = None) -> bool:
+    state = load_circuit_breaker()
+    if not bool(state.get("active", False)):
+        return False
+    expires_at = _parse_state_datetime(state.get("expires_at"))
+    if expires_at is None:
+        return True
+    now_dt = _coerce_now(now)
+    return now_dt < expires_at
+
+
+def _coerce_now(now: datetime | str | None) -> datetime:
+    if now is None:
+        return datetime.now(timezone.utc)
+    if isinstance(now, str):
+        parsed = _parse_state_datetime(now)
+        if parsed is None:
+            raise ValueError(f"invalid now datetime: {now}")
+        return parsed
+    if now.tzinfo is None:
+        return now.replace(tzinfo=timezone.utc)
+    return now.astimezone(timezone.utc)
+
+
+def _parse_state_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def append_veto_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -102,4 +139,3 @@ def append_veto_record(record: dict[str, Any]) -> dict[str, Any]:
     payload["updated_at"] = utc_now_iso()
     atomic_write_json(VETO_LOG_PATH, payload)
     return payload
-

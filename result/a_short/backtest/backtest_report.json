@@ -1,7 +1,7 @@
 {
   "schema_name": "rank_backtest_report",
   "schema_version": "1.11.0",
-  "generated_at": "2026-05-24T21:35:40+08:00",
+  "generated_at": "2026-05-25T11:47:46+08:00",
   "preset": "a_short",
   "mode": "production",
   "engineering_smoke": false,
@@ -225,11 +225,19 @@
       "sample_count": 360
     },
     {
-      "strategy_variant": "analyzer_veto_chase_overheat",
+      "strategy_variant": "all_analyzer_veto_chase_overheat",
+      "sample_count": 314
+    },
+    {
+      "strategy_variant": "tier1_analyzer_veto_chase_overheat",
       "sample_count": 305
     },
     {
-      "strategy_variant": "analyzer_veto_all_rules",
+      "strategy_variant": "all_analyzer_veto_all_rules",
+      "sample_count": 302
+    },
+    {
+      "strategy_variant": "tier1_analyzer_veto_all_rules",
       "sample_count": 302
     }
   ],

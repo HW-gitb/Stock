@@ -841,3 +841,66 @@ python runnersorward_tracker.py backfill
 4. **如果 esp_score reverse 在实盘消失**：backtest PIT contamination 假说被证实（被 Phase 3.4 cohort 检验弱化但未排除）；建议 Phase 7 DataHub 设计加入财务 PIT snapshot 机制（类比 L3 PIT）。
 5. **如果 esp_score reverse 在实盘仍存在**：priced-in 假说（行为金融）被证实；Phase 7 应重新设计 ESP 子分数权重或方向。
 6. **不要把 tracker 输出加入版本控制的 result/** — 它走 `logs/`，与 `data_canary_*.json` 一样被视为运行时产出，不污染 `result/a_short/` 实盘目录。`.gitignore` 检查：`logs/` 应已被 ignore 或仅 track 特定文件；如未配置需要补。
+
+
+---
+
+## 2026-05-25 追加：Phase 3.6 收尾 audit 修复
+
+### 改了什么
+
+- `runners/backtest_rank.py`
+  - `build_analyzer_ablation_variants()` 不再输出旧的 `analyzer_veto_chase_overheat` / `analyzer_veto_all_rules`。
+  - 新增显式 scope 的 variant：
+    - `all_analyzer_veto_chase_overheat`
+    - `tier1_analyzer_veto_chase_overheat`
+    - `all_analyzer_veto_all_rules`
+    - `tier1_analyzer_veto_all_rules`
+  - 这样 CSV 中的 `subset=all` 不会再被误读为"全样本"；variant 名称已经说明是 full-sample ablation 还是 Tier1-only ablation。
+  - `l2_unknown` 归一化与 analyzer 对齐：strip/lower，支持 `未知`、`unknown`、`unk`；空字符串仍是 missing，不是 unknown。
+- `engine/analyzer/state_manager.py`
+  - `is_circuit_breaker_active(now=None)` 开始读取并判断 `expires_at`。
+  - `active=false` 返回 False；`active=true` 且无 expiry / malformed expiry 保守返回 True；`expires_at <= now` 返回 False。
+  - `utc_now_iso()` 改为 timezone-aware UTC。
+- 测试
+  - 新增 `tests/analyzer/test_state_manager.py`。
+  - 新增 `tests/test_backtest_rank_phase3.py`，覆盖 l2 normalization 与 analyzer ablation 命名。
+- 重新生成 24p stats-only 输出：`strategy_variant_stats.csv`、`strategy_variant_monthly.csv`、`portfolio_stats.csv`、`portfolio_period_returns.csv`、`backtest_report.json`。
+
+### 为什么改
+
+Phase 3 复核时发现三个 Phase 4 前需要补掉的小坑：
+
+1. 旧 analyzer ablation 把 Tier1 过滤后的样本交给 `build_stats()`，CSV 出现 `strategy_variant=analyzer_veto_*` + `subset=all`，容易被误读为全样本 ablation。
+2. backtest 的 `l2_unknown` 分组只认精确 `未知`/`unknown`，而 analyzer 已支持 strip/lower 与 `unk`；未来新样本可能出现 attribution 分叉。
+3. state manager 熔断初版只看 `active`，不看 `expires_at`；Phase 4/5 开始读真实 state 后会把过期熔断误判为仍有效。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['engine/analyzer/rule6_hard_veto.py','engine/analyzer/state_manager.py','runners/backtest_rank.py','runners/forward_tracker.py']; [compile(Path(f).read_text(encoding='utf-8'), f, 'exec') for f in files]; print('compile ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\backtest_rank.py --mode production --stats-only --windows 5,10,20 --split-date 20250101
+```
+
+### 验证结果
+
+- Unit tests：21 tests passed。
+- Compile：`compile ok`。
+- stats-only：成功；复用 `forward_daily` cache `20240131..20260228`；`backtest_report.json` 通过 `rank_backtest_report v1.11.0` 校验。
+- report 中新增/更新 strategy variants：
+  - `all_analyzer_veto_chase_overheat`：sample_count=314
+  - `tier1_analyzer_veto_chase_overheat`：sample_count=305
+  - `all_analyzer_veto_all_rules`：sample_count=302
+  - `tier1_analyzer_veto_all_rules`：sample_count=302
+
+### 失效旧结论
+
+- 旧的 `analyzer_veto_chase_overheat` / `analyzer_veto_all_rules` 名称废弃；后续引用必须使用带 `all_` 或 `tier1_` 前缀的新名称。
+- 旧结论本身不失效：当前 24p 里 chasing_high / overheat 在 Tier1 中仍无独立命中，4 条 hard veto 的 Tier1 独立贡献仍主要是 3 条 `esp_non_positive` catch。
+
+### 下一步注意事项
+
+1. Phase 4 读取 state 时可直接用 `is_circuit_breaker_active()`，但真实执行前仍需补 deterministic_report 对 state 字段的记录。
+2. 引用 analyzer ablation 时必须说明 scope：`all_analyzer_*` 是全样本扣 veto，`tier1_analyzer_*` 是 Tier1-only 扣 veto。
+3. `l2_unknown` 的空字符串仍不 hard veto；保持 missing 不等于 negative。

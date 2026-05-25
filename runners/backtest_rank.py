@@ -800,7 +800,7 @@ def build_group_columns(samples):
     # included "" so Tier2 filler with no industry was counted as unknown
     # downstream, but that semantics now diverged from the analyzer; the
     # two definitions must agree so reason attribution stays consistent.
-    samples["l2_unknown"] = samples.get("l2_name", pd.Series("", index=samples.index)).fillna("").astype(str).isin(["未知", "unknown"])
+    samples["l2_unknown"] = samples.get("l2_name", pd.Series("", index=samples.index)).map(_is_l2_unknown_value)
     if "analyzer_vetoed" not in samples.columns:
         samples["analyzer_vetoed"] = False
     samples["analyzer_vetoed"] = _coerce_bool_column(samples["analyzer_vetoed"])
@@ -824,6 +824,16 @@ def build_group_columns(samples):
     )
     samples["risk_reasons"] = samples.apply(_risk_reasons_for_row, axis=1)
     return samples
+
+
+def _is_l2_unknown_value(value):
+    """Match engine.analyzer.rule6_hard_veto._check_l2_unknown."""
+    if value is None or pd.isna(value):
+        return False
+    text = str(value).strip()
+    if not text:
+        return False
+    return text == "未知" or text.lower() in {"unknown", "unk"}
 
 
 def _risk_reasons_for_row(row):
@@ -1488,16 +1498,22 @@ def build_analyzer_ablation_variants(samples, analyzer_enabled=True):
         return {}
     variants = {}
     ablations = {
-        "analyzer_veto_chase_overheat": ["chasing_high", "overheat"],
-        "analyzer_veto_all_rules": list(DEFAULT_VETO_RULES),
+        "chase_overheat": ["chasing_high", "overheat"],
+        "all_rules": list(DEFAULT_VETO_RULES),
     }
-    for name, rules in ablations.items():
+    for suffix, rules in ablations.items():
         replayed = apply_analyzer_veto(samples, rules)
+        if "analyzer_vetoed" not in replayed.columns:
+            continue
+        not_vetoed = ~_coerce_bool_column(replayed["analyzer_vetoed"])
+        all_passed = replayed[not_vetoed].copy()
+        if 0 < len(all_passed) < len(replayed):
+            variants[f"all_analyzer_veto_{suffix}"] = all_passed
         if "tier1_veto_passed" not in replayed.columns:
             continue
-        passed = replayed[replayed["tier1_veto_passed"].fillna(False).astype(bool)].copy()
-        if not passed.empty:
-            variants[name] = passed
+        tier1_passed = replayed[_coerce_bool_column(replayed["tier1_veto_passed"])].copy()
+        if not tier1_passed.empty:
+            variants[f"tier1_analyzer_veto_{suffix}"] = tier1_passed
     return variants
 
 
