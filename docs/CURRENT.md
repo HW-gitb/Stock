@@ -1,15 +1,15 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（Phase 4 enrichment example fixture 落地）
+**最后更新**：2026-05-25（Phase 4 minimal 收口，下一步 Phase 5 边界设计）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 进行中；`deterministic_report` schema、runner v1、coverage doc、Skill 使用文档、prompt 骨架、LLM enrichment patch schema、example fixture、两只真实样本 smoke 已落地
-- **当前目标**：Phase 4 minimal 下一步做收口判断；runner 纯 Python 不调 LLM，Skill 是使用文档不是执行入口
-- **下一阶段大目标**：Phase 5 execution 回测（需 Phase 4 schema-validated report 作 contract）；Phase 3.5 forward tracker 继续后台累积，不阻塞
+- **当前 Phase**：Phase 4 minimal 已完成；`deterministic_report` schema、runner v1、coverage doc、Skill 使用文档、prompt 骨架、LLM enrichment patch schema/example、两只真实样本 smoke 已落地
+- **当前目标**：Phase 5 execution 回测边界设计；先定义 execution 输入/输出 contract 和完成线，不直接写大实现
+- **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
 ---
 
@@ -26,7 +26,7 @@
 - **Phase 4 启动规格**（2026-05-25，commit `54e61dc`）：[phase4 handoff](handoff/2026-05-25_phase4_kickoff_spec_handoff.md) — deterministic_report schema first / runner-as-executor / Skill-as-doc。§8 已拍板：字段范围沿用 §3.1，输出目录用 `result/a_short/<as_of>/reports/`。
 - **Phase 3.6 收尾 audit**（2026-05-25，commit `e342452`，Codex）：analyzer ablation 重命名 `{all,tier1}_analyzer_veto_*`；`l2_unknown` 归一化对齐；`is_circuit_breaker_active()` 尊重 `expires_at`；测试增至 21 个。详 phase3 handoff "2026-05-25 追加" 节。
 - Session log discipline + validation 依赖（2026-05-25，commits `1b8af8f` `7448118` `0927218`）：`docs/SESSION_LOG.md` + AGENTS.md 规则；`requirements-dev.txt`。详 SESSION_LOG.md 顶部。
-- **Phase 4 enrichment example**（2026-05-25，Codex）：新增 `schemas/examples/deterministic_report_enrichment.example.json`，测试覆盖 example schema validation；enrichment patch contract 现在有 schema + runner merge + fixture。
+- **Phase 4 minimal 收口**（2026-05-25，Codex）：Phase 4 完成线满足：schema + runner + coverage + Skill + prompt 骨架 + enrichment patch/example + 真实 smoke + tests。下一步进入 Phase 5 execution 回测边界设计，不直接开大实现。
 
 更早事项（Phase 1a/1b、Phase 2 工程链路、Phase A+B 修复、L3 PIT 三模式、v7.10 升级、Phase 2.5/2.6、git init、Phase 3 首轮等约 16 条）→ 见 `AGENTS.md §交接记录` 完整 handoff 列表 + `git log --all`。
 
@@ -120,11 +120,11 @@
 
 ## 6. 下一步（按优先级 P0 → P3）
 
-### P0 — Phase 4 启动
+### P0 — Phase 5 启动边界
 
-1. **Phase 4 minimal 收口判断** — 对照 handoff §4，确认是否达到 minimal 完成线；不要扩大到 Phase 5 execution。
-2. **下一阶段准备** — 若收口通过，再进入 Phase 5 execution 回测设计边界；先 schema/contract，不直接写交易模拟大实现。
-3. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / runner v1 只输出 `skip/watch`。
+1. **Phase 5 kickoff spec** — 先写 execution 回测 handoff/设计边界：输入、输出 schema、撮合假设、止损/时间止损/熔断/仓位限制/冷静期完成线。
+2. **execution report schema-first** — 设计 `schemas/execution_backtest_report.schema.json` 或同等 contract，再写 runner。
+3. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）
 

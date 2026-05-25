@@ -17,7 +17,7 @@
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
 - ✅ Phase 2：`runners/backtest_rank.py` 已跑通 24 期 production rank 回测；工程链路通过，策略优化继续推进
 - ✅ L3 概念缓存：正式运行默认刷新 L3；搭建/测试阶段可用 `--reuse-l3-cache` 复用共享缓存加速
-- ✅ Phase 4 minimal 基础：`deterministic_report` schema、纯 Python runner、coverage doc、Skill 使用文档、prompts 骨架、LLM enrichment patch schema 已落地
+- ✅ Phase 4 minimal：`deterministic_report` schema、纯 Python runner、coverage doc、Skill 使用文档、prompts 骨架、LLM enrichment patch schema/example 已落地
 
 ## 三条不可动摇的原则
 
@@ -111,8 +111,8 @@ Stock/
 | 1a | 设计 `analysis_input.schema.json` | 0.5-1 天 | ✅ |
 | 1b | `egs_main.py` 输出 `analysis_input` + 历史快照 | 1-2 天 | ✅ |
 | 2 | rank 回测 + Rule 6 规则有效性统计 | 3-5 天 | ✅ 工程链路通过，策略优化继续 |
-| 3+ | minimal analyzer + state 接口同步建立 | 1-2 周 | ⬜ |
-| 4 | minimal Skill：读 input，调 analyzer，出 M6.7 | 3-5 天 | ⬜ |
+| 3+ | minimal analyzer + state 接口同步建立 | 1-2 周 | ✅ |
+| 4 | minimal Skill：读 input，调 analyzer，出 M6.7 | 3-5 天 | ✅ minimal 完成 |
 | 5 | execution 回测 | 1-2 周 | ⬜ |
 | 6 | A 股短线完整闭环跑一个季度 | 实盘期 | ⬜ |
 | 7 | 引擎模块化重构，美股扩展硬前置 | 1-2 周 | ⬜ |

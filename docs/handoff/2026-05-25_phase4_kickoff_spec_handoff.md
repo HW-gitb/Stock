@@ -2,7 +2,7 @@
 
 **日期**：2026-05-25
 **范围**：Phase 4 minimal Skill 启动规格
-**状态**：实施中。schema v1.0.0、runner v1、coverage doc、Skill 使用文档、prompt 骨架、LLM enrichment patch schema 已落地；真实样本 smoke 待补。
+**状态**：Phase 4 minimal 完成。schema v1.0.0、runner v1、coverage doc、Skill 使用文档、prompt 骨架、LLM enrichment patch schema/example、真实样本 smoke 均已落地。
 **前置 handoff**：`docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md`（Phase 3 完整实施记录，含 audit fixes / 3.3 / 3.4 / 3.5）
 
 ---
@@ -605,3 +605,59 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest te
 
 1. 对照 Phase 4 handoff §4 做 minimal 收口判断。
 2. 若收口通过，下一步进入 Phase 5 execution 回测边界设计，不要直接跳到大实现。
+
+
+---
+
+## 2026-05-25 追加：Phase 4 minimal completion
+
+### 改了什么
+
+- 将 Phase 4 handoff 状态更新为 minimal 完成。
+- 更新 `AGENTS.md` 路线图：
+  - Phase 3+ 标记为 ✅。
+  - Phase 4 标记为 ✅ minimal 完成。
+- 更新 `docs/CURRENT.md`：
+  - 当前 Phase 从 Phase 4 进行中推进到 Phase 4 minimal 已完成。
+  - 下一步改为 Phase 5 execution 回测边界设计。
+
+### 为什么改
+
+Phase 4 handoff §4 的完成线已经满足：
+
+- `schemas/deterministic_report.schema.json` v1.0.0 已落地。
+- `runners/run_analysis_report.py` 已可读 `analysis_input.json`、调 analyzer/state、输出 schema-validated JSON + Markdown。
+- `schemas/deterministic_report_coverage.md` 已记录 v14.2 覆盖矩阵。
+- `skills/a_short_analysis/SKILL.md` 已从占位改为使用文档。
+- `skills/a_short_analysis/prompts/*.md` 已有 enrichment 骨架。
+- `tests/skill/test_run_analysis_report.py` 覆盖 runner、Markdown、enrichment merge、example validation。
+- 两只真实样本 smoke 覆盖 watch 与 hard-veto skip。
+- enrichment patch schema/example 已补齐，LLM notes 写回边界明确。
+
+继续在 Phase 4 内扩大功能会开始侵入 Phase 5 execution 领域。下一步应先写 Phase 5 kickoff spec 和 execution 输出 contract，而不是直接写撮合/交易模拟大实现。
+
+### 验证命令
+
+沿用最近三节验证命令：
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "test_*.py" -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.skill.test_run_analysis_report.RunAnalysisReportTest.test_enrichment_example_validates_when_jsonschema_available -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "<two-case Phase 4 smoke: 600415.SH watch + 603298.SH skip>"
+```
+
+### 验证结果
+
+- Full bundled tests：28 tests passed，2 skipped。
+- Local Python 3.13 enrichment example schema test：passed。
+- Local Python 3.13 two-case smoke：passed。
+
+### 失效旧结论
+
+无。此收口不改变任何策略 finding 或 analyzer 规则；只推进工程 phase 状态。
+
+### 下一步注意事项
+
+1. Phase 5 先写 kickoff spec/contract，保持 schema-first。
+2. execution 回测必须完整模拟止损、时间止损、熔断、仓位限制、冷静期；不要只做简化收益切片冒充 Phase 5。
+3. Phase 4 runner v1 仍不输出 `buy`；Phase 5 若需要可回测买入，应先定义 deterministic entry/exit/position 字段如何从 report 或后续 analyzer enrich 产生。
