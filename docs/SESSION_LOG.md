@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-05-25 — Codex (Phase 4 coverage + Skill)
+
+**Commits**: bf3ed0b
+
+**Relationship to prior session(s)**:
+- Builds on runner commit `e11bb39`; this is the documentation/usage layer that makes the runner safe for other LLMs to use.
+- Follows the user's standing instruction to continue through natural next steps and auto-commit stable milestones.
+
+**Worked on**:
+1. Added `schemas/deterministic_report_coverage.md` to map v14.2 Rule/M0-M6 coverage into deterministic, LLM, external, missing, and not-implemented buckets.
+2. Rewrote `skills/a_short_analysis/SKILL.md` from a Phase 4 placeholder into a usage guide with YAML frontmatter, runner command, reading order, deterministic boundary, and validation commands.
+3. Added six prompt skeletons under `skills/a_short_analysis/prompts/` so Skill references do not point at an empty directory.
+
+**Key decisions**:
+- Prompt files are deliberately skeletons. They do not call tools, do not imply live search occurred, and do not write deterministic decisions.
+- `SKILL.md` says LLM enrichment can add notes or patch proposals, but cannot override `decision`, `veto`, `risk_flags`, or analyzer invocations.
+- The next technical gap is now explicit: define how LLM enrichment is represented as input/patch if it needs to be merged into report JSON.
+
+**Alternatives considered and rejected**:
+- "Put full v14.2 logic into SKILL.md" — rejected. `v14.2_spec.md` remains the design spec; the Skill stays lean and operational.
+- "Leave prompts empty until later" — rejected because `SKILL.md` would point to a directory with no usable anchors.
+- "Let prompt output directly alter report JSON" — rejected until an enrichment contract exists.
+
+**Open questions handed off**:
+- The enrichment patch schema should probably only allow `llm_notes.sections` writes in v1. Anything that touches deterministic fields should be rejected by schema/runner.
+
+**Next natural step from my view**:
+1. Add a minimal LLM enrichment patch schema.
+2. Add runner support for optional `--enrichment-path` that validates and merges only LLM notes.
+3. Add tests proving deterministic fields cannot be patched.
+
+---
+
 ## 2026-05-25 — Codex (Phase 4 runner v1)
 
 **Commits**: e11bb39
