@@ -764,3 +764,80 @@ Phase 3.3 在 backtest 上发现 ESP 子分数反向预测力（high esp > 50 �
 
 - 验证命令：仅 `python` REPL 读 rank_samples.csv 做 cohort 分析；详见上表
 - 文件：无新文件；handoff + CURRENT.md 更新
+
+
+---
+
+## 2026-05-25 追加：Phase 3.5 实盘 forward tracker
+
+### 改了什么
+
+- 新增 `runners/forward_tracker.py`，单文件双 subcommand：
+  - `capture --as-of YYYYMMDD`：读 `result/a_short/<as_of>/analysis_input.json`，每个 candidate 写一行到 `logs/forward_tracker.csv`。idempotent on (as_of, ts_code)，重复跑跳过已存在行。
+  - `backfill`：扫 CSV 找成熟窗口（min_window×1.4 + 3 个交易日缓冲）+ 当前 `forward_daily.pkl` cache 覆盖范围内的行，复用 `backtest_rank.attach_forward_returns` 同口径计算 5d/10d/20d t1_net。idempotent；不覆盖已有 `ok` 行。
+- 修改 `runners/weekly_screening.ps1`：加 Stage 3 调 `forward_tracker capture`，旁路约束（egs_main 失败时不跑；自身失败不影响 exit code）。新增 `-SkipTracker` flag。
+- 新 `logs/forward_tracker.csv` 文件（25 列 schema，见下）。
+
+### Schema
+
+| 列 | 含义 | 来源 |
+|---|---|---|
+| `as_of` | 实盘选股日期 (YYYYMMDD) | egs_main `--as-of` 参数 |
+| `captured_at` | tracker 写入时间戳 (ISO local time) | tracker capture |
+| `ts_code` / `name` / `tier` | 候选基本信息 | `analysis_input.candidates[i]` |
+| `final_score` / `esp_score` / `cat_score` / `l4_score` | EGS 综合分 + 三个子分 | `scores` |
+| `esp_raw` / `q0_dt_yoy` / `q1_dt_yoy` | ESP 计算输入字段 | `fundamental` |
+| `chasing_high` / `overheat_flag` / `l2_name` | analyzer veto 输入 | `derived_flags` / `industry` |
+| `base_close` | as_of 收盘价（snapshot） | `quote.close` |
+| `entry_date` / `entry_unbuyable_reason` | backfill 写入（T+1 入场日 / 限涨拒绝原因） | `attach_forward_returns` |
+| `ret_5d_t1_net` / `ret_5d_status` 等三个窗口 | T+1 入场 → N 日 close，qfq + 0.16% 双边成本扣完 | `attach_forward_returns` |
+| `backfilled_at` | 最近 backfill 时间戳 | tracker backfill |
+
+### 设计原则
+
+1. **旁路（sidebar）约束**：tracker 不阻断选股，不主动触发 universe-wide Tushare 拉取。capture 在 egs_main 成功后跑一次（轻量，纯文件读写）；backfill 由用户手动跑，且发现 cache 不够时**主动 bail** 不去 refetch，给出 hint 让用户用 `backtest_rank.py --refresh-forward-daily` 显式触发刷新。这保留"重 IO 由用户控制"的边界。
+2. **同口径**：复用 `backtest_rank.attach_forward_returns` 计算 t1_net，确保 backtest vs 实盘可直接对比。如未来改 cost / qfq / limit-up 逻辑，两边自动同步。
+3. **Idempotent capture**：同一 `as_of` 可重跑无副作用；老行的 backfill 结果保留。
+4. **Idempotent backfill**：只更新 `status != 'ok'` 的行；不会覆盖已有 forward return 值。
+5. **Cache 共享 trade-off**：tracker 与 backtest 共用 `forward_daily.pkl`。如果 tracker 触发 refresh（通过 `backtest_rank.py` 接口），cache 范围会按 tracker as_of 推算，不一定覆盖 24p 历史回测；下次 backtest 跑可能要重新 refresh。**目前接受这个 trade-off**，未来可加 cache merge / 增量 fetch 优化。
+
+### 为什么做
+
+Phase 3.3 / 3.4 在 backtest 上发现：
+- ESP 子分数反向预测力（high esp > 50 跑输 low / neutral）
+- score_ge_60 是 risk-mitigation 工具
+- 4 条 hard veto 在 24p 上有 3 条独立 catch（其余与 EGS Tier1→Tier2 降级 overlap）
+
+这些结论是否在实盘成立 / 是否是 Tushare PIT 数据 artifact / 是否随 regime 漂移 — **靠 backtest 数据无法回答**，必须实盘 forward 累积。Phase 3.5 是这个累积的工程基础。3 个月后（~12 期 as_of）就能跑同样的 esp_score 分组、score_ge_60 portfolio_stats、4 条 veto overlap 分析，对比 backtest 结论是否一致。
+
+### 验证命令
+
+```powershell
+python runnersorward_tracker.py capture --as-of 20260515
+python runnersorward_tracker.py capture --as-of 20260521
+python runnersorward_tracker.py capture --as-of 20260522
+# idempotency
+python runnersorward_tracker.py capture --as-of 20260522
+# backfill — currently bails because shared cache ends 20260228
+python runnersorward_tracker.py backfill
+```
+
+### 验证结果
+
+- 3 个 as_of capture：各 15 行，total 45 行；第二次 capture 20260522 输出 `15 rows already in tracker, skipping`，idempotent 工作。
+- CSV 25 列与 schema 一致；UTF-8 BOM 编码（Windows-friendly）。
+- live 模式下 `cat_score` 在 12-100 之间真实变化（如 000006.SZ 在 20260515 cat_score=73.25），证实 backtest neutralize hardcode 50 是数据路径而非模型限制。
+- backfill 探测到 20260515 5d 窗口已成熟（gap 10 天 ≥ 10 天阈值）；探测到 cache 范围 20240131..20260228 不覆盖 20260515 + 20d 窗口（需 end ≥ 20260609）；输出 HINT 指引用户跑 backtest_rank refresh。
+
+### 失效旧结论
+
+无。Phase 3.5 是新工程，不否定旧结论。
+
+### 下一步注意事项
+
+1. **下次 backtest_rank stats-only 跑时**，会需要重新 fetch forward_daily cache（因为现在 cache 已经过期；24p 用 end_date 20260301 不再有效，需要扩到至少今天 + max_window buffer）。届时同时也会覆盖 tracker 已有 as_of 的 forward 范围，可以紧接着跑 `python runnersorward_tracker.py backfill` 填充。
+2. **每周五 weekly_screening 跑完后** tracker 自动 capture 一行/per Tier1 候选。**不要把 backfill 也接进 weekly_screening** — backfill 应手动 / 定期跑（建议每月一次），避免每周触发 cache refresh。
+3. **累积阈值**：~12 期实盘 as_of（约 3 个月）后即可跑 esp_score 分组 / score_ge_60 portfolio / 4 条 veto overlap 分析；与 backtest 24p 结论对比。
+4. **如果 esp_score reverse 在实盘消失**：backtest PIT contamination 假说被证实（被 Phase 3.4 cohort 检验弱化但未排除）；建议 Phase 7 DataHub 设计加入财务 PIT snapshot 机制（类比 L3 PIT）。
+5. **如果 esp_score reverse 在实盘仍存在**：priced-in 假说（行为金融）被证实；Phase 7 应重新设计 ESP 子分数权重或方向。
+6. **不要把 tracker 输出加入版本控制的 result/** — 它走 `logs/`，与 `data_canary_*.json` 一样被视为运行时产出，不污染 `result/a_short/` 实盘目录。`.gitignore` 检查：`logs/` 应已被 ignore 或仅 track 特定文件；如未配置需要补。
