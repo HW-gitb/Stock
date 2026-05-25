@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-05-25 — Codex (AI review protocol)
+
+**Commits**: 3aa1bf7
+
+**Relationship to prior session(s)**:
+- Builds on Claude's Phase 3+4 audit entry and the user's explicit collaboration rule: Codex designs/implements, Claude independently reviews, user approves.
+- Does not change business code, schemas, runners, or phase implementation.
+
+**Worked on**:
+1. Audited the current handoff stack: `AGENTS.md`, `docs/CURRENT.md`, top `docs/SESSION_LOG.md`, Phase 4 handoff, and related docs.
+2. Added `docs/AI_REVIEW_PROTOCOL.md` to make the Codex / Claude / user workflow repo-visible.
+3. Updated `AGENTS.md` and `docs/CURRENT.md` with the review-role boundary.
+
+**Key decisions**:
+- The handoff system is mostly complete; the missing piece was an explicit multi-LLM review protocol.
+- Current phase is Phase 5 boundary design, but there is not yet a Phase 5 handoff.
+- Codex must not directly execute Claude's suggestions; user confirmation is required first.
+
+**Alternatives considered and rejected**:
+- "Create AI_WORKFLOW.md again" — rejected by user instruction.
+- "Use the existing empty `docs/AI_REVIEW_PROTOCOL` file" — rejected because the requested shared document path is `docs/AI_REVIEW_PROTOCOL.md`; the empty no-extension file was left untouched.
+- "Create Phase 5 handoff now" — rejected for this turn because the task is to audit/update collaboration docs first, not start phase design.
+
+**Open questions handed off**:
+- Should the pre-existing empty untracked `docs/AI_REVIEW_PROTOCOL` file be removed or ignored? I left it untouched because the user said not to delete files.
+- Phase 5 still needs a kickoff handoff.
+
+**Next natural step from my view**:
+1. Have Claude review `docs/AI_REVIEW_PROTOCOL.md`, the AGENTS addition, and CURRENT changes.
+2. After user approval, create Phase 5 kickoff handoff.
+
+---
+
 ## 2026-05-25 — Claude (Phase 3+4 audit + 4-batch fix sweep)
 
 **Commits**: a312e57 (analyzer L1/L3/L6), 9476d4c (runner B1/B2/B4/B5), 278f917 (tracker rename + analyzer normalize_rules public), 911e49b (skill tests fixture B3)
