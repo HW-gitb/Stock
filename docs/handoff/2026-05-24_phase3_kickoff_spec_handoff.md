@@ -673,3 +673,94 @@ python runners\diagnose_subscore_predictive.py
 3. **不要把 backtest 下"L4 主导 + ESP 反向"的发现直接搬到实盘解读**。实盘 cat_score 进入后整个分布可能变化。
 4. 实盘视角的快速旁证（不进主回测）：可以跑一次 `--l3-mode today` smoke（注意会有 lookahead，仅看实盘 cat_score 分布与 esp/l4 的真实相关结构），但不要拿这个结果做策略决策。
 5. 保留 `final_score lt_60` validation t=-3.82 / 20d -4.57% 的实证作为 Phase 3.2 score_ge_60 的额外证据；这条在 backtest 下稳定。
+
+
+---
+
+## 2026-05-25 追加：Phase 3.4 ESP 反向信号 PIT 调查
+
+### 改了什么
+
+无代码改动。诊断式调查，只读 EGS 源码 + 现有 rank_samples.csv。
+
+### 为什么调查
+
+Phase 3.3 在 backtest 上发现 ESP 子分数反向预测力（high esp > 50 全 period × window 跑输 low / neutral）。这可能是：
+1. 行为金融 priced-in（实盘也存在）
+2. Tushare 财务数据 revision 污染（backtest artifact，实盘不存在）
+3. EGS scoring sign bug
+
+按 `[[feedback-data-anomaly-verify]]` 的规则，下任何结论之前必须查代码 + 检验已知数据限制。
+
+### EGS 代码层 PIT 检查
+
+`egs_main.py` 财务数据获取（lines 1628-1665）：
+
+- 1632-1635：`safe_api(pro.fina_indicator, ts_code=chunk_str, period=q, ...)` — **不传 end_date 参数**，纯按季度拉取。
+- 1664：`df_fi = df_fi[df_fi["ann_date"] <= pd.Timestamp(TODAY_DT)]`，其中 `TODAY_DT = asof_dt`（egs_main.py:1220，--as-of 模式下）。
+- 1665：`sort_values("ann_date", ascending=False).drop_duplicates(subset=["ts_code","quarter"])`，取每 (ts_code, quarter) 最近一次披露。
+
+**EGS 代码层 PIT filter 完全正确**：每个 as_of 拿到的是 as_of 之前最近一次披露的财报记录。
+
+### Tushare API 行为层（AGENTS.md 已记录限制）
+
+> Tushare 财务返回最新修订版（非原始披露），ann_date 过滤无法解决。
+
+具体含义：`fina_indicator(ts_code, period=20240331)` 返回的每条记录有 ann_date（可能是 2024-04-30），但**该记录的 numeric 字段值（dt_netprofit_yoy 等）是 Tushare 数据库当前持有的最新版本**。如果该公司在 2024-12 重新审计后修订过 2024Q1 数据，Tushare 数据库里就只剩修订后版本，ann_date 仍是 2024-04-30 但数值已经是修订后。
+
+**通过 Tushare API 单独验证 PIT 污染结构性不可能** — Tushare 不暴露 revision history，没有"as_of 时间点持有的版本"概念。
+
+### 24p 时间 cohort 间接检验
+
+如果 PIT revision 是反向信号主因，**反向强度应随 as_of 时间递减**（旧 as_of → 更多 revision 累积 → 更强反向）。检验：
+
+按季度 cohort 分组 high esp (>50) - low esp (<50) 的 20d t1_net 平均差（负值 = high 跑输）：
+
+| cohort | N(high) | high-low 20d spread |
+|---|---:|---:|
+| 2024Q1 | 2 | -5.28 |
+| 2024Q2 | 10 | -0.85 |
+| 2024Q3 | 11 | -0.75 |
+| 2024Q4 | 4 | **-19.64** |
+| 2025Q1 | 7 | **-9.28** |
+| 2025Q2 | 13 | -4.46 |
+| 2025Q3 | 13 | +1.65 |
+| 2025Q4 | 13 | +0.40 |
+
+**模式不是单调衰减，是集中爆发**：2024Q4 + 2025Q1 反向最强（-19.64 / -9.28），早期 2024 mild，2025 下半年 fade 到 neutral。这与 PIT revision 假说预测的"单调时间衰减"**不符**，更像某段 regime 事件（可能是该时段国内政策刺激相关板块切换）。
+
+5d 同形：2024Q4 (-14.74) + 2025Q1 (-13.31) 反向最强，早期晚期都更 mild。
+
+### 综合判定
+
+| 机制 | 证据支持度 | 备注 |
+|---|---|---|
+| EGS scoring sign bug | **排除** | 代码逻辑 esp_raw → esp_score 正向计算（egs_main.py:2139-2530 大段），分组反向不是 sign 翻转 |
+| Tushare PIT revision | **弱** | 24p 时间 cohort 反向不是单调衰减；高峰在 2024Q4 + 2025Q1 看起来是 event-driven |
+| 行为金融 priced-in | **中等** | 跨期一致（虽然 magnitude 大幅波动）、跨窗口一致（5d 20d 同方向）、文献支持（analyst optimism premium 为负） |
+| Regime event（policy / sector rotation） | **中等** | 2024Q4-2025Q1 高 ESP 票被某种风格切换系统性惩罚，需要进一步独立分析 |
+
+最可能：**priced-in 与 regime event 共同作用**，PIT contamination 是次要机制不是主因。**但 24p N=73 high esp 太小，不能下死结论**。
+
+### 失效旧结论
+
+- ~~"ESP 反向可能主要是 backtest PIT artifact"~~ — 部分失效。时间 cohort 分析不支持 PIT 单调衰减预测，PIT 不是主因。
+- ~~"应该立刻在 Phase 7 修 ESP 评分权重"~~ — 仍**不应该**。现在原因不清，强行改 EGS 不安全；但理由从"PIT artifact 等数据收齐"变成"机制未确定 + 实盘验证未做"。
+
+### 下一步注意事项
+
+1. **不修 EGS ESP scoring**。证据不足以支持任何方向（priced-in / event-specific / data quirk）。Phase 7 之前不动。
+2. **不加 `esp_score_le_50` strategy variant**。Phase 3.3 handoff 已明确这是设计层信号不是工程修补。
+3. **长期 follow-up：实盘 ESP forward tracker**（推荐但当前不实施，属 Phase 4-5 工程量）。设计要点：
+   - 每周五 `weekly_screening.ps1` 跑完后，把当周 Tier1 候选的 `esp_score / esp_raw / q0_dt_yoy / q1_dt_yoy` 累计到 `logs/esp_live_tracker.csv`
+   - 每月 backfill 一次 forward 5d/20d return（用 `backtest_rank.py` 已有的 `fetch_forward_daily`）
+   - 累计 ~12 期实盘 as_of 后跑同样的 esp_score 分组分析
+   - 如果实盘 ESP 反向消失 → backtest PIT 是主因（被本次 cohort 分析弱化但仍可能）
+   - 如果实盘 ESP 反向仍在 → priced-in / event 共存假说，进入 Phase 7 正式 ESP 重设计
+4. **2024Q4 + 2025Q1 高反向爆发值得单独诊断**。如果是事件性（policy stimulus / 板块轮动），是行为现象不是 scoring 缺陷；如果与某个板块 / l1_name 强相关，可能 EGS 在那段 regime 下系统性误判。下次扩样本到 36p+ 时可以单独写一个 cohort × l1 × esp_score 的诊断脚本。
+5. 把 ESP 反向调查的"结构性不可验证"作为 [[project-backtest-l3-pit]] 的姊妹问题记入 datahub_design.md — 未来 Phase 7 DataHub 设计时需要决定财务 PIT 是否要建本地 snapshot（同 L3 PIT 处理方式），还是接受 Tushare revision 作为永久 backtest 限制。
+
+### 调查结果（无代码改动）
+
+- 验证命令：仅 `python` REPL 读 rank_samples.csv 做 cohort 分析；详见上表
+- 文件：无新文件；handoff + CURRENT.md 更新
