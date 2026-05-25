@@ -122,7 +122,21 @@ Claude review output must be recorded in `docs/SESSION_LOG.md` (as a prepended e
 
 Review entries must clearly mark whether fixes are pending user approval (typical mark: `Status: REVIEW VERDICT RECORDED. Required fixes below are PENDING USER APPROVAL.`). Codex must not execute review suggestions directly unless the user has approved them. A review entry in `SESSION_LOG.md` is for cross-LLM continuity — it is **not** a direct execution order to Codex.
 
-A pure Pass verdict with no fixes / no open questions / no process decision does not require a SESSION_LOG entry; the review can stay in chat or commit message.
+A pure Pass verdict (no Required fixes, no Optional suggestions, no open questions, no process decision) **still requires a minimal PASS-only SESSION_LOG entry**, so that `提交` step 3 (verify Claude's latest verdict is Pass) can find it. Without the entry, Codex cannot read the chat where the Pass was given.
+
+Minimal PASS-only entry format (4 fields max, terse):
+
+```markdown
+## YYYY-MM-DD — Claude review — Pass (<one-line scope>)
+
+**Commits**: none (review-only entry; reviews <target>: working tree diff vs <ref-commit-or-HEAD>)
+
+**Verdict**: Pass.
+
+**Notes**: <one short sentence — what was verified, or "No Required fixes / no Optional suggestions / no open questions" if pure>.
+```
+
+No `Required fixes`, `Optional suggestions`, `Open questions`, `Worked on`, `Alternatives`, or `Next step` sections needed. The entry exists primarily as a Pass marker for downstream `提交`, not as detailed review documentation.
 
 ## Commit Timing Rule
 
