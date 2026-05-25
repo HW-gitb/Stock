@@ -168,6 +168,83 @@ Stock/
 
 **通用要求**：所有 handoff（无论新建或追加）必须记录改了什么、为什么改、验证命令、验证结果、失效旧结论、下一步注意事项。旧 handoff 不重组（git 历史已固化）。
 
+## Session log discipline
+
+**目的**：commit message 记录"改了什么 / 为什么改"，handoff 记录 phase 级设计决定；但都不记录"试过什么没成 / 试过的方案为什么被否决 / 当前 LLM 的纠结点 / 下一步该做什么的判断"。**这一层认知信息在跨 LLM 协作时最容易丢失**，所以单独用 `docs/SESSION_LOG.md` 累积。
+
+**所有 AI 协作者（Codex / Claude / 其他 LLM）均适用**。
+
+### 何时写 session log entry
+
+满足以下**任一**条件时，session 收尾前必须 append 一条 entry 到 `docs/SESSION_LOG.md`：
+
+- 本次 session 有 ≥1 个 non-trivial commit（不含纯错别字、纯注释格式调整等微改）
+- 即使无 commit，但做出了实质性设计决定 / 排除了某个方案 / 留下了开放问题给下一 LLM
+- 用户明确说要切换话题或下次再聊
+
+**何时不写**：纯问答会话（没有任何文件改动、没有设计决定）；纯探索式 grep / read 而无任何结论；用户主动说"这次不用记"。
+
+### Entry 格式（七节）
+
+reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1 header 之后。
+
+```markdown
+## YYYY-MM-DD — <LLM 名> (<本次 session 主题简述>)
+
+**Commits**: <hash1>, <hash2>, ...
+
+**Relationship to prior session(s)**:
+- Builds on <date> <LLM> (<topic>) §<section>
+- **Reverses**: <prior decision> → <new decision>. Reason: <why>
+- **Refines**: <prior decision>. Adjustment: <what changed>
+（无关联可只写 "Initial session for <topic>"）
+
+**Worked on**:
+1. <item> ...
+2. <item> ...
+
+**Key decisions**:
+- <decision> — <reasoning>
+- ...
+
+**Alternatives considered and rejected**:
+- "<alternative>" — 否决。<reason>
+- ...
+
+**Open questions handed off**:
+- <question>
+- ...
+
+**Next natural step from my view**:
+1. <step>
+2. <step>
+```
+
+`LLM 名` 用 `Claude` / `Codex` / `ChatGPT` 等明显标识。
+
+### 三层保险机制
+
+1. **机制层**：本规则写进 AGENTS.md（你正在读的这节），所有 LLM 进项目时自动加载到 context
+2. **行为层**：Claude 通过 `~/.claude/projects/D--cnhea-Stock/memory/feedback_session_log.md` 自我约束；Codex 通过 AGENTS.md auto-load 约束
+3. **fallback 层**：**下一个进场的 LLM 第一件事就是检查 SESSION_LOG 末次 entry 之后的 git log 有没有 commit**。如果有 commit 但没对应 entry，必须立刻补一条"reconstructed from commit messages"的 entry，重建上一 session 的认知交接
+
+### 与 commit message / handoff 的关系
+
+- **不重复 commit message 的内容**。entry 的 "Worked on" 节用 1-2 行高层概述，不抄 commit 详情。读者要详情自己 git show
+- **不重复 phase handoff 的内容**。handoff 是项目级设计文档，session log 是 LLM 思维流水账
+- **重叠的部分有意保留**：commits 列表可以让接手 LLM 快速回看；"Key decisions" 概要可与 handoff "为什么改"节重叠，目的是让 SESSION_LOG 单独可读不需要打开 handoff
+
+### 单文件 vs 多文件
+
+刻意选择**单文件 `docs/SESSION_LOG.md`** 而非 `docs/sessions/<date>.md` 一篇一文件，因为：
+- 文件多了又会重蹈 2026-05-24 当天 8 个 handoff 碎片化的覆辙
+- 单文件 reverse-chrono 让接手 LLM 一次性看到最近 N 次 session 的认知线索
+- 文件无限增长不是问题：只读最近 3-5 条 entry，更老的当历史档案
+
+### 与 Phase 7 DataHub 的关系
+
+未来 Phase 7 引擎重构若有显著架构决策，主线决定走 handoff（仍是 phase 级文档），认知过程（rejected 方向 / 纠结点）继续走 SESSION_LOG。两个层级互补。
+
 **用户身份**：Python 熟手，AI 工具链如 Skill、Codex、MCP 入门。代码细节可以放心讨论，AI 工具链概念按需展开。
 
 **沟通风格**：直接给判断，不堆选项让用户选。有理据时主动指出用户方案的问题，不必要的礼貌让位于决策效率。

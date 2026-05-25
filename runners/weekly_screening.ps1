@@ -56,7 +56,7 @@ Write-Host "skip tracker:  $SkipTracker"
 Write-Host ""
 
 # --- Stage 1: egs_main ---
-Write-Host "[1/2] Running A-EGS\egs_main.py --as-of $AsOf ..." -ForegroundColor Yellow
+Write-Host "[1/3] Running A-EGS\egs_main.py --as-of $AsOf ..." -ForegroundColor Yellow
 & $PythonExe A-EGS\egs_main.py --as-of $AsOf
 $EgsExitCode = $LASTEXITCODE
 if ($null -eq $EgsExitCode) { $EgsExitCode = 1 }
