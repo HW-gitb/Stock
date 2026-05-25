@@ -8,6 +8,84 @@
 
 ---
 
+## 2026-05-25 — Claude (Phase 3+4 audit + 4-batch fix sweep)
+
+**Commits**: a312e57 (analyzer L1/L3/L6), 9476d4c (runner B1/B2/B4/B5), 278f917 (tracker rename + analyzer normalize_rules public), 911e49b (skill tests fixture B3)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-25 Codex (Phase 4 enrichment + completion) — audited the full Phase 3 + Phase 4 minimal stack after Codex finished it
+- **Refines** analyzer: tightened `_is_missing_value` (pd.NA now correctly detected as missing instead of being silently caught by exception handler), `_check_overheat` (token-match instead of substring — prevents future `NO_OVERHEAT`/`OVERHEAT_CLEARED` false-positives), `_parse_bool` (numeric 0/1 now accepted, not flagged as data_unparseable)
+- **Refines** runner: as_of consistency check, distinguishable empty-candidates vs ts_code-not-found errors, deep copy on enrichment merge, comma-join (was pipe) for veto reason_code to avoid Markdown table collision
+- **Refines** forward_tracker: renamed `MATURE_BUFFER_TRADING_DAYS` → `MATURE_BUFFER_CALENDAR_DAYS` (constant name had been added to a calendar-day threshold)
+- **Refines** analyzer API: `normalize_rules` is now public; `runners/backtest_rank.parse_veto_rules` uses it directly instead of running full `run_veto({}, ...)` just to trigger ValueError on unknown rule codes
+- **Refines** skill tests: decoupled from `result/a_short/20260522/` real data via new `tests/fixtures/analysis_input_minimal.json` (two synthetic candidates exercise clean Tier1 path + l2_unknown veto + llm_tasks prompt-ref mapping)
+
+**Worked on**:
+1. Comprehensive read-through audit of Phase 3 (analyzer, state_manager, backtest_rank Phase 3 sections, forward_tracker, diagnose_*) + Phase 4 minimal (deterministic_report schema, enrichment schema, runner, Skill, prompts)
+2. Categorized findings: 2 design improvements (A, B), 9 logic gaps (L1-L9), 5 code bugs (B1-B5), test coverage gaps
+3. Implemented all "应修" findings across 4 commits (one per logical group); 34 tests pass throughout
+
+**Key decisions**:
+- Schema v1.1.0 design improvements (A: `data_lineage.l3_mode`; B: `data_lineage.enrichment_applied` + `enrichment_source`) **deferred** — these are not pure fixes, they extend the contract. Wait for user direction before bumping schema.
+- L2 (analyzer_rules version check during apply_enrichment) deferred — depends on schema v1.1.0 decision
+- L5 (cache sharing between tracker and backtest) deferred — design-level question, not a bug
+- L8 (state_snapshot_ref hashes all 3 state files unconditionally) accepted as-is — predictability over efficiency
+- L9 (Phase 3.4 cohort analysis not in script form) accepted as gap — out of scope for "fix" pass
+- forward_tracker + diagnose_* tests left unwritten — out of scope for "fix" pass (no bug, just gap)
+
+**Alternatives considered and rejected**:
+- "Schema v1.1.0 in this sweep" — rejected. Mixing pure bug fixes with schema contract evolution makes commits unreviewable. User should explicitly approve schema bump separately.
+- "Add forward_tracker tests now" — rejected (scope). Would add 30+ lines of fixture/mock setup for a non-blocking gap; let user prioritize.
+- "Inline rule normalization in backtest_rank instead of exposing normalize_rules public" — rejected. Two source-of-truth for what counts as a valid rule code is fragile. Public API is the right call.
+- "Bundle all 4 batches into one commit" — rejected. Each batch is independent; smaller commits give cleaner git bisect / revert if needed.
+
+**Open questions handed off**:
+- **Schema v1.1.0**: should we bump to add `data_lineage.l3_mode` + `data_lineage.enrichment_applied` + `enrichment_source`? User decides. Would also unblock L2 (enrichment analyzer-rules version check).
+- **forward_tracker + diagnose_* tests**: gap acknowledged. Worth adding before Phase 5 starts or punt to Phase 6?
+- **Phase 3.4 cohort analysis as script**: 2024Q4-2025Q1 ESP reverse spike identified ad-hoc; should `runners/diagnose_subscore_predictive.py` get a `--cohort-by quarter` mode?
+
+**Next natural step from my view**:
+1. User reviews audit findings (one round was already done; this entry summarizes)
+2. If user OKs schema v1.1.0, do it as a single commit (schema + runner field emission + tests)
+3. Otherwise proceed to Phase 5 (execution backtest) — Phase 3 + Phase 4 minimal are now solid enough to support it
+
+---
+
+## 2026-05-25 — Codex (Phase 4 enrichment + completion)
+
+**Commits**: 2d0287e, d0e7c42, b8a1922, 1208ef7
+
+**Relationship to prior session(s)**:
+- Continues after Phase 4 coverage/Skill commit `bf3ed0b`.
+- Takes Phase 4 from "runner + docs usable" to "minimal completion judged and recorded".
+
+**Worked on**:
+1. Added `schemas/deterministic_report_enrichment.schema.json` and runner `--enrichment-path`, allowing only `llm_notes` patches.
+2. Ran two real smoke cases and fixed report usability issues: hard-veto table trigger fallback and `llm_tasks.prompt/task_id` mapping.
+3. Added `schemas/examples/deterministic_report_enrichment.example.json` and validation coverage.
+4. Marked Phase 4 minimal complete in `AGENTS.md`, `docs/CURRENT.md`, and Phase 4 handoff.
+
+**Key decisions**:
+- Enrichment patch is intentionally narrow: it cannot touch `decision`, `veto`, `risk_flags`, entry/exit/position fields, evidence, lineage, or analyzer invocations.
+- `regulatory_check` is treated as a prompt alias to `prompts/regulatory_48h.md` because current `analysis_input.json` fixtures use `regulatory_check`.
+- Phase 4 is complete at the minimal boundary. Further work on executable trading simulation belongs to Phase 5, starting with a kickoff spec and contract, not immediate large implementation.
+
+**Alternatives considered and rejected**:
+- "Let enrichment JSON include arbitrary report patches" — rejected because it would break deterministic replay guarantees.
+- "Keep Phase 4 open for entry/stop/position calculation" — rejected because those calculations are Phase 5/analyzer-enrichment territory and require execution assumptions.
+- "Move directly into execution code" — rejected. Cross-phase transition needs a repo-visible handoff/spec first.
+
+**Open questions handed off**:
+- Phase 5 must decide whether execution backtest consumes Phase 4 reports as-is (`watch/skip`) or introduces a deterministic entry/exit/position enrichment layer before simulation.
+- Phase 5 output schema should be designed before writing `execution_backtest.py`.
+
+**Next natural step from my view**:
+1. Create Phase 5 kickoff spec handoff.
+2. Define execution backtest input/output contracts and completion line.
+3. Only then implement schema/runner.
+
+---
+
 ## 2026-05-25 — Codex (Phase 4 coverage + Skill)
 
 **Commits**: bf3ed0b
