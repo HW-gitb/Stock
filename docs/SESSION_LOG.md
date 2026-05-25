@@ -59,7 +59,7 @@ This entry is for cross-LLM continuity. It is NOT a direct execution order to Co
 
 ## 2026-05-25 — Codex (AI review protocol)
 
-**Commits**: 3aa1bf7
+**Commits**: 3aa1bf7, d289013 (protocol rewrite expanding the initial short draft from 40 lines to the current 127-line full version; in-place added 2026-05-25 by Claude per user-approved Required fix #2 from the Claude review entry above)
 
 **Relationship to prior session(s)**:
 - Builds on Claude's Phase 3+4 audit entry and the user's explicit collaboration rule: Codex designs/implements, Claude independently reviews, user approves.

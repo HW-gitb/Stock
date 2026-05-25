@@ -8,7 +8,7 @@
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 4 minimal 已完成；`deterministic_report` schema、runner v1、coverage doc、Skill 使用文档、prompt 骨架、LLM enrichment patch schema/example、两只真实样本 smoke 已落地
-- **当前目标**：Phase 5 execution 回测边界设计；先定义 execution 输入/输出 contract 和完成线，不直接写大实现
+- **当前目标**：Phase 5 尚未开启；下一步候选是 Phase 5 kickoff spec/contract（定义 execution 输入/输出 contract 与完成线），待用户批准。任何 Phase 5 schema / runner / engine 代码必须等 kickoff handoff 落地后才能开始
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
