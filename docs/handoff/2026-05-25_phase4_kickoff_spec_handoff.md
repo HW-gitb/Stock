@@ -298,3 +298,65 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "from impor
 1. 后续 schema-validating 命令统一使用项目/本机 Python，或先确保当前 Python 已安装 `requirements-dev.txt`。
 2. 不要往 Codex bundled Python 里安装项目依赖；它只作为工具运行时。
 3. 如果 Phase 4 增加新的 validation-only 依赖，追加到 `requirements-dev.txt`，不要散落在 handoff 的命令说明里。
+
+
+---
+
+## 2026-05-25 追加：deterministic_report schema v1.0.0
+
+### 改了什么
+
+- 新增 `schemas/deterministic_report.schema.json`，JSON Schema Draft 7，schema id:
+  `https://stock.local/schemas/deterministic_report/1.0.0/schema.json`。
+- 顶级字段按 §3.1 已拍板的 minimal 范围实现：
+  - `decision`
+  - `veto`
+  - `entry_plan`
+  - `exit_plan`
+  - `position_size`
+  - `risk_flags`
+  - `evidence`
+  - `unknowns`
+  - `llm_notes`
+  - `data_lineage`
+  - `analyzer_invocations`
+- `schema_name` 固定为 `deterministic_report`，`schema_version` 固定为 `1.0.0`。
+- `decision.action` enum 保留 `buy/skip/watch/sell/reduce`，但 schema description 明确 Phase 4 v1 runner 应只输出 `skip/watch`；`buy/sell/reduce` 留给后续 deterministic enrich。
+- `veto.reasons/diagnostics/enabled_rules` 对齐 Phase 3 `run_veto()` 输出结构；reason code enum 为当前四条 analyzer rule。
+- `llm_notes.enabled` 与 `llm_notes.sections` 明确把 LLM enrich 和 deterministic 字段分离；v1 runner 应输出 `enabled=false`。
+- `unknowns.reason` enum 固定为 `requires_llm / requires_external / data_missing / not_implemented_phase4`，承接 Phase 4 v1 "诚实标 unknown"边界。
+- 用户已拍板 §8：
+  - 数据模型字段范围足够 minimal，不额外加字段。
+  - 输出目录用 `result/a_short/<as_of>/reports/`。
+- 更新 `AGENTS.md` 与 `docs/CURRENT.md` 指向新 schema。
+
+### 为什么改
+
+Phase 5 execution 回测需要消费机器可读决策字段，不能从 LLM 自由文本里抽取入场、止损、仓位等信息。Phase 4 第一刀必须先把 deterministic report contract 固化，再写 runner 和 Skill 文档。
+
+本轮刻意没有加入盈亏比、持仓周期、ATR 止损细节等字段；这些属于 Phase 5/后续 analyzer enrich 的 schema minor 升级，不进入 v1.0.0 minimal contract，避免 schema-first 变成大而全设计。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/deterministic_report.schema.json',encoding='utf-8')); Draft7Validator.check_schema(s); print('schema ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; import json; json.load(open('schemas/deterministic_report.schema.json',encoding='utf-8')); print('json parse ok')"
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -c "<minimal sample validation>"
+```
+
+### 验证结果
+
+- Schema meta-validation：`schema ok`。
+- Bundled Python JSON parse：`json parse ok`。
+- 最小 `watch` 样例 report 校验：`sample_errors 0`。
+
+### 失效旧结论
+
+无。此改动是 Phase 4 schema-first 首次落地，不改变 Phase 3/Phase 4 既有设计边界。
+
+### 下一步注意事项
+
+1. 下一步写 `runners/run_analysis_report.py`。
+2. Runner 必须在落盘前校验输出符合 `schemas/deterministic_report.schema.json`。
+3. Runner v1 的 `decision.action` 只应输出 `skip/watch`；不要在 Phase 4 v1 里硬做 `buy`。
+4. 输出目录固定为 `result/a_short/<as_of>/reports/<ts_code>.json` 和 `.md`。

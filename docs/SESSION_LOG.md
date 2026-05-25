@@ -8,6 +8,38 @@
 
 ---
 
+## 2026-05-25 — Codex (Phase 4 schema-first)
+
+**Commits**: <pending>
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-25 Claude (Phase 4 spec freeze) — user explicitly拍板 §8: field range is minimal enough and output dir is `result/a_short/<as_of>/reports/`.
+- Refines Phase 4 from "待用户拍板 / schema first" to "schema v1.0.0 landed; next runner".
+
+**Worked on**:
+1. Added `schemas/deterministic_report.schema.json` v1.0.0 as the Phase 4 machine-readable report contract.
+2. Updated `AGENTS.md`, `docs/CURRENT.md`, and Phase 4 handoff to mark schema-first landed and set runner as next step.
+3. Validated the schema with local Python 3.13 + `jsonschema`, and validated a minimal `watch` report sample.
+
+**Key decisions**:
+- Kept the v1 schema strictly to the handoff §3.1 minimal fields; did not add risk/reward ratio, holding period, ATR fields, or execution-only knobs.
+- `decision.action` enum includes future actions (`buy/sell/reduce`) for forward compatibility, but schema description states Phase 4 v1 runner should emit only `skip/watch`.
+- `llm_notes` exists in the schema but is separated from deterministic fields; v1 runner should emit `enabled=false`.
+
+**Alternatives considered and rejected**:
+- "Add execution fields now" — rejected. They belong to Phase 5 or a schema minor upgrade after runner proves what is missing.
+- "Persist M6.7 rendered table in JSON" — rejected for v1. The JSON model contains enough fields to render Markdown; the Markdown output is the rendering layer.
+
+**Open questions handed off**:
+- None blocking schema-first. Runner implementation may reveal whether `data_lineage.state_snapshot_ref` needs a stronger hash/timestamp format in v1.1.0.
+
+**Next natural step from my view**:
+1. Write `runners/run_analysis_report.py`.
+2. Validate output against `schemas/deterministic_report.schema.json` before writing JSON/Markdown.
+3. Then add coverage doc and Skill usage document.
+
+---
+
 ## 2026-05-25 — Claude (Session log infra bootstrap + Codex entry reconstruction)
 
 **Commits**: 1b8af8f (session log infra), <pending> (this entry + Codex reconstruction)

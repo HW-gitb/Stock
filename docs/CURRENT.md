@@ -1,14 +1,14 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（CURRENT.md §2 截断到 8 条 + handoff cross-reference 化；§6 P0 重组到 Phase 4 启动）
+**最后更新**：2026-05-25（Phase 4 schema-first：deterministic_report v1.0.0 落地）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 3 全部子阶段（3.0-3.5）完成；**Phase 4 启动规格已固化**（见 `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md`），待用户拍板 §8 两件事后开工
-- **当前目标**：Phase 4 minimal — deterministic_report schema first，runner 纯 Python 不调 LLM，Skill 是使用文档不是执行入口；v1 必须本地可复现，缺 LLM 判断的字段标 `unknown + requires_llm`
+- **当前 Phase**：Phase 4 进行中；`schemas/deterministic_report.schema.json` v1.0.0 已落地并通过 JSON Schema 校验
+- **当前目标**：Phase 4 minimal 下一步写 `runners/run_analysis_report.py`；runner 纯 Python 不调 LLM，Skill 是使用文档不是执行入口；v1 必须本地可复现，缺 LLM 判断的字段标 `unknown + requires_llm`
 - **下一阶段大目标**：Phase 5 execution 回测（需 Phase 4 schema-validated report 作 contract）；Phase 3.5 forward tracker 继续后台累积，不阻塞
 
 ---
@@ -23,9 +23,10 @@
 - **Phase 3.3 子分数预测力**（2026-05-25，commit `2a4f46f`）：新 `runners/diagnose_subscore_predictive.py`。BACKTEST scope 下 `cat_score` 全 50 是 `l3_mode=neutralize` artifact；`esp_score` 反向预测；`l4_score` regime-dependent；`final_score < 60` validation 20d t=-3.82。
 - **Phase 3.4 ESP 反向 PIT 调查**（2026-05-25，commit `f18f282`）：纯诊断。EGS 代码 PIT filter 正确；Tushare API 限制结构性不可验证；24p cohort 不支持 PIT 单调衰减假说。最可能机制：priced-in + 2024Q4-2025Q1 regime event。
 - **Phase 3.5 实盘 forward tracker**（2026-05-25，commit `17fb70e`）：`runners/forward_tracker.py` capture + backfill；`weekly_screening.ps1` Stage 3 自动 capture；复用 `attach_forward_returns` 同口径；累积 ~12 期后可对比 backtest 结论。
-- **Phase 4 启动规格**（2026-05-25，commit `54e61dc`）：[phase4 handoff](handoff/2026-05-25_phase4_kickoff_spec_handoff.md) — deterministic_report schema first / runner-as-executor / Skill-as-doc。待用户拍板 §8。
+- **Phase 4 启动规格**（2026-05-25，commit `54e61dc`）：[phase4 handoff](handoff/2026-05-25_phase4_kickoff_spec_handoff.md) — deterministic_report schema first / runner-as-executor / Skill-as-doc。§8 已拍板：字段范围沿用 §3.1，输出目录用 `result/a_short/<as_of>/reports/`。
 - **Phase 3.6 收尾 audit**（2026-05-25，commit `e342452`，Codex）：analyzer ablation 重命名 `{all,tier1}_analyzer_veto_*`；`l2_unknown` 归一化对齐；`is_circuit_breaker_active()` 尊重 `expires_at`；测试增至 21 个。详 phase3 handoff "2026-05-25 追加" 节。
 - Session log discipline + validation 依赖（2026-05-25，commits `1b8af8f` `7448118` `0927218`）：`docs/SESSION_LOG.md` + AGENTS.md 规则；`requirements-dev.txt`。详 SESSION_LOG.md 顶部。
+- **Phase 4 schema-first**（2026-05-25，Codex）：新增 `schemas/deterministic_report.schema.json` v1.0.0；字段范围为 `decision/veto/entry_plan/exit_plan/position_size/risk_flags/evidence/unknowns/llm_notes/data_lineage/analyzer_invocations`；schema 自身与最小样例均已校验通过。
 
 更早事项（Phase 1a/1b、Phase 2 工程链路、Phase A+B 修复、L3 PIT 三模式、v7.10 升级、Phase 2.5/2.6、git init、Phase 3 首轮等约 16 条）→ 见 `AGENTS.md §交接记录` 完整 handoff 列表 + `git log --all`。
 
@@ -82,6 +83,7 @@
 - `engine/analyzer/state_manager.py` — Phase 3 JSON state 接口与 atomic write helper
 - `tests/analyzer/test_state_manager.py` / `tests/test_backtest_rank_phase3.py` — Phase 3 state expiry、l2 normalization、analyzer ablation 命名回归测试
 - `schemas/analysis_input.schema.json` — v1.1.0
+- `schemas/deterministic_report.schema.json` — v1.0.0（Phase 4 minimal report contract；runner 输出 JSON 必须先过它）
 - `schemas/rank_backtest_report.schema.json` — v1.11.0（含 date_warnings + data_lineage + analyzer veto replay settings）
 - `schemas/data_health.schema.json` — v1.1.0（每周实盘 egs_main 自动产 `data_health.json` 的契约；2026-05-24 第二轮 audit 时 `pe_missing_count` 字段语义不清，rename 为 `pe_ttm_or_pe_missing_count`）
 - `requirements-dev.txt` — validation-only 依赖；当前至少包含 `jsonschema>=4.0`
@@ -116,8 +118,8 @@
 
 ### P0 — Phase 4 启动
 
-1. **用户拍板 Phase 4 §8** — (a) deterministic_report 数据模型字段范围是否够 minimal？(b) 输出目录 `result/a_short/<as_of>/reports/`？详 [phase4 handoff §8](handoff/2026-05-25_phase4_kickoff_spec_handoff.md)。
-2. **schema first 开工** — `schemas/deterministic_report.schema.json` v1.0.0 → runner → SKILL.md → prompts → tests，6 步顺序见 phase4 handoff §4。
+1. **runner 开工** — 写 `runners/run_analysis_report.py`，读 `result/a_short/<as_of>/analysis_input.json`，按 `ts_code` 找 candidate，调 analyzer + state，输出 schema-validated JSON + Markdown 到 `result/a_short/<as_of>/reports/`。
+2. **保持 schema first 顺序** — runner 不得绕过 `schemas/deterministic_report.schema.json`；落盘前必须 JSON Schema 校验通过。
 3. **保留所有 Phase 3 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS。详 phase3 handoff 末节。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）

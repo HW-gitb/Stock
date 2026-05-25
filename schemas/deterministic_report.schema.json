@@ -1,0 +1,536 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/deterministic_report/1.0.0/schema.json",
+  "title": "Deterministic Analysis Report",
+  "description": "Phase 4 machine-readable contract emitted by runners/run_analysis_report.py before any optional LLM enrichment.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "preset",
+    "as_of",
+    "ts_code",
+    "name",
+    "decision",
+    "veto",
+    "entry_plan",
+    "exit_plan",
+    "position_size",
+    "risk_flags",
+    "evidence",
+    "unknowns",
+    "llm_notes",
+    "data_lineage",
+    "analyzer_invocations"
+  ],
+  "properties": {
+    "schema_name": {
+      "type": "string",
+      "const": "deterministic_report"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Semantic version of this deterministic report contract."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "preset": {
+      "type": "string",
+      "enum": ["a_short"]
+    },
+    "as_of": {
+      "$ref": "#/$defs/date8"
+    },
+    "ts_code": {
+      "$ref": "#/$defs/tsCode"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision": {
+      "$ref": "#/$defs/decision"
+    },
+    "veto": {
+      "$ref": "#/$defs/vetoResult"
+    },
+    "entry_plan": {
+      "$ref": "#/$defs/entryPlan"
+    },
+    "exit_plan": {
+      "$ref": "#/$defs/exitPlan"
+    },
+    "position_size": {
+      "$ref": "#/$defs/positionSize"
+    },
+    "risk_flags": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/riskFlag"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceItem"
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unknownItem"
+      }
+    },
+    "llm_notes": {
+      "$ref": "#/$defs/llmNotes"
+    },
+    "data_lineage": {
+      "$ref": "#/$defs/dataLineage"
+    },
+    "analyzer_invocations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/analyzerInvocation"
+      }
+    }
+  },
+  "$defs": {
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "reason_code",
+        "confidence"
+      ],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["buy", "skip", "watch", "sell", "reduce"],
+          "description": "Phase 4 v1 runner should emit skip/watch only; buy/sell/reduce are reserved for later deterministic enrichment."
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        }
+      }
+    },
+    "vetoResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vetoed",
+        "reasons",
+        "diagnostics",
+        "enabled_rules"
+      ],
+      "properties": {
+        "vetoed": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/vetoReason"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/vetoDiagnostic"
+          }
+        },
+        "enabled_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/analyzerRuleCode"
+          }
+        }
+      }
+    },
+    "vetoReason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "version",
+        "severity",
+        "detail"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/analyzerRuleCode"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "severity": {
+          "type": "string",
+          "const": "hard"
+        },
+        "detail": {
+          "$ref": "#/$defs/detailObject"
+        }
+      }
+    },
+    "vetoDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "version",
+        "severity",
+        "status",
+        "field"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/analyzerRuleCode"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "severity": {
+          "type": "string",
+          "const": "diagnostic"
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {}
+      }
+    },
+    "entryPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "price",
+        "condition",
+        "type",
+        "requires_llm"
+      ],
+      "properties": {
+        "price": {
+          "$ref": "#/$defs/nonNegativeNumberNullable"
+        },
+        "condition": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["breakout", "pullback", "absorb", "unknown", "other"]
+        },
+        "requires_llm": {
+          "type": "boolean"
+        }
+      }
+    },
+    "exitPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stop_loss",
+        "take_profit_1",
+        "take_profit_2",
+        "time_stop_days",
+        "requires_llm"
+      ],
+      "properties": {
+        "stop_loss": {
+          "$ref": "#/$defs/nonNegativeNumberNullable"
+        },
+        "take_profit_1": {
+          "$ref": "#/$defs/nonNegativeNumberNullable"
+        },
+        "take_profit_2": {
+          "$ref": "#/$defs/nonNegativeNumberNullable"
+        },
+        "time_stop_days": {
+          "$ref": "#/$defs/nonNegativeIntegerNullable"
+        },
+        "requires_llm": {
+          "type": "boolean"
+        }
+      }
+    },
+    "positionSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shares",
+        "pct_of_capital",
+        "rationale",
+        "requires_llm"
+      ],
+      "properties": {
+        "shares": {
+          "$ref": "#/$defs/nonNegativeIntegerNullable"
+        },
+        "pct_of_capital": {
+          "$ref": "#/$defs/ratioNullable"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "requires_llm": {
+          "type": "boolean"
+        }
+      }
+    },
+    "riskFlag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "source",
+        "detail"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warn", "critical"]
+        },
+        "source": {
+          "$ref": "#/$defs/reportSource"
+        },
+        "detail": {
+          "$ref": "#/$defs/detailObject"
+        }
+      }
+    },
+    "evidenceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_path",
+        "value",
+        "source"
+      ],
+      "properties": {
+        "field_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {},
+        "source": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "unknownItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "reason",
+        "note"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "enum": ["requires_llm", "requires_external", "data_missing", "not_implemented_phase4"]
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "llmNotes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "sections"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Phase 4 v1 runner emits false. Later enrichment may set true."
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/llmSection"
+          }
+        }
+      }
+    },
+    "llmSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "title",
+        "status",
+        "prompt_ref",
+        "content",
+        "confidence"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["unknown", "skipped", "completed"]
+        },
+        "prompt_ref": {
+          "type": ["string", "null"]
+        },
+        "content": {
+          "type": ["string", "null"]
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        }
+      }
+    },
+    "dataLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "egs_version",
+        "analyzer_rules",
+        "state_snapshot_ref",
+        "analysis_input_schema_version",
+        "generated_at"
+      ],
+      "properties": {
+        "egs_version": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+        },
+        "analyzer_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/analyzerRuleRef"
+          }
+        },
+        "state_snapshot_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "analysis_input_schema_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "analyzerInvocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "version",
+        "status",
+        "detail"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/analyzerRuleCode"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["fired", "passed", "diagnostic"]
+        },
+        "detail": {
+          "$ref": "#/$defs/detailObject"
+        }
+      }
+    },
+    "analyzerRuleRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "version"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/analyzerRuleCode"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "analyzerRuleCode": {
+      "type": "string",
+      "enum": ["chasing_high", "overheat", "l2_unknown", "esp_non_positive"]
+    },
+    "reportSource": {
+      "type": "string",
+      "enum": ["analyzer", "egs", "state", "llm"]
+    },
+    "detailObject": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low", "unknown"]
+    },
+    "tsCode": {
+      "type": "string",
+      "description": "A-share Tushare code such as 600000.SH/000001.SZ.",
+      "pattern": "^[0-9]{6}\\.(SH|SZ)$"
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "nonNegativeNumberNullable": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "nonNegativeIntegerNullable": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "ratioNullable": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Fraction of capital. Example: 0.25 means 25%."
+    }
+  }
+}
