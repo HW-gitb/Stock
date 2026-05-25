@@ -1,14 +1,14 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（Phase 5 execution_backtest_report v1.0.0 Optional 修复待 Claude 复审）
+**最后更新**：2026-05-25（reference framework policy 已写入 AGENTS；Phase 5 schema 已提交）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 前置 deterministic report v1.1.0 已提交；execution report schema v1.0.0 已在工作树中实现并应用 Claude Optional 修复，待 Claude 复审；runner / simulator 尚未开始
-- **当前目标**：先让 Claude 复审 `schemas/execution_backtest_report.schema.json` v1.0.0 Optional 修复。通过并提交后，再进入 Phase 5 runner / simulator 的下一条最小实现任务。
+- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 前置 deterministic report v1.1.0 已提交；execution report schema v1.0.0 已提交；runner / simulator 尚未开始
+- **当前目标**：下一条最小实现任务是 Phase 5 runner / simulator skeleton，必须输出 schema-valid `execution_report.json`，并继续遵守 schema-first / review-first 节奏。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -19,7 +19,8 @@
 本节只保留当前接续需要的 high-level snapshot；争议、被否方案、review verdict、pending fixes 统一查 `docs/SESSION_LOG.md` 顶部 1-3 条。
 
 - **协作协议精简**（2026-05-25，commits `ef12fbf` `e9a2b18`）：`docs/REVIEW_PACKET.md` 已移除；Codex 的 SESSION_LOG 顶部 entry 作为 review handoff；`[trivial]` 轻量通道已启用。详 `docs/AI_REVIEW_PROTOCOL.md`。
-- **Phase 5 execution report schema-first**（2026-05-25，当前工作树待复审）：新增 `schemas/execution_backtest_report.schema.json` v1.0.0 与最小 schema meta-validation 测试，并应用 Claude 4 条 Optional contract 加固；未实现 runner / simulator。
+- **Reference framework policy**（2026-05-25，当前工作树）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
+- **Phase 5 execution report schema-first**（2026-05-25，commit `636f0fd`）：新增 `schemas/execution_backtest_report.schema.json` v1.0.0 与最小 schema meta-validation 测试，并应用 Claude 4 条 Optional contract 加固；未实现 runner / simulator。
 - **deterministic report v1.1.0 前置升级**（2026-05-25，commit `da26a2b`）：deterministic report / enrichment patch contract 已对齐 L3 与 enrichment lineage。
 - **Phase 5 kickoff spec**（2026-05-25，commit `6c90f56`）：新增 [phase5 handoff](handoff/2026-05-25_phase5_kickoff_spec_handoff.md)。Phase 5 边界已锁定：schema first，再 runner / simulator。
 - **Phase 4 minimal 收口**（2026-05-25）：deterministic report schema + runner + coverage + Skill + prompt 骨架 + enrichment patch/example + smoke/tests 已完成。
@@ -92,10 +93,16 @@
 - `schemas/deterministic_report_enrichment.schema.json` — v1.1.0（可选 LLM notes patch；只允许合并 `llm_notes`，target report version 对齐 deterministic_report v1.1.0）
 - `schemas/examples/deterministic_report_enrichment.example.json` — enrichment patch 最小样例
 - `schemas/deterministic_report_coverage.md` — Phase 4 v1 对 v14.2 M0-M6 / M6.7 的覆盖矩阵与 unknown 原因约定
-- `schemas/execution_backtest_report.schema.json` — v1.0.0（Phase 5 execution backtest report contract；当前工作树已应用 Optional 加固，待 Claude 复审；runner / simulator 尚未实现）
+- `schemas/execution_backtest_report.schema.json` — v1.0.0（Phase 5 execution backtest report contract；commit `636f0fd`；runner / simulator 尚未实现）
 - `schemas/rank_backtest_report.schema.json` — v1.11.0（含 date_warnings + data_lineage + analyzer veto replay settings）
 - `schemas/data_health.schema.json` — v1.1.0（每周实盘 egs_main 自动产 `data_health.json` 的契约；2026-05-24 第二轮 audit 时 `pe_missing_count` 字段语义不清，rename 为 `pe_ttm_or_pe_missing_count`）
 - `requirements-dev.txt` — validation-only 依赖；当前至少包含 `jsonschema>=4.0`
+
+### Reference framework policy
+- `skills/a_short_analysis/reference/` — A 股短线分析框架参考源。
+- `skills/us_short_analysis/reference/` — 美股短线选股框架与分析框架参考源。
+- A 股短线与美股短线的 `v14.x` 只是各自框架的版本号，不是前后版本关系；工程设计要参考但不照搬。
+- A 股长线 / 美股长线框架尚未建立，后续到对应 Phase 时从头设计。
 
 ### 当前有效 findings（**只读这两份，旧 12p findings 已 INVALIDATED**）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md` — cc 合并版（OVERHEAT/entry_flag/LOCK + 时间序列分析）
@@ -129,8 +136,8 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **execution report schema-first** — `schemas/execution_backtest_report.schema.json` v1.0.0 + 最小 schema meta-validation 测试已在当前工作树实现并应用 Optional 修复，待 Claude 复审；通过后提交。
-2. **下一条最小任务** — 提交 schema 后，再实现 Phase 5 runner / simulator 的最小骨架；不得在当前 schema review 前抢跑。
+1. **Phase 5 runner / simulator skeleton** — 基于已提交的 `execution_backtest_report.schema.json` v1.0.0，实现最小骨架并输出 schema-valid `execution_report.json`。
+2. **Reference 框架约束** — 后续设计必须参考 A 股短线 / 美股短线 reference 文档的业务逻辑，但不能把 chatbox 框架机械照搬为运行时提示词或代码。
 3. **Claude 审查点** — execution schema、撮合假设、输出目录隔离均需 Claude 独立审查后由用户确认。
 4. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
 

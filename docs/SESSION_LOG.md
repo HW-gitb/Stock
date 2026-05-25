@@ -8,6 +8,34 @@
 
 ---
 
+## 2026-05-25 — Codex (reference framework policy clarification)
+
+**Commits**: none (documentation-only working tree change; user asked to write the constraint into project files)
+
+**Relationship to prior session(s)**:
+- Refines AGENTS.md §三条不可动摇的原则 and §文件参考 with explicit reference-framework usage boundaries.
+
+**Worked on**:
+1. Added `AGENTS.md §Reference framework policy`.
+2. Updated `docs/CURRENT.md` to reflect the committed Phase 5 schema state and summarize the reference framework boundary.
+
+**Key decisions**:
+- A 股短线 and 美股短线 reference Markdown files are business/design references for future schema, runner, analyzer, Skill, prompt, and preset work; they are not runtime prompts to copy verbatim.
+- A 股短线 v14.x and 美股短线 v14.x are independent framework version lines, not predecessors/successors of each other.
+- A 股长线 and 美股长线 frameworks are not established yet and must not be inferred by mechanically reusing short-term frameworks.
+
+**Alternatives considered and rejected**:
+- "Keep this only in Codex memory" — rejected because Claude Code and other AI collaborators need the rule in repo-visible project files.
+- "Only update CURRENT.md" — rejected because AGENTS.md is the highest-level shared project rule.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Continue Phase 5 runner / simulator skeleton only after the user invokes `执行`.
+
+---
+
 ## 2026-05-25 — Claude review — Pass (approved Optional fixes for execution_backtest_report v1.0.0)
 
 **Commits**: none (review-only entry; reviews working tree diff vs HEAD `da26a2b`; targets the immediately prior Codex 修复 entry "approved Optional fixes for execution_backtest_report v1.0.0")

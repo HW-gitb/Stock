@@ -25,6 +25,15 @@
 2. **先把 A 股短线做成完整可复用样板**，即 Phase 1-6 全跑通并实盘一个季度，再扩展其他市场。
 3. **回测分两层。** rank 回测先做，execution 回测后做。
 
+## Reference framework policy
+
+- `skills/a_short_analysis/reference/` 下的 Markdown 是 **A 股短线分析框架参考源**，其中 `v14.2_spec.md` 是规格说明书，不是运行时提示词。
+- `skills/us_short_analysis/reference/` 下的两个 Markdown 是 **美股短线选股框架** 与 **美股短线分析框架参考源**。
+- A 股短线框架与美股短线框架虽然都可能使用 `v14.x` 版本号，但它们是两套独立框架；不是前后版本关系，也不能把一个市场的 v14.x 当作另一个市场的升级版或替代版。
+- 这些 reference 文档原始目标是 AI chatbox 工作流。后续做 schema、runner、analyzer、Skill、prompt 或 preset 设计时，必须参考其业务逻辑、流程结构和判断维度，但不能机械照搬为运行时提示词或代码规则。
+- 可确定、可回测、可结构化的规则应拆入 Python / schema / config / state；需要语义判断、新闻理解、行业判断的部分才进入 Skill prompts。
+- A 股长线与美股长线框架目前尚未建立；不得用短线框架硬套长线系统。长线框架到对应 Phase 时从头设计。
+
 ## 目标架构
 
 ```text
