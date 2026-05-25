@@ -8,9 +8,43 @@
 
 ---
 
+## 2026-05-25 — Codex (Phase 4 runner v1)
+
+**Commits**: e11bb39
+
+**Relationship to prior session(s)**:
+- Builds directly on Codex Phase 4 schema-first commit `2dd2d59`.
+- Implements the Phase 4 handoff rule that runner is the execution entry and Skill is documentation/enrichment guidance, not the deterministic executor.
+
+**Worked on**:
+1. Added `runners/run_analysis_report.py` as a pure Python single-stock deterministic report runner.
+2. Added `tests/skill/test_run_analysis_report.py` to lock analyzer replay, M6.7 Markdown rendering, and schema validation when `jsonschema` is installed.
+3. Updated `AGENTS.md`, `docs/CURRENT.md`, `runners/README.md`, and Phase 4 handoff to move the current boundary from "write runner" to "write coverage doc + Skill usage document".
+
+**Key decisions**:
+- Runner v1 emits only `skip/watch`, even though the schema enum reserves future `buy/sell/reduce`.
+- Markdown rendering uses an ASCII table header to avoid encoding ambiguity in generated reports; stock names still remain UTF-8 from source data.
+- The CLI requires `jsonschema` for actual writes because `write_report()` validates before landing files. Bundled Python can run compile/unit tests; local Python 3.13 validates the full E2E path.
+
+**Alternatives considered and rejected**:
+- "Let bundled Python write reports without schema validation when jsonschema is missing" — rejected. Phase 4's point is schema-validated contract output; skipping validation would weaken the boundary.
+- "Generate real buy/entry/stop fields now" — rejected. Those remain Phase 5/analyzer-enrichment work and are honestly marked unknown/not_implemented in v1.
+- "Make Skill drive report generation" — rejected by Phase 4 handoff; runner stays the deterministic executor.
+
+**Open questions handed off**:
+- `data_lineage.state_snapshot_ref` is currently a semicolon-joined short SHA256 digest for the three JSON state files. This is adequate for v1 but can become structured in schema v1.1.0 if Phase 5 needs machine parsing.
+- `llm_tasks` is read only if candidate payload uses a list. Current live fixture did not require deeper mapping; Skill/prompt work may decide whether `analysis_input` needs a richer LLM task convention later.
+
+**Next natural step from my view**:
+1. Write `schemas/deterministic_report_coverage.md`.
+2. Write `skills/a_short_analysis/SKILL.md` as the usage document for runner + optional LLM enrich.
+3. Keep Phase 4 deterministic output separate from any future LLM enrichment JSON.
+
+---
+
 ## 2026-05-25 — Codex (Phase 4 schema-first)
 
-**Commits**: <pending>
+**Commits**: 2dd2d59
 
 **Relationship to prior session(s)**:
 - Builds on 2026-05-25 Claude (Phase 4 spec freeze) — user explicitly拍板 §8: field range is minimal enough and output dir is `result/a_short/<as_of>/reports/`.
