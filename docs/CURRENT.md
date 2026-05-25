@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-25（Phase 4 minimal 收口，下一步 Phase 5 边界设计）
+**最后更新**：2026-05-25（Phase 3+4 audit + 4 批 fix sweep；下一步等用户决定 schema v1.1.0 / Phase 5 启动）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -27,6 +27,7 @@
 - **Phase 3.6 收尾 audit**（2026-05-25，commit `e342452`，Codex）：analyzer ablation 重命名 `{all,tier1}_analyzer_veto_*`；`l2_unknown` 归一化对齐；`is_circuit_breaker_active()` 尊重 `expires_at`；测试增至 21 个。详 phase3 handoff "2026-05-25 追加" 节。
 - Session log discipline + validation 依赖（2026-05-25，commits `1b8af8f` `7448118` `0927218`）：`docs/SESSION_LOG.md` + AGENTS.md 规则；`requirements-dev.txt`。详 SESSION_LOG.md 顶部。
 - **Phase 4 minimal 收口**（2026-05-25，Codex）：Phase 4 完成线满足：schema + runner + coverage + Skill + prompt 骨架 + enrichment patch/example + 真实 smoke + tests。下一步进入 Phase 5 execution 回测边界设计，不直接开大实现。
+- **Phase 3+4 audit + 4-batch fix sweep**（2026-05-25，Claude，commits `a312e57` `9476d4c` `278f917` `911e49b`）：analyzer 加固（pd.NA / OVERHEAT token match / numeric bool）+ runner robustness（as_of check / empty-candidates 区分 / deep copy / comma-join）+ tracker const 重命名 + analyzer `normalize_rules` 公开 API + skill 测试 fixture 化（脱离 `result/a_short/20260522/`）。34 tests pass。Schema v1.1.0 设计改进暂搁等用户拍板。详 SESSION_LOG 顶部 entry。
 
 更早事项（Phase 1a/1b、Phase 2 工程链路、Phase A+B 修复、L3 PIT 三模式、v7.10 升级、Phase 2.5/2.6、git init、Phase 3 首轮等约 16 条）→ 见 `AGENTS.md §交接记录` 完整 handoff 列表 + `git log --all`。
 
