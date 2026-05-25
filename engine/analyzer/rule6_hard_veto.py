@@ -7,6 +7,7 @@ Missing or unparsable values produce diagnostics, not hard vetoes.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -129,7 +130,12 @@ def _check_overheat(candidate: Mapping[str, Any]):
     flag_paths = ["l4_flag", "l4_flag_group", "scores.l4_flag"]
     flag, flag_field = _first_present(candidate, flag_paths)
     if flag is not MISSING:
-        if "OVERHEAT" in str(flag).upper():
+        # Token match, not substring. Substring would falsely match labels like
+        # "NO_OVERHEAT" or "OVERHEAT_CLEARED" if EGS ever extends the flag
+        # vocabulary. Tokens are pipe/comma/space-separated per existing
+        # backtest_rank.has_l4_overheat convention.
+        tokens = {t.strip().upper() for t in re.split(r"[|,\s]+", str(flag)) if t.strip()}
+        if "OVERHEAT" in tokens:
             return _reason("overheat", flag_field, flag), diagnostics
         return None, diagnostics
 
@@ -215,6 +221,15 @@ def _get_path(obj: Mapping[str, Any], path: str) -> Any:
 def _parse_bool(value: Any) -> bool | None:
     if isinstance(value, bool):
         return value
+    # Numeric 0/1 (and 0.0/1.0) — these flow through when pandas auto-converts
+    # bool-like columns to numeric. Order matters: bool must be checked before
+    # int because `True` is `isinstance(True, int)`.
+    if isinstance(value, (int, float)):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+        return None
     text = str(value).strip().lower()
     if text in {"true", "1", "yes", "y"}:
         return True
@@ -234,9 +249,18 @@ def _parse_float(value: Any) -> float | None:
 def _is_missing_value(value: Any) -> bool:
     if value is None:
         return True
+    # NaN check: NaN != NaN is the canonical detection. Works for float('nan')
+    # and numpy.nan directly. For pandas.NA / pd.NaT the comparison returns
+    # NA which raises TypeError on bool(); we catch that and explicitly treat
+    # NA-like sentinels as missing (the prior `return False` here was a latent
+    # bug — pd.NA would slip through as a "present" value).
     try:
-        # Handles pandas.NA / numpy.nan without importing pandas.
-        return bool(value != value)
+        is_nan = bool(value != value)
+        return is_nan
+    except TypeError:
+        # pd.NA, pd.NaT, and similar sentinels raise TypeError on bool(). They
+        # all represent missing values; return True.
+        return True
     except Exception:
         return False
 

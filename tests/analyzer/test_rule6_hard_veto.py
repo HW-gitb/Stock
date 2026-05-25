@@ -93,6 +93,43 @@ class Rule6HardVetoTests(unittest.TestCase):
         self.assertFalse(result["vetoed"])
         self.assertEqual(result["diagnostics"][0]["status"], "data_missing")
 
+    def test_overheat_no_false_positive_on_substring_label(self):
+        # Phase 3 audit (2026-05-25): "OVERHEAT" in str(flag).upper() would
+        # match "NO_OVERHEAT" or "OVERHEAT_CLEARED" if EGS ever extends the
+        # vocabulary. Token-based matching is the safer contract.
+        for label in ["NO_OVERHEAT", "OVERHEAT_CLEARED", "NOT-OVERHEAT"]:
+            result = run_veto({"l4_flag": label}, enabled_rules=["overheat"])
+            self.assertFalse(result["vetoed"], f"false positive on label: {label}")
+        # Plain OVERHEAT still fires.
+        result = run_veto({"l4_flag": "OVERHEAT"}, enabled_rules=["overheat"])
+        self.assertTrue(result["vetoed"])
+        # Composite labels with OVERHEAT as a token still fire.
+        result = run_veto({"l4_flag": "BREAKOUT|OVERHEAT"}, enabled_rules=["overheat"])
+        self.assertTrue(result["vetoed"])
+
+    def test_parse_bool_numeric_zero_one(self):
+        # Phase 3 audit (2026-05-25): pandas-loaded bool columns sometimes
+        # become int/float 0/1. _parse_bool must accept these, not return
+        # None (which would emit a misleading 'data_unparseable' diagnostic).
+        self.assertTrue(run_veto({"chasing_high": 1}, enabled_rules=["chasing_high"])["vetoed"])
+        self.assertFalse(run_veto({"chasing_high": 0}, enabled_rules=["chasing_high"])["vetoed"])
+        self.assertTrue(run_veto({"chasing_high": 1.0}, enabled_rules=["chasing_high"])["vetoed"])
+
+    def test_pd_na_treated_as_missing_not_present(self):
+        # Phase 3 audit (2026-05-25): _is_missing_value previously caught
+        # TypeError from bool(pd.NA) and returned False (a present value),
+        # which would let pd.NA flow into downstream checks. Now NA-like
+        # sentinels are treated as missing.
+        try:
+            import pandas as pd
+        except ModuleNotFoundError:
+            self.skipTest("pandas not available")
+        result = run_veto({"esp_raw": pd.NA}, enabled_rules=["esp_non_positive"])
+        self.assertFalse(result["vetoed"])
+        # Must surface as data_missing, not data_unparseable.
+        statuses = {d["status"] for d in result["diagnostics"]}
+        self.assertEqual(statuses, {"data_missing"})
+
 
 if __name__ == "__main__":
     unittest.main()
