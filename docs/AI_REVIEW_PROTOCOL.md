@@ -89,7 +89,7 @@ For Claude:
 5. Codex runs checks or tests.
 6. Codex updates docs/CURRENT.md.
 7. Codex prepends docs/SESSION_LOG.md if the change is non-trivial.
-8. Claude reviews the diff.
+8. Claude reviews the diff. When the review contains Required fixes, Optional suggestions, open questions, a non-trivial verdict, or a phase/process decision, Claude prepends a review entry to `docs/SESSION_LOG.md` and clearly marks pending user approval items (see §Review Recording below).
 9. The user decides whether to accept, request fixes, or defer.
 10. Codex fixes only user-approved Required fixes.
 
@@ -103,6 +103,20 @@ The change is mostly acceptable but has Required fixes.
 
 ### Fail
 The change should not be accepted until the main issues are fixed.
+
+## Review Recording
+
+Claude review output must be recorded in `docs/SESSION_LOG.md` (as a prepended entry per `AGENTS.md §Session log discipline`) when it contains any of:
+
+- Required fixes
+- Optional suggestions
+- Open questions
+- A non-trivial verdict (Pass with fixes / Fail)
+- A phase or process decision
+
+Review entries must clearly mark whether fixes are pending user approval (typical mark: `Status: REVIEW VERDICT RECORDED. Required fixes below are PENDING USER APPROVAL.`). Codex must not execute review suggestions directly unless the user has approved them. A review entry in `SESSION_LOG.md` is for cross-LLM continuity — it is **not** a direct execution order to Codex.
+
+A pure Pass verdict with no fixes / no open questions / no process decision does not require a SESSION_LOG entry; the review can stay in chat or commit message.
 
 ## Documentation Rules
 

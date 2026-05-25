@@ -8,6 +8,55 @@
 
 ---
 
+## 2026-05-25 — Claude review — pending user approval
+
+**Commits**: none (review-only entry; reviews `3aa1bf7` + `d289013` + `cb4b78c`)
+
+**Status**: REVIEW VERDICT RECORDED. **Required fixes below are PENDING USER APPROVAL.** Codex must not execute them until the user explicitly approves each item, per `docs/AI_REVIEW_PROTOCOL.md` §Standard Workflow #9-10.
+
+**Relationship / References**:
+- Reviews 2026-05-25 Codex (AI review protocol) entry + Codex's commits `3aa1bf7` (initial protocol + AGENTS.md addition + CURRENT.md update) and `d289013` (protocol rewrite 40 → 127 lines, not yet recorded in prior SESSION_LOG entry).
+- References 2026-05-25 Claude (Phase 3+4 audit + 4-batch fix sweep) for the still-open Schema v1.1.0 question.
+
+**Verdict**: Pass with fixes.
+
+**Reasons for Pass**:
+- AGENTS.md remains the highest-level rule; AI_REVIEW_PROTOCOL.md explicitly defers to it on conflict (AGENTS.md §Multi-LLM Review Protocol last line + AI_REVIEW_PROTOCOL.md L5).
+- Three roles (Codex / Claude / User) are stated consistently in both docs.
+- The protocol does not override existing AGENTS.md content; it only adds review workflow.
+- Codex's audit of the handoff stack is complete; no important file was missed.
+- Codex's two self-flagged concerns (CURRENT.md L11 ambiguous Phase 5 status, SESSION_LOG missing `d289013` hash) are accurate.
+
+**Required fixes (PENDING USER APPROVAL — Codex must not execute without explicit user approval)**:
+1. **CURRENT.md L11 wording**: "当前目标：Phase 5 execution 回测边界设计" is ambiguous between "Phase 5 already started" and "Phase 5 not yet started". Tighten to Codex's own proposed phrasing: "Phase 5 尚未开启；下一步候选是 Phase 5 kickoff spec/contract，待用户批准."
+2. **SESSION_LOG top Codex entry Commits field**: only lists `3aa1bf7`. The substantive rewrite `d289013` (40 → 127 lines) is unrecorded. In-place edit the Codex entry to also list `d289013` plus a one-line note that this was the protocol rewrite from the short initial draft.
+3. **Phase 5 startup sequence**: per AGENTS.md §交接记录 "跨 phase 转换" is one of the four high-bar conditions for a new handoff file. Phase 4 → Phase 5 transition therefore requires `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` BEFORE any Phase 5 schema or code. Codex's proposed "first minimal code task" (`schemas/execution_backtest_report.schema.json` + meta-validation test) is small/safe in content but procedurally out of order. The handoff should land first, then schema.
+
+**Optional suggestions (user may ignore, defer, or accept)**:
+- AI_REVIEW_PROTOCOL.md §Documentation Rules duplicates a small amount of AGENTS.md §Session log discipline content (SESSION_LOG purpose, Claude memory not cross-LLM). Future consolidation could reduce drift risk.
+- docs/README.md is outdated per Codex's self-audit; not blocking since AGENTS.md is the canonical entry point.
+- AGENTS.md §Multi-LLM Review Protocol is English; rest of AGENTS.md is mixed Chinese/English. Style consistency only.
+- Schema v1.1.0 design improvements (`data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source`) are still open from Claude's earlier audit; Phase 5 kickoff spec should explicitly decide: include in Phase 5 contract, defer to Phase 6/7, or treat as standalone schema bump.
+
+**Key procedural judgment**:
+- Codex's content-level work on the protocol is acceptable.
+- Codex's procedural ordering (proposing schema code before Phase 5 kickoff handoff) violates AGENTS.md handoff threshold for phase transitions.
+- Therefore: Codex is NOT yet cleared to start any Phase 5 code task. The next allowable Codex action (subject to user approval) is drafting the Phase 5 kickoff handoff.
+
+**Open questions handed to user**:
+- User decides each of the 3 Required fixes individually (accept / defer / reject).
+- User decides whether AI_REVIEW_PROTOCOL.md should be amended to require Claude review output to be written to SESSION_LOG (the gap that motivated this very entry).
+
+**Next natural step from my view** (informational; not a directive to Codex):
+1. User reviews this entry.
+2. For each Required fix, user replies with explicit "approve" / "defer" / "reject".
+3. If user approves Required fix #3, Codex drafts the Phase 5 kickoff handoff (no code yet).
+4. After kickoff handoff lands and is reviewed, Phase 5 schema can begin.
+
+This entry is for cross-LLM continuity. It is NOT a direct execution order to Codex.
+
+---
+
 ## 2026-05-25 — Codex (AI review protocol)
 
 **Commits**: 3aa1bf7
