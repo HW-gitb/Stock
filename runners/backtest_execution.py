@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -290,6 +291,24 @@ def normalized_l3_mode(payload: dict[str, Any]) -> str:
     if mode not in {"pit", "today", "neutralize"}:
         raise ValueError(f"unsupported analysis_input.source.l3_mode: {mode!r}")
     return mode
+
+
+def normalized_analysis_input_schema_version(payload: dict[str, Any]) -> str:
+    raw_value = payload.get("schema_version")
+    version = str(raw_value or "")
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        return version
+    legacy_prefix = "analysis_input.v"
+    if version.startswith(legacy_prefix):
+        suffix = version[len(legacy_prefix) :]
+        if re.fullmatch(r"[0-9]+\.[0-9]+", suffix):
+            return f"{suffix}.0"
+        if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", suffix):
+            return suffix
+    raise ValueError(
+        "analysis_input.schema_version must be SemVer or legacy analysis_input.v<major>.<minor>: "
+        f"{raw_value!r}"
+    )
 
 
 def validate_price_data_semantics(
@@ -1146,6 +1165,7 @@ def build_report(
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     as_of = str(payload.get("trade_date") or args.as_of)
+    analysis_input_schema_version = normalized_analysis_input_schema_version(payload)
     candidates = payload.get("candidates", [])
     if skipped_rows is None:
         skipped_rows = classify_skips(candidates)
@@ -1179,7 +1199,7 @@ def build_report(
                 {
                     "as_of": as_of,
                     "path": relative_ref(input_path),
-                    "schema_version": str(payload.get("schema_version") or "unknown"),
+                    "schema_version": analysis_input_schema_version,
                     "candidate_count": candidate_count,
                 }
             ],
@@ -1218,7 +1238,7 @@ def build_report(
                 "The runner uses analysis_input.json as the sole primary input.",
                 "No Markdown report or LLM free-text output is consumed.",
             ],
-            "analysis_input_schema_version": str(payload.get("schema_version") or "unknown"),
+            "analysis_input_schema_version": analysis_input_schema_version,
             "deterministic_report_schema_version": None,
             "analyzer_rules": [
                 {"code": name, "version": version}

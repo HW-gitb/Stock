@@ -25,14 +25,21 @@ Validation environment:
 Existing helpers:
 
 - `backtest_rank.py` — Phase 2 rank 回测入口
-- `backtest_execution.py` - Phase 5 execution backtest skeleton; reads
+- `backtest_execution.py` - Phase 5 execution backtest runner; reads
   `analysis_input.json`, can validate/reference an existing `execution_price_data`
   JSON via `--price-data`, requires explicit `--portfolio-allocation` and
   `--cash-buffer-state` inputs for bucket-aware capital context, reads
   `presets/a_short.yaml` by default via `--preset-path`, validates
-  `execution_report.json`, and writes CSV shells under
-  `result/a_short/backtest/execution/`. It still does not fetch prices or
-  simulate fills.
+  `execution_report.json`, and writes CSV outputs under
+  `result/a_short/backtest/execution/`. With `--price-data`, it runs the minimal
+  daily-OHLC fill simulation; without `--price-data`, it keeps the skeleton skip
+  behavior.
+- `aggregate_execution_reports.py` - Phase 5 multi-period aggregation helper;
+  reads schema-valid `execution_backtest_report` v1.2.0 files, aggregates
+  monthly return / Sharpe / worst drawdown evidence, optionally computes
+  benchmark-aware monthly alpha t-stat from a `YYYYMM -> return` JSON, and writes
+  schema-valid `execution_aggregate_report` v1.0.0. It is ship-gate evidence
+  only and does not rebuild a full continuous portfolio equity curve.
 - `materialize_execution_price_data.py` - Phase 5 provider-boundary helper;
   converts a local OHLC CSV into a schema-valid `execution_price_data` JSON for
   `backtest_execution.py --price-data`. It does not fetch Tushare data or

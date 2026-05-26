@@ -1336,3 +1336,125 @@ git diff --check
 1. 让 Claude 复审 O1-O3 disposition。
 2. 若 Pass，用户可 `提交`。
 3. 后续 multi-period aggregation 层必须重新测试 ship gate `pass` / `fail` 状态分支；单份 execution report 不适合伪造这些分支。
+
+## 2026-05-26 追加：Phase 5 multi-period execution aggregation
+
+### 改了什么
+
+- 新增 `schemas/execution_aggregate_report.schema.json` v1.0.0。
+  - 输入锁定为 `execution_backtest_report` v1.2.0。
+  - 输出保留 `capital_context` summary 和 `ship_gate_evaluation`，不改变单期 execution report contract。
+  - `monthly_alpha_t_stat` 可为 null；只有显式传入 benchmark monthly returns 后才按 benchmark excess series 计算。
+- 新增 `runners/aggregate_execution_reports.py`。
+  - 支持重复 `--report` 和 `--report-glob`。
+  - 校验每份 input report 的 schema，并要求 `capital_context` summary / mode 一致。
+  - 聚合 `candidate_count_total`、`trade_count_total`、`skipped_count_total`、月度 report total_return 均值、annualized Sharpe、worst max drawdown。
+  - 可选 `--benchmark-monthly-returns <json>`，JSON 形如 `{"202605": 0.01}`，用于计算 monthly alpha t-stat。
+  - `--forward-live-months` 默认 0；不从 backtest 历史推断 Phase 6 forward evidence。
+- 新增测试：
+  - `tests/schema/test_execution_aggregate_report_schema.py`
+  - `tests/execution/test_aggregate_execution_reports.py`
+  - 覆盖 no-benchmark not_evaluable、benchmark + 12 forward months pass branch、incompatible capital context reject。
+- `runners/README.md` 更新：`backtest_execution.py` 当前已能 minimal fill simulation；新增 aggregation helper 说明。
+- `runners/backtest_execution.py` 兼容旧历史输入：`analysis_input.schema_version = "analysis_input.v1.0"` 现在归一化为 SemVer `1.0.0`，避免真实旧样本写 execution report 时 schema validation 失败。
+- 跑通真实 Tushare smoke：
+  - `20260515` / `20260521` / `20260522` 三个已有 `analysis_input` 日期均由真实 Tushare materializer 生成 full-candidate `execution_price_data`。
+  - 三个日期均生成 schema-valid execution reports。
+  - 三份真实 reports 可被 `aggregate_execution_reports.py` 消费并生成 schema-valid aggregate report。
+
+### 为什么改
+
+单份 execution report 无法诚实计算 monthly alpha t-stat / Sharpe，之前只能输出 null。Phase 5 进入 Phase 6 前需要一个多期 evidence layer，把多份 execution backtest 报告合成为可审查的 ship-gate evidence，同时保持 alpha 的 benchmark-aware 语义，不把 total return 伪装成 alpha。
+
+本轮没有启动 Phase 6，没有做 full portfolio engine，也没有改变 manual-order-only 边界。
+
+真实 Tushare smoke 的环境判定：当前 shell 有 `TUSHARE_TOKEN`；Codex bundled Python 没有 `tushare`，但 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 有 `tushare` 和 `jsonschema`。因此真实 provider fetch 用 Python313 跑，deterministic tests 和 execution/aggregation runners 仍可用 Codex bundled Python 跑。
+
+注意：三份真实 smoke 都属于 202605 同一个月，因此 aggregation report 的 `month_count = 1`，Sharpe / alpha t-stat 仍不可评估。它证明的是 provider -> price_data -> execution -> aggregation plumbing，不是 ship-gate strategy evidence。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports tests.schema.test_execution_aggregate_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.execution.test_aggregate_execution_reports tests.schema.test_capital_context_schemas tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema tests.schema.test_execution_aggregate_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\materialize_execution_price_data_tushare.py --as-of 20260515 --analysis-input result\a_short\20260515\analysis_input.json --end-date 20260519 --out-path result\a_short\backtest\execution\price_data\execution_price_data_tushare_smoke_20260515_full.json --refresh
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\materialize_execution_price_data_tushare.py --as-of 20260521 --analysis-input result\a_short\20260521\analysis_input.json --end-date 20260523 --out-path result\a_short\backtest\execution\price_data\execution_price_data_tushare_smoke_20260521_full.json --refresh
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\materialize_execution_price_data_tushare.py --as-of 20260522 --analysis-input result\a_short\20260522\analysis_input.json --end-date 20260526 --out-path result\a_short\backtest\execution\price_data\execution_price_data_tushare_smoke_20260522_full.json --refresh
+
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\backtest_execution.py --as-of 20260515 --input-path result\a_short\20260515\analysis_input.json --price-data result\a_short\backtest\execution\price_data\execution_price_data_tushare_smoke_20260515_full.json --portfolio-allocation tests\fixtures\portfolio_allocation_minimal.json --cash-buffer-state tests\fixtures\cash_buffer_state_minimal.json --time-stop-days 1 --out-dir result\a_short\backtest\execution\smoke_20260515_full
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\backtest_execution.py --as-of 20260521 --input-path result\a_short\20260521\analysis_input.json --price-data result\a_short\backtest\execution\price_data\execution_price_data_tushare_smoke_20260521_full.json --portfolio-allocation tests\fixtures\portfolio_allocation_minimal.json --cash-buffer-state tests\fixtures\cash_buffer_state_minimal.json --time-stop-days 1 --out-dir result\a_short\backtest\execution\smoke_20260521_full
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\backtest_execution.py --as-of 20260522 --input-path result\a_short\20260522\analysis_input.json --price-data result\a_short\backtest\execution\price_data\execution_price_data_tushare_smoke_20260522_full.json --portfolio-allocation tests\fixtures\portfolio_allocation_minimal.json --cash-buffer-state tests\fixtures\cash_buffer_state_minimal.json --time-stop-days 1 --out-dir result\a_short\backtest\execution\smoke_20260522_full
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\aggregate_execution_reports.py --report result\a_short\backtest\execution\smoke_20260515_full\execution_report.json --report result\a_short\backtest\execution\smoke_20260521_full\execution_report.json --report result\a_short\backtest\execution\smoke_20260522_full\execution_report.json --out-path result\a_short\backtest\execution\smoke_202605_real3_aggregate.json
+```
+
+### 验证结果
+
+- 新增 aggregation/schema focused subset：7 tests passed。
+- Real Tushare materializer：20260515 / 20260521 / 20260522 full-candidate price_data 均生成成功。
+- Real execution smoke：
+  - 20260515：15 candidates，8 trades，7 skipped，total_return ≈ -0.005237，max_drawdown ≈ -0.00895411。
+  - 20260521：15 candidates，0 trades，15 skipped，raw max_drawdown = 0.0；execution report ship-gate drawdown 仍按 0-trade null handling。
+  - 20260522：15 candidates，8 trades，7 skipped，total_return ≈ -0.005788，max_drawdown ≈ -0.00712333。
+- Real 3-report aggregate smoke：3 reports，1 month，16 trades；0-trade 20260521 report 按 0.0 return 计入 monthly aggregation；mean total_return ≈ -0.0036749，Sharpe = null，worst max_drawdown ≈ -0.00895411，ship_gate status = `not_evaluable`。
+- Aggregation/schema focused rerun：7 tests passed。
+- Broader Phase 5 suite：61 tests passed。
+- Full unittest discover：96 tests passed。
+- `git diff --check`：通过（仅 PowerShell/Git 的 LF -> CRLF 工作区提示，无 whitespace error）。
+
+### 失效旧结论
+
+- “Phase 5 还没有多期 aggregation 层”失效；当前已有 v1.0.0 aggregate report contract 和 runner。
+- “ship gate pass/fail branch 只能留到未来层测试”部分失效；当前 aggregation 测试已覆盖 synthetic multi-period pass branch。真实策略 signoff 仍必须依赖真实 provider smoke + forward evidence。
+- “下一步是先做真实 Tushare 小样本 smoke”失效；3-date real smoke 已跑通。下一步应先审查/提交，再启动 Phase 6 forward-observation boundary。
+- “所有历史 analysis_input schema_version 都是 SemVer”失效；20260521 使用 legacy `analysis_input.v1.0`，runner 现在显式归一化。
+
+### 下一步注意事项
+
+1. 让 Claude 审查 aggregation schema / runner / tests，重点看 alpha t-stat 是否保持 benchmark-aware、Sharpe 是否没有替代 alpha、capital_context compatibility 是否足够。
+2. 若 Pass，用户可 `提交`。
+3. 若本轮通过并提交，下一条 `执行` 可做 Phase 6 kickoff / forward-observation boundary update；benchmark monthly return source 仍需明确后才能把 aggregate alpha t-stat 从 null 变成真实 gate evidence。
+
+## 2026-05-26 追加：Phase 5 aggregation Optional disposition O1-O3
+
+### 改了什么
+
+- O1 accepted with modification：`aggregate_execution_reports.py` 已经在 `load_execution_report()` 中对每个 input report 调用 `validate_json_schema(..., execution_backtest_report.schema.json, ...)`，因此代码无需改；新增 `test_v11_input_report_is_rejected_before_aggregation` 锁住 v1.1 / missing `ship_gate_evaluation` 输入会被拒绝。
+- O2 accepted：新增 `test_single_report_aggregate_returns_null_sharpe`，锁住单份 report / 单月 return 时 Sharpe 仍为 null，`ship_gate_evaluation.status` 仍为 `not_evaluable`。
+- O3 accepted：扩展 `test_incompatible_capital_context_is_rejected`，用 subTest 覆盖 `preset` / `market` / `bucket` / `currency` mismatch，防止跨 preset / market / bucket 的 evidence 混入。
+
+### 为什么改
+
+Claude review 没有 Required fixes，但 O1-O3 都是低成本、高价值的 regression coverage。O1 明确证明 strict input validation pattern 已存在；O2/O3 锁住两个最容易被未来维护误伤的边界：单报告统计不足和跨 capital bucket 混聚合。
+
+本轮没有改聚合算法，没有改真实 Tushare smoke 产物，也没有启动 Phase 6。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports tests.schema.test_execution_aggregate_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.execution.test_aggregate_execution_reports tests.schema.test_capital_context_schemas tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema tests.schema.test_execution_aggregate_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+```
+
+### 验证结果
+
+- Aggregation/schema focused subset：9 tests passed。
+- Broader Phase 5 suite：63 tests passed。
+- Full unittest discover：98 tests passed。
+- `git diff --check`：通过（仅 PowerShell/Git 的 LF -> CRLF 工作区提示，无 whitespace error）。
+
+### 失效旧结论
+
+- “O1 的 input report strict schema validation 不明确”失效；当前已有 runner-level schema validation，并有 v1.1 reject regression。
+- “N=1 single-report aggregate 没测试”失效；当前单报告 Sharpe null 已有 regression。
+- “capital_context mismatch 只测 currency”失效；当前覆盖 preset / market / bucket / currency。
+
+### 下一步注意事项
+
+1. 让 Claude 复审 Optional disposition O1-O3。
+2. 若 Pass，用户可 `提交`。
+3. 提交后再进入 Phase 6 kickoff / forward-observation boundary update。

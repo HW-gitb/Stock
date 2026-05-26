@@ -1,12 +1,16 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（Phase 5 ship-gate evaluation step）
+**最后更新**：2026-05-26（Phase 5 multi-period execution aggregation）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-26)
 
+- Phase 5 aggregation review Optional disposition O1-O3: input reports are already schema-validated against `execution_backtest_report` v1.2.0, and the reviewed change set now adds a v1.1 rejection regression, a single-report Sharpe-null regression, and expanded capital_context mismatch coverage for preset / market / bucket / currency.
+- Phase 5 multi-period aggregation step adds `schemas/execution_aggregate_report.schema.json` v1.0.0 and `runners/aggregate_execution_reports.py`. The runner validates input `execution_backtest_report` v1.2.0 files, enforces compatible bucket-aware `capital_context`, aggregates monthly return / Sharpe / worst max drawdown, optionally computes benchmark-aware monthly alpha t-stat from a `YYYYMM -> return` JSON, and emits `ship_gate_evaluation`. Without benchmark returns or Phase 6 forward months, full-size remains blocked.
+- Real-token Tushare smoke status: Codex bundled Python lacks `tushare`, but `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` has `tushare` + `jsonschema`. Real Tushare price materialization succeeded for `20260515` / `20260521` / `20260522`, execution smoke reports were written under ignored `result/a_short/backtest/execution/smoke_*`, and a 3-report aggregate smoke was written under ignored `smoke_202605_real3_aggregate.json`.
+- Phase 5 runner compatibility fix: `backtest_execution.py` now normalizes legacy `analysis_input.schema_version = "analysis_input.v1.0"` to SemVer `1.0.0` before writing execution reports. This was required by the real 20260521 smoke.
 - Phase 5 ship-gate Optional disposition O1-O3：0-trade execution report 的 `ship_gate_evaluation.metric_results.max_drawdown` 不再把 raw `0.0` 当作 gate pass，而是输出 `value=null / passed=null`；测试新增 multi-trade realized drawdown regression；schema description 明确 v1.x execution report contract 在无 production consumer 前仍是 unfrozen contract。
 - Phase 5 ship-gate evaluation step upgrades `execution_backtest_report` to v1.2.0 and adds required `ship_gate_evaluation`: the report now emits AND-gate status, `full_size_allowed`, manual-order boundary, failure mode, and metric-level results for monthly alpha t-stat / Sharpe / max drawdown / forward-live months. Single-report runs mark alpha t-stat and Sharpe as not evaluable, forward-live months as 0, and keep full-size usage blocked.
 - Tushare materializer -> execution runner integration is now regression-covered: a fake Tushare materialized `execution_price_data` payload is written to disk, consumed by `backtest_execution.py --price-data`, and verified to produce a schema-valid v1.2.0 report with provider API lineage and ship-gate evaluation.
@@ -27,12 +31,12 @@
 - Roadmap policy: user accepted B semi-reorder. Keep A-share short Phase 6 observation running, draft A-long / US-long specs and normalize US-short spec in parallel during Phase 6, then do Phase 7 DataHub/engine modularization based on all four specs. Phase 8/9 swapping may use data readiness examples in `AGENTS.md` #12, without hard-coding strict criteria.
 - P0a capital context contract commit `244353e` adds `portfolio_allocation` and `cash_buffer_state` schemas, upgrades `execution_backtest_report` to v1.1.0 with required `capital_context`, requires `backtest_execution.py --portfolio-allocation --cash-buffer-state --preset-path`, and adds capital/bucket fields to all four presets.
 - P0a review Optional disposition is included: runner now reads preset YAML instead of a hardcoded preset map, `portfolio_allocation` bucket `horizon` was removed, and single-value policy enums were converted to `const`.
-- Next implementation: run a real-token small Tushare execution smoke when credentials/data are available, then add a multi-period execution aggregation layer for monthly alpha t-stat / Sharpe / max drawdown evidence; do not start a broad portfolio engine yet.
+- Next implementation: start a Phase 6 kickoff / forward-observation boundary update, including the benchmark monthly return source for `--benchmark-monthly-returns`. Do not treat the 3-report same-month smoke as ship-gate alpha evidence; it only proves provider -> execution -> aggregation plumbing.
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.2.0 ship-gate evaluation / runner skeleton / execution_price_data contract / loader wiring / CSV materializer / real Tushare provider materializer / minimal fill simulation 已形成连续链路。
-- **当前目标**：进入 Phase 5 下一小步：用真实 Tushare 小样本 smoke 和多期 execution aggregation 给 ship gate 提供月度 alpha / Sharpe / drawdown 证据。路线图已改为 B 半重排，但下一 scope 仍不实现长线 spec 或 Phase 7 重构。
+- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.2.0 ship-gate evaluation / execution aggregate report v1.0.0 / runner skeleton / execution_price_data contract / loader wiring / CSV materializer / real Tushare provider materializer / minimal fill simulation 已形成连续链路。
+- **当前目标**：Phase 5 aggregation / real-smoke 收口已通过审查并进入提交状态；下一步启动 Phase 6 boundary。真实 Tushare 小样本 smoke 已跑通，aggregation runner 已能消费真实 execution reports，但 3 个样本都在 202605 同月，不构成 alpha / Sharpe ship-gate 证据。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -43,7 +47,9 @@
 本节只保留当前接续需要的 high-level snapshot；争议、被否方案、review verdict、pending fixes 统一查 `docs/SESSION_LOG.md` 顶部 1-3 条。
 
 - **协作协议精简**（2026-05-25，commits `ef12fbf` `e9a2b18`）：`docs/REVIEW_PACKET.md` 已移除；Codex 的 SESSION_LOG 顶部 entry 作为 review handoff；`[trivial]` 轻量通道已启用。详 `docs/AI_REVIEW_PROTOCOL.md`。
+- **Phase 5 aggregation Optional disposition**（2026-05-26）：处理 Claude O1-O3。补 v1.1 input report reject、single-report Sharpe null、preset/market/bucket/currency capital_context mismatch 回归；未改聚合算法。
 - **Phase 5 ship-gate Optional disposition**（2026-05-26）：处理 Claude O1-O3。0-trade max drawdown gate 改为不可评估；新增 multi-trade realized drawdown regression；v1.x unfrozen schema policy 已写入 schema description。
+- **Phase 5 multi-period execution aggregation**（2026-05-26）：新增 `execution_aggregate_report` v1.0.0 和 `aggregate_execution_reports.py`；可把多份 v1.2.0 execution reports 聚合成月度 return / Sharpe / worst drawdown / 可选 benchmark-aware alpha t-stat 的 ship-gate evidence。真实 Tushare 3-date smoke 已跑通，但都在同月，Sharpe / alpha 仍不可评估。
 - **Phase 5 ship-gate evaluation output**（2026-05-26）：`execution_backtest_report` 升到 v1.2.0，新增 required `ship_gate_evaluation`，并用 regression 锁住 Tushare materializer payload 可直接输入 execution runner。单份 execution report 不计算 monthly alpha t-stat / Sharpe，full-size 手动使用仍需后续多期 aggregation 和 forward evidence。
 - **Reference framework policy**（2026-05-25）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
 - **Phase roadmap B semi-reorder**（2026-05-26）：`AGENTS.md` 固化 B 半重排：Phase 6 继续 A 股短线观察，同时并行产出 A 长 / US 长 spec 并规范化 US 短 spec；Phase 7 以 4 套 spec 做共享层与独立 rule pack 划分；Phase 8 优先 US 短 + US 长 skeleton，Phase 9 A 长 implementation 可按数据准备度与 Phase 8 子项交换；数据准备度示例见 `AGENTS.md` #12。
@@ -123,6 +129,7 @@
 - `runners/materialize_execution_price_data.py` — Phase 5 provider-boundary helper；把本地 OHLC CSV 转成 `execution_price_data` JSON；不抓 Tushare、不做撮合
 - `runners/materialize_execution_price_data_tushare.py` — Phase 5 provider-boundary helper；抓 Tushare `daily` / `adj_factor` / `stk_limit` / `trade_cal` 生成同一 `execution_price_data` JSON；不做撮合
 - `runners/backtest_execution.py` — Phase 5 execution runner；读取 `analysis_input`、可引用 `execution_price_data`，并要求 `--portfolio-allocation` / `--cash-buffer-state` / `--preset-path` 生成 bucket-aware `capital_context`；传入 `--price-data` 时执行 minimal daily-OHLC fill simulation，不传时保留 skeleton skip 行为
+- `runners/aggregate_execution_reports.py` — Phase 5 多期 execution 聚合 runner；读取 v1.2.0 `execution_report.json`，输出 v1.0.0 `execution_aggregate_report`，用于 ship-gate evidence，不重建完整组合权益曲线
 - `engine/analyzer/rule6_hard_veto.py` — Phase 3 首轮 deterministic hard veto：`chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive`
 - `engine/analyzer/state_manager.py` — Phase 3 JSON state 接口与 atomic write helper
 - `tests/analyzer/test_state_manager.py` / `tests/test_backtest_rank_phase3.py` — Phase 3 state expiry、l2 normalization、analyzer ablation 命名回归测试
@@ -133,7 +140,8 @@
 - `schemas/deterministic_report_coverage.md` — Phase 4 v1 对 v14.2 M0-M6 / M6.7 的覆盖矩阵与 unknown 原因约定
 - `schemas/portfolio_allocation.schema.json` — v1.0.0（P0a 静态资金政策 contract；A=35% / US=65%，市场内 long/short/liquidity = 1/3）
 - `schemas/cash_buffer_state.schema.json` — v1.0.0（P0a 动态 per-market cash/bucket state contract；要求 atomic write pattern）
-- `schemas/execution_backtest_report.schema.json` — v1.1.0（Phase 5 execution backtest report contract；required `capital_context`；event log enum 覆盖 minimal fill simulation 的 `missing_price_data` / `cash_constrained`）
+- `schemas/execution_backtest_report.schema.json` — v1.2.0（Phase 5 execution backtest report contract；required `capital_context` + `ship_gate_evaluation`；event log enum 覆盖 minimal fill simulation 的 `missing_price_data` / `cash_constrained`）
+- `schemas/execution_aggregate_report.schema.json` — v1.0.0（Phase 5 多期 execution report 聚合 contract；用于 ship-gate monthly return / Sharpe / drawdown / alpha t-stat evidence）
 - `schemas/rank_backtest_report.schema.json` — v1.11.0（含 date_warnings + data_lineage + analyzer veto replay settings）
 - `schemas/data_health.schema.json` — v1.1.0（每周实盘 egs_main 自动产 `data_health.json` 的契约；2026-05-24 第二轮 audit 时 `pe_missing_count` 字段语义不清，rename 为 `pe_ttm_or_pe_missing_count`）
 - `requirements-dev.txt` — validation-only 依赖；当前至少包含 `jsonschema>=4.0`
@@ -177,7 +185,7 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **Small real execution run** — minimal fill simulation 已提交；下一步接 Tushare materializer 输出做小样本 real execution run，并补 ship-gate metric 输出字段。不继续扩到 full portfolio engine。
+1. **Phase 6 boundary kickoff** — aggregation runner + 3-date real Tushare smoke 已作为 Phase 5 收口 change set；下一步启动 Phase 6 forward-observation boundary，而不是扩成 full portfolio engine。
 2. **保持 P0a contract 边界** — fill simulation 必须使用 `capital_context.bucket_capital` / `bucket_ceiling_pct` / manual-order-only boundary，不得退回 total-account `initial_capital` 假设。
 3. **Reference 框架约束** — 后续设计必须参考 A 股短线 / 美股短线 reference 文档的业务逻辑，但不能把 chatbox 框架机械照搬为运行时提示词或代码。
 4. **Claude 审查点** — execution runner、撮合假设、输出目录隔离、capital context contract 均需 Claude 独立审查后由用户确认。

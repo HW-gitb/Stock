@@ -8,6 +8,239 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Phase 5 aggregation Optional disposition O1-O3)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O3 全部 dispose 完成 + Codex 正确反驳了我 O1 的 false-positive 部分）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `a784b18`; targets the immediately prior Codex entry "Phase 5 aggregation Optional disposition O1-O3")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `tests/execution/test_aggregate_execution_reports.py` 加 2 个新 tests（O1 + O2 + O3 加强）
+- `runners/aggregate_execution_reports.py` 无代码改动（O1 验证已存在）
+- `docs/CURRENT.md` + `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` + `runners/README.md` 同步
+- 无 EGS / analyzer / preset / P0a schema / CSV/Tushare materializer / 其他 runner 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest discover` → `Ran 98 tests in 1.690s OK` ✅（96 → 98，新增 2 tests）
+
+**Disposition 逐条核对**:
+
+- **O1 (Pass — Codex 反驳了 false-positive 部分)** — 我原 review O1 基于 Agent 2 的 misread 说 "runner 没验 schema_version ≥ 1.2.0"。**实际上 `runners/aggregate_execution_reports.py:141-145` 的 `load_execution_report()` 已经调 `validate_json_schema(payload, REPORT_SCHEMA_PATH, ...)`** — schema 强制 `schema_version: const "1.2.0"` 自然把 v1.1.0 input rejected。Codex 正确没加 duplicate validation（`Alternatives rejected`: "Add a second custom version check in the aggregator — rejected. Schema validation already enforces..."），只补了 regression test 锁住 behavior。新 test `test_v11_input_report_is_rejected_before_aggregation` (L224) 通过构造 v1.1.0 input 验证 reject。这是**正确反驳 reviewer 假阳性**的范例，不是接受错误建议改重复 validation。✅
+- **O2 (Pass)** — `test_single_report_aggregate_returns_null_sharpe` (L157) 新加，N=1 边界覆盖：单 report aggregate → Sharpe null + gate status not_evaluable。完全按建议加 single-report 边界 lock。✅
+- **O3 (Pass)** — `test_incompatible_capital_context_is_rejected` (L240) 从只覆盖 currency 扩到 preset / market / bucket / currency 4 dimension。Codex `Alternatives rejected` 写 "Only keep the currency mismatch test — rejected. It would not lock the cross-preset / cross-market / cross-bucket safety claim Claude highlighted" — 完全按建议扩 ✅
+
+**Test 数量 verify**:
+- aggregate runner tests: 4 → 6 (+test_single_report_aggregate_returns_null_sharpe + test_v11_input_report_is_rejected_before_aggregation) ✅
+- 全 repo: 96 → 98 ✅
+
+**额外观察（非 issue）**:
+
+- **正确反驳 reviewer 假阳性是好行为**：Codex 没盲目按 reviewer 建议加 duplicate validation；通过 audit 现有代码发现 O1 是 reviewer 基于 Agent misread 的假阳性，转而只补 regression test 锁住 existing behavior。这比无脑 accept 建议安全。Reviewer (我) 应该 acknowledge — Agent 2 的 review 不是 100% accurate，我应该在 prepend SESSION_LOG entry 前自己 verify Agent 假设。下次 review 时如果有"runner 缺 validation"类 finding，先自己 grep 确认 ✅
+- **Codex `修复` entry 措辞 stable**：'Builds on 2026-05-26 Claude review — Pass...' / 'Refines the aggregation test surface without changing the aggregation algorithm' — 没用 transient wording。一致 hygiene rule 内化 ✅
+- **scope 纪律好**：纯 test-coverage hardening，无 runtime code 改动；不动 aggregation 数学 / 0-trade handling / benchmark-aware alpha / forward-live default ✅
+- **Codex `Key decisions` 明确 "Alternative rejected: add a second custom version check"**：Schema validation single source of truth，duplicating it would create drift。架构正确 framing ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1-O3 全部 Pass，O1 假阳性被 Codex 正确反驳，无新 finding）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`。
+
+**Process meta observation（hygiene 跟踪）**:
+
+- **`a784b18` 之后无 [trivial] sync** ✅（上次 review 已 confirm）
+- **本轮 `修复` entry 措辞 stable**：没有 "current uncommitted work" 类 transient wording — 预期本次 commit 后**仍不需要** [trivial] post-commit sync ✅
+- **Codex 反驳 reviewer 假阳性** 是新的 positive process 观察 — 反映 Codex 不是 yes-man，会主动 audit 而非盲目接受。这是健康的 reviewer-implementer 协作模式。
+
+**Reviewer 自查**（meta）：
+
+- 上轮 O1 我基于 Agent 2 "Schema_version 无验证 (L181)" 直接 promote 成 Optional。**应该自己先 grep `validate_json_schema` 确认 Agent 假设**。下次 review 时如果有 Agent finding 涉及 "缺 X validation"，我自己 verify 后再 promote — 防止 reviewer 推 false-positive 给 Codex。
+
+**Next natural step from my view**:
+
+1. 用户 `提交`（单 scope = aggregation Optional dispose 加测试，2 docs + README + 1 test file + 1 handoff，走 `git add -A` 快路径；按 hygiene 规则**不应**再做 [trivial] sync）。
+2. 提交后 next `执行` 是 Codex 提的 **Phase 6 kickoff / forward-observation boundary update**：
+   - 定义 benchmark monthly return source（A 短 default 建议 CSI300）
+   - 定义 forward tracker → aggregator `forward_live_months` 数据流（避免 manual trade decisions 漏进 backtest evidence）
+   - Phase 5 → Phase 6 boundary 文档化（什么算 forward evidence vs 什么仍是 backtest plumbing）
+3. **Phase 5 整体闭环已基本成型**：contract + skeleton + CSV materializer + Tushare materializer + fill simulation + ship gate evaluation + multi-period aggregation + cross-report validation。剩下 Phase 6 kickoff 边界文档后即可进 forward observation 收集 12 个月数据，第一次让 ship gate "passed=true/false" 真实成立。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 aggregation Optional disposition O1-O3)
+
+**Commits**: none (`修复` round; commit happens only after Claude Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude review — Pass (Phase 5 multi-period execution aggregation), which had no Required fixes and 3 Optional suggestions pending Codex disposition.
+- Refines the aggregation test surface without changing the aggregation algorithm.
+
+**Worked on**:
+1. O1 accepted with modification: runner-level input schema validation already existed; added a v1.1 / missing `ship_gate_evaluation` rejection regression.
+2. O2 accepted: added single-report aggregate regression proving Sharpe stays null and gate status stays `not_evaluable`.
+3. O3 accepted: expanded capital_context mismatch regression to preset / market / bucket / currency.
+4. Updated CURRENT and Phase 5 handoff with the disposition.
+
+**Key decisions**:
+- No code change was needed for O1 because `load_execution_report()` already validates each input against `execution_backtest_report.schema.json`; the missing piece was proof.
+- O2/O3 are treated as coverage hardening only. The aggregation math, 0-trade return handling, benchmark-aware alpha policy, and forward-live default remain unchanged.
+
+**Alternatives considered and rejected**:
+- "Add a second custom version check in the aggregator" — rejected. Schema validation already enforces `schema_version = 1.2.0` and required `ship_gate_evaluation`; duplicating it would create drift.
+- "Only keep the currency mismatch test" — rejected. It would not lock the cross-preset / cross-market / cross-bucket safety claim Claude highlighted.
+
+**Open questions handed off**:
+- None new. Existing Phase 6 kickoff questions remain: benchmark monthly return source and forward tracker to aggregate evidence flow.
+
+**Verification**:
+- `python -m unittest tests.execution.test_aggregate_execution_reports tests.schema.test_execution_aggregate_report_schema -v` → 9 tests passed.
+- Broader Phase 5 suite → 63 tests passed.
+- `python -m unittest discover -v` → 98 tests passed.
+- `git diff --check` → pass, with LF/CRLF warnings only.
+
+**Next natural step from my view**:
+1. Claude reviews this Optional disposition.
+2. If Pass, user `提交`.
+3. Next `执行`: Phase 6 kickoff / forward-observation boundary update.
+
+---
+
+## 2026-05-26 — Claude review — Pass (Phase 5 multi-period execution aggregation)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (3 条 active)。1 个 positive process observation：本 session 第一次 substantive commit (`a784b18`) **没有 follow-up [trivial] sync** — Codex 内化了 hygiene 规则。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `a784b18`; targets the immediately prior Codex entry "Phase 5 multi-period execution aggregation")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `schemas/execution_aggregate_report.schema.json` 新文件（聚合 contract）
+- `runners/aggregate_execution_reports.py` 新文件（多报告聚合 runner）
+- `tests/execution/test_aggregate_execution_reports.py` 新文件（4 tests）
+- `tests/schema/test_execution_aggregate_report_schema.py` 新文件（3 tests）
+- `runners/backtest_execution.py` +24 行：`normalized_analysis_input_schema_version()` 处理 legacy `analysis_input.v1.0` → `1.0.0`
+- `tests/execution/test_backtest_execution.py` +27 行：legacy normalization regression
+- `runners/README.md` + `docs/CURRENT.md` + `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 同步
+- 无 EGS / analyzer / preset / P0a schema / CSV/Tushare materializer / Phase 4 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest discover` → `Ran 96 tests in 1.116s OK` ✅（88 → 96，+8 new tests）
+
+**Reasons for Pass**:
+
+通过 3 个并发 Explore agent 独立审查（schema design / runner logic / test coverage）：
+
+- **Schema 设计完整** (Agent 1)：顶层 schema_name / version / generated_at / settings / inputs / capital_context / metrics / ship_gate_evaluation / limitations 全齐；`inputs.execution_reports[].schema_version: const "1.2.0"` 强制输入版本；`ship_gate_evaluation` 与 v1.2.0 单期 evaluation 平行设计 + 聚合维度扩展；0-trade → 0.0 处理在 schema 显式描述 ✅
+- **聚合数学正确** (Agent 2)：
+  - Monthly returns: `mean(total_return)` by YYYYMM 分组（L226-242）
+  - Sharpe: `mean(monthly) / sample_std * sqrt(12)` annualized（L115-119）
+  - Monthly alpha t-stat: 只在 benchmark match 时算 `(monthly_mean - benchmark[month])` t-stat（L264-271）
+  - Max DD: `min(drawdowns)` 取 most negative across N reports（L284）✅
+- **Honest null handling** (Agent 2)：
+  - Benchmark 缺 → `monthly_alpha_t_stat = null + reason "missing --benchmark-monthly-returns" / "benchmark missing month"`
+  - 单月或方差 0 → `sharpe = null`
+  - `forward_live_months` explicit input default 0（L371）— backtest 永不 silent 当 Phase 6 forward evidence
+  - capital_context 一致性强制（L212-223）：preset/market/bucket/currency 必须全 match
+  ✅
+- **Real Tushare smoke 已跑** (`20260515` / `20260521` / `20260522`)：用 project Python313（非 bundled），生成真实 execution reports + 3-report aggregate。3 个 report 都在 202605 → month_count=1 → Sharpe null, alpha null (no benchmark) — Codex 诚实标 "plumbing evidence only" ✅
+- **Legacy schema_version 处理诚实** (Agent 3)：`normalized_analysis_input_schema_version` (L296-311) 三路径：SemVer 直接通过 / `analysis_input.v1.0` → `1.0.0` / `analysis_input.v1.0.0` → `1.0.0`。新 test `test_runner_normalizes_legacy_analysis_input_schema_version` (L131) 锁住 legacy 路径。**避免编辑历史 generated input** — 修 normalizer 比 retroactive rewrite 数据安全 ✅
+- **Test 覆盖 4 个 aggregate 场景** (Agent 3)：(a) 无 benchmark → alpha not_evaluable / (b) 0-trade as 0.0 return / (c) 全 4 metric pass → status="pass" + full_size_allowed=true / (d) capital_context 不一致 reject ✅
+- **Codex alternatives rejected 3 条** 写得严密：(i) bundled Python 装 tushare 否决（用 project Python313 match data dependency boundary）/ (ii) "monthly total return t-stat as alpha t-stat without benchmark" 否决（weakens ship-gate semantics）/ (iii) "Start Phase 6 because aggregation layer exists" 否决（real smoke + aggregation 还需 review）✅
+- **scope 纪律好**：无 broker / HTTP / OS automation；只新增 aggregator + 改 backtest runner 一处 legacy normalization；没 silent 改 P0a / Phase 5 fill / ship_gate evaluation ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — 输入 report 是否真在 runner 层验 schema_version ≥ 1.2.0 不明确**（Agent 2 #1）。aggregate runner 读 `report["schema_version"]`，但没看到对 input reports 调 `validate_json_schema(report, EXECUTION_BACKTEST_REPORT_SCHEMA_PATH, ...)` 强制 v1.2.0。如果 input report 是 v1.1.0（无 ship_gate_evaluation 字段），runner 应该立即 raise 而非 silent 跳过缺失字段。建议：
+   - (a) `validate_json_schema(report, EXECUTION_BACKTEST_REPORT_SCHEMA_PATH, "input execution report")` 对每个输入报告强制 schema 验证
+   - (b) 加 unit test：v1.1.0 input report 应被 reject
+
+   倾向 (a)+(b) — 与 P0a `load_portfolio_allocation` / `load_cash_buffer_state` 一致的 strict input validation pattern。
+
+2. **O2 — N=1 single-report aggregate 边界没测**（Agent 3）。单 report 输入时：Sharpe 公式需要 ≥ 2 个月，应 return null。当前没 explicit test 覆盖 N=1 路径。建议补 1 个 `test_aggregate_single_report_returns_null_sharpe` 锁住边界行为。Codex 实际 implementation 看起来 OK（L99-105 说"少于 2 个月或方差 ≤ 0 时 None"），但测试 lock 重要。
+
+3. **O3 — capital_context 不一致 test 只覆盖 currency mismatch**（Agent 3）。当前 `test_incompatible_capital_context_is_rejected` 只 mutate `currency = "USD"`。建议扩或加测试覆盖 preset / market / bucket 三 dimension mismatch，确保 cross-bucket evidence 真不会 silently 混。Codex 在 Key decisions 已明确"rejects mixed `capital_context` summary / mode" — 测试应该 lock 各 dimension。
+
+**额外观察（非 issue）**:
+
+- **Agent 2 #5 "Policy 逻辑硬编码" 是 misread**：runner 实际从 `capital_context["ship_gate"]` 读 policy（与 P0a O3 dispose 一致 single source of truth），不是 hardcoded。Codex 设计正确 ✅
+- **Agent 2 #2-4（月份重叠 / Alpha 部分观测 silently skip / forward_live ≤12 验证）** 都是 quality nits，不算 issue。aggregator 是 plumbing layer，月份顺序和 benchmark coverage 由 caller 负责输入 cleanliness 是合理设计 ✅
+- **Real smoke 3 reports 都在 202605** Codex 主动标 "plumbing evidence only，month_count=1，Sharpe null，alpha null"——没 oversell minimal smoke evidence ✅
+- **`forward_live_months` 设计**：CLI explicit input default 0，aggregator 不从 backtest history 推断 — 强 framing "backtest 不算 forward live" 与 P0c 用户决策完全一致 ✅
+- **legacy normalization 不破坏现有 SemVer**：normalize 函数 fall-through 处理 `analysis_input.v1.0` → `1.0.0` 和 `analysis_input.v1.0.0` → `1.0.0`，正常 SemVer 直接通过 ✅
+- **Open questions 2 条诚实**：(i) benchmark monthly return source（CSI300 / CSI1000 / 既有 rank backtest excess policy？）/ (ii) Phase 6 kickoff 怎么把 forward tracker 输出变成 aggregate `forward_live_months` 和 benchmark monthly returns — 都是合理的 next-phase 决策点，不属本轮 scope ✅
+
+**Documentation issues**: O1 (input validation pattern doc) + O3 (capital_context coverage)。
+
+**Pending status**: Required: none / Optional (O1-O3): PENDING CODEX DISPOSITION。
+
+**Process meta observation（跟踪 hygiene 规则内化）**:
+
+- **本 session 第一次 substantive commit (`a784b18`) 没有 follow-up [trivial] sync**！这是 `ccc5c85 Tighten commit documentation hygiene` 之后**第一次**做到 single-commit-for-single-scope。
+- 上轮 review 我提出 "如果本次不需要 sync → Codex 真内化了 hygiene 规则" — 现在实测内化成功 ✅
+- 本轮 `执行` entry 措辞也 stable："the reviewed change set adds..." / "after this reviewed change is committed..." — 没有 transient "current uncommitted work..." 写法。
+- 累计 hygiene tighten 投入 (commit_workflow_optimization `7e3560c` + commit_hygiene `ccc5c85`) **回报开始显现** — 节省了至少 1 个 [trivial] commit。下一轮可以继续观察。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — dispose O1-O3。O1 最重要（防 v1.1.0 input silently 通过 aggregator）。O2/O3 是测试覆盖。
+2. 修复后用户 `审查` → `提交`。
+3. 提交后 next `执行` 是 Codex 提的 Phase 6 kickoff：
+   - 定义 benchmark monthly return source（A 短 default 建议 CSI300）
+   - 定义 forward tracker → aggregator `forward_live_months` 数据流（避免 manual trade decisions 漏进 backtest evidence）
+   - Phase 5 → Phase 6 boundary 文档化
+4. **Phase 5 真正闭环节点**：当 aggregator 首次能用真实 12 个月 forward live data + benchmark 算出 monthly alpha t-stat 真数字 → ship gate 第一次能 emit `passed=true/false`（非 null）→ Phase 6 实盘决策有 evidence 依据。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 multi-period execution aggregation)
+
+**Commits**: none (`执行` round; commit happens only after Claude Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude review — Pass (Phase 5 ship-gate evaluation Optional disposition O1-O3), which explicitly handed off real-token Tushare smoke plus multi-period aggregation before Phase 6.
+- Refines the ship-gate path by moving alpha / Sharpe pass-fail testing into a true multi-report aggregation layer instead of single-report synthetic fields.
+
+**Worked on**:
+1. Added a schema-first multi-period aggregation contract and runner for execution reports.
+2. Ran real Tushare provider smoke with project Python313 for `20260515` / `20260521` / `20260522`, then generated execution reports and a 3-report aggregate smoke under ignored `result/a_short/backtest/execution/`.
+3. Fixed a real-smoke compatibility gap: legacy `analysis_input.v1.0` now normalizes to SemVer `1.0.0` before execution report schema validation.
+4. Updated CURRENT / Phase 5 handoff / runners README so the next LLM starts from reviewed Phase 5 closeout, not a premature Phase 6 claim.
+
+**Key decisions**:
+- `monthly_alpha_t_stat` stays benchmark-aware. The aggregate runner computes it only when a `YYYYMM -> benchmark return` JSON is supplied; otherwise it remains null with an explicit reason.
+- Sharpe is computed from the monthly mean of report-level total returns, but it does not substitute for alpha. The AND gate still blocks full-size when alpha is unavailable.
+- `forward_live_months` is an explicit input, defaulting to 0. Backtest history is not silently counted as Phase 6 forward evidence.
+- Aggregation validates all input reports against `execution_backtest_report` v1.2.0 and rejects mixed `capital_context` summary / mode, so A-short bucket evidence cannot accidentally mix with another market or bucket.
+- Real smoke output is plumbing evidence only. The 3 reports are all in 202605, so aggregate `month_count = 1`, Sharpe remains null, and alpha remains null without benchmark returns.
+- 0-trade reports count as 0.0 return in monthly aggregation when their single-report `total_return` is null. This avoids overstating monthly mean / Sharpe by dropping empty-position periods.
+- Historical `analysis_input.schema_version` is not uniform. `20260521` still uses `analysis_input.v1.0`; normalizing that legacy string is safer than editing generated historical input.
+
+**Alternatives considered and rejected**:
+- "Run real Tushare smoke from bundled Python by installing `tushare` now" — rejected. The smoke was run with project Python313 instead, matching the existing project/local data dependency boundary.
+- "Treat monthly total return t-stat as alpha t-stat when no benchmark is provided" — rejected. That would weaken the ship-gate semantics and overstate evidence quality.
+- "Start Phase 6 because the aggregation layer exists" — rejected. Provider smoke and aggregation on real reports still need review first.
+
+**Open questions handed off**:
+- What benchmark monthly return source should feed `--benchmark-monthly-returns` for A-short ship-gate alpha: CSI300, CSI1000, or the existing benchmark excess policy from rank backtest?
+- Phase 6 kickoff should define how forward tracker outputs become aggregate `forward_live_months` and benchmark monthly returns without leaking manual trade decisions into backtest evidence.
+
+**Next natural step from my view**:
+1. Claude reviews this aggregation change set.
+2. If Pass, user `提交`.
+3. Next `执行`: Phase 6 kickoff / forward-observation boundary update, including benchmark monthly return source and how real forward reports feed `aggregate_execution_reports.py`.
+
+---
+
 ## 2026-05-26 — Claude review — Pass (Phase 5 ship-gate evaluation Optional disposition O1-O3)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O3 全部 dispose 完成）。

@@ -1,0 +1,472 @@
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import math
+import sys
+from collections import defaultdict
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from runners.backtest_execution import (  # noqa: E402
+    REPORT_SCHEMA_PATH,
+    iso_now,
+    load_json,
+    relative_ref,
+    validate_json_schema,
+)
+
+AGGREGATE_SCHEMA_PATH = ROOT / "schemas" / "execution_aggregate_report.schema.json"
+DEFAULT_OUT_PATH = (
+    ROOT / "result" / "a_short" / "backtest" / "execution" / "execution_aggregate_report.json"
+)
+SHIP_GATE_FAILURE_MODE = "paper_or_minimal_size_or_risk_filter_only"
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Aggregate Phase 5 execution_backtest_report JSON files into a "
+            "multi-period ship-gate evidence report."
+        )
+    )
+    parser.add_argument(
+        "--report",
+        action="append",
+        type=Path,
+        default=[],
+        help="Path to one execution_report.json. May be repeated.",
+    )
+    parser.add_argument(
+        "--report-glob",
+        action="append",
+        default=[],
+        help="Glob pattern for execution_report.json files. May be repeated.",
+    )
+    parser.add_argument(
+        "--benchmark-monthly-returns",
+        type=Path,
+        help=(
+            "Optional JSON object mapping YYYYMM to benchmark monthly return. "
+            "When supplied, monthly_alpha_t_stat uses report monthly returns minus benchmark returns."
+        ),
+    )
+    parser.add_argument(
+        "--forward-live-months",
+        type=int,
+        default=0,
+        help="Forward live observation months from Phase 6 tracking. Backtest aggregation defaults to 0.",
+    )
+    parser.add_argument(
+        "--out-path",
+        type=Path,
+        default=DEFAULT_OUT_PATH,
+        help="Output aggregate report JSON path.",
+    )
+    return parser.parse_args(argv)
+
+
+def numeric_or_none(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def mean_or_none(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def report_total_return_for_aggregation(report: dict[str, Any]) -> float | None:
+    metrics = report["metrics"]
+    value = numeric_or_none(metrics.get("total_return"))
+    if value is not None:
+        return value
+    if int(metrics.get("trade_count") or 0) == 0:
+        return 0.0
+    return None
+
+
+def sample_std(values: list[float]) -> float | None:
+    if len(values) < 2:
+        return None
+    mean = sum(values) / len(values)
+    variance = sum((value - mean) ** 2 for value in values) / (len(values) - 1)
+    if variance <= 0:
+        return None
+    return math.sqrt(variance)
+
+
+def t_stat(values: list[float]) -> float | None:
+    std = sample_std(values)
+    if std is None:
+        return None
+    return (sum(values) / len(values)) / (std / math.sqrt(len(values)))
+
+
+def annualized_sharpe(monthly_returns: list[float]) -> float | None:
+    std = sample_std(monthly_returns)
+    if std is None:
+        return None
+    return (sum(monthly_returns) / len(monthly_returns)) / std * math.sqrt(12)
+
+
+def resolve_report_paths(report_paths: list[Path], glob_patterns: list[str]) -> list[Path]:
+    resolved: list[Path] = []
+    for path in report_paths:
+        resolved.append(path)
+    for pattern in glob_patterns:
+        resolved.extend(Path(item) for item in sorted(glob.glob(pattern)))
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in resolved:
+        candidate = path.resolve()
+        if candidate not in seen:
+            unique.append(candidate)
+            seen.add(candidate)
+    if not unique:
+        raise ValueError("at least one --report or --report-glob match is required")
+    return unique
+
+
+def load_execution_report(path: Path) -> dict[str, Any]:
+    payload = load_json(path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"execution report must be a JSON object: {path}")
+    validate_json_schema(payload, REPORT_SCHEMA_PATH, f"execution report {path}")
+    return payload
+
+
+def load_execution_reports(paths: list[Path]) -> list[tuple[Path, dict[str, Any]]]:
+    return [(path, load_execution_report(path)) for path in paths]
+
+
+def load_benchmark_monthly_returns(path: Path | None) -> dict[str, float] | None:
+    if path is None:
+        return None
+    payload = load_json(path)
+    if not isinstance(payload, dict):
+        raise ValueError("--benchmark-monthly-returns must be a JSON object")
+    parsed: dict[str, float] = {}
+    for raw_month, raw_value in payload.items():
+        month = str(raw_month)
+        if len(month) != 6 or not month.isdigit():
+            raise ValueError(f"benchmark month must be YYYYMM: {raw_month!r}")
+        value = numeric_or_none(raw_value)
+        if value is None:
+            raise ValueError(f"benchmark return for {month} must be numeric")
+        parsed[month] = value
+    return parsed
+
+
+def month_from_report(report: dict[str, Any]) -> str:
+    end_date = str(report["settings"]["end_date"])
+    return end_date[:6]
+
+
+def input_ref(path: Path, report: dict[str, Any]) -> dict[str, Any]:
+    metrics = report["metrics"]
+    settings = report["settings"]
+    return {
+        "path": relative_ref(path),
+        "schema_version": str(report["schema_version"]),
+        "preset": str(report["preset"]),
+        "mode": str(report["mode"]),
+        "start_date": settings.get("start_date"),
+        "end_date": str(settings["end_date"]),
+        "candidate_count": int(metrics["candidate_count"]),
+        "trade_count": int(metrics["trade_count"]),
+        "total_return": report_total_return_for_aggregation(report),
+        "max_drawdown": numeric_or_none(metrics.get("max_drawdown")),
+    }
+
+
+def capital_context_summary(report: dict[str, Any]) -> dict[str, Any]:
+    context = report["capital_context"]
+    fields = [
+        "preset",
+        "market",
+        "horizon",
+        "bucket",
+        "currency",
+        "capital_basis",
+        "market_allocation_pct",
+        "bucket_target_pct",
+        "bucket_ceiling_pct",
+        "liquidity_reserve_pct",
+        "cross_market_cash_fungible",
+        "manual_execution_only",
+    ]
+    return {field: context[field] for field in fields} | {"ship_gate": context["ship_gate"]}
+
+
+def validate_compatible_reports(reports: list[tuple[Path, dict[str, Any]]]) -> dict[str, Any]:
+    first_summary = capital_context_summary(reports[0][1])
+    first_mode = str(reports[0][1]["mode"])
+    for path, report in reports[1:]:
+        summary = capital_context_summary(report)
+        if summary != first_summary:
+            raise ValueError(
+                f"execution reports must share the same capital_context summary: {path}"
+            )
+        if str(report["mode"]) != first_mode:
+            raise ValueError(f"execution reports must share the same mode: {path}")
+    return first_summary
+
+
+def monthly_return_series(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[float]] = defaultdict(list)
+    for report in reports:
+        total_return = report_total_return_for_aggregation(report)
+        if total_return is not None:
+            grouped[month_from_report(report)].append(total_return)
+    rows: list[dict[str, Any]] = []
+    for month in sorted(grouped):
+        values = grouped[month]
+        rows.append(
+            {
+                "month": month,
+                "report_count": len(values),
+                "total_return_mean": round(sum(values) / len(values), 10),
+            }
+        )
+    return rows
+
+
+def build_metrics(
+    reports: list[dict[str, Any]],
+    benchmark_monthly_returns: dict[str, float] | None,
+    forward_live_months: int,
+) -> dict[str, Any]:
+    metrics_rows = [report["metrics"] for report in reports]
+    total_returns = [
+        value
+        for value in (report_total_return_for_aggregation(report) for report in reports)
+        if value is not None
+    ]
+    drawdowns = [
+        value
+        for value in (numeric_or_none(row.get("max_drawdown")) for row in metrics_rows)
+        if value is not None
+    ]
+    monthly_rows = monthly_return_series(reports)
+    monthly_returns = [float(row["total_return_mean"]) for row in monthly_rows]
+
+    monthly_alpha_t_stat = None
+    if benchmark_monthly_returns is not None:
+        alpha_values = [
+            float(row["total_return_mean"]) - benchmark_monthly_returns[str(row["month"])]
+            for row in monthly_rows
+            if str(row["month"]) in benchmark_monthly_returns
+        ]
+        monthly_alpha_t_stat = t_stat(alpha_values)
+
+    return {
+        "report_count": len(reports),
+        "month_count": len({month_from_report(report) for report in reports}),
+        "candidate_count_total": sum(int(row["candidate_count"]) for row in metrics_rows),
+        "trade_count_total": sum(int(row["trade_count"]) for row in metrics_rows),
+        "skipped_count_total": sum(int(row["skipped_count"]) for row in metrics_rows),
+        "total_return_mean": mean_or_none(total_returns),
+        "monthly_return_series": monthly_rows,
+        "monthly_return_count": len(monthly_returns),
+        "monthly_alpha_t_stat": monthly_alpha_t_stat,
+        "sharpe": annualized_sharpe(monthly_returns),
+        "max_drawdown": min(drawdowns) if drawdowns else None,
+        "forward_live_months": forward_live_months,
+    }
+
+
+def ship_gate_metric_result(
+    value: float | None,
+    threshold: float,
+    passed: bool | None,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "value": value,
+        "threshold": threshold,
+        "passed": passed,
+        "reason": reason,
+    }
+
+
+def build_ship_gate_evaluation(
+    aggregate_metrics: dict[str, Any],
+    capital_context: dict[str, Any],
+    benchmark_source: str | None,
+) -> dict[str, Any]:
+    policy = capital_context["ship_gate"]
+    monthly_alpha_t_stat = numeric_or_none(aggregate_metrics["monthly_alpha_t_stat"])
+    monthly_alpha_threshold = float(policy["monthly_alpha_t_stat_min"])
+    if monthly_alpha_t_stat is None:
+        monthly_alpha_passed = None
+        monthly_alpha_reason = (
+            "requires --benchmark-monthly-returns with at least two matched monthly observations"
+            if benchmark_source is None
+            else "benchmark return source did not yield at least two variable monthly alpha observations"
+        )
+    else:
+        monthly_alpha_passed = monthly_alpha_t_stat >= monthly_alpha_threshold
+        monthly_alpha_reason = "uses monthly return mean by month minus supplied benchmark returns"
+
+    sharpe = numeric_or_none(aggregate_metrics["sharpe"])
+    sharpe_threshold = float(policy["sharpe_min"])
+    if sharpe is None:
+        sharpe_passed = None
+        sharpe_reason = "requires at least two months of non-identical execution returns"
+    else:
+        sharpe_passed = sharpe >= sharpe_threshold
+        sharpe_reason = "annualized from mean report total_return by calendar month"
+
+    max_drawdown = numeric_or_none(aggregate_metrics["max_drawdown"])
+    max_drawdown_threshold = float(policy["max_drawdown_max"])
+    if int(aggregate_metrics["trade_count_total"]) == 0:
+        max_drawdown = None
+        max_drawdown_passed = None
+        max_drawdown_reason = "no executed trades across input reports to evaluate drawdown"
+    elif max_drawdown is None:
+        max_drawdown_passed = None
+        max_drawdown_reason = "input reports did not provide a numeric drawdown"
+    else:
+        max_drawdown_passed = abs(max_drawdown) <= max_drawdown_threshold
+        max_drawdown_reason = "uses worst realized max_drawdown across input reports"
+
+    forward_live_months = float(aggregate_metrics["forward_live_months"])
+    forward_live_threshold = float(policy["forward_live_months_min"])
+    forward_live_passed = forward_live_months >= forward_live_threshold
+
+    metric_results = {
+        "monthly_alpha_t_stat": ship_gate_metric_result(
+            monthly_alpha_t_stat,
+            monthly_alpha_threshold,
+            monthly_alpha_passed,
+            monthly_alpha_reason,
+        ),
+        "sharpe": ship_gate_metric_result(
+            sharpe,
+            sharpe_threshold,
+            sharpe_passed,
+            sharpe_reason,
+        ),
+        "max_drawdown": ship_gate_metric_result(
+            max_drawdown,
+            max_drawdown_threshold,
+            max_drawdown_passed,
+            max_drawdown_reason,
+        ),
+        "forward_live_months": ship_gate_metric_result(
+            forward_live_months,
+            forward_live_threshold,
+            forward_live_passed,
+            "must come from Phase 6 forward tracking; backtest aggregation defaults to 0",
+        ),
+    }
+    passed_values = [result["passed"] for result in metric_results.values()]
+    if any(value is None for value in passed_values):
+        status = "not_evaluable"
+    elif all(bool(value) for value in passed_values):
+        status = "pass"
+    else:
+        status = "fail"
+
+    return {
+        "policy_logic": str(policy["policy_logic"]),
+        "status": status,
+        "full_size_allowed": status == "pass",
+        "failure_mode": str(policy.get("failure_mode") or SHIP_GATE_FAILURE_MODE),
+        "manual_execution_only": bool(capital_context["manual_execution_only"]),
+        "metric_results": metric_results,
+        "limitations": [
+            "full_size_allowed only turns true when every AND-gate metric is evaluable and passes under the manual-order boundary.",
+            "monthly_alpha_t_stat is benchmark-aware only when a benchmark monthly return JSON is supplied.",
+            "forward_live_months is not inferred from backtest history; Phase 6 forward tracking must supply it explicitly.",
+        ],
+    }
+
+
+def build_aggregate_report(
+    reports_with_paths: list[tuple[Path, dict[str, Any]]],
+    benchmark_monthly_returns: dict[str, float] | None = None,
+    benchmark_source: str | None = None,
+    forward_live_months: int = 0,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    if forward_live_months < 0:
+        raise ValueError("--forward-live-months must be non-negative")
+    capital_context = validate_compatible_reports(reports_with_paths)
+    reports = [report for _, report in reports_with_paths]
+    aggregate_metrics = build_metrics(
+        reports,
+        benchmark_monthly_returns=benchmark_monthly_returns,
+        forward_live_months=forward_live_months,
+    )
+    return {
+        "schema_name": "execution_aggregate_report",
+        "schema_version": "1.0.0",
+        "generated_at": generated_at or iso_now(),
+        "preset": str(reports[0]["preset"]),
+        "mode": str(reports[0]["mode"]),
+        "settings": {
+            "input_report_count": len(reports),
+            "forward_live_months": forward_live_months,
+            "benchmark_excess_return_source": benchmark_source,
+            "monthly_return_method": "mean_report_total_return_by_month",
+        },
+        "inputs": {
+            "execution_reports": [input_ref(path, report) for path, report in reports_with_paths]
+        },
+        "capital_context": capital_context,
+        "metrics": aggregate_metrics,
+        "ship_gate_evaluation": build_ship_gate_evaluation(
+            aggregate_metrics,
+            capital_context,
+            benchmark_source=benchmark_source,
+        ),
+        "limitations": [
+            "This report aggregates execution-report metrics; it does not rebuild a continuous multi-position portfolio equity curve.",
+            "When multiple reports land in the same month, the monthly series uses the mean of report-level total_return values.",
+            "Input reports with zero executed trades and null total_return are counted as 0.0 return in the monthly aggregation.",
+            "All generated gate decisions are analysis/screening evidence only; manual-order-only boundary remains in force.",
+        ],
+    }
+
+
+def write_report(report: dict[str, Any], path: Path) -> None:
+    validate_json_schema(report, AGGREGATE_SCHEMA_PATH, "execution aggregate report")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(report, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    report_paths = resolve_report_paths(args.report, args.report_glob)
+    reports_with_paths = load_execution_reports(report_paths)
+    benchmark = load_benchmark_monthly_returns(args.benchmark_monthly_returns)
+    benchmark_source = (
+        relative_ref(args.benchmark_monthly_returns) if args.benchmark_monthly_returns else None
+    )
+    report = build_aggregate_report(
+        reports_with_paths,
+        benchmark_monthly_returns=benchmark,
+        benchmark_source=benchmark_source,
+        forward_live_months=args.forward_live_months,
+    )
+    write_report(report, args.out_path)
+    print(f"[OK] wrote {args.out_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

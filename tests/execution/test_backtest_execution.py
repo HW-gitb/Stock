@@ -128,6 +128,33 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 {row["message"] for row in event_rows},
             )
 
+    def test_runner_normalizes_legacy_analysis_input_schema_version(self) -> None:
+        payload = self.load_fixture_payload()
+        payload["schema_version"] = "analysis_input.v1.0"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            input_path = work_dir / "analysis_input.json"
+            out_dir = work_dir / "execution"
+            input_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(input_path),
+                    *self.capital_cli_args(),
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(report["inputs"]["analysis_inputs"][0]["schema_version"], "1.0.0")
+        self.assertEqual(report["data_lineage"]["analysis_input_schema_version"], "1.0.0")
+
     def test_runner_validates_and_references_execution_price_data(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             out_dir = Path(tmpdir)

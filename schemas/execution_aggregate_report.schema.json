@@ -1,0 +1,475 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/execution_aggregate_report/1.0.0/schema.json",
+  "title": "Execution Aggregate Report",
+  "description": "Phase 5 multi-period aggregation contract for execution_backtest_report v1.2.0 outputs. It aggregates bucket-aware A-short execution reports for ship-gate evidence without changing the single-run execution report contract. Benchmark-aware alpha remains nullable until an explicit benchmark-excess series is supplied. A zero-trade input report with null total_return is counted as 0.0 return in the monthly aggregation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "preset",
+    "mode",
+    "settings",
+    "inputs",
+    "capital_context",
+    "metrics",
+    "ship_gate_evaluation",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "type": "string",
+      "const": "execution_aggregate_report"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "preset": {
+      "type": "string",
+      "enum": ["a_short", "us_short", "a_long", "us_long"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["smoke", "production"]
+    },
+    "settings": {
+      "$ref": "#/$defs/settings"
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "capital_context": {
+      "$ref": "#/$defs/capitalContextSummary"
+    },
+    "metrics": {
+      "$ref": "#/$defs/aggregateMetrics"
+    },
+    "ship_gate_evaluation": {
+      "$ref": "#/$defs/shipGateEvaluation"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_report_count",
+        "forward_live_months",
+        "benchmark_excess_return_source",
+        "monthly_return_method"
+      ],
+      "properties": {
+        "input_report_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "forward_live_months": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "benchmark_excess_return_source": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "monthly_return_method": {
+          "type": "string",
+          "enum": ["mean_report_total_return_by_month"]
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution_reports"],
+      "properties": {
+        "execution_reports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/executionReportRef"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "executionReportRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "schema_version",
+        "preset",
+        "mode",
+        "start_date",
+        "end_date",
+        "candidate_count",
+        "trade_count",
+        "total_return",
+        "max_drawdown"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "schema_version": {
+          "type": "string",
+          "const": "1.2.0"
+        },
+        "preset": {
+          "type": "string",
+          "enum": ["a_short", "us_short", "a_long", "us_long"]
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["smoke", "production"]
+        },
+        "start_date": {
+          "$ref": "#/$defs/date8Nullable"
+        },
+        "end_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "candidate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trade_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_return": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "max_drawdown": {
+          "$ref": "#/$defs/numberNullable"
+        }
+      }
+    },
+    "capitalContextSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset",
+        "market",
+        "horizon",
+        "bucket",
+        "currency",
+        "capital_basis",
+        "market_allocation_pct",
+        "bucket_target_pct",
+        "bucket_ceiling_pct",
+        "liquidity_reserve_pct",
+        "cross_market_cash_fungible",
+        "manual_execution_only",
+        "ship_gate"
+      ],
+      "properties": {
+        "preset": {
+          "type": "string",
+          "enum": ["a_short", "us_short", "a_long", "us_long"]
+        },
+        "market": {
+          "type": "string",
+          "enum": ["A", "US"]
+        },
+        "horizon": {
+          "type": "string",
+          "enum": ["short", "long"]
+        },
+        "bucket": {
+          "type": "string",
+          "enum": ["short", "long"]
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["CNY", "USD"]
+        },
+        "capital_basis": {
+          "type": "string",
+          "enum": ["bucket_capital"]
+        },
+        "market_allocation_pct": {
+          "$ref": "#/$defs/ratio"
+        },
+        "bucket_target_pct": {
+          "$ref": "#/$defs/ratio"
+        },
+        "bucket_ceiling_pct": {
+          "$ref": "#/$defs/ratio"
+        },
+        "liquidity_reserve_pct": {
+          "$ref": "#/$defs/ratio"
+        },
+        "cross_market_cash_fungible": {
+          "type": "boolean",
+          "const": false
+        },
+        "manual_execution_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "ship_gate": {
+          "$ref": "#/$defs/shipGateSnapshot"
+        }
+      }
+    },
+    "aggregateMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_count",
+        "month_count",
+        "candidate_count_total",
+        "trade_count_total",
+        "skipped_count_total",
+        "total_return_mean",
+        "monthly_return_series",
+        "monthly_return_count",
+        "monthly_alpha_t_stat",
+        "sharpe",
+        "max_drawdown",
+        "forward_live_months"
+      ],
+      "properties": {
+        "report_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "month_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidate_count_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trade_count_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped_count_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_return_mean": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "monthly_return_series": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/monthlyReturn"
+          }
+        },
+        "monthly_return_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "monthly_alpha_t_stat": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "sharpe": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "max_drawdown": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "forward_live_months": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "monthlyReturn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["month", "report_count", "total_return_mean"],
+      "properties": {
+        "month": {
+          "type": "string",
+          "pattern": "^[0-9]{6}$"
+        },
+        "report_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "total_return_mean": {
+          "type": "number"
+        }
+      }
+    },
+    "shipGateEvaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_logic",
+        "status",
+        "full_size_allowed",
+        "failure_mode",
+        "manual_execution_only",
+        "metric_results",
+        "limitations"
+      ],
+      "properties": {
+        "policy_logic": {
+          "type": "string",
+          "enum": ["and"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_evaluable", "pass", "fail"]
+        },
+        "full_size_allowed": {
+          "type": "boolean",
+          "description": "True only when every AND-gate metric is evaluable and passes. This is a manual-use gate, not broker automation permission."
+        },
+        "failure_mode": {
+          "type": "string",
+          "const": "paper_or_minimal_size_or_risk_filter_only"
+        },
+        "manual_execution_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "metric_results": {
+          "$ref": "#/$defs/shipGateMetricResults"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "shipGateMetricResults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "monthly_alpha_t_stat",
+        "sharpe",
+        "max_drawdown",
+        "forward_live_months"
+      ],
+      "properties": {
+        "monthly_alpha_t_stat": {
+          "$ref": "#/$defs/shipGateMetricResult"
+        },
+        "sharpe": {
+          "$ref": "#/$defs/shipGateMetricResult"
+        },
+        "max_drawdown": {
+          "$ref": "#/$defs/shipGateMetricResult"
+        },
+        "forward_live_months": {
+          "$ref": "#/$defs/shipGateMetricResult"
+        }
+      }
+    },
+    "shipGateMetricResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "threshold", "passed", "reason"],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "passed": {
+          "type": ["boolean", "null"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "shipGateSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_logic",
+        "monthly_alpha_t_stat_min",
+        "sharpe_min",
+        "max_drawdown_max",
+        "forward_live_months_min",
+        "failure_mode",
+        "status",
+        "full_size_allowed",
+        "reason"
+      ],
+      "properties": {
+        "policy_logic": {
+          "type": "string",
+          "enum": ["and"]
+        },
+        "monthly_alpha_t_stat_min": {
+          "type": "number",
+          "const": 2.0
+        },
+        "sharpe_min": {
+          "type": "number",
+          "const": 1.0
+        },
+        "max_drawdown_max": {
+          "type": "number",
+          "const": 0.15
+        },
+        "forward_live_months_min": {
+          "type": "integer",
+          "const": 12
+        },
+        "failure_mode": {
+          "type": "string",
+          "const": "paper_or_minimal_size_or_risk_filter_only"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_evaluated", "pass", "fail"]
+        },
+        "full_size_allowed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "pathRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "date8Nullable": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{8}$"
+    },
+    "ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "numberNullable": {
+      "type": ["number", "null"]
+    }
+  }
+}
