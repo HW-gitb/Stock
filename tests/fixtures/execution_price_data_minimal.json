@@ -44,6 +44,34 @@
       "up_limit": 21.67,
       "down_limit": 17.73,
       "source_flags": ["daily", "adj_factor", "stk_limit"]
+    },
+    {
+      "ts_code": "600000.SH",
+      "trade_date": "20260525",
+      "is_trade_day": true,
+      "open_qfq": 13.4,
+      "high_qfq": 13.8,
+      "low_qfq": 13.2,
+      "close_qfq": 13.6,
+      "pre_close_qfq": 13.35,
+      "adj_factor": 101.2,
+      "up_limit": 14.69,
+      "down_limit": 12.02,
+      "source_flags": ["daily", "adj_factor", "stk_limit"]
+    },
+    {
+      "ts_code": "600001.SH",
+      "trade_date": "20260525",
+      "is_trade_day": true,
+      "open_qfq": 20.1,
+      "high_qfq": 20.5,
+      "low_qfq": 19.9,
+      "close_qfq": 20.2,
+      "pre_close_qfq": 20.0,
+      "adj_factor": 98.2,
+      "up_limit": 22.0,
+      "down_limit": 18.0,
+      "source_flags": ["daily", "adj_factor", "stk_limit"]
     }
   ],
   "limitations": ["Synthetic fixture for Phase 5 loader tests; not real market data."]

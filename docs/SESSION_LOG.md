@@ -8,6 +8,251 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Phase 5 minimal fill simulation Optional disposition O1-O5)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O5 全部 dispose 完成）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `fb71751`; targets the immediately prior Codex entry "Phase 5 minimal fill simulation Optional disposition O1-O5")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `runners/backtest_execution.py` 改动（O1 stop fill hybrid logic / O2 stop-vs-entry pre-check / O4 limitations 段扩 3 行）
+- `schemas/execution_backtest_report.schema.json` description 加 grow-only enum policy（O5）
+- `tests/execution/test_backtest_execution.py` 新增 3 个 tests（覆盖 O1 + O2 + O3 partial）
+- `docs/CURRENT.md` + `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 同步
+- 无 EGS / analyzer / Phase 3 hard veto / CSV/Tushare materializer / Phase 4 deterministic report / preset / P0a schemas 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest discover` → `Ran 85 tests in 0.524s OK` ✅（82 → 85，新增 3 fill tests）
+
+**Disposition 逐条核对**:
+
+- **O1 (Pass — implementation actually better than suggested)** — `runners/backtest_execution.py:908-912` 用 hybrid logic：`exit_price = open_price if open_price is not None and open_price <= stop_loss else stop_loss`。
+  - Gap-down (T+1 open ≤ stop_loss): fill at open（最坏可观测价）
+  - Intraday touch (open > stop, intraday low < stop): fill at stop（假设 stop-limit order 触发）
+  
+  **这比我原建议 `max(low_qfq, stop_loss)` 更准确**：我的 max(low, stop) 在 gap-down 时仍等于 stop（因为 low < stop），等于没改；Codex 区分 gap-down vs intraday touch 是 daily OHLC 数据下能做的最准确推断。`limitations` L1033 显式 doc 化此行为。`test_gap_down_stop_loss_fills_at_open` (L263) 锁住。✅ Codex 的实现优于我的建议。
+- **O2 (Pass)** — `candidate_stop_loss(candidate, entry_price)` (L499-514) + entry-time validation (L871) 要求 stop 严格 < entry_price，否则 `missing_stop` skip。Codex `alternatives rejected` 注明 "Add `stop_below_entry` as a new event code — rejected to avoid another enum expansion when existing `missing_stop` already represents no valid deterministic stop below entry" — 复用现有 event code 避免 schema 又升级，scope 纪律好。`test_entry_open_at_or_below_stop_is_skipped` (L316) 锁住。✅
+- **O3 (Pass with mod)** — 3 个新 tests：
+  - `test_gap_down_stop_loss_fills_at_open` (L263) — 覆盖 (a) gap-down stop
+  - `test_entry_open_at_or_below_stop_is_skipped` (L316) — 覆盖 (e) stop ≥ entry
+  - `test_cash_constrained_candidate_is_skipped` (L365) — 覆盖 (c) cash 不足 skip
+  
+  **未加 multi-candidate concurrent cash competition test** — Codex 明确 reject 因为 "current minimal simulator explicitly does not model concurrent open positions"。但**实际 cash 是 sequential 累计扣除的**（L927 `cash -= entry_gross + entry_cost` + L941 `cash += exit_gross - exit_cost`），所以 sequential 多 candidate cash 共享是 implicitly modeled，cash_constrained test 已 cover 第二 candidate cash 不足场景。Codex 的 framing 是关于"同时持仓"（concurrent open positions）而非"cash 共享"——这是 accurate scope statement。`limitations` L1034 doc 化 "processes candidates sequentially and does not yet model concurrent open positions"。✅
+- **O4 (Pass — doc-only)** — `limitations` L1036 加 `total_return is realized total_pnl divided by initial bucket_capital; no alternate ending-equity-normalized return is emitted yet`。选择 (a) doc 化路径而非加新 metric — 符合 minimal scope。✅
+- **O5 (Pass — doc-only)** — `schemas/execution_backtest_report.schema.json:5` description 加 `event_log.event_codes is grow-only within v1.x; consumers should handle unknown event codes gracefully`。L367 在 enum 字段下也重复同样 description（防 future reader 只看 nested 字段时漏掉）。选择 (b) grow-only policy 而非升 v1.2.0 — Codex `alternatives rejected` 注明 "no production consumer yet"，合理。✅
+
+**额外观察（非 issue）**:
+
+- **`candidate_stop_loss(candidate, entry_price)` 拒绝 stop ≥ entry 在 4 层 fallback 链内** (L499-514): 每个 stop_loss 来源单独检查，确保 fallback 不会用一个无效 stop。这比 entry 时只 check 1 次更严密 ✅
+- **`is_limit_up_unbuyable` 函数化** (L539-544): 之前 inline 现在抽 helper，可读性 + 可测试性提升 ✅
+- **`A_SHARE_LOT_SIZE = 100` 常量** (L487): 之前 hardcoded，现在提到模块顶 — 好 ✅
+- **限制段共 6 条诚实 limitations** (L1031-1036): 明示 daily OHLC only / stop fill logic / 无 concurrent positions / 无 mark-to-market / total_return 分母 / manual-order-only boundary — 诚实描述当前 scope ✅
+- **Schema description 在两处重复 grow-only policy** (L5 顶部 + L367 enum 字段): 防 future LLM 只看 nested 字段时漏掉。defensive 写法好 ✅
+- **`event_message_for_skip` 4 个 reason 全 cover** (L657-664): 之前只有 `missing_stop`，现在加 `missing_price_data` / `entry_unbuyable` / `cash_constrained` — 与 event enum 一致 ✅
+- **`empty_simulation_result` 函数** (L645+): 抽出 skeleton 路径的输出 helper，使 `simulate_execution` vs `empty_simulation_result` 二选一清晰 ✅
+- **Codex alternatives rejected 4 条** 都有清晰理据，决策路径可追溯 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1-O5 全部 Pass，O1 实现优于建议，O3 关于 multi-candidate cash competition 的 framing accurate，无新 finding）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`。
+
+**Next natural step from my view**:
+
+1. 用户 `提交`。working tree 单 scope（Phase 5 minimal fill simulation 闭环：原 execute + Optional dispose 应作为同一 scope commit），走 `git add -A` 快路径。
+2. 提交后下一步是 Codex `执行` 提到的："connect the Tushare materializer output to a small real execution run and extend ship-gate metric outputs"：
+   - 用 `materialize_execution_price_data_tushare.py` 给真实 A 股 24p as_of 生成 execution_price_data
+   - 跑 `backtest_execution.py --price-data <materialized>.json --portfolio-allocation ... --cash-buffer-state ...` 给出真实 fill simulation 输出
+   - extend ship-gate metric outputs（monthly alpha t-stat / sharpe / max drawdown 计算）
+3. 真实 24p execution backtest 结果将给出 A 股短线**首次 bucket-aware net alpha 数字**，对 ship gate 决策至关重要。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 minimal fill simulation Optional disposition O1-O5)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior Claude Pass review entry for "Phase 5 minimal fill simulation", which had no Required fixes and 5 active Optional suggestions.
+- Refines the same Phase 5 fill-simulation scope; does not expand into provider fetch, long specs, Phase 7 DataHub, broker automation, or full concurrent portfolio accounting.
+
+**Worked on**:
+1. Disposed O1/O2 by tightening stop-loss fill and entry pre-check logic.
+2. Disposed O3 by adding focused regression coverage for gap-down stop, entry open <= stop, and cash-constrained skip behavior.
+3. Disposed O4/O5 by documenting `total_return` denominator semantics and event-code grow-only policy.
+
+**Key decisions**:
+- O1 accepted with modification: true gap-down stop fills at the day's `open_qfq` when open is below stop; ordinary intraday low touch still fills at stop price because daily OHLC cannot prove a low-price fill.
+- O2 accepted: stop is parsed before entry validation and must be strictly below entry; otherwise the candidate is skipped as `missing_stop`.
+- O3 accepted with modification: added cash-constrained event-path coverage, but did not add multi-candidate concurrent cash competition because the current minimal simulator explicitly does not model concurrent open positions.
+- O4 accepted via limitation text, not a new metric: `total_return` remains realized total_pnl divided by initial bucket capital.
+- O5 accepted via schema description: event codes are grow-only within v1.x and consumers should gracefully handle unknown codes.
+
+**Alternatives considered and rejected**:
+- "Fill every low_qfq stop breach at low_qfq" — rejected as too pessimistic for daily OHLC; only open-below-stop is an observable gap-down.
+- "Add `stop_below_entry` as a new event code" — rejected to avoid another enum expansion when existing `missing_stop` already represents no valid deterministic stop below entry.
+- "Implement multi-candidate concurrent cash competition now" — rejected because it belongs to the later portfolio-engine scope, not this minimal fill repair.
+- "Bump execution report schema to v1.2.0" — rejected because there is no production consumer yet and the chosen policy is grow-only enum within v1.x.
+
+**Open questions handed off**:
+- Future full portfolio engine still needs concurrent positions, mark-to-market daily equity, and cash competition across overlapping holdings.
+- Future contract cleanup can decide whether invalid stop should become a distinct skipped reason / event code once consumers exist.
+
+**Verification**:
+- Execution + report schema subset: 22 passed.
+- Broader Phase 5 suite: 50 passed.
+- Full `unittest discover`: 85 passed.
+- `git diff --check`: passed.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude re-reviews the minimal fill simulation plus O1-O5 disposition.
+2. If Pass, user invokes `提交`.
+3. After commit, next execution scope should connect Tushare materializer output to a small real execution run and extend ship-gate metric outputs, not start a broad portfolio engine.
+
+## 2026-05-26 — Claude review — Pass (Phase 5 minimal fill simulation)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (5 条 active)。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `fb71751`; targets the immediately prior Codex entry "Phase 5 minimal fill simulation")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `runners/backtest_execution.py` +503 行（fill simulation 核心：entry T+1 open / 涨停 unbuyable / stop loss / time stop / cash constraint / 双向 cost / skipped 分类）
+- `schemas/execution_backtest_report.schema.json` +2 event enum (`missing_price_data` / `cash_constrained`)
+- `tests/execution/test_backtest_execution.py` +156 行（3 个新 fill tests）
+- `tests/fixtures/execution_price_data_minimal.json` +28 行（加 20260525 给 600000/600001 支持 T+1 entry）
+- `tests/schema/test_execution_backtest_report_schema.py` +8 行（测 enum 扩展）
+- `docs/CURRENT.md` + `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 同步
+- 无 EGS / analyzer / Phase 3 hard veto / CSV/Tushare materializer / Phase 4 deterministic report 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest discover` → `Ran 82 tests in 0.355s OK` ✅
+
+**Reasons for Pass**:
+
+通过 3 个并发 Explore agent 独立审查（core logic / test coverage / integration scope），核心 fill behavior 全部正确实施：
+
+- **Entry T+1 open** (L841/851): 用 `first_price_row_after(rows, as_of)` 找 next 交易日 open_qfq ✅
+- **涨停 unbuyable** (L536-541/861-867): `open_qfq >= up_limit * 0.999` 触发 `entry_unbuyable` event ✅
+- **Stop loss** (L499-513/902-910): stop_price 来源链 `execution.stop_loss` → `exit_plan.stop_loss` → `technical.stop_loss` → `technical.support.price`；`low_qfq <= stop_loss` 触发 fill at stop_price ✅
+- **Time stop** (L880-893): 按 trading day count，exit at close_qfq ✅
+- **Stop > Time stop priority** (L902-910 在 time_stop 默认之前): ✅
+- **Cash constraint** (L547-556/912-919): `min(cash, bucket_capital × max_position_pct, bucket_capital / max_positions)` + cost-adjusted gross budget + 最小 100 股 lot；emit `cash_constrained` event ✅
+- **双向 cost** (L923/936-937): entry + exit 都扣 cost ✅
+- **bucket_capital 真用** (L549-550): 不 fallback 到 args.initial_capital ✅
+- **manual_execution_only const true 保持** (schema L490 + runner L439): ✅
+- **无 broker / HTTP / OS automation 引入** (grep negative): ✅
+- **Skeleton 路径不破坏** (L1235-1239): `price_data is None` 走 `empty_simulation_result` ✅
+- **Limitations 文档化诚实**: L1031-1032 明示 "does not yet model concurrent open positions" + "open-position mark-to-market is not yet modeled" — 没 oversell minimal fill scope ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — Gap-down stop fill 价格 bias**（`runners/backtest_execution.py:909`）。当前 `low_qfq < stop_loss` 时 fill at `stop_loss`。A 股 gap-down 实战（T+1 open 已 < stop）按更高 stop_loss 价 fill 会**系统性 overstate stop-loss recovery**，影响 ship gate metric (alpha / sharpe / max_drawdown) 数值可信度。这是 backtest correctness 问题，会让未来 ship gate 评估虚高。修法：
+   ```python
+   exit_price = max(low_qfq, stop_loss)  # gap-down fills at low (worse than stop)
+   ```
+   或显式 doc 化为 known limitation（但当前 limitations 段没提）。倾向真修，因为 ship gate 数值是后续 phase 6 forward live evaluation 的关键比对基准。
+
+2. **O2 — Same-day gap-down entry 应 reject**（`runners/backtest_execution.py:851` 附近）。当前 logic：T+1 open < stop_loss 时仍允许 entry，然后第 1 天 exit at stop > open → instant profit artifact。应在 entry 时 pre-check：
+   ```python
+   if open_qfq <= stop_loss:
+       emit "missing_stop" or new event "stop_below_entry"
+       skip
+   ```
+   与 O1 类似，影响 backtest correctness。
+
+3. **O3 — 5 个测试盲区**（`tests/execution/test_backtest_execution.py`）。
+   - (a) gap-down below stop (open 未触及但 low < stop)
+   - (b) exit 端 close_qfq None
+   - (c) cash_constrained 多候选竞争（当前 1 candidate 测不到）
+   - (d) entry 端 open_qfq None
+   - (e) stop ≥ entry_price 校验路径
+
+   建议至少补 (a)/(c) 两条（O1 修后需要 (a) 锁住正确行为；(c) 是 multi-candidate cash sharing 关键 invariant）。其余可优先级降一档。
+
+4. **O4 — `total_return` 分母 design 未文档化**（`runners/backtest_execution.py:1021`）。用 initial `bucket_capital` 作分母，不随 cash drain 调整。如果早期 trades 大幅亏损，后期 metric 失真。两种修法：
+   - (a) Doc 化为 known limitation（在 `limitations` 段加一行 "total_return = total_pnl / initial bucket_capital; ending equity drift is not normalized"）
+   - (b) 加 `metrics.return_on_ending_equity` 备用 metric，让两种 view 都有
+
+   倾向 (a)，本阶段 minimal fill 不必加 metric。Codex 可自决。
+
+5. **O5 — Schema event enum 扩展 SemVer 风险**（`schemas/execution_backtest_report.schema.json:383-395`）。新增 `missing_price_data` + `cash_constrained` 但 schema 仍 v1.1.0。Producer 视角 backward-compatible；**Consumer 视角是 backward-incompatible**（v1.1.0 旧 reader validate enum 会拒新值）。三种修法：
+   - (a) 升 v1.2.0（严格 SemVer）
+   - (b) 在 schema description 顶部明示 "event_codes enum 是 grow-only，consumer 应实现 unknown-enum graceful handling，enum 扩展不算 breaking"
+   - (c) 接受当前现状（v1.1.0 阶段没生产 consumer，无实际影响）
+
+   倾向 (b)，doc 化 enum 增长策略避免未来同问题反复。Codex 可自决。
+
+**额外观察（非 issue）**:
+
+- **Codex 自报 open questions** 与我 O3/O4 partial overlap：(i) "missing_price_data_count / cash_constrained_count 是否独立 metric column" — 对应 O4 方向；(ii) "stop_loss source 是否升级 deterministic_report/analyzer 字段" — 是 future 设计点。Codex 自己已感知到这两个尾巴 ✅
+- **Stop source fallback 链 4 层** (`execution.stop_loss` → `exit_plan.stop_loss` → `technical.stop_loss` → `technical.support.price`) — robust，但意味着 fixture 缺前 3 个 field 会落到 support.price，可能不是 ideal stop。Codex 在 Key decisions 注明 "keeps simulator grounded in existing fixtures without inventing a new analyzer output contract" — 合理的 minimal scope 选择 ✅
+- **fixture 改动诚实**：加了 20260525 行给 600000/600001，pre_close + up_limit 数学一致；adj_factor=101.2 / 98.2 是 synthetic 但 fixture 文档化为 "Synthetic fixture for Phase 5 loader tests; not real market data" ✅
+- **Schema enum 加值在 `order_events.event_codes.items.enum`** — 改动位置正确，没碰其他 schema 段 ✅
+
+**Documentation issues**: O4 (total_return 分母 design 没文档化) + O5 (schema enum 增长策略没 doc 化)。
+
+**Pending status**: Required: none / Optional (O1-O5): PENDING CODEX DISPOSITION。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — dispose O1-O5。**O1 + O2 是 backtest correctness 问题**，优先级高（虽不阻塞本轮 commit，但会让 ship gate metric 系统性 biased）。O3 (a)+(c) 配合 O1 修补。O4/O5 是 doc 化即可。
+2. 修复后用户 `审查` → `提交`。
+3. 提交后下一 scope 应该是 Codex `执行` 提到的："connect the Tushare materializer output to a small real execution run and extend ship-gate metric outputs, not start a broad portfolio engine" — 用真实 Tushare data 跑 24p execution backtest 给 ship-gate metric 实际数字。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 minimal fill simulation)
+
+**Commits**: none (Pattern A: `执行` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the P0a post-commit status sync entry and commit `244353e`, which made bucket-aware capital context the required execution-backtest basis.
+- Refines Phase 5 from contract-only runner toward the first minimal fill simulator, without expanding into provider fetch, long specs, Phase 7 DataHub, or broker automation.
+
+**Worked on**:
+1. Implemented minimal daily-OHLC fill simulation in `runners/backtest_execution.py` for the `--price-data` path.
+2. Synced execution report event codes, fixtures, tests, CURRENT, and Phase 5 handoff for review.
+
+**Key decisions**:
+- Preserve the no-`--price-data` skeleton behavior so existing contract/smoke path still works.
+- Use `capital_context.bucket_capital` as sizing basis and keep `settings.initial_capital` as a bucket-capital runtime setting, not total account capital.
+- For this first increment, stop-loss reads deterministic candidate fields with `technical.support.price` as fallback; this keeps the simulator grounded in existing fixtures without inventing a new analyzer output contract.
+- Stop-loss takes priority over time-stop within the simulated holding window; stop fills at the stop price when daily `low_qfq` touches the stop.
+- All events remain analysis/backtest artifacts only; manual-order-only boundary is unchanged.
+
+**Alternatives considered and rejected**:
+- "Make price-data path still reference-only and defer fills again" — rejected because P0a's purpose was to unblock fill simulation.
+- "Implement full multi-position portfolio accounting now" — rejected as too broad for the first fill scope; current implementation still enforces bucket cash and per-trade sizing.
+- "Change execution report schema version again" — rejected because this only extends existing v1.1.0 event enum and uses existing metrics fields.
+
+**Open questions handed off**:
+- Whether the next fill increment should add explicit `missing_price_data_count` / `cash_constrained_count` metrics or keep those only in skipped rows and events.
+- Whether stop-loss source should be upgraded from support fallback to a dedicated deterministic_report/analyzer field before broader sample runs.
+
+**Verification**:
+- Targeted Phase 5 execution/schema tests: 24 passed.
+- Broader Phase 5 suite: 47 passed.
+- Full `unittest discover`: 82 passed.
+- `git diff --check`: passed.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude reviews the minimal fill simulation diff.
+2. If Pass, user invokes `提交`.
+3. Next execution scope should connect the Tushare materializer output to a small real execution run and extend ship-gate metric outputs, not start a broad portfolio engine.
+
 ## 2026-05-26 — Codex (P0a post-commit status sync)
 
 **Commits**: 244353e

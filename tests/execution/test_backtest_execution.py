@@ -115,7 +115,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 event_rows = list(csv.DictReader(handle))
 
             self.assertIn(
-                "candidate skipped: no deterministic stop input wired in skeleton",
+                "candidate skipped: no deterministic stop input below entry price",
                 {row["message"] for row in event_rows},
             )
 
@@ -152,9 +152,300 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 ["daily", "adj_factor", "stk_limit", "trade_cal"],
             )
             self.assertIn(
-                "Execution price data is schema-validated but not used for fills yet.",
+                "Execution price data is used by the Phase 5 minimal daily-OHLC fill simulator.",
                 report["data_lineage"]["pit_limitations"],
             )
+
+    def test_runner_simulates_time_stop_trade_with_bucket_sizing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    "--price-data",
+                    str(ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json"),
+                    *self.capital_cli_args(),
+                    "--time-stop-days",
+                    "1",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["metrics"]["trade_count"], 1)
+            self.assertEqual(report["metrics"]["skipped_count"], 1)
+            self.assertEqual(report["metrics"]["missing_stop_count"], 0)
+            self.assertEqual(report["metrics"]["entry_unbuyable_count"], 0)
+            self.assertEqual(report["metrics"]["win_rate"], 1.0)
+            self.assertEqual(report["metrics"]["avg_holding_days"], 1.0)
+            self.assertGreater(report["metrics"]["ending_equity"], 116666.55)
+            self.assertNotIn(
+                "no_executable_candidates",
+                {warning["warning_type"] for warning in report["date_warnings"]},
+            )
+
+            with (out_dir / "trades.csv").open("r", encoding="utf-8", newline="") as handle:
+                trades = list(csv.DictReader(handle))
+            self.assertEqual(len(trades), 1)
+            self.assertEqual(trades[0]["ts_code"], "600000.SH")
+            self.assertEqual(trades[0]["entry_date"], "20260525")
+            self.assertEqual(trades[0]["exit_date"], "20260525")
+            self.assertEqual(trades[0]["shares"], "800")
+            self.assertEqual(trades[0]["exit_reason"], "time_stop")
+            self.assertEqual(trades[0]["holding_days"], "1")
+
+            with (out_dir / "order_events.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                event_codes = {row["event_code"] for row in csv.DictReader(handle)}
+            self.assertIn("entry", event_codes)
+            self.assertIn("time_stop", event_codes)
+            self.assertIn("exit", event_codes)
+
+            with (out_dir / "skipped_candidates.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                skipped = list(csv.DictReader(handle))
+            self.assertEqual([row["reason"] for row in skipped], ["analyzer_hard_veto"])
+
+    def test_stop_loss_takes_priority_over_time_stop(self) -> None:
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for row in price_data["rows"]:
+            if row["ts_code"] == "600000.SH" and row["trade_date"] == "20260525":
+                row["low_qfq"] = 12.4
+                break
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            price_path = out_dir / "price_data.json"
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    "--price-data",
+                    str(price_path),
+                    *self.capital_cli_args(),
+                    "--time-stop-days",
+                    "1",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["metrics"]["trade_count"], 1)
+            self.assertLess(report["metrics"]["ending_equity"], 116666.55)
+            with (out_dir / "trades.csv").open("r", encoding="utf-8", newline="") as handle:
+                trades = list(csv.DictReader(handle))
+            self.assertEqual(trades[0]["exit_reason"], "stop_loss")
+            self.assertEqual(trades[0]["exit_price"], "12.5")
+            self.assertLess(float(trades[0]["pnl"]), 0.0)
+
+            with (out_dir / "order_events.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                event_codes = {row["event_code"] for row in csv.DictReader(handle)}
+            self.assertIn("stop_loss", event_codes)
+
+    def test_gap_down_stop_loss_fills_at_open(self) -> None:
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        price_data["date_range"]["end_date"] = "20260526"
+        for row in list(price_data["rows"]):
+            if row["ts_code"] == "600000.SH" and row["trade_date"] == "20260525":
+                next_row = deepcopy(row)
+                next_row.update(
+                    {
+                        "trade_date": "20260526",
+                        "open_qfq": 12.2,
+                        "high_qfq": 12.4,
+                        "low_qfq": 12.0,
+                        "close_qfq": 12.1,
+                        "pre_close_qfq": 13.6,
+                        "up_limit": 14.96,
+                        "down_limit": 12.24,
+                    }
+                )
+                price_data["rows"].append(next_row)
+                break
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            price_path = out_dir / "price_data.json"
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    "--price-data",
+                    str(price_path),
+                    *self.capital_cli_args(),
+                    "--time-stop-days",
+                    "2",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            with (out_dir / "trades.csv").open("r", encoding="utf-8", newline="") as handle:
+                trades = list(csv.DictReader(handle))
+            self.assertEqual(trades[0]["exit_reason"], "stop_loss")
+            self.assertEqual(trades[0]["exit_date"], "20260526")
+            self.assertEqual(trades[0]["exit_price"], "12.2")
+            self.assertLess(float(trades[0]["pnl"]), 0.0)
+
+    def test_entry_open_at_or_below_stop_is_skipped(self) -> None:
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for row in price_data["rows"]:
+            if row["ts_code"] == "600000.SH" and row["trade_date"] == "20260525":
+                row["open_qfq"] = 12.4
+                row["high_qfq"] = 12.6
+                row["low_qfq"] = 12.3
+                row["close_qfq"] = 12.4
+                break
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            price_path = out_dir / "price_data.json"
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    "--price-data",
+                    str(price_path),
+                    *self.capital_cli_args(),
+                    "--time-stop-days",
+                    "1",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["metrics"]["trade_count"], 0)
+            self.assertEqual(report["metrics"]["missing_stop_count"], 1)
+            with (out_dir / "skipped_candidates.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                reasons = {row["reason"] for row in csv.DictReader(handle)}
+            self.assertEqual(reasons, {"missing_stop", "analyzer_hard_veto"})
+            with (out_dir / "order_events.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                event_codes = {row["event_code"] for row in csv.DictReader(handle)}
+            self.assertNotIn("entry", event_codes)
+
+    def test_cash_constrained_candidate_is_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    "--price-data",
+                    str(ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json"),
+                    *self.capital_cli_args(),
+                    "--time-stop-days",
+                    "1",
+                    "--max-position-pct",
+                    "0.0001",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["metrics"]["trade_count"], 0)
+            with (out_dir / "skipped_candidates.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                reasons = {row["reason"] for row in csv.DictReader(handle)}
+            self.assertEqual(reasons, {"cash_constrained", "analyzer_hard_veto"})
+            with (out_dir / "order_events.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                event_codes = {row["event_code"] for row in csv.DictReader(handle)}
+            self.assertIn("cash_constrained", event_codes)
+
+    def test_limit_up_entry_is_unbuyable(self) -> None:
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for row in price_data["rows"]:
+            if row["ts_code"] == "600000.SH" and row["trade_date"] == "20260525":
+                row["open_qfq"] = row["up_limit"]
+                row["high_qfq"] = row["up_limit"]
+                row["low_qfq"] = row["up_limit"]
+                row["close_qfq"] = row["up_limit"]
+                break
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            price_path = out_dir / "price_data.json"
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    "--price-data",
+                    str(price_path),
+                    *self.capital_cli_args(),
+                    "--time-stop-days",
+                    "1",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["metrics"]["trade_count"], 0)
+            self.assertEqual(report["metrics"]["entry_unbuyable_count"], 1)
+            with (out_dir / "skipped_candidates.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                reasons = {row["reason"] for row in csv.DictReader(handle)}
+            self.assertEqual(reasons, {"entry_unbuyable", "analyzer_hard_veto"})
+
+            with (out_dir / "order_events.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                event_codes = {row["event_code"] for row in csv.DictReader(handle)}
+            self.assertIn("entry_unbuyable", event_codes)
 
     def test_price_data_date_range_must_cover_as_of(self) -> None:
         price_data = json.loads(

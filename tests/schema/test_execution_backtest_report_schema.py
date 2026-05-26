@@ -75,9 +75,18 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
             "missing_stop",
             assumptions["properties"]["event_log"]["properties"]["event_codes"]["items"]["enum"],
         )
+        self.assertIn(
+            "missing_price_data",
+            assumptions["properties"]["event_log"]["properties"]["event_codes"]["items"]["enum"],
+        )
+        self.assertIn(
+            "cash_constrained",
+            assumptions["properties"]["event_log"]["properties"]["event_codes"]["items"]["enum"],
+        )
 
         event_codes = assumptions["properties"]["event_log"]["properties"]["event_codes"]
         self.assertEqual(event_codes["minItems"], 2)
+        self.assertIn("grow-only", event_codes["description"])
         self.assertEqual(
             [item["contains"]["const"] for item in event_codes["allOf"]],
             ["entry", "exit"],

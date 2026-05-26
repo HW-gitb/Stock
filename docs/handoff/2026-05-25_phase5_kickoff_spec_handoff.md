@@ -1127,3 +1127,115 @@ git diff --check
 1. 让 Claude 复审 O1-O3 disposition，重点看 preset YAML parser 与 cross-validation 是否足够窄、`horizon` 删除是否未破坏 report `capital_context.horizon`。
 2. 通过并提交后，下一步才是 Phase 5 fill simulation。
 3. 不要把 `--preset-path` 理解成多 preset 批量执行；当前 runner 默认仍是 A-short skeleton，只是把 capital profile source of truth 移到 preset YAML。
+
+## 2026-05-26 追加：Phase 5 minimal fill simulation
+
+### 改了什么
+
+- `runners/backtest_execution.py` 在传入 `--price-data` 时不再只引用价格文件，而是执行最小 daily-OHLC fill simulation：
+  - candidate 先过 Phase 3 Rule 6 analyzer hard veto replay。
+  - 入场使用 T+1 `open_qfq`。
+  - 若 T+1 `open_qfq` 接近/等于 `up_limit`，记为 `entry_unbuyable` 并跳过。
+  - stop-loss 从 deterministic candidate 字段读取，当前 fallback 到 `technical.support.price`。
+  - stop-loss 优先于 time-stop；后续交易日若 `open_qfq <= stop_loss`，按 open 出场，否则 daily `low_qfq <= stop_loss` 时按 stop price 退出。
+  - time-stop 使用 `close_qfq` 退出。
+  - 仓位按 `capital_context.bucket_capital`、`max_position_pct`、`max_positions`、现金约束和 A 股 100 股 lot sizing 计算。
+  - entry/exit 均扣 `cost_pct`。
+- `execution_report.json` 的 metrics / warnings / limitations 改为来自模拟结果。
+- `trades.csv` / `daily_equity.csv` / `order_events.csv` / `skipped_candidates.csv` 写出真实模拟结果；不传 `--price-data` 时保留 skeleton skip 行为。
+- `schemas/execution_backtest_report.schema.json` 的 event enum 补 `missing_price_data` 和 `cash_constrained`。
+- `tests/fixtures/execution_price_data_minimal.json` 增加 T+1 价格行。
+- 新增 regression 覆盖：
+  - time-stop 正常成交且按 bucket sizing 买入 800 股。
+  - stop-loss 优先于 time-stop。
+  - 涨停开盘不可买。
+
+### 为什么改
+
+P0a 已把资金模型锁到 bucket capital；下一步必须让 execution backtest 从“契约 shell”前进到“最小可解释撮合”。本轮只做最小 daily-OHLC 模拟，确保后续扩展真实样本、组合持仓和 ship gate metrics 时不会回到 total-account `initial_capital` 假设。
+
+本轮刻意不实现 provider fetch、Tushare materializer 修改、长线 spec、Phase 7 DataHub、券商/OS 自动下单。用户已确认系统只做分析筛选，后续交易仍手动执行。
+
+另一个刻意保留的边界：这不是 full concurrent multi-position portfolio engine。第一版按候选顺序模拟、执行 bucket cash / 单票 sizing 约束，daily equity 只记录起点和已实现 exit 日期；持仓期间 mark-to-market 和并发持仓 accounting 留给后续 scope。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_backtest_report_schema tests.schema.test_execution_price_data_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_capital_context_schemas tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+```
+
+### 验证结果
+
+- `tests.execution.test_backtest_execution`：15 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：4 tests passed。
+- `tests.schema.test_execution_price_data_schema`：5 tests passed。
+- Targeted total：24 tests passed。
+- Broader Phase 5 suite：47 tests passed。
+- Full unittest discover：82 tests passed。
+- `git diff --check`：通过。
+
+### 失效旧结论
+
+- “`--price-data` 只做 schema validate + report reference，不用于 fills”失效；当前传入 `--price-data` 会触发 minimal fill simulation。
+- “`trades.csv` / `daily_equity.csv` / `order_events.csv` 只是 shell”部分失效；price-data path 下它们写真实模拟结果。无 price-data path 仍保留 skeleton skip 行为。
+- “execution report limitations 可写 no fill simulation”失效；当前 price-data path limitations 必须说明 daily-OHLC 模拟边界，而不是说未实现撮合。
+
+### 下一步注意事项
+
+1. 让 Claude 审查本轮 minimal fill simulation + Optional disposition，重点看撮合顺序、stop-loss 优先级、bucket sizing、schema event enum 和 no-price-data fallback 是否一致。
+2. 若 Pass，再提交；若 Required fixes 出现，只修用户批准的 Required items。
+3. 下一轮不要马上做 full portfolio engine。更自然的下一个小 scope 是把真实 Tushare materializer 输出接到一个小样本 execution run，并补 execution-level ship-gate metric 输出字段。
+
+## 2026-05-26 追加：Phase 5 minimal fill simulation Optional disposition O1-O5
+
+### 改了什么
+
+- O1 accepted with modification：修正 gap-down stop fill。
+  - 若后续持仓日 `open_qfq <= stop_loss`，stop-loss 出场价用当日 open。
+  - 若当日 open 仍高于 stop，但 `low_qfq <= stop_loss`，按 stop price 出场。
+  - 没有采用“所有 low 触及都按 low 出场”，因为 daily OHLC 无法证明日内穿 stop 后一定成交在 low；用 open 处理真正 gap-down，用 stop 处理日内触发，更符合当前数据粒度。
+- O2 accepted：stop 先独立解析，再显式要求 `stop_loss < entry_price`；若 T+1 open 已低于/等于 stop，跳过该 candidate，不产生 entry artifact。
+- O3 accepted with modification：
+  - 新增 `test_gap_down_stop_loss_fills_at_open`。
+  - 新增 `test_entry_open_at_or_below_stop_is_skipped`。
+  - 新增 `test_cash_constrained_candidate_is_skipped` 覆盖 cash-constrained event path。
+  - 未实现“多候选并发持仓竞争”测试，因为当前 minimal fill scope 明确不建 concurrent multi-position accounting；这个点留给 full portfolio engine 阶段。
+- O4 accepted：`limitations` 增加 `total_return = realized total_pnl / initial bucket_capital` 的说明，不新增 metric。
+- O5 accepted：`execution_backtest_report.schema.json` 描述中明确 `event_log.event_codes` 是 v1.x grow-only，consumer 应 graceful handle unknown event codes，不升 schema version。
+
+### 为什么改
+
+Claude review 虽然 Pass，但 O1/O2 指向 stop-loss 价格和 entry pre-check 的 correctness 风险，会直接影响后续 ship gate 的 alpha / Sharpe / drawdown 可信度。本轮修正这些数值偏差，同时把 O4/O5 两个 contract 解释问题文档化。
+
+本轮仍不改 provider materializer、不接真实 Tushare run、不做长线 spec、不做 Phase 7 DataHub、不做并发持仓 portfolio engine。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_capital_context_schemas tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+```
+
+### 验证结果
+
+- Execution + report schema subset：22 tests passed。
+- Broader Phase 5 suite：50 tests passed。
+- Full unittest discover：85 tests passed。
+- `git diff --check`：通过。
+
+### 失效旧结论
+
+- “stop-loss 出场只要 low 触及就总是按 stop price”失效；后续持仓日若 open 已低于 stop，按 open 出场。
+- “T+1 open 低于/等于 stop 可能进入再同日止损”失效；当前直接跳过，计入 missing_stop。
+- “event enum 扩展是否应升 schema version 仍未说明”失效；当前已文档化 grow-only 策略。
+
+### 下一步注意事项
+
+1. 让 Claude 复审 O1-O5 disposition。
+2. 若 Pass，用户可 `提交`。
+3. 下一条 `执行` 仍应保持小 scope：优先把 Tushare materializer 输出接到一个小样本 execution run，并补 ship-gate metric 输出字段；不要直接启动 full portfolio engine。

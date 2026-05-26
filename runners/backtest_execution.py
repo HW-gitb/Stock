@@ -35,6 +35,7 @@ CASH_BUFFER_STATE_SCHEMA_PATH = ROOT / "schemas" / "cash_buffer_state.schema.jso
 DEFAULT_INPUT_ROOT = ROOT / "result" / "a_short"
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution"
 DEFAULT_PRESET_PATH = ROOT / "presets" / "a_short.yaml"
+A_SHARE_LOT_SIZE = 100
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -474,6 +475,87 @@ def candidate_name(candidate: dict[str, Any]) -> str:
     return str(candidate.get("name") or candidate.get("stock_name") or "")
 
 
+def nested_value(payload: dict[str, Any], *path: str) -> Any:
+    current: Any = payload
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def coerce_positive_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number <= 0:
+        return None
+    return number
+
+
+def candidate_stop_loss(candidate: dict[str, Any], entry_price: float | None = None) -> float | None:
+    candidates = [
+        nested_value(candidate, "execution", "stop_loss"),
+        nested_value(candidate, "exit_plan", "stop_loss"),
+        nested_value(candidate, "technical", "stop_loss"),
+        nested_value(candidate, "technical", "support", "price"),
+    ]
+    for value in candidates:
+        stop = coerce_positive_float(value)
+        if stop is None:
+            continue
+        if entry_price is not None and stop >= entry_price:
+            continue
+        return stop
+    return None
+
+
+def price_rows_by_symbol(price_data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    by_symbol: dict[str, list[dict[str, Any]]] = {}
+    for row in price_data.get("rows", []):
+        if not isinstance(row, dict):
+            continue
+        by_symbol.setdefault(str(row.get("ts_code")), []).append(row)
+    for rows in by_symbol.values():
+        rows.sort(key=lambda item: str(item.get("trade_date")))
+    return by_symbol
+
+
+def first_price_row_after(
+    rows: list[dict[str, Any]], as_of: str
+) -> tuple[int, dict[str, Any]] | tuple[None, None]:
+    for index, row in enumerate(rows):
+        if str(row.get("trade_date")) > as_of:
+            return index, row
+    return None, None
+
+
+def is_limit_up_unbuyable(row: dict[str, Any]) -> bool:
+    entry_open = coerce_positive_float(row.get("open_qfq"))
+    up_limit = coerce_positive_float(row.get("up_limit"))
+    if entry_open is None or up_limit is None:
+        return False
+    return entry_open >= up_limit * 0.999
+
+
+def calculate_shares(
+    entry_price: float, cash: float, bucket_capital: float, args: argparse.Namespace
+) -> int:
+    per_trade_budget = min(
+        cash,
+        bucket_capital * args.max_position_pct,
+        bucket_capital / max(args.max_positions, 1),
+    )
+    gross_budget = per_trade_budget / (1.0 + args.cost_pct)
+    raw_shares = int(gross_budget // entry_price)
+    if raw_shares < A_SHARE_LOT_SIZE:
+        return 0
+    return (raw_shares // A_SHARE_LOT_SIZE) * A_SHARE_LOT_SIZE
+
+
 def build_execution_assumptions(
     args: argparse.Namespace, capital_context: dict[str, Any]
 ) -> dict[str, Any]:
@@ -488,7 +570,7 @@ def build_execution_assumptions(
         },
         "price_adjustment": {
             "mode": "qfq_via_adj_factor",
-            "source": "phase5_skeleton_contract_only",
+            "source": "execution_price_data_when_provided",
         },
         "transaction_cost": {
             "cost_pct": args.cost_pct,
@@ -532,10 +614,12 @@ def build_execution_assumptions(
                 "candidate_seen",
                 "entry",
                 "entry_unbuyable",
+                "missing_price_data",
                 "missing_stop",
                 "stop_loss",
                 "take_profit",
                 "time_stop",
+                "cash_constrained",
                 "circuit_breaker",
                 "cooldown_block",
                 "exit",
@@ -571,7 +655,13 @@ def classify_skips(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def event_message_for_skip(row: dict[str, Any]) -> str:
     if row["reason"] == "missing_stop":
-        return "candidate skipped: no deterministic stop input wired in skeleton"
+        return "candidate skipped: no deterministic stop input below entry price"
+    if row["reason"] == "missing_price_data":
+        return "candidate skipped: insufficient execution price data for entry or exit"
+    if row["reason"] == "entry_unbuyable":
+        return "candidate skipped: T+1 open is at or near up limit"
+    if row["reason"] == "cash_constrained":
+        return "candidate skipped: bucket cash is insufficient for one A-share lot"
     codes = row["analyzer_reason_codes"]
     if codes:
         return f"candidate skipped by analyzer hard veto: {codes}"
@@ -607,6 +697,348 @@ def build_order_events(as_of: str, skipped_rows: list[dict[str, Any]]) -> list[d
     return events
 
 
+def empty_simulation_result(
+    payload: dict[str, Any],
+    capital_context: dict[str, Any],
+    skipped_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    as_of = str(payload.get("trade_date"))
+    bucket_capital = float(capital_context["bucket_capital"])
+    missing_stop_count = sum(1 for row in skipped_rows if row["reason"] == "missing_stop")
+    analyzer_veto_count = sum(
+        1 for row in skipped_rows if row["reason"] == "analyzer_hard_veto"
+    )
+    warning_message = (
+        "Phase 5 skeleton writes contract outputs only; no execution price simulator "
+        "has accepted trades yet."
+    )
+    if analyzer_veto_count:
+        warning_message += f" Rule 6 hard veto replay skipped {analyzer_veto_count} candidate(s)."
+    return {
+        "trades": [],
+        "skipped_rows": skipped_rows,
+        "order_events": build_order_events(as_of, skipped_rows),
+        "daily_equity": [
+            {
+                "trade_date": as_of,
+                "equity": bucket_capital,
+                "cash": bucket_capital,
+                "market_value": 0.0,
+                "drawdown": 0.0,
+            }
+        ],
+        "metrics": {
+            "trade_count": 0,
+            "skipped_count": len(skipped_rows),
+            "entry_unbuyable_count": 0,
+            "missing_stop_count": missing_stop_count,
+            "win_rate": None,
+            "total_return": None,
+            "annualized_return": None,
+            "max_drawdown": None,
+            "avg_holding_days": None,
+            "ending_equity": bucket_capital,
+        },
+        "date_warnings": [
+            {
+                "trade_date": as_of,
+                "warning_type": "no_executable_candidates",
+                "severity": "warning" if payload.get("candidates") else "critical",
+                "message": warning_message,
+            }
+        ],
+        "limitations": [
+            "Phase 5 skeleton validates the execution report contract and writes CSV shells only.",
+            "Candidates that pass analyzer replay are skipped as missing_stop until deterministic stop rules are wired.",
+            "No execution price fetch, limit-up matching, order fill, portfolio accounting, or exit simulation is implemented yet.",
+        ],
+    }
+
+
+def add_event(
+    events: list[dict[str, Any]],
+    event_id: int,
+    as_of: str,
+    ts_code: str,
+    event_code: str,
+    message: str,
+) -> int:
+    events.append(
+        {
+            "event_id": event_id,
+            "as_of": as_of,
+            "ts_code": ts_code,
+            "event_code": event_code,
+            "message": message,
+        }
+    )
+    return event_id + 1
+
+
+def skip_row(
+    candidate: dict[str, Any],
+    reason: str,
+    analyzer_vetoed: bool = False,
+    analyzer_reason_codes: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "ts_code": candidate_code(candidate),
+        "name": candidate_name(candidate),
+        "reason": reason,
+        "analyzer_vetoed": analyzer_vetoed,
+        "analyzer_reason_codes": ",".join(analyzer_reason_codes or []),
+    }
+
+
+def simulate_execution(
+    payload: dict[str, Any],
+    price_data: dict[str, Any],
+    args: argparse.Namespace,
+    capital_context: dict[str, Any],
+) -> dict[str, Any]:
+    as_of = str(payload.get("trade_date") or args.as_of)
+    bucket_capital = float(capital_context["bucket_capital"])
+    cash = bucket_capital
+    peak_equity = bucket_capital
+    by_symbol = price_rows_by_symbol(price_data)
+    trades: list[dict[str, Any]] = []
+    skipped_rows: list[dict[str, Any]] = []
+    daily_equity: list[dict[str, Any]] = [
+        {
+            "trade_date": as_of,
+            "equity": round(bucket_capital, 6),
+            "cash": round(bucket_capital, 6),
+            "market_value": 0.0,
+            "drawdown": 0.0,
+        }
+    ]
+    events: list[dict[str, Any]] = []
+    event_id = 1
+    missing_price_data_count = 0
+    entry_unbuyable_count = 0
+    missing_stop_count = 0
+
+    for candidate in payload.get("candidates", []):
+        ts_code = candidate_code(candidate)
+        event_id = add_event(
+            events, event_id, as_of, ts_code, "candidate_seen", "candidate loaded from analysis_input"
+        )
+        decision = run_veto(candidate)
+        reason_codes = [
+            str(reason.get("code"))
+            for reason in decision.get("reasons", [])
+            if isinstance(reason, dict) and reason.get("code")
+        ]
+        if bool(decision.get("vetoed")):
+            row = skip_row(candidate, "analyzer_hard_veto", True, reason_codes)
+            skipped_rows.append(row)
+            event_id = add_event(
+                events, event_id, as_of, ts_code, "candidate_seen", event_message_for_skip(row)
+            )
+            continue
+
+        rows = by_symbol.get(ts_code, [])
+        entry_index, entry_row = first_price_row_after(rows, as_of)
+        if entry_index is None or entry_row is None:
+            missing_price_data_count += 1
+            row = skip_row(candidate, "missing_price_data")
+            skipped_rows.append(row)
+            event_id = add_event(
+                events, event_id, as_of, ts_code, "missing_price_data", event_message_for_skip(row)
+            )
+            continue
+
+        entry_price = coerce_positive_float(entry_row.get("open_qfq"))
+        if entry_price is None:
+            missing_price_data_count += 1
+            row = skip_row(candidate, "missing_price_data")
+            skipped_rows.append(row)
+            event_id = add_event(
+                events, event_id, as_of, ts_code, "missing_price_data", event_message_for_skip(row)
+            )
+            continue
+
+        if is_limit_up_unbuyable(entry_row):
+            entry_unbuyable_count += 1
+            row = skip_row(candidate, "entry_unbuyable")
+            skipped_rows.append(row)
+            event_id = add_event(
+                events, event_id, as_of, ts_code, "entry_unbuyable", event_message_for_skip(row)
+            )
+            continue
+
+        stop_loss = candidate_stop_loss(candidate)
+        if stop_loss is None or stop_loss >= entry_price:
+            missing_stop_count += 1
+            row = skip_row(candidate, "missing_stop")
+            skipped_rows.append(row)
+            event_id = add_event(
+                events, event_id, as_of, ts_code, "missing_stop", event_message_for_skip(row)
+            )
+            continue
+
+        exit_index = entry_index + args.time_stop_days - 1
+        if exit_index >= len(rows):
+            missing_price_data_count += 1
+            row = skip_row(candidate, "missing_price_data")
+            skipped_rows.append(row)
+            event_id = add_event(
+                events, event_id, as_of, ts_code, "missing_price_data", event_message_for_skip(row)
+            )
+            continue
+
+        exit_row = rows[exit_index]
+        exit_row_index = exit_index
+        exit_reason = "time_stop"
+        exit_price = coerce_positive_float(exit_row.get("close_qfq"))
+        if exit_price is None:
+            missing_price_data_count += 1
+            row = skip_row(candidate, "missing_price_data")
+            skipped_rows.append(row)
+            event_id = add_event(
+                events, event_id, as_of, ts_code, "missing_price_data", event_message_for_skip(row)
+            )
+            continue
+        for row_index in range(entry_index, exit_index + 1):
+            row = rows[row_index]
+            low = coerce_positive_float(row.get("low_qfq"))
+            if low is not None and low <= stop_loss:
+                open_price = coerce_positive_float(row.get("open_qfq"))
+                exit_row = row
+                exit_row_index = row_index
+                exit_reason = "stop_loss"
+                exit_price = (
+                    open_price if open_price is not None and open_price <= stop_loss else stop_loss
+                )
+                break
+
+        shares = calculate_shares(entry_price, cash, bucket_capital, args)
+        if shares <= 0:
+            row = skip_row(candidate, "cash_constrained")
+            skipped_rows.append(row)
+            event_id = add_event(
+                events, event_id, as_of, ts_code, "cash_constrained", event_message_for_skip(row)
+            )
+            continue
+
+        entry_date = str(entry_row["trade_date"])
+        entry_gross = shares * entry_price
+        entry_cost = entry_gross * args.cost_pct
+        cash -= entry_gross + entry_cost
+        event_id = add_event(
+            events,
+            event_id,
+            entry_date,
+            ts_code,
+            "entry",
+            f"entered {shares} shares at T+1 open_qfq {entry_price:.4f}",
+        )
+
+        exit_date = str(exit_row["trade_date"])
+        exit_gross = shares * exit_price
+        exit_cost = exit_gross * args.cost_pct
+        pnl = exit_gross - exit_cost - entry_gross - entry_cost
+        cash += exit_gross - exit_cost
+        holding_days = exit_row_index - entry_index + 1
+        trades.append(
+            {
+                "trade_id": len(trades) + 1,
+                "ts_code": ts_code,
+                "entry_date": entry_date,
+                "exit_date": exit_date,
+                "entry_price": round(entry_price, 6),
+                "exit_price": round(exit_price, 6),
+                "shares": shares,
+                "pnl": round(pnl, 6),
+                "return_pct": round(pnl / (entry_gross + entry_cost), 8),
+                "exit_reason": exit_reason,
+                "holding_days": holding_days,
+            }
+        )
+        event_id = add_event(
+            events,
+            event_id,
+            exit_date,
+            ts_code,
+            exit_reason,
+            f"{exit_reason} exit at {exit_price:.4f}",
+        )
+        event_id = add_event(
+            events,
+            event_id,
+            exit_date,
+            ts_code,
+            "exit",
+            f"closed trade with net pnl {pnl:.2f}",
+        )
+        equity = cash
+        peak_equity = max(peak_equity, equity)
+        drawdown = 0.0 if peak_equity <= 0 else (equity / peak_equity) - 1.0
+        daily_equity.append(
+            {
+                "trade_date": exit_date,
+                "equity": round(equity, 6),
+                "cash": round(cash, 6),
+                "market_value": 0.0,
+                "drawdown": round(drawdown, 8),
+            }
+        )
+
+    trade_count = len(trades)
+    wins = sum(1 for trade in trades if float(trade["pnl"]) > 0)
+    total_pnl = sum(float(trade["pnl"]) for trade in trades)
+    max_drawdown = min(float(row["drawdown"]) for row in daily_equity) if daily_equity else None
+    avg_holding_days = None
+    if trade_count:
+        avg_holding_days = sum(int(trade["holding_days"]) for trade in trades) / trade_count
+    date_warnings: list[dict[str, Any]] = []
+    if trade_count == 0:
+        date_warnings.append(
+            {
+                "trade_date": as_of,
+                "warning_type": "no_executable_candidates",
+                "severity": "warning" if payload.get("candidates") else "critical",
+                "message": "No candidates produced executable trades after fill simulation.",
+            }
+        )
+    if missing_price_data_count:
+        date_warnings.append(
+            {
+                "trade_date": as_of,
+                "warning_type": "missing_price_data",
+                "severity": "warning",
+                "message": f"{missing_price_data_count} candidate(s) lacked entry or exit price rows.",
+            }
+        )
+    return {
+        "trades": trades,
+        "skipped_rows": skipped_rows,
+        "order_events": events,
+        "daily_equity": daily_equity,
+        "metrics": {
+            "trade_count": trade_count,
+            "skipped_count": len(skipped_rows),
+            "entry_unbuyable_count": entry_unbuyable_count,
+            "missing_stop_count": missing_stop_count,
+            "win_rate": (wins / trade_count) if trade_count else None,
+            "total_return": (total_pnl / bucket_capital) if trade_count else None,
+            "annualized_return": None,
+            "max_drawdown": max_drawdown,
+            "avg_holding_days": avg_holding_days,
+            "ending_equity": cash,
+        },
+        "date_warnings": date_warnings,
+        "limitations": [
+            "Phase 5 minimal fill simulation uses daily OHLC only; intraday path within the day is not modeled.",
+            "Stop-loss exits use the day's open_qfq when it opens below the stop; otherwise a low_qfq stop touch fills at the stop price.",
+            "The first fill increment processes candidates sequentially and does not yet model concurrent open positions.",
+            "Daily equity currently records starting equity and realized exit dates; open-position mark-to-market is not yet modeled.",
+            "total_return is realized total_pnl divided by initial bucket_capital; no alternate ending-equity-normalized return is emitted yet.",
+            "All generated actions are backtest events only; manual-order-only boundary remains in force.",
+        ],
+    }
+
+
 def output_refs(out_dir: Path) -> dict[str, str]:
     return {
         "execution_report": relative_ref(out_dir / "execution_report.json"),
@@ -626,32 +1058,17 @@ def build_report(
     skipped_rows: list[dict[str, Any]] | None = None,
     price_data: dict[str, Any] | None = None,
     price_data_path: Path | None = None,
+    simulation: dict[str, Any] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     as_of = str(payload.get("trade_date") or args.as_of)
     candidates = payload.get("candidates", [])
     if skipped_rows is None:
         skipped_rows = classify_skips(candidates)
-    missing_stop_count = sum(1 for row in skipped_rows if row["reason"] == "missing_stop")
-    analyzer_veto_count = sum(
-        1 for row in skipped_rows if row["reason"] == "analyzer_hard_veto"
-    )
+    if simulation is None:
+        simulation = empty_simulation_result(payload, capital_context, skipped_rows)
     candidate_count = len(candidates)
-    warnings = [
-        {
-            "trade_date": as_of,
-            "warning_type": "no_executable_candidates",
-            "severity": "warning" if candidate_count else "critical",
-            "message": (
-                "Phase 5 skeleton writes contract outputs only; no execution price "
-                "simulator has accepted trades yet."
-            ),
-        }
-    ]
-    if analyzer_veto_count:
-        warnings[0]["message"] += (
-            f" Rule 6 hard veto replay skipped {analyzer_veto_count} candidate(s)."
-        )
+    sim_metrics = dict(simulation["metrics"])
 
     return {
         "schema_name": "execution_backtest_report",
@@ -705,7 +1122,7 @@ def build_report(
             },
             "pit_limitations": [
                 (
-                    "Execution price data is schema-validated but not used for fills yet."
+                    "Execution price data is used by the Phase 5 minimal daily-OHLC fill simulator."
                     if price_data is not None
                     else "Execution prices are not fetched in the Phase 5 skeleton."
                 ),
@@ -724,23 +1141,10 @@ def build_report(
         "metrics": {
             "sample_count": candidate_count,
             "candidate_count": candidate_count,
-            "trade_count": 0,
-            "skipped_count": len(skipped_rows),
-            "entry_unbuyable_count": 0,
-            "missing_stop_count": missing_stop_count,
-            "win_rate": None,
-            "total_return": None,
-            "annualized_return": None,
-            "max_drawdown": None,
-            "avg_holding_days": None,
-            "ending_equity": capital_context["bucket_capital"],
+            **sim_metrics,
         },
-        "date_warnings": warnings,
-        "limitations": [
-            "Phase 5 skeleton validates the execution report contract and writes CSV shells only.",
-            "Candidates that pass analyzer replay are skipped as missing_stop until deterministic stop rules are wired.",
-            "No execution price fetch, limit-up matching, order fill, portfolio accounting, or exit simulation is implemented yet.",
-        ],
+        "date_warnings": simulation["date_warnings"],
+        "limitations": simulation["limitations"],
     }
 
 
@@ -758,12 +1162,14 @@ def write_outputs(
     payload: dict[str, Any],
     out_dir: Path,
     skipped_rows: list[dict[str, Any]] | None = None,
+    simulation: dict[str, Any] | None = None,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     as_of = str(payload.get("trade_date") or report["settings"]["end_date"])
     if skipped_rows is None:
         skipped_rows = classify_skips(payload.get("candidates", []))
-    order_events = build_order_events(as_of, skipped_rows)
+    if simulation is None:
+        simulation = empty_simulation_result(payload, report["capital_context"], skipped_rows)
 
     write_csv(
         out_dir / "trades.csv",
@@ -778,26 +1184,19 @@ def write_outputs(
             "pnl",
             "return_pct",
             "exit_reason",
+            "holding_days",
         ],
-        [],
+        simulation["trades"],
     )
     write_csv(
         out_dir / "daily_equity.csv",
         ["trade_date", "equity", "cash", "market_value", "drawdown"],
-        [
-            {
-                "trade_date": as_of,
-                "equity": report["metrics"]["ending_equity"],
-                "cash": report["metrics"]["ending_equity"],
-                "market_value": 0,
-                "drawdown": 0,
-            }
-        ],
+        simulation["daily_equity"],
     )
     write_csv(
         out_dir / "order_events.csv",
         ["event_id", "as_of", "ts_code", "event_code", "message"],
-        order_events,
+        simulation["order_events"],
     )
     write_csv(
         out_dir / "skipped_candidates.csv",
@@ -837,7 +1236,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     validate_initial_capital_guard(args, capital_context)
     out_dir = args.out_dir
-    skipped_rows = classify_skips(payload.get("candidates", []))
+    if price_data is None:
+        skipped_rows = classify_skips(payload.get("candidates", []))
+        simulation = empty_simulation_result(payload, capital_context, skipped_rows)
+    else:
+        simulation = simulate_execution(payload, price_data, args, capital_context)
+        skipped_rows = simulation["skipped_rows"]
     report = build_report(
         payload,
         input_path,
@@ -847,8 +1251,9 @@ def main(argv: list[str] | None = None) -> int:
         skipped_rows=skipped_rows,
         price_data=price_data,
         price_data_path=price_data_path,
+        simulation=simulation,
     )
-    write_outputs(report, payload, out_dir, skipped_rows=skipped_rows)
+    write_outputs(report, payload, out_dir, skipped_rows=skipped_rows, simulation=simulation)
     print(f"[OK] wrote {out_dir / 'execution_report.json'}")
     print(f"[OK] wrote {out_dir / 'trades.csv'}")
     print(f"[OK] wrote {out_dir / 'daily_equity.csv'}")

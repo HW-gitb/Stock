@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://stock.local/schemas/execution_backtest_report/1.1.0/schema.json",
   "title": "Execution Backtest Report",
-  "description": "Phase 5 machine-readable contract for execution-level backtest reports. Version 1.1.0 adds bucket-aware capital_context before fill simulation is implemented.",
+  "description": "Phase 5 machine-readable contract for execution-level backtest reports. Version 1.1.0 adds bucket-aware capital_context and supports minimal fill simulation outputs. event_log.event_codes is grow-only within v1.x; consumers should handle unknown event codes gracefully.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -364,7 +364,7 @@
             },
             "event_codes": {
               "type": "array",
-              "description": "Required row-level event code coverage. At minimum every execution report must declare entry and exit event rows.",
+              "description": "Required row-level event code coverage. At minimum every execution report must declare entry and exit event rows. This enum is grow-only within v1.x; consumers should handle unknown event codes gracefully.",
               "allOf": [
                 {
                   "contains": {
@@ -383,10 +383,12 @@
                   "candidate_seen",
                   "entry",
                   "entry_unbuyable",
+                  "missing_price_data",
                   "missing_stop",
                   "stop_loss",
                   "take_profit",
                   "time_stop",
+                  "cash_constrained",
                   "circuit_breaker",
                   "cooldown_block",
                   "exit"
