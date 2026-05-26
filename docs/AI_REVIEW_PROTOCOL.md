@@ -31,7 +31,7 @@ Codex must not:
 - rewrite the whole project without user approval
 - delete working logic without user approval
 - modify files outside the approved task
-- follow Claude's review suggestions directly without user approval
+- repair Required fixes without user approval, or dispose Optional suggestions outside the `修复` flow
 - create new handoff files for ordinary small changes
 - put code details or git state into Claude memory
 
@@ -59,8 +59,9 @@ Claude must not:
 The user is responsible for:
 - approving whether Codex may execute a task
 - deciding whether Claude's Required fixes should be applied
-- deciding whether Optional suggestions should be ignored, deferred, or accepted
 - deciding when a phase is complete
+
+The user is **not** responsible for deciding individual Optional suggestions: those route to Codex disposition per §修复 (as of 2026-05-26). The user retains override via `git revert` or by explicitly directing Codex to reverse a disposition.
 
 ## Required Reading Order
 
@@ -89,9 +90,9 @@ For Claude:
 5. Codex runs checks or tests.
 6. Codex updates docs/CURRENT.md when the change is meaningful.
 7. Codex prepends docs/SESSION_LOG.md if the change is non-trivial (Codex's entry IS the handoff to Claude; there is no separate REVIEW_PACKET).
-8. Claude reviews the actual git diff plus the top SESSION_LOG entry. When the review contains Required fixes, Optional suggestions, open questions, a non-trivial verdict, or a phase/process decision, Claude prepends a review entry to `docs/SESSION_LOG.md` and clearly marks pending user approval items (see §Review Recording below). A pure Pass writes a minimal PASS-only entry (see §Review Recording).
-9. The user decides whether to accept, request fixes, or defer.
-10. Codex fixes only user-approved Required fixes.
+8. Claude reviews the actual git diff plus the top SESSION_LOG entry. When the review contains Required fixes, Optional suggestions, open questions, a non-trivial verdict, or a phase/process decision, Claude prepends a review entry to `docs/SESSION_LOG.md` marking Required fixes as PENDING USER APPROVAL and Optional suggestions as PENDING CODEX DISPOSITION (see §Review Recording below). A pure Pass writes a minimal PASS-only entry (see §Review Recording).
+9. The user decides Required fixes (approve via `批准修改` / defer via `暂缓修改`). Optional suggestions skip user approval and route to Codex disposition during the next `修复` round.
+10. Codex repairs user-approved Required fixes AND disposes of each Optional suggestion (accept / accept with modification / reject + reason). See §修复.
 11. After Claude returns Pass on the latest iteration, the user invokes `提交`; Codex commits the reviewed working tree as a single coherent commit. Codex must not commit during `执行` or `修复` (see §Commit Timing Rule below).
 
 ## Review Verdicts
@@ -105,6 +106,18 @@ The change is mostly acceptable but has Required fixes.
 ### Fail
 The change should not be accepted until the main issues are fixed.
 
+## Optional Re-raise Constraint
+
+(Established 2026-05-26.)
+
+When Claude re-reviews a `修复` round and a prior Optional was disposed as `reject` (per §修复), Claude must not re-raise the same Optional unless Claude has materially new information — for example, the reject reason itself contains a logic error, or new diff evidence invalidates Codex's rationale.
+
+Rationale: Codex is the Designer; Optional suggestions are advisory. Re-raising rejected Optionals turns review into "I know your design better than you do" loops. Claude's review lane is correctness, scope, contract, risk — not overriding Designer judgment on advisory items.
+
+`accept with modification` deviations may be re-flagged if Claude believes the modification missed the Optional's original intent. Mark such items as a **new** Optional that explicitly references the prior Optional ID (e.g., "Re-flagging prior O3's accept-with-modification: the deviation skipped the entry/exit coverage requirement"). Do not re-state the original rejected Optional verbatim.
+
+If Claude believes a rejected Optional should be elevated to Required (rare — usually means it was mis-classified the first round), Claude must explicitly explain the elevation rationale in the new review entry, not silently re-add it under the same Optional category.
+
 ## Review Recording
 
 Claude review output must be recorded in `docs/SESSION_LOG.md` (as a prepended entry per `AGENTS.md §Session log discipline`) when it contains any of:
@@ -115,7 +128,14 @@ Claude review output must be recorded in `docs/SESSION_LOG.md` (as a prepended e
 - A non-trivial verdict (Pass with fixes / Fail)
 - A phase or process decision
 
-Review entries must clearly mark whether fixes are pending user approval (typical mark: `Status: REVIEW VERDICT RECORDED. Required fixes below are PENDING USER APPROVAL.`). Codex must not execute review suggestions directly unless the user has approved them. A review entry in `SESSION_LOG.md` is for cross-LLM continuity — it is **not** a direct execution order to Codex.
+Review entries must clearly mark pending status separately for Required fixes and Optional suggestions:
+
+- Required fixes (if any) → PENDING USER APPROVAL — Codex must not repair until user invokes `批准修改`.
+- Optional suggestions (if any) → PENDING CODEX DISPOSITION — Codex decides accept / accept with modification / reject + reason during the next `修复` round, no user approval needed (see §修复).
+
+Typical mark: `Status: REVIEW VERDICT RECORDED. Required fixes (if any) PENDING USER APPROVAL; Optional suggestions (if any) PENDING CODEX DISPOSITION.`
+
+A review entry in `SESSION_LOG.md` is for cross-LLM continuity — it is **not** a direct execution order to Codex.
 
 A pure Pass verdict (no Required fixes, no Optional suggestions, no open questions, no process decision) **still requires a minimal PASS-only SESSION_LOG entry**, so that `提交` step 3 (verify Claude's latest verdict is Pass) can find it. Without the entry, Codex cannot read the chat where the Pass was given.
 
@@ -190,7 +210,7 @@ After removing the short-lived REVIEW_PACKET document (decision 2026-05-25), all
 
 That is sufficient for Claude to review. There is no separate short-lived file to consult or update.
 
-Codex must not execute Claude review suggestions unless the user approves them.
+Codex must not repair Required fixes unless the user approves them. Optional suggestions are disposed by Codex during `修复` per this protocol; they are not executed directly from review text.
 
 ## Short Command Aliases
 
@@ -258,7 +278,7 @@ Claude must automatically do all of the following:
 11. Review bugs, edge cases, tests, security, data, and state risks.
 12. Review whether docs/CURRENT.md and the SESSION_LOG entry were updated correctly.
 13. Output Verdict: Pass / Pass with fixes / Fail.
-14. If there are Required fixes, Optional suggestions, open questions, or process decisions, write the review result into docs/SESSION_LOG.md and mark it pending user approval. For pure Pass, write a minimal PASS-only entry (see §Review Recording).
+14. If there are Required fixes, Optional suggestions, open questions, or process decisions, write the review result into docs/SESSION_LOG.md using the separate Required / Optional pending statuses from §Review Recording. For pure Pass, write a minimal PASS-only entry (see §Review Recording).
 15. Do not directly modify business code.
 16. Do not directly instruct Codex to execute fixes.
 17. Do not expand the project scope.
@@ -274,7 +294,7 @@ Claude output should be concise:
 
 Meaning:
 
-The user approves Claude's pending Required fixes.
+The user approves Claude's pending Required fixes. `批准修改` applies only to Required fixes — Optional suggestions are not user-approved; they route to Codex disposition during `修复` (see §修复).
 
 When the user types:
 
@@ -283,29 +303,28 @@ When the user types:
 It means:
 
 1. The user approves all currently pending Required fixes from the latest Claude review.
-2. Optional suggestions are not approved unless explicitly stated.
-3. Codex may only repair the approved Required fixes.
-4. Codex must not expand scope.
-5. Codex must not execute Optional suggestions.
-6. If the fix is non-trivial, Codex must prepend docs/SESSION_LOG.md (this is the handoff for Claude re-review).
+2. `批准修改` does not apply to Optional suggestions; Codex disposes of each Optional during the next `修复` regardless of user action here.
+3. Codex may repair the approved Required fixes during the next `修复`.
+4. Codex must not expand scope beyond approved Required fixes + Optional dispositions.
+5. If the repair is non-trivial, Codex must prepend docs/SESSION_LOG.md (this is the handoff for Claude re-review).
 
-If the user wants partial approval, they may type:
+If the user wants partial Required approval, they may type:
 
 批准修改 1,2
 
-Then only Required fixes 1 and 2 are approved.
+Then only Required fixes 1 and 2 are approved; Optional disposition still proceeds automatically during `修复`.
 
 If the user types:
 
 暂缓修改
 
-Then Codex must not execute any Required fixes.
+Then Codex must not execute any Required fixes, but may still dispose of Optional suggestions during `修复`.
 
 ### User command to Codex: 修复
 
 Meaning:
 
-Codex must repair only the user-approved Required fixes from the latest Claude review.
+Codex must repair user-approved Required fixes from the latest Claude review AND dispose of each Optional suggestion as the Designer.
 
 When the user types only:
 
@@ -318,22 +337,31 @@ Codex must automatically do all of the following:
 3. Read docs/CURRENT.md.
 4. Read docs/SESSION_LOG.md top 1-3 entries.
 5. Identify which Required fixes are approved by the user.
-6. Repair only approved Required fixes.
+6. Repair only user-approved Required fixes.
 7. Do not repair unapproved Required fixes.
-8. Do not execute Optional suggestions.
-9. Do not add new features.
+8. For each Optional suggestion in the latest Claude review, decide one of:
+   a. **accept** — implement as Claude described
+   b. **accept with modification** — implement with deviation; record exact deviation and reason
+   c. **reject** — do not implement; record reason
+   Codex is the Designer and has authority to decide each Optional. No user approval needed.
+9. Do not add new features beyond Required fixes + Optional dispositions.
 10. Do not refactor unrelated code.
-11. Do not modify files outside the fix scope.
+11. Do not modify files outside Required fix scope + Optional disposition scope.
 12. Run relevant tests or checks.
 13. Update docs/CURRENT.md if needed.
-14. Prepend docs/SESSION_LOG.md if the fix is non-trivial (this entry IS the handoff to Claude for re-review).
+14. Prepend docs/SESSION_LOG.md (this entry IS the handoff to Claude for re-review). The entry must include an `Optional disposition` section listing one line per Optional from the prior Claude review:
+    - `O1 accept` (no further detail needed)
+    - `O2 accept with modification — change: <what>; reason: <why>`
+    - `O3 reject — reason: <why>`
+    If the prior Claude review had zero Optionals, skip this section.
 15. Do not commit. Commit is a separate step after Claude `审查` returns Pass; user invokes `提交`. See §Commit Timing Rule.
 
 After finishing, Codex must output only a concise summary:
-- Approved fixes repaired
+- Approved Required fixes repaired (count)
+- Optional dispositions: <N accepted, M accepted with modification, K rejected>
 - Files changed
 - Tests/checks run
-- SESSION_LOG entry prepended: Yes / No
+- SESSION_LOG entry prepended: Yes / No (must include `Optional disposition` section if there were Optionals)
 - Working tree uncommitted (per Commit Timing Rule): Yes
 - Ready for Claude re-review: Yes / No
 
@@ -352,8 +380,8 @@ Codex must automatically do all of the following:
 1. Read AGENTS.md.
 2. Read docs/AI_REVIEW_PROTOCOL.md.
 3. Read docs/SESSION_LOG.md top 1-3 entries to verify Claude's latest verdict is Pass.
-4. If the latest verdict is Fail, or Pass with unresolved Required fixes (meaning fixes approved by the user but not yet repaired and Claude-re-passed): refuse to commit. Output the reason and instruct user to run `批准修改` + `修复` first.
-5. If the latest verdict is Pass: run `git status` to see the change set.
+4. If the latest verdict is Fail, Pass with unresolved Required fixes, or a review entry still has unresolved `PENDING CODEX DISPOSITION` Optional suggestions (meaning Codex has not yet run `修复` and reached a clean re-review Pass): refuse to commit. Output the reason and instruct user to run `批准修改` if Required fixes are pending, then `修复`, then `审查`.
+5. If the latest verdict is a clean Pass with no pending Required fixes or Optional dispositions: run `git status` to see the change set.
 6. If `git status` shows nothing to stage, refuse and output `nothing to commit; no changes pending`.
 7. Run `git add -A` to stage all working tree changes. Pattern B assumes the whole working tree has been reviewed; files matching `.gitignore` are skipped automatically.
 8. Run `git commit` with a descriptive message that references the latest SESSION_LOG entry and lists the items in the change set.

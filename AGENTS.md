@@ -164,8 +164,8 @@ Detailed command expansions live only in `docs/AI_REVIEW_PROTOCOL.md` to avoid d
 Common aliases:
 - `执行` = Codex executes the next approved smallest task and prepends a SESSION_LOG entry. Does not commit.
 - `审查` = Claude reviews the current uncommitted working tree using the top SESSION_LOG entry and git diff; Claude must not directly modify business code.
-- `批准修改` = User approves pending Required fixes.
-- `修复` = Codex fixes only user-approved Required fixes and prepends a SESSION_LOG entry. Does not commit.
+- `批准修改` = User approves pending Required fixes only. Optional suggestions are not user-approved — Codex disposes of them during `修复` (see `docs/AI_REVIEW_PROTOCOL.md` §修复).
+- `修复` = Codex repairs user-approved Required fixes + disposes of each Optional suggestion from the latest Claude review (accept / accept with modification / reject + reason). Records dispositions in SESSION_LOG. Does not commit.
 - `提交` = Codex commits the reviewed working tree as a single coherent commit after Claude `审查` returns Pass. Not used during `执行` / `修复`. See `docs/AI_REVIEW_PROTOCOL.md` §Commit Timing Rule.
 
 `AGENTS.md` remains the highest-level project rule. If any alias conflicts with `AGENTS.md`, `AGENTS.md` wins.

@@ -8,6 +8,119 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (approved Required fixes for Optional disposition protocol)
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `b2d6ec4`; targets the immediately prior Codex 修复 entry "approved Required fixes for Optional disposition protocol")
+
+**Verdict**: Pass.
+
+**Notes**: 三条 Required 全部正确落地（R1 §Review Continuity Without Packet line 213、R2 §审查 alias step 14、R3 §提交 alias step 4-5）。Codex 把 §Codex Responsibilities line 34 同语义 contradiction 一并改是合理 Designer 扩展，已在 Key decisions / Alternatives 透明披露。grep 验证无 stale wording 残留（"execute Optional / Optional approval / follow Claude review suggestions" 三类模式只剩新协议的正面陈述）。无新 Optional / 无 open questions。可以 `提交`。
+
+---
+
+## 2026-05-26 — Codex (approved Required fixes for Optional disposition protocol)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for clean `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Codex review (Optional disposition protocol) §Required fixes. User approved fixes 1-3.
+
+**Worked on**:
+1. Rewrote the stale "Codex must not execute Claude review suggestions unless the user approves them" wording to distinguish Required fixes from Optional disposition.
+2. Updated the `审查` alias to use the split Required / Optional pending statuses from §Review Recording.
+3. Updated the `提交` gate to block unresolved `PENDING CODEX DISPOSITION` Optionals as well as unresolved Required fixes.
+
+**Key decisions**:
+- Treated the duplicate stale wording in Codex Responsibilities as part of Required fix 1, because it carried the same old "all suggestions require user approval" semantics.
+- Did not add a new pause-all command; the approved Required fixes were limited to removing contradictions in the new Optional disposition protocol.
+
+**Alternatives considered and rejected**:
+- "Only edit the exact three line numbers from the review" — rejected because leaving the duplicate Codex Responsibilities sentence unchanged would preserve the same contradiction elsewhere in the protocol.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. User sends `审查` for a clean re-review of this protocol repair.
+2. If Pass, user sends `提交`.
+
+---
+
+## 2026-05-26 — Codex review — Pass with fixes (Optional disposition protocol)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes below are PENDING USER APPROVAL; Optional suggestions: none.
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `b2d6ec4`; target is immediately prior Claude transitional Implementer entry "Optional disposition protocol")
+
+**Verdict**: Pass with fixes.
+
+**Scope checked**:
+- `AGENTS.md` short aliases for `批准修改` / `修复`
+- `docs/AI_REVIEW_PROTOCOL.md` workflow, review recording, Optional re-raise rule, `批准修改`, `修复`, and `提交`
+- `docs/SESSION_LOG.md` top handoff entry
+
+**Required fixes**:
+1. `docs/AI_REVIEW_PROTOCOL.md` line 213 still says "Codex must not execute Claude review suggestions unless the user approves them." This contradicts the new Optional flow, where Required fixes need user approval but Optional suggestions route to Codex disposition without user approval. Rewrite this sentence to distinguish Required fixes from Optional suggestions.
+2. `docs/AI_REVIEW_PROTOCOL.md` line 281 in the `审查` alias still says review results should be marked "pending user approval" for Required fixes, Optional suggestions, open questions, or process decisions. This contradicts §Review Recording's split status. Rewrite it to point to the separate Required / Optional pending statuses.
+3. `docs/AI_REVIEW_PROTOCOL.md` `提交` steps still only block Fail or unresolved Required fixes. That allows a user to invoke `提交` immediately after a Pass-with-Optional review, bypassing the now-required Codex Optional disposition record. Update the commit gate so unresolved `PENDING CODEX DISPOSITION` Optionals also block commit until Codex runs `修复` and the latest re-review reaches Pass with no pending Required fixes or Optional dispositions.
+
+**Optional suggestions**: none.
+
+**Documentation issues**:
+- `AGENTS.md` alias summary is aligned with the new rule.
+- `docs/CURRENT.md` was not touched, which is acceptable because this is review-protocol-only work.
+
+**Pending user approval**: Yes — Required fixes 1-3.
+
+---
+
+## 2026-05-26 — Claude (Optional disposition protocol — transitional Implementer)
+
+**Commits**: none (Pattern B: working tree only; commit waits for Codex `审查` Pass + user `提交`)
+
+**Relationship to prior session(s)**:
+- Refines 2026-05-25 protocol simplification (commit `ef12fbf`) §Short Command Aliases / §Review Recording / §修复 to add a Codex disposition path for Optional suggestions.
+- Implements user's 2026-05-26 protocol proposal: "Required fixes 流程不变；Optional 走 Codex 自主，no user approval"。Claude 上一轮提出 3 个边界倾向（disposition 留痕 / 复用 `修复` 命令 / Claude 二审不重提 reject 的 Optional），用户授权"按你的倾向来"，本轮按倾向落地。
+
+**Worked on (Claude as transitional Implementer; user explicitly directed "修改协议")**:
+1. `AGENTS.md` §Short Command Aliases — `批准修改` 限定 Required only；`修复` 加 Optional disposition 职责。
+2. `docs/AI_REVIEW_PROTOCOL.md`：
+   - §User Responsibilities — 删 "deciding Optional"，加 carve-out（user 仍可 git revert 或显式指示反转 disposition）。
+   - §Standard Workflow step 8/9/10 — Optional 改走 `PENDING CODEX DISPOSITION`。
+   - §Review Recording — 区分双 pending status；typical mark 更新为 "Required (if any) PENDING USER APPROVAL; Optional (if any) PENDING CODEX DISPOSITION"。
+   - 新增 §Optional Re-raise Constraint — Claude 二审不得重提 reject 的 Optional（除非新信息）；accept-with-modification 偏离可作为新 Optional 重新提，需引用旧 ID；若需升 Required 必须显式说明 reclassification rationale。
+   - §批准修改 — 限定 Required；保留 `暂缓修改` 语义（Optional 不受暂缓影响）。
+   - §修复 — 必填 step 8 Optional disposition 三档（accept / accept with modification / reject）；entry 必含 `Optional disposition` 段（每条 Optional 一行）；输出 summary 加 "Optional dispositions: <N accepted, M modified, K rejected>"。
+
+**Key decisions**:
+- **复用 `修复` 命令，不新建 `处理 optional`** — 减少协议词汇，单一 entry point。Required 和 Optional 同轮处理时无需两次命令切换。
+- **Codex reject 的 Optional 必须留痕**（`Optional disposition` 节内 "O3 reject — reason: ..."）— 后人翻 SESSION_LOG 可追溯，否则同一 Optional 会被反复提议。
+- **Claude 二审不得重提 reject 的 Optional**（除非新信息）— 尊重 Designer judgment，避免 "我比你更懂设计" 循环。新信息的窄口子：reject reason 本身有逻辑错误，或新 diff evidence 否定 rationale。
+- **`暂缓修改` 对 Optional 不生效**（Codex 仍会 dispose）— Optional 流程已脱离用户批准链。
+- **本轮不动 `docs/CURRENT.md` / handoff 文件** — 协议改动不影响业务 phase 状态，SESSION_LOG entry 足以承载。
+
+**Alternatives considered and rejected**:
+- "新建 `处理 optional` 独立命令" — 否决。增加用户记忆负担；Required + Optional 同轮时双命令切换比单命令繁琐。
+- "Claude self-review 本轮协议改动" — 否决。先例 `ef12fbf` 已留 caveat："Self-review is inherently weaker; future major protocol changes should ideally land via Codex implementation + Claude independent review"。本轮没有 "现在就做" 的紧急理由，应当让 Codex 独立 review。
+- "Optional 不留痕、Codex 想拒就直接不动" — 否决。透明度成本 > 极少几行 SESSION_LOG 的开销，且无追溯会导致重复提议。
+- "Claude 二审完全不能动 reject 的 Optional" — 否决（更严）。保留 "新信息可重提" 窄口子避免协议僵化；同时为防滥用，新信息必须显式说明、不得 verbatim re-state。
+- "新增 'Optional acceptance rate' 在 SESSION_LOG metadata 跟踪" — 否决。过度量化 + 偏离协议本意（review 不是 KPI）。
+
+**Open questions handed off**:
+- Codex 审查时确认：§修复 step 8 的三档分类是否清晰、`Optional disposition` 段的行格式是否足够规整（每行示例已在条文里给出）。
+- Codex 审查时确认：§Optional Re-raise Constraint 中 "materially new information" 的判定标准当前留给 Claude 自判 — 是否需要进一步收紧（如要求引用具体 diff 行或测试结果）？
+- Codex 审查时确认：`暂缓修改` 对 Optional 不生效的语义是否对所有 future use case 都成立 — 是否存在用户希望同时暂停 Required + Optional 的场景，若有应另设命令（如 `全暂缓`）。
+
+**Next natural step from my view**:
+1. 用户切到 Codex → `审查`（Codex 作为 independent reviewer，对协议层 self-review 弱点的对策）。
+2. Codex 返回 Pass → 用户 `提交`。commit message 单独描述协议改动，scope = AGENTS.md + AI_REVIEW_PROTOCOL.md。
+3. 提交后下一次实际业务流程（Phase 5 runner skeleton 等）即采用新规则：Claude review 写 Optional 时标 `PENDING CODEX DISPOSITION`，Codex `修复` 时 disposition 写进 entry。
+4. 历史 SESSION_LOG entry 不重写（reverse-chrono immutable），新规则只对本次 commit 之后的 review 轮次生效。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex (Codex must `审查` first).
+
+---
+
 ## 2026-05-25 — Codex (reference framework policy clarification)
 
 **Commits**: none (documentation-only working tree change; user asked to write the constraint into project files)
