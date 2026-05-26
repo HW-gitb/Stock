@@ -415,3 +415,48 @@ git diff --check
 2. Return JSON intentionally remains a plain `YYYYMM -> return` object for aggregate runner compatibility; lineage lives in the metadata sidecar.
 3. The materializer uses first available `index_daily` close to last available `index_daily` close within each requested month. Callers should request date ranges that cover the aggregate execution months completely.
 4. Generated benchmark artifacts default under ignored `result/a_short/backtest/execution/forward_aggregate/`; do not commit real forward evidence artifacts.
+
+---
+
+## 2026-05-27 追加：Phase 6b candidate-universe overlap audit
+
+### 改了什么
+
+- 新增 `schemas/candidate_universe_overlap_audit.schema.json` v1.0.0，作为单个 captured A-short candidate universe 与 CSI1000 / CSI300 成分重叠的审计 artifact contract。
+- 新增 `runners/audit_candidate_universe_overlap_tushare.py`，读取 `analysis_input.json` 候选 `ts_code`，从 Tushare `index_weight` 拉 CSI1000 primary (`000852.SH`) 与 CSI300 secondary (`000300.SH`) 成分，输出 schema-valid overlap audit JSON。
+- Claude review Optional disposition 后，audit `settings` 内联记录 `provider="tushare"` 与 `api_families=["index_weight", "tushare_provider"]`；`index_weight` 空返回优先报 no rows，再区分有数据但缺列。
+- 默认输出路径为 ignored `result/a_short/backtest/execution/forward_aggregate/candidate_universe_overlap_audit_<as_of>.json`。
+- 新增 `tests/schema/test_candidate_universe_overlap_audit_schema.py` 与 `tests/phase6/test_audit_candidate_universe_overlap_tushare.py`，覆盖 schema meta、provider lineage、primary-switch guard、CSI1000/CSI300 required pair、CLI 写出、latest membership date 选择、重复候选去重、date mismatch、空候选池、空 index_weight、缺列与无 usable membership rows。
+- 更新 `runners/README.md` 与 `docs/CURRENT.md`。
+
+### 为什么
+
+Phase 6a 已规定 primary switch 必须有 candidate universe style audit，而不能用主观描述判断候选池“像大盘/小盘”。本切片先把最小可复现 audit artifact 落地：用 captured `analysis_input` 的候选池与 Tushare index membership 做 count overlap。它只提供 benchmark-policy evidence，不切换 primary benchmark，不计算 alpha，不 promotion variant。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_candidate_universe_overlap_audit_schema tests.phase6.test_audit_candidate_universe_overlap_tushare -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_candidate_universe_overlap_audit_schema tests.phase6.test_audit_candidate_universe_overlap_tushare tests.execution.test_materialize_benchmark_monthly_returns_tushare tests.phase6.test_materialize_a_short_variant_tracking tests.schema.test_a_short_variant_tracking_schema -v
+git diff --check
+git check-ignore result/a_short/backtest/execution/forward_aggregate/candidate_universe_overlap_audit_20260621.json
+```
+
+### 验证结果
+
+- `tests.schema.test_candidate_universe_overlap_audit_schema` + `tests.phase6.test_audit_candidate_universe_overlap_tushare`：11 tests passed。
+- Candidate-universe audit + benchmark materializer / variant plan materializer / variant tracking schema regression：32 tests passed。
+- `git diff --check`：passed（CRLF warnings only）。
+- `git check-ignore ...candidate_universe_overlap_audit_20260621.json`：confirmed ignored。
+
+### 失效旧结论
+
+- “Candidate-universe overlap audit 只有 Phase 6a policy，没有机器可校验 artifact contract”失效；现在有 `candidate_universe_overlap_audit` v1.0.0。
+- “候选池风格/指数 overlap 只能靠人工描述”失效；现在有 Tushare `index_weight` provider-boundary helper。
+- “单次 overlap audit 可以触发 primary switch”明确失效；schema 和 runner 均锁定 `primary_switch_allowed=false`，primary switch 仍需 Phase 6a §3.5 的 6 个月、多 cohort 和 sensitivity 条件。
+
+### 下一步注意事项
+
+1. 该 runner 只做 count overlap；market-cap percentile、sector/style concentration 仍未实现，后续需要数据字段再扩。
+2. 多期审计结果可以作为 primary-switch review 的输入，但单个 audit artifact 不允许切换 CSI1000 primary。
+3. 下一条 Phase 6b slice 可转向 materialized-plan driven comparison track inputs 或 forward evidence accumulation；不要把 overlap audit 误读为 variant evidence。

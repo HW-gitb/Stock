@@ -1,0 +1,422 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/candidate_universe_overlap_audit/1.0.0/schema.json",
+  "title": "Candidate Universe Overlap Audit",
+  "description": "Phase 6b audit artifact for comparing one captured A-short candidate universe against CSI1000 and CSI300 constituents. This is benchmark-policy evidence only; it does not switch the primary benchmark, promote variants, or authorize full-size manual use.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "as_of",
+    "scope",
+    "inputs",
+    "settings",
+    "candidate_universe",
+    "benchmarks",
+    "conclusion",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "candidate_universe_overlap_audit"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "as_of": {
+      "$ref": "#/$defs/date8"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "settings": {
+      "$ref": "#/$defs/settings"
+    },
+    "candidate_universe": {
+      "$ref": "#/$defs/candidateUniverse"
+    },
+    "benchmarks": {
+      "$ref": "#/$defs/benchmarks"
+    },
+    "conclusion": {
+      "$ref": "#/$defs/conclusion"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "symbolList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "system",
+        "phase",
+        "purpose",
+        "audit_status",
+        "primary_switch_allowed"
+      ],
+      "properties": {
+        "market": {
+          "const": "A"
+        },
+        "system": {
+          "const": "a_short"
+        },
+        "phase": {
+          "const": "6b"
+        },
+        "purpose": {
+          "const": "candidate_universe_overlap_audit"
+        },
+        "audit_status": {
+          "const": "audit_only"
+        },
+        "primary_switch_allowed": {
+          "const": false
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysis_input"
+      ],
+      "properties": {
+        "analysis_input": {
+          "$ref": "#/$defs/analysisInputRef"
+        }
+      }
+    },
+    "analysisInputRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "schema_name",
+        "schema_version",
+        "trade_date",
+        "preset",
+        "market",
+        "horizon",
+        "candidate_count_raw",
+        "candidate_count_unique"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "schema_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "schema_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "trade_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "preset": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "market": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "horizon": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "candidate_count_raw": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "candidate_count_unique": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_symbol_source",
+        "provider",
+        "api_families",
+        "membership_source",
+        "membership_window",
+        "overlap_method",
+        "primary_benchmark",
+        "secondary_benchmarks"
+      ],
+      "properties": {
+        "candidate_symbol_source": {
+          "const": "analysis_input.candidates[*].ts_code"
+        },
+        "provider": {
+          "const": "tushare"
+        },
+        "api_families": {
+          "const": [
+            "index_weight",
+            "tushare_provider"
+          ]
+        },
+        "membership_source": {
+          "const": "tushare:index_weight"
+        },
+        "membership_window": {
+          "$ref": "#/$defs/membershipWindow"
+        },
+        "overlap_method": {
+          "const": "candidate_ts_code_vs_index_constituents_by_count"
+        },
+        "primary_benchmark": {
+          "const": "csi1000"
+        },
+        "secondary_benchmarks": {
+          "type": "array",
+          "items": {
+            "const": "csi300"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      }
+    },
+    "membershipWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_date",
+        "end_date",
+        "lookback_days"
+      ],
+      "properties": {
+        "start_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "end_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "lookback_days": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "candidateUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbols",
+        "candidate_count_raw",
+        "candidate_count_unique",
+        "duplicate_candidate_count"
+      ],
+      "properties": {
+        "symbols": {
+          "$ref": "#/$defs/symbolList"
+        },
+        "candidate_count_raw": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "candidate_count_unique": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "duplicate_candidate_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "benchmarks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "csi1000",
+        "csi300"
+      ],
+      "properties": {
+        "csi1000": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/benchmarkAudit"
+            },
+            {
+              "properties": {
+                "benchmark": {
+                  "const": "csi1000"
+                },
+                "role": {
+                  "const": "primary"
+                }
+              }
+            }
+          ]
+        },
+        "csi300": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/benchmarkAudit"
+            },
+            {
+              "properties": {
+                "benchmark": {
+                  "const": "csi300"
+                },
+                "role": {
+                  "const": "secondary"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "benchmarkAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benchmark",
+        "role",
+        "index_code",
+        "source",
+        "membership_trade_date",
+        "constituent_count",
+        "overlap_count",
+        "overlap_ratio",
+        "overlap_symbols",
+        "non_overlap_count"
+      ],
+      "properties": {
+        "benchmark": {
+          "type": "string",
+          "enum": [
+            "csi1000",
+            "csi300"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "primary",
+            "secondary"
+          ]
+        },
+        "index_code": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "membership_trade_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "constituent_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "overlap_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "overlap_ratio": {
+          "$ref": "#/$defs/ratio"
+        },
+        "overlap_symbols": {
+          "$ref": "#/$defs/symbolList"
+        },
+        "non_overlap_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "conclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nearest_benchmark_by_overlap_count",
+        "benchmark_ranking_by_overlap",
+        "primary_switch_allowed",
+        "benchmark_policy_action"
+      ],
+      "properties": {
+        "nearest_benchmark_by_overlap_count": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "benchmark_ranking_by_overlap": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/benchmarkRankingRow"
+          },
+          "minItems": 2
+        },
+        "primary_switch_allowed": {
+          "const": false
+        },
+        "benchmark_policy_action": {
+          "const": "no_primary_switch_from_single_audit"
+        }
+      }
+    },
+    "benchmarkRankingRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benchmark",
+        "overlap_count",
+        "overlap_ratio"
+      ],
+      "properties": {
+        "benchmark": {
+          "type": "string",
+          "enum": [
+            "csi1000",
+            "csi300"
+          ]
+        },
+        "overlap_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "overlap_ratio": {
+          "$ref": "#/$defs/ratio"
+        }
+      }
+    }
+  }
+}

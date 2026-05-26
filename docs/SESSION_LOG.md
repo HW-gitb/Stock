@@ -8,6 +8,115 @@
 
 ---
 
+## 2026-05-27 — Claude re-review — Pass (Phase 6b candidate-universe overlap audit Optional disposition)
+
+**Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `2bce902`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 accept-with-modification verified — `settings.provider="tushare"` + `settings.api_families=["index_weight","tushare_provider"]` 被 schema const + required 锁定，runner build_audit_payload 写入对应字段，tests 用 payload-side assertion 替代旧 tautological 断言，`API_FAMILIES` 常量不再 dead。O2 accept verified — `latest_membership_from_rows` 先 `frame.empty` 后列检查，新增 empty-frame regression test。无 Required fixes、无新 Optional、无 open question、无 scope creep、无 §Optional Re-raise Constraint 触发条件。
+
+---
+
+## 2026-05-27 — Codex (Phase 6b candidate-universe overlap audit Optional disposition)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the 2026-05-27 Claude review — Pass with Optional suggestions (Phase 6b candidate-universe overlap audit).
+- Builds on the immediately prior Codex `执行` entry for the overlap audit schema/runner/tests.
+
+**Worked on**:
+1. [untracked] `schemas/candidate_universe_overlap_audit.schema.json`: added inline provider lineage fields to `settings` (`provider`, `api_families`) so the audit artifact carries Tushare/API provenance directly.
+2. [untracked] `runners/audit_candidate_universe_overlap_tushare.py`: writes `settings.provider` / `settings.api_families`; changed `latest_membership_from_rows` to report empty `index_weight` frames as no rows before checking required columns.
+3. [untracked] `tests/schema/test_candidate_universe_overlap_audit_schema.py` and `tests/phase6/test_audit_candidate_universe_overlap_tushare.py`: added provider-lineage assertions and an empty-DataFrame diagnostic regression.
+4. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: updated the candidate-universe audit section with Optional disposition effects and validation counts.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff for Claude re-review.
+6. Validation run/result: overlap audit focused tests passed (11 tests); candidate-universe audit + benchmark materializer + variant plan materializer + variant tracking schema regressions passed (32 tests total).
+7. Current review state: waiting for Claude re-review of O1/O2 disposition.
+
+**Optional disposition**:
+- O1 accept with modification — change: added provider lineage as `settings.provider="tushare"` and `settings.api_families=["index_weight", "tushare_provider"]` in the main audit artifact instead of adding a separate provider block; reason: this uses the existing settings area and avoids duplicating membership window/source fields.
+- O2 accept — changed empty `index_weight` frames to raise `index_weight returned no rows ...` before missing-column validation, while preserving the missing-column error for non-empty malformed frames.
+
+**Key decisions**:
+- Provider lineage belongs in the main audit JSON because this artifact is intended for future benchmark-policy review; no sidecar is needed for this small audit contract.
+- The repair does not change benchmark policy, primary-switch rules, candidate selection, variant promotion, EGS behavior, or aggregate execution schema.
+
+**Alternatives considered and rejected**:
+- "Delete `API_FAMILIES` and the tautological test assertion" — rejected. The audit artifact benefits from explicit provider/API lineage, and O1 correctly identified this as more useful for future review.
+- "Add a top-level `provider_lineage` object" — rejected for now. It would duplicate `settings.membership_source` / `settings.membership_window`; inline settings fields are enough for v1.0.0.
+
+**Open questions handed off**:
+- None introduced by this repair round.
+
+**Next natural step from my view**:
+1. Claude re-reviews the current working tree using the mandatory fast path.
+2. If Pass, user `提交`.
+
+---
+
+## 2026-05-27 — Claude review — Pass (Phase 6b candidate-universe overlap audit)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2bce902`)
+
+**Verdict**: Pass with Optional suggestions (no Required fixes).
+
+**Scope reviewed**: Codex `执行` round 起草 Phase 6b candidate-universe overlap audit — `schemas/candidate_universe_overlap_audit.schema.json` v1.0.0 (Draft-07, `additionalProperties=false` 全程；scope+conclusion 双重锁 `primary_switch_allowed=false` + `benchmark_policy_action="no_primary_switch_from_single_audit"`；CSI1000 primary / CSI300 secondary 单一 required pair；`overlap_method=candidate_ts_code_vs_index_constituents_by_count` const；ratio 0..1 / date8 / non-negative integer 等 $defs reuse 干净)；`runners/audit_candidate_universe_overlap_tushare.py` 346 行（`backtest_execution` helpers `relative_ref`/`candidate_code`/`load_analysis_input`/`normalized_analysis_input_schema_version`/`validate_json_schema`/`iso_now` 全部已确认 source-grep 存在；`ts_call`/`tushare_pro` reuse 自 price-data materializer；`as_of`/`trade_date` 必须匹配 analysis_input；`lookback_days` 默认 450 calendar day；`fetch_index_weight` 对 `None` 返回空 DataFrame；`latest_membership_from_rows` 校验列+空+strip+去空 con_code+max(trade_date) 选最新窗口；overlap_ratio = round(overlap_count / candidate_count, 10)，分母用 candidate 集合大小；`benchmark_ranking` 按 (-count, -ratio, name) 稳定排序；`nearest_benchmark_by_overlap_count` 有 `tie:` 输出格式；artifact 内显式 4 条 `limitations` 锁住 audit 用途；schema 双校验 build+write；默认输出 `result/a_short/backtest/execution/forward_aggregate/candidate_universe_overlap_audit_<as_of>.json`，落在已 ignored 目录)；`tests/schema/test_candidate_universe_overlap_audit_schema.py` (2 tests：Draft-07 meta + required 列表 + primary-switch / pair / settings / conclusion const 锁)；`tests/phase6/test_audit_candidate_universe_overlap_tushare.py` (8 tests：fake Tushare 端到端 payload schema-valid + count/ratio/tie-breaker / CLI default + fields="index_code,con_code,trade_date,weight" 双次 / default 输出路径 / membership_start_date 校验 / trade_date mismatch / 空候选 / 缺列 / 无 usable rows)；`runners/README.md`+`docs/CURRENT.md` (§0/§1/§2/§5/§6) + `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` 追加段全部 stable wording、§2 milestone 维持 8 条；`docs/SESSION_LOG.md` Codex 七节 entry 含 `[tracked]/[untracked]` tags + 验证命令/结果 + 当前 review state；scope 严格 bounded（不切 primary、不算 alpha、不 promote variants、不动 EGS / `burst_lane`）；3 alternatives 列出并 reject 理由清晰。
+
+**Required fixes**: none.
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+- **O1**: `runners/audit_candidate_universe_overlap_tushare.py:31` 定义了 `API_FAMILIES = ["index_weight", "tushare_provider"]`，但 audit payload 里没有任何字段引用它；姊妹文件 `runners/materialize_benchmark_monthly_returns_tushare.py:174` 同名常量是用在 metadata sidecar `api_families` 字段里的。当前 audit 既没 sidecar 也没 inline provider lineage 块，结果是这个常量只被测试 `tests/phase6/test_audit_candidate_universe_overlap_tushare.py:140` 自我比对（`assertEqual(API_FAMILIES, [...])` 即拿模块常量比自己）。建议二选一：要么把 `api_families` + `provider="tushare"` + as-of 窗口等 lineage 加进 audit 的 `settings.provider` / `inputs` / 顶层新增 `provider` 块（与 benchmark sidecar 对齐），让后续 primary-switch review 能直接看到 provider 来源；要么删除该常量并删除测试里的 tautological 断言。Audit artifact 作为未来 benchmark-policy 审查输入，含明确 provider lineage 是更可持续的方向。
+- **O2**: `runners/audit_candidate_universe_overlap_tushare.py:148-153` 先校验 `required - set(frame.columns)` 再校验 `frame.empty`。`fetch_index_weight` 在 `ts_call` 返回 `None` 时回落到 `pd.DataFrame()`（无列空 frame），此分支会先命中 "index_weight missing required columns: con_code, trade_date"，但真实根因是 Tushare 返回空。建议把空检查放到列检查之前（或额外区分空-no-columns vs 有数据但缺列两种 case），让运营/排错时拿到的诊断信息直接指向 Tushare 数据缺口而不是 schema/字段问题。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes; Optional suggestions PENDING CODEX DISPOSITION.
+
+---
+
+## 2026-05-27 — Codex (Phase 6b candidate-universe overlap audit)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `2bce902` Phase 6b benchmark monthly-return materializer, which completed CSI1000 / CSI300 monthly return inputs and left candidate-universe overlap audit as the next benchmark-policy evidence slice.
+- Builds on `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md §3.5`, which requires candidate-universe style audit before any future primary benchmark switch proposal.
+
+**Worked on**:
+1. [untracked] `schemas/candidate_universe_overlap_audit.schema.json`: added v1.0.0 audit contract for one captured A-short candidate universe versus CSI1000 / CSI300 constituent overlap.
+2. [untracked] `runners/audit_candidate_universe_overlap_tushare.py`: added a Tushare `index_weight` provider-boundary helper that reads `analysis_input.json`, computes CSI1000 / CSI300 overlap by count, and writes a schema-valid audit artifact under ignored `result/a_short/backtest/execution/forward_aggregate/`.
+3. [untracked] `tests/schema/test_candidate_universe_overlap_audit_schema.py` and `tests/phase6/test_audit_candidate_universe_overlap_tushare.py`: added schema and runner coverage for primary-switch guard, required CSI pair, CLI write, latest membership date, duplicate candidates, date mismatch, empty candidates, missing columns, and unusable membership rows.
+4. [tracked] `runners/README.md`: documented the new audit helper and its non-switch / non-promotion boundary.
+5. [tracked] `docs/CURRENT.md`: updated Latest Delta, current Phase 6b status, recent milestones, key files, and P0 candidate-universe audit status.
+6. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: appended the Phase 6b candidate-universe overlap audit slice with validation and next-step notes.
+7. [tracked] `docs/SESSION_LOG.md`: prepended this seven-section handoff for Claude review.
+8. Validation run/result: `tests.schema.test_candidate_universe_overlap_audit_schema` + `tests.phase6.test_audit_candidate_universe_overlap_tushare` + benchmark/variant adjacent regressions passed (31 tests total); `git diff --check` passed with CRLF warnings only; `git check-ignore result/a_short/backtest/execution/forward_aggregate/candidate_universe_overlap_audit_20260621.json` confirmed ignored.
+9. Current review state: waiting for Claude review of this Phase 6b candidate-universe overlap audit diff.
+
+**Key decisions**:
+- The audit output is schema-first because it is a cross-run evidence artifact that future benchmark-policy review may consume.
+- The runner requires both CSI1000 primary and CSI300 secondary in the same artifact. It does not expose a partial-benchmark mode because Phase 6a requires the pair side by side.
+- Overlap is count-based only in this slice: candidate `ts_code` set versus latest `index_weight` membership date within the lookback window. Market-cap percentile and sector/style concentration are intentionally deferred.
+- The artifact explicitly locks `primary_switch_allowed=false` and `benchmark_policy_action=no_primary_switch_from_single_audit`. A single audit cannot switch CSI1000 primary, promote variants, compute alpha, or authorize full-size manual use.
+- Default output stays under ignored `result/a_short/backtest/execution/forward_aggregate/`, matching the Phase 6a forward aggregate evidence isolation.
+
+**Alternatives considered and rejected**:
+- "Implement materialized-plan driven comparison track inputs first" — rejected for this slice because candidate-universe overlap is the remaining benchmark-policy evidence prerequisite and can be delivered without defining variant behavior.
+- "Fold overlap fields into `execution_aggregate_report` now" — rejected. The audit is candidate-universe style evidence, not execution return evidence; widening the aggregate schema would mix concerns before multi-cohort audit usage exists.
+- "Allow this runner to recommend primary benchmark switch when CSI300 overlap is higher" — rejected. Phase 6a requires at least 6 forward live months, consecutive cohort evidence, and sensitivity reports before a switch proposal.
+
+**Open questions handed off**:
+- Next Phase 6b slice should move to materialized-plan driven comparison track inputs or forward evidence accumulation.
+- Later candidate-universe audit may need market-cap percentile and sector/style concentration once data fields are available.
+
+**Next natural step from my view**:
+1. Claude reviews this working tree using the mandatory fast path, including all four `??` files.
+2. If Pass, user `提交`.
+3. After commit, start materialized-plan driven comparison track inputs or forward evidence accumulation; do not implement `burst_lane`, long-system code, primary benchmark switch, or variant promotion.
+
+---
+
 ## 2026-05-27 — Claude review — Pass (Phase 6b benchmark monthly-return materializer)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `96f19f5`)

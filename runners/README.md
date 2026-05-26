@@ -53,6 +53,11 @@ Existing helpers:
   evidence helper; fetches Tushare `index_daily` for CSI1000 / CSI300 and writes
   `YYYYMM -> return` JSON files for `aggregate_execution_reports.py`, plus
   metadata sidecars with provider/API/date-range lineage.
+- `audit_candidate_universe_overlap_tushare.py` - Phase 6b benchmark-policy
+  audit helper; reads one captured `analysis_input.json`, fetches Tushare
+  `index_weight` membership for CSI1000 / CSI300, and writes a schema-valid
+  candidate-universe overlap audit under the ignored forward aggregate output
+  area. It cannot switch the primary benchmark or promote variants.
 - `materialize_a_short_variant_tracking.py` - Phase 6b tracking-plan helper;
   consumes `schemas/a_short_variant_tracking.schema.json` via the canonical
   example template and writes a schema-valid A-short variant tracking plan under
