@@ -369,3 +369,49 @@ git check-ignore result/a_short/backtest/variants/a_short_variant_tracking_plan.
 1. `materialize_a_short_variant_tracking.py` 仍只生成 tracking plan，不计算 evidence、不改 EGS、不 promotion、不实现 `burst_lane`。
 2. 下一条 Phase 6b implementation slice 可围绕 materialized plan 生成 variant comparison track inputs，或实现 CSI1000 / CSI300 benchmark monthly-return materializer。
 3. Generated variant plan artifacts 默认位于 ignored `result/a_short/backtest/variants/`；不要把真实 forward evidence 产物纳入 git。
+
+---
+
+## 2026-05-26 追加：Phase 6b benchmark monthly-return materializer
+
+### 改了什么
+
+- 新增 `runners/materialize_benchmark_monthly_returns_tushare.py`，从 Tushare `index_daily` 生成 Phase 6 A-short benchmark monthly return JSON。
+- 默认同时输出 CSI1000 primary (`000852.SH`) 与 CSI300 secondary (`000300.SH`) 两组 artifact：
+  - `benchmark_monthly_returns_csi1000.json`
+  - `benchmark_monthly_returns_csi1000_metadata.json`
+  - `benchmark_monthly_returns_csi300.json`
+  - `benchmark_monthly_returns_csi300_metadata.json`
+- Return JSON 保持 `aggregate_execution_reports.py --benchmark-monthly-returns` 兼容的 `YYYYMM -> return` 形态；metadata sidecar 记录 provider/API/date range、benchmark role、ts_code、monthly return method、每月首末交易日和 close。
+- 新增 `tests/execution/test_materialize_benchmark_monthly_returns_tushare.py`，覆盖 first/last close 月收益计算、primary + secondary CLI 输出、默认路径、benchmark 去重、日期校验、单交易日月份拒绝、缺列拒绝、非正 close 拒绝。
+- 更新 `runners/README.md` 与 `docs/CURRENT.md`。
+
+### 为什么
+
+Phase 6a 已锁定 A 短 ship-gate alpha 的 benchmark policy：CSI1000 primary，CSI300 mandatory secondary sensitivity。Phase 5 aggregate runner 已有 `YYYYMM -> return` 输入，但缺少按该 policy 生成月收益的 provider-boundary helper。本切片把 benchmark-aware alpha 所需的月收益输入落成可测 runner，同时保持 aggregate runner 的现有接口不变。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.execution.test_materialize_benchmark_monthly_returns_tushare -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v
+git diff --check
+```
+
+### 验证结果
+
+- `tests.execution.test_materialize_benchmark_monthly_returns_tushare`：8 tests passed。
+- `tests.execution.test_aggregate_execution_reports`：6 tests passed。
+- `git diff --check`：passed。
+
+### 失效旧结论
+
+- “Phase 6a benchmark monthly returns 只有 policy，没有 materializer”失效；现在有 Tushare `index_daily` materializer。
+- “下一步仍需选择 first consumer vs benchmark monthly-return materializer”失效；二者都已完成。下一步应转向 materialized-plan driven comparison track inputs、candidate-universe overlap audit，或 forward evidence accumulation。
+
+### 下一步注意事项
+
+1. CSI1000 remains the primary benchmark for automatic aggregate alpha gate; CSI300 remains mandatory secondary sensitivity and review escalation.
+2. Return JSON intentionally remains a plain `YYYYMM -> return` object for aggregate runner compatibility; lineage lives in the metadata sidecar.
+3. The materializer uses first available `index_daily` close to last available `index_daily` close within each requested month. Callers should request date ranges that cover the aggregate execution months completely.
+4. Generated benchmark artifacts default under ignored `result/a_short/backtest/execution/forward_aggregate/`; do not commit real forward evidence artifacts.

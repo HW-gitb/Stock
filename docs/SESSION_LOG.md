@@ -8,6 +8,57 @@
 
 ---
 
+## 2026-05-27 — Claude review — Pass (Phase 6b benchmark monthly-return materializer)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `96f19f5`)
+
+**Verdict**: Pass.
+
+**Scope reviewed**: Codex `执行` round 起草 Phase 6b benchmark materializer — `runners/materialize_benchmark_monthly_returns_tushare.py` (229 行；CSI1000 primary `000852.SH` / CSI300 secondary `000300.SH`；Tushare `index_daily` via `ts_call` 复用；月度收益 = first-trade-day close → last-trade-day close 跟 Phase 6a §3.3 method 一致；输出 plain `YYYYMM -> return` JSON aggregate-compatible + sibling metadata sidecar 含 provider/API/date-range lineage；default `--benchmark` = [csi1000, csi300]；strict input validation: YYYYMMDD format / start ≤ end / required cols / positive close / ≥2 rows per month no zero-fill)；`tests/execution/test_materialize_benchmark_monthly_returns_tushare.py` (8 tests: payload calc / CLI integration both benchmarks / default paths / dedup defaults / invalid dates / single-row month / missing columns / non-positive close)；`runners/README.md` 加 helper entry；`docs/CURRENT.md` (§0 latest delta / §1 当前 Phase&目标 update / §2 加 entry + 删 "Phase roadmap B semi-reorder" 保 8 条 / §5 加 path / §6 P0#3 update)；`docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` append "Phase 6b benchmark materializer" section；`docs/SESSION_LOG.md` Codex entry 七节齐全 + 新 protocol `[tracked]/[untracked]` tags + validation run/result + current review state (8 + 6 aggregate regression tests passed, git diff --check passed)；output default 被 existing `.gitignore` rule `result/*/backtest/execution/` cover (`git check-ignore` verified)；scope-bound (provider helper only, doesn't widen aggregate runner / schema / ship gate / compute `benchmark_sensitive`)；3 alternatives considered + rejected (widen aggregate input contract / primary-only default / CSI500-size-decile now); 2 open questions handed off (next slice direction / benchmark_sensitive sidecar vs aggregate schema v1.1).
+
+---
+
+## 2026-05-26 — Codex (Phase 6b benchmark monthly-return materializer)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Phase 6a kickoff spec, which locked CSI1000 primary / CSI300 secondary benchmark policy and `YYYYMM -> return` aggregate input shape.
+- Builds on 2026-05-26 Phase 6b variant tracking plan materializer, which completed the first consumer path and left benchmark monthly-return materialization as the next evidence-pipeline slice.
+
+**Worked on**:
+1. [untracked] `runners/materialize_benchmark_monthly_returns_tushare.py`: added a Tushare `index_daily` provider-boundary helper that writes CSI1000 / CSI300 benchmark monthly return JSON files plus metadata sidecars.
+2. [untracked] `tests/execution/test_materialize_benchmark_monthly_returns_tushare.py`: added regression coverage for first/last close monthly return calculation, default primary+secondary CLI output, output paths, benchmark de-duplication, invalid dates, single-row months, missing columns, and non-positive closes.
+3. [tracked] `runners/README.md`: documented the new benchmark helper and its aggregate-runner compatibility boundary.
+4. [tracked] `docs/CURRENT.md`: updated Latest Delta, Phase 6b current target, recent milestones, key files, and P0 benchmark materialization status.
+5. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: appended the Phase 6b benchmark materializer slice with validation and next-step notes.
+6. [tracked] `docs/SESSION_LOG.md`: prepended this seven-section handoff for Claude review.
+7. Validation run/result: `tests.execution.test_materialize_benchmark_monthly_returns_tushare` passed (8 tests); `tests.execution.test_aggregate_execution_reports` passed (6 tests); `git diff --check` passed.
+8. Current review state: waiting for Claude review of this Phase 6b benchmark materializer diff.
+
+**Key decisions**:
+- Output return JSON remains a plain `YYYYMM -> return` object so it is directly consumable by existing `aggregate_execution_reports.py --benchmark-monthly-returns` without changing the aggregate schema.
+- Provider/API/date-range lineage is recorded in a sibling metadata sidecar instead of widening the aggregate runner input contract.
+- Default CLI materializes both benchmarks side by side: CSI1000 as Phase 6a primary and CSI300 as mandatory secondary sensitivity.
+- Monthly return uses first available `index_daily` close to last available `index_daily` close within each requested month, matching the Phase 6a handoff method.
+- This runner does not compute `benchmark_sensitive`, change ship-gate thresholds, infer forward live months, or promote variants.
+
+**Alternatives considered and rejected**:
+- "Change aggregate_execution_reports.py to consume a richer benchmark object now" — rejected. The existing aggregate contract already accepts `YYYYMM -> return`; changing it would widen a stable Phase 5 interface before a sensitivity sidecar exists.
+- "Write only CSI1000 primary by default" — rejected. Phase 6a requires CSI300 mandatory secondary sensitivity, so the provider helper should keep the pair side by side.
+- "Use CSI500 or size-decile benchmarks in this slice" — rejected. Phase 6a explicitly deferred them until CSI1000 / CSI300 evidence shows instability.
+
+**Open questions handed off**:
+- Next Phase 6b slice should move from input materialization to either materialized-plan driven comparison track inputs or candidate-universe overlap audit.
+- Later sensitivity reporting must decide whether `benchmark_sensitive` remains a sidecar artifact or becomes an `execution_aggregate_report` v1.1 optional section.
+
+**Next natural step from my view**:
+1. Claude reviews this working tree using the mandatory fast path, including both new `??` files.
+2. If Pass, user `提交`.
+3. After commit, start a comparison-track input materializer or candidate-universe overlap audit; do not implement `burst_lane`, long-system code, or variant promotion.
+
+---
+
 ## 2026-05-26 — Claude review — Pass (Phase 6b variant tracking plan materializer)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs HEAD)
