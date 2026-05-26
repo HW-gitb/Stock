@@ -7,6 +7,13 @@
 
 构建 4 套股票分析系统：A 股短线、美股短线、A 股长线、美股长线。每套包含筛选、分析、回测、复盘四组件，共享同一套 engine，通过 preset 配置区分市场和周期。
 
+**资金分布与设计目标**（2026-05-26 用户明确）：
+
+- each market = **1/3 长线 + 1/3 短线 + 1/3 流动资金**（A 股内部 1/3+1/3+1/3，美股内部 1/3+1/3+1/3）。
+- 长线和短线**同等重要**；4 套子系统**全部都是真实需求**，phase 路线图不能让任何一套被长期搁置。
+- 跨子系统的 portfolio coordination 是真需求：长短可以共享 cash buffer，但触发规则需明确（如短线熔断时 cash 默认转向长线 averaging-down 而非 short re-entry）。每个 runner 启动前必须能拿到自己 preset 的 capital ceiling，不超过所属 bucket 的 1/3。
+- **Ship gate**：每套子系统 ship 实盘前必须给出对应 bucket 净 alpha 的 evidence。alpha 不足时定位为"风控 filter"（仍可 ship 但 sizing 缩到 minimal 或仅跑 paper trade），不能 silent 走全仓实盘。
+
 ## 当前进度
 
 - ✅ A 股短线筛选脚本：`A-EGS/egs_main.py` v7.10 已支持 `--as-of` 历史日期运行
@@ -139,6 +146,7 @@ Stock/
 7. Skill 走渐进路线，第一版只做读 input、调 analyzer、出 M6.7，不追求自动批量。
 8. v14.2.md 不废弃，已移到 `skills/a_short_analysis/reference/v14.2_spec.md` 作设计文档。
 9. `A-EGS/egs_main.py` 当前不移动，等 Phase 7 再拆进 `engine/`。
+10. 资金分布固化为 each market = 1/3 长线 + 1/3 短线 + 1/3 流动资金。4 套子系统同等重要；phase 路线图不能让任何一套被长期搁置；每套 ship 实盘前必须给出净 alpha 的 evidence，alpha 不足则定位为风控 filter。详 §项目背景。
 
 ## AI 协作者在本项目中的工作守则
 

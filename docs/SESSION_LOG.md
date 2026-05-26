@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-05-26 — Claude (project goal clarification: capital allocation policy)
+
+**Commits**: pending (single-scope AGENTS.md doc change; commit per [[feedback-auto-commit]])
+
+**Relationship to prior session(s)**:
+- Triggered by user clarifying real portfolio allocation during the framework design discussion. Resolves "漏洞 4 — 项目缺用户目的的显式定义" from the Claude framework review earlier in this session.
+- Does not modify the Phase roadmap table yet; that is a separate scope and needs explicit user direction on whether to actually re-order phases.
+
+**Worked on**:
+1. Added `**资金分布与设计目标**` block to `AGENTS.md §项目背景` capturing: each-market 1/3 long + 1/3 short + 1/3 cash split; 4 subsystems are equally first-class; cross-system portfolio coordination is a real requirement; ship-gate is alpha-evidence per bucket with risk-filter fallback.
+2. Added decision #10 to `AGENTS.md §已固化决策`, with a back-pointer to §项目背景 so the decision list stays one-liner per item.
+
+**Key decisions**:
+- Direct-edit (user explicitly authorized "更新 AGENTS.md §项目背景") rather than route through Codex `执行` / Claude `审查` — protocol is for code changes that need independent review; this is verbatim transcription of a user statement into the project's highest-level rule doc.
+- Kept the change to two surfaces only (§项目背景 + 已固化决策 #10). Phase roadmap re-ordering, preset config additions, cross-system coordinator spec, and ship-gate operational definition are larger downstream scopes — each deserves its own commit + handoff.
+- Did not invent details the user did not say. Specifically: did not pick a concrete ship-gate alpha number (e.g. "sharpe > 1"), did not pick a rebalance frequency, did not pick the cross-bucket borrow rule beyond "需明确". Those are user-decisions that should be filled by handoff later, not by me here.
+
+**Alternatives considered and rejected**:
+- "Also re-order the Phase table in this commit" — rejected because Phase ordering is a separate strategic decision; bundling it here would silently lock in an interpretation the user has not approved.
+- "Skip the §已固化决策 entry, only update §项目背景" — rejected because the decision list is the canonical fast-scan surface for future LLMs; a #10 line keeps it findable.
+- "Write a dedicated `docs/handoff/2026-05-26_portfolio_allocation_handoff.md`" — rejected for this round (would be premature; handoff threshold per AGENTS.md is high). Will spin up a handoff only when concrete spec (preset capital field, coordinator schema) is actually being designed.
+
+**Open questions handed off** (for the user to resolve, then a future scope can act on them):
+- Phase roadmap re-ordering: do we move A-long spec ahead of US-short (Phase 8 → A-long; Phase 9 → US-long+US-short parallel)? See framework review for the proposed shape.
+- Ship-gate exact threshold: net alpha number, sharpe, max drawdown, or holding-period-IR? Currently AGENTS.md only says "evidence" qualitatively.
+- Cross-bucket borrow rule precise wording: my chat proposal was "long can borrow cash; short cannot borrow long" — this is a placeholder, user has not confirmed.
+- Cash buffer mandate: is the 1/3 cash strict (never < 1/3) or soft (target with band)? Affects how circuit-breaker rule treats cash refill.
+
+**Next natural step from my view**:
+1. User commits this AGENTS.md change.
+2. After commit, decide whether to act on the open questions above. The Phase roadmap re-order is the highest-leverage one — it changes what Codex builds next.
+3. Once Phase roadmap and ship-gate threshold are settled, a Phase-5b handoff and a cross-system coordinator spec become the next concrete pieces of work.
+
+---
+
 ## 2026-05-26 — Claude review — Pass (commit-flow optimization review fixes)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（R1 + O1-O3 全部 dispose 完成）。
