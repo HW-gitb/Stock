@@ -10,6 +10,7 @@
 - Phase 5 aggregation review Optional disposition O1-O3: input reports are already schema-validated against `execution_backtest_report` v1.2.0, and the reviewed change set now adds a v1.1 rejection regression, a single-report Sharpe-null regression, and expanded capital_context mismatch coverage for preset / market / bucket / currency.
 - Strategy design synthesis is now fixed in `docs/strategy_design_synthesis.md`: short-term = steady risk-filter lane + bounded variants + independent `burst_lane`; long-term = alpha-push system with core quality compounding plus re-rating/catalyst long; research has lighter iteration but reproducibility and promotion gates; coordinator only issues manual recommendations.
 - Phase 5 multi-period aggregation step adds `schemas/execution_aggregate_report.schema.json` v1.0.0 and `runners/aggregate_execution_reports.py`. The runner validates input `execution_backtest_report` v1.2.0 files, enforces compatible bucket-aware `capital_context`, aggregates monthly return / Sharpe / worst max drawdown, optionally computes benchmark-aware monthly alpha t-stat from a `YYYYMM -> return` JSON, and emits `ship_gate_evaluation`. Without benchmark returns or Phase 6 forward months, full-size remains blocked.
+- A-short benchmark decision is now fixed for Phase 6a: primary = CSI1000, secondary = CSI300 mandatory sensitivity. Phase 6a must define falsifiable primary-switch rules and benchmark-sensitivity reporting before benchmark-aware ship-gate interpretation.
 - Real-token Tushare smoke status: Codex bundled Python lacks `tushare`, but `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` has `tushare` + `jsonschema`. Real Tushare price materialization succeeded for `20260515` / `20260521` / `20260522`, execution smoke reports were written under ignored `result/a_short/backtest/execution/smoke_*`, and a 3-report aggregate smoke was written under ignored `smoke_202605_real3_aggregate.json`.
 - Phase 5 runner compatibility fix: `backtest_execution.py` now normalizes legacy `analysis_input.schema_version = "analysis_input.v1.0"` to SemVer `1.0.0` before writing execution reports. This was required by the real 20260521 smoke.
 - Phase 5 ship-gate Optional disposition O1-O3：0-trade execution report 的 `ship_gate_evaluation.metric_results.max_drawdown` 不再把 raw `0.0` 当作 gate pass，而是输出 `value=null / passed=null`；测试新增 multi-trade realized drawdown regression；schema description 明确 v1.x execution report contract 在无 production consumer 前仍是 unfrozen contract。
@@ -41,15 +42,16 @@
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
-### 待用户决策（blocking / hot queue）
+### Phase 6a 已决输入（hot queue 当前为空）
 
-格式：每条带 Pending / Recommendation / Blocks / Rule 四段。**决策完成后立刻删除该条或改成已决策结论**，避免 CURRENT.md 变成长期 todo 垃圾堆。**未决前 LLM 不得 silent default 进入相关 implementation**。
+当前无 blocking user decision。若出现新 blocker，按 Pending / Recommendation / Blocks / Rule 四段加入本节；决策完成后立刻删除或改成已决结论，避免 CURRENT.md 变成长期 todo。
 
-1. **A 短 benchmark monthly return source**
-   - **Pending**: CSI300 / CSI1000 / dual reporting / other
-   - **Recommendation**: Phase 6a 先做 candidate universe overlap audit；若候选池偏大盘，用 CSI300 作 primary；若偏中小盘（24p Tier1-only N≈305 暗示中小盘倾向），用 CSI1000 作 primary；另一个作为 secondary sensitivity，让 ship gate alpha 自带敏感性分析。
-   - **Blocks**: Phase 6a benchmark contract + 所有 benchmark-aware alpha t-stat interpretation。
-   - **Rule**: 未决前不得 silent default 进入 benchmark-dependent implementation。
+1. **A 短 benchmark monthly return source（已决 2026-05-26）**
+   - **Primary**: CSI1000。
+   - **Secondary**: CSI300，mandatory sensitivity report。
+   - **Ship gate rule**: benchmark-aware alpha 自动判定先用 primary-only gate；secondary 不进入自动 AND gate。若 CSI1000 与 CSI300 结论显著分歧，Phase 6a spec 必须输出 `benchmark_sensitive=true` 或等价标记，交给 review 判断。
+   - **Phase 6a spec requirements**: 必须定义可证伪的 primary switch trigger（例如 candidate universe 与 CSI1000 / CSI300 的 overlap、market-cap / style 分布连续满足量化阈值），禁止用“看起来偏大盘/中小盘”的主观判断切换 primary。
+   - **Reason**: A 短候选池更偏弹性 / 题材 / 中小盘；24p 结果中 5d excess_csi1000 t=+2.88，而 excess_csi300 t=+0.57。只用 CSI300 可能把 small-cap style beta 误判成 alpha。
 
 ---
 

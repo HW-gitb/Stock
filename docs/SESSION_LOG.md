@@ -8,6 +8,90 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass with minor notes (A 短 benchmark decision)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: 3 active (O1 + F3 cleanup + F2 spec out) — 全部留给 Phase 6a kickoff handoff round dispose，**不阻塞本轮 commit**。
+
+**Scope reviewed**: Codex 2026-05-26 起草（本 SESSION_LOG 下一条 entry "Codex (A-short benchmark decision for Phase 6a)"）包含的 docs-only 改动 — `docs/CURRENT.md` §0 加 1 行 latest delta + §1 把 benchmark 从 hot queue → "Phase 6a 已决输入"（5 段：Primary / Secondary / Ship gate rule / Phase 6a spec requirements / Reason）。无 code / schema / test 改动 ✅。
+
+**Verdict**: Pass with minor notes.
+
+**Process meta (transparency)**:
+
+本 review 流程不寻常：本 session 用户先在 chat 起草 benchmark decision（CSI1000 primary + CSI300 secondary + dual reporting + Phase 6a overlap audit + 切换允许），我 amend（lock CSI1000 + 加 spec falsifiable trigger + ship-gate merge rule hint + 把 spec requirement 写进 CURRENT.md decision text），用户喊"审查"，我 self-review 生成 prospective brief (F1/F2/F3 + O1) 准备 prepend SESSION_LOG 作为 Codex 工作 brief。Codex 在我 prepend 之前独立起草 docs edit（未读 chat finding list），到达跟用户原方案对齐的 lock CSI1000 + 加量化切换 trigger 方向。我原 prospective brief 因此变成 retrospective review verdict on Codex's draft，按用户决策改写本 entry。
+
+**对照原 finding list dispose**:
+
+- **F1 (Primary 不 lock, defer audit) — WITHDRAWN**: Codex lock CSI1000 primary 跟用户 chat 表态原方案对齐。我原 F1 推的 defer 比用户原方案还紧，**超出 reviewer scope** — reviewer 不应该 push design 比 user intent 更严格（除非 safety / correctness 风险，此处无）。Codex 加的"primary switching 必须 quantified 用 overlap / market-cap / style distribution rules"满足 falsifiability 要求，等价 F1 想保护的"非 passive observation"原则。✅
+
+- **F2 (Merge rule defer enumerate (a)/(b)/(c)) — PARTIAL DISPOSE**: Codex SESSION_LOG `Alternatives considered and rejected` 节已 enumerate 三选项：CSI300-only primary (rejected: small-cap style beta 误判)、CSI1000-only reporting (rejected: 候选池漂移时不可见)、CSI1000 AND CSI300 both auto gate (rejected: overly conservative across distinct styles)。最终 dispose 成 (a) primary-only auto gate + `benchmark_sensitive=true` flag — 本质是 **(a)+(c) hybrid**。三选项已展示完整考虑，dispose 合理。Remaining: `benchmark_sensitive=true` flag 具体定义（触发阈值、报告字段格式）留给 Phase 6a kickoff handoff §Boundary inputs 展开，不在本 commit scope。✅
+
+- **F3 (CURRENT.md decision 不塞 spec requirement) — PARTIAL HIT, ACCEPTABLE**: CURRENT.md §1 "Phase 6a spec requirements" 段确实塞了 spec requirement 进 decision 行（F3 原警告反模式）。但 Codex 写得精简（一句话 + 例子），明确指向 Phase 6a spec，不是 "todo 1/2/3" 列表形态。考虑到**量化切换 trigger 是 lock primary 的前提**（否则 primary lock 等于 free pass），写在 decision 行有 rationale 作用。可接受 with future cleanup：Phase 6a kickoff handoff 起草时把这段移入 §Boundary inputs，CURRENT.md decision 行缩为一句 reference。**不阻塞本轮 commit**。
+
+- **O1 (CSI500 / size-decile alternative acknowledge) — ACTIVE, DEFERRED TO PHASE 6A KICKOFF HANDOFF**: Codex 本轮 scope 限于 benchmark decision dispose（commit hygiene 单 scope 单 commit），未起草 Phase 6a kickoff handoff。O1 留到下一轮 Phase 6a kickoff handoff 起草时 dispose — Codex 应在 §Boundary inputs 节 brief acknowledge "CSI500、size-decile portfolio benchmark considered and deferred to Phase 6b or later"。
+
+**Codex draft 亮点**:
+
+- **独立到达合理方向**: Codex 没读 chat finding list 仍然独立 enumerate 三 alternative + reject + dispose；24p 5d excess_csi1000 t=+2.88 的 rationale 直接写进 CURRENT.md，方便 future LLM 追溯决策依据。
+- **`benchmark_sensitive=true` flag idea**: 这是 Codex 自创的机制（chat 没出现过），用单 flag 处理 primary/secondary divergence 而非 silently auto-block。本质是 (c) reviewer-escalation rule 的简化形式，比 (a) primary-only / (b) AND-gate 都更稳健。Phase 6a kickoff handoff 应该 spec 化这个 flag（触发阈值、报告字段）。
+- **Hot queue 整节定义为空**: "Phase 6a 已决输入（hot queue 当前为空）" + 一句"若出现新 blocker，按 Pending/Recommendation/Blocks/Rule 四段加入" — 既清理 stale section 又保留 future blocker template。✅
+
+**Required fixes**: 无。
+
+**Optional follow-ups (for Phase 6a kickoff handoff round, not this commit)**:
+
+- **O1 carry-over**: Phase 6a kickoff handoff §Boundary inputs 节 brief acknowledge CSI500 / size-decile portfolio benchmark "considered and deferred to Phase 6b or later"。
+- **F3 cleanup carry-over**: CURRENT.md §1 "Phase 6a spec requirements" 段移入 Phase 6a kickoff handoff §Boundary inputs；CURRENT.md decision 行缩为一句 reference。
+- **F2 spec-out carry-over**: `benchmark_sensitive=true` flag 具体定义（触发阈值 — 例如 alpha t-stat 一显著一不显著、Sharpe 绝对差 > threshold 等；报告字段格式）在 Phase 6a kickoff handoff §Boundary inputs 展开。
+
+**Process meta observation (hygiene streak 跟踪)**:
+
+- 自 `ccc5c85 Tighten commit documentation hygiene` 之后**连续 5 次** substantive commit 都没 follow-up [trivial] sync（累计：`a784b18` `87a1a5a` `f74ff40` `3ae448b` + 本轮即将 commit Codex benchmark decision draft）。节省 4+ 个 [trivial] commits。hygiene 规则稳定。
+- 本 review 流程的非常规之处（用户起草 → Claude amend → Claude self-review prospective brief → Codex 独立先 dispose → Claude retrospective review）揭示 cross-LLM 协议在**用户主动起草情形下的 race condition**。本 session 的处理方式（verdict 改为 retrospective + WITHDRAWN reviewer over-strict finding）可作 protocol case study，但不需要立即写进 AGENTS.md — 等再发生 1-2 次类似情形再考虑提炼 rule（避免 [[feedback-protocol-overengineering]] 警告的协议自增殖）。
+
+**Next natural step from my view**:
+
+1. 用户 `提交` Codex 起草 + 本 review entry（单 commit，同 scope "benchmark decision for Phase 6a"；SESSION_LOG review entry 不需要独立 commit）。
+2. 下一轮 `执行`: Phase 6a kickoff handoff 起草（Codex），dispose 三条 carry-over Optional + 完成 Phase 6a kickoff 完整 §Boundary inputs（含 forward evidence 定义、forward tracker → aggregate evidence flow、A-short variants / `burst_lane` / A-long / US-long spec separation per CURRENT.md §0 last bullet）。
+3. Claude review Phase 6a kickoff handoff → Pass → 用户 `提交`。
+
+This entry records the Pass verdict and carry-over Optional follow-ups. It is **not** a direct execution order to Codex this round（本轮 Codex 工作已完成）; the carry-overs are scoped to the next Phase 6a kickoff handoff round.
+
+---
+
+## 2026-05-26 — Codex (A-short benchmark decision for Phase 6a)
+
+**Commits**: none (docs-only decision update; commit waits for review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude (CURRENT.md 待决策 hot queue cleanup + memory question handoff), which put A-short benchmark choice into the CURRENT.md hot queue as the only Phase 6a blocker.
+- Refines that blocker after user confirmed the benchmark policy direction.
+
+**Worked on**:
+1. Converted `docs/CURRENT.md` §1 from a blocking hot queue into "Phase 6a 已决输入（hot queue 当前为空）".
+2. Recorded the A-short benchmark decision: CSI1000 primary, CSI300 secondary mandatory sensitivity.
+3. Added Phase 6a requirements: falsifiable primary-switch trigger, primary-only automatic gate, and explicit benchmark-sensitivity flag when CSI1000 / CSI300 conclusions diverge materially.
+
+**Key decisions**:
+- A-short benchmark-aware ship-gate interpretation should use CSI1000 as the primary benchmark because the short-term A-share lane is more likely to capture small/mid-cap elasticity and theme beta than CSI300-style large-cap beta.
+- CSI300 remains mandatory secondary reporting, not an automatic AND-gate input. A significant primary/secondary divergence must be visible to review through `benchmark_sensitive=true` or an equivalent field/report flag.
+- Primary switching must be quantified in Phase 6a spec using candidate-universe overlap / market-cap / style distribution rules. Subjective "looks like large-cap now" switching is not allowed.
+
+**Alternatives considered and rejected**:
+- "CSI300-only primary" — rejected because it can misclassify small-cap style beta as alpha for A-short.
+- "CSI1000-only reporting" — rejected because benchmark sensitivity would be invisible if the candidate universe drifts toward large-cap exposure.
+- "CSI1000 AND CSI300 both gate automatically" — rejected because it is overly conservative across distinct style benchmarks; secondary should inform review rather than silently block by formula.
+
+**Open questions handed off**:
+- Phase 6a must define the exact numeric thresholds for primary-switch trigger and benchmark-sensitivity divergence.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only decision update.
+2. If Pass, user `提交`.
+3. Next `执行`: Phase 6a boundary kickoff; benchmark decision is no longer blocking.
+
+---
+
 ## 2026-05-26 — Claude (CURRENT.md 待决策 hot queue cleanup + memory question handoff)
 
 **Commits**: none (docs-only hot queue cleanup; commit waits for review Pass and user `提交`)
