@@ -583,3 +583,92 @@ C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\p
 1. 让 Claude 复审本轮 Optional disposition。
 2. 通过并提交前，仍不实现 provider fetch 或 fill simulation。
 3. 后续 provider materialization 必须生成 candidate/as_of 可用的 row-level price observations。
+
+## 2026-05-26 追加：execution price data CSV materializer
+
+### 改了什么
+
+- 新增 `runners/materialize_execution_price_data.py`，把本地 OHLC CSV 转成 schema-valid `execution_price_data` JSON。
+- CSV 输入要求包含 `ts_code`、`trade_date`、qfq OHLC、`pre_close_qfq`、`adj_factor`、`up_limit`、`down_limit`；`source_flags` 可选，缺省为 `daily,adj_factor,stk_limit`。
+- 输出默认落到 `result/a_short/backtest/execution/price_data/execution_price_data_<as_of>.json`，也可用 `--out-path` 指定。
+- 新增 `tests/execution/test_materialize_execution_price_data.py`，覆盖 schema-valid 输出、symbol filter、缺必填 CSV 列错误。
+- 更新 `docs/CURRENT.md` 与 `runners/README.md`，把当前 P0 切到 CSV materializer 审查。
+
+### 为什么改
+
+`be68abe` 已让 execution runner 能消费 `execution_price_data` JSON。下一步不应直接混入真实 Tushare fetch 或 fill simulator，而是先建立一个可审查的 provider-boundary materializer：后续真实 provider 只要产出同一契约，runner 和 fill 阶段就不用关心数据来源。
+
+本轮仍不实现 Tushare fetch、缓存生成、limit-up matching、order fill、stop/take-profit/time-stop execution 或 portfolio accounting。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+git diff --check
+```
+
+### 验证结果
+
+- `tests.execution.test_materialize_execution_price_data`：5 tests passed。
+- `tests.execution.test_backtest_execution`：9 tests passed。
+- `tests.schema.test_execution_price_data_schema`：5 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- 总计 22 tests passed。
+- `git diff --check` 通过。
+
+### 失效旧结论
+
+- “下一步是 provider materialization 或 fill simulation 二选一”需要细化：当前已先落地 local CSV materializer 作为 provider-boundary step；真实 Tushare fetch 和 fill simulation 仍未开始。
+- “没有工具能生成 `execution_price_data` JSON”已失效；现在可由本地 CSV materializer 生成并交给 `backtest_execution.py --price-data` 验证引用。
+
+### 下一步注意事项
+
+1. 让 Claude 审查本轮 materializer diff。
+2. 通过并提交前，不实现真实 Tushare fetch 或 fill simulation。
+3. 后续真实 provider materialization 应复用同一 `execution_price_data` 契约；fill simulation 再单独实现 entry/exit、涨停不可买、止损、时间止损和组合约束。
+
+## 2026-05-26 追加：execution price data CSV materializer review fixes
+
+### 改了什么
+
+- 处理 Claude 对 CSV materializer 的 5 条 active Optional suggestion。
+- O1：`is_trade_day=false` 现在在 materializer 层抛出明确 `ValueError`，说明 `execution_price_data` rows 只允许交易日价格观测，非交易日由 `trade_cal` lineage 表达。
+- O2：补充 `parse_symbols()` 和默认 `output_path()` 测试，覆盖 CLI-facing 的 symbol 去重/空值处理和默认输出路径。
+- O3：`materialize_payload()` 新增 `source_csv_path`，CLI 输出的 `limitations` 会记录源 CSV 路径，便于 audit 追溯。
+- O4：先按 raw `ts_code` 过滤 selected symbols，再做 float/flag/trade-day build，避免 `--symbols` 只选少数标的时无谓解析整表。
+- O5：新增 `CSV_API_FAMILIES` 常量，避免 `source.api_families` 与 `DEFAULT_SOURCE_FLAGS` 风格不一致。
+- O6 仍按 Claude review 结论保留为 `docs/CURRENT.md §P2` 后续 cleanup，本轮不做 shared util 重构。
+
+### 为什么改
+
+这些 Optional 都是 materializer 边界内的低成本加固：让坏 CSV 更早给出可读错误，让输出文件有源 CSV 追溯，让 CLI 行为被测试锁住，并减少后续 provider materializer 扩大输入规模时的无谓解析。O6 涉及跨 runner helper 抽取，属于更大重构，继续留到后续 cleanup。
+
+本轮仍不实现真实 Tushare fetch、缓存生成、fill simulation、止损止盈、时间止损或组合记账。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+git diff --check
+```
+
+### 验证结果
+
+- `tests.execution.test_materialize_execution_price_data`：9 tests passed。
+- `tests.execution.test_backtest_execution`：9 tests passed。
+- `tests.schema.test_execution_price_data_schema`：5 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- 总计 26 tests passed。
+- `git diff --check` 通过。
+
+### 失效旧结论
+
+- “CSV materializer Optional O1-O5 pending”已失效；当前已由 Codex 全部处理。
+- “`is_trade_day=false` 只能由 JSON Schema 报 const 错”已失效；现在 materializer 会给出 CSV 语义错误。
+- “materialized JSON 无源 CSV 路径追溯”已失效；CLI 现在写入 `limitations`。
+
+### 下一步注意事项
+
+1. 让 Claude 复审本轮 Optional disposition diff。
+2. 通过并提交前，不实现真实 Tushare fetch 或 fill simulation。
+3. 后续若处理 O6，应单独做 shared util cleanup，不要混入 provider fetch 或 fill simulator。

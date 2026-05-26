@@ -8,6 +8,214 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Phase 5 CSV materializer Optional disposition)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O5 全部 dispose 完成；O6 保持 archived 在 `CURRENT.md §P2`）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `be68abe`; targets the immediately prior Codex entry "Phase 5 CSV materializer Optional disposition")
+
+**Verdict**: Pass.
+
+**Scope checked** (本轮只审 CSV materializer disposition，不审 private remote policy):
+- `runners/materialize_execution_price_data.py` 改动（O1/O3/O4/O5 都改了此文件）
+- `tests/execution/test_materialize_execution_price_data.py` 新增 3 个测试 + 1 个 O1 测试（5 → 9 条）
+- `docs/CURRENT.md` Latest Delta / §1 / §6 P0 同步
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 追加段
+- `docs/SESSION_LOG.md` 新 Codex `修复` entry
+- 无 `runners/backtest_execution.py` / schema / EGS / analyzer 改动 ✅
+- AGENTS.md / `2026-05-24_phase2_git_init_handoff.md` 的 private remote policy 改动**不在本 review scope**（属于独立 doc/规则变更，Codex 已单独写一条 SESSION_LOG entry；建议单独 review 或与本轮一起 `提交` 时分两个 commit）
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` → `Ran 26 tests in 0.120s OK` ✅（22 → 26，新增 4 条 materializer 测试）
+
+**Disposition 逐条核对**:
+
+- **O1 (Pass)** — `build_price_row` L122-130 现在先 `parse_trade_day`，若返回 False 立即 raise 明确 ValueError 包含 `ts_code` + `trade_date` + 解释（"non-trading dates are represented by trade_cal lineage"）。错误消息与建议措辞基本一致。`test_non_trade_day_rows_raise_clear_error` (L158-164) 覆盖。✅
+- **O2 (Pass)** — 新增 3 条测试：`test_parse_symbols_normalizes_duplicates_and_empty_values` / `test_parse_symbols_rejects_empty_value` / `test_output_path_defaults_to_execution_price_data_dir`，锁住 CLI helper 边界。✅
+- **O3 (Pass with modification accepted)** — `materialize_payload` 加 `source_csv_path: Path | None = None` (L154)，conditional append `f"Materialized from CSV: {source_csv_path}"` 到 limitations (L192-193)，CLI `main()` 传 `args.csv_path` (L235)。direct test path 经 `test_cli_writes_schema_valid_execution_price_data` 的 `assertIn` (L115) 锁住。Codex 把 mtime/hash 推到真实 provider materialization 是合理选择 — CSV fixture path 已经够本阶段 lineage 需求，更强 provenance 跟着真 provider 走更对齐。✅
+- **O4 (Pass)** — L159-165 重排：`selected_raw_rows = [row for row in rows if row["ts_code"] in selected_set]` 先过滤 raw row，再 `[build_price_row(row) for row in selected_raw_rows]` 只对选中的行 build。避免了 universe CSV + `--symbols` 子集时的 build 浪费。`derived_symbols` 仍然从全量 raw rows 推导（保留"无 --symbols 时默认全部"语义）。✅
+- **O5 (Pass)** — L21 `CSV_API_FAMILIES = ["daily", "adj_factor", "stk_limit", "trade_cal", "csv_fixture"]` 提到模块顶，与 `DEFAULT_SOURCE_FLAGS` 对称。L202 引用常量。测试 `test_cli_writes_schema_valid_execution_price_data` 导入并 assertion (L110-113)，避免常量被静默改动。✅
+- **O6 (Archived，未动)** — `runners/materialize_execution_price_data.py:14-18` 仍 `from runners.backtest_execution import …`。Codex 在 SESSION_LOG 明确"rejected: shared utility extraction crosses runner boundaries and was explicitly archived out of this round"。与本轮 review 协议一致。✅
+
+**额外观察（非 issue）**:
+- `parse_trade_day` 仍允许返回 False (L116)，由 `build_price_row` raise — 等于 false 路径走不通。两层 split（parser 纯解析、semantic check 在 caller）是合理设计，不需要合并。
+- Codex 把 `runners/backtest_execution.py` 完全没碰，scope 纪律好。
+- 9 条 materializer 测试 + 9 条 backtest_execution 测试 + 5 条 price data schema 测试 + 3 条 report schema 测试 = 26 ✅。
+- Reuse agent 早前提的 `state_manager.utc_now_iso()` 输出 `Z` 后缀 vs `iso_now()` 输出 `+00:00` 的不一致，是后续 cleanup（与 O6 同一波 followup）。
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1-O5 全部 Pass，O6 仍 archived 到 P2，无新 finding）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`。
+
+**Next natural step from my view**:
+1. 用户 `提交`。**注意**：working tree 当前混了两块 scope（CSV materializer disposition + private remote policy）。两种提交策略：
+   - **拆两个 commit**（推荐）：先 commit CSV materializer 相关文件，再 commit private remote policy。
+   - **单个 commit**：commit message 明确说明两块 scope。
+2. 提交后下一步是真实 Tushare provider materializer（取代 CSV-only）或 fill simulation。
+3. 私有 remote policy 改动建议单独 `审查` 一次再 `提交`（如要单独 review）。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 CSV materializer Optional disposition)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for clean `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude review "Pass (Phase 5 execution price data CSV materializer)".
+- Does not modify the separate private remote policy change except preserving its existing SESSION_LOG entry below.
+
+**Worked on**:
+1. Disposed active Optional suggestions O1-O5 for `runners/materialize_execution_price_data.py`.
+2. Added focused tests for non-trading row errors, symbol parsing, and default output path.
+3. Updated CURRENT and Phase 5 handoff to mark Optional disposition complete.
+
+**Key decisions**:
+- O1 accept: `is_trade_day=false` rows now raise a clear CSV semantic `ValueError` before schema validation.
+- O2 accept: `parse_symbols()` normalization/error behavior and `output_path()` default behavior are test-covered.
+- O3 accept with modification: CLI materialization records source CSV path in `limitations`; mtime/hash are deferred until real provider materialization needs stronger provenance.
+- O4 accept: raw rows are filtered by selected symbols before expensive row parsing/building.
+- O5 accept: `CSV_API_FAMILIES` is now a module-level constant.
+- O6 remains archived to `docs/CURRENT.md §P2`; no shared util extraction in this repair round.
+
+**Validation**:
+- `python -m unittest tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 26 tests.
+- `git diff --check` passed.
+
+**Alternatives considered and rejected**:
+- "Silently skip `is_trade_day=false` rows" — rejected because CSV input containing non-trading rows should be corrected explicitly before generating a price-observation contract.
+- "Add mtime/hash provenance now" — rejected as over-specified for a CSV fixture helper; source path is enough for this boundary, stronger provenance belongs with real provider/cache materialization.
+- "Fix O6 now" — rejected because shared utility extraction crosses runner boundaries and was explicitly archived out of this round.
+
+**Open questions handed off**:
+- None for O1-O5.
+
+**Next natural step from my view**:
+1. User sends `审查`; Claude re-reviews the Optional disposition diff.
+2. If Pass, user sends `提交`.
+
+## 2026-05-26 — Claude review — Pass (Phase 5 execution price data CSV materializer)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (5 条 active) + 1 条 archived followup（O6 不在本轮 scope，已转入 `CURRENT.md §P2`）。本 entry 在第二次 Claude review pass 后扩了 O4-O6。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `be68abe`; targets the immediately prior Codex entry "Phase 5 execution price data CSV materializer")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `runners/materialize_execution_price_data.py` 新文件（CSV → execution_price_data JSON materializer）
+- `tests/execution/test_materialize_execution_price_data.py` 新测试（5 条）
+- `docs/CURRENT.md` + Phase 5 handoff 追加 + `runners/README.md` + SESSION_LOG `执行` entry + reconstructed post-commit (`be68abe`)
+- 无 EGS / analyzer / backtest_execution.py runner / schema / rank backtest 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema` → `Ran 22 tests in 0.114s OK`
+
+**Reasons for Pass**:
+- 严守 provider-boundary scope：CSV → schema-valid JSON，不 fetch Tushare、不模拟 fills ✅
+- 复用 `backtest_execution.py` 的 `PRICE_DATA_SCHEMA_PATH / iso_now / validate_json_schema` 三个 helper，无 duplication ✅
+- 输出经过 `validate_json_schema` 强制 schema validation，contract violation 立即报错 ✅
+- 输出位置默认 `result/a_short/backtest/execution/price_data/`，与其他 Phase 5 输出隔离 ✅
+- 三层 semantic validation（rows 非空 / selected symbols 有 as_of row / date_range cover as_of）顺序由粗到细，错误 message 明确 ✅
+- `parse_trade_day` 处理多种 truthy/falsy（1/true/yes/0/false/no），`parse_source_flags` 接受 `,` 或 `|` 分隔，`parse_optional_float` 处理 nullable 字段（pre_close/up_limit/down_limit）— 工程层面健壮 ✅
+- `utf-8-sig` 读 CSV 处理 Excel BOM，好习惯 ✅
+- `api_families` 含 `"csv_fixture"` 利用 schema 之前 Optional hardening "extra families allowed" 的设计 ✅
+- `calendar_source = "csv"` 准确反映来源 ✅
+- Reconstructed post-commit entry (`be68abe`) 符合 SESSION_LOG fallback 层规则 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **`is_trade_day=false` 行的错误信息不直观**（`runners/materialize_execution_price_data.py:109-117 + 137-200`）。`parse_trade_day` 支持 `false`/`0`/`no` 等输入，会把 `is_trade_day: False` 放进 row，下游 `validate_json_schema` 报 schema 错（"False is not const True"）。user 看到的是 JSON Schema 错误而不是 "你的 CSV 包含非交易日行"。建议在 `materialize_payload` 加 pre-check：rows 中如果有 `is_trade_day=false` 行，raise 明确 `ValueError("CSV row [ts_code=X, trade_date=Y] has is_trade_day=false; execution_price_data schema requires trading-day observations only; non-trading dates are represented by trade_cal lineage")`；或者更友好的方案是 silent skip + warning。倾向 raise（CSV 含坏数据应让 user 显式处理）。
+
+2. **测试覆盖缺 `--symbols` CLI 解析和 `output_path()` 默认行为**（`tests/execution/test_materialize_execution_price_data.py`）。当前 5 个测试都通过 `--out-path` 显式指定或直接调 `materialize_payload(..., symbols=[...])` 跳过 CLI。`parse_symbols("A,B,C")` 的 corner case（空字符串、空格、duplicates）和 `output_path("20260522", None)` 的默认路径计算都是 user-facing 但无测试。建议补 2-3 条小 test 锁住，避免 future refactor 静默破坏 CLI 默认行为。
+
+3. **生成的 JSON `limitations` 缺 source CSV path 追溯**（line 195-199）。当前 limitations 三条只说 "Materialized from a local CSV provider fixture" + "no Tushare fetch" + as_of。但没记 source CSV path / mtime / hash 等可追溯字段。后续 audit 想知道"这个 execution_price_data 是哪个 CSV 生成的"会缺信息。建议在 limitations 末尾加 `f"Materialized from CSV: {csv_path}"` (或 `{relative_ref(csv_path)}` 与 backtest_execution.py 的 path policy 一致)。简单 lineage 改进，不破坏 contract。
+
+4. **`build_price_row` 先全部调用再过滤**（`runners/materialize_execution_price_data.py:148-152`）。`price_rows = [build_price_row(row) for row in rows]` 对 CSV 全部行做 float 转换、`parse_source_flags` 等，然后 L152 才用 `selected_set` 过滤。当 user 传 `--symbols` 只挑少数 ts_code 时，未选中的行做的 build 工作全浪费。当前测试规模不痛，但 provider materializer 后续直接吃整支 universe CSV 会显化。建议把 symbol 过滤提到 build 之前（用 raw `row["ts_code"]` 过滤再 build），或合并为单次扫描同时完成"build + ts_code 收集 + dates 收集 + as_of 行检查"。
+
+5. **`api_families` 硬编码 vs `DEFAULT_SOURCE_FLAGS` 不对称**（L33 vs L183-188）。`DEFAULT_SOURCE_FLAGS` 已提到模块顶 const，但 L183 的 `api_families: ["daily", "adj_factor", "stk_limit", "trade_cal", "csv_fixture"]` 又硬编码一份。两者都和 schema 强耦合（schema 要求 api_families 至少含前 4 项）。建议把 api_families 也提到顶部常量（如 `CSV_API_FAMILIES`），与 `DEFAULT_SOURCE_FLAGS` 风格对称，避免日后调 schema 时漏改一处。
+
+**Archived followup (NOT in this round's scope)**:
+
+6. **跨 runner 模块导入耦合**（`runners/materialize_execution_price_data.py:14-18`）。`from runners.backtest_execution import PRICE_DATA_SCHEMA_PATH, iso_now, validate_json_schema` —— runner 互相 import 是 code smell：`backtest_execution.py` 是 entry-point script，其顶部有 `sys.path.insert` 副作用、未来若新增 import-time 工作（比如 Tushare client 初始化），materializer 会被牵连。Reuse agent 还发现 `runners/run_analysis_report.py` 也有 `_validate_json_object()` 副本。**这是更大的重构**，正确做法是把 `iso_now` / `validate_json_schema` / `relative_ref` 抽到 `engine/util/`（或新建 `runners/_common.py`），同时把 `_validate_json_object` 也合并进去。本轮做会让 PR scope 失控，已转 `docs/CURRENT.md §6 P2` 作为后续 cleanup 项。
+
+**Documentation issues**: 无。
+
+**Pending status**: Required: none / Optional (O1-O5): PENDING CODEX DISPOSITION / Optional (O6): ARCHIVED to CURRENT.md §P2。
+
+**Next natural step from my view**:
+1. 切到 Codex → `修复`（无 Required 需批准，Codex 自主 dispose O1-O5；O6 不在本轮 scope，不必处理）。
+2. Codex 修复完 → 用户 `审查` → Pass → `提交`。
+3. 提交后下一条 `执行` 进入真实 Tushare provider materializer（取代 CSV-only），或直接进入 fill simulation 起步。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 execution price data CSV materializer)
+
+**Commits**: none (Pattern B: `执行` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `be68abe` (Phase 5 execution price data loader wiring).
+- Follows the Phase 5 handoff note that provider materialization must generate row-level `execution_price_data` observations before fill simulation.
+
+**Worked on**:
+1. Added `runners/materialize_execution_price_data.py`, a local CSV -> `execution_price_data` JSON materializer.
+2. Added focused tests for schema-valid output, symbol filtering, and missing CSV-column errors.
+3. Updated CURRENT, Phase 5 handoff, and runner README so the review boundary is visible.
+
+**Key decisions**:
+- This is a provider-boundary helper only: it materializes a schema-valid file from a local CSV, but does not fetch Tushare data or simulate fills.
+- Kept `execution_price_data` v1.0.0 unchanged; the helper conforms to the existing contract rather than expanding schema scope.
+- Added `csv_fixture` as an extra `api_families` entry, relying on the existing schema decision that required families are a minimum set and extras are allowed.
+
+**Validation**:
+- `python -m unittest tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 22 tests.
+- `git diff --check` passed.
+
+**Alternatives considered and rejected**:
+- "Implement real Tushare fetch now" — rejected because network/provider policy and caching are a separate reviewable step.
+- "Start fill simulation now that price JSON can be generated" — rejected because this round is only the data materialization boundary.
+
+**Open questions handed off**:
+- None for this round; the next implementation step after review/commit is real Tushare provider materialization or first fill simulation.
+
+**Next natural step from my view**:
+1. User sends `审查`; Claude reviews the CSV materializer diff.
+2. If Pass, user sends `提交`.
+
+## 2026-05-26 — Codex (reconstructed post-commit: Phase 5 execution price data loader wiring)
+
+**Commits**: be68abe
+
+**Relationship to prior session(s)**:
+- Reconstructs the local commit created after the 2026-05-26 Claude review Pass for the loader review fix.
+- This entry is added by the fallback rule because commit `be68abe` existed after the latest SESSION_LOG entry.
+
+**Worked on**:
+1. Committed the Phase 5 execution price data loader wiring and row-level coverage review fix as a single reviewed local checkpoint.
+
+**Key decisions**:
+- No new design decision in this entry; commit message is the source for implementation details.
+- Repo remains local-only; no push or remote changes.
+
+**Alternatives considered and rejected**:
+- None; this is a reconstructed continuity entry.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Add a provider materialization boundary before real fill simulation.
+
 ## 2026-05-26 — Claude review — Pass (Phase 5 execution price data loader review fix)
 
 **Commits**: none (review-only entry; reviews working tree diff vs HEAD `ad4068f`; targets the immediately prior Codex 修复 entry "Phase 5 execution price data loader review fix")

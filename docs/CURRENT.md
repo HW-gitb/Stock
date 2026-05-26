@@ -1,23 +1,23 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（Phase 5 execution price data contract 已提交；当前进行 loader wiring）
+**最后更新**：2026-05-26（Phase 5 CSV materializer Optional disposition 已完成，等待提交）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-26)
 
-- Phase 5 `runners/backtest_execution.py` skeleton and review fixes were committed in `8488427`; execution price data contract was committed in `ad4068f`; simulator/fill logic is still not implemented.
+- Phase 5 `runners/backtest_execution.py` skeleton and review fixes were committed in `8488427`; execution price data contract was committed in `ad4068f`; loader wiring was committed in `be68abe`; simulator/fill logic is still not implemented.
 - The skeleton reads `analysis_input.json` as the sole primary input, replays Phase 3 analyzer vetoes, writes schema-validated `execution_report.json`, and emits CSV shells under `result/a_short/backtest/execution/` when run with default output settings.
-- Current uncommitted work wires `--price-data` into `runners/backtest_execution.py`: it validates a pre-existing `execution_price_data` JSON, checks date-range coverage, candidate-symbol coverage, row-level `(ts_code, --as-of)` coverage, and writes the real path/API families into `execution_report`.
-- The runner still does not fetch Tushare data, simulate fills, apply stops, or do portfolio accounting.
-- Validation used the Codex bundled Python: `python -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 17 tests.
-- The next P0 is Claude re-review of this loader wiring repair diff; do not implement provider fetch or fill simulation before review/commit.
+- Current uncommitted work adds `runners/materialize_execution_price_data.py`: it converts a local OHLC CSV into schema-valid `execution_price_data` JSON for `backtest_execution.py --price-data`.
+- The materializer is a provider-boundary helper only; it does not fetch Tushare data, simulate fills, apply stops, or do portfolio accounting.
+- Validation used the Codex bundled Python: `python -m unittest tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 26 tests after Optional disposition.
+- Claude reviewed this CSV materializer twice (verdict: Pass, no Required fixes). Codex has now disposed active Optional O1-O5; O6 remains archived to §P2. The next P0 is Claude re-review → user `提交`; do not implement Tushare provider fetch or fill simulation before commit.
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 前置 deterministic report v1.1.0 已提交；execution report schema v1.0.0 已提交；runner skeleton 已提交；price data input contract 已提交；loader wiring review fix 正在审查前状态；simulator / fill logic 尚未开始
-- **当前目标**：下一条最小流程任务是让 Claude 复审 Phase 5 price data loader wiring 修复；通过并提交后再实现 provider materialization / price simulation。
+- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 前置 deterministic report v1.1.0 已提交；execution report schema v1.0.0 已提交；runner skeleton 已提交；price data input contract 已提交；loader wiring 已提交；CSV materializer Optional disposition 已完成，等待 Claude 复审；simulator / fill logic 尚未开始
+- **当前目标**：下一条最小流程任务是让 Claude 复审 CSV materializer Optional disposition；Pass 后用户 `提交`，再实现真实 Tushare provider materialization 或 fill simulation。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -29,7 +29,8 @@
 
 - **协作协议精简**（2026-05-25，commits `ef12fbf` `e9a2b18`）：`docs/REVIEW_PACKET.md` 已移除；Codex 的 SESSION_LOG 顶部 entry 作为 review handoff；`[trivial]` 轻量通道已启用。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **Reference framework policy**（2026-05-25，当前工作树）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
-- **Phase 5 execution price data loader wiring**（2026-05-26，当前工作树）：`runners/backtest_execution.py` 新增 `--price-data`，可校验并引用既有 `execution_price_data` JSON；真实 provider fetch / fill logic 未实现。
+- **Phase 5 execution price data CSV materializer**（2026-05-26，当前工作树）：`runners/materialize_execution_price_data.py` 可把本地 OHLC CSV 转成 schema-valid `execution_price_data` JSON；真实 Tushare fetch / fill logic 未实现。
+- **Phase 5 execution price data loader wiring**（2026-05-26，commit `be68abe`）：`runners/backtest_execution.py` 新增 `--price-data`，可校验并引用既有 `execution_price_data` JSON；真实 provider fetch / fill logic 未实现。
 - **Phase 5 execution price data contract**（2026-05-26，commit `ad4068f`）：新增 `schemas/execution_price_data.schema.json`，用于定义 `execution_report.inputs.price_data.path` 未来指向的 OHLC 输入文件。
 - **Phase 5 execution runner skeleton**（2026-05-26，commit `8488427`）：`runners/backtest_execution.py` 已能从 `analysis_input.json` 生成 schema-valid `execution_report.json` 与 CSV shells；真实 simulator / fill logic 未实现。
 - **Phase 5 execution report schema-first**（2026-05-25，commit `636f0fd`）：新增 `schemas/execution_backtest_report.schema.json` v1.0.0 与最小 schema meta-validation 测试，并应用 Claude 4 条 Optional contract 加固。
@@ -97,6 +98,7 @@
 - `runners/forward_tracker.py` — Phase 3.5 forward tracker；后台累计实盘样本
 - `runners/weekly_screening.ps1` — 每周筛选脚本；筛选后自动 capture forward tracker
 - `runners/data_canary.py` — 旁路数据对账；不阻断主流程
+- `runners/materialize_execution_price_data.py` — Phase 5 provider-boundary helper；把本地 OHLC CSV 转成 `execution_price_data` JSON；不抓 Tushare、不做撮合
 - `engine/analyzer/rule6_hard_veto.py` — Phase 3 首轮 deterministic hard veto：`chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive`
 - `engine/analyzer/state_manager.py` — Phase 3 JSON state 接口与 atomic write helper
 - `tests/analyzer/test_state_manager.py` / `tests/test_backtest_rank_phase3.py` — Phase 3 state expiry、l2 normalization、analyzer ablation 命名回归测试
@@ -148,7 +150,7 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **Claude 复审 Phase 5 price data loader wiring 修复** — 当前工作树已补齐 row-level coverage 校验；先复审并提交，再实现 provider materialization / price simulation / fill logic。
+1. **Claude 复审 CSV materializer Optional disposition** — Codex 已处理 O1-O5；O6 已 archive 到 §P2，本轮不处理。Pass 后用户 `提交`，再实现真实 Tushare provider materialization / price simulation / fill logic。
 2. **Reference 框架约束** — 后续设计必须参考 A 股短线 / 美股短线 reference 文档的业务逻辑，但不能把 chatbox 框架机械照搬为运行时提示词或代码。
 3. **Claude 审查点** — execution runner、撮合假设、输出目录隔离均需 Claude 独立审查后由用户确认。
 4. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
@@ -164,6 +166,7 @@
 7. **L3 snapshot 累积满 6 月后跑 pit 对照**（约 2026-12）— 测 L3 因子 PIT 下边际贡献 + cat_score 真实预测力。
 8. **扩 36 期+** 覆盖 2023 段不同 regime；当前 2024+2025 偏强势。诊断 2024Q4-2025Q1 ESP 反向 regime event 也需扩样本。
 9. **LOCK veto** — N=4 太小，扩到 N≥15 再决策。
+10. **抽 shared util 模块解耦 runner 互相依赖** — 把 `iso_now` / `validate_json_schema` / `relative_ref` 等 helper 从 `runners/backtest_execution.py` 抽到 `engine/util/`（或 `runners/_common.py`），同时合并 `runners/run_analysis_report.py` 里重复的 `_validate_json_object()`。来源：2026-05-26 Claude review O6（archived followup of CSV materializer review）。
 
 ### P3 — 长期 / Phase 7
 
