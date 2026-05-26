@@ -23,7 +23,8 @@ if str(ROOT) not in sys.path:
 from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
 from engine.analyzer.state_manager import STATE_ROOT
 
-SCHEMA_PATH = ROOT / "schemas" / "execution_backtest_report.schema.json"
+REPORT_SCHEMA_PATH = ROOT / "schemas" / "execution_backtest_report.schema.json"
+PRICE_DATA_SCHEMA_PATH = ROOT / "schemas" / "execution_price_data.schema.json"
 DEFAULT_INPUT_ROOT = ROOT / "result" / "a_short"
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution"
 
@@ -45,6 +46,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Directory for execution_report.json and CSV outputs.",
     )
     parser.add_argument("--mode", choices=["smoke", "production"], default="smoke")
+    parser.add_argument(
+        "--price-data",
+        type=Path,
+        help="Optional path to an execution_price_data JSON file. The skeleton validates and references it, but still does not simulate fills.",
+    )
     parser.add_argument("--initial-capital", type=float, default=1_000_000.0)
     parser.add_argument("--cost-pct", type=float, default=0.001)
     parser.add_argument("--max-position-pct", type=float, default=0.1)
@@ -67,6 +73,14 @@ def load_analysis_input(path: Path) -> dict[str, Any]:
     return payload
 
 
+def load_execution_price_data(path: Path) -> dict[str, Any]:
+    payload = load_json(path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"execution_price_data must be a JSON object: {path}")
+    validate_json_schema(payload, PRICE_DATA_SCHEMA_PATH, "execution_price_data")
+    return payload
+
+
 def resolve_input_path(as_of: str, input_path: Path | None) -> Path:
     if input_path is not None:
         return input_path
@@ -74,19 +88,23 @@ def resolve_input_path(as_of: str, input_path: Path | None) -> Path:
 
 
 def validate_report(report: dict[str, Any]) -> None:
+    validate_json_schema(report, REPORT_SCHEMA_PATH, "execution report")
+
+
+def validate_json_schema(payload: dict[str, Any], schema_path: Path, label: str) -> None:
     if Draft7Validator is None:  # pragma: no cover - environment guard
         raise RuntimeError(
-            "jsonschema is required to validate execution reports"
+            f"jsonschema is required to validate {label}"
         ) from JSONSCHEMA_IMPORT_ERROR
-    schema = load_json(SCHEMA_PATH)
+    schema = load_json(schema_path)
     validator = Draft7Validator(schema)
-    errors = sorted(validator.iter_errors(report), key=lambda item: list(item.path))
+    errors = sorted(validator.iter_errors(payload), key=lambda item: list(item.path))
     if errors:
         details = "\n".join(
             f"- {'/'.join(str(part) for part in error.path) or '<root>'}: {error.message}"
             for error in errors
         )
-        raise ValueError(f"execution report schema validation failed:\n{details}")
+        raise ValueError(f"{label} schema validation failed:\n{details}")
 
 
 def relative_ref(path: Path) -> str:
@@ -106,6 +124,70 @@ def normalized_l3_mode(payload: dict[str, Any]) -> str:
     if mode not in {"pit", "today", "neutralize"}:
         raise ValueError(f"unsupported analysis_input.source.l3_mode: {mode!r}")
     return mode
+
+
+def validate_price_data_semantics(
+    price_data: dict[str, Any], analysis_input: dict[str, Any], as_of: str
+) -> None:
+    date_range = price_data["date_range"]
+    start_date = str(date_range["start_date"])
+    end_date = str(date_range["end_date"])
+    if not (start_date <= as_of <= end_date):
+        raise ValueError(
+            "execution_price_data.date_range must cover --as-of "
+            f"{as_of}: got {start_date}..{end_date}"
+        )
+
+    candidate_codes = {
+        candidate_code(candidate)
+        for candidate in analysis_input.get("candidates", [])
+        if candidate_code(candidate)
+    }
+    available_symbols = {str(symbol) for symbol in price_data.get("symbols", [])}
+    missing_symbols = sorted(candidate_codes - available_symbols)
+    if missing_symbols:
+        raise ValueError(
+            "execution_price_data.symbols must include all analysis_input candidates: "
+            + ", ".join(missing_symbols)
+        )
+
+    available_rows = {
+        (str(row.get("ts_code")), str(row.get("trade_date")))
+        for row in price_data.get("rows", [])
+        if isinstance(row, dict)
+    }
+    missing_rows = sorted(
+        code for code in candidate_codes if (code, as_of) not in available_rows
+    )
+    if missing_rows:
+        raise ValueError(
+            "execution_price_data.rows must include each analysis_input candidate "
+            f"on --as-of {as_of}: " + ", ".join(missing_rows)
+        )
+
+
+def price_data_ref(
+    price_data: dict[str, Any] | None, price_data_path: Path | None, as_of: str
+) -> dict[str, str]:
+    if price_data is None or price_data_path is None:
+        return {
+            "path": "not_available_phase5_skeleton",
+            "start_date": as_of,
+            "end_date": as_of,
+            "adj": "qfq_via_adj_factor",
+        }
+    return {
+        "path": relative_ref(price_data_path),
+        "start_date": str(price_data["date_range"]["start_date"]),
+        "end_date": str(price_data["date_range"]["end_date"]),
+        "adj": str(price_data["source"]["adjustment_mode"]),
+    }
+
+
+def execution_price_api_families(price_data: dict[str, Any] | None) -> list[str]:
+    if price_data is None:
+        return ["not_implemented_phase5_skeleton"]
+    return [str(item) for item in price_data["source"]["api_families"]]
 
 
 def candidate_code(candidate: dict[str, Any]) -> str:
@@ -261,6 +343,8 @@ def build_report(
     out_dir: Path,
     args: argparse.Namespace,
     skipped_rows: list[dict[str, Any]] | None = None,
+    price_data: dict[str, Any] | None = None,
+    price_data_path: Path | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     as_of = str(payload.get("trade_date") or args.as_of)
@@ -322,19 +406,14 @@ def build_report(
                 },
                 {"kind": "execution_log", "path": relative_ref(STATE_ROOT / "execution_log.csv")},
             ],
-            "price_data": {
-                "path": "not_available_phase5_skeleton",
-                "start_date": as_of,
-                "end_date": as_of,
-                "adj": "qfq_via_adj_factor",
-            },
+            "price_data": price_data_ref(price_data, price_data_path, as_of),
         },
         "execution_assumptions": build_execution_assumptions(args),
         "data_lineage": {
             "data_provider": "tushare",
             "api_families": {
                 "candidate_generation": ["analysis_input"],
-                "execution_price": ["not_implemented_phase5_skeleton"],
+                "execution_price": execution_price_api_families(price_data),
                 "state_replay": ["state_manager_json"],
             },
             "forward_return_adjustment_mode": "qfq_via_adj_factor",
@@ -343,7 +422,11 @@ def build_report(
                 "csi1000": "not_used_phase5_skeleton",
             },
             "pit_limitations": [
-                "Execution prices are not fetched in the Phase 5 skeleton.",
+                (
+                    "Execution price data is schema-validated but not used for fills yet."
+                    if price_data is not None
+                    else "Execution prices are not fetched in the Phase 5 skeleton."
+                ),
                 "The runner uses analysis_input.json as the sole primary input.",
                 "No Markdown report or LLM free-text output is consumed.",
             ],
@@ -454,9 +537,23 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError(
             f"analysis_input.trade_date {payload.get('trade_date')} does not match --as-of {args.as_of}"
         )
+    price_data = None
+    price_data_path = None
+    if args.price_data is not None:
+        price_data_path = args.price_data
+        price_data = load_execution_price_data(price_data_path)
+        validate_price_data_semantics(price_data, payload, args.as_of)
     out_dir = args.out_dir
     skipped_rows = classify_skips(payload.get("candidates", []))
-    report = build_report(payload, input_path, out_dir, args, skipped_rows=skipped_rows)
+    report = build_report(
+        payload,
+        input_path,
+        out_dir,
+        args,
+        skipped_rows=skipped_rows,
+        price_data=price_data,
+        price_data_path=price_data_path,
+    )
     write_outputs(report, payload, out_dir, skipped_rows=skipped_rows)
     print(f"[OK] wrote {out_dir / 'execution_report.json'}")
     print(f"[OK] wrote {out_dir / 'trades.csv'}")

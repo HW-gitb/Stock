@@ -93,6 +93,116 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 {row["message"] for row in event_rows},
             )
 
+    def test_runner_validates_and_references_execution_price_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    "--price-data",
+                    str(ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json"),
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                report["inputs"]["price_data"],
+                {
+                    "path": "tests/fixtures/execution_price_data_minimal.json",
+                    "start_date": "20260522",
+                    "end_date": "20260525",
+                    "adj": "qfq_via_adj_factor",
+                },
+            )
+            self.assertEqual(
+                report["data_lineage"]["api_families"]["execution_price"],
+                ["daily", "adj_factor", "stk_limit", "trade_cal"],
+            )
+            self.assertIn(
+                "Execution price data is schema-validated but not used for fills yet.",
+                report["data_lineage"]["pit_limitations"],
+            )
+
+    def test_price_data_date_range_must_cover_as_of(self) -> None:
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        price_data["date_range"] = {"start_date": "20260523", "end_date": "20260525"}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            price_path = Path(tmpdir) / "price_data.json"
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "date_range must cover --as-of"):
+                main(
+                    [
+                        "--as-of",
+                        "20260522",
+                        "--input-path",
+                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        "--price-data",
+                        str(price_path),
+                        "--out-dir",
+                        tmpdir,
+                    ]
+                )
+
+    def test_price_data_symbols_must_cover_candidates(self) -> None:
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        price_data["symbols"] = ["600000.SH"]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            price_path = Path(tmpdir) / "price_data.json"
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "symbols must include all"):
+                main(
+                    [
+                        "--as-of",
+                        "20260522",
+                        "--input-path",
+                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        "--price-data",
+                        str(price_path),
+                        "--out-dir",
+                        tmpdir,
+                    ]
+                )
+
+    def test_price_data_rows_must_cover_candidates_on_as_of(self) -> None:
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        price_data["rows"] = [
+            row for row in price_data["rows"] if row["ts_code"] == "600000.SH"
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            price_path = Path(tmpdir) / "price_data.json"
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "rows must include each"):
+                main(
+                    [
+                        "--as-of",
+                        "20260522",
+                        "--input-path",
+                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        "--price-data",
+                        str(price_path),
+                        "--out-dir",
+                        tmpdir,
+                    ]
+                )
+
     def test_l3_mode_pit_is_preserved_in_lineage(self) -> None:
         payload = self.load_fixture_payload()
         payload["source"]["l3_mode"] = "pit"

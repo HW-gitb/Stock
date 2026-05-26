@@ -503,3 +503,83 @@ C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\p
 1. 让 Claude 复审 Optional disposition 是否合理。
 2. 通过并提交前，仍不实现 provider fetch 或 fill simulation。
 3. 后续 loader 若遇到停牌或非交易日，应通过缺失 price row / `trade_cal` / downstream skip 处理，不要伪造 OHLC。
+
+## 2026-05-26 追加：execution price data loader wiring
+
+### 改了什么
+
+- `runners/backtest_execution.py` 新增 `--price-data` 参数，读取并校验一个既有 `execution_price_data` JSON 文件。
+- 新增 `load_execution_price_data()`，复用 JSON Schema 校验工具，校验 `schemas/execution_price_data.schema.json`。
+- 新增 price-data 语义校验：
+  - `date_range.start_date <= --as-of <= date_range.end_date`
+  - `symbols` 必须覆盖 `analysis_input.candidates` 中的全部 candidate code
+- `execution_report.inputs.price_data` 在传入 `--price-data` 时写入真实路径、date range、adjustment mode；未传入时保留 skeleton 占位值。
+- `data_lineage.api_families.execution_price` 在传入 `--price-data` 时来自 price-data source；未传入时保留 `not_implemented_phase5_skeleton`。
+- 新增 `tests/fixtures/execution_price_data_minimal.json` 与 3 条 execution runner 测试，覆盖正常引用、date range mismatch、symbol coverage mismatch。
+
+### 为什么改
+
+`execution_price_data` 契约已经提交为 `ad4068f`。下一条最小实现不是直接抓 Tushare 或撮合，而是先让 runner 消费这个契约，确保 `inputs.price_data.path` 能从占位字符串过渡为 schema-validated 的真实文件引用。这样后续 provider materialization 和 fill simulation 可以分别审查，不把数据输入边界和交易逻辑混在同一轮。
+
+本轮仍不实现 provider fetch、缓存生成、limit-up matching、order fill、stop/take-profit/time-stop execution 或 portfolio accounting。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+```
+
+### 验证结果
+
+- `tests.execution.test_backtest_execution`：8 tests passed。
+- `tests.schema.test_execution_price_data_schema`：5 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- 总计 16 tests passed；runner 在有/无 `--price-data` 两条路径都继续输出 schema-valid report。
+
+### 失效旧结论
+
+- “`inputs.price_data.path` 只能是 `not_available_phase5_skeleton` 占位值”已失效；传入 `--price-data` 时可写入真实 schema-validated 文件引用。
+- “runner 完全不消费 `execution_price_data` 契约”已失效；当前已做契约读取、schema 校验和最小语义校验。
+
+### 下一步注意事项
+
+1. 让 Claude 审查本轮 loader wiring diff。
+2. 通过并提交前，不实现 provider fetch 或 fill simulation。
+3. 后续 provider materialization 应生成满足 `execution_price_data` 的真实文件；fill simulation 应在其后单独实现 entry/exit 事件、涨停不可买、止损、时间止损和组合约束。
+
+## 2026-05-26 追加：execution price data loader review fix
+
+### 改了什么
+
+- 处理 Claude 对 loader wiring 的 1 条 Optional suggestion。
+- `validate_price_data_semantics()` 新增 row-level coverage 校验：`execution_price_data.rows` 必须包含每个 `analysis_input` candidate 在 `--as-of` 当天的 `(ts_code, trade_date)` 行。
+- `tests/execution/test_backtest_execution.py` 新增 `test_price_data_rows_must_cover_candidates_on_as_of`，覆盖 `symbols` 完整但 `rows` 缺失某 candidate 的错误路径。
+
+### 为什么改
+
+只检查 `symbols` 和 `date_range` 不足以保证 loader 边界完整：一个 price file 可以声明覆盖某股票和日期范围，但实际 `rows` 缺失该股票在 `--as-of` 的价格观测。若推迟到 fill stage 才报错，会把数据缺失误诊为撮合逻辑问题。本轮把该错误提前收敛到 loader。
+
+本轮仍不实现 provider fetch、缓存生成、fill simulation、止损止盈、时间止损或组合记账。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+```
+
+### 验证结果
+
+- `tests.execution.test_backtest_execution`：9 tests passed。
+- `tests.schema.test_execution_price_data_schema`：5 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- 总计 17 tests passed。
+
+### 失效旧结论
+
+- “loader 只检查 date_range + symbols 覆盖”已失效；现在还检查每个候选在 `--as-of` 的 row-level 覆盖。
+
+### 下一步注意事项
+
+1. 让 Claude 复审本轮 Optional disposition。
+2. 通过并提交前，仍不实现 provider fetch 或 fill simulation。
+3. 后续 provider materialization 必须生成 candidate/as_of 可用的 row-level price observations。

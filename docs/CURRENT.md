@@ -1,24 +1,23 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（Phase 5 execution runner skeleton 已提交；当前进行 price data input contract）
+**最后更新**：2026-05-26（Phase 5 execution price data contract 已提交；当前进行 loader wiring）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-26)
 
-- Phase 5 `runners/backtest_execution.py` skeleton and review fixes were committed in `8488427`; simulator/fill logic is still not implemented.
+- Phase 5 `runners/backtest_execution.py` skeleton and review fixes were committed in `8488427`; execution price data contract was committed in `ad4068f`; simulator/fill logic is still not implemented.
 - The skeleton reads `analysis_input.json` as the sole primary input, replays Phase 3 analyzer vetoes, writes schema-validated `execution_report.json`, and emits CSV shells under `result/a_short/backtest/execution/` when run with default output settings.
-- Current uncommitted work defines the Phase 5 `execution_price_data` input contract behind `execution_report.inputs.price_data.path`.
-- The price data contract requires Tushare `daily` + `adj_factor` + `stk_limit` + `trade_cal`, qfq OHLC rows, nullable limit-up/down fields, and explicit limitations.
-- Review Optional repair tightened the contract: `rows` is non-empty, `api_families` allows extra named families while requiring the four minimum families, and `priceRow.is_trade_day` is `const: true` so rows represent trading-day price observations only.
-- Validation used the Codex bundled Python: `python -m unittest tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema tests.execution.test_backtest_execution -v` passed with 13 tests.
-- The next P0 is Claude re-review of this price-data schema repair diff; do not implement provider fetch or fill simulation before review/commit.
+- Current uncommitted work wires `--price-data` into `runners/backtest_execution.py`: it validates a pre-existing `execution_price_data` JSON, checks date-range coverage, candidate-symbol coverage, row-level `(ts_code, --as-of)` coverage, and writes the real path/API families into `execution_report`.
+- The runner still does not fetch Tushare data, simulate fills, apply stops, or do portfolio accounting.
+- Validation used the Codex bundled Python: `python -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 17 tests.
+- The next P0 is Claude re-review of this loader wiring repair diff; do not implement provider fetch or fill simulation before review/commit.
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 前置 deterministic report v1.1.0 已提交；execution report schema v1.0.0 已提交；runner skeleton 已提交；price data input contract review fixes 正在审查前状态；simulator / fill logic 尚未开始
-- **当前目标**：下一条最小流程任务是让 Claude 复审 Phase 5 price data input contract 修复；通过并提交后再实现 provider loader / price simulation。
+- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；Phase 5 前置 deterministic report v1.1.0 已提交；execution report schema v1.0.0 已提交；runner skeleton 已提交；price data input contract 已提交；loader wiring review fix 正在审查前状态；simulator / fill logic 尚未开始
+- **当前目标**：下一条最小流程任务是让 Claude 复审 Phase 5 price data loader wiring 修复；通过并提交后再实现 provider materialization / price simulation。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -30,7 +29,8 @@
 
 - **协作协议精简**（2026-05-25，commits `ef12fbf` `e9a2b18`）：`docs/REVIEW_PACKET.md` 已移除；Codex 的 SESSION_LOG 顶部 entry 作为 review handoff；`[trivial]` 轻量通道已启用。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **Reference framework policy**（2026-05-25，当前工作树）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
-- **Phase 5 execution price data contract**（2026-05-26，当前工作树）：新增 `schemas/execution_price_data.schema.json`，用于定义 `execution_report.inputs.price_data.path` 未来指向的 OHLC 输入文件；真实 provider loader / fill logic 未实现。
+- **Phase 5 execution price data loader wiring**（2026-05-26，当前工作树）：`runners/backtest_execution.py` 新增 `--price-data`，可校验并引用既有 `execution_price_data` JSON；真实 provider fetch / fill logic 未实现。
+- **Phase 5 execution price data contract**（2026-05-26，commit `ad4068f`）：新增 `schemas/execution_price_data.schema.json`，用于定义 `execution_report.inputs.price_data.path` 未来指向的 OHLC 输入文件。
 - **Phase 5 execution runner skeleton**（2026-05-26，commit `8488427`）：`runners/backtest_execution.py` 已能从 `analysis_input.json` 生成 schema-valid `execution_report.json` 与 CSV shells；真实 simulator / fill logic 未实现。
 - **Phase 5 execution report schema-first**（2026-05-25，commit `636f0fd`）：新增 `schemas/execution_backtest_report.schema.json` v1.0.0 与最小 schema meta-validation 测试，并应用 Claude 4 条 Optional contract 加固。
 - **deterministic report v1.1.0 前置升级**（2026-05-25，commit `da26a2b`）：deterministic report / enrichment patch contract 已对齐 L3 与 enrichment lineage。
@@ -148,7 +148,7 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **Claude 复审 Phase 5 price data input contract 修复** — 当前工作树已处理 O1-O3 Optional；先复审并提交，再实现 provider loader / price simulation / fill logic。
+1. **Claude 复审 Phase 5 price data loader wiring 修复** — 当前工作树已补齐 row-level coverage 校验；先复审并提交，再实现 provider materialization / price simulation / fill logic。
 2. **Reference 框架约束** — 后续设计必须参考 A 股短线 / 美股短线 reference 文档的业务逻辑，但不能把 chatbox 框架机械照搬为运行时提示词或代码。
 3. **Claude 审查点** — execution runner、撮合假设、输出目录隔离均需 Claude 独立审查后由用户确认。
 4. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。

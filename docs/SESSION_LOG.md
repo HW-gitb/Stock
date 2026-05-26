@@ -8,6 +8,166 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Phase 5 execution price data loader review fix)
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `ad4068f`; targets the immediately prior Codex 修复 entry "Phase 5 execution price data loader review fix")
+
+**Verdict**: Pass.
+
+**Notes**: O1 accept 干净落地。独立验证 `tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema` → `Ran 17 tests in 0.101s OK`（增量 +1：`test_price_data_rows_must_cover_candidates_on_as_of`）。`validate_price_data_semantics` 第三段 `(ts_code, --as-of)` row coverage 实现正确：遍历 `candidate_codes` 检查每个 ts_code 是否在 rows 中有 `(ts_code, as_of)` 对应行，缺失则 raise 含 missing list 的明确 ValueError。Codex 选 "现在加" 分支（rejected defer to fill stage 的理由："missing price rows are data-boundary errors and are cheaper to diagnose before fill logic exists"）— 与我提出 Optional 时的逻辑一致。`Optional disposition` 段格式符合 §修复 step 14。无新 Required / Optional / open questions。可以 `提交`。
+
+---
+
+## 2026-05-26 — Codex (Phase 5 execution price data loader review fix)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for clean `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude review "Pass (Phase 5 execution price data loader wiring)".
+- No Required fixes were present; this round disposes Optional suggestion O1.
+
+**Worked on**:
+1. Added row-level price-data coverage validation to `runners/backtest_execution.py`.
+2. Added a regression test for missing `(candidate_ts_code, --as-of)` price rows.
+
+**Key decisions**:
+- Accepted O1: loader validation now requires every `analysis_input` candidate to have a matching price row on `--as-of`, not only a matching symbol in `symbols`.
+- Kept this as loader validation only; still no provider fetch or fill simulation.
+
+**Optional disposition**:
+- O1 accept: `validate_price_data_semantics()` now checks `(ts_code, --as-of)` coverage in `execution_price_data.rows`.
+
+**Validation**:
+- `python -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 17 tests.
+
+**Alternatives considered and rejected**:
+- "Defer row-level coverage to fill stage" — rejected because missing price rows are data-boundary errors and are cheaper to diagnose before fill logic exists.
+
+**Open questions handed off**:
+- None for this repair round.
+
+**Next natural step from my view**:
+1. User sends `审查`; Claude re-reviews the Optional disposition diff.
+2. If Pass, user sends `提交`.
+
+## 2026-05-26 — Claude review — Pass (Phase 5 execution price data loader wiring)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (1 条).
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `ad4068f`; targets the immediately prior Codex entry "Phase 5 execution price data loader wiring")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `runners/backtest_execution.py` 改动（+109 / 抽公共 `validate_json_schema` helper / 新增 `load_execution_price_data` / 新增 `validate_price_data_semantics` / 新增 `price_data_ref` / 新增 `execution_price_api_families` / `--price-data` CLI arg / `build_report` 接两个新参数 / `main` 装配）
+- `tests/execution/test_backtest_execution.py` 改动（+84 / 3 个新 test：happy path + date_range 不覆盖 + symbols 不全）
+- `tests/fixtures/execution_price_data_minimal.json` 新 fixture（含 2 个 ts_code 与 analysis_input_minimal 对齐）
+- `docs/CURRENT.md` + Phase 5 handoff 追加 + `runners/README.md` + SESSION_LOG `执行` entry + reconstructed post-commit (`ad4068f`)
+- 无 EGS / analyzer / rank backtest / state 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` → `Ran 16 tests in 0.103s OK`
+- 3 个新 execution test 覆盖 happy + 2 error path
+
+**Reasons for Pass**:
+- 严守 loader-only scope：runner validate + reference 已有 price_data 文件，不 fetch Tushare，不模拟 fills ✅
+- `--price-data` 是 optional：未提供时回退原 placeholder，向后兼容（原 smoke test 仍 pass）✅
+- 两层 semantic validation：date_range 覆盖 --as-of + symbols superset of candidates，错误 message 明确 ✅
+- `validate_json_schema` 抽公共 helper（取代单一 `validate_report`），未来 price_data fixture / 其他 schema 都能复用 ✅
+- `price_data_ref` 和 `execution_price_api_families` 提供 with/without 两路径相同 shape 的输出，schema-compatible ✅
+- `pit_limitations` 条件 message（有 price data → "schema-validated but not used for fills yet"；无 → 原 "not fetched"）显式说明当前 lineage 状态 ✅
+- Reconstructed post-commit entry (`ad4068f`) 符合 SESSION_LOG fallback 层规则 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **`validate_price_data_semantics` 缺第三层 row-level coverage 验证**（`runners/backtest_execution.py` line 129-152）
+
+   现实现验了：
+   - date_range 覆盖 --as-of ✅
+   - symbols ⊇ candidate ts_codes ✅
+
+   缺：rows 中是否真的存在 `(candidate_ts_code, --as-of)` 对应的 row。例如 symbols=["600000.SH","600001.SH"]、date_range=20260501..20260530，但 rows 全是 ts_code=600000.SH 的，对 600001.SH 在 --as-of 取价时只能在 fill stage 报错（"row not found"），不能在 loader 阶段提前 catch。
+
+   后果：fill stage 出错时 user 会先怀疑 fill 实现 bug，而不是上游数据缺失，定位成本变高。
+
+   解决方案二选一：
+   - **现在加**：在 `validate_price_data_semantics` 加一段 `(ts_code, --as-of) ∈ rows` 验证。代价：~10 行 + 1 个 test case；收益：把"数据完整性"边界完整圈在 loader 层。
+   - **defer 到 fill stage**：在 `runners/README.md` 或 backtest_execution.py 顶部 comment 明确"loader 只验 date_range + symbols；row-level coverage 留给 fill stage"，避免后人误以为 loader 已经做了完整数据检查。
+
+   两种都能闭合 invariant 边界，Codex 自主选。
+
+**Documentation issues**: 无。
+
+**Pending status**: Required: none / Optional (O1): PENDING CODEX DISPOSITION。
+
+**Next natural step from my view**:
+1. 切到 Codex → `修复`（无 Required 需批准，Codex 自主 dispose O1）。
+2. Codex 修复完 → 用户 `审查` → Pass → `提交`。
+3. 提交后下一条 `执行` 进入 provider materialization（产真实 execution_price_data 文件 from Tushare）或 fill simulation 起步。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 execution price data loader wiring)
+
+**Commits**: none (Pattern A: `执行` updates working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `ad4068f` (Phase 5 execution price data contract).
+- Follows the Phase 5 handoff note that the next step after the contract is to make the runner consume the file behind `inputs.price_data.path`.
+
+**Worked on**:
+1. Added `--price-data` support to `runners/backtest_execution.py`.
+2. Added a minimal `execution_price_data` fixture and tests for schema validation, date-range coverage, candidate-symbol coverage, and report lineage wiring.
+3. Updated current-state and handoff docs so the next reviewer sees `ad4068f` as committed and this round as the new uncommitted diff.
+
+**Key decisions**:
+- This is loader wiring only: the runner validates and references a pre-existing `execution_price_data` file, but still does not fetch Tushare data or simulate fills.
+- `execution_price_data.date_range` must cover `--as-of`.
+- `execution_price_data.symbols` must include every candidate in `analysis_input`.
+- When no `--price-data` is supplied, the runner keeps the prior skeleton placeholder so existing smoke behavior remains stable.
+
+**Validation**:
+- `python -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 16 tests.
+
+**Alternatives considered and rejected**:
+- "Implement Tushare fetch now" — rejected because provider access and cache policy are a separate step from loader contract consumption.
+- "Start fill simulation after loading prices" — rejected because this round only wires the input boundary and report lineage.
+
+**Open questions handed off**:
+- None for this round; the next step after review/commit is provider materialization or first non-fill price availability checks.
+
+**Next natural step from my view**:
+1. User sends `审查`; Claude reviews the loader wiring diff.
+2. If Pass, user sends `提交`.
+
+## 2026-05-26 — Codex (reconstructed post-commit: Phase 5 execution price data contract)
+
+**Commits**: ad4068f
+
+**Relationship to prior session(s)**:
+- Reconstructs the local commit created after the 2026-05-26 Claude review Pass for the price data contract.
+- This entry is added by the fallback rule because commit `ad4068f` existed after the latest SESSION_LOG entry.
+
+**Worked on**:
+1. Committed the Phase 5 execution price data contract and review fixes as a single reviewed local checkpoint.
+
+**Key decisions**:
+- No new design decision in this entry; commit message is the source for implementation details.
+- Repo remains local-only; no push or remote changes.
+
+**Alternatives considered and rejected**:
+- None; this is a reconstructed continuity entry.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Wire `execution_price_data` into the Phase 5 runner before real provider fetch or fill simulation.
+
 ## 2026-05-26 — Claude review — Pass (Phase 5 execution price data contract review fixes)
 
 **Commits**: none (review-only entry; reviews working tree diff vs HEAD `8488427`; targets the immediately prior Codex 修复 entry "Phase 5 execution price data contract review fixes")

@@ -1,0 +1,50 @@
+{
+  "schema_name": "execution_price_data",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-26T00:00:00+08:00",
+  "preset": "a_short",
+  "data_provider": "tushare",
+  "source": {
+    "api_families": ["daily", "adj_factor", "stk_limit", "trade_cal"],
+    "adjustment_mode": "qfq_via_adj_factor",
+    "price_basis": "daily_eod",
+    "calendar_source": "tushare.trade_cal",
+    "pit_policy": "trade_date_eod"
+  },
+  "date_range": {
+    "start_date": "20260522",
+    "end_date": "20260525"
+  },
+  "symbols": ["600000.SH", "600001.SH"],
+  "rows": [
+    {
+      "ts_code": "600000.SH",
+      "trade_date": "20260522",
+      "is_trade_day": true,
+      "open_qfq": 13.1,
+      "high_qfq": 13.5,
+      "low_qfq": 12.9,
+      "close_qfq": 13.35,
+      "pre_close_qfq": 13.0,
+      "adj_factor": 101.0,
+      "up_limit": 14.3,
+      "down_limit": 11.7,
+      "source_flags": ["daily", "adj_factor", "stk_limit"]
+    },
+    {
+      "ts_code": "600001.SH",
+      "trade_date": "20260522",
+      "is_trade_day": true,
+      "open_qfq": 19.8,
+      "high_qfq": 20.2,
+      "low_qfq": 19.5,
+      "close_qfq": 20.0,
+      "pre_close_qfq": 19.7,
+      "adj_factor": 98.0,
+      "up_limit": 21.67,
+      "down_limit": 17.73,
+      "source_flags": ["daily", "adj_factor", "stk_limit"]
+    }
+  ],
+  "limitations": ["Synthetic fixture for Phase 5 loader tests; not real market data."]
+}
