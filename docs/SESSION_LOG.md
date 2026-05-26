@@ -8,6 +8,30 @@
 
 ---
 
+## 2026-05-26 — Codex (post-commit: Phase 5 Tushare materializer)
+
+**Commits**: cfa1c57
+
+**Relationship to prior session(s)**:
+- Finalizes the Claude Pass entry below and the Codex Optional disposition entry for the Phase 5 Tushare provider materializer.
+
+**Worked on**:
+1. Committed the reviewed Tushare provider materializer, tests, `.gitignore`, README, CURRENT, SESSION_LOG, and Phase 5 handoff updates.
+
+**Key decisions**:
+- No new design decision; this entry exists to prevent the post-commit SESSION_LOG/CURRENT gap.
+
+**Alternatives considered and rejected**:
+- "Leave CURRENT/SESSION_LOG in pre-commit state" — rejected because prior sessions identified that as a handoff gap.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Start fill simulation as a separate Phase 5 scope.
+
+---
+
 ## 2026-05-26 — Claude review — Pass (Phase 5 Tushare materializer Optional disposition)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O6 全部 dispose 完成；A1-A3 archived followups 已按建议 merge 进 `CURRENT.md §P2 第 10 条` shared util cleanup batch）。

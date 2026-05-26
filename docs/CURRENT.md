@@ -7,20 +7,20 @@
 
 ## 0. Latest Delta (2026-05-26)
 
-- Phase 5 chain committed so far: skeleton `8488427` → execution_price_data contract `ad4068f` → loader wiring `be68abe` → CSV materializer `ece86b1`. Fill/simulator logic still not implemented.
+- Phase 5 chain committed so far: skeleton `8488427` → execution_price_data contract `ad4068f` → loader wiring `be68abe` → CSV materializer `ece86b1` → Tushare provider materializer `cfa1c57`. Fill/simulator logic still not implemented.
 - CSV materializer (`runners/materialize_execution_price_data.py`, commit `ece86b1`): provider-boundary helper that converts a local OHLC CSV to schema-valid `execution_price_data` JSON for `backtest_execution.py --price-data`. Does not fetch Tushare data, simulate fills, apply stops, or do portfolio accounting.
 - 4 rounds of Claude review fully consumed: 5 active Optional (O1-O5) disposed by Codex; O6 archived to §P2 cleanup followup (shared-util extraction across runners). 26 tests pass.
 - Git remote policy (`28cdc30`): the original absolute prohibition on `git push` / `git remote add` was relaxed to a constrained private-remote allowance. Public remote, unauthorized collaborators, secrets, logs, caches, live-state data, and ignored generated artifacts remain prohibited. See `AGENTS.md §Git remote privacy policy`.
-- Latest commit `b2c78a3` stopped tracking generated outputs for private GitHub backup hygiene; `.gitignore` now excludes generated screening/backtest/state artifacts.
-- Current uncommitted work adds `runners/materialize_execution_price_data_tushare.py`: it fetches Tushare `daily` / `adj_factor` / `stk_limit` / `trade_cal`, writes the same schema-valid `execution_price_data` v1.0.0 JSON, and caches provider payloads under `result/a_short/backtest/cache/`.
+- Commit `b2c78a3` stopped tracking generated outputs for private GitHub backup hygiene; `.gitignore` now excludes generated screening/backtest/state artifacts.
+- Substantive commit `cfa1c57` adds `runners/materialize_execution_price_data_tushare.py`: it fetches Tushare `daily` / `adj_factor` / `stk_limit` / `trade_cal`, writes the same schema-valid `execution_price_data` v1.0.0 JSON, and caches provider payloads under `result/a_short/backtest/cache/`.
 - Initial Claude review returned Pass with 6 active Optional suggestions; Codex disposed all 6 in the current working tree. The materializer now gives a clear non-trading `--as-of` error, hard-fails broken Tushare base-URL pinning, treats row `source_flags` as API lineage, simplifies limit-column handling, and adds CLI/cache/token coverage.
 - This provider materializer still does not simulate fills, apply stops, or do portfolio accounting. Validation used the Codex bundled Python: `python -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 38 tests.
-- Next P0: Claude re-review of the Tushare provider materializer Optional disposition diff. After Pass and commit, proceed to fill simulation start.
+- Next P0: start fill simulation as a separate Phase 5 scope.
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.0.0 / runner skeleton / execution_price_data contract / loader wiring / CSV materializer 全部已 commit；real Tushare provider materializer 已实现且 initial review Optional 已处理待复审；simulator / fill logic 尚未开始
-- **当前目标**：下一条最小流程任务是让 Claude 复审 Tushare provider materializer Optional disposition；通过并提交后，再起步 fill simulation。
+- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.0.0 / runner skeleton / execution_price_data contract / loader wiring / CSV materializer / real Tushare provider materializer 全部已 commit；simulator / fill logic 尚未开始
+- **当前目标**：下一条最小流程任务是起步 fill simulation。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -34,7 +34,7 @@
 - **Reference framework policy**（2026-05-25，当前工作树）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
 - **Git remote privacy policy 放开**（2026-05-26，commit `28cdc30`）：绝对禁止 `git push` / `git remote add` 改成 private-remote + 用户明确指令 + 隐私审计后允许；secrets / logs / caches / 实盘状态 / ignored artifacts 仍禁上传。详 `AGENTS.md §Git remote privacy policy`。
 - **Phase 5 execution price data CSV materializer**（2026-05-26，commit `ece86b1`）：`runners/materialize_execution_price_data.py` 可把本地 OHLC CSV 转成 schema-valid `execution_price_data` JSON；真实 Tushare fetch / fill logic 未实现。9 测试新增（22 → 26 total）。
-- **Phase 5 execution price data Tushare materializer**（2026-05-26，当前工作树）：`runners/materialize_execution_price_data_tushare.py` 复用同一 `execution_price_data` v1.0.0 契约，接入 Tushare provider + ignored cache；initial review 的 6 条 Optional 已处理；fill logic 未实现。
+- **Phase 5 execution price data Tushare materializer**（2026-05-26，commit `cfa1c57`）：`runners/materialize_execution_price_data_tushare.py` 复用同一 `execution_price_data` v1.0.0 契约，接入 Tushare provider + ignored cache；initial review 的 6 条 Optional 已处理；fill logic 未实现。
 - **Phase 5 execution price data loader wiring**（2026-05-26，commit `be68abe`）：`runners/backtest_execution.py` 新增 `--price-data`，可校验并引用既有 `execution_price_data` JSON；真实 provider fetch / fill logic 未实现。
 - **Phase 5 execution price data contract**（2026-05-26，commit `ad4068f`）：新增 `schemas/execution_price_data.schema.json`，用于定义 `execution_report.inputs.price_data.path` 未来指向的 OHLC 输入文件。
 - **Phase 5 execution runner skeleton**（2026-05-26，commit `8488427`）：`runners/backtest_execution.py` 已能从 `analysis_input.json` 生成 schema-valid `execution_report.json` 与 CSV shells；真实 simulator / fill logic 未实现。
@@ -156,7 +156,7 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **Claude 复审真实 Tushare provider materializer Optional disposition** — 当前工作树已实现 `materialize_execution_price_data_tushare.py` 并处理 initial review 的 6 条 Optional，只替换 data source（CSV → Tushare API + ignored cache），不改 schema、不做 fill simulation。Pass 并提交后再起步 fill simulation（entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束）。
+1. **Fill simulation 起步** — Tushare provider materializer 已提交为 `cfa1c57`；下一条 scope 单独实现 entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束，不再混入 provider materializer 变更。
 2. **Reference 框架约束** — 后续设计必须参考 A 股短线 / 美股短线 reference 文档的业务逻辑，但不能把 chatbox 框架机械照搬为运行时提示词或代码。
 3. **Claude 审查点** — execution runner、撮合假设、输出目录隔离均需 Claude 独立审查后由用户确认。
 4. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
