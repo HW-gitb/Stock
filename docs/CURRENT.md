@@ -1,17 +1,17 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（Phase 5 minimal fill simulation + Optional disposition）
+**最后更新**：2026-05-26（Phase 5 minimal fill simulation 已提交）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-26)
 
-- Phase 5 minimal fill simulation change set：`runners/backtest_execution.py` 已接入 `--price-data` path。传入 `--price-data` 时按 `capital_context.bucket_capital` 做 T+1 open 入场、涨停不可买、deterministic stop-loss、time-stop exit、A 股 100 股 lot sizing、双边交易成本、cash constraint，并把真实结果写入 `trades.csv` / `daily_equity.csv` / `order_events.csv` / `skipped_candidates.csv`。不传 `--price-data` 时保留原 skeleton skip 行为。
-- Phase 5 Optional disposition O1-O5：stop-loss gap-down 修为“后续交易日 open 低于 stop 则按 open 出场，否则 low 触发按 stop 出场”；entry open <= stop 会跳过；补 gap-down / stop>=entry / cash_constrained regression；`total_return` 分母与 event enum grow-only 策略已文档化。
+- Commit `0f90c40` adds Phase 5 minimal fill simulation. `runners/backtest_execution.py` 已接入 `--price-data` path：按 `capital_context.bucket_capital` 做 T+1 open 入场、涨停不可买、deterministic stop-loss、time-stop exit、A 股 100 股 lot sizing、双边交易成本、cash constraint，并把真实结果写入 `trades.csv` / `daily_equity.csv` / `order_events.csv` / `skipped_candidates.csv`。不传 `--price-data` 时保留原 skeleton skip 行为。
+- Commit `0f90c40` also includes Claude O1-O5 Optional disposition：stop-loss gap-down 修为“后续交易日 open 低于 stop 则按 open 出场，否则 low 触发按 stop 出场”；entry open <= stop 会跳过；补 gap-down / stop>=entry / cash_constrained regression；`total_return` 分母与 event enum grow-only 策略已文档化。
 - Scope boundary：本轮不抓 provider、不改 Tushare materializer、不写长线 spec、不做 Phase 7 DataHub，不做 full concurrent multi-position accounting，不接券商或 OS 自动下单；所有 order events 都是 backtest/manual-analysis 输出。
 - Commit workflow policy: default single-scope `提交` path is Claude Pass check + `git status --short` + `git add -A` + `git commit` + `git status --short`; multi-scope working trees must split commits by scope, and post-commit CURRENT/SESSION_LOG sync is exception-only when committed docs would materially mislead the next LLM.
-- Phase 5 chain committed so far: skeleton `8488427` → execution_price_data contract `ad4068f` → loader wiring `be68abe` → CSV materializer `ece86b1` → Tushare provider materializer `cfa1c57`. Minimal fill/simulator logic exists only in the current uncommitted working tree.
+- Phase 5 chain committed so far: skeleton `8488427` → execution_price_data contract `ad4068f` → loader wiring `be68abe` → CSV materializer `ece86b1` → Tushare provider materializer `cfa1c57` → minimal fill simulation `0f90c40`.
 - CSV materializer (`runners/materialize_execution_price_data.py`, commit `ece86b1`): provider-boundary helper that converts a local OHLC CSV to schema-valid `execution_price_data` JSON for `backtest_execution.py --price-data`. Does not fetch Tushare data, simulate fills, apply stops, or do portfolio accounting.
 - 4 rounds of Claude review fully consumed: 5 active Optional (O1-O5) disposed by Codex; O6 archived to §P2 cleanup followup (shared-util extraction across runners). 26 tests pass.
 - Git remote policy (`28cdc30`): the original absolute prohibition on `git push` / `git remote add` was relaxed to a constrained private-remote allowance. Public remote, unauthorized collaborators, secrets, logs, caches, live-state data, and ignored generated artifacts remain prohibited. See `AGENTS.md §Git remote privacy policy`.
@@ -23,12 +23,12 @@
 - Roadmap policy: user accepted B semi-reorder. Keep A-share short Phase 6 observation running, draft A-long / US-long specs and normalize US-short spec in parallel during Phase 6, then do Phase 7 DataHub/engine modularization based on all four specs. Phase 8/9 swapping may use data readiness examples in `AGENTS.md` #12, without hard-coding strict criteria.
 - P0a capital context contract commit `244353e` adds `portfolio_allocation` and `cash_buffer_state` schemas, upgrades `execution_backtest_report` to v1.1.0 with required `capital_context`, requires `backtest_execution.py --portfolio-allocation --cash-buffer-state --preset-path`, and adds capital/bucket fields to all four presets.
 - P0a review Optional disposition is included: runner now reads preset YAML instead of a hardcoded preset map, `portfolio_allocation` bucket `horizon` was removed, and single-value policy enums were converted to `const`.
-- Next protocol step: run Claude `审查` on the latest minimal fill simulation + Optional disposition diff; if Pass, user can `提交`.
+- Next implementation: connect Tushare materializer output to a small real execution run and extend ship-gate metric outputs; do not start a broad portfolio engine yet.
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.1.0 capital-context contract / runner skeleton / execution_price_data contract / loader wiring / CSV materializer / real Tushare provider materializer / minimal fill simulation 已形成连续链路。
-- **当前目标**：让 Claude 复审 Phase 5 minimal fill simulation + Optional disposition：entry/exit + 涨停不可买 + 止损 + 时间止损 + bucket capital 组合约束。路线图已改为 B 半重排，但本 scope 不实现长线 spec 或 Phase 7 重构。
+- **当前目标**：进入 Phase 5 下一小步：把 Tushare materializer 输出接到小样本 real execution run，并补 ship-gate metric 输出字段。路线图已改为 B 半重排，但下一 scope 仍不实现长线 spec 或 Phase 7 重构。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -42,7 +42,7 @@
 - **Reference framework policy**（2026-05-25，当前工作树）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
 - **Phase roadmap B semi-reorder**（2026-05-26，当前工作树）：`AGENTS.md` 固化 B 半重排：Phase 6 继续 A 股短线观察，同时并行产出 A 长 / US 长 spec 并规范化 US 短 spec；Phase 7 以 4 套 spec 做共享层与独立 rule pack 划分；Phase 8 优先 US 短 + US 长 skeleton，Phase 9 A 长 implementation 可按数据准备度与 Phase 8 子项交换；数据准备度示例见 `AGENTS.md` #12。
 - **Phase 5 P0a capital context contracts**（2026-05-26，commit `244353e`）：新增 `schemas/portfolio_allocation.schema.json`、`schemas/cash_buffer_state.schema.json`、对应 fixtures/tests；`execution_backtest_report.schema.json` 升 v1.1.0 并要求 `capital_context`；`backtest_execution.py` 新增 `--portfolio-allocation` / `--cash-buffer-state` / `--preset-path`，report 的 `settings.initial_capital` 和 ending equity 均来自 selected bucket capital；4 个 preset 都声明 capital bucket/ceiling。Optional disposition 后，preset YAML 是 capital profile source of truth，portfolio policy bucket 不再重复声明 `horizon`。
-- **Phase 5 minimal fill simulation + Optional disposition**（2026-05-26，当前 change set）：`backtest_execution.py --price-data` 会从 schema-valid `execution_price_data` 执行最小 daily-OHLC 撮合：T+1 open、涨停不可买、stop-loss 优先、time-stop、bucket sizing、双边成本、CSV/report metrics。O1-O5 disposition 后，新增 gap-down open stop fill、entry open <= stop skip、cash_constrained regression；broader Phase 5 suite 50 tests passed，full unittest 85 tests passed。
+- **Phase 5 minimal fill simulation + Optional disposition**（2026-05-26，commit `0f90c40`）：`backtest_execution.py --price-data` 会从 schema-valid `execution_price_data` 执行最小 daily-OHLC 撮合：T+1 open、涨停不可买、stop-loss 优先、time-stop、bucket sizing、双边成本、CSV/report metrics。O1-O5 disposition 后，新增 gap-down open stop fill、entry open <= stop skip、cash_constrained regression；broader Phase 5 suite 50 tests passed，full unittest 85 tests passed。
 - **Git remote privacy policy 放开**（2026-05-26，commit `28cdc30`）：绝对禁止 `git push` / `git remote add` 改成 private-remote + 用户明确指令 + 隐私审计后允许；secrets / logs / caches / 实盘状态 / ignored artifacts 仍禁上传。详 `AGENTS.md §Git remote privacy policy`。
 - **Phase 5 execution price data CSV materializer**（2026-05-26，commit `ece86b1`）：`runners/materialize_execution_price_data.py` 可把本地 OHLC CSV 转成 schema-valid `execution_price_data` JSON；真实 Tushare fetch / fill logic 未实现。9 测试新增（22 → 26 total）。
 - **Phase 5 execution price data Tushare materializer**（2026-05-26，commit `cfa1c57`）：`runners/materialize_execution_price_data_tushare.py` 复用同一 `execution_price_data` v1.0.0 契约，接入 Tushare provider + ignored cache；initial review 的 6 条 Optional 已处理；fill logic 未实现。
@@ -171,7 +171,7 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **Fill simulation re-review** — minimal fill simulation + O1-O5 Optional disposition 已完成；下一步是 Claude 复审，不继续扩 scope。若通过，再提交；若有 Required fixes，只修用户批准项。
+1. **Small real execution run** — minimal fill simulation 已提交；下一步接 Tushare materializer 输出做小样本 real execution run，并补 ship-gate metric 输出字段。不继续扩到 full portfolio engine。
 2. **保持 P0a contract 边界** — fill simulation 必须使用 `capital_context.bucket_capital` / `bucket_ceiling_pct` / manual-order-only boundary，不得退回 total-account `initial_capital` 假设。
 3. **Reference 框架约束** — 后续设计必须参考 A 股短线 / 美股短线 reference 文档的业务逻辑，但不能把 chatbox 框架机械照搬为运行时提示词或代码。
 4. **Claude 审查点** — execution runner、撮合假设、输出目录隔离、capital context contract 均需 Claude 独立审查后由用户确认。

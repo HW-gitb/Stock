@@ -8,6 +8,31 @@
 
 ---
 
+## 2026-05-26 — Codex (Phase 5 minimal fill simulation post-commit status sync)
+
+**Commits**: 0f90c40
+
+**Relationship to prior session(s)**:
+- Builds on the Claude Pass entry immediately below and the Codex O1-O5 Optional disposition entry.
+- Refines post-commit handoff state only: the reviewed Phase 5 minimal fill simulation is now committed, so CURRENT should route the next LLM to the small real execution run instead of another review/commit step.
+
+**Worked on**:
+1. Committed Phase 5 minimal fill simulation plus O1-O5 Optional disposition as `0f90c40`.
+2. Updated `docs/CURRENT.md` from reviewed-change-set wording to committed-state wording.
+
+**Key decisions**:
+- No new design decision. This is the commit-flow exception for post-commit documentation sync because the committed CURRENT wording would otherwise still point at review/commit.
+
+**Alternatives considered and rejected**:
+- "Leave CURRENT as-is until the next execution" — rejected because it would materially mislead the next LLM about the current target.
+
+**Open questions handed off**:
+- None new.
+
+**Next natural step from my view**:
+1. Connect Tushare materializer output to a small real execution run.
+2. Extend ship-gate metric outputs without starting a full portfolio engine.
+
 ## 2026-05-26 — Claude review — Pass (Phase 5 minimal fill simulation Optional disposition O1-O5)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O5 全部 dispose 完成）。
