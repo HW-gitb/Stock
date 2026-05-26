@@ -170,7 +170,7 @@ Exception (must be explicitly stated by the user): a work block too large for on
 
 ### Commit Documentation Hygiene
 
-Default `提交` path stays small:
+Default `提交` path stays small and should produce **one commit** for a single reviewed scope:
 
 1. Verify the latest SESSION_LOG review verdict is a clean Claude Pass.
 2. Run `git status --short`.
@@ -178,7 +178,7 @@ Default `提交` path stays small:
 4. Run `git commit`.
 5. Run `git status --short`.
 
-Before `审查` / `提交`, Codex should phrase `docs/CURRENT.md` and `docs/SESSION_LOG.md` so they remain true after the reviewed change is committed. Prefer stable wording such as:
+Before `审查` / `提交`, Codex must phrase `docs/CURRENT.md` and `docs/SESSION_LOG.md` so they remain true after the reviewed change is committed. This is the default way to avoid extra post-commit cleanup work. Prefer stable wording such as:
 - "the reviewed change set adds ..."
 - "after this reviewed change is committed, the next natural step is ..."
 - "Phase 5 step 3 added ..." for an intermediate step in a longer phase
@@ -189,23 +189,23 @@ Avoid wording that becomes stale immediately after commit, such as:
 - "latest commit will be ..."
 - "today / this round added ..." when a phase or step identifier would be more stable
 
-Do not try to write the new commit hash into the same commit that creates it. The final Codex response and `git log` carry the hash.
+Do not try to write the new commit hash into the same commit that creates it. The final Codex response and `git log` carry the hash. Do not create a second commit merely to add the new hash when the committed docs already identify the scope and next task clearly.
 
 #### Post-commit exception
 
 Do **not** create a routine post-commit documentation sync commit.
 
-Post-commit doc sync is an exception only when the just-created commit leaves `docs/CURRENT.md` or `docs/SESSION_LOG.md` materially misleading for the next LLM. Concrete triggers:
+Post-commit doc sync is an exception only when the just-created commit leaves `docs/CURRENT.md` or `docs/SESSION_LOG.md` materially misleading for the next LLM and the issue could not reasonably have been avoided by stable pre-commit wording. Concrete triggers:
 - a committed doc still says the already-committed work is pending review, pending commit, or only in the working tree
 - `docs/CURRENT.md` Latest Delta has a commit chain or current-state statement that would point the next LLM at the wrong next task without the just-created hash or state correction
 - a handoff or session entry says "next round does X" when the just-created commit already did X
 
 Non-triggers:
-- adding the new hash when the committed docs already identify the scope clearly enough
+- adding the new hash when the committed docs already identify the scope and next task clearly enough
 - polishing wording that is not misleading
 - keeping a chronological hash list perfectly complete when it is not needed for the next handoff decision
 
-If the exception is needed, keep the sync docs-only, small, and prefixed `[trivial]`; explain both hashes in the final response. This exception is not part of the normal `提交` flow.
+If the exception is needed, keep the sync docs-only, small, and prefixed `[trivial]`; explain both hashes in the final response. This exception is not part of the normal `提交` flow, and repeated use means the prior `执行` / `修复` documentation was written too transiently.
 
 ### Multi-scope Commit Splitting
 
@@ -457,7 +457,7 @@ If a short command is ambiguous or unsafe, stop and ask the user for confirmatio
 ## Documentation Rules
 
 - docs/CURRENT.md is the current state snapshot.
-- docs/CURRENT.md should avoid transient "pending review / pending commit" wording when the same reviewed change is expected to be committed immediately after Claude Pass; write stable state statements whenever possible.
+- docs/CURRENT.md must avoid transient "pending review / pending commit / current uncommitted work" wording when the same reviewed change is expected to be committed immediately after Claude Pass; write stable state statements so the reviewed change can land in a single commit.
 - docs/SESSION_LOG.md is for cross-LLM cognitive continuity. The top entry written by Codex after each `执行` / `修复` doubles as the Codex-to-Claude review handoff (no separate REVIEW_PACKET file as of 2026-05-25).
 - docs/handoff files are for phase or major milestone handoff only.
 - Claude memory is not shared with Codex.

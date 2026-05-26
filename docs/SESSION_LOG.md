@@ -8,6 +8,85 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Commit documentation hygiene tightening)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active。1 个 meta observation 关于本 session 第 2 次 protocol 演进。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `7b69254`; targets the immediately prior Codex entry "Commit documentation hygiene tightening")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `docs/AI_REVIEW_PROTOCOL.md` §Commit Documentation Hygiene 4 处 tightening + §Documentation Rules 1 处 tightening
+- `docs/CURRENT.md` Latest Delta 加 commit hygiene policy 总结
+- `docs/SESSION_LOG.md` Codex `执行` entry
+- 无 code / schema / preset / test / handoff 改动 ✅
+
+**Reasons for Pass**:
+
+- **真问题**：`0f90c40` (Phase 5 fill 实质 commit) 之后又做了 `7b69254` [trivial] post-commit sync — 这是**本 session 第二次** routine post-commit sync（第一次是 P0a 之后 `fb71751`）。Codex 反思：如果 0f90c40 的 docs 在 commit 前就写成 stable wording（"the reviewed change set adds..." 而非 "current uncommitted work adds..."），post-commit sync 本可避免。这是 reactive-protocol-tightening 的合理动机 ✅
+- **改动方向对**：把"prefer stable wording"升级为"must avoid transient wording"，把"exception only when materially misleading"加 "and the issue could not reasonably have been avoided by stable pre-commit wording" gate — 让 exception boundary 更紧 ✅
+- **scope 纪律好**：纯 doc-only 改动，没 silently 改 review/dispose/commit 闭环逻辑；没 silently 把 hash 写规则 ✅
+- **alternatives rejected 写清楚** 2 条：(a) 继续依赖 post-commit sync 否决（成本太高）/ (b) 要求 hash 写进 CURRENT 否决（强迫 unavoidable 第二 commit） ✅
+- **CURRENT.md Latest Delta 加 policy 总结**（不是新文档），让 next LLM 进项目读 CURRENT 就能看到新规则 ✅
+- **Codex 自我感知 failure mode 诚实**：明确说"7b69254 sync 本可避免如果 0f90c40 docs 写得 stable" — 不是 deflect blame ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（tightening 是 doc-only 合理改进，没引入 architectural risk；alternatives rejected 合理；没破坏既有 review/dispose/commit 闭环）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 OK；本轮可直接 `提交`。
+
+**额外 meta observation（非 issue，不阻塞 Pass）**:
+
+- **这是本 session 第 2 次 commit-flow protocol 演进**（第 1 次是 `7e3560c Refine commit workflow protocol`）。两次都解决 real problem 且 scope 干净，**不算 over-engineering**。但 memory `[[feedback-protocol-overengineering]]` 提醒过"protocol 演进时小心自增殖"。建议：
+  - Codex 如果**第 3 次**在本 session 内再发起 commit-flow protocol 改动，应该停下 ask user 是否真有必要
+  - 用户层面：如果觉得 commit hygiene rule 已足够稳定，可以告诉 Codex "本月不再调 commit 流程，business work 优先"
+- **新 wording "repeated use means the prior 执行/修复 documentation was written too transiently"** 是 commentary 不是 hard rule。某些 case (例如多 commit 链需要新 hash 作为 downstream critical reference) 也可能合理触发 post-commit sync。Codex 已在 exception triggers 段保留 reasonable flexibility，所以 wording 偏 self-blaming 但不会卡死合理 exception。**不写为 Optional**，是 doc 风格选择 ✅
+- **business-first 原则提醒**：用户的 P0 是用 Tushare materializer 跑真实 24p execution backtest 给 ship-gate metric。本轮 protocol 改动是好事但不应 displace business work — 下一轮应该回到那条 path 而非又发起 protocol 改动。
+
+**Next natural step from my view**:
+
+1. 用户 `提交`（单 scope = 协议 doc 微调，单 commit，走 `git add -A` 快路径）。
+2. 提交后回到 business P0：connect Tushare materializer output to real A 股 24p execution backtest，给 ship-gate metric 首个真实数字。**不再做 protocol 改动**。
+3. 如果 24p execution backtest 显示 net alpha t-stat < 2.0（已固化 ship gate）→ 触发 §三原则 #2 修订后路径："定位为风控 filter / paper trade / minimal-size 手动观察"，不上 full-size。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Commit documentation hygiene tightening)
+
+**Commits**: none (protocol/documentation change; commit waits for review)
+
+**Relationship to prior session(s)**:
+- Refines the post-commit documentation sync problem identified after `0f90c40` / `7b69254`.
+- Builds on the current `docs/AI_REVIEW_PROTOCOL.md` post-commit exception rule by making stable pre-commit wording the explicit default.
+
+**Worked on**:
+1. Tightened `docs/AI_REVIEW_PROTOCOL.md` so normal `提交` should be one commit for one reviewed scope.
+2. Made stable pre-commit wording a `must`, not a preference, for `CURRENT.md` / `SESSION_LOG.md`.
+3. Clarified that post-commit docs-only sync is only for materially misleading committed docs, not for adding hashes or polishing wording.
+4. Updated `docs/CURRENT.md` with the new commit hygiene policy summary.
+
+**Key decisions**:
+- Default commit path is now "stable pre-commit documentation + single commit".
+- A second `[trivial]` post-commit sync is an exception that indicates the prior `执行` / `修复` docs were too transient.
+- Final response and `git log` carry the new commit hash; docs should not need a second commit just to record it.
+
+**Alternatives considered and rejected**:
+- "Keep relying on post-commit sync when CURRENT says pending review/commit" — rejected because it costs both LLMs time and creates extra commits.
+- "Require the hash in CURRENT for every commit" — rejected because it creates unavoidable second commits and is not needed when scope and next task are clear.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude should review this protocol/doc update.
+2. If Pass, user can `提交`.
+
 ## 2026-05-26 — Codex (Phase 5 minimal fill simulation post-commit status sync)
 
 **Commits**: 0f90c40
