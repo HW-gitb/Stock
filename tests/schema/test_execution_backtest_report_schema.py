@@ -19,7 +19,7 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
 
         Draft7Validator.check_schema(schema)
         self.assertEqual(schema["properties"]["schema_name"]["const"], "execution_backtest_report")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.0.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.0")
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(
             schema["required"],
@@ -31,6 +31,7 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
                 "mode",
                 "settings",
                 "inputs",
+                "capital_context",
                 "execution_assumptions",
                 "data_lineage",
                 "outputs",
@@ -82,10 +83,27 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
             ["entry", "exit"],
         )
 
+        position_sizing = assumptions["properties"]["position_sizing"]
+        self.assertEqual(position_sizing["properties"]["capital_basis"]["enum"], ["bucket_capital"])
+        self.assertIn("bucket_ceiling_pct", position_sizing["required"])
+
     def test_lineage_string_lists_are_non_empty(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
         self.assertEqual(schema["$defs"]["stringList"]["minItems"], 1)
+
+    def test_capital_context_is_required_and_bucket_aware(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+        capital_context = schema["$defs"]["capitalContext"]
+        self.assertIn("capital_context", schema["required"])
+        self.assertIn("bucket_capital", capital_context["required"])
+        self.assertEqual(capital_context["properties"]["capital_basis"]["enum"], ["bucket_capital"])
+        self.assertEqual(
+            capital_context["properties"]["cross_market_cash_fungible"]["const"],
+            False,
+        )
+        self.assertEqual(capital_context["properties"]["manual_execution_only"]["const"], True)
 
 
 if __name__ == "__main__":

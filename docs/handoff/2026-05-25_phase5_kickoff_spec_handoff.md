@@ -992,3 +992,138 @@ git status --short
 1. 让 Claude 复查 O1 disposition。
 2. 本轮仍不写 schema、不改 runner、不启动长线 spec。
 3. 通过并提交后，下一步仍是 P0a capital context contracts。
+
+## 2026-05-26 追加：P0a capital context contracts
+
+### 改了什么
+
+- 新增 `schemas/portfolio_allocation.schema.json` v1.0.0，作为静态资金政策源头：
+  - A 股 / 美股顶层比例固定为 `35% / 65%`。
+  - 每个市场内部 long / short / liquidity bucket 固定为 `0.333333 / 0.333333 / 0.333333`。
+  - A/US cash 默认不互通，跨市场转移为 `manual_only_non_fungible`。
+  - ship gate 固定为多 metric AND：monthly alpha t-stat ≥ 2.0、Sharpe ≥ 1.0、max drawdown ≤ 15%、forward live data ≥ 12 个月。
+  - execution boundary 固定为 manual-order-only，不允许 broker / OS automation。
+- 新增 `schemas/cash_buffer_state.schema.json` v1.0.0，作为动态 per-market cash/bucket state：
+  - `portfolio_policy_ref` 指向静态政策。
+  - A/US 各自记录 market capital、long/short/liquidity bucket capital、cash buffer、drawdown state、rebalance metadata。
+  - `state_management.atomic_write_required = true`，writer 指向 `engine.analyzer.state_manager.atomic_write_json`。
+- `schemas/execution_backtest_report.schema.json` 升级 v1.0.0 -> v1.1.0：
+  - 新增 required `capital_context` runtime snapshot。
+  - `settings.initial_capital` 的语义改为 selected bucket capital，不再是 total account capital。
+  - `execution_assumptions.position_sizing` 新增 `capital_basis = bucket_capital` 和 `bucket_ceiling_pct`。
+- `runners/backtest_execution.py` 新增：
+  - `--portfolio-allocation` required input。
+  - `--cash-buffer-state` required input。
+  - schema validation for both inputs。
+  - `build_capital_context()`，从 policy + cash state 生成 A-short bucket-aware capital context。
+  - `--initial-capital` 变为 optional guard；如果传入，必须等于 selected bucket capital。
+- 4 个 preset 同步新增 `capital` block：`market` / `horizon` / `bucket` / `capital_basis` / `bucket_target_pct` / `bucket_ceiling_pct` / `portfolio_allocation_policy`。
+- 新增 fixtures 和测试：
+  - `tests/fixtures/portfolio_allocation_minimal.json`
+  - `tests/fixtures/cash_buffer_state_minimal.json`
+  - `tests/schema/test_capital_context_schemas.py`
+  - 扩展 `tests/schema/test_execution_backtest_report_schema.py`
+  - 扩展 `tests/execution/test_backtest_execution.py`
+
+### 为什么改
+
+P0a 是 fill simulation 的硬前置。没有静态资金政策、动态 cash state 和 execution report 的 runtime capital snapshot，fill simulator 会继续把单一 `initial_capital` 当作总账户本金，从而把错误资金模型锁进执行回测。
+
+本轮把资金契约拆成三层：
+
+- `portfolio_allocation` = 静态政策源头。
+- `cash_buffer_state` = 动态状态源头。
+- `execution_backtest_report.capital_context` = 本次 run 的可复现快照，不是政策源头。
+
+同时保留 scope 边界：本轮不实现 entry/exit 撮合、涨停不可买、止损、时间止损、组合 accounting、长线 spec 或 Phase 7 DataHub 重构。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_capital_context_schemas tests.schema.test_execution_backtest_report_schema tests.execution.test_backtest_execution -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_capital_context_schemas tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+```
+
+### 验证结果
+
+- `tests.schema.test_capital_context_schemas`：2 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：4 tests passed。
+- `tests.execution.test_backtest_execution`：11 tests passed。
+- P0a focused total：17 tests passed。
+- Broader Phase 5 suite：43 tests passed。
+- Full unittest discover：78 tests passed。
+- `git diff --check`：通过。
+
+### 失效旧结论
+
+- “`execution_backtest_report` 当前版本为 v1.0.0”失效；当前 contract 为 v1.1.0。
+- “runner 可只用 run-level `--initial-capital` 生成 execution report”失效；现在必须显式传入 `--portfolio-allocation` 和 `--cash-buffer-state`。
+- “`position_sizing` 只需要 max_position_pct / max_positions / cash_constrained”失效；现在还必须声明 `capital_basis = bucket_capital` 与 `bucket_ceiling_pct`。
+- “4 个 preset 还没有 capital/bucket 契约字段”失效；当前已同步声明。
+
+### 下一步注意事项
+
+1. 让 Claude 审查 P0a contract diff，重点看三层资金契约是否职责分明、runner 是否仍未实现 fill simulation、`settings.initial_capital` 是否会被误读。
+2. 通过并提交后，下一步才是 Phase 5 fill simulation：entry/exit、涨停不可买、止损、时间止损、组合约束。
+3. 后续若处理真实 cash state 写入，应复用 `engine.analyzer.state_manager.atomic_write_json`，不要直接写文件。
+
+## 2026-05-26 追加：P0a Optional disposition O1-O3
+
+### 改了什么
+
+- O1 accepted：`runners/backtest_execution.py` 不再使用 hardcoded `PRESET_CAPITAL_PROFILES`。
+  - 新增 `--preset-path`，默认读取 `presets/a_short.yaml`。
+  - runner 从 preset YAML 的 `capital` block 读取 `preset` / `market` / `horizon` / `bucket` / `bucket_target_pct` / `bucket_ceiling_pct` / `portfolio_allocation_policy`。
+  - runner 将 preset YAML 与 `portfolio_allocation` / `cash_buffer_state` 做 cross-validation，防止 preset、policy、state 三者漂移。
+- O2 accepted：删除 `schemas/portfolio_allocation.schema.json` 中 `bucketAllocation.horizon`，并从 `tests/fixtures/portfolio_allocation_minimal.json` 删除对应字段。
+- O3 accepted：`portfolio_allocation` 里的单值 policy enum 改为 `const`：
+  - `cross_market_transfer_policy`
+  - `capital_basis`
+  - `floor_policy`
+  - `cross_market_cash_default`
+  - `short_circuit_breaker_liquidity_use`
+  - `logic`
+  - `failure_mode`
+- 新增/更新 regression：
+  - `tests.execution.test_backtest_execution.test_preset_yaml_drives_capital_profile`
+  - `tests.schema.test_capital_context_schemas` 检查 `bucketAllocation.horizon` 已移除、单值 policy 使用 `const`。
+
+### 为什么改
+
+Claude 首轮审查已 Pass，但指出 3 个 schema/contract hygiene 风险：
+
+- hardcoded preset map 与 preset YAML 双源会在未来 preset 调整时 drift。
+- `bucketAllocation.horizon` 与 `bucket` 完全同义，且 schema 无法保证一致。
+- 单值 enum 看起来像可扩展枚举，但当前政策是明确锁死，`const` 更清晰。
+
+本轮只做 Optional disposition，不实现 fill simulation，不改 provider materializer，不改 EGS/analyzer，不启动长线 spec。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_capital_context_schemas tests.schema.test_execution_backtest_report_schema tests.execution.test_backtest_execution -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_capital_context_schemas tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+```
+
+### 验证结果
+
+- P0a focused total：18 tests passed。
+- Broader Phase 5 suite：44 tests passed。
+- Full unittest discover：79 tests passed。
+- `git diff --check`：通过。
+
+### 失效旧结论
+
+- “runner 依赖 `PRESET_CAPITAL_PROFILES` 映射 4 套 preset”失效；当前 runner 从 `--preset-path` 读取 preset YAML。
+- “`portfolio_allocation` bucket row 同时需要 `bucket` 和 `horizon`”失效；当前静态政策只保留 `bucket`，horizon 属于 preset/report 身份字段。
+- “单值 enum 可继续作为锁死 policy 表达”失效；当前锁死 policy 统一使用 `const`。
+
+### 下一步注意事项
+
+1. 让 Claude 复审 O1-O3 disposition，重点看 preset YAML parser 与 cross-validation 是否足够窄、`horizon` 删除是否未破坏 report `capital_context.horizon`。
+2. 通过并提交后，下一步才是 Phase 5 fill simulation。
+3. 不要把 `--preset-path` 理解成多 preset 批量执行；当前 runner 默认仍是 A-short skeleton，只是把 capital profile source of truth 移到 preset YAML。

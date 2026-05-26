@@ -27,9 +27,12 @@ Existing helpers:
 - `backtest_rank.py` — Phase 2 rank 回测入口
 - `backtest_execution.py` - Phase 5 execution backtest skeleton; reads
   `analysis_input.json`, can validate/reference an existing `execution_price_data`
-  JSON via `--price-data`, validates `execution_report.json`, and writes CSV
-  shells under `result/a_short/backtest/execution/`. It still does not fetch
-  prices or simulate fills.
+  JSON via `--price-data`, requires explicit `--portfolio-allocation` and
+  `--cash-buffer-state` inputs for bucket-aware capital context, reads
+  `presets/a_short.yaml` by default via `--preset-path`, validates
+  `execution_report.json`, and writes CSV shells under
+  `result/a_short/backtest/execution/`. It still does not fetch prices or
+  simulate fills.
 - `materialize_execution_price_data.py` - Phase 5 provider-boundary helper;
   converts a local OHLC CSV into a schema-valid `execution_price_data` JSON for
   `backtest_execution.py --price-data`. It does not fetch Tushare data or

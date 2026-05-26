@@ -5,6 +5,15 @@ schema_version: 1.0.0
 data_provider: tushare
 status: reserved_phase_9
 
+capital:
+  market: A
+  horizon: long
+  bucket: long
+  capital_basis: bucket_capital
+  bucket_target_pct: 0.333333
+  bucket_ceiling_pct: 0.333333
+  portfolio_allocation_policy: p0c_user_confirmed_20260526
+
 paths:
   result_dir: result/a_long
   state_dir: state/a_long

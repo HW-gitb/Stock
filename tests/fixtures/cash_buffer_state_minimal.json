@@ -1,0 +1,134 @@
+{
+  "schema_name": "cash_buffer_state",
+  "schema_version": "1.0.0",
+  "state_id": "cash_state_fixture_20260522",
+  "generated_at": "2026-05-26T00:00:00Z",
+  "updated_at": "2026-05-26T00:00:00Z",
+  "as_of": "20260522",
+  "base_currency": "mixed",
+  "total_portfolio_capital": 1000000.0,
+  "portfolio_policy_ref": {
+    "path": "tests/fixtures/portfolio_allocation_minimal.json",
+    "schema_version": "1.0.0",
+    "policy_id": "p0c_user_confirmed_20260526"
+  },
+  "markets": [
+    {
+      "market": "A",
+      "currency": "CNY",
+      "capital": {
+        "market_capital": 350000.0,
+        "long_bucket_capital": 116666.55,
+        "short_bucket_capital": 116666.55,
+        "liquidity_bucket_capital": 116666.55,
+        "source": "simulation_fixture"
+      },
+      "buckets": [
+        {
+          "bucket": "long",
+          "preset": "a_long",
+          "capital": 116666.55,
+          "invested": 0.0,
+          "available": 116666.55,
+          "reserved": 0.0
+        },
+        {
+          "bucket": "short",
+          "preset": "a_short",
+          "capital": 116666.55,
+          "invested": 0.0,
+          "available": 116666.55,
+          "reserved": 0.0
+        },
+        {
+          "bucket": "liquidity",
+          "preset": null,
+          "capital": 116666.55,
+          "invested": 0.0,
+          "available": 116666.55,
+          "reserved": 0.0
+        }
+      ],
+      "cash_buffer": {
+        "floor_policy": "hard_floor_with_explicit_exceptions",
+        "total_cash": 116666.55,
+        "available_cash": 116666.55,
+        "reserved_cash": 0.0,
+        "locked_cash": 0.0,
+        "transfer_allowed_to_other_market": false
+      },
+      "drawdown_state": {
+        "status": "normal",
+        "current_drawdown_pct": null,
+        "liquidity_locked": false
+      },
+      "last_rebalance": {
+        "rebalanced_at": null,
+        "reason": null
+      }
+    },
+    {
+      "market": "US",
+      "currency": "USD",
+      "capital": {
+        "market_capital": 650000.0,
+        "long_bucket_capital": 216666.45,
+        "short_bucket_capital": 216666.45,
+        "liquidity_bucket_capital": 216666.45,
+        "source": "simulation_fixture"
+      },
+      "buckets": [
+        {
+          "bucket": "long",
+          "preset": "us_long",
+          "capital": 216666.45,
+          "invested": 0.0,
+          "available": 216666.45,
+          "reserved": 0.0
+        },
+        {
+          "bucket": "short",
+          "preset": "us_short",
+          "capital": 216666.45,
+          "invested": 0.0,
+          "available": 216666.45,
+          "reserved": 0.0
+        },
+        {
+          "bucket": "liquidity",
+          "preset": null,
+          "capital": 216666.45,
+          "invested": 0.0,
+          "available": 216666.45,
+          "reserved": 0.0
+        }
+      ],
+      "cash_buffer": {
+        "floor_policy": "hard_floor_with_explicit_exceptions",
+        "total_cash": 216666.45,
+        "available_cash": 216666.45,
+        "reserved_cash": 0.0,
+        "locked_cash": 0.0,
+        "transfer_allowed_to_other_market": false
+      },
+      "drawdown_state": {
+        "status": "normal",
+        "current_drawdown_pct": null,
+        "liquidity_locked": false
+      },
+      "last_rebalance": {
+        "rebalanced_at": null,
+        "reason": null
+      }
+    }
+  ],
+  "pending_liquidity_requests": [],
+  "state_management": {
+    "atomic_write_required": true,
+    "writer": "engine.analyzer.state_manager.atomic_write_json"
+  },
+  "limitations": [
+    "Fixture values are not live brokerage balances.",
+    "A-share cash and US cash are intentionally represented as non-fungible market states."
+  ]
+}

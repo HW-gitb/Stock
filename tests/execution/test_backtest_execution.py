@@ -24,6 +24,14 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             )
         )
 
+    def capital_cli_args(self) -> list[str]:
+        return [
+            "--portfolio-allocation",
+            str(ROOT / "tests" / "fixtures" / "portfolio_allocation_minimal.json"),
+            "--cash-buffer-state",
+            str(ROOT / "tests" / "fixtures" / "cash_buffer_state_minimal.json"),
+        ]
+
     def test_runner_writes_schema_valid_skeleton_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             out_dir = Path(tmpdir)
@@ -33,6 +41,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     "20260522",
                     "--input-path",
                     str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    *self.capital_cli_args(),
                     "--out-dir",
                     str(out_dir),
                 ]
@@ -53,9 +62,26 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
 
             self.assertEqual(errors, [])
             self.assertEqual(report["schema_name"], "execution_backtest_report")
-            self.assertEqual(report["schema_version"], "1.0.0")
+            self.assertEqual(report["schema_version"], "1.1.0")
             self.assertEqual(report["settings"]["primary_input"], "analysis_input")
             self.assertFalse(report["settings"]["deterministic_report_required"])
+            self.assertEqual(report["settings"]["initial_capital"], 116666.55)
+            self.assertEqual(report["capital_context"]["capital_basis"], "bucket_capital")
+            self.assertEqual(report["capital_context"]["market"], "A")
+            self.assertEqual(report["capital_context"]["bucket"], "short")
+            self.assertEqual(report["capital_context"]["bucket_capital"], 116666.55)
+            self.assertEqual(
+                report["capital_context"]["portfolio_allocation_ref"]["path"],
+                "tests/fixtures/portfolio_allocation_minimal.json",
+            )
+            self.assertEqual(
+                report["capital_context"]["cash_buffer_state_ref"]["path"],
+                "tests/fixtures/cash_buffer_state_minimal.json",
+            )
+            self.assertEqual(
+                report["execution_assumptions"]["position_sizing"]["bucket_ceiling_pct"],
+                0.333333,
+            )
             self.assertEqual(report["metrics"]["candidate_count"], 2)
             self.assertEqual(report["metrics"]["trade_count"], 0)
             self.assertEqual(report["metrics"]["skipped_count"], 2)
@@ -104,6 +130,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
                     "--price-data",
                     str(ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json"),
+                    *self.capital_cli_args(),
                     "--out-dir",
                     str(out_dir),
                 ]
@@ -148,6 +175,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
                         "--price-data",
                         str(price_path),
+                        *self.capital_cli_args(),
                         "--out-dir",
                         tmpdir,
                     ]
@@ -172,6 +200,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
                         "--price-data",
                         str(price_path),
+                        *self.capital_cli_args(),
                         "--out-dir",
                         tmpdir,
                     ]
@@ -198,6 +227,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
                         "--price-data",
                         str(price_path),
+                        *self.capital_cli_args(),
                         "--out-dir",
                         tmpdir,
                     ]
@@ -236,20 +266,127 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "20260523",
                         "--input-path",
                         str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        *self.capital_cli_args(),
+                        "--out-dir",
+                        tmpdir,
+                    ]
+                )
+
+    def test_initial_capital_guard_must_match_bucket_capital(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "must equal capital_context.bucket_capital"):
+                main(
+                    [
+                        "--as-of",
+                        "20260522",
+                        "--input-path",
+                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        *self.capital_cli_args(),
+                        "--initial-capital",
+                        "1000000",
+                        "--out-dir",
+                        tmpdir,
+                    ]
+                )
+
+    def test_cash_state_policy_id_must_match_allocation(self) -> None:
+        cash_state = json.loads(
+            (ROOT / "tests" / "fixtures" / "cash_buffer_state_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        cash_state["portfolio_policy_ref"]["policy_id"] = "wrong_policy"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cash_path = Path(tmpdir) / "cash_state.json"
+            cash_path.write_text(json.dumps(cash_state), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "policy_id must match"):
+                main(
+                    [
+                        "--as-of",
+                        "20260522",
+                        "--input-path",
+                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        "--portfolio-allocation",
+                        str(ROOT / "tests" / "fixtures" / "portfolio_allocation_minimal.json"),
+                        "--cash-buffer-state",
+                        str(cash_path),
+                        "--out-dir",
+                        tmpdir,
+                    ]
+                )
+
+    def test_preset_yaml_drives_capital_profile(self) -> None:
+        preset_text = (ROOT / "presets" / "a_short.yaml").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            preset_path = Path(tmpdir) / "a_short.yaml"
+            preset_path.write_text(
+                preset_text.replace("  bucket: short", "  bucket: long"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "must reference preset a_short"):
+                main(
+                    [
+                        "--as-of",
+                        "20260522",
+                        "--input-path",
+                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        *self.capital_cli_args(),
+                        "--preset-path",
+                        str(preset_path),
                         "--out-dir",
                         tmpdir,
                     ]
                 )
 
     def build_report_for_payload(self, payload: dict) -> dict:
-        args = parse_args(["--as-of", str(payload["trade_date"])])
+        args = parse_args(["--as-of", str(payload["trade_date"]), *self.capital_cli_args()])
         input_path = ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"
         skipped_rows = classify_skips(payload["candidates"])
+        capital_context = {
+            "portfolio_allocation_ref": {
+                "path": "tests/fixtures/portfolio_allocation_minimal.json",
+                "schema_version": "1.0.0",
+                "policy_id": "p0c_user_confirmed_20260526",
+            },
+            "cash_buffer_state_ref": {
+                "path": "tests/fixtures/cash_buffer_state_minimal.json",
+                "schema_version": "1.0.0",
+                "state_id": "cash_state_fixture_20260522",
+                "as_of": "20260522",
+            },
+            "preset": "a_short",
+            "market": "A",
+            "horizon": "short",
+            "bucket": "short",
+            "currency": "CNY",
+            "capital_basis": "bucket_capital",
+            "total_portfolio_capital": 1000000.0,
+            "market_allocation_pct": 0.35,
+            "market_capital": 350000.0,
+            "bucket_target_pct": 0.333333,
+            "bucket_ceiling_pct": 0.333333,
+            "bucket_capital": 116666.55,
+            "liquidity_reserve_pct": 0.333333,
+            "liquidity_floor_policy": "hard_floor_with_explicit_exceptions",
+            "cross_market_cash_fungible": False,
+            "manual_execution_only": True,
+            "ship_gate": {
+                "policy_logic": "and",
+                "monthly_alpha_t_stat_min": 2.0,
+                "sharpe_min": 1.0,
+                "max_drawdown_max": 0.15,
+                "forward_live_months_min": 12,
+                "status": "not_evaluated",
+                "full_size_allowed": False,
+                "reason": "fixture",
+            },
+        }
         return build_report(
             payload,
             input_path,
             Path("unused"),
             args,
+            capital_context,
             skipped_rows=skipped_rows,
             generated_at="2026-05-26T00:00:00+00:00",
         )

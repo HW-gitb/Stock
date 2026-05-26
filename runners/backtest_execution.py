@@ -16,6 +16,11 @@ except ImportError as exc:  # pragma: no cover - environment guard
 else:
     JSONSCHEMA_IMPORT_ERROR = None
 
+try:
+    import yaml
+except ImportError:  # pragma: no cover - optional dependency guard
+    yaml = None  # type: ignore[assignment]
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -25,8 +30,11 @@ from engine.analyzer.state_manager import STATE_ROOT
 
 REPORT_SCHEMA_PATH = ROOT / "schemas" / "execution_backtest_report.schema.json"
 PRICE_DATA_SCHEMA_PATH = ROOT / "schemas" / "execution_price_data.schema.json"
+PORTFOLIO_ALLOCATION_SCHEMA_PATH = ROOT / "schemas" / "portfolio_allocation.schema.json"
+CASH_BUFFER_STATE_SCHEMA_PATH = ROOT / "schemas" / "cash_buffer_state.schema.json"
 DEFAULT_INPUT_ROOT = ROOT / "result" / "a_short"
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution"
+DEFAULT_PRESET_PATH = ROOT / "presets" / "a_short.yaml"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -51,7 +59,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="Optional path to an execution_price_data JSON file. The skeleton validates and references it, but still does not simulate fills.",
     )
-    parser.add_argument("--initial-capital", type=float, default=1_000_000.0)
+    parser.add_argument(
+        "--portfolio-allocation",
+        type=Path,
+        required=True,
+        help="Path to portfolio_allocation JSON. Required so capital_context is reproducible.",
+    )
+    parser.add_argument(
+        "--cash-buffer-state",
+        type=Path,
+        required=True,
+        help="Path to cash_buffer_state JSON. Required so bucket capital comes from dynamic state.",
+    )
+    parser.add_argument(
+        "--preset-path",
+        type=Path,
+        default=DEFAULT_PRESET_PATH,
+        help="Path to preset YAML. Defaults to presets/a_short.yaml for the current Phase 5 skeleton.",
+    )
+    parser.add_argument(
+        "--initial-capital",
+        type=float,
+        default=None,
+        help="Optional guard: when set, must equal the selected bucket capital from cash_buffer_state.",
+    )
     parser.add_argument("--cost-pct", type=float, default=0.001)
     parser.add_argument("--max-position-pct", type=float, default=0.1)
     parser.add_argument("--max-positions", type=int, default=10)
@@ -62,6 +93,123 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def load_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def parse_simple_yaml_scalar(value: str) -> Any:
+    text = value.strip()
+    if text in {"", "null", "Null", "NULL", "~"}:
+        return None
+    if text in {"true", "True", "TRUE"}:
+        return True
+    if text in {"false", "False", "FALSE"}:
+        return False
+    if (text.startswith('"') and text.endswith('"')) or (
+        text.startswith("'") and text.endswith("'")
+    ):
+        return text[1:-1]
+    try:
+        if any(char in text for char in ".eE"):
+            return float(text)
+        return int(text)
+    except ValueError:
+        return text
+
+
+def load_simple_yaml_mapping(path: Path) -> dict[str, Any]:
+    root: dict[str, Any] = {}
+    current_section: dict[str, Any] | None = None
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        stripped = raw_line.strip()
+        if stripped.startswith("- "):
+            continue
+        if ":" not in stripped:
+            raise ValueError(f"unsupported YAML line in {path}:{line_number}: {raw_line!r}")
+        key, raw_value = stripped.split(":", 1)
+        key = key.strip()
+        raw_value = raw_value.strip()
+        if indent == 0:
+            if raw_value:
+                root[key] = parse_simple_yaml_scalar(raw_value)
+                current_section = None
+            else:
+                section: dict[str, Any] = {}
+                root[key] = section
+                current_section = section
+            continue
+        if current_section is None:
+            raise ValueError(
+                f"unsupported nested YAML line without a parent section in {path}:{line_number}"
+            )
+        current_section[key] = parse_simple_yaml_scalar(raw_value)
+    return root
+
+
+def load_yaml_mapping(path: Path) -> dict[str, Any]:
+    if yaml is not None:  # pragma: no cover - depends on optional local package
+        with path.open("r", encoding="utf-8") as handle:
+            payload = yaml.safe_load(handle)
+    else:
+        payload = load_simple_yaml_mapping(path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"preset YAML must contain a mapping object: {path}")
+    return payload
+
+
+def required_string(mapping: dict[str, Any], key: str, label: str) -> str:
+    value = mapping.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{label}.{key} must be a non-empty string")
+    return value
+
+
+def required_float(mapping: dict[str, Any], key: str, label: str) -> float:
+    value = mapping.get(key)
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"{label}.{key} must be numeric")
+    return float(value)
+
+
+def load_preset_capital_profile(path: Path) -> dict[str, Any]:
+    payload = load_yaml_mapping(path)
+    preset = required_string(payload, "preset", "preset")
+    top_market = required_string(payload, "market", "preset")
+    top_horizon = required_string(payload, "horizon", "preset")
+    capital = payload.get("capital")
+    if not isinstance(capital, dict):
+        raise ValueError(f"preset.capital must be a mapping object: {path}")
+
+    market = required_string(capital, "market", "preset.capital")
+    horizon = required_string(capital, "horizon", "preset.capital")
+    bucket = required_string(capital, "bucket", "preset.capital")
+    capital_basis = required_string(capital, "capital_basis", "preset.capital")
+    policy_id = required_string(capital, "portfolio_allocation_policy", "preset.capital")
+    if market != top_market:
+        raise ValueError(f"preset.capital.market must match preset.market: {market} != {top_market}")
+    if horizon != top_horizon:
+        raise ValueError(
+            f"preset.capital.horizon must match preset.horizon: {horizon} != {top_horizon}"
+        )
+    if market not in {"A", "US"}:
+        raise ValueError(f"unsupported preset.capital.market: {market!r}")
+    if horizon not in {"short", "long"}:
+        raise ValueError(f"unsupported preset.capital.horizon: {horizon!r}")
+    if bucket not in {"short", "long"}:
+        raise ValueError(f"unsupported preset.capital.bucket: {bucket!r}")
+    if capital_basis != "bucket_capital":
+        raise ValueError(f"unsupported preset.capital.capital_basis: {capital_basis!r}")
+    return {
+        "preset": preset,
+        "market": market,
+        "horizon": horizon,
+        "bucket": bucket,
+        "capital_basis": capital_basis,
+        "bucket_target_pct": required_float(capital, "bucket_target_pct", "preset.capital"),
+        "bucket_ceiling_pct": required_float(capital, "bucket_ceiling_pct", "preset.capital"),
+        "portfolio_allocation_policy": policy_id,
+    }
 
 
 def load_analysis_input(path: Path) -> dict[str, Any]:
@@ -78,6 +226,22 @@ def load_execution_price_data(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"execution_price_data must be a JSON object: {path}")
     validate_json_schema(payload, PRICE_DATA_SCHEMA_PATH, "execution_price_data")
+    return payload
+
+
+def load_portfolio_allocation(path: Path) -> dict[str, Any]:
+    payload = load_json(path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"portfolio_allocation must be a JSON object: {path}")
+    validate_json_schema(payload, PORTFOLIO_ALLOCATION_SCHEMA_PATH, "portfolio_allocation")
+    return payload
+
+
+def load_cash_buffer_state(path: Path) -> dict[str, Any]:
+    payload = load_json(path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"cash_buffer_state must be a JSON object: {path}")
+    validate_json_schema(payload, CASH_BUFFER_STATE_SCHEMA_PATH, "cash_buffer_state")
     return payload
 
 
@@ -184,6 +348,118 @@ def price_data_ref(
     }
 
 
+def _find_one(items: list[dict[str, Any]], key: str, value: str, label: str) -> dict[str, Any]:
+    matches = [item for item in items if isinstance(item, dict) and str(item.get(key)) == value]
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one {label} with {key}={value!r}; got {len(matches)}")
+    return matches[0]
+
+
+def build_capital_context(
+    portfolio_allocation: dict[str, Any],
+    portfolio_allocation_path: Path,
+    cash_buffer_state: dict[str, Any],
+    cash_buffer_state_path: Path,
+    preset_profile: dict[str, Any],
+) -> dict[str, Any]:
+    preset = required_string(preset_profile, "preset", "preset_profile")
+    market = required_string(preset_profile, "market", "preset_profile")
+    bucket = required_string(preset_profile, "bucket", "preset_profile")
+    horizon = required_string(preset_profile, "horizon", "preset_profile")
+
+    policy_id = str(portfolio_allocation["policy_id"])
+    if str(preset_profile["portfolio_allocation_policy"]) != policy_id:
+        raise ValueError(
+            "preset.capital.portfolio_allocation_policy must match "
+            f"portfolio_allocation.policy_id: {preset_profile['portfolio_allocation_policy']} != {policy_id}"
+        )
+    state_policy_ref = cash_buffer_state["portfolio_policy_ref"]
+    if str(state_policy_ref["policy_id"]) != policy_id:
+        raise ValueError(
+            "cash_buffer_state.portfolio_policy_ref.policy_id must match "
+            f"portfolio_allocation.policy_id: {state_policy_ref['policy_id']} != {policy_id}"
+        )
+
+    market_policy = _find_one(
+        portfolio_allocation["markets"], "market", market, "portfolio allocation market"
+    )
+    bucket_policy = _find_one(
+        market_policy["buckets"], "bucket", bucket, "portfolio allocation bucket"
+    )
+    if bucket_policy.get("preset") != preset:
+        raise ValueError(
+            f"portfolio_allocation bucket {market}/{bucket} must reference preset {preset}"
+        )
+    if abs(float(bucket_policy["target_pct"]) - float(preset_profile["bucket_target_pct"])) > 1e-9:
+        raise ValueError(
+            f"portfolio_allocation bucket {market}/{bucket} target_pct must match preset capital block"
+        )
+    if abs(float(bucket_policy["ceiling_pct"]) - float(preset_profile["bucket_ceiling_pct"])) > 1e-9:
+        raise ValueError(
+            f"portfolio_allocation bucket {market}/{bucket} ceiling_pct must match preset capital block"
+        )
+    liquidity_policy = _find_one(
+        market_policy["buckets"], "bucket", "liquidity", "portfolio liquidity bucket"
+    )
+
+    market_state = _find_one(cash_buffer_state["markets"], "market", market, "cash state market")
+    bucket_state = _find_one(market_state["buckets"], "bucket", bucket, "cash state bucket")
+    if bucket_state.get("preset") != preset:
+        raise ValueError(f"cash_buffer_state bucket {market}/{bucket} must reference preset {preset}")
+
+    ship_gate_policy = portfolio_allocation["ship_gate_policy"]
+    return {
+        "portfolio_allocation_ref": {
+            "path": relative_ref(portfolio_allocation_path),
+            "schema_version": str(portfolio_allocation["schema_version"]),
+            "policy_id": policy_id,
+        },
+        "cash_buffer_state_ref": {
+            "path": relative_ref(cash_buffer_state_path),
+            "schema_version": str(cash_buffer_state["schema_version"]),
+            "state_id": str(cash_buffer_state["state_id"]),
+            "as_of": str(cash_buffer_state["as_of"]),
+        },
+        "preset": preset,
+        "market": market,
+        "horizon": horizon,
+        "bucket": bucket,
+        "currency": str(market_policy["currency"]),
+        "capital_basis": str(preset_profile["capital_basis"]),
+        "total_portfolio_capital": float(cash_buffer_state["total_portfolio_capital"]),
+        "market_allocation_pct": float(market_policy["allocation_pct"]),
+        "market_capital": float(market_state["capital"]["market_capital"]),
+        "bucket_target_pct": float(bucket_policy["target_pct"]),
+        "bucket_ceiling_pct": float(bucket_policy["ceiling_pct"]),
+        "bucket_capital": float(bucket_state["capital"]),
+        "liquidity_reserve_pct": float(liquidity_policy["target_pct"]),
+        "liquidity_floor_policy": str(portfolio_allocation["liquidity_policy"]["floor_policy"]),
+        "cross_market_cash_fungible": False,
+        "manual_execution_only": bool(portfolio_allocation["execution_boundary"]["manual_order_only"]),
+        "ship_gate": {
+            "policy_logic": str(ship_gate_policy["logic"]),
+            "monthly_alpha_t_stat_min": float(ship_gate_policy["monthly_alpha_t_stat_min"]),
+            "sharpe_min": float(ship_gate_policy["sharpe_min"]),
+            "max_drawdown_max": float(ship_gate_policy["max_drawdown_max"]),
+            "forward_live_months_min": int(ship_gate_policy["forward_live_months_min"]),
+            "status": "not_evaluated",
+            "full_size_allowed": False,
+            "reason": "Phase 5 skeleton has not evaluated forward-live ship-gate metrics.",
+        },
+    }
+
+
+def validate_initial_capital_guard(args: argparse.Namespace, capital_context: dict[str, Any]) -> None:
+    if args.initial_capital is None:
+        return
+    bucket_capital = float(capital_context["bucket_capital"])
+    if abs(args.initial_capital - bucket_capital) > 0.01:
+        raise ValueError(
+            "--initial-capital is only a guard in v1.1.0 and must equal "
+            f"capital_context.bucket_capital ({bucket_capital:.2f}); got {args.initial_capital:.2f}"
+        )
+
+
 def execution_price_api_families(price_data: dict[str, Any] | None) -> list[str]:
     if price_data is None:
         return ["not_implemented_phase5_skeleton"]
@@ -198,7 +474,9 @@ def candidate_name(candidate: dict[str, Any]) -> str:
     return str(candidate.get("name") or candidate.get("stock_name") or "")
 
 
-def build_execution_assumptions(args: argparse.Namespace) -> dict[str, Any]:
+def build_execution_assumptions(
+    args: argparse.Namespace, capital_context: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "entry_timing": {
             "rule": "t1_open",
@@ -233,7 +511,9 @@ def build_execution_assumptions(args: argparse.Namespace) -> dict[str, Any]:
         },
         "position_sizing": {
             "method": "equal_weight",
+            "capital_basis": "bucket_capital",
             "max_position_pct": args.max_position_pct,
+            "bucket_ceiling_pct": capital_context["bucket_ceiling_pct"],
             "max_positions": args.max_positions,
             "cash_constrained": True,
         },
@@ -342,6 +622,7 @@ def build_report(
     input_path: Path,
     out_dir: Path,
     args: argparse.Namespace,
+    capital_context: dict[str, Any],
     skipped_rows: list[dict[str, Any]] | None = None,
     price_data: dict[str, Any] | None = None,
     price_data_path: Path | None = None,
@@ -374,15 +655,15 @@ def build_report(
 
     return {
         "schema_name": "execution_backtest_report",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at": generated_at or iso_now(),
-        "preset": "a_short",
+        "preset": str(capital_context["preset"]),
         "mode": args.mode,
         "settings": {
             "mode": args.mode,
             "start_date": as_of,
             "end_date": as_of,
-            "initial_capital": args.initial_capital,
+            "initial_capital": capital_context["bucket_capital"],
             "primary_input": "analysis_input",
             "deterministic_report_required": False,
         },
@@ -408,7 +689,8 @@ def build_report(
             ],
             "price_data": price_data_ref(price_data, price_data_path, as_of),
         },
-        "execution_assumptions": build_execution_assumptions(args),
+        "capital_context": capital_context,
+        "execution_assumptions": build_execution_assumptions(args, capital_context),
         "data_lineage": {
             "data_provider": "tushare",
             "api_families": {
@@ -451,7 +733,7 @@ def build_report(
             "annualized_return": None,
             "max_drawdown": None,
             "avg_holding_days": None,
-            "ending_equity": args.initial_capital,
+            "ending_equity": capital_context["bucket_capital"],
         },
         "date_warnings": warnings,
         "limitations": [
@@ -543,6 +825,17 @@ def main(argv: list[str] | None = None) -> int:
         price_data_path = args.price_data
         price_data = load_execution_price_data(price_data_path)
         validate_price_data_semantics(price_data, payload, args.as_of)
+    portfolio_allocation = load_portfolio_allocation(args.portfolio_allocation)
+    cash_buffer_state = load_cash_buffer_state(args.cash_buffer_state)
+    preset_profile = load_preset_capital_profile(args.preset_path)
+    capital_context = build_capital_context(
+        portfolio_allocation,
+        args.portfolio_allocation,
+        cash_buffer_state,
+        args.cash_buffer_state,
+        preset_profile,
+    )
+    validate_initial_capital_guard(args, capital_context)
     out_dir = args.out_dir
     skipped_rows = classify_skips(payload.get("candidates", []))
     report = build_report(
@@ -550,6 +843,7 @@ def main(argv: list[str] | None = None) -> int:
         input_path,
         out_dir,
         args,
+        capital_context,
         skipped_rows=skipped_rows,
         price_data=price_data,
         price_data_path=price_data_path,

@@ -102,7 +102,7 @@ P0a 应拆清静态政策、动态状态和 report 快照：
   - bucket
   - bucket ceiling percent
 
-runner 还需要显式 capital input path，例如 `--portfolio-allocation` + `--cash-buffer-state`，或一个统一的 `--capital-context` wrapper。没有 runner input，report 里的 `capital_context` 就会变成人工拼出的不可复现字段。
+runner 还需要显式 capital input path，例如 `--portfolio-allocation` + `--cash-buffer-state`，并从 `--preset-path` 读取 preset 身份与 bucket 元数据。没有 runner input，report 里的 `capital_context` 就会变成人工拼出的不可复现字段。
 
 ## P0a 启动状态
 

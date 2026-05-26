@@ -1,0 +1,414 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/cash_buffer_state/1.0.0/schema.json",
+  "title": "Cash Buffer State",
+  "description": "Dynamic per-market cash and bucket capital state used by Phase 5 capital context. Static rules live in portfolio_allocation; this state must be written atomically.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "state_id",
+    "generated_at",
+    "updated_at",
+    "as_of",
+    "base_currency",
+    "total_portfolio_capital",
+    "portfolio_policy_ref",
+    "markets",
+    "pending_liquidity_requests",
+    "state_management",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "type": "string",
+      "const": "cash_buffer_state"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "state_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "as_of": {
+      "$ref": "#/$defs/date8"
+    },
+    "base_currency": {
+      "type": "string",
+      "enum": ["mixed", "CNY", "USD"]
+    },
+    "total_portfolio_capital": {
+      "$ref": "#/$defs/nonNegativeNumber"
+    },
+    "portfolio_policy_ref": {
+      "$ref": "#/$defs/policyRef"
+    },
+    "markets": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "market": {
+                "const": "A"
+              }
+            },
+            "required": ["market"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "market": {
+                "const": "US"
+              }
+            },
+            "required": ["market"]
+          }
+        }
+      ],
+      "items": {
+        "$ref": "#/$defs/marketState"
+      }
+    },
+    "pending_liquidity_requests": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/liquidityRequest"
+      }
+    },
+    "state_management": {
+      "$ref": "#/$defs/stateManagement"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "policyRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "schema_version", "policy_id"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "schema_version": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "marketState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "currency",
+        "capital",
+        "buckets",
+        "cash_buffer",
+        "drawdown_state",
+        "last_rebalance"
+      ],
+      "properties": {
+        "market": {
+          "type": "string",
+          "enum": ["A", "US"]
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["CNY", "USD"]
+        },
+        "capital": {
+          "$ref": "#/$defs/marketCapital"
+        },
+        "buckets": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "bucket": {
+                    "const": "long"
+                  }
+                },
+                "required": ["bucket"]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "bucket": {
+                    "const": "short"
+                  }
+                },
+                "required": ["bucket"]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "bucket": {
+                    "const": "liquidity"
+                  }
+                },
+                "required": ["bucket"]
+              }
+            }
+          ],
+          "items": {
+            "$ref": "#/$defs/bucketState"
+          }
+        },
+        "cash_buffer": {
+          "$ref": "#/$defs/cashBuffer"
+        },
+        "drawdown_state": {
+          "$ref": "#/$defs/drawdownState"
+        },
+        "last_rebalance": {
+          "$ref": "#/$defs/rebalanceMeta"
+        }
+      }
+    },
+    "marketCapital": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market_capital",
+        "long_bucket_capital",
+        "short_bucket_capital",
+        "liquidity_bucket_capital",
+        "source"
+      ],
+      "properties": {
+        "market_capital": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "long_bucket_capital": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "short_bucket_capital": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "liquidity_bucket_capital": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["manual_snapshot", "broker_statement", "simulation_fixture"]
+        }
+      }
+    },
+    "bucketState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bucket",
+        "preset",
+        "capital",
+        "invested",
+        "available",
+        "reserved"
+      ],
+      "properties": {
+        "bucket": {
+          "type": "string",
+          "enum": ["long", "short", "liquidity"]
+        },
+        "preset": {
+          "enum": ["a_short", "us_short", "a_long", "us_long", null]
+        },
+        "capital": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "invested": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "available": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "reserved": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        }
+      }
+    },
+    "cashBuffer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "floor_policy",
+        "total_cash",
+        "available_cash",
+        "reserved_cash",
+        "locked_cash",
+        "transfer_allowed_to_other_market"
+      ],
+      "properties": {
+        "floor_policy": {
+          "type": "string",
+          "enum": ["hard_floor_with_explicit_exceptions"]
+        },
+        "total_cash": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "available_cash": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "reserved_cash": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "locked_cash": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "transfer_allowed_to_other_market": {
+          "type": "boolean",
+          "const": false
+        }
+      }
+    },
+    "drawdownState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "current_drawdown_pct", "liquidity_locked"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["normal", "warning", "critical"]
+        },
+        "current_drawdown_pct": {
+          "$ref": "#/$defs/ratioNullable"
+        },
+        "liquidity_locked": {
+          "type": "boolean"
+        }
+      }
+    },
+    "rebalanceMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rebalanced_at", "reason"],
+      "properties": {
+        "rebalanced_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "reason": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "liquidityRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "market",
+        "source_bucket",
+        "target_bucket",
+        "amount",
+        "trigger",
+        "audit_reason",
+        "status"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "market": {
+          "type": "string",
+          "enum": ["A", "US"]
+        },
+        "source_bucket": {
+          "type": "string",
+          "enum": ["liquidity"]
+        },
+        "target_bucket": {
+          "type": "string",
+          "enum": ["long", "short"]
+        },
+        "amount": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 1
+        },
+        "audit_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["requested", "approved_manual", "rejected", "executed_manual"]
+        }
+      }
+    },
+    "stateManagement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["atomic_write_required", "writer"],
+      "properties": {
+        "atomic_write_required": {
+          "type": "boolean",
+          "const": true
+        },
+        "writer": {
+          "type": "string",
+          "const": "engine.analyzer.state_manager.atomic_write_json"
+        }
+      }
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "pathRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ratioNullable": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "nonNegativeNumber": {
+      "type": "number",
+      "minimum": 0
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    }
+  }
+}

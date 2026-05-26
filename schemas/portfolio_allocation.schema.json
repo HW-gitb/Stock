@@ -1,0 +1,350 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/portfolio_allocation/1.0.0/schema.json",
+  "title": "Portfolio Allocation Policy",
+  "description": "Static capital-allocation policy for market and long/short/liquidity buckets. This is the source policy for Phase 5 capital context; execution reports only snapshot it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "policy_id",
+    "effective_date",
+    "portfolio_base_currency",
+    "market_allocation_sum_pct",
+    "markets",
+    "liquidity_policy",
+    "ship_gate_policy",
+    "execution_boundary",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "type": "string",
+      "const": "portfolio_allocation"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "policy_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "effective_date": {
+      "$ref": "#/$defs/date8"
+    },
+    "portfolio_base_currency": {
+      "type": "string",
+      "enum": ["mixed", "CNY", "USD"]
+    },
+    "market_allocation_sum_pct": {
+      "type": "number",
+      "const": 1.0
+    },
+    "markets": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "market": {
+                "const": "A"
+              },
+              "allocation_pct": {
+                "const": 0.35
+              }
+            },
+            "required": ["market", "allocation_pct"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "market": {
+                "const": "US"
+              },
+              "allocation_pct": {
+                "const": 0.65
+              }
+            },
+            "required": ["market", "allocation_pct"]
+          }
+        }
+      ],
+      "items": {
+        "$ref": "#/$defs/marketAllocation"
+      }
+    },
+    "liquidity_policy": {
+      "$ref": "#/$defs/liquidityPolicy"
+    },
+    "ship_gate_policy": {
+      "$ref": "#/$defs/shipGatePolicy"
+    },
+    "execution_boundary": {
+      "$ref": "#/$defs/executionBoundary"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "marketAllocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "allocation_pct",
+        "currency",
+        "cash_fungibility_group",
+        "cross_market_transfer_policy",
+        "buckets"
+      ],
+      "properties": {
+        "market": {
+          "type": "string",
+          "enum": ["A", "US"]
+        },
+        "allocation_pct": {
+          "$ref": "#/$defs/ratio"
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["CNY", "USD"]
+        },
+        "cash_fungibility_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cross_market_transfer_policy": {
+          "type": "string",
+          "const": "manual_only_non_fungible"
+        },
+        "buckets": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "bucket": {
+                    "const": "long"
+                  }
+                },
+                "required": ["bucket"]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "bucket": {
+                    "const": "short"
+                  }
+                },
+                "required": ["bucket"]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "bucket": {
+                    "const": "liquidity"
+                  }
+                },
+                "required": ["bucket"]
+              }
+            }
+          ],
+          "items": {
+            "$ref": "#/$defs/bucketAllocation"
+          }
+        }
+      }
+    },
+    "bucketAllocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bucket",
+        "preset",
+        "target_pct",
+        "ceiling_pct",
+        "capital_basis"
+      ],
+      "properties": {
+        "bucket": {
+          "type": "string",
+          "enum": ["long", "short", "liquidity"]
+        },
+        "preset": {
+          "enum": ["a_short", "us_short", "a_long", "us_long", null]
+        },
+        "target_pct": {
+          "type": "number",
+          "const": 0.333333
+        },
+        "ceiling_pct": {
+          "type": "number",
+          "const": 0.333333
+        },
+        "capital_basis": {
+          "type": "string",
+          "const": "within_market_capital"
+        }
+      }
+    },
+    "liquidityPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "floor_policy",
+        "default_floor_pct",
+        "cross_market_cash_default",
+        "short_circuit_breaker_liquidity_use",
+        "long_liquidity_use_conditions",
+        "audit_required"
+      ],
+      "properties": {
+        "floor_policy": {
+          "type": "string",
+          "const": "hard_floor_with_explicit_exceptions"
+        },
+        "default_floor_pct": {
+          "type": "number",
+          "const": 0.333333
+        },
+        "cross_market_cash_default": {
+          "type": "string",
+          "const": "non_fungible"
+        },
+        "short_circuit_breaker_liquidity_use": {
+          "type": "string",
+          "const": "blocked_for_new_short_risk"
+        },
+        "long_liquidity_use_conditions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "audit_required": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "shipGatePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logic",
+        "monthly_alpha_t_stat_min",
+        "sharpe_min",
+        "max_drawdown_max",
+        "forward_live_months_min",
+        "failure_mode",
+        "applies_to_presets"
+      ],
+      "properties": {
+        "logic": {
+          "type": "string",
+          "const": "and"
+        },
+        "monthly_alpha_t_stat_min": {
+          "type": "number",
+          "const": 2.0
+        },
+        "sharpe_min": {
+          "type": "number",
+          "const": 1.0
+        },
+        "max_drawdown_max": {
+          "type": "number",
+          "const": 0.15
+        },
+        "forward_live_months_min": {
+          "type": "integer",
+          "const": 12
+        },
+        "failure_mode": {
+          "type": "string",
+          "const": "paper_or_minimal_size_or_risk_filter_only"
+        },
+        "applies_to_presets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["a_short", "us_short", "a_long", "us_long"]
+          },
+          "minItems": 4,
+          "uniqueItems": true
+        }
+      }
+    },
+    "executionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manual_order_only",
+        "broker_integration_allowed",
+        "os_automation_allowed",
+        "system_outputs"
+      ],
+      "properties": {
+        "manual_order_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "broker_integration_allowed": {
+          "type": "boolean",
+          "const": false
+        },
+        "os_automation_allowed": {
+          "type": "boolean",
+          "const": false
+        },
+        "system_outputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["analysis", "screening", "backtest", "review", "report"]
+          },
+          "minItems": 5,
+          "uniqueItems": true
+        }
+      }
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    }
+  }
+}

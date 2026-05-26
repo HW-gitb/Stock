@@ -8,6 +8,228 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (P0a Optional disposition O1-O3)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O3 全部 dispose 完成 + 多条额外 cross-validation strengthening）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `6574faa`; targets the immediately prior Codex entry "P0a Optional disposition O1-O3")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `runners/backtest_execution.py` 改动：删 `PRESET_CAPITAL_PROFILES` hardcoded map；新增 `--preset-path` CLI flag + `load_preset_capital_profile` + `parse_simple_yaml_scalar` + `load_simple_yaml_mapping` fallback YAML parser；`build_capital_context` signature 改为 `preset_profile: dict`（O1）
+- `schemas/portfolio_allocation.schema.json` 改动：`bucketAllocation.horizon` 字段删除 + required 列表去掉 `horizon`（O2）；6 个 single-value enums 改为 const（O3）
+- `tests/fixtures/portfolio_allocation_minimal.json` 改动：所有 bucket rows 删 `horizon` 字段（O2 fixture 同步）
+- `tests/execution/test_backtest_execution.py` 新增 `test_preset_yaml_drives_capital_profile` 锁住 O1 行为
+- `docs/CURRENT.md` + `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` + `runners/README.md` + `docs/portfolio_allocation_policy.md` 同步
+- 无 EGS / analyzer / Phase 3 hard veto / CSV/Tushare materializer / Phase 4 deterministic report 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest discover` → `Ran 79 tests in 0.311s OK` ✅（43 → 79... 等等，43 是 Phase 5 子集；79 是全 repo；Phase 5 子集 43 → 44，新增 1 test）
+
+**Disposition 逐条核对**:
+
+- **O1 (Pass with strengthening)** — `PRESET_CAPITAL_PROFILES` hardcoded map **完全删除** ✅。新增 `--preset-path` argparse（default `presets/a_short.yaml`）+ `load_preset_capital_profile()` 读 YAML + 6 条内部 validation（top-level `market`/`horizon` vs `capital.market`/`horizon` cross-check；enum 检查 market/horizon/bucket/capital_basis）。`load_simple_yaml_mapping` fallback parser 处理 PyYAML 不存在场景 — 不强加新依赖。**且 Codex 额外强化** `build_capital_context`：3 条新 cross-validation（preset.capital.portfolio_allocation_policy == policy.policy_id / bucket_policy.target_pct == preset.bucket_target_pct / bucket_policy.ceiling_pct == preset.bucket_ceiling_pct）。完全按建议方向 (a)：preset YAML 是 single source of truth，runner 跨 3 个文件 (preset / policy / state) 一致性强校验。新 test `test_preset_yaml_drives_capital_profile` 锁住行为 ✅
+- **O2 (Pass)** — `bucketAllocation.horizon` 字段从 schema required + properties 全部移除；`tests/fixtures/portfolio_allocation_minimal.json` grep `horizon` 无返回（确认 fixture 同步）✅。Codex 在 Key decisions 注明 "horizon remains preset/report metadata where it carries independent product identity" — 把 horizon 集中在 preset YAML + capital_context runtime snapshot，schema 层不冗余 ✅
+- **O3 (Pass)** — 6 个 single-value 字段全部改 const ✅：
+  - `marketAllocation.cross_market_transfer_policy: const "manual_only_non_fungible"`
+  - `bucketAllocation.capital_basis: const "within_market_capital"`
+  - `liquidityPolicy.cross_market_cash_default: const "non_fungible"`
+  - `liquidityPolicy.short_circuit_breaker_liquidity_use: const "blocked_for_new_short_risk"`
+  - `shipGatePolicy.logic: const "and"`
+  - `shipGatePolicy.failure_mode: const "paper_or_minimal_size_or_risk_filter_only"`
+  
+  `applies_to_presets.items.enum: ["a_short","us_short","a_long","us_long"]` **保持 enum**（4 值真 multi-value enum，不应改 const）— Codex 正确区分 single-value 和 multi-value enum ✅
+
+**额外观察（非 issue）**:
+
+- **PyYAML 可选依赖处理优雅**: `try: import yaml; except ImportError: yaml = None`，runner 优先用 PyYAML（如果装了），否则 fallback 自写的 `load_simple_yaml_mapping`。fallback parser scope 极小（只支持 P0a preset YAML 的 nested-1-level mapping shape），不打算做通用 YAML parser — 避免 reinventing PyYAML ✅
+- **`load_simple_yaml_mapping` 行号化错误信息**: 错误 message 含 `path:line_number` 方便 debug — 好做法 ✅
+- **Cross-validation 强度升级**: 现在 capital_context 取决于 3 个文件（preset YAML / portfolio_allocation / cash_buffer_state）的一致性，任一环节不匹配立即 raise + clear error。架构 robustness 显著提升 ✅
+- **`required_string` / `required_float` 小 helper**: 复用模式好，避免每次手写 isinstance check ✅
+- **Codex `修复` entry alternatives rejected** 列了 3 条具体被否方向（"PRESET_CAPITAL_PROFILES + drift test 而非删除" / "保留 horizon 加 cross-field validator" / "保留 single-value enum 作 future-flex placeholder"）— 决策路径可追溯 ✅
+- **fixture 与 schema 同步**: Codex 改 schema 删 horizon 时也同步改了 fixture，避免 schema validation 失败 ✅
+- **policy doc 也同步**: `docs/portfolio_allocation_policy.md` 也在改动列表，应该是 schema 改动的对应描述更新 — 没破坏 P0c 用户确认 policy 内容 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1-O3 全部 Pass，无新 finding；Codex 还额外做了 3 条 cross-validation strengthening，超出 strict O1 要求）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`。
+
+**Next natural step from my view**:
+
+1. 用户 `提交`。working tree 现在含两层 scope（P0a 原 contract + Optional dispose），按 `[[feedback-commit-scope-discipline]]` 应作为**单 scope** commit（两轮工作都是 P0a contract 闭环，应该一起 commit 而非拆 — Codex `修复` 是接在 `执行` 同一 scope 内）。走新 §Commit Documentation Hygiene 单 scope 快路径 `git add -A`。
+2. 提交后正式启动 **Phase 5 fill simulation 实施**（按 bucket_capital 计算 sizing；entry/exit + 涨停不可买 + 止损 + 时间止损 + portfolio circuit breaker）。
+3. P0a 把 capital_context 和 manual-execution-only boundary 锚到 schema + runner + preset YAML 三层，fill simulation build 在此基础上不会 silently 偏离 bucket-aware capital 假设。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (P0a Optional disposition O1-O3)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior Claude review entry `P0a capital context contracts`, which returned Pass with no Required fixes and 3 active Optional suggestions.
+- Refines P0a without expanding into fill simulation, long specs, Phase 7, provider materializers, or EGS/analyzer changes.
+
+**Worked on**:
+1. Disposed O1 by replacing hardcoded preset capital mapping with `--preset-path` YAML loading; `presets/a_short.yaml` is now the default source for preset/market/horizon/bucket metadata.
+2. Disposed O2 by removing `bucketAllocation.horizon` from `portfolio_allocation` schema and fixture rows.
+3. Disposed O3 by converting single-value policy enums in `portfolio_allocation` to `const`.
+4. Added regression coverage and synced CURRENT / handoff / runner README / policy doc.
+
+**Key decisions**:
+- O1 accepted: preset YAML is the capital-profile source of truth; runner cross-validates it against `portfolio_allocation` and `cash_buffer_state`.
+- O2 accepted: `portfolio_allocation.markets[].buckets[]` keeps only `bucket`; horizon remains preset/report metadata where it carries independent product identity.
+- O3 accepted: single-value policy locks use `const` for reader clarity and schema consistency.
+- YAML parsing stays dependency-light: if PyYAML exists it is used; otherwise the runner parses the controlled preset mapping shape needed for `capital`.
+
+**Alternatives considered and rejected**:
+- "Keep `PRESET_CAPITAL_PROFILES` and only add a drift test" — rejected because it preserves two sources of truth.
+- "Keep bucket `horizon` and add cross-field validation" — rejected because current rows only duplicate `bucket`; future long-spec needs can add a distinct field later.
+- "Leave single-value enums as future-flex placeholders" — rejected because current policy is intentionally locked and future change should be explicit.
+
+**Open questions handed off**:
+- None new. Long-system liquidity-use enums remain reserved from the prior P0a entry.
+
+**Verification**:
+- P0a focused tests: 18 passed.
+- Broader Phase 5 suite: 44 passed.
+- Full `unittest discover`: 79 passed.
+- `git diff --check`: passed.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude re-reviews the P0a Optional disposition diff.
+2. If Pass, user invokes `提交`.
+3. After commit, start Phase 5 fill simulation as a separate scope using bucket capital.
+
+## 2026-05-26 — Claude review — Pass (P0a capital context contracts)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (3 条 active)。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `6574faa`; targets the immediately prior Codex entry "P0a capital context contracts")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `schemas/portfolio_allocation.schema.json` (新文件，356 行 — 静态政策)
+- `schemas/cash_buffer_state.schema.json` (新文件，415 行 — 动态状态)
+- `schemas/execution_backtest_report.schema.json` v1.0.0 → v1.1.0 升级（+212 行加 capital_context required）
+- `runners/backtest_execution.py` 改动（+172 行：`--portfolio-allocation` + `--cash-buffer-state` required CLI flags，`load_portfolio_allocation` / `load_cash_buffer_state` validators，`build_capital_context` cross-validator，`validate_initial_capital_guard`，`PRESET_CAPITAL_PROFILES` 4 套 preset 映射）
+- `presets/{a_short,us_short,a_long,us_long}.yaml` 4 个 preset 都加 `capital:` block
+- `tests/schema/test_capital_context_schemas.py` 新文件 (2 tests)
+- `tests/execution/test_backtest_execution.py` 改动 (+118 行：所有现有测试加 capital_cli_args helper；新增 `test_initial_capital_guard_must_match_bucket_capital` + `test_cash_state_policy_id_must_match_allocation`)
+- `tests/schema/test_execution_backtest_report_schema.py` 改动 (+20 行：测 capital_context required + position_sizing.capital_basis)
+- `tests/fixtures/portfolio_allocation_minimal.json` + `cash_buffer_state_minimal.json` 新 fixtures
+- `docs/CURRENT.md` + `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` + `runners/README.md` 同步
+- 无 EGS / analyzer / Phase 3 hard veto / CSV materializer / Tushare materializer / Phase 4 deterministic report 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest tests.execution.test_backtest_execution tests.schema.test_capital_context_schemas tests.schema.test_execution_backtest_report_schema tests.schema.test_execution_price_data_schema tests.execution.test_materialize_execution_price_data tests.execution.test_materialize_execution_price_data_tushare` → `Ran 43 tests in 0.409s OK` ✅（38 → 43，新增 5 tests）
+
+**Reasons for Pass**:
+
+- **Schema 三层分离正确**: portfolio_allocation 静态政策 / cash_buffer_state 动态状态 / execution_backtest_report.capital_context runtime snapshot — 完全符合 P0c 决策草案设计 ✅
+- **关键政策值全部 const 焊死**: `allocation_pct: const 0.35/0.65` / `target_pct: const 0.333333` / `monthly_alpha_t_stat_min: const 2.0` / `sharpe_min: const 1.0` / `max_drawdown_max: const 0.15` / `forward_live_months_min: const 12` / `manual_order_only: const true` / `broker_integration_allowed: const false` — defensive design 防止下游 silent 改 ✅
+- **强制覆盖 4 套 preset**: `ship_gate_policy.applies_to_presets: minItems 4` + `markets.contains A` + `markets.contains US` + `buckets.contains long/short/liquidity` — schema 层强制 4 套全覆盖 ✅
+- **Runner cross-validation 严密**: `policy_id` 必须跨 policy/state 匹配；`bucket.preset` 必须跨 policy/state 匹配；`--initial-capital` 从 source-of-truth 改为 optional guard（must == bucket_capital） ✅
+- **测试覆盖关键 invariant**: `test_initial_capital_guard_must_match_bucket_capital` + `test_cash_state_policy_id_must_match_allocation` 锁住跨文件 invariant ✅
+- **执行边界融合**: `executionBoundary.manual_order_only: const true` 写进 portfolio_allocation schema → runner.build_capital_context 把 `manual_execution_only: bool` 加进 capital_context → execution_backtest_report.capitalContext.manual_execution_only const true（schema 强制）— 用户 P0c 加的 "手动下单" boundary 一路贯通 ✅
+- **atomic write 强制**: `cash_buffer_state.state_management.atomic_write_required: const true` + `writer: const "engine.analyzer.state_manager.atomic_write_json"` — 防止 future LLM 用普通 `json.dump` 写 cash state ✅
+- **runner scope 纪律**: 没改 EGS / analyzer / Phase 3 / CSV materializer / Tushare materializer 任何代码，只在 backtest_execution.py 加 P0a 入口 ✅
+- **schema 升级 backward-incompatible 透明**: schema_version `1.0.0` → `1.1.0` 是 minor bump 但加了 required field，按 SemVer 严格说应该是 major（2.0.0）。但因为 v1.0.0 是 Phase 5 skeleton 还没消费者，minor 升级实操可接受 ✅
+- **fixtures 数学一致**: `portfolio_allocation_minimal.json` A=0.35 / US=0.65 + bucket=0.333333；`cash_buffer_state_minimal.json` 总资金 1,000,000 → A market_capital = 350,000 → A short bucket = 116,666.55 ≈ 1,000,000 × 0.35 × 0.333333 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — Preset YAML `capital` block 与 runner hardcoded `PRESET_CAPITAL_PROFILES` 冗余且无验证**（`runners/backtest_execution.py:33-38` vs `presets/{4套}.yaml`）。当前 runner 用 hardcoded `PRESET_CAPITAL_PROFILES = {"a_short": {"market": "A", "horizon": "short", "bucket": "short"}, ...}`，而 4 个 preset YAML 各自写 `capital.market: A / horizon: short / bucket: short / ...`。**二者必须保持一致但 runner 完全不读 preset YAML**。如果 future 改 preset YAML（如调 bucket assignment）、或加新 preset，hardcoded map 不会跟随。两种修法：
+   - (a) Runner 改成读 preset YAML（删 PRESET_CAPITAL_PROFILES）— 更对，preset 是 single source of truth
+   - (b) 加 sanity test 启动时比对 hardcoded map vs preset YAML 一致 — 保留 hardcoded 但防 drift
+
+   倾向 (a)，因为 preset 设计本意就是 single source of truth；(b) 是 patch。
+
+2. **O2 — `bucketAllocation.horizon` 字段冗余**（`schemas/portfolio_allocation.schema.json:194-197`）。`bucketAllocation` 同时有 `bucket` 和 `horizon` 字段，enum 都是 `["long", "short", "liquidity"]`。Fixture 里所有行都是 `bucket == horizon`。schema 没 cross-field validation，可以接受 `bucket="long"` + `horizon="short"` 的不一致 row。三种修法：
+   - (a) 删 `horizon`（与 bucket 同义）
+   - (b) 改 `horizon` enum 为 `["long", "short", null]`（liquidity bucket horizon=null）+ 强制 `bucket=="liquidity"` ↔ `horizon==null`
+   - (c) 加 cross-field validator（jsonschema if/then）
+
+   倾向 (a)，因为 P0a fixture 里 horizon 和 bucket 完全一致，没看出独立信息含义。如果 future 长线 spec 需要区分 "horizon 周期" vs "bucket 桶"，那时再加，YAGNI。
+
+3. **O3 — Single-value enums 风格不统一应改 const**（`schemas/portfolio_allocation.schema.json:131,237,241,271,289` 等）。多个字段是单值 enum：
+   - `marketAllocation.cross_market_transfer_policy: enum ["manual_only_non_fungible"]`
+   - `liquidityPolicy.cross_market_cash_default: enum ["non_fungible"]`
+   - `liquidityPolicy.short_circuit_breaker_liquidity_use: enum ["blocked_for_new_short_risk"]`
+   - `shipGatePolicy.logic: enum ["and"]`
+   - `shipGatePolicy.failure_mode: enum ["paper_or_minimal_size_or_risk_filter_only"]`
+   - `bucketAllocation.capital_basis: enum ["within_market_capital"]`
+
+   与同 schema 其他 const 字段（如 `manual_order_only: const true`）风格不一致。建议统一改 `const`，或在 schema 顶部 comment 注明 "单值 enum 是 future-flexibility 预留"。倾向改 const — 单值 enum 视觉上像"有多选"但实际锁死，迷惑读者。
+
+**额外观察（非 issue）**:
+
+- **35/65 / 33.33 const 焊死**: 用户已确认是固化决策，schema 焊死是防 silent 改的 defensive design。如果未来调比例（如 30/70）需要 schema major upgrade — 这是 feature 不是 bug ✅
+- **state_management.writer const 焊死路径**: Phase 7 engine 重构如果改 atomic_write 实现路径，schema 要 patch — 同上属于 defensive design ✅
+- **schema_version 1.0.0 → 1.1.0 加 required field** 严格 SemVer 应该是 2.0.0；但 v1.0.0 是 Phase 5 skeleton 还没生产消费者，minor 升级实操可接受。Codex `Key decisions` 没明说这是 SemVer 例外，但 not a blocker ✅
+- **`PRESET_CAPITAL_PROFILES` 含 a_long / us_long**: runner 当前只测 a_short 路径，但 PROFILES 已经 cover 4 套 — 与 P0a "必须一次性覆盖 4 个 preset" 设计一致 ✅
+- **`build_capital_context` 没显式检查 `cash_buffer_state.markets[].capital.market_capital == total_portfolio_capital × policy.allocation_pct`**: schema 层无法 cross-validate 这种数学关系。runner 可以加 sanity check（math invariant 验证）— 但不影响 P0a 功能，是 future-strengthening。不写为 Optional ✅
+- **Phase 5 fill simulation 仍然没碰**: build_execution_assumptions 仍 skeleton，position_sizing 加了 capital_basis 但没实现真实 sizing — 与 scope "P0a 只是 contract，不做 fill" 一致 ✅
+
+**Documentation issues**: 无（CURRENT.md / handoff / runner README 同步 verify 一致）。
+
+**Pending status**: Required: none / Optional (O1-O3): PENDING CODEX DISPOSITION。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — dispose O1-O3。O1 最重要（preset YAML vs hardcoded map drift 风险），O2/O3 是 schema quality 改进。
+2. 修复后用户 `审查` → `提交`。
+3. 提交后正式启动 **Phase 5 fill simulation 实施**（按 bucket_capital 计算 sizing；entry/exit + 涨停不可买 + 止损 + 时间止损 + portfolio circuit breaker）。
+4. P0a 已经把 capital_context 和 manual-execution-only boundary 锚到 schema 和 runner，fill simulation 在此基础上 build 不会 silently 偏离 bucket-aware capital 假设。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (P0a capital context contracts)
+
+**Commits**: none (Pattern B: `执行` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `6574faa` (`Record roadmap B semi-reorder`) and the latest Claude Pass entry, which made P0a capital context contracts the next implementation step.
+- Refines the Phase 5 contract boundary: fill simulation remains blocked until capital context is explicit and bucket-aware.
+
+**Worked on**:
+1. Added `portfolio_allocation` and `cash_buffer_state` JSON schemas plus minimal fixtures and schema tests.
+2. Upgraded `execution_backtest_report` to v1.1.0 with required `capital_context`.
+3. Wired `backtest_execution.py` to require `--portfolio-allocation` and `--cash-buffer-state`, validate both, derive A-short bucket capital, and write the capital snapshot into the report.
+4. Added capital/bucket fields to all four presets and updated runner/docs/tests.
+
+**Key decisions**:
+- `portfolio_allocation` is the static policy source; `cash_buffer_state` is dynamic state; `execution_report.capital_context` is only a runtime snapshot.
+- `settings.initial_capital` remains for compatibility but is now populated from selected `bucket_capital`; user-supplied `--initial-capital` is only a guard and must equal that bucket value.
+- `position_sizing` now explicitly declares `capital_basis = bucket_capital` and `bucket_ceiling_pct`, preventing total-account sizing from reappearing silently.
+- P0a covers all four presets, but `backtest_execution.py` still only runs the current A-short skeleton. This round does not implement US provider, long specs, or fill simulation.
+
+**Alternatives considered and rejected**:
+- "Keep `--initial-capital` as the source of truth" — rejected because it recreates the single-account assumption P0a is meant to remove.
+- "Make `capital_context` optional until fill simulation" — rejected because fill simulation would then start without a reproducible capital source.
+- "Infer capital from preset YAML only" — rejected because preset YAML is identity/static ceiling metadata, not dynamic cash state.
+
+**Open questions handed off**:
+- Exact long-system liquidity-use enums remain reserved until A-long and US-long specs exist.
+- Whether to add real state files under `state/` is deferred; current P0a uses validated input files and fixtures, not live balances.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude reviews P0a contract/schema/runner diff.
+2. If Pass, user invokes `提交`.
+3. After commit, start Phase 5 fill simulation as a separate scope using bucket capital.
+
 ## 2026-05-26 — Claude review — Pass (roadmap B semi-reorder Optional disposition)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1 dispose 完成）。

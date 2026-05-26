@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/execution_backtest_report/1.0.0/schema.json",
+  "$id": "https://stock.local/schemas/execution_backtest_report/1.1.0/schema.json",
   "title": "Execution Backtest Report",
-  "description": "Phase 5 machine-readable contract for execution-level backtest reports. This schema defines the report surface before the simulator/runner implementation.",
+  "description": "Phase 5 machine-readable contract for execution-level backtest reports. Version 1.1.0 adds bucket-aware capital_context before fill simulation is implemented.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -13,6 +13,7 @@
     "mode",
     "settings",
     "inputs",
+    "capital_context",
     "execution_assumptions",
     "data_lineage",
     "outputs",
@@ -27,7 +28,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "generated_at": {
       "type": "string",
@@ -35,7 +36,7 @@
     },
     "preset": {
       "type": "string",
-      "enum": ["a_short"]
+      "enum": ["a_short", "us_short", "a_long", "us_long"]
     },
     "mode": {
       "type": "string",
@@ -46,6 +47,9 @@
     },
     "inputs": {
       "$ref": "#/$defs/inputs"
+    },
+    "capital_context": {
+      "$ref": "#/$defs/capitalContext"
     },
     "execution_assumptions": {
       "$ref": "#/$defs/executionAssumptions"
@@ -99,7 +103,8 @@
         },
         "initial_capital": {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "description": "Run-level starting capital. In schema v1.1.0 this must represent the selected bucket capital, not total account capital; capital_context is the authoritative source."
         },
         "primary_input": {
           "type": "string",
@@ -286,13 +291,27 @@
         "position_sizing": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["method", "max_position_pct", "max_positions", "cash_constrained"],
+          "required": [
+            "method",
+            "capital_basis",
+            "max_position_pct",
+            "bucket_ceiling_pct",
+            "max_positions",
+            "cash_constrained"
+          ],
           "properties": {
             "method": {
               "type": "string",
               "enum": ["equal_weight", "risk_budget", "fixed_pct"]
             },
+            "capital_basis": {
+              "type": "string",
+              "enum": ["bucket_capital"]
+            },
             "max_position_pct": {
+              "$ref": "#/$defs/ratio"
+            },
+            "bucket_ceiling_pct": {
               "$ref": "#/$defs/ratio"
             },
             "max_positions": {
@@ -380,6 +399,99 @@
         }
       }
     },
+    "capitalContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "portfolio_allocation_ref",
+        "cash_buffer_state_ref",
+        "preset",
+        "market",
+        "horizon",
+        "bucket",
+        "currency",
+        "capital_basis",
+        "total_portfolio_capital",
+        "market_allocation_pct",
+        "market_capital",
+        "bucket_target_pct",
+        "bucket_ceiling_pct",
+        "bucket_capital",
+        "liquidity_reserve_pct",
+        "liquidity_floor_policy",
+        "cross_market_cash_fungible",
+        "manual_execution_only",
+        "ship_gate"
+      ],
+      "properties": {
+        "portfolio_allocation_ref": {
+          "$ref": "#/$defs/portfolioAllocationRef"
+        },
+        "cash_buffer_state_ref": {
+          "$ref": "#/$defs/cashBufferStateRef"
+        },
+        "preset": {
+          "type": "string",
+          "enum": ["a_short", "us_short", "a_long", "us_long"]
+        },
+        "market": {
+          "type": "string",
+          "enum": ["A", "US"]
+        },
+        "horizon": {
+          "type": "string",
+          "enum": ["short", "long"]
+        },
+        "bucket": {
+          "type": "string",
+          "enum": ["short", "long"]
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["CNY", "USD"]
+        },
+        "capital_basis": {
+          "type": "string",
+          "enum": ["bucket_capital"]
+        },
+        "total_portfolio_capital": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "market_allocation_pct": {
+          "$ref": "#/$defs/ratio"
+        },
+        "market_capital": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "bucket_target_pct": {
+          "$ref": "#/$defs/ratio"
+        },
+        "bucket_ceiling_pct": {
+          "$ref": "#/$defs/ratio"
+        },
+        "bucket_capital": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "liquidity_reserve_pct": {
+          "$ref": "#/$defs/ratio"
+        },
+        "liquidity_floor_policy": {
+          "type": "string",
+          "enum": ["hard_floor_with_explicit_exceptions"]
+        },
+        "cross_market_cash_fungible": {
+          "type": "boolean",
+          "const": false
+        },
+        "manual_execution_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "ship_gate": {
+          "$ref": "#/$defs/shipGateSnapshot"
+        }
+      }
+    },
     "dataLineage": {
       "type": "object",
       "additionalProperties": false,
@@ -397,7 +509,7 @@
       "properties": {
         "data_provider": {
           "type": "string",
-          "enum": ["tushare"]
+          "enum": ["tushare", "us_provider"]
         },
         "api_families": {
           "type": "object",
@@ -632,6 +744,92 @@
         },
         "path": {
           "$ref": "#/$defs/pathRef"
+        }
+      }
+    },
+    "portfolioAllocationRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "schema_version", "policy_id"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "schema_version": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "cashBufferStateRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "schema_version", "state_id", "as_of"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/pathRef"
+        },
+        "schema_version": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "state_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "as_of": {
+          "$ref": "#/$defs/date8"
+        }
+      }
+    },
+    "shipGateSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_logic",
+        "monthly_alpha_t_stat_min",
+        "sharpe_min",
+        "max_drawdown_max",
+        "forward_live_months_min",
+        "status",
+        "full_size_allowed",
+        "reason"
+      ],
+      "properties": {
+        "policy_logic": {
+          "type": "string",
+          "enum": ["and"]
+        },
+        "monthly_alpha_t_stat_min": {
+          "type": "number",
+          "const": 2.0
+        },
+        "sharpe_min": {
+          "type": "number",
+          "const": 1.0
+        },
+        "max_drawdown_max": {
+          "type": "number",
+          "const": 0.15
+        },
+        "forward_live_months_min": {
+          "type": "integer",
+          "const": 12
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_evaluated", "pass", "fail"]
+        },
+        "full_size_allowed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
