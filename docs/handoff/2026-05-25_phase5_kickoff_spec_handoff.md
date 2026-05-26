@@ -1458,3 +1458,49 @@ git diff --check
 1. 让 Claude 复审 Optional disposition O1-O3。
 2. 若 Pass，用户可 `提交`。
 3. 提交后再进入 Phase 6 kickoff / forward-observation boundary update。
+
+## 2026-05-26 追加：strategy design synthesis
+
+### 改了什么
+
+- 新增 `docs/strategy_design_synthesis.md`，作为短线优化、爆发力通道、长线 alpha 系统、research 分支和 coordinator 的详细设计入口。
+- `AGENTS.md` 新增 `Strategy design synthesis policy`，让所有 LLM 一进项目就看到约束摘要。
+- `AGENTS.md` 执行路线图将 Phase 6 拆成：
+  - Phase 6a：boundary kickoff。
+  - Phase 6b：A 股短线 variants 并行验证。
+  - Phase 6c：`burst_lane` spec。
+  - Phase 6d：A 长 / US 长 spec 与 US 短规范化。
+  - Phase 7.5：`research/` infrastructure。
+- `docs/CURRENT.md` 切换下一步入口为 Phase 6a boundary kickoff，并指向策略综合文档。
+- `docs/SESSION_LOG.md` 顶部记录本次设计思路、被否方案和下一步。
+
+### 为什么改
+
+用户确认新的系统定位：短线不能继续被误解为最高正确率 / 最高收益率 alpha engine；短线应保留风控过滤和证据闸门，同时用 bounded variants 与独立 `burst_lane` 捕捉爆发力。长线应作为真正 push alpha 的主系统，从 `core quality compounding` 与 `re-rating / catalyst long` 两层重新设计。
+
+这次更新把该设计固化到 repo-visible 文档，避免后续 LLM 只读 Phase 5 execution 文档后继续围绕 A 股短线 EGS rank 做过度优化。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['AGENTS.md','docs/CURRENT.md','docs/SESSION_LOG.md','docs/strategy_design_synthesis.md','docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok')"
+git diff --check
+```
+
+### 验证结果
+
+- UTF-8 read check：`utf8 ok`。
+- `git diff --check`：通过（仅 PowerShell/Git 的 LF -> CRLF 工作区提示，无 whitespace error）。
+
+### 失效旧结论
+
+- “下一步只需要普通 Phase 6 forward observation boundary”被细化：现在下一步是 Phase 6a，且必须同时路由 A-short variants、`burst_lane`、A-long / US-long specs 的边界。
+- “短线继续 push rank alpha 是主方向”失效；短线稳健通道保持风控过滤，alpha 改善通过 bounded variants 和 burst research 验证。
+- “爆发力通道可直接给 30% short bucket production sizing”失效；30% 只能在 paper 模拟或 12 个月独立 ship-gate 通过后使用。
+- “长线用绝对 ROE/ROIC/PE 阈值起步”失效；长线必须行业归一化。
+
+### 下一步注意事项
+
+1. 让 Claude 审查本轮 docs-only strategy synthesis。
+2. 若 Pass，用户可 `提交`。
+3. 下一条 `执行` 做 Phase 6a boundary kickoff：forward evidence、benchmark monthly returns、forward tracker 到 aggregate report 的数据流、steady / variants / burst / long-spec 边界。

@@ -8,6 +8,154 @@
 
 ---
 
+## 2026-05-26 — Codex (docs routing + strategy synthesis O1 disposition)
+
+**Commits**: none (`批准做` docs update; commit happens only after Claude Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude review — Pass (strategy design synthesis), which had no Required fixes and one Optional about the `burst_lane` 6-month preliminary pass.
+- Refines the same docs-only strategy synthesis scope with a stable document routing layer.
+
+**Worked on**:
+1. Accepted O1 with modification: `docs/strategy_design_synthesis.md` now states the 6-month preliminary pass must be falsifiable in Phase 6c and cannot be passive time-based; exact thresholds are deferred to the `burst_lane` spec.
+2. Expanded `docs/README.md` into a document routing table and maintenance rules so future LLMs can identify each doc's role without reading everything.
+3. Added `AGENTS.md §文档路由` as the short fast path from project rules to the routing table.
+
+**Key decisions**:
+- `docs/README.md` owns the routing table; `AGENTS.md` keeps only the mandatory fast path.
+- Do not add another full handoff for a pure navigation/O1-disposition tweak; that would worsen the document bloat the user flagged. `SESSION_LOG.md` records the reasoning, while `AGENTS.md` / `docs/README.md` carry the stable routing rule.
+- Do not hard-code preliminary-pass numeric thresholds now. Phase 6c must define exact `burst_lane` preliminary criteria with data context, but passive time-based promotion is forbidden now.
+
+**Alternatives considered and rejected**:
+- "Append another full phase handoff entry for docs routing" — 否决。This is process/navigation metadata, not a new phase-level design event.
+- "Merge strategy synthesis into AGENTS.md" — 否决。That would make the root entry too long; AGENTS should route, not duplicate the full design.
+- "Hard-code preliminary pass numbers in the synthesis doc" — 否决。The synthesis doc should lock the falsifiability requirement; the Phase 6c spec should own exact thresholds.
+
+**Open questions handed off**:
+- Phase 6c must define numeric preliminary-pass criteria for `burst_lane` before any 10% -> 20% production sizing step.
+
+**Next natural step from my view**:
+1. Claude reviews this docs routing + O1 disposition diff.
+2. If Pass, user `提交`.
+3. Next `执行`: Phase 6a boundary kickoff.
+
+## 2026-05-26 — Claude review — Pass (strategy design synthesis)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (1 条 active)。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `87a1a5a`; targets the immediately prior Codex entry "strategy design synthesis")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `docs/strategy_design_synthesis.md` 新文件（326 行，8 section 完整 strategy spec）
+- `AGENTS.md`：§当前进度 加 1 行 / §Strategy design synthesis policy 新增 7 条 binding summary / §执行路线图 Phase 5/5b 标 ✅ + Phase 6 拆 6a/6b/6c/6d + 7.5 新加 / §已固化决策 #13 新加
+- `docs/CURRENT.md` Latest Delta + §1 当前目标 + §2 已完成事项同步
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 追加 strategy synthesis section
+- 无 code / schema / preset / test 改动 ✅（纯文档/规则更新）
+
+**Reasons for Pass**:
+
+- **完整采纳合并整合版**：Codex 没只把自己的 6 条 critique 写下来，而是**主动综合**了我推荐 + Codex critique + 我 3 条补充（variant promotion rules / burst lane 三阶段 sizing / industry normalization spec）三方所有有价值的输入 ✅
+- **永久 callout 我的 math mistake**（§2.3 末段）："Do not describe '10% short bucket' as '3.33% total AUM' unless explicitly referring to a combined global short bucket. The project policy is per-market buckets." + 给正确 examples (A 短 10% = 1.17% total / US 短 10% = 2.17% total)。这是写进 production doc 的永久修正，future LLM 不会再犯 ✅
+- **比我推荐更细的 burst lane 四阶段 sizing**：我原建议 3 阶段（research → minimal → ship gate 通过 30%），Codex 加了第 4 阶段 "6-month preliminary pass: up to 20%" 作为中间过渡。比 paper 直接跳 minimal 安全 ✅
+- **比我推荐更完整的 promotion rules**（§2.2）：每 variant ≥12 期 forward + Sharpe 改善 ≥0.3 + alpha t-stat 提升 + **每轮最多 promote 1 个 + 6 期 underperform 自动关停**（这两条是 Codex 加的，防 variant 黑洞）✅
+- **完整 industry normalization spec**（§3.4）：A 股 SW L2 fallback SW L1 / US GICS industry fallback group / 5 年滚动 / sample <20 阈值 / cyclical 单独标注 / "ROE above industry's 5-year median and stable" example — **直接 implementable**，不只是方向 ✅
+- **AGENTS.md §Strategy design synthesis policy 7 条 binding summary**：让所有 future LLM 进项目就看到核心约束，不需要每次读完整 326 行 synthesis doc。Doc layering 清晰：summary 在 AGENTS（binding）+ detail 在 synthesis（reference）✅
+- **6 条 invalidated prior ideas 列得完整**（§7）：short-term 主 alpha / burst lane 30% start / 5d profit-take hardcoded / ESP 直接 hard veto / 长线绝对阈值 / research 无 governance — 全部 explicit reject，避免 future LLM 走回头路 ✅
+- **Codex `执行` entry alternatives rejected 写清楚 4 条**：immediate burst lane / hardcode 5d take-profit / hard veto all negatives / absolute long-term thresholds — 决策路径可追溯 ✅
+- **Phase 表 5/5b 状态正确更新**（minimal / preliminary 完成），不 silent overstate ✅
+- **决策 #13 把策略设计综合版固化** — 升级到与 #10 (capital allocation) + #11 (manual order boundary) + #12 (B 半重排) 同级 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — Burst lane "6-month preliminary pass" 中间阶段判定标准不明确**（`docs/strategy_design_synthesis.md:108` + §2.3）。Codex 加了 4-stage sizing：paper 30% → minimal live 10% → **6-month preliminary pass 20%** → 12-month independent ship gate 30%。但**没说明 "6-month preliminary pass" 怎么判定**。如果留空 → 默认变成"6 个月没爆雷就升 20%"的 silent passive promote，等于 ship gate 弱化版。
+
+   建议在 §2.3 或留到 Phase 6c burst lane spec 时明确：preliminary pass 是 ship gate 的 weakened subset。具体可能的标准（数字非 lock，可调）：
+   - alpha t-stat ≥ 1.5（vs full ship gate ≥ 2.0）
+   - sharpe ≥ 0.5（vs ≥ 1.0）
+   - max drawdown ≤ 20%（vs ≤ 15%）
+   - forward live ≥ 6 月（vs ≥ 12 月）
+
+   不一定按这些数字，但 **stage gate 必须 falsifiable**，不能"时间到了就升"。建议在 §2.3 末尾加一行 "Preliminary pass 标准在 Phase 6c burst lane spec 中定义；不能默认 passive time-based promote"，明确把决策点 lock 到 6c。
+
+**额外观察（非 issue）**:
+
+- **§4 Research promotion gate 6 条**：sample-out / walk-forward / forward evidence / no lookahead / reproducible lineage / baseline comparison / review-approved contract。完整 ✅。具体 "sample-out 和 walk-forward 怎么算" 留到 Phase 7.5 research infra 实施时再细化是合理 deferred decision。
+- **§5 Coordinator 责任 6 项 + 非目标 4 项**：清晰划线（read state / summarize / track DD / track cash / detect extreme lock / generate manual report；no auto transfer / no broker / no OS auto / no silent mixing）。"何时 trigger" 留到 Phase 9 implementation 时定。✅
+- **§3 长线 spec 持仓周期、rebalance 频率** 没 hardcode — doc 明示 "Phase 6d - A-Long / US-Long Specs" 才是 write 这些的时候。Defer 合理 ✅
+- **AGENTS.md §Strategy design synthesis policy 第 4 条** 没列具体 burst lane sizing 百分比，要求 reader 跳到 synthesis doc — 合理 layering ✅
+- **Phase 7.5 工作量 "2-4 天"** 可能略低估（research infra + experiment logging + promotion policy）。但工作量估算非 architectural issue，跑过自然校正，不写 Optional。
+- **决策 #13 与 #10 / #11 / #12 一起形成完整决策链**：#10 capital / #11 manual order / #12 phase reorder / #13 strategy synthesis — 项目顶层决策现在 self-consistent ✅
+- **AGENTS.md §当前进度** 加 strategy_design_synthesis 一行 — future LLM 进项目读 AGENTS 就知道有这份 reference doc ✅
+
+**Documentation issues**: O1（burst lane preliminary pass 判定）。
+
+**Pending status**: Required: none / Optional (O1): PENDING CODEX DISPOSITION。
+
+**Process meta observation（hygiene 跟踪连续）**:
+
+- `a784b18` (Phase 5 ship-gate evaluation) → 无 [trivial] sync ✅
+- `87a1a5a` (Phase 5 aggregation) → 无 [trivial] sync ✅
+- 本次 strategy synthesis commit 后**预期也无 [trivial] sync** — `执行` entry / CURRENT.md / handoff 措辞全是 stable wording（"已固化"/"已通过"/"下一步启动 Phase 6a"），没 transient "current uncommitted work" 类写法
+- **`ccc5c85` 之后连续 3 次 substantive commit 都没 sync**。hygiene 规则真生效了，节省了 3 个 [trivial] commits
+- 这是 cross-LLM 协议演进的成功案例：identify problem → tighten protocol → measure outcome → 真实改善 ✅
+
+**Next natural step from my view**:
+
+1. 用户 `提交`（单 scope = strategy synthesis 文档 + AGENTS/CURRENT/handoff 同步，走 `git add -A` 快路径；按 hygiene 规则**不应**再做 [trivial] sync）。
+2. 提交后启动 **Phase 6a boundary kickoff**（按 §6 / §8 of synthesis doc）：
+   - 定 forward evidence 来源
+   - 定 A 短 benchmark monthly return source（CSI300 / CSI1000 / 其他 — 用户决策点）
+   - 定 forward tracker → aggregate evidence 数据流
+   - 定 steady / variant / burst / long-spec 4 个 deliverable 边界
+3. Phase 6a 完成后才进 Phase 6b/6c/6d（短线 variants / burst lane spec / 长线 spec）。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (strategy design synthesis)
+
+**Commits**: none (`执行`-style docs update; commit happens only after Claude Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Phase 5 aggregation closeout and the prior B semi-reorder roadmap.
+- Refines the user's newly approved strategy direction: short-term remains evidence-gated, while long-term becomes the alpha-push system.
+
+**Worked on**:
+1. Added `docs/strategy_design_synthesis.md` as the detailed design source for short-term lanes, long-term alpha systems, research governance, coordinator, and revised Phase 6+ route.
+2. Updated `AGENTS.md` so all future LLMs see the binding summary and the refined Phase 6a/6b/6c/6d roadmap.
+3. Updated `docs/CURRENT.md` so the next `执行` starts Phase 6a boundary kickoff instead of jumping into code.
+4. Appended the Phase 5 handoff with the design decision and invalidated prior assumptions.
+
+**Key decisions**:
+- Short-term is not the primary alpha engine. It has a steady risk-filter lane, bounded variants, and an independent `burst_lane`.
+- A-short variants are capped initially at six families and require forward evidence before promotion.
+- `burst_lane` cannot bypass the 12-month ship gate. Paper may simulate 30% of the relevant short bucket; minimal live is <=10%; six-month preliminary pass allows <=20%; 12-month independent ship-gate pass is required before 30%.
+- Long-term systems become the main alpha-push layer, split into core quality compounding and re-rating/catalyst long.
+- Long-term thresholds must be industry-normalized, not universal ROE/ROIC/PE constants.
+- `research/` may iterate faster, but it must keep lineage / parameters / seed / experiment logs and cannot feed production directly.
+
+**Alternatives considered and rejected**:
+- "Implement burst lane immediately in production" — rejected. It needs a spec, research/paper evidence, and staged sizing.
+- "Hard-code 5d profit-taking because 5d excess signal is positive" — rejected. A-short returns are right-skewed; exit policy must be a variant.
+- "Make every negative signal a hard veto now" — rejected. Strong signals can become veto candidates; weaker ESP evidence starts as cap/winsorize/downgrade variants.
+- "Use absolute long-term thresholds such as ROE >= 12% everywhere" — rejected. Industry normalization is required.
+
+**Open questions handed off**:
+- Phase 6a must pick the A-short benchmark monthly return source and define forward tracker -> aggregate report data flow.
+- Later specs must define exact burst-lane signals and long-term industry normalization data sources.
+
+**Next natural step from my view**:
+1. Claude reviews this documentation-only strategy synthesis update.
+2. If Pass, user `提交`.
+3. Next `执行`: Phase 6a boundary kickoff, not code implementation.
+
+---
+
 ## 2026-05-26 — Claude review — Pass (Phase 5 aggregation Optional disposition O1-O3)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O3 全部 dispose 完成 + Codex 正确反驳了我 O1 的 false-positive 部分）。

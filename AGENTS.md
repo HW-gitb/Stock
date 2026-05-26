@@ -3,6 +3,18 @@
 > 本文件是项目的 AI 协作根入口。**所有 AI 协作者**（Claude Code / Codex CLI / ChatGPT / Cursor / Cline / Aider / 其他 LLM）进入此项目时**必读**。
 > Claude Code 用户通过根目录的 `CLAUDE.md` 自动转入本文件；Codex CLI 自动加载本文件；其他工具请用户手动告知。
 
+## 文档路由
+
+先读本文件，再按任务查 `docs/README.md` 的 routing table。常用入口：
+
+- 当前状态 / 下一步：`docs/CURRENT.md`
+- 最新跨 LLM 交接、review verdict、pending Optional：`docs/SESSION_LOG.md` 顶部 1-3 条
+- Review 流程和短命令：`docs/AI_REVIEW_PROTOCOL.md`
+- 策略总设计：`docs/strategy_design_synthesis.md`
+- 资金政策：`docs/portfolio_allocation_policy.md`
+- DataHub / provider / factor guardrail：`docs/datahub_design.md`
+- phase 历史：`docs/handoff/` 下由本文件“交接记录”列出的 handoff
+
 ## 项目背景
 
 构建 4 套股票分析系统：A 股短线、美股短线、A 股长线、美股长线。每套包含筛选、分析、回测、复盘四组件，共享同一套 engine，通过 preset 配置区分市场和周期。
@@ -22,6 +34,7 @@
 - ✅ A 股短线筛选脚本：`A-EGS/egs_main.py` v7.10 已支持 `--as-of` 历史日期运行
 - ✅ A 股短线分析框架：`skills/a_short_analysis/reference/v14.2_spec.md` 已定位为规格说明书，不作为运行时提示词
 - ✅ 美股短线资料：已整理到 `skills/us_short_analysis/reference/`
+- ✅ 策略设计综合版：`docs/strategy_design_synthesis.md` 已固化为短线双通道 + 长线 alpha 主系统 + research / coordinator 的设计入口
 - ✅ Phase 1a：`schemas/analysis_input.schema.json` 已完成，当前输出 schema 版本 `1.1.0`
 - ✅ Phase 1b：`egs_main.py` 已接入 `analysis_input.json`、`snapshot.json`、`candidates.csv` 导出器
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
@@ -43,6 +56,17 @@
 - 这些 reference 文档原始目标是 AI chatbox 工作流。后续做 schema、runner、analyzer、Skill、prompt 或 preset 设计时，必须参考其业务逻辑、流程结构和判断维度，但不能机械照搬为运行时提示词或代码规则。
 - 可确定、可回测、可结构化的规则应拆入 Python / schema / config / state；需要语义判断、新闻理解、行业判断的部分才进入 Skill prompts。
 - A 股长线与美股长线框架目前尚未建立；不得用短线框架硬套长线系统。长线框架到对应 Phase 时从头设计。
+
+## Strategy design synthesis policy
+
+- 详细设计入口是 `docs/strategy_design_synthesis.md`；本节只保留所有 LLM 必须遵守的摘要。
+- 短线系统不再被定义为 alpha 主引擎；短线 = 稳健风控过滤 + bounded variants + 独立 `burst_lane`。A 短现有主通道不得为追爆发力而整体放松风控。
+- A 短优化先走有限 variants：追高 veto、OVERHEAT veto、Tier1-only trading、ESP cap/winsorize、rank bucket split、exit policy variants。variant promote 必须有 forward evidence，不得凭单次回测直接替换主策略。
+- `burst_lane` 是独立爆发力通道，必须有自己的 signal spec、risk lock、sizing gate 和 ship gate。Production sizing 按阶段推进：paper 可模拟 30% of relevant short bucket；minimal live <=10%；6 个月 preliminary pass <=20%；12 个月独立 ship gate pass 后才可到 30%。
+- 长线系统是 push alpha 的主战场。A 长 / US 长从头设计为 `core quality compounding` + `re-rating / catalyst long` 两层，不复用短线 v14.x 规则。
+- 长线阈值必须行业归一化：A 股默认 SW L2 + 5 年滚动，样本 <20 回退 SW L1；美股默认 GICS industry + 5 年滚动，样本 <20 回退 GICS industry group。
+- `research/` 允许更快实验，但必须记录 data lineage / parameters / seed / experiment log。Research 输出不得直接喂 production runner；进主线必须 schema-first + tests + review。
+- Cross-system coordinator 先写 spec 后实现，只生成手动建议，不自动调仓、不接券商、不混池 A/US cash。
 
 ## 目标架构
 
@@ -132,12 +156,16 @@ Stock/
 | 2 | rank 回测 + Rule 6 规则有效性统计 | 3-5 天 | ✅ 工程链路通过，策略优化继续 |
 | 3+ | minimal analyzer + state 接口同步建立 | 1-2 周 | ✅ |
 | 4 | minimal Skill：读 input，调 analyzer，出 M6.7 | 3-5 天 | ✅ minimal 完成 |
-| 5 | P0a capital context contract + A 股短线 execution/fill 回测 | 1-2 周 | ⬜ |
-| 5b | Ship gate policy + preliminary gate status（非 full-size 最终放行；full-size 仍需 ≥12 个月 forward live data） | 1-2 天 | ⬜ |
-| 6 | A 股短线完整闭环跑一个季度（forward/paper 或 minimal-size 手动观察）+ A 股长线 spec + 美股长线 spec + 美股短线 spec 规范化 | 观察期 + spec 设计 | ⬜ |
+| 5 | P0a capital context contract + A 股短线 execution/fill 回测 | 1-2 周 | ✅ minimal 完成 |
+| 5b | Ship gate policy + preliminary gate status（非 full-size 最终放行；full-size 仍需 ≥12 个月 forward live data） | 1-2 天 | ✅ preliminary 完成 |
+| 6a | Phase 6 boundary kickoff：forward evidence、benchmark、记录格式、steady/variant/burst/long-spec 边界 | 1-2 天 | ⬜ |
+| 6b | A 股短线 variants 并行验证：强负信号、Tier1-only、ESP cap、rank 分层、exit policy variants | 观察期 | ⬜ |
+| 6c | `burst_lane` 爆发力通道 spec：research/paper 先行、独立 risk lock / sizing gate / ship gate | 2-4 天 | ⬜ |
+| 6d | A 股长线 spec + 美股长线 spec + 美股短线 spec 规范化 | spec 设计 | ⬜ |
 | 7 | DataHub / engine 模块化重构；按 4 套 spec 划分共享层与独立 rule pack | 1-2 周 | ⬜ |
+| 7.5 | `research/` infrastructure + experiment logging + promotion gate | 2-4 天 | ⬜ |
 | 8 | 美股短线 implementation + 美股长线 implementation skeleton（数据条件满足时并行） | 1-2 周 | ⬜ |
-| 9 | A 股长线 implementation（可按数据准备度与 Phase 8 子项交换顺序） | 2-4 周 | ⬜ |
+| 9 | A 股长线 implementation + cross-system coordinator spec / first implementation（可按数据准备度与 Phase 8 子项交换顺序） | 2-4 周 | ⬜ |
 
 ## 已固化决策
 
@@ -153,6 +181,7 @@ Stock/
 10. 资金分布固化为 A 股 35% / 美股 65%；each market = 1/3 长线 + 1/3 短线 + 1/3 流动资金；A 股 cash 与美股 cash 默认不互通。4 套子系统同等重要；phase 路线图不能让任何一套被长期搁置；每套支持 full-size 手动实盘使用前必须通过多 metric AND ship gate，alpha 不足则定位为风控 filter。详 §项目背景。
 11. 系统执行边界固化为分析筛选 + 回测复盘 + 报告输出；用户手动下单。不得接入券商、操作系统或自动化工具做自动下单；execution backtest 只是模拟规则，不是 live trading/order execution engine。
 12. 路线图采用 B 半重排：保留 A 股短线 Phase 6 一季度观察和 Phase 7 DataHub 原则，同时在 Phase 6 并行提前产出 A 股长线 / 美股长线 spec，并规范化美股短线 spec；Phase 7 重构以 4 套 spec 为依据，Phase 8 优先美股短线 + 美股长线 skeleton，Phase 9 做 A 股长线 implementation（可按数据准备度与 Phase 8 子项交换）。数据准备度只作示例性触发，不写死门槛：若 US provider 已能稳定提供 10-K、FCF、guidance、估值等长线维度，可优先推进 US 长线 skeleton / implementation；否则按默认顺序先做 US 短线。
+13. 策略设计综合版采用 `docs/strategy_design_synthesis.md`：短线 = 稳健通道 + 有限 variants + 独立 `burst_lane`；长线 = `core quality compounding` + `re-rating / catalyst long` 的 alpha 主系统；research 快迭代但不可直连 production；coordinator 只给手动建议。
 
 ## AI 协作者在本项目中的工作守则
 
