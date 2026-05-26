@@ -163,3 +163,42 @@ git diff --check
 1. 真正执行 `git remote add` 或 `git push` 前，必须重新审计 `.gitignore`、`git status --short`、`git remote -v`、staged/tracked 文件中的 secret / token / credentials / logs / caches / live-state data。
 2. 若用户只说“上传 GitHub”但未说明 private，必须先确认 private；不得默认创建 public repo。
 3. 不要把本轮规则变更理解为可以上传 `.gitignore` 已排除文件或任何未脱敏数据。
+## 2026-05-26 追加：ordinary GitHub backup cleanup
+
+### 改了什么
+
+- `.gitignore` 明确扩大 private backup 边界：排除 `A-EGS/Result/`、`A-EGS/*.xlsx`、`result/*/YYYYMMDD/`、backtest CSV/JSON/XLSX、`generated/`、`snapshot_seed/`、`_intermediate/`、以及 `state/*/*.json` / `state/*/*.csv`。
+- 用 `git rm --cached` 将上述已跟踪生成产物和本地 live state 从 Git 索引移除；本地磁盘文件保留。
+- 保留人写的 backtest findings markdown 与 `result/a_short/backtest/README.md` 在 Git 跟踪中。
+
+### 为什么改
+
+用户已经完成 GitHub private backup，但首次 push 前未做完整敏感信息检查。本轮本地审计未发现真实 token / API key 泄露，因此不做历史重写；改用普通 cleanup 收窄未来备份范围，避免后续继续上传可再生结果、大 CSV/XLSX、中间产物或实盘状态。
+
+### 验证命令
+
+```powershell
+git grep -I -n -E "(TUSHARE_TOKEN|api[_-]?key|secret|password|Bearer|ghp_|github_pat_|access[_-]?token|credential)" HEAD
+git grep -I -n -E "(TUSHARE_TOKEN[[:space:]]*=|DEEPSEEK_API_KEY[[:space:]]*=|ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|Bearer[[:space:]]+[A-Za-z0-9._=-]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})" $(git rev-list --all)
+git ls-files result A-EGS/Result A-EGS/egs_tier1.xlsx A-EGS/egs_tier1_20260515.xlsx A-EGS/egs_tier1_20260522.xlsx state/a_short
+Test-Path result\a_short\backtest\rank_samples.csv
+Test-Path A-EGS\Result\egs_full_20260522.csv
+Test-Path state\a_short\positions.json
+```
+
+### 验证结果
+
+- 当前 HEAD 与完整历史的 secret-pattern 扫描未发现真实 token；命中项为环境变量读取、文档安全说明、`your_token` 占位示例和第三方测试样例。
+- cleanup 后 `git ls-files` 在高风险路径下只保留 human-written findings markdown 与 backtest README。
+- `Test-Path` 确认被取消跟踪的本地结果和 state 文件仍在磁盘上。
+
+### 失效旧结论
+
+- “历史候选池 / backtest generated JSON 默认随仓库备份”不再作为推荐边界；之后默认本地保留、Git 不跟踪。
+- “空 state 模板可以一直 tracked”不再推荐；未来需要 starter state 时应新增 `.example.json` / `.example.csv`，不要跟踪 live state 路径。
+
+### 下一步注意事项
+
+1. cleanup commit 推送前仍需用户确认 GitHub 仓库是 Private。
+2. 本轮不是 history rewrite；旧 commit 中的生成产物仍存在于远端历史，但当前证据不支持为此承担 force push 风险。
+3. 若未来发现真实 token/API key 进入历史，再按 incident 处理：吊销 token、重写历史、force push、重新审计。

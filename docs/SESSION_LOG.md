@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-05-26 — Codex (ordinary GitHub backup cleanup)
+
+**Commits**: pending cleanup commit in this same change
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 private remote policy work: private GitHub backup is allowed only after privacy review.
+- Refines the backup boundary after the first private push: keep source/docs/tests/findings tracked, but stop tracking regenerable outputs and local live state.
+
+**Worked on**:
+1. Audited current tracked files after the private GitHub backup and found no real token/API-key pattern in current HEAD or git history.
+2. Updated `.gitignore` to exclude generated EGS outputs, analysis/backtest CSV/JSON/XLSX artifacts, snapshot seeds, `_intermediate` scratch outputs, and local `state/*/*.json` / `state/*/*.csv`.
+3. Used `git rm --cached` so generated artifacts and local state leave Git tracking while remaining on disk.
+
+**Key decisions**:
+- No history rewrite: current evidence does not show secret leakage, so force-push cleanup is unnecessary risk.
+- Keep human-written findings markdown and `result/a_short/backtest/README.md` tracked because they are project conclusions, not reproducible run artifacts.
+- Untrack `state/a_short/*` even though current files are empty templates, because future live positions/execution state should not be accidentally pushed.
+
+**Alternatives considered and rejected**:
+- Rewrite remote history now — rejected. It would add force-push risk without evidence of leaked credentials.
+- Keep generated backtest pools tracked — rejected for GitHub backup hygiene; they are large/reproducible and can contain strategy research detail better kept local.
+
+**Open questions handed off**:
+- If a fresh clone needs starter state files, add explicit `.example.json` / `.example.csv` templates rather than tracking live `state/*` files.
+
+**Next natural step from my view**:
+1. Commit the ordinary cleanup locally.
+2. After the user confirms GitHub repo visibility is Private, push the cleanup commit to `origin master`.
+
+---
+
 ## 2026-05-26 — Claude (reconstructed post-commit: Phase 5 CSV materializer + private remote policy)
 
 **Commits**: `ece86b1`, `28cdc30`

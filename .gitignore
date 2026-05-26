@@ -1,5 +1,5 @@
 # ============================================================
-# .gitignore — local private repo, never push
+# .gitignore - private repo safety boundary
 # ============================================================
 
 # --- Python ---
@@ -11,7 +11,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 
-# --- Sensitive (defensive — TUSHARE_TOKEN should only live in env) ---
+# --- Sensitive (defensive: tokens should only live in env) ---
 .env
 .env.*
 *.token
@@ -20,6 +20,23 @@ credentials*
 *.pem
 secrets*
 
+# --- Generated screening outputs / spreadsheets ---
+A-EGS/Result/
+A-EGS/*.xlsx
+
+# --- Generated analysis and backtest outputs ---
+result/*/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/
+result/*/backtest/*.csv
+result/*/backtest/*.json
+result/*/backtest/*.xlsx
+result/*/backtest/generated/
+result/*/backtest/snapshot_seed/
+result/*/backtest/**/_intermediate/
+
+# --- Local live state ---
+state/*/*.json
+state/*/*.csv
+
 # --- Large API caches (regenerable from Tushare) ---
 # Tushare daily/financial/concept caches (~860MB)
 A-EGS/Result/egs_cache/
@@ -27,10 +44,7 @@ A-EGS/Result/egs_cache/
 # Forward daily price cache for backtest (~120MB)
 result/*/backtest/cache/
 
-# --- L3 snapshots (regenerable, grows ~600KB/week) ---
-# These accumulate over time. Important for PIT but reproducible
-# only as long as Tushare API exists. Back up separately if you
-# need long-term PIT history.
+# --- L3 snapshots (regenerable, grows over time) ---
 state/*/l3_snapshots/
 state/l3_snapshots/
 
@@ -58,7 +72,4 @@ desktop.ini
 # --- Claude Code local state (per-project; private) ---
 .claude/
 
-# --- Intermediate / generated artifacts that are reproducible ---
-# (Keep generated/YYYYMMDD/*.json as historical pool records;
-#  exclude _intermediate large CSV/XLSX scratch dumps if any)
-result/*/backtest/generated/_intermediate/
+# Human-written result notes and docs remain trackable.
