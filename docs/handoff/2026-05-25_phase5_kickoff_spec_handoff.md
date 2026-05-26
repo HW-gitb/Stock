@@ -672,3 +672,103 @@ git diff --check
 1. 让 Claude 复审本轮 Optional disposition diff。
 2. 通过并提交前，不实现真实 Tushare fetch 或 fill simulation。
 3. 后续若处理 O6，应单独做 shared util cleanup，不要混入 provider fetch 或 fill simulator。
+
+## 2026-05-26 追加：execution price data Tushare materializer
+
+### 改了什么
+
+- 新增 `runners/materialize_execution_price_data_tushare.py`，从 Tushare `daily` / `adj_factor` / `stk_limit` / `trade_cal` 生成 schema-valid `execution_price_data` v1.0.0 JSON。
+- CLI 支持：
+  - `--as-of`
+  - `--analysis-input`（默认 `result/a_short/<as-of>/analysis_input.json`，用于推导 symbols）
+  - `--symbols`（覆盖 analysis_input symbols）
+  - `--start-date` / `--end-date` / `--calendar-days`
+  - `--cache-dir` / `--refresh`
+  - `--out-path`
+- 输出仍默认落到 `result/a_short/backtest/execution/price_data/`；provider cache 默认落到 `result/a_short/backtest/cache/execution_price_data/`。
+- 生成的 OHLC 与 limit 字段采用同一口径：raw price × same-day `adj_factor`，保持 qfq 价格与涨跌停价可比较。
+- 新增 `tests/execution/test_materialize_execution_price_data_tushare.py`，用 fake Tushare client 覆盖 schema-valid payload、缺 as_of row 错误、analysis_input symbols、date range、cache path、cache roundtrip、cache request-mismatch 校验、CLI cache reuse。
+- `.gitignore` 新增 `result/*/backtest/execution/`，避免 provider/materializer 输出被误纳入 GitHub backup。
+- 更新 `docs/CURRENT.md` 与 `runners/README.md`，把 P0 切换为 Claude 审查 Tushare provider materializer。
+
+### 为什么改
+
+CSV materializer 已验证 `execution_price_data` 契约和 runner loader 边界。下一步应把 data source 从 CSV fixture 换成真实 Tushare provider，同时继续保持 provider-boundary scope：只产出价格数据契约，不混入 entry/exit、涨停不可买、止损、时间止损或组合记账。这样 fill simulator 后续可以基于稳定、真实来源的价格输入单独审查。
+
+本轮仍不改 `schemas/execution_price_data.schema.json`，不改 `runners/backtest_execution.py` 的撮合逻辑，不实现 fill simulation。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+git diff --check
+```
+
+### 验证结果
+
+- `tests.execution.test_materialize_execution_price_data_tushare`：8 tests passed。
+- `tests.execution.test_materialize_execution_price_data`：9 tests passed。
+- `tests.execution.test_backtest_execution`：9 tests passed。
+- `tests.schema.test_execution_price_data_schema`：5 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- 总计 34 tests passed。
+- `git diff --check` 通过。
+
+### 失效旧结论
+
+- “真实 Tushare provider materializer 尚未开始”已失效；当前已实现待审。
+- “Phase 5 只能通过 CSV fixture 生成 `execution_price_data`”已失效；现在有 CSV 与 Tushare 两个 materializer，共用同一 schema contract。
+
+### 下一步注意事项
+
+1. 让 Claude 审查本轮 Tushare provider materializer diff。
+2. 通过并提交前，不实现 fill simulation。
+3. 后续 fill simulation 应消费 schema-valid `execution_price_data`，单独实现 entry/exit、涨停不可买、止损、时间止损和组合约束。
+
+## 2026-05-26 追加：execution price data Tushare materializer review fixes
+
+### 改了什么
+
+- 处理 Claude 对 Tushare materializer 的 6 条 active Optional suggestion。
+- O1 accept：`build_payload_from_tushare()` 在读取 `trade_cal` 后先检查 `--as-of` 是否为交易日；非交易日现在抛出明确错误，而不是退化成“缺 as_of price row”。
+- O2 accept：`_pin_tushare_base_url()` 无法设置 Tushare client 私有 URL 属性时改为 hard fail，避免用户配置 `TUSHARE_BASE_URL` 后静默打到默认公网 endpoint。
+- O3 accept：Tushare materializer 的 row-level `source_flags` 固定包含 `daily` / `adj_factor` / `stk_limit`，表示已调用 API family lineage；即使具体行没有涨跌停字段，也不把 lineage 解释成字段非空状态。
+- O4 accept：删除 `getattr(row, "up_limit", None)` 式冗余防御，直接使用 merge 后保证存在的 `row.up_limit` / `row.down_limit`。
+- O5 accept with modification：新增缺 `TUSHARE_TOKEN`、`--refresh` 绕过 cache、`--symbols` 覆盖 analysis_input、跨月/跨年 `add_calendar_days()`、非交易日 as_of 的测试；未覆盖 `ts_call` retry path，因为该路径保留为环境绑定防御分支。
+- O6 accept：把 `FakeTusharePro` 改成 dict-backed fixture，降低测试读者理解成本。
+- `docs/CURRENT.md §P2` 的 shared-util cleanup followup 补入本轮 archived A1-A3 范围：materializer 重复 helper、Tushare retry helper、Tushare client 初始化/base URL pinning。
+
+### 为什么改
+
+这些修改都在 provider-boundary scope 内：让错误更早、更可读，并把 lineage 语义固定为“调用过哪些 API family”，而不是“某行哪些字段非空”。同时补齐 CLI/cache/token 关键路径测试，为后续真实运行和 fill simulator 消费 price data 降低误诊风险。
+
+本轮仍不改 `schemas/execution_price_data.schema.json`，不改 `runners/backtest_execution.py`，不实现 fill simulation、止损止盈、时间止损或组合记账。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+git diff --check
+```
+
+### 验证结果
+
+- `tests.execution.test_materialize_execution_price_data_tushare`：12 tests passed。
+- `tests.execution.test_materialize_execution_price_data`：9 tests passed。
+- `tests.execution.test_backtest_execution`：9 tests passed。
+- `tests.schema.test_execution_price_data_schema`：5 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- 总计 38 tests passed。
+- `git diff --check` 通过。
+
+### 失效旧结论
+
+- “Tushare provider materializer initial review Optional O1-O6 pending”已失效；当前已由 Codex disposition 并落地。
+- “Tushare row `source_flags` 可根据涨跌停字段是否非空省略 `stk_limit`”已失效；当前语义按 API family lineage 处理。
+- “缺 token path 未测试 / `--refresh` 未测试 / `--symbols` override 未测试”已失效；当前已有单测覆盖。
+
+### 下一步注意事项
+
+1. 让 Claude 复审本轮 Optional disposition diff。
+2. 通过并提交前，不实现 fill simulation。
+3. 提交后下一条大 scope 才是 fill simulation 起步：entry/exit、涨停不可买、止损、时间止损和组合约束。

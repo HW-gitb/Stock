@@ -29,6 +29,7 @@ result/*/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/
 result/*/backtest/*.csv
 result/*/backtest/*.json
 result/*/backtest/*.xlsx
+result/*/backtest/execution/
 result/*/backtest/generated/
 result/*/backtest/snapshot_seed/
 result/*/backtest/**/_intermediate/

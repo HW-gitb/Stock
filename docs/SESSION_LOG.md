@@ -8,6 +8,269 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Phase 5 Tushare materializer Optional disposition)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O6 全部 dispose 完成；A1-A3 archived followups 已按建议 merge 进 `CURRENT.md §P2 第 10 条` shared util cleanup batch）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `b2c78a3`; targets the immediately prior Codex entry "Phase 5 Tushare materializer Optional disposition")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `runners/materialize_execution_price_data_tushare.py` 改动（O1/O2/O3/O4 都改了此文件）
+- `tests/execution/test_materialize_execution_price_data_tushare.py` 改动（O5 + O6：FakeTusharePro 重写为 dict-backed + 4 条新测试）
+- `docs/CURRENT.md` Latest Delta / §1 / §6 P0 / §6 P2 第 10 条同步（A1-A3 merge 完成）
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 追加 "review fixes" 段，逐条标注 O1-O6 disposition
+- `.gitignore` 不动 ✅
+- `runners/README.md` 不动 ✅
+- 无 `runners/backtest_execution.py` / `materialize_execution_price_data.py` (CSV) / schema 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema` → `Ran 38 tests in 0.255s OK` ✅（34 → 38，新增 4 条 Tushare materializer 测试）
+
+**Disposition 逐条核对**:
+
+- **O1 (Pass)** — `build_payload_from_tushare` L317-321 现在拿 `open_dates` 后立即 `if as_of not in open_dates: raise ValueError(f"--as-of {as_of} is not a trading day per Tushare trade_cal {start_date}..{end_date}")`。措辞与建议一致。`test_non_trading_as_of_raises_clear_error` (L168-177) 覆盖。✅
+- **O2 (Pass)** — `_pin_tushare_base_url` L139-150 把 warning fallback 改成 `raise RuntimeError(f"tushare.DataApi has no attribute {attr}; cannot apply TUSHARE_BASE_URL. Update _pin_tushare_base_url for the installed tushare client version.")`，并删了 `import warnings`。代理策略风险消除。✅
+- **O3 (Pass)** — `build_rows_for_symbol` L298 `source_flags` 固定 `["daily", "adj_factor", "stk_limit"]`，删了 `has_limit` 条件分支。下游消费者可以稳定依赖 source_flags 反映 API family lineage 而非字段非空状态。测试 L155 锁住 "600001.SH 无 limit 数据也带 stk_limit lineage"。✅
+- **O4 (Pass)** — L296-297 直接 `row.up_limit` / `row.down_limit`，删了 `getattr(..., None)` 冗余防御。merge 左 join 后 `pd.DataFrame(columns=["up_limit","down_limit"])` 占位列保证 namedtuple attr 总存在。读起来不再"假防御"。✅
+- **O5 (Pass with one acceptable skip)** — 新增 4 条测试：
+   - `test_non_trading_as_of_raises_clear_error` (L168-177)
+   - `test_tushare_pro_requires_token_before_importing_client` (L283-286)
+   - `test_cli_refresh_bypasses_matching_cache` (L288-324)
+   - `test_cli_symbols_override_analysis_input` (L326-351)
+   - `add_calendar_days` 月/年边界 inline 加到 `test_resolve_date_range_defaults_and_validates` (L187-188)
+   - `ts_call` retry path 保留 `# pragma: no cover - retry path is environment-bound`，按 review 已 acceptable。✅
+- **O6 (Pass)** — `FakeTusharePro` L38-103 用 `daily_by_symbol` / `adj_by_symbol` / `limit_by_symbol` 三个 dict，方法用 `.get(ts_code, pd.DataFrame())`，干净直观。✅
+
+**Archived followups disposition**:
+
+- **A1-A3 (merged into P2 cleanup batch)** — `docs/CURRENT.md §6 P2 第 10 条` 已扩，明确包含：CSV/Tushare materializer 重复 `parse_symbols` / `output_path` / `write_payload`、Tushare 重试 `ts_call`、`tushare_pro()` / `_pin_tushare_base_url`。来源标注完整 (O6 + Tushare review A1-A3)。后续 cleanup 时知道完整范围。✅
+
+**Bonus 改动（非要求但好）**:
+- `tushare_pro()` L154-160 把 `token = os.environ.get("TUSHARE_TOKEN")` + `raise` 提到 `import tushare as ts` 之前。未装 tushare 的环境缺 token 也能拿到友好 RuntimeError。`test_tushare_pro_requires_token_before_importing_client` 命名暗示此设计是故意的。✅
+
+**额外观察（非 issue）**:
+- L281 `adj_factor = getattr(row, "adj_factor")` 没改 — 但它是无 default 的 getattr，等价 `row.adj_factor`，与 O4 的 `getattr(..., None)` 性质不同（无 fallback 不算"假防御"）。Codex 不动是合理的。
+- Codex `runners/backtest_execution.py` 完全没碰，scope 纪律好。
+- 12 Tushare + 9 CSV + 9 backtest_execution + 5 price_data_schema + 3 report_schema = 38 ✅。
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1-O6 全部 Pass，A1-A3 已 merge 进 P2 cleanup batch，无新 finding）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`。
+
+**Next natural step from my view**:
+1. 用户 `提交`。working tree 单 scope（只是 Tushare materializer + 测试 + 同步 doc + handoff），不需要分多 commit，单 commit 即可。
+2. 提交后下一步是 fill simulation 起步（entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束），Phase 5 最后一个大 scope。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 Tushare materializer Optional disposition)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior Claude review entry: "Pass (Phase 5 Tushare execution price data materializer)".
+- No Required fixes were pending; this round only disposes O1-O6 active Optional suggestions and records the disposition.
+- Keeps archived A1-A3 in the shared-util cleanup lane rather than doing that refactor in this scope.
+
+**Worked on**:
+1. Hardened `runners/materialize_execution_price_data_tushare.py` around trading-calendar validation, Tushare base-URL pinning, source flag semantics, and limit-column handling.
+2. Expanded `tests/execution/test_materialize_execution_price_data_tushare.py` from 8 to 12 tests.
+3. Updated `docs/CURRENT.md` and appended the Phase 5 handoff with this review-fix round.
+
+**Key decisions**:
+- Row `source_flags` in the Tushare materializer now represents API family lineage (`daily`, `adj_factor`, `stk_limit`), not whether a specific row has non-null limit fields.
+- `TUSHARE_BASE_URL` pinning failure is a hard error because silent fallback to the default Tushare endpoint can violate the user's provider-routing assumption.
+- `tushare_pro()` checks `TUSHARE_TOKEN` before importing or initializing the Tushare client so the missing-token path is deterministic and testable.
+- Shared helper extraction remains a separate P2 cleanup because it crosses runner/module boundaries.
+
+**Optional disposition**:
+- O1 accept — added explicit `--as-of` trading-day precheck against `trade_cal` before fetching/building rows.
+- O2 accept — changed `_pin_tushare_base_url()` fallback from `warnings.warn` to `RuntimeError`.
+- O3 accept — made Tushare row `source_flags` always include `stk_limit` once that API family is part of the provider path.
+- O4 accept — replaced redundant `getattr(row, "up_limit", None)` / `getattr(row, "down_limit", None)` with direct row attributes after merge-created columns.
+- O5 accept with modification — added tests for missing token, `--refresh` cache bypass, `--symbols` override, calendar month/year boundaries, and non-trading `--as-of`; did not add a `ts_call` retry test because that branch remains environment-bound and explicitly `pragma: no cover`.
+- O6 accept — rewrote `FakeTusharePro` as dict-backed fixture data for daily/adj/limit frames.
+
+**Validation**:
+- `python -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 38 tests.
+- `git diff --check` passed.
+
+**Alternatives considered and rejected**:
+- "Extract shared util helpers now" — rejected for this round because it is archived P2 cleanup and would mix cross-runner refactor into provider materializer review fixes.
+- "Keep `source_flags` row-field-presence based" — rejected because it would stay inconsistent with CSV materializer and confuse API lineage with field availability.
+
+**Open questions handed off**:
+- None for this repair round.
+
+**Next natural step from my view**:
+1. User sends `审查`; Claude re-reviews the Optional disposition diff.
+2. If Pass, user sends `提交`.
+3. After commit, start fill simulation as the next separate Phase 5 scope.
+
+---
+
+## 2026-05-26 — Claude review — Pass (Phase 5 Tushare execution price data materializer)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (6 条 active) + 3 条 archived followups（与 [[O6]] 同一波 shared-util cleanup 合并到 `CURRENT.md §P2`）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `b2c78a3`; targets the immediately prior Codex entry "Phase 5 Tushare execution price data materializer")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `runners/materialize_execution_price_data_tushare.py` 新文件（452 行）
+- `tests/execution/test_materialize_execution_price_data_tushare.py` 新文件（8 tests，FakeTusharePro 替代真实 API）
+- `.gitignore` 新增 `result/*/backtest/execution/`
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 追加 2026-05-26 段
+- `runners/README.md` 新条目
+- `docs/CURRENT.md` Latest Delta + §1 + §6 P0 同步
+- 无 `runners/backtest_execution.py` / `materialize_execution_price_data.py` (CSV) / schema / EGS / analyzer 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema` → `Ran 34 tests in 0.156s OK` ✅（26 → 34，新增 8 Tushare tests）
+
+**Reasons for Pass**:
+- 严守 provider-boundary scope：Tushare → schema-valid JSON，不实现 fill simulation / 涨停撮合 / 止损 / 组合记账 ✅
+- 复用同一 `execution_price_data` v1.0.0 contract，未改 schema ✅
+- 复用 `backtest_execution.py` 的 `PRICE_DATA_SCHEMA_PATH / candidate_code / iso_now / load_analysis_input / validate_json_schema` ✅
+- QFQ 计算合理：raw price × same-day adj_factor（与 schema 的 `adjustment_mode: qfq_via_adj_factor` 一致）✅
+- as_of row 必须存在 → raise；adj_factor 缺失 → raise，且收集全部缺失日期一次性 raise 而非看到第一个就死 ✅
+- Cache 设计合理：sha1(sorted symbols)[:12] + date_range 作为 path，cache 命中 → 仍 schema-validate + request-match validate 防止读到旧/篡改 cache ✅
+- `.gitignore` 加 `result/*/backtest/execution/` 配合 `b2c78a3` 的 backup hygiene ✅
+- FakeTusharePro 模式 OK：不打真实网络，pinned 测试可重现 ✅
+- ts_call retry 指数退避（base=0.6, 2^attempt, 3 retries）合理 ✅
+- TUSHARE_TOKEN 通过 env var 读取，不写 commit / log / cache ✅
+- 一次性收集 missing_adj_dates 再 raise（L280-309），错误 message friendly ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — as_of 非交易日错误信息不直观**（`runners/materialize_execution_price_data_tushare.py:323 + 329-335`）。当前 user 传非交易日（如周末）作为 as_of 时，会得到 generic `"Tushare price data must include an --as-of price row for each selected symbol: 600000.SH, 600001.SH"`，user 看不到根因。建议在 L323 拿到 `open_dates` 后立即 pre-check：`if as_of not in open_dates: raise ValueError(f"--as-of {as_of} is not a trading day per Tushare trade_cal {start_date}..{end_date}")`。零开销 + UX 大改善。
+
+2. **O2 — `_pin_tushare_base_url` warning fallback 应改 raise**（L139-151）。当前 `hasattr(DataApi, "_DataApi__http_url")` 失败时只 `warnings.warn`，**静默降级到 Tushare 默认 URL**。如果用户配置了 `TUSHARE_BASE_URL` 想走 self-host 代理，发现 attr 不在的情况下会去 hit 默认 `api.tushare.pro`，可能违反代理策略。改 `raise RuntimeError(f"Tushare DataApi version compatibility broken: missing {attr}; upgrade _pin_tushare_base_url for tushare>=X.Y.Z")` 让 user 显式处理。
+
+3. **O3 — `source_flags` 跨 provider 语义不一致**（Tushare L289-291 vs CSV `DEFAULT_SOURCE_FLAGS` L34）。CSV materializer 总是 `["daily", "adj_factor", "stk_limit"]`；Tushare materializer 当 stk_limit 数据全 NaN 时 fallback 到 `["daily", "adj_factor"]`。下游消费者无法依据 source_flags 内容稳定判断"用了哪些 API"。两种修法：(a) Tushare 也总是把 `"stk_limit"` 加入 source_flags（即使具体行 up_limit/down_limit 是 null，只要 API call 跑了）；(b) CSV materializer 也按 has_limit 判断。**倾向 (a)**：source_flags 应反映"API family lineage"而非"哪些字段非空"——schema 的 `source.api_families` 就是这种语义。
+
+4. **O4 — `getattr(row, "up_limit", None)` 冗余防御**（L287, L303-304）。L275-276 用 left join merge stk_limit，pandas 一定会为空 frame 创建 NaN 列；`itertuples()` 返回的 namedtuple 总含 `up_limit` / `down_limit` attr。`getattr(..., None)` 的 fallback 永远不触发。建议直接 `row.up_limit` + `pd.isna()` 处理，删 getattr 减少 "看似有防御实则没必要" 的误导。
+
+5. **O5 — 测试覆盖盲区**（`tests/execution/test_materialize_execution_price_data_tushare.py`）。当前 8 tests 没覆盖：
+   - `tushare_pro()` 缺 TUSHARE_TOKEN 的 RuntimeError (L159-160)
+   - `--refresh` flag 路径（绕过 cache）
+   - `--symbols` CLI override（当前 main 测试只用 analysis_input）
+   - `add_calendar_days` 月/年边界（如 20260131 + 5 跨月，20261231 + 5 跨年）
+   - `ts_call` retry path 标 `# pragma: no cover` 可接受
+
+   建议至少补 2 条：缺 token raise + `--refresh` cache bypass。`--symbols` CLI override 也值得补，因为 production 路径会用到。
+
+6. **O6 — `FakeTusharePro` 测试 fixture 表达力差**（`tests/.../test_materialize_execution_price_data_tushare.py:65-66, 91-92`）。`if symbol != "600001.SH": return pd.DataFrame()` 读不顺。改 dict 映射更直观：
+
+   ```python
+   SYMBOL_DAILY = {"600000.SH": df1, "600001.SH": df2}
+   def daily(self, **kw): return SYMBOL_DAILY.get(kw["ts_code"], pd.DataFrame())
+   ```
+
+   Micro，但有助 future test reader 理解 fake 行为。
+
+**Archived followups (合并到 CURRENT.md §P2 第 10 条 shared util cleanup)**:
+
+7. **A1 — `parse_symbols` / `output_path` / `write_payload` 三个函数在 CSV materializer 和 Tushare materializer 完全重复**。Reuse agent grep 确认实现相同（除了 default output path 前缀不同）。与之前 archived O6 同一波 cleanup，建议在抽 `iso_now / validate_json_schema / relative_ref` 时把这三个也抽到 `runners/_common.py` 或 `engine/util/execution_price_data.py`。
+
+8. **A2 — `ts_call` 重试逻辑与 `runners/backtest_rank.py` 的 `_ts_call`（L307-318）完全重复**。同一波 cleanup，抽到 `engine/util/tushare.py`。
+
+9. **A3 — `tushare_pro()` 初始化 + `_pin_tushare_base_url` monkey-patch 与 `.tools/test_tushare.py` 中 `_DataApi.__http_url` 设置重复**。同一波 cleanup，所有 Tushare entry 统一走 helper。
+
+**额外观察（非 issue）**:
+
+- N+1 串行 fetch (L325-327) 不算 issue：Tushare `daily/adj_factor/stk_limit` API 不支持批量 `ts_code`，串行是不得不的；ts_call retry + base_delay 0.6s 是 rate-limit-friendly 设计。10 symbol = 30 calls 在可接受范围。
+- 多处 `.copy()` (L262, L268, L271) 是 defensive — `daily["trade_date"] = ... astype(str)` 会 mutate 原 DataFrame，.copy() 避免污染 caller (FakeTusharePro 复用同一 df)。合理保留。
+- Cache miss 时全量 refetch (无 partial cache hit) — 是 acceptable trade-off，per-symbol cache 是 over-engineer。CSV materializer 也没 partial cache，一致。
+- `print(f"[RETRY] {name} attempt ... failed ({exc}); sleep ...)` (L182) 不暴露 kwargs 也不暴露 token (tushare exc 通常不含 token)，安全。
+
+**Documentation issues**: 无。
+
+**Pending status**: Required: none / Optional (O1-O6): PENDING CODEX DISPOSITION / Followups (A1-A3): ARCHIVED to CURRENT.md §P2 第 10 条 cleanup batch。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — dispose O1-O6 active Optional。无 Required 不需用户审批。
+2. Codex 修完 → 用户 `审查` → Pass → `提交`。
+3. **建议本轮也加更新 `CURRENT.md §P2` 第 10 条**，把 A1/A2/A3 三个新增 followup 项明确列入 shared util cleanup batch（让未来做 cleanup 时知道范围）。
+4. 提交后下一步是 fill simulation 起步（entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束），是 Phase 5 最后一个大 scope。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 Tushare execution price data materializer)
+
+**Commits**: none (Pattern B: `执行` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `ece86b1` (CSV materializer) and `be68abe` (runner `--price-data` loader).
+- Continues the P0 recommendation in CURRENT.md: implement real Tushare provider materializer before fill simulation.
+- Also follows the reconstructed post-commit cleanup entry below for commit `b2c78a3`.
+
+**Worked on**:
+1. Added `runners/materialize_execution_price_data_tushare.py`.
+2. Added fake-provider tests in `tests/execution/test_materialize_execution_price_data_tushare.py`.
+3. Updated `.gitignore`, `docs/CURRENT.md`, Phase 5 handoff, and runner README.
+
+**Key decisions**:
+- Provider materializer reuses `execution_price_data` v1.0.0 unchanged; no schema bump.
+- Tushare source families are `daily`, `adj_factor`, `stk_limit`, and `trade_cal`; output keeps the same shape consumed by `backtest_execution.py --price-data`.
+- QFQ OHLC and limit fields are reconstructed as raw price multiplied by same-day `adj_factor`, so future fill logic can compare open/high/low/close and limit prices on the same basis.
+- Provider cache is schema-validated and request-matched before reuse; cache lives under ignored `result/a_short/backtest/cache/execution_price_data/`.
+- Fill simulation remains out of scope.
+
+**Validation**:
+- `python -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 34 tests.
+- `git diff --check` passed.
+
+**Alternatives considered and rejected**:
+- "Start fill simulation now" — rejected because provider materialization is the cleaner continuation of the already-reviewed price-data contract.
+- "Modify `execution_price_data` schema for provider provenance" — rejected because the current contract already allows extra `api_families` and `limitations`; schema churn is unnecessary.
+- "Use real Tushare in tests" — rejected because tests must not depend on network or `TUSHARE_TOKEN`.
+
+**Open questions handed off**:
+- Whether the qfq limit reconstruction should later be explicitly documented in the schema description once fill logic starts comparing limit prices.
+
+**Next natural step from my view**:
+1. User sends `审查`; Claude reviews the Tushare provider materializer diff.
+2. If Pass, user sends `提交`.
+
+## 2026-05-26 — Codex (reconstructed post-commit: generated-output backup cleanup)
+
+**Commits**: b2c78a3
+
+**Relationship to prior session(s)**:
+- Reconstructs the local commit created after the top SESSION_LOG entry "ordinary GitHub backup cleanup" still described the cleanup as pending.
+- This entry is added by the fallback rule because commit `b2c78a3` existed after the latest SESSION_LOG state.
+
+**Worked on**:
+1. Stopped tracking generated outputs and local live-state files for private GitHub backup hygiene.
+
+**Key decisions**:
+- No new design decision in this entry; commit message and the prior SESSION_LOG entry are the source for details.
+- The repo remained clean after that commit.
+
+**Alternatives considered and rejected**:
+- None; this is a reconstructed continuity entry.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Continue Phase 5 provider materialization before fill simulation.
+
 ## 2026-05-26 — Codex (ordinary GitHub backup cleanup)
 
 **Commits**: pending cleanup commit in this same change

@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（CSV materializer commit `ece86b1` + private remote policy commit `28cdc30` 已落地；下一步真实 Tushare provider materializer 或 fill simulation）
+**最后更新**：2026-05-26（真实 Tushare provider materializer Optional 已处理待复审；fill simulation 尚未开始）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -11,12 +11,16 @@
 - CSV materializer (`runners/materialize_execution_price_data.py`, commit `ece86b1`): provider-boundary helper that converts a local OHLC CSV to schema-valid `execution_price_data` JSON for `backtest_execution.py --price-data`. Does not fetch Tushare data, simulate fills, apply stops, or do portfolio accounting.
 - 4 rounds of Claude review fully consumed: 5 active Optional (O1-O5) disposed by Codex; O6 archived to §P2 cleanup followup (shared-util extraction across runners). 26 tests pass.
 - Git remote policy (`28cdc30`): the original absolute prohibition on `git push` / `git remote add` was relaxed to a constrained private-remote allowance. Public remote, unauthorized collaborators, secrets, logs, caches, live-state data, and ignored generated artifacts remain prohibited. See `AGENTS.md §Git remote privacy policy`.
-- Next P0: Codex `执行` — preferred next scope is the real Tushare provider materializer reusing the same `execution_price_data` v1.0.0 contract; fill simulation is the alternative but larger scope.
+- Latest commit `b2c78a3` stopped tracking generated outputs for private GitHub backup hygiene; `.gitignore` now excludes generated screening/backtest/state artifacts.
+- Current uncommitted work adds `runners/materialize_execution_price_data_tushare.py`: it fetches Tushare `daily` / `adj_factor` / `stk_limit` / `trade_cal`, writes the same schema-valid `execution_price_data` v1.0.0 JSON, and caches provider payloads under `result/a_short/backtest/cache/`.
+- Initial Claude review returned Pass with 6 active Optional suggestions; Codex disposed all 6 in the current working tree. The materializer now gives a clear non-trading `--as-of` error, hard-fails broken Tushare base-URL pinning, treats row `source_flags` as API lineage, simplifies limit-column handling, and adds CLI/cache/token coverage.
+- This provider materializer still does not simulate fills, apply stops, or do portfolio accounting. Validation used the Codex bundled Python: `python -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 38 tests.
+- Next P0: Claude re-review of the Tushare provider materializer Optional disposition diff. After Pass and commit, proceed to fill simulation start.
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.0.0 / runner skeleton / execution_price_data contract / loader wiring / CSV materializer 全部已 commit；real Tushare provider + simulator / fill logic 尚未开始
-- **当前目标**：Codex 下一条最小流程任务是实现真实 Tushare provider materializer（复用 `execution_price_data` v1.0.0 契约，取代 CSV-only），或起步 fill simulation。推荐前者：scope 干净延续 CSV materializer 已 review 通过的 contract。
+- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.0.0 / runner skeleton / execution_price_data contract / loader wiring / CSV materializer 全部已 commit；real Tushare provider materializer 已实现且 initial review Optional 已处理待复审；simulator / fill logic 尚未开始
+- **当前目标**：下一条最小流程任务是让 Claude 复审 Tushare provider materializer Optional disposition；通过并提交后，再起步 fill simulation。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -30,6 +34,7 @@
 - **Reference framework policy**（2026-05-25，当前工作树）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
 - **Git remote privacy policy 放开**（2026-05-26，commit `28cdc30`）：绝对禁止 `git push` / `git remote add` 改成 private-remote + 用户明确指令 + 隐私审计后允许；secrets / logs / caches / 实盘状态 / ignored artifacts 仍禁上传。详 `AGENTS.md §Git remote privacy policy`。
 - **Phase 5 execution price data CSV materializer**（2026-05-26，commit `ece86b1`）：`runners/materialize_execution_price_data.py` 可把本地 OHLC CSV 转成 schema-valid `execution_price_data` JSON；真实 Tushare fetch / fill logic 未实现。9 测试新增（22 → 26 total）。
+- **Phase 5 execution price data Tushare materializer**（2026-05-26，当前工作树）：`runners/materialize_execution_price_data_tushare.py` 复用同一 `execution_price_data` v1.0.0 契约，接入 Tushare provider + ignored cache；initial review 的 6 条 Optional 已处理；fill logic 未实现。
 - **Phase 5 execution price data loader wiring**（2026-05-26，commit `be68abe`）：`runners/backtest_execution.py` 新增 `--price-data`，可校验并引用既有 `execution_price_data` JSON；真实 provider fetch / fill logic 未实现。
 - **Phase 5 execution price data contract**（2026-05-26，commit `ad4068f`）：新增 `schemas/execution_price_data.schema.json`，用于定义 `execution_report.inputs.price_data.path` 未来指向的 OHLC 输入文件。
 - **Phase 5 execution runner skeleton**（2026-05-26，commit `8488427`）：`runners/backtest_execution.py` 已能从 `analysis_input.json` 生成 schema-valid `execution_report.json` 与 CSV shells；真实 simulator / fill logic 未实现。
@@ -99,6 +104,7 @@
 - `runners/weekly_screening.ps1` — 每周筛选脚本；筛选后自动 capture forward tracker
 - `runners/data_canary.py` — 旁路数据对账；不阻断主流程
 - `runners/materialize_execution_price_data.py` — Phase 5 provider-boundary helper；把本地 OHLC CSV 转成 `execution_price_data` JSON；不抓 Tushare、不做撮合
+- `runners/materialize_execution_price_data_tushare.py` — Phase 5 provider-boundary helper；抓 Tushare `daily` / `adj_factor` / `stk_limit` / `trade_cal` 生成同一 `execution_price_data` JSON；不做撮合
 - `engine/analyzer/rule6_hard_veto.py` — Phase 3 首轮 deterministic hard veto：`chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive`
 - `engine/analyzer/state_manager.py` — Phase 3 JSON state 接口与 atomic write helper
 - `tests/analyzer/test_state_manager.py` / `tests/test_backtest_rank_phase3.py` — Phase 3 state expiry、l2 normalization、analyzer ablation 命名回归测试
@@ -150,7 +156,7 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **Codex 实现真实 Tushare provider materializer**（推荐）— 复用 `execution_price_data` v1.0.0 契约（CSV materializer 同样契约），只替换 data source（CSV → Tushare API + 缓存）。scope 干净延续。备选：fill simulation 起步（entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束）—— 是更大的 scope，建议等 provider 也稳了再开。
+1. **Claude 复审真实 Tushare provider materializer Optional disposition** — 当前工作树已实现 `materialize_execution_price_data_tushare.py` 并处理 initial review 的 6 条 Optional，只替换 data source（CSV → Tushare API + ignored cache），不改 schema、不做 fill simulation。Pass 并提交后再起步 fill simulation（entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束）。
 2. **Reference 框架约束** — 后续设计必须参考 A 股短线 / 美股短线 reference 文档的业务逻辑，但不能把 chatbox 框架机械照搬为运行时提示词或代码。
 3. **Claude 审查点** — execution runner、撮合假设、输出目录隔离均需 Claude 独立审查后由用户确认。
 4. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
@@ -166,7 +172,7 @@
 7. **L3 snapshot 累积满 6 月后跑 pit 对照**（约 2026-12）— 测 L3 因子 PIT 下边际贡献 + cat_score 真实预测力。
 8. **扩 36 期+** 覆盖 2023 段不同 regime；当前 2024+2025 偏强势。诊断 2024Q4-2025Q1 ESP 反向 regime event 也需扩样本。
 9. **LOCK veto** — N=4 太小，扩到 N≥15 再决策。
-10. **抽 shared util 模块解耦 runner 互相依赖** — 把 `iso_now` / `validate_json_schema` / `relative_ref` 等 helper 从 `runners/backtest_execution.py` 抽到 `engine/util/`（或 `runners/_common.py`），同时合并 `runners/run_analysis_report.py` 里重复的 `_validate_json_object()`。来源：2026-05-26 Claude review O6（archived followup of CSV materializer review）。
+10. **抽 shared util 模块解耦 runner 互相依赖** — 把 `iso_now` / `validate_json_schema` / `relative_ref` 等 helper 从 `runners/backtest_execution.py` 抽到 `engine/util/`（或 `runners/_common.py`），同时合并 `runners/run_analysis_report.py` 里重复的 `_validate_json_object()`；把 CSV/Tushare materializer 重复的 `parse_symbols` / `output_path` / `write_payload`，Tushare 重试 `ts_call`，以及 `tushare_pro()` / `_pin_tushare_base_url` 也纳入同一 cleanup batch。来源：2026-05-26 Claude review O6 + Tushare review archived A1-A3。
 
 ### P3 — 长期 / Phase 7
 
