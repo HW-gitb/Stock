@@ -425,3 +425,81 @@ C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\p
 1. 让 Claude 复审本轮 repair diff，尤其确认 R1 lineage invariant 和 Optional disposition 记录是否完整。
 2. 复审 Pass 并提交前，不继续实现真实 price simulation / fill logic。
 3. 下一轮实现 fill logic 前，先明确 `inputs.price_data.path` 指向的真实 OHLC 数据来源与最小字段契约。
+
+## 2026-05-26 追加：execution price data input contract
+
+### 改了什么
+
+- 新增 `schemas/execution_price_data.schema.json` v1.0.0，定义 Phase 5 `execution_report.inputs.price_data.path` 未来指向的真实 OHLC 输入文件契约。
+- 新增 `tests/schema/test_execution_price_data_schema.py`，覆盖 schema meta-validation、API family 最小要求、qfq OHLC + limit 字段契约、最小合法实例。
+- 补齐 `docs/SESSION_LOG.md` 的 post-commit reconstructed entry，记录 commit `8488427` 已完成，避免下一位 LLM 误判 runner skeleton 仍待提交。
+- 更新 `docs/CURRENT.md`，把当前 P0 从 runner skeleton 复审切换为 price data input contract 复审。
+
+### 为什么改
+
+Phase 5 runner skeleton 已提交，但 `inputs.price_data.path` 仍只是占位字符串。进入真实 fill logic 前，必须先明确执行级价格输入的最小字段、数据来源和 lineage，否则后续撮合会把 rank backtest 的 `ret_*` 或其他聚合收益误用为逐日成交价格。
+
+本轮只定义契约，不实现 provider fetch、缓存生成、撮合、止损止盈、时间止损、组合记账或真实交易事件。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema tests.execution.test_backtest_execution -v
+```
+
+### 验证结果
+
+- `tests.schema.test_execution_price_data_schema`：4 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- `tests.execution.test_backtest_execution`：5 tests passed。
+- 总计 12 tests passed；现有 runner skeleton 继续通过 schema-valid smoke path。
+
+### 失效旧结论
+
+- “下一步是 Claude 复审 runner skeleton 修复”已失效；runner skeleton 修复已通过 review 并提交为 `8488427`。
+- “`inputs.price_data.path` 暂无明确文件契约”已失效；当前契约为 `execution_price_data` v1.0.0。
+
+### 下一步注意事项
+
+1. 先让 Claude 审查本轮 schema/doc diff。
+2. 通过并提交前，不实现 provider fetch 或 fill simulation。
+3. 后续 loader 必须生成满足 `execution_price_data` 的文件，并把 execution report 的 `inputs.price_data.path` 从 placeholder 改成真实路径。
+
+## 2026-05-26 追加：execution price data contract review fixes
+
+### 改了什么
+
+- 处理 Claude 对 `execution_price_data` v1.0.0 的 3 条 Optional suggestion。
+- `source.api_families.items` 从封闭 enum 改为非空字符串，同时保留 `minItems: 4`、`uniqueItems: true` 和四个 required `contains`，允许后续 loader 声明额外 provider family。
+- `rows` 增加 `minItems: 1`，避免空 price file schema-valid。
+- `priceRow.is_trade_day` 改为 `const: true`，明确 rows 只表达交易日价格观测；非交易日由 `trade_cal` lineage 表达，不用空 OHLC row 表达。
+- `tests/schema/test_execution_price_data_schema.py` 增加空 rows 与非交易日 row 的拒绝测试。
+
+### 为什么改
+
+Claude review 指出初版契约存在三个可读性/下游风险点：API family 同时用 enum 与 contains 过度约束；空 rows 会让未来 fill simulator 在更深层报错；`is_trade_day` 与必填正数 OHLC 的语义有冲突。本轮选择把 price rows 定义为“实际交易日价格观测”，保留 OHLC 必填正数，日历缺口交给 `trade_cal`。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema tests.execution.test_backtest_execution -v
+```
+
+### 验证结果
+
+- `tests.schema.test_execution_price_data_schema`：5 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- `tests.execution.test_backtest_execution`：5 tests passed。
+- 总计 13 tests passed；现有 runner skeleton 继续通过 schema-valid smoke path。
+
+### 失效旧结论
+
+- “`api_families` 只能包含四个固定 family”已失效；现在必须包含四个 minimum family，但可声明额外非空 family。
+- “`rows: []` schema-valid”已失效；price data file 必须至少包含一行。
+- “`is_trade_day` 是任意 boolean”已失效；price row 只允许 `is_trade_day: true`。
+
+### 下一步注意事项
+
+1. 让 Claude 复审 Optional disposition 是否合理。
+2. 通过并提交前，仍不实现 provider fetch 或 fill simulation。
+3. 后续 loader 若遇到停牌或非交易日，应通过缺失 price row / `trade_cal` / downstream skip 处理，不要伪造 OHLC。

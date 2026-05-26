@@ -1,0 +1,225 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/execution_price_data/1.0.0/schema.json",
+  "title": "Execution Price Data",
+  "description": "Phase 5 input contract for the OHLC price data file referenced by execution_backtest_report.inputs.price_data.path. This contract defines the data surface before provider fetch or fill simulation is implemented.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "preset",
+    "data_provider",
+    "source",
+    "date_range",
+    "symbols",
+    "rows",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "type": "string",
+      "const": "execution_price_data"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "preset": {
+      "type": "string",
+      "enum": ["a_short"]
+    },
+    "data_provider": {
+      "type": "string",
+      "enum": ["tushare"]
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "date_range": {
+      "$ref": "#/$defs/dateRange"
+    },
+    "symbols": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tsCode"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/priceRow"
+      },
+      "minItems": 1
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api_families",
+        "adjustment_mode",
+        "price_basis",
+        "calendar_source",
+        "pit_policy"
+      ],
+      "properties": {
+        "api_families": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 4,
+          "uniqueItems": true,
+          "description": "Must include the four minimum Tushare families required for execution price reconstruction; extra provider families may be named when the loader needs them.",
+          "allOf": [
+            {
+              "contains": {
+                "const": "daily"
+              }
+            },
+            {
+              "contains": {
+                "const": "adj_factor"
+              }
+            },
+            {
+              "contains": {
+                "const": "stk_limit"
+              }
+            },
+            {
+              "contains": {
+                "const": "trade_cal"
+              }
+            }
+          ]
+        },
+        "adjustment_mode": {
+          "type": "string",
+          "enum": ["qfq_via_adj_factor"]
+        },
+        "price_basis": {
+          "type": "string",
+          "enum": ["daily_eod"]
+        },
+        "calendar_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pit_policy": {
+          "type": "string",
+          "enum": ["trade_date_eod"],
+          "description": "Execution backtests may read future trade dates after the candidate as_of, but each row must represent that trade_date's end-of-day market data, not a later-restated factor."
+        }
+      }
+    },
+    "dateRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date"],
+      "properties": {
+        "start_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "end_date": {
+          "$ref": "#/$defs/date8"
+        }
+      }
+    },
+    "priceRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts_code",
+        "trade_date",
+        "is_trade_day",
+        "open_qfq",
+        "high_qfq",
+        "low_qfq",
+        "close_qfq",
+        "pre_close_qfq",
+        "adj_factor",
+        "up_limit",
+        "down_limit",
+        "source_flags"
+      ],
+      "properties": {
+        "ts_code": {
+          "$ref": "#/$defs/tsCode"
+        },
+        "trade_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "is_trade_day": {
+          "type": "boolean",
+          "const": true,
+          "description": "Price rows represent trading-day observations only. Non-trading calendar dates are represented by trade_cal lineage, not by rows with null OHLC."
+        },
+        "open_qfq": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "high_qfq": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "low_qfq": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "close_qfq": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "pre_close_qfq": {
+          "$ref": "#/$defs/positiveNumberNullable"
+        },
+        "adj_factor": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "up_limit": {
+          "$ref": "#/$defs/positiveNumberNullable"
+        },
+        "down_limit": {
+          "$ref": "#/$defs/positiveNumberNullable"
+        },
+        "source_flags": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "tsCode": {
+      "type": "string",
+      "pattern": "^[0-9]{6}\\.(SH|SZ)$"
+    },
+    "positiveNumber": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "positiveNumberNullable": {
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    }
+  }
+}

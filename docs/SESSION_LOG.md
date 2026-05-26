@@ -8,6 +8,168 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Phase 5 execution price data contract review fixes)
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `8488427`; targets the immediately prior Codex 修复 entry "Phase 5 execution price data contract review fixes")
+
+**Verdict**: Pass.
+
+**Notes**: 3 Optional 全部正确落地。独立验证 `tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema tests.execution.test_backtest_execution -v` → `Ran 13 tests in 0.065s OK`（增量 +1：`test_empty_rows_and_non_trade_day_rows_are_rejected`）。O1 accept with modification：删 `api_families.items.enum`、保留 `minItems/uniqueItems/allOf contains` — 比我原建议的"清理 over-specification"更优（保留扩展性，future provider 可加新 family 无需 schema bump）。O2 accept：`rows.minItems: 1`。O3 accept with modification：用 `is_trade_day: const true` 强制 rows 只放交易日、calendar gap 由 trade_cal 表达 — 比我原建议的"nullable OHLC + null when is_trade_day=false"更干净（关注点分离，避免 downstream fill 每次 null check）。两条 accept with modification 均未 missed Optional 原意，按 §Optional Re-raise Constraint 不重提。Codex `Optional disposition` 段格式符合 §修复 step 14。无新 Required / Optional / open questions。可以 `提交`。
+
+---
+
+## 2026-05-26 — Codex (Phase 5 execution price data contract review fixes)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for clean `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude review "Pass (Phase 5 execution price data input contract)".
+- No Required fixes were present; this round disposes Optional suggestions O1-O3.
+
+**Worked on**:
+1. Tightened `execution_price_data` schema and schema tests based on Claude's Optional review notes.
+2. Updated CURRENT and Phase 5 handoff so the repair state is visible to the next reviewer.
+
+**Key decisions**:
+- Kept `allOf + contains` for the four required Tushare API families, but removed the closed enum so future provider families can be named without schema churn.
+- Made `rows` non-empty because an execution price file with no observations is not a useful downstream contract.
+- Kept qfq OHLC required and positive; `priceRow` now represents trading-day observations only via `is_trade_day: const true`, while non-trading dates remain calendar lineage from `trade_cal`.
+
+**Optional disposition**:
+- O1 accept with modification: removed the closed `api_families.items.enum`, kept `minItems`, `uniqueItems`, and explicit `contains` requirements for readability and extensibility.
+- O2 accept: `rows` now has `minItems: 1`.
+- O3 accept with modification: did not nullable-ize OHLC; instead constrained rows to trading-day price observations and made `is_trade_day` `const: true`.
+
+**Validation**:
+- `python -m unittest tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema tests.execution.test_backtest_execution -v` passed with 13 tests.
+
+**Alternatives considered and rejected**:
+- "Allow non-trading rows with null OHLC" — rejected because fill simulation needs price observations; calendar gaps should be represented by `trade_cal`, not fake price rows.
+- "Drop `is_trade_day` entirely" — rejected because keeping it as `const true` gives providers and reviewers an explicit invariant.
+
+**Open questions handed off**:
+- None for this repair round.
+
+**Next natural step from my view**:
+1. User sends `审查`; Claude re-reviews the Optional disposition diff.
+2. If Pass, user sends `提交`.
+
+## 2026-05-26 — Claude review — Pass (Phase 5 execution price data input contract)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (3 条).
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `8488427`; targets the immediately prior Codex entry "Phase 5 execution price data input contract")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `schemas/execution_price_data.schema.json` v1.0.0 新文件
+- `tests/schema/test_execution_price_data_schema.py` 新测试（4 条）
+- `docs/SESSION_LOG.md` 新增 `执行` entry + reconstructed post-commit entry（commit `8488427`）
+- `docs/CURRENT.md` + Phase 5 handoff 追加段
+- 无业务代码 / EGS / analyzer / runner / rank backtest 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema tests.execution.test_backtest_execution -v` → `Ran 12 tests in 0.061s OK`
+- 4 个新测试覆盖：meta-validation + api_families 最小要求 + price row contract + 最小合法实例
+
+**Reasons for Pass**:
+- 严守 schema-first，未实现 provider fetch / fill simulation ✅
+- 与 execution_backtest_report v1.0.0 的 `inputs.price_data` 字段对齐（schema 名称、字段位置、`adjustment_mode = qfq_via_adj_factor`）✅
+- API families 4 个 (`daily / adj_factor / stk_limit / trade_cal`) 是 Tushare A 股短线回测的最小必要集，与 Phase 5 handoff §6 撮合完成线匹配（OHLC for fill、stk_limit for limit-up、trade_cal for time stop） ✅
+- `pit_policy = trade_date_eod` 的 description 准确说明 "execution backtest 可以读 future trade dates，但每行必须是该 trade_date 的 EOD 数据而非后期 restated factor" — 这是 Phase 5 lineage 的关键约束 ✅
+- Reconstructed post-commit entry（commit `8488427`）符合 AGENTS.md §Session log discipline 三层保险的 fallback 层 ✅
+- `limitations` minItems=1 强制 runner 显式说明限制 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **`api_families` over-specification**（`schemas/execution_price_data.schema.json` line 77-106）：
+   ```
+   enum = ["daily", "adj_factor", "stk_limit", "trade_cal"]  (4 elements)
+   minItems: 4
+   uniqueItems: true
+   allOf: [contains const "daily", contains const "adj_factor", contains const "stk_limit", contains const "trade_cal"]
+   ```
+   语义上 `enum 4 元素 + minItems:4 + uniqueItems:true` 已经强制必含全部 4 个值，4 个 `contains` allOf 是冗余 over-specification。建议简化为前三项（删 allOf 4 个 contains）；或者反向：保留 allOf 作为"明确必含哪些"，删 minItems/uniqueItems。当前写法两套都在，schema 自身可读性下降。
+
+2. **`rows` 无 `minItems`**（line 55-60）：空数组 `[]` schema-valid，但 future fill simulator 假设至少 1 row。建议加 `minItems: 1`（与 `symbols.minItems: 1` 风格一致），强制 contract producer 不能产出空 price file；或在 description 明文允许空但 runner 必须跳过。当前 silent 通过会让下游 fill 时报神秘错误。
+
+3. **`priceRow.{open,high,low,close}_qfq` 必填且 `exclusiveMinimum: 0`，与 `is_trade_day` 语义冲突**（line 140-194）：
+   - `is_trade_day: boolean` required，说明 rows 可能包含非交易日
+   - 但停牌日 / 非交易日 OHLC 通常没有数据
+   - 当前 schema 强制 OHLC 必填且 positive → 非交易日 row 只能填假数据才能通过 schema
+   - 解决：要么把 `{open,high,low,close}_qfq` 改成 `positiveNumberNullable`（与 `pre_close_qfq` 一致），并在 description 明文 `is_trade_day=false → OHLC=null`；要么去掉 `is_trade_day` 字段并明文 rows 只放交易日
+   - 这是真正可能在 future provider impl 时踩坑的设计矛盾
+
+**Documentation issues**: 无。
+
+**Pending status**: Required: none / Optional (O1-O3): PENDING CODEX DISPOSITION。
+
+**Next natural step from my view**:
+1. 切到 Codex → `修复`（无 Required 需要批准，Codex 直接 dispose O1-O3）。
+2. Codex 修复完 → 用户 `审查` → Pass → `提交`。
+3. 提交后下一条 `执行` 进入 loader 实现：产出满足 `execution_price_data` 的真实文件 + 把 `inputs.price_data.path` 从 placeholder 改成真实路径。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 execution price data input contract)
+
+**Commits**: none (Pattern A: `执行` updates working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `8488427` (Phase 5 execution runner skeleton).
+- Follows the Phase 5 handoff note that real fill logic must first define the file contract behind `inputs.price_data.path`.
+
+**Worked on**:
+1. Added the Phase 5 `execution_price_data` schema contract for A-share short-term execution OHLC input data.
+2. Updated current-state and handoff docs so the next reviewer sees `8488427` as committed and this round as the new uncommitted diff.
+
+**Key decisions**:
+- `inputs.price_data.path` now has a concrete future file contract, separate from the execution report schema.
+- The minimum Tushare lineage for execution price data is `daily`, `adj_factor`, `stk_limit`, and `trade_cal`.
+- Rows require qfq OHLC and `adj_factor`; limit-up/down fields are required but nullable because `stk_limit` coverage may be incomplete.
+- No provider fetch, cache generation, fill simulation, stop/take-profit/time-stop execution, or portfolio accounting was implemented in this round.
+
+**Alternatives considered and rejected**:
+- "Start real fill logic now" — rejected because the price input contract was still undefined.
+- "Reuse rank backtest `ret_*` as execution prices" — rejected because Phase 5 needs entry/exit event reconstruction from daily OHLC and limit data.
+- "Write a generated cache fixture now" — rejected; schema-first plus meta-validation is the smaller reviewable step.
+
+**Open questions handed off**:
+- Should the first provider implementation emit one JSON per backtest run or one reusable date-window cache per market/preset? Defer until loader implementation.
+
+**Next natural step from my view**:
+1. Claude reviews this schema/doc diff.
+2. After Pass and commit, implement the loader that materializes `execution_price_data` and wires `inputs.price_data.path` away from the skeleton placeholder.
+
+## 2026-05-26 — Codex (reconstructed post-commit: Phase 5 execution runner skeleton)
+
+**Commits**: 8488427
+
+**Relationship to prior session(s)**:
+- Reconstructs the local commit created after the 2026-05-26 Claude review Pass and Codex repair entry.
+- This entry is added by the fallback rule because commit `8488427` existed after the latest SESSION_LOG entry.
+
+**Worked on**:
+1. Committed the Phase 5 execution runner skeleton and review fixes as a single reviewed local checkpoint.
+
+**Key decisions**:
+- No new design decision in this entry; commit message is the source for implementation details.
+- Repo remains local-only; no push or remote changes.
+
+**Alternatives considered and rejected**:
+- None; this is a reconstructed continuity entry.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Continue with Phase 5 price data input contract before real fill logic.
+
 ## 2026-05-26 — Claude review — Pass (Phase 5 execution runner skeleton review fixes)
 
 **Commits**: none (review-only entry; reviews working tree diff vs HEAD `e4ce3a2`; targets the immediately prior Codex 修复 entry "Phase 5 execution runner skeleton review fixes")
