@@ -8,6 +8,183 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (roadmap B semi-reorder Optional disposition)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1 dispose 完成）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `59d008f`; targets the immediately prior Codex entry "roadmap B semi-reorder Optional disposition")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `AGENTS.md §已固化决策 #12` 末尾加 "数据准备度" example（O1）
+- `docs/CURRENT.md` Latest Delta 加 cross-reference 路由到 `AGENTS.md #12`
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 追加 "roadmap data-readiness example" 段
+- `docs/SESSION_LOG.md` Codex `修复` entry
+- 无 schema / runner / preset / 测试改动 ✅
+
+**Disposition 逐条核对**:
+
+- **O1 (Pass with mod)** — AGENTS.md 决策 #12 末尾加 `数据准备度只作示例性触发，不写死门槛：若 US provider 已能稳定提供 10-K、FCF、guidance、估值等长线维度，可优先推进 US 长线 skeleton / implementation；否则按默认顺序先做 US 短线`。完全按建议方向：(a) 4 个具体维度作为 example (10-K / FCF / guidance / 估值) — 足够具体让 future LLM 知道按什么判断；(b) 不写死门槛 — 不 over-constrain Phase 8/9 实际决策；(c) 明确 fallback "默认顺序先做 US 短线" — 默认行为清晰。Codex 选择把 example 加在 #12 末尾而非 Phase 表 cell 内 — cell 太挤，#12 更合适。CURRENT.md 用 cross-reference 路由不重复 doc — 避免 example 在两处维护 drift。✅
+
+**额外观察（非 issue）**:
+
+- handoff 追加段 "roadmap data-readiness example" 七节齐全，"失效旧结论" 2 条精确：("数据准备度完全留空"失效 / "需当前阶段写 strict criteria"不成立)。决策 framing 中立 ✅
+- Codex `修复` entry alternatives rejected 列了 2 条 ("Leave data readiness undefined" / "Write strict readiness criteria now")，决策路径可追溯 ✅
+- handoff 第 5 段 "下一步注意事项" 第 3 条提醒 "通过并提交后，下一步仍是 P0a capital context contracts" — 防止下一轮 Codex 跑去写长线 spec ✅
+- Codex `修复` entry 把 "Exact data-readiness criteria remain deferred to Phase 8/9 after US provider capability and long specs are concrete" 标为 Open question — 把 strict criteria 的真正决策时机也固定下来 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1 已 Pass，无新 finding）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`（单 scope = roadmap data-readiness example 文档同步；走 `git add -A` 快路径）。
+
+**Next natural step from my view**:
+
+1. 用户 `提交`。working tree 单 scope（4 个文档同步），可走 `git add -A` 快路径。
+2. 提交后正式启动 **P0a capital context contracts 实施**：
+   - `schemas/portfolio_allocation.schema.json`（静态政策：A=35%/US=65% + within-market bucket 1/3+1/3+1/3 + hard_floor liquidity + manual-execution-only boundary + ship-gate policy reference）
+   - `schemas/cash_buffer_state.schema.json`（动态状态：per-market cash balance + atomic JSON write）
+   - 升级 `schemas/execution_backtest_report.schema.json` v1.0.0 → v1.1.0 加 `capital_context` runtime snapshot
+   - `presets/a_short.yaml` / `us_short.yaml` / `a_long.yaml` / `us_long.yaml` 4 个 preset 同时加 `bucket` / `bucket_ceiling_pct` / `market` fields（**记得 P0a 必须覆盖 4 套 preset**避免长线接入时 breaking change）
+   - runner CLI flag `--portfolio-allocation` / `--cash-buffer-state`（或统一 `--capital-context` wrapper）
+   - 仍走 review-dispose-commit 完整流程
+3. P0a 完成后才能动 Phase 5 fill simulation。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (roadmap B semi-reorder Optional disposition)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior Claude review entry: "Pass (roadmap B semi-reorder)".
+- No Required fixes were present; this round disposes the single active Optional O1.
+
+**Worked on**:
+1. Added a non-binding data-readiness example to `AGENTS.md` decision #12.
+2. Updated `docs/CURRENT.md` to point future readers at that example for Phase 8/9 ordering.
+3. Appended the Phase 5 handoff with the O1 disposition, rationale, validation plan, and next-step constraints.
+
+**Key decisions**:
+- Accept O1: "data readiness" now has concrete examples so Phase 8/9 swapping is not arbitrary.
+- Keep the wording non-binding: current project state does not justify strict criteria before US provider and long specs exist.
+
+**Optional disposition**:
+- O1 accept with modification — added examples centered on US provider readiness for long-term dimensions (`10-K`, `FCF`, `guidance`, valuation data); did not create hard thresholds.
+
+**Alternatives considered and rejected**:
+- "Leave data readiness undefined" — rejected because it preserves the ambiguity Claude flagged.
+- "Write strict readiness criteria now" — rejected because long specs and US provider implementation do not exist yet; strict criteria would be premature.
+
+**Open questions handed off**:
+- Exact data-readiness criteria remain deferred to Phase 8/9 after US provider capability and long specs are concrete.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude reviews this O1 disposition diff.
+2. If Pass, user invokes `提交`.
+3. Then start P0a capital context contracts before any fill simulation.
+
+## 2026-05-26 — Claude review — Pass (roadmap B semi-reorder)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (1 条 active)。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `59d008f`; targets the immediately prior Codex entry "roadmap B semi-reorder")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `AGENTS.md` §执行路线图 重排 + §已固化决策 #12 新增
+- `docs/CURRENT.md` Latest Delta + §1 当前目标 + §2 已完成事项 + §6 P0 #6 同步
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 追加 "roadmap B semi-reorder" 段
+- `docs/SESSION_LOG.md` Codex `执行` entry
+- 无 schema / runner / preset / 测试改动 ✅（仍是 planning-only scope）
+
+**Reasons for Pass**:
+
+- 完全按建议的 B 半重排路径：spec 提前到 Phase 6 与 A 短 observation 并行，implementation 仍在 Phase 8-9，**没破坏 §三条原则 #2**（A 短先做样板）✅
+- **解决最关键架构风险**：Phase 7 现在 explicitly "以 4 套 spec 划分共享层与独立 rule pack"，不再 short-term-biased ✅
+- Phase 5b 新加（ship gate policy + preliminary gate status）— 把 ship gate 判定独立 phase 更清晰，与 §三原则 #2 修订后的措辞自洽 ✅
+- 决策 #12 末尾保留 "Phase 8 子项 / Phase 9 可按数据准备度交换顺序" — 给 future 留弹性而非死锁 ✅
+- §三原则 #2 没改（"先把 A 股短线做成完整可复用样板" 仍 first principle）— B 路径与已固化原则一致 ✅
+- handoff "失效旧结论" 3 条精确：(a) phase 重排不再 pending / (b) Phase 7 不能仅 short-term 视角 / (c) 长线 spec 不再等到 Phase 9 才开始 ✅
+- Codex `执行` entry 明确 "user accepted B semi-reorder" — 授权链清楚 ✅
+- alternatives rejected 列了 3 条（No reorder / Full reorder / Start writing long specs now in this scope），决策路径可追溯 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — "数据准备度" trigger 缺 example，future LLM 不知道按什么判断 Phase 8/9 子项交换**（`AGENTS.md §执行路线图 Phase 8/9` + `§已固化决策 #12`）。当前两处都说 "可按数据准备度与 Phase 8 子项交换顺序"，但 "数据准备度" 是 vague — 是 Tushare/US provider 是否支持 10-K/FCF/Guidance/估值数据？还是 A 短 forward live data 累积量？还是别的？建议加 1-2 个 example 提示 future LLM：
+
+   ```
+   数据准备度示例：
+   - US data provider 已能稳定提供 10-K/FCF/Guidance 等长线维度数据 → 可优先 US 长 implementation；
+   - 否则按 Phase 8 默认顺序（US 短优先）。
+   ```
+
+   不要写 strict criteria（会 over-constrain），但要给 example 帮 future decision。位置：决策 #12 末尾或 Phase 8/9 cell 内。
+
+**额外观察（非 issue）**:
+
+- Phase 5 工作量仍标 "1-2 周"，但现在包含 P0a (4 schema + 4 preset + runner CLI) + A 短 fill simulation (entry/exit + 涨停 + 止损 + 时间止损 + 组合约束) 两个 substantive scope。实际可能 3-4 周。但工作量估算非 architectural issue，user/Codex 实际跑过自然校正，不写 Optional。
+- Phase 6 工作量从 "实盘期" 改成 "观察期 + spec 设计"，工作内容显著扩大但 estimate 没标具体周数。同上，不写 Optional。
+- Phase 8 描述 "美股长线 implementation skeleton" — skeleton 边界清晰（只搭脚手架，core implementation 留 Phase 9），与"长线 implementation 应在 Phase 9"一致，不混乱 ✅
+- 决策 #12 把整个 B 路径浓缩在一条决策里，可读性 OK；如果未来 phase 表又改，#12 措辞也要同步（耦合点提醒）。
+- CURRENT.md §6 P0 #6 从 "Phase roadmap follow-up（待决策）" 改成 "Roadmap B semi-reorder 已固化"，且重申 "P0a 必须一次性覆盖 4 个 preset 的 capital/bucket 契约，避免后续 breaking change" — 这条**最重要的 architectural 防御**保留 ✅
+
+**Documentation issues**: O1 (单条 Optional)。
+
+**Pending status**: Required: none / Optional (O1): PENDING CODEX DISPOSITION。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — dispose O1（"数据准备度" example）。scope 极小，1-2 行追加。
+2. 修复后用户 `审查` → `提交`。
+3. 提交后启动 **P0a capital context contracts 实施**：4 schema（`portfolio_allocation` / `cash_buffer_state` / 升级 `execution_backtest_report` 加 `capital_context` / 加 `presets/<preset>.yaml` capital fields）+ runner CLI flag (`--portfolio-allocation` / `--cash-buffer-state`)。仍走 review-dispose-commit 完整流程。
+4. P0a 完成后才能动 Phase 5 fill simulation。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (roadmap B semi-reorder)
+
+**Commits**: none (Pattern B: `执行` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the prior Claude Pass entry for P0c Optional disposition, where Phase roadmap reordering was left as a separate user decision.
+- Refines that open decision: user accepted B semi-reorder, so the roadmap is no longer pending.
+
+**Worked on**:
+1. Updated `AGENTS.md` Phase table and fixed decision #12 to encode B semi-reorder.
+2. Updated `docs/CURRENT.md` so the current snapshot says B semi-reorder is fixed, while the next P0 remains capital context contracts before fill simulation.
+3. Appended the Phase 5 handoff with the roadmap decision, rationale, invalidated old conclusions, and next-step constraints.
+
+**Key decisions**:
+- B semi-reorder is now the project roadmap: keep A-share short Phase 6 observation running, draft A-long / US-long specs and normalize US-short spec in parallel during Phase 6, then do Phase 7 DataHub/engine modularization based on all four specs.
+- This is a documentation and planning update only. It does not start long-system implementation, schema changes, fill simulation, or Phase 7 refactor.
+- P0a remains the next implementation scope and must cover all four presets' capital/bucket contracts, even if long-system strategy enums remain reserved until specs exist.
+
+**Alternatives considered and rejected**:
+- "No roadmap reorder" — rejected because it leaves the known mismatch between four-system equality and a short-biased Phase 7 design path.
+- "Full reorder with long implementation moved before A-short observation" — rejected because it breaks the already useful A-short forward/paper clock and would expand this small planning scope into a broader roadmap rewrite.
+- "Start writing long specs now in this execution" — rejected because the approved smallest task is to record the roadmap decision; P0a capital context contracts still blocks fill simulation.
+
+**Open questions handed off**:
+- Exact A-long and US-long spec contents remain open; they should be designed during Phase 6, not in P0a.
+- Whether Phase 8 subitems and Phase 9 A-long implementation should swap depends on future data readiness.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude reviews the roadmap documentation diff.
+2. If Pass, user invokes `提交`.
+3. Then start P0a capital context contracts before any fill simulation.
+
 ## 2026-05-26 — Claude review — Pass (P0c user-confirmed decisions Optional disposition)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O4 全部 dispose 完成）。

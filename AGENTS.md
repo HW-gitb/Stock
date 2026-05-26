@@ -132,11 +132,12 @@ Stock/
 | 2 | rank 回测 + Rule 6 规则有效性统计 | 3-5 天 | ✅ 工程链路通过，策略优化继续 |
 | 3+ | minimal analyzer + state 接口同步建立 | 1-2 周 | ✅ |
 | 4 | minimal Skill：读 input，调 analyzer，出 M6.7 | 3-5 天 | ✅ minimal 完成 |
-| 5 | execution 回测 | 1-2 周 | ⬜ |
-| 6 | A 股短线完整闭环跑一个季度（forward/paper 或 minimal-size 手动观察；非 full-size ship gate） | 观察期 | ⬜ |
-| 7 | 引擎模块化重构，美股扩展硬前置 | 1-2 周 | ⬜ |
-| 8 | 美股短线：data provider + preset + skill | 1-2 周 | ⬜ |
-| 9 | 长线系统：架构复用，规则全新设计 | 2-4 周 | ⬜ |
+| 5 | P0a capital context contract + A 股短线 execution/fill 回测 | 1-2 周 | ⬜ |
+| 5b | Ship gate policy + preliminary gate status（非 full-size 最终放行；full-size 仍需 ≥12 个月 forward live data） | 1-2 天 | ⬜ |
+| 6 | A 股短线完整闭环跑一个季度（forward/paper 或 minimal-size 手动观察）+ A 股长线 spec + 美股长线 spec + 美股短线 spec 规范化 | 观察期 + spec 设计 | ⬜ |
+| 7 | DataHub / engine 模块化重构；按 4 套 spec 划分共享层与独立 rule pack | 1-2 周 | ⬜ |
+| 8 | 美股短线 implementation + 美股长线 implementation skeleton（数据条件满足时并行） | 1-2 周 | ⬜ |
+| 9 | A 股长线 implementation（可按数据准备度与 Phase 8 子项交换顺序） | 2-4 周 | ⬜ |
 
 ## 已固化决策
 
@@ -151,6 +152,7 @@ Stock/
 9. `A-EGS/egs_main.py` 当前不移动，等 Phase 7 再拆进 `engine/`。
 10. 资金分布固化为 A 股 35% / 美股 65%；each market = 1/3 长线 + 1/3 短线 + 1/3 流动资金；A 股 cash 与美股 cash 默认不互通。4 套子系统同等重要；phase 路线图不能让任何一套被长期搁置；每套支持 full-size 手动实盘使用前必须通过多 metric AND ship gate，alpha 不足则定位为风控 filter。详 §项目背景。
 11. 系统执行边界固化为分析筛选 + 回测复盘 + 报告输出；用户手动下单。不得接入券商、操作系统或自动化工具做自动下单；execution backtest 只是模拟规则，不是 live trading/order execution engine。
+12. 路线图采用 B 半重排：保留 A 股短线 Phase 6 一季度观察和 Phase 7 DataHub 原则，同时在 Phase 6 并行提前产出 A 股长线 / 美股长线 spec，并规范化美股短线 spec；Phase 7 重构以 4 套 spec 为依据，Phase 8 优先美股短线 + 美股长线 skeleton，Phase 9 做 A 股长线 implementation（可按数据准备度与 Phase 8 子项交换）。数据准备度只作示例性触发，不写死门槛：若 US provider 已能稳定提供 10-K、FCF、guidance、估值等长线维度，可优先推进 US 长线 skeleton / implementation；否则按默认顺序先做 US 短线。
 
 ## AI 协作者在本项目中的工作守则
 

@@ -905,3 +905,90 @@ git status --short
 1. P0a 设计四个 preset 的 bucket/capital ceiling 字段，避免未来长线接入时 schema breaking。
 2. Phase 路线图是否重排仍需用户单独决定；本轮未改 AGENTS.md Phase 表顺序。
 3. 不要把 manual-order boundary 误解为 live order execution engine。
+
+## 2026-05-26 追加：roadmap B semi-reorder
+
+### 改了什么
+
+- `AGENTS.md` 执行路线图改为用户采纳的 B 半重排：
+  - Phase 5 = P0a capital context contract + A 股短线 execution/fill 回测。
+  - Phase 5b = ship gate policy + preliminary gate status；full-size 仍需 ≥12 个月 forward live data。
+  - Phase 6 = A 股短线一季度 forward/paper 或 minimal-size 手动观察，同时产出 A 股长线 spec、美股长线 spec，并规范化美股短线 spec。
+  - Phase 7 = DataHub / engine 模块化重构，以 4 套 spec 划分共享层与独立 rule pack。
+  - Phase 8 = 美股短线 implementation + 美股长线 implementation skeleton。
+  - Phase 9 = A 股长线 implementation；可按数据准备度与 Phase 8 子项交换顺序。
+- `AGENTS.md` 已固化决策新增路线图决策 #12。
+- `docs/CURRENT.md` 删除“路线图是否重排待决策”的旧状态，改为“B 半重排已固化；P0a 仍只做 capital context contract，但必须覆盖四个 preset”。
+
+### 为什么改
+
+用户在 P0c 之后确认：A 股和美股都采用长线 1/3、短线 1/3、流动资金 1/3 的市场内 bucket 结构，且四套子系统都是真实需求。旧路线图把长线整体推到 Phase 9，容易让 Phase 7 引擎重构在缺少长线 spec 的情况下短线化。
+
+B 半重排保留两条既定约束：A 股短线仍先完成 Phase 6 一季度观察，Phase 7 仍是美股扩展和共享引擎的硬前置；同时提前输出长线 spec，让 Phase 7 的共享层 / 独立层划分有依据。
+
+本轮只落文档，不写 schema、不改 runner、不提前实现长线。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['AGENTS.md','docs/CURRENT.md','docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md','docs/SESSION_LOG.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok')"
+git diff --check
+git status --short
+```
+
+### 验证结果
+
+- `utf8 ok`
+- `git diff --check` 通过
+- `git status --short` 只显示本次 roadmap 文档 scope 相关文件
+
+### 失效旧结论
+
+- “Phase roadmap follow-up 仍待用户决策”失效；用户已采纳 B 半重排。
+- “Phase 7 可以只基于 A 股短线 / 美股短线视角拆 shared engine”失效；Phase 7 应以 4 套 spec 作为共享层与独立 rule pack 的划分依据。
+- “长线只有到 Phase 9 才开始任何设计”失效；长线 implementation 仍在后面，但 A 股长线 / 美股长线 spec 应在 Phase 6 与 A 股短线观察并行输出。
+
+### 下一步注意事项
+
+1. 下一条执行仍是 P0a capital context contracts，不是长线 spec，也不是 fill simulation。
+2. P0a 应一次性覆盖 `a_short` / `us_short` / `a_long` / `us_long` 的 capital/bucket contract；但可以把长线策略细节 enum 保留为空数组或 reserved 字段，等长线 spec 完成后填充。
+3. Phase 5b 的 ship gate status 只能给 preliminary gate status；full-size manual use 仍必须满足 ≥12 个月 forward live data。
+
+## 2026-05-26 追加：roadmap data-readiness example
+
+### 改了什么
+
+- 处理 Claude 对 roadmap B semi-reorder 的 O1 Optional。
+- `AGENTS.md` 决策 #12 补充“数据准备度”的非硬性示例：若 US provider 已能稳定提供 10-K、FCF、guidance、估值等长线维度，可优先推进 US 长线 skeleton / implementation；否则按默认顺序先做 US 短线。
+- `docs/CURRENT.md` 增加交叉引用，提示 Phase 8/9 子项交换看 `AGENTS.md` #12 的示例，不把它误读成严格门槛。
+
+### 为什么改
+
+原路线图允许 Phase 8 子项与 Phase 9 按“数据准备度”交换顺序，但没有说明数据准备度的判断维度。这样会让后续 LLM 不确定是看 US provider 长线数据能力、A 股短线 forward 样本量，还是其他条件。
+
+本轮选择接受 Claude O1，但只给示例，不写 strict criteria。原因是当前还没有长线 spec，也没有 US provider 首版；硬编码门槛会过早约束 Phase 8/9 的实际排序。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['AGENTS.md','docs/CURRENT.md','docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md','docs/SESSION_LOG.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok')"
+git diff --check
+git status --short
+```
+
+### 验证结果
+
+- `utf8 ok`
+- `git diff --check` 通过
+- `git status --short` 只显示本次 roadmap 文档 scope 相关文件
+
+### 失效旧结论
+
+- “数据准备度可以完全留空解释”失效；现在至少有 US 长线 provider 维度作为示例。
+- “数据准备度需要在当前阶段写成 strict criteria”不成立；当前只保留示例，具体门槛等 US provider / 长线 spec 明确后再定。
+
+### 下一步注意事项
+
+1. 让 Claude 复查 O1 disposition。
+2. 本轮仍不写 schema、不改 runner、不启动长线 spec。
+3. 通过并提交后，下一步仍是 P0a capital context contracts。
