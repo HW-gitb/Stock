@@ -8,6 +8,186 @@
 
 ---
 
+## 2026-05-26 — Claude re-review — Pass (Phase 6a kickoff Optional follow-up disposition)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active. **Ready to commit.**
+
+**Scope reviewed**: Codex 2026-05-26 `修复` round（本 SESSION_LOG 下一条 entry "Codex (Phase 6a kickoff Optional follow-up disposition)"）含 4 文件改动的 3 处 Optional dispose:
+- O-fol1: `docs/CURRENT.md §2` 真正裁到 8 条 + "更早事项" archive routing pointer 句保留；Codex 在前一条 (Phase 6a boundary kickoff spec) entry "Worked on" 加第 4 项 transparency note 锁住 §2 maintenance 历史（uncommitted entry 内 amend 合理）。
+- O-fol2: `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md §3.5` (1) 加 "preliminary review floor spanning at least two quarters; reduces chance of single regime / cohort drift driving primary-switch proposal" rationale。
+- O-fol3: `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md §3.4` flag (1) 加 "the 2.0 example refers to current ship-gate alpha threshold; if schema/policy later changes that threshold, use the then-current `ship_gate_evaluation` definition" cross-reference + 前向兼容性。
+
+无 code / schema / runner / preset / test 改动 ✅。
+
+**Verdict**: Pass (clean).
+
+**Disposition 核对**:
+
+- **O-fol1 — FULLY DISPOSED, 选了 stricter option (b)**: Codex 选 b "真正裁到 8 条" 而非 a "放宽注释到 ~20"，理由 "CURRENT is short re-entry snapshot; detailed history already belongs in SESSION_LOG, handoffs, git log" — designer judgment 合理且与我 review entry 给出的 (a)/(b) 选项一致。新 §2 8 条全是 2026-05-26 entries (cut-off 当天)，archive 内容在 "更早事项" pointer 句明确 list（协作协议精简、Reference framework policy、Git remote privacy、Phase 5 runner/materializer/schema 细节、deterministic report、Phase 4、Phase 3、Phase 2、v7.10、git init）。✅
+
+- **O-fol2 — FULLY DISPOSED + bonus**: 不仅加了 "preliminary review floor" 满足我建议的 quarter coverage rationale，还自加 "reduces chance that a single regime or cohort drift drives a primary-switch proposal" — 让 future LLM 更容易判断 6 月这个数字的合理性（单一 regime / cohort drift 噪声防护）。✅
+
+- **O-fol3 — FULLY DISPOSED + bonus**: 不仅加 cross-reference 到 `ship_gate_evaluation` definition，还自加前向兼容性条款 "if schema/policy later changes that threshold, use the then-current..." — 防止 future schema 升级时 example 数字 stale，future LLM 不会把 2.0 当 hard-coded constant 复用。✅
+
+**Codex draft 亮点**:
+
+- **Alternatives considered and rejected 2 条** — 决策路径透明：(1) "Leave all 3 for trivial sync — rejected" (2) "Relax §2 from 最近 8 条 to ~20 entries — rejected"。后者说明 designer 主动选了更严格选项，与 review verdict 不冲突。
+- **§2 archive routing pointer 句** — "更早事项（...）→ 见 `AGENTS.md §交接记录`、相关 handoff、`docs/AI_REVIEW_PROTOCOL.md`、`docs/SESSION_LOG.md` 与 `git log --all`" 让 future LLM 知道 §2 不是全部历史，archive 在哪里。
+- **未回去改 Codex Phase 6a kickoff entry 之外的历史 entry** — SESSION_LOG hygiene 保持：只在 uncommitted Codex Phase 6a kickoff entry 内加第 4 项 transparency note，没碰更早 committed entries。
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（本轮 dispose 完整 + Codex 自加 bonus 已覆盖 future-schema 演化兼容性 / regime drift 数字 rationale）。
+
+**Process meta observation**:
+
+- 自 `ccc5c85 Tighten commit documentation hygiene` 之后 **连续 6 次** substantive commit 都没 follow-up [trivial] sync（累计 `a784b18` `87a1a5a` `f74ff40` `3ae448b` `56277b6` + 本轮即将 commit Phase 6a handoff round）。本轮 commit 落地后改为连续 7 次。hygiene 稳定。
+- 本 round 完整走完 "执行 → 审查 → 修复 → 提交" 循环（execution: Codex Phase 6a confirm package + 起草正文；review: Claude review with 2 amend 自审；repair: Codex Optional dispose；ready to commit）。这是协议设计的 standard happy path 案例，可作 SESSION_LOG case study 但不需要立即写进 AGENTS.md（与上轮 process meta observation 一致：避免 [[feedback-protocol-overengineering]] 协议自增殖）。
+
+**Next natural step from my view**:
+
+1. 用户 `提交` 全部 4 文件改动（单 commit，scope "Phase 6a kickoff spec handoff + Optional follow-up disposition"）。本 commit 含 Codex 起草 Phase 6a handoff + AGENTS handoff index + CURRENT.md state update + SESSION_LOG 3 条新 entries (2 Codex + 1 Claude Pass)，加上本 re-review entry 共 4 条 SESSION_LOG entries。
+2. 下一轮 `执行`：Phase 6b A-short observation 第一个 implementation slice。Codex Phase 6a kickoff entry Open questions handed off 留了 next-session decision: variant tracking contract 还是 benchmark monthly-return materialization 作为第一切片。
+
+This entry records the Pass verdict for the repair round. No Required or Optional follow-ups remain active. **Ready to commit.**
+
+---
+
+## 2026-05-26 — Codex (Phase 6a kickoff Optional follow-up disposition)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior 2026-05-26 Claude review — Pass with minor notes (Phase 6a kickoff spec handoff), which had no Required fixes and 3 non-blocking Optional follow-ups.
+
+**Worked on**:
+1. Disposed all 3 Optional follow-ups from the latest Claude review, including the amended O-fol1 `CURRENT.md §2` doc-rot finding.
+2. Kept the change docs-only: no `A-EGS`, runner, schema, preset, state, or result artifact behavior changed.
+
+**Optional disposition**:
+- O-fol1 accepted: `docs/CURRENT.md §2` now actually contains 8 high-level entries, preserving the "最近 8 条" contract instead of widening it to ~20. Older process / Phase 5 / Phase 4 / Phase 3 details are routed to AGENTS handoff records, phase handoffs, `docs/AI_REVIEW_PROTOCOL.md`, `docs/SESSION_LOG.md`, and `git log`.
+- O-fol2 accepted: `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md §3.5` now explains that the 6 forward-live-month prerequisite is a preliminary review floor spanning at least two quarters.
+- O-fol3 accepted: `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md §3.4` now states that the `2.0` example uses the current ship-gate alpha threshold and should track the then-current `ship_gate_evaluation` definition if policy/schema changes.
+
+**Key decisions**:
+- No Phase 6a scope or benchmark policy changed. This round only made review-facing rationale and maintenance transparency explicit.
+
+**Alternatives considered and rejected**:
+- "Leave all 3 follow-ups for a later trivial sync" — rejected because the user invoked `修复`, and all 3 edits are small, low-risk clarifications in the same docs scope.
+- "Relax `docs/CURRENT.md §2` from 最近 8 条 to ~20 entries" — rejected. CURRENT is the short re-entry snapshot; detailed history already belongs in SESSION_LOG, handoffs, and git log.
+
+**Open questions handed off**:
+- None from this repair round.
+
+**Next natural step from my view**:
+1. Claude re-reviews this Optional disposition diff.
+2. If Pass, user `提交`.
+3. Next `执行`: start Phase 6b A-short observation boundary or first implementation slice.
+
+---
+
+## 2026-05-26 — Claude review — Pass with minor notes (Phase 6a kickoff spec handoff)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: 3 (all minor, **do not block commit**).
+
+**Scope reviewed**: Codex 2026-05-26 起草（本 SESSION_LOG 下一条 entry "Codex (Phase 6a boundary kickoff spec)"）的 4 文件改动：
+- `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`（287 行 untracked 新 handoff，10 节结构完整）
+- `AGENTS.md`（+1 行 handoff index entry 12.）
+- `docs/CURRENT.md`（§0 latest delta、benchmark 决议精简、§1 当前 Phase / §2 已完成事项 / §5 关键文件 / §6 P0 重写）
+- `docs/SESSION_LOG.md`（prepend Codex entry）
+
+无 code / schema / runner / preset / test 改动 ✅。
+
+**Verdict**: Pass with 3 minor Optional follow-ups (not blocking).
+
+**对照原 review packet finding dispose**:
+
+- **F1 (Phase 6b scope 不一致) — FULLY DISPOSED**: §3.1 Scope lock 把 Phase 6b 完整 framing 为 "主轴：六个 A-short variants 并行验证（具体 routing 见 §5.2）；evidence pipeline 支撑：(i) candidate-universe overlap audit, (ii) forward evidence accumulation, (iii) benchmark-aware alpha evidence sedimentation"。§5.2 routing table 重申 "Phase 6b owns bounded A-short variants as the observation main axis. Candidate-universe audit, forward evidence accumulation, and benchmark-aware alpha sedimentation are the evidence pipeline supporting that axis, not competing main tasks." — **双向 cross-reference**（§3.1 → §5.2 / §5.2 重申主轴 vs 支撑），完全满足 F1 最新版 3 条要求。Wording 自决要求满足：Codex 自选 "主轴 / evidence pipeline 支撑" framing。✅
+
+- **F2 (`benchmark_sensitive` merge rule) — FULLY DISPOSED**: §3.4 "Default merge rule: keep each dimension as its own boolean field, and set `benchmark_sensitive = OR(flags)`. Do not collapse the four dimensions into an unexplainable single boolean." 4 dimension flags 列出 + 总 OR field — hybrid (multi-flag + OR) 完全落地。t-stat gap numeric threshold 推到 Phase 6b 实证后定。✅
+
+- **F3 cleanup — FULLY DISPOSED**: CURRENT.md benchmark 决议行从 "Ship gate rule + Phase 6a spec requirements" 两段细则 → "Ship gate rule" 单段 + "Spec details: ... 均在 docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md" reference 单行。CURRENT.md 不再承载 trigger 细则。✅
+
+- **O1 (CSI500 / size-decile acknowledge) — DISPOSED**: handoff §3.6 "Considered and deferred benchmarks" 节明确 CSI500 / size-decile 为 considered, deferred to Phase 6b or later，并给 reopen condition ("If Phase 6b A-short observation shows CSI1000 / CSI300 sensitivity is unstable")。✅
+
+- **Optional (variants reference strategy_design_synthesis.md) — DISPOSED**: §5.2 "The canonical variant family definitions live in `docs/strategy_design_synthesis.md §2.2`. This table records routing only." — handoff 表格只 record routing，detailed thresholds 留在 synthesis doc，避免 duplicate state。✅
+
+**Optional follow-ups (minor, do not block commit)**:
+
+- **O-fol1 (CURRENT.md §2 doc rot)**: §2 注释明确 "最近 8 条" high-level snapshot，但**实际累积到 21 条**（Codex 本轮加 1 删 3 后）。Codex 删 3 条 Phase 3.x 历史 entries（Phase 3.3 子分数预测力、Phase 3.4 ESP 反向 PIT 调查、Phase 3.6 收尾 audit）是部分 maintenance，**但未彻底 fix**；同时 SESSION_LOG Codex entry "Worked on" 未说明删除动作（silent state change）。建议作 **separate cleanup task** 处理：要么 (a) 修订 §2 注释放宽到 "~20 条 high-level snapshot"，要么 (b) 真正裁到 8 条 + 把更早事项 archive 到 SESSION_LOG / git log 引用。本轮不阻塞 commit；如果本 commit 顺手 fix，应至少加 transparency note："CURRENT.md §2 maintenance: removed 3 oldest Phase 3.x entries; doc rot relative to '最近 8 条' annotation noted as separate cleanup task." 由用户决定本轮是否处理或推到后续 task。
+
+- **O-fol2 (rationale gap)**: handoff §3.5 primary switch prerequisite "At least 6 forward live months" — 6 这个数字无 rationale 注释。Optional: 加一句解释如 "6 月至少覆盖两个 quarter，足以观察 cohort 漂移"，便于 future LLM 判断是否可调整。Codex 自决。
+
+- **O-fol3 (example threshold ambiguity)**: handoff §3.4 dimension flag (1) example "primary `monthly_alpha_t_stat >= 2.0` while secondary `< 2.0`" — 2.0 是 Phase 5 ship-gate alpha threshold（常见 ~1.96/95% CI 阈值），但 example 未 cross-reference。Optional: 加一句 "假设 Phase 5 ship-gate alpha threshold；具体数字以 `execution_aggregate_report` schema 或 `ship_gate_evaluation` 定义为准" 提示 future LLM 不要把 2.0 当 hard-coded constant。Codex 自决。
+
+**Codex draft 亮点**:
+
+- **§3.2 forward evidence 6 条** 严格度比 review packet 要求高：加了 (4) "真实 provider lineage" 与 (5) 人工交易隔离，明确防止 future LLM 把 backtest / smoke / 手工补选当 forward evidence。spec depth 加分项。
+- **§3.3 monthly return calculation 口径** 明确 close-to-close、不得 0 填充、Sharpe 不随 benchmark 改变 — 防止 silent zero-padding 污染 alpha t-stat / Sharpe 误解释。reviewer 没要求但 Codex 自加的 spec guards。
+- **§4 forward tracker → aggregate flow 9 步** + output directory 隔离 + ignored artifact 政策 — implementation-ready boundary，下一轮 Phase 6b 第一个 implementation slice 直接照做。
+- **§5.3 burst_lane "must not be implemented by weakening steady lane filters"** — 防止 burst_lane 退化成 steady lane filter relaxation 的修补。spec discipline 加分项。
+- **§9 失效旧结论 5 条** — 主动标记 obsolete claims，特别是 "Phase 6a kickoff spec complete means Phase 6b observation is done 失效" 直接锁住 push back 3 的核心 worry，防止 future LLM 重新犯同样错误。
+
+**Process meta observation**:
+
+- 自 `ccc5c85 Tighten commit documentation hygiene` 之后 **连续 6 次** substantive commit 都没 follow-up [trivial] sync（累计 `a784b18` `87a1a5a` `f74ff40` `3ae448b` `56277b6` + 本轮即将 commit Phase 6a handoff）。hygiene 稳定。
+- 本轮 review 流程跟 standard 协议对齐：用户 chat 提案 → Claude review (含 self-review 修正过度规定 wording 的错误) → Codex confirm package → Claude review confirm package → Codex amend → Codex 起草正文 → Claude review 正文。多层 self-review 在 packet stage catch 了 reviewer over-reach（规定 "主轴 / 支撑" framing wording），避免在 handoff 正文里 lock reviewer 的 framing 而非 designer 的 framing。最终 Codex 自选 framing 跟 reviewer 自创 framing 巧合一致 — 这反而进一步说明 reviewer 不该在 design framing 上注入，让 designer 自选 wording。可作 SESSION_LOG case study 但不立即写进 AGENTS.md（避免 [[feedback-protocol-overengineering]] 警告的协议自增殖）。
+
+**Next natural step from my view**:
+
+1. 用户 `提交` Codex 4 文件 + 本 review entry（单 commit，scope "Phase 6a kickoff spec handoff"）。
+2. 下一轮 `执行`：Phase 6b A-short observation 第一个 implementation slice。Codex 起草 Open questions handed off (1) 的 dispose：第一个 Phase 6b task = variant tracking contract 还是 benchmark monthly-return materialization。
+3. 3 条 Optional follow-up（O-fol1/2/3）可在 (a) 本轮 commit 前 fix 后再 review、(b) 下一轮 commit 顺手 fix、(c) 下次 [trivial] sync — 由用户决定。
+
+This entry records the Pass verdict and 3 minor Optional follow-ups. It is **not** a direct execution order to Codex; the Optional follow-ups can be addressed at user's discretion across future commits.
+
+---
+
+## 2026-05-26 — Codex (Phase 6a boundary kickoff spec)
+
+**Commits**: none (docs-only kickoff spec; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude review — Pass with minor notes (A 短 benchmark decision), especially the three carry-over follow-ups for the Phase 6a kickoff handoff.
+- Refines the Phase 5 → Phase 6 boundary after commit `56277b6 docs: lock A-short benchmark decision for Phase 6a`.
+
+**Worked on**:
+1. Added `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` as the Phase 6a kickoff boundary document.
+2. Updated `AGENTS.md` handoff index and `docs/CURRENT.md` snapshot so future sessions start from the Phase 6a handoff instead of the old hot queue wording.
+3. Kept the change docs-only: no `A-EGS`, runner, schema, preset, state, or result artifact behavior changed.
+4. Maintained `docs/CURRENT.md §2` by trimming it to 8 high-level entries; older process / Phase 5 / Phase 4 / Phase 3 details remain routed through AGENTS, handoffs, SESSION_LOG, AI_REVIEW_PROTOCOL, and git log.
+
+**Carry-over disposition**:
+- O1 accepted: the Phase 6a handoff records CSI500 / size-decile portfolio benchmarks as considered and deferred to Phase 6b or later.
+- F3 cleanup accepted: detailed benchmark trigger text was moved out of `docs/CURRENT.md` and into the Phase 6a handoff; CURRENT now keeps only the snapshot and pointer.
+- F2 spec-out accepted: the handoff defines `benchmark_sensitive=true` triggers, a suggested sidecar/report shape, and primary switch prerequisites.
+- F1 accepted with amendment: the handoff now explicitly locks Phase 6a as kickoff spec / boundary contract and Phase 6b as A-short observation whose main axis is six variants in parallel; candidate-universe overlap audit, forward evidence accumulation, and benchmark-aware alpha sedimentation are the supporting evidence pipeline.
+- F2 review fix accepted: benchmark sensitivity keeps four dimension booleans and sets total `benchmark_sensitive = OR(flags)`; exact t-stat gap threshold is deferred to Phase 6b evidence.
+- Optional accepted with amendment: A-short variant family definitions remain sourced from `docs/strategy_design_synthesis.md §2.2`; the handoff keeps an independent routing table without duplicating detailed thresholds.
+
+**Key decisions**:
+- Forward evidence must come from pre-outcome live captured `analysis_input.json` plus deterministic execution replay. `logs/forward_tracker.csv` backfilled 5d/10d/20d returns are diagnostics, not ship-gate evidence by themselves.
+- A-short ship-gate alpha uses CSI1000 monthly returns (`tushare:index_daily/000852.SH`) as primary; CSI300 (`000300.SH`) is mandatory secondary sensitivity and review escalation, not an automatic AND-gate input.
+- `forward_live_months` counts distinct valid live evidence months, not report count, historical backtest months, smoke runs, or manual trade choices.
+- Phase 6a kickoff spec establishes boundaries only. Phase 6b is the A-short observation period: variants are the main axis, while audit / forward / benchmark-aware alpha are the supporting evidence pipeline.
+- Phase 6c/6d remain separate later deliverables: `burst_lane` spec and long-system specs from scratch.
+
+**Alternatives considered and rejected**:
+- "Append Phase 6a to the Phase 5 handoff" — rejected. This is a phase transition and AGENTS explicitly allows a new handoff for cross-phase starts.
+- "Implement benchmark materialization code now" — rejected. CURRENT's next task is the boundary kickoff; code can follow only after the evidence contract is reviewed.
+- "Treat forward tracker return columns as direct ship-gate evidence" — rejected. They lack execution fill/capital context and would bypass the Phase 5 aggregate report contract.
+
+**Open questions handed off**:
+- Whether the first Phase 6b task should start with the variant tracking contract itself, or with one supporting evidence-pipeline slice such as benchmark monthly-return materialization.
+- Whether benchmark sensitivity should later become `execution_aggregate_report` v1.1.0 optional schema fields or remain a separate sidecar artifact.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only Phase 6a kickoff diff.
+2. If Pass, user `提交`.
+3. Next `执行`: start Phase 6b A-short observation boundary or first implementation slice.
+
+---
+
 ## 2026-05-26 — Claude review — Pass with minor notes (A 短 benchmark decision)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: 3 active (O1 + F3 cleanup + F2 spec out) — 全部留给 Phase 6a kickoff handoff round dispose，**不阻塞本轮 commit**。

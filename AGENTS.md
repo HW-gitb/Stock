@@ -228,6 +228,7 @@ Common aliases:
 9. `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格：minimal veto analyzer + JSON state + replay/ablation 完成线（含 3.3 子分数预测力 + 3.4 ESP 反向 PIT 调查 + 3.5 实盘 forward tracker）
 10. `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md` — Phase 4 开工规格：deterministic_report schema first + runner 纯 Python + Skill 是使用文档（非执行入口）
 11. `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` — Phase 5 kickoff 规格：execution backtest contract 边界；schema / runner / simulator 代码尚未开始
+12. `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` — Phase 6a 开工边界：forward evidence、A 短 benchmark sensitivity、forward tracker → aggregate evidence flow、steady/variant/burst/long-spec 边界
 
 完成一轮重要修改后，收尾时必须同步更新 handoff。**默认追加到同 phase 主 handoff，不要轻易新建文件**（2026-05-24 当天 8 个 handoff 是历史教训：碎片化让接手者读到第 5 个就开始跳读）。
 

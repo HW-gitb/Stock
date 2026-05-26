@@ -1,16 +1,17 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（strategy design synthesis）
+**最后更新**：2026-05-26（Phase 6a kickoff spec）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-26)
 
+- Phase 6a boundary kickoff spec is now established in `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: it defines valid forward evidence, CSI1000 primary / CSI300 secondary benchmark monthly return policy, `benchmark_sensitive` triggers, primary-switch prerequisites, forward tracker → execution aggregate flow, and steady / variants / burst / long-spec boundaries. This is docs-only; no EGS, runner, schema, or preset behavior changed.
 - Phase 5 aggregation review Optional disposition O1-O3: input reports are already schema-validated against `execution_backtest_report` v1.2.0, and the reviewed change set now adds a v1.1 rejection regression, a single-report Sharpe-null regression, and expanded capital_context mismatch coverage for preset / market / bucket / currency.
 - Strategy design synthesis is now fixed in `docs/strategy_design_synthesis.md`: short-term = steady risk-filter lane + bounded variants + independent `burst_lane`; long-term = alpha-push system with core quality compounding plus re-rating/catalyst long; research has lighter iteration but reproducibility and promotion gates; coordinator only issues manual recommendations.
 - Phase 5 multi-period aggregation step adds `schemas/execution_aggregate_report.schema.json` v1.0.0 and `runners/aggregate_execution_reports.py`. The runner validates input `execution_backtest_report` v1.2.0 files, enforces compatible bucket-aware `capital_context`, aggregates monthly return / Sharpe / worst max drawdown, optionally computes benchmark-aware monthly alpha t-stat from a `YYYYMM -> return` JSON, and emits `ship_gate_evaluation`. Without benchmark returns or Phase 6 forward months, full-size remains blocked.
-- A-short benchmark decision is now fixed for Phase 6a: primary = CSI1000, secondary = CSI300 mandatory sensitivity. Phase 6a must define falsifiable primary-switch rules and benchmark-sensitivity reporting before benchmark-aware ship-gate interpretation.
+- A-short benchmark decision is fixed for Phase 6a: primary = CSI1000, secondary = CSI300 mandatory sensitivity. Full trigger details now live in the Phase 6a kickoff handoff, not in this snapshot.
 - Real-token Tushare smoke status: Codex bundled Python lacks `tushare`, but `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` has `tushare` + `jsonschema`. Real Tushare price materialization succeeded for `20260515` / `20260521` / `20260522`, execution smoke reports were written under ignored `result/a_short/backtest/execution/smoke_*`, and a 3-report aggregate smoke was written under ignored `smoke_202605_real3_aggregate.json`.
 - Phase 5 runner compatibility fix: `backtest_execution.py` now normalizes legacy `analysis_input.schema_version = "analysis_input.v1.0"` to SemVer `1.0.0` before writing execution reports. This was required by the real 20260521 smoke.
 - Phase 5 ship-gate Optional disposition O1-O3：0-trade execution report 的 `ship_gate_evaluation.metric_results.max_drawdown` 不再把 raw `0.0` 当作 gate pass，而是输出 `value=null / passed=null`；测试新增 multi-trade realized drawdown regression；schema description 明确 v1.x execution report contract 在无 production consumer 前仍是 unfrozen contract。
@@ -33,12 +34,12 @@
 - Roadmap policy: user accepted B semi-reorder. Keep A-share short Phase 6 observation running, draft A-long / US-long specs and normalize US-short spec in parallel during Phase 6, then do Phase 7 DataHub/engine modularization based on all four specs. Phase 8/9 swapping may use data readiness examples in `AGENTS.md` #12, without hard-coding strict criteria.
 - P0a capital context contract commit `244353e` adds `portfolio_allocation` and `cash_buffer_state` schemas, upgrades `execution_backtest_report` to v1.1.0 with required `capital_context`, requires `backtest_execution.py --portfolio-allocation --cash-buffer-state --preset-path`, and adds capital/bucket fields to all four presets.
 - P0a review Optional disposition is included: runner now reads preset YAML instead of a hardcoded preset map, `portfolio_allocation` bucket `horizon` was removed, and single-value policy enums were converted to `const`.
-- Next implementation: start Phase 6a boundary kickoff. It must define forward evidence, benchmark monthly return source, forward tracker -> aggregate evidence flow, and separate deliverables for A-short variants, `burst_lane`, and A-long / US-long specs. Do not jump directly into strategy code.
+- Next implementation: start Phase 6b A-short observation boundary or first implementation slice. Phase 6b's main axis is six A-short variants in parallel; candidate-universe overlap audit, forward evidence accumulation, and benchmark-aware alpha sedimentation are the supporting evidence pipeline. Do not promote variants, implement `burst_lane`, or write long-system code before their own specs.
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.2.0 ship-gate evaluation / execution aggregate report v1.0.0 / runner skeleton / execution_price_data contract / loader wiring / CSV materializer / real Tushare provider materializer / minimal fill simulation 已形成连续链路。
-- **当前目标**：Phase 5 aggregation / real-smoke 收口已提交；策略设计综合版已固化；下一步启动 Phase 6a boundary kickoff。真实 Tushare 小样本 smoke 已跑通，但 3 个样本都在 202605 同月，不构成 alpha / Sharpe ship-gate 证据。
+- **当前 Phase**：Phase 5 execution chain 已完成 minimal 闭环；Phase 6a kickoff spec / boundary contract 已建立；下一步进入 Phase 6b A-short observation。
+- **当前目标**：Phase 6a 已把 forward evidence、benchmark sensitivity、forward tracker → aggregate evidence flow 与 lane 边界写入 handoff；下一步 Phase 6b 以六个 A-short variants 并行验证为主轴，candidate-universe overlap audit、benchmark monthly-return materialization、forward evidence accumulation 作为 evidence pipeline 支撑。真实 Tushare 小样本 smoke 已跑通，但 3 个样本都在 202605 同月，不构成 alpha / Sharpe ship-gate 证据。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -46,11 +47,11 @@
 
 当前无 blocking user decision。若出现新 blocker，按 Pending / Recommendation / Blocks / Rule 四段加入本节；决策完成后立刻删除或改成已决结论，避免 CURRENT.md 变成长期 todo。
 
-1. **A 短 benchmark monthly return source（已决 2026-05-26）**
+1. **A 短 benchmark monthly return source（已决 2026-05-26；细则见 Phase 6a handoff）**
    - **Primary**: CSI1000。
    - **Secondary**: CSI300，mandatory sensitivity report。
-   - **Ship gate rule**: benchmark-aware alpha 自动判定先用 primary-only gate；secondary 不进入自动 AND gate。若 CSI1000 与 CSI300 结论显著分歧，Phase 6a spec 必须输出 `benchmark_sensitive=true` 或等价标记，交给 review 判断。
-   - **Phase 6a spec requirements**: 必须定义可证伪的 primary switch trigger（例如 candidate universe 与 CSI1000 / CSI300 的 overlap、market-cap / style 分布连续满足量化阈值），禁止用“看起来偏大盘/中小盘”的主观判断切换 primary。
+   - **Ship gate rule**: benchmark-aware alpha 自动判定先用 primary-only gate；secondary 不进入自动 AND gate。
+   - **Spec details**: `benchmark_sensitive` trigger、primary switch prerequisite、CSI500 / size-decile deferred rationale 均在 `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`。
    - **Reason**: A 短候选池更偏弹性 / 题材 / 中小盘；24p 结果中 5d excess_csi1000 t=+2.88，而 excess_csi300 t=+0.57。只用 CSI300 可能把 small-cap style beta 误判成 alpha。
 
 ---
@@ -59,33 +60,16 @@
 
 本节只保留当前接续需要的 high-level snapshot；争议、被否方案、review verdict、pending fixes 统一查 `docs/SESSION_LOG.md` 顶部 1-3 条。
 
-- **协作协议精简**（2026-05-25，commits `ef12fbf` `e9a2b18`）：`docs/REVIEW_PACKET.md` 已移除；Codex 的 SESSION_LOG 顶部 entry 作为 review handoff；`[trivial]` 轻量通道已启用。详 `docs/AI_REVIEW_PROTOCOL.md`。
+- **Phase 6a boundary kickoff spec**（2026-05-26）：新增 `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`，定义 forward evidence、CSI1000/CSI300 benchmark policy、`benchmark_sensitive`、forward tracker → aggregate flow、steady/variant/burst/long-spec 边界；纯文档，不改代码/schema。
 - **Phase 5 aggregation Optional disposition**（2026-05-26）：处理 Claude O1-O3。补 v1.1 input report reject、single-report Sharpe null、preset/market/bucket/currency capital_context mismatch 回归；未改聚合算法。
 - **Strategy design synthesis**（2026-05-26）：新增 `docs/strategy_design_synthesis.md`，并在 `AGENTS.md` 固化摘要：短线双通道（steady + variants + burst）、长线 alpha 主系统、research promotion gate、coordinator manual-only 边界。
-- **Phase 5 ship-gate Optional disposition**（2026-05-26）：处理 Claude O1-O3。0-trade max drawdown gate 改为不可评估；新增 multi-trade realized drawdown regression；v1.x unfrozen schema policy 已写入 schema description。
 - **Phase 5 multi-period execution aggregation**（2026-05-26）：新增 `execution_aggregate_report` v1.0.0 和 `aggregate_execution_reports.py`；可把多份 v1.2.0 execution reports 聚合成月度 return / Sharpe / worst drawdown / 可选 benchmark-aware alpha t-stat 的 ship-gate evidence。真实 Tushare 3-date smoke 已跑通，但都在同月，Sharpe / alpha 仍不可评估。
 - **Phase 5 ship-gate evaluation output**（2026-05-26）：`execution_backtest_report` 升到 v1.2.0，新增 required `ship_gate_evaluation`，并用 regression 锁住 Tushare materializer payload 可直接输入 execution runner。单份 execution report 不计算 monthly alpha t-stat / Sharpe，full-size 手动使用仍需后续多期 aggregation 和 forward evidence。
-- **Reference framework policy**（2026-05-25）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
 - **Phase roadmap B semi-reorder**（2026-05-26）：`AGENTS.md` 固化 B 半重排：Phase 6 继续 A 股短线观察，同时并行产出 A 长 / US 长 spec 并规范化 US 短 spec；Phase 7 以 4 套 spec 做共享层与独立 rule pack 划分；Phase 8 优先 US 短 + US 长 skeleton，Phase 9 A 长 implementation 可按数据准备度与 Phase 8 子项交换；数据准备度示例见 `AGENTS.md` #12。
 - **Phase 5 P0a capital context contracts**（2026-05-26，commit `244353e`）：新增 `schemas/portfolio_allocation.schema.json`、`schemas/cash_buffer_state.schema.json`、对应 fixtures/tests；`execution_backtest_report.schema.json` 升 v1.1.0 并要求 `capital_context`；`backtest_execution.py` 新增 `--portfolio-allocation` / `--cash-buffer-state` / `--preset-path`，report 的 `settings.initial_capital` 和 ending equity 均来自 selected bucket capital；4 个 preset 都声明 capital bucket/ceiling。Optional disposition 后，preset YAML 是 capital profile source of truth，portfolio policy bucket 不再重复声明 `horizon`。
 - **Phase 5 minimal fill simulation + Optional disposition**（2026-05-26，commit `0f90c40`）：`backtest_execution.py --price-data` 会从 schema-valid `execution_price_data` 执行最小 daily-OHLC 撮合：T+1 open、涨停不可买、stop-loss 优先、time-stop、bucket sizing、双边成本、CSV/report metrics。O1-O5 disposition 后，新增 gap-down open stop fill、entry open <= stop skip、cash_constrained regression；broader Phase 5 suite 50 tests passed，full unittest 85 tests passed。
-- **Git remote privacy policy 放开**（2026-05-26，commit `28cdc30`）：绝对禁止 `git push` / `git remote add` 改成 private-remote + 用户明确指令 + 隐私审计后允许；secrets / logs / caches / 实盘状态 / ignored artifacts 仍禁上传。详 `AGENTS.md §Git remote privacy policy`。
-- **Phase 5 execution price data CSV materializer**（2026-05-26，commit `ece86b1`）：`runners/materialize_execution_price_data.py` 可把本地 OHLC CSV 转成 schema-valid `execution_price_data` JSON；真实 Tushare fetch / fill logic 未实现。9 测试新增（22 → 26 total）。
-- **Phase 5 execution price data Tushare materializer**（2026-05-26，commit `cfa1c57`）：`runners/materialize_execution_price_data_tushare.py` 复用同一 `execution_price_data` v1.0.0 契约，接入 Tushare provider + ignored cache；initial review 的 6 条 Optional 已处理；fill logic 未实现。
-- **Phase 5 execution price data loader wiring**（2026-05-26，commit `be68abe`）：`runners/backtest_execution.py` 新增 `--price-data`，可校验并引用既有 `execution_price_data` JSON；真实 provider fetch / fill logic 未实现。
-- **Phase 5 execution price data contract**（2026-05-26，commit `ad4068f`）：新增 `schemas/execution_price_data.schema.json`，用于定义 `execution_report.inputs.price_data.path` 未来指向的 OHLC 输入文件。
-- **Phase 5 execution runner skeleton**（2026-05-26，commit `8488427`）：`runners/backtest_execution.py` 已能从 `analysis_input.json` 生成 schema-valid `execution_report.json` 与 CSV shells；真实 simulator / fill logic 未实现。
-- **Phase 5 execution report schema-first**（2026-05-25，commit `636f0fd`）：新增 `schemas/execution_backtest_report.schema.json` v1.0.0 与最小 schema meta-validation 测试，并应用 Claude 4 条 Optional contract 加固。
-- **deterministic report v1.1.0 前置升级**（2026-05-25，commit `da26a2b`）：deterministic report / enrichment patch contract 已对齐 L3 与 enrichment lineage。
-- **Phase 5 kickoff spec**（2026-05-25，commit `6c90f56`）：新增 [phase5 handoff](handoff/2026-05-25_phase5_kickoff_spec_handoff.md)。Phase 5 边界已锁定：schema first，再 runner / simulator。
-- **Phase 4 minimal 收口**（2026-05-25）：deterministic report schema + runner + coverage + Skill + prompt 骨架 + enrichment patch/example + smoke/tests 已完成。
-- **Phase 3+4 audit fix sweep**（2026-05-25，commits `a312e57` `9476d4c` `278f917` `911e49b`）：analyzer / runner / tracker / Skill fixture 加固；34 tests pass。
-- **Phase 3.6 收尾 audit**（2026-05-25，commit `e342452`）：analyzer ablation 命名、`l2_unknown` 归一化、circuit breaker expiry、测试增至 21 个。
-- **Phase 3.5 forward tracker**（2026-05-25，commit `17fb70e`）：`forward_tracker.py` capture + backfill；`weekly_screening.ps1` Stage 3 自动 capture。
-- **Phase 3.4 ESP 反向 PIT 调查**（2026-05-25，commit `f18f282`）：EGS PIT filter 正确；Tushare revision history 不可验证；priced-in + 2024Q4-2025Q1 regime event 是当前最可能解释。
-- **Phase 3.3 子分数预测力**（2026-05-25，commit `2a4f46f`）：`esp_score` 反向预测、`l4_score` regime-dependent、`final_score < 60` validation 20d t=-3.82。
 
-更早事项（Phase 1a/1b、Phase 2 工程链路、v7.10、Phase 2.5/2.6、git init、Phase 3 首轮等）→ 见 `AGENTS.md §交接记录`、相关 handoff 与 `git log --all`。
+更早事项（协作协议精简、Reference framework policy、Git remote privacy、Phase 5 runner/materializer/schema 细节、deterministic report、Phase 4、Phase 3、Phase 2 工程链路、v7.10、git init 等）→ 见 `AGENTS.md §交接记录`、相关 handoff、`docs/AI_REVIEW_PROTOCOL.md`、`docs/SESSION_LOG.md` 与 `git log --all`。
 
 ---
 
@@ -182,6 +166,7 @@
 - `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格：minimal veto analyzer + JSON state + replay/ablation 完成线
 - `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md` — Phase 4 开工规格：deterministic_report schema first + runner-as-executor + Skill-as-doc
 - `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` — Phase 5 kickoff 规格与追加记录：execution report schema、runner skeleton、price data input contract
+- `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` — Phase 6a 边界：forward evidence、benchmark sensitivity、forward tracker → aggregate flow、lane/spec 路由
 - `docs/AI_REVIEW_PROTOCOL.md` — Codex / Claude / 用户三方审查流程
 - `docs/portfolio_allocation_policy.md` — P0c 用户确认资金政策；P0a capital context contract 的前置决策面
 - `docs/strategy_design_synthesis.md` — 短线优化 + 爆发力通道 + 长线 alpha 系统 + research/coordinator 的设计综合版
@@ -198,14 +183,17 @@
 
 ## 6. 下一步（按优先级 P0 → P3）
 
-### P0 — Phase 6a 启动边界
+### P0 — Phase 6b A-short observation
 
-1. **Phase 6a boundary kickoff** — 下一步只写 forward evidence / benchmark / tracking / lane boundary 契约，不直接改 EGS 或实现 `burst_lane`。
-2. **保持 P0a contract 边界** — fill simulation 必须使用 `capital_context.bucket_capital` / `bucket_ceiling_pct` / manual-order-only boundary，不得退回 total-account `initial_capital` 假设。
-3. **Strategy synthesis 约束** — 后续短线优化必须走 steady lane / bounded variants / independent `burst_lane`；长线 spec 必须按 alpha 主系统从头设计。详 `docs/strategy_design_synthesis.md`。
-4. **Claude 审查点** — execution runner、撮合假设、输出目录隔离、capital context contract 均需 Claude 独立审查后由用户确认。
-5. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
-6. **Roadmap B semi-reorder refined** — Phase 6 拆成 6a boundary、6b A-short variants、6c `burst_lane` spec、6d A-long / US-long specs + US-short normalization；Phase 7 才做 DataHub / engine 重构。
+1. **A-short variants 并行验证（主轴）** — 六个 bounded variants 按 `docs/strategy_design_synthesis.md §2.2` 建 comparison tracks；不直接 promote、不改 EGS 主通道。
+2. **Candidate-universe overlap audit（evidence pipeline）** — 为 benchmark policy 补真实候选池风格/指数 overlap 证据；禁止主观切换 primary benchmark。
+3. **Benchmark monthly-return materialization（evidence pipeline）** — 产出 CSI1000 primary 与 CSI300 secondary 的月度 return JSON，供 `aggregate_execution_reports.py` 与 sensitivity report 使用。
+4. **Forward evidence accumulation（evidence pipeline）** — 继续 weekly capture / mature-window execution replay；`forward_live_months` 只按有效 live evidence 月份计数。
+5. **沿用 Phase 6a evidence contract** — forward evidence / benchmark monthly returns / `benchmark_sensitive` / `forward_live_months` 必须按 `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`。
+6. **保持 P0a contract 边界** — fill simulation 必须使用 `capital_context.bucket_capital` / `bucket_ceiling_pct` / manual-order-only boundary，不得退回 total-account `initial_capital` 假设。
+7. **Strategy synthesis 约束** — 后续短线优化必须走 steady lane / bounded variants / independent `burst_lane`；长线 spec 必须按 alpha 主系统从头设计。详 `docs/strategy_design_synthesis.md`。
+8. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
+9. **Roadmap B semi-reorder refined** — Phase 6 拆成 6a boundary、6b A-short variants、6c `burst_lane` spec、6d A-long / US-long specs + US-short normalization；Phase 7 才做 DataHub / engine 重构。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）
 
