@@ -62,7 +62,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
 
             self.assertEqual(errors, [])
             self.assertEqual(report["schema_name"], "execution_backtest_report")
-            self.assertEqual(report["schema_version"], "1.1.0")
+            self.assertEqual(report["schema_version"], "1.2.0")
             self.assertEqual(report["settings"]["primary_input"], "analysis_input")
             self.assertFalse(report["settings"]["deterministic_report_required"])
             self.assertEqual(report["settings"]["initial_capital"], 116666.55)
@@ -85,6 +85,15 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             self.assertEqual(report["metrics"]["candidate_count"], 2)
             self.assertEqual(report["metrics"]["trade_count"], 0)
             self.assertEqual(report["metrics"]["skipped_count"], 2)
+            self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
+            self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
+            self.assertEqual(
+                report["ship_gate_evaluation"]["metric_results"]["forward_live_months"]["value"],
+                0.0,
+            )
+            self.assertFalse(
+                report["ship_gate_evaluation"]["metric_results"]["forward_live_months"]["passed"]
+            )
             self.assertEqual(report["inputs"]["deterministic_reports"], [])
             self.assertIn("entry", report["execution_assumptions"]["event_log"]["event_codes"])
             self.assertIn("exit", report["execution_assumptions"]["event_log"]["event_codes"])
@@ -184,6 +193,13 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             self.assertEqual(report["metrics"]["win_rate"], 1.0)
             self.assertEqual(report["metrics"]["avg_holding_days"], 1.0)
             self.assertGreater(report["metrics"]["ending_equity"], 116666.55)
+            self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
+            self.assertTrue(
+                report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]["passed"]
+            )
+            self.assertIsNone(
+                report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["passed"]
+            )
             self.assertNotIn(
                 "no_executable_candidates",
                 {warning["warning_type"] for warning in report["date_warnings"]},
@@ -212,6 +228,54 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             ) as handle:
                 skipped = list(csv.DictReader(handle))
             self.assertEqual([row["reason"] for row in skipped], ["analyzer_hard_veto"])
+
+    def test_ship_gate_drawdown_uses_realized_multi_trade_path(self) -> None:
+        payload = self.load_fixture_payload()
+        payload["candidates"][1] = deepcopy(payload["candidates"][1])
+        payload["candidates"][1]["industry"] = deepcopy(payload["candidates"][1]["industry"])
+        payload["candidates"][1]["industry"]["sw_l2_name"] = "一般零售"
+
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for row in price_data["rows"]:
+            if row["ts_code"] == "600001.SH" and row["trade_date"] == "20260525":
+                row["low_qfq"] = 18.8
+                break
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            input_path = work_dir / "analysis_input.json"
+            price_path = work_dir / "price_data.json"
+            out_dir = work_dir / "execution"
+            input_path.write_text(json.dumps(payload), encoding="utf-8")
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(input_path),
+                    "--price-data",
+                    str(price_path),
+                    *self.capital_cli_args(),
+                    "--time-stop-days",
+                    "1",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(report["metrics"]["trade_count"], 2)
+        self.assertLess(report["metrics"]["max_drawdown"], 0.0)
+        drawdown_result = report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]
+        self.assertEqual(drawdown_result["value"], report["metrics"]["max_drawdown"])
+        self.assertTrue(drawdown_result["passed"])
 
     def test_stop_loss_takes_priority_over_time_stop(self) -> None:
         price_data = json.loads(
@@ -386,6 +450,10 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             self.assertEqual(rc, 0)
             report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["metrics"]["trade_count"], 0)
+            drawdown_result = report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]
+            self.assertIsNone(drawdown_result["value"])
+            self.assertIsNone(drawdown_result["passed"])
+            self.assertIn("no executed trades", drawdown_result["reason"])
             with (out_dir / "skipped_candidates.csv").open(
                 "r", encoding="utf-8", newline=""
             ) as handle:
@@ -667,6 +735,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 "sharpe_min": 1.0,
                 "max_drawdown_max": 0.15,
                 "forward_live_months_min": 12,
+                "failure_mode": "paper_or_minimal_size_or_risk_filter_only",
                 "status": "not_evaluated",
                 "full_size_allowed": False,
                 "reason": "fixture",

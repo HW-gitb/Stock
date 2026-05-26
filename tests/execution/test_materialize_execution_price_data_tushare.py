@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - environment guard
     Draft7Validator = None  # type: ignore[assignment]
 
 from runners.backtest_execution import ROOT
+import runners.backtest_execution as execution_runner
 import runners.materialize_execution_price_data_tushare as materializer
 from runners.materialize_execution_price_data_tushare import (
     DEFAULT_OUT_DIR,
@@ -349,6 +350,51 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(payload["symbols"], ["600000.SH"])
         self.assertNotIn("daily:600001.SH", fake.calls)
+
+    def test_materialized_tushare_payload_can_feed_execution_runner(self) -> None:
+        payload = build_payload_from_tushare(
+            FakeTusharePro(),
+            symbols=["600000.SH", "600001.SH"],
+            as_of="20260522",
+            start_date="20260522",
+            end_date="20260525",
+            generated_at="2026-05-26T00:00:00+00:00",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            price_path = Path(tmpdir) / "execution_price_data.json"
+            out_dir = Path(tmpdir) / "execution"
+            write_payload(payload, price_path)
+
+            rc = execution_runner.main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    "--price-data",
+                    str(price_path),
+                    "--portfolio-allocation",
+                    str(ROOT / "tests" / "fixtures" / "portfolio_allocation_minimal.json"),
+                    "--cash-buffer-state",
+                    str(ROOT / "tests" / "fixtures" / "cash_buffer_state_minimal.json"),
+                    "--time-stop-days",
+                    "1",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(report["schema_version"], "1.2.0")
+        self.assertEqual(report["metrics"]["trade_count"], 1)
+        self.assertEqual(
+            report["data_lineage"]["api_families"]["execution_price"],
+            TUSHARE_API_FAMILIES,
+        )
+        self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
+        self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
 
 
 if __name__ == "__main__":

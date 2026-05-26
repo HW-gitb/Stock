@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/execution_backtest_report/1.1.0/schema.json",
+  "$id": "https://stock.local/schemas/execution_backtest_report/1.2.0/schema.json",
   "title": "Execution Backtest Report",
-  "description": "Phase 5 machine-readable contract for execution-level backtest reports. Version 1.1.0 adds bucket-aware capital_context and supports minimal fill simulation outputs. event_log.event_codes is grow-only within v1.x; consumers should handle unknown event codes gracefully.",
+  "description": "Phase 5 machine-readable contract for execution-level backtest reports. Version 1.2.0 adds a preliminary ship_gate_evaluation block on top of the bucket-aware capital_context and minimal fill simulation outputs. The v1.x execution report contract remains unfrozen while there is no production consumer; required field additions may use v1.x minor bumps until the first production consumer is frozen, after which breaking changes require v2.0.0. event_log.event_codes is grow-only within v1.x; consumers should handle unknown event codes gracefully.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,6 +18,7 @@
     "data_lineage",
     "outputs",
     "metrics",
+    "ship_gate_evaluation",
     "date_warnings",
     "limitations"
   ],
@@ -28,7 +29,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.1.0"
+      "const": "1.2.0"
     },
     "generated_at": {
       "type": "string",
@@ -62,6 +63,9 @@
     },
     "metrics": {
       "$ref": "#/$defs/metrics"
+    },
+    "ship_gate_evaluation": {
+      "$ref": "#/$defs/shipGateEvaluation"
     },
     "date_warnings": {
       "type": "array",
@@ -104,7 +108,7 @@
         "initial_capital": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Run-level starting capital. In schema v1.1.0 this must represent the selected bucket capital, not total account capital; capital_context is the authoritative source."
+          "description": "Run-level starting capital. In schema v1.2.0 this must represent the selected bucket capital, not total account capital; capital_context is the authoritative source."
         },
         "primary_input": {
           "type": "string",
@@ -666,6 +670,92 @@
         }
       }
     },
+    "shipGateEvaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_logic",
+        "status",
+        "full_size_allowed",
+        "failure_mode",
+        "manual_execution_only",
+        "metric_results",
+        "limitations"
+      ],
+      "properties": {
+        "policy_logic": {
+          "type": "string",
+          "enum": ["and"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_evaluable", "pass", "fail"],
+          "description": "not_evaluable means one or more required gate metrics are not available from this report."
+        },
+        "full_size_allowed": {
+          "type": "boolean",
+          "description": "True only when every AND-gate metric is evaluable and passes. This is a manual-use gate, not broker automation permission."
+        },
+        "failure_mode": {
+          "type": "string",
+          "const": "paper_or_minimal_size_or_risk_filter_only"
+        },
+        "manual_execution_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "metric_results": {
+          "$ref": "#/$defs/shipGateMetricResults"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "shipGateMetricResults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "monthly_alpha_t_stat",
+        "sharpe",
+        "max_drawdown",
+        "forward_live_months"
+      ],
+      "properties": {
+        "monthly_alpha_t_stat": {
+          "$ref": "#/$defs/shipGateMetricResult"
+        },
+        "sharpe": {
+          "$ref": "#/$defs/shipGateMetricResult"
+        },
+        "max_drawdown": {
+          "$ref": "#/$defs/shipGateMetricResult"
+        },
+        "forward_live_months": {
+          "$ref": "#/$defs/shipGateMetricResult"
+        }
+      }
+    },
+    "shipGateMetricResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "threshold", "passed", "reason"],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "passed": {
+          "type": ["boolean", "null"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "dateWarning": {
       "type": "object",
       "additionalProperties": false,
@@ -797,6 +887,7 @@
         "sharpe_min",
         "max_drawdown_max",
         "forward_live_months_min",
+        "failure_mode",
         "status",
         "full_size_allowed",
         "reason"
@@ -821,6 +912,10 @@
         "forward_live_months_min": {
           "type": "integer",
           "const": 12
+        },
+        "failure_mode": {
+          "type": "string",
+          "const": "paper_or_minimal_size_or_risk_filter_only"
         },
         "status": {
           "type": "string",

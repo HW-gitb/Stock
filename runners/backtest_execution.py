@@ -36,6 +36,7 @@ DEFAULT_INPUT_ROOT = ROOT / "result" / "a_short"
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution"
 DEFAULT_PRESET_PATH = ROOT / "presets" / "a_short.yaml"
 A_SHARE_LOT_SIZE = 100
+SHIP_GATE_FAILURE_MODE = "paper_or_minimal_size_or_risk_filter_only"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -443,6 +444,7 @@ def build_capital_context(
             "sharpe_min": float(ship_gate_policy["sharpe_min"]),
             "max_drawdown_max": float(ship_gate_policy["max_drawdown_max"]),
             "forward_live_months_min": int(ship_gate_policy["forward_live_months_min"]),
+            "failure_mode": str(ship_gate_policy["failure_mode"]),
             "status": "not_evaluated",
             "full_size_allowed": False,
             "reason": "Phase 5 skeleton has not evaluated forward-live ship-gate metrics.",
@@ -456,7 +458,7 @@ def validate_initial_capital_guard(args: argparse.Namespace, capital_context: di
     bucket_capital = float(capital_context["bucket_capital"])
     if abs(args.initial_capital - bucket_capital) > 0.01:
         raise ValueError(
-            "--initial-capital is only a guard in v1.1.0 and must equal "
+            "--initial-capital is only a guard in v1.2.0 and must equal "
             f"capital_context.bucket_capital ({bucket_capital:.2f}); got {args.initial_capital:.2f}"
         )
 
@@ -1049,6 +1051,88 @@ def output_refs(out_dir: Path) -> dict[str, str]:
     }
 
 
+def ship_gate_metric_result(
+    value: float | None,
+    threshold: float,
+    passed: bool | None,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "value": value,
+        "threshold": threshold,
+        "passed": passed,
+        "reason": reason,
+    }
+
+
+def build_ship_gate_evaluation(
+    report_metrics: dict[str, Any], capital_context: dict[str, Any]
+) -> dict[str, Any]:
+    policy = capital_context["ship_gate"]
+    trade_count = int(report_metrics.get("trade_count") or 0)
+    max_drawdown = report_metrics.get("max_drawdown")
+    max_drawdown_value = (
+        float(max_drawdown) if isinstance(max_drawdown, (int, float)) else None
+    )
+    max_drawdown_threshold = float(policy["max_drawdown_max"])
+    max_drawdown_passed = None
+    max_drawdown_reason = "requires simulated equity drawdown; no executable equity path was available"
+    if trade_count == 0:
+        max_drawdown_value = None
+        max_drawdown_reason = "no executed trades to evaluate drawdown signal"
+    elif max_drawdown_value is not None:
+        max_drawdown_passed = abs(max_drawdown_value) <= max_drawdown_threshold
+        max_drawdown_reason = "uses realized daily_equity drawdown from this execution run"
+
+    metric_results = {
+        "monthly_alpha_t_stat": ship_gate_metric_result(
+            None,
+            float(policy["monthly_alpha_t_stat_min"]),
+            None,
+            "requires a multi-period benchmark-excess return series; this single execution report does not compute it",
+        ),
+        "sharpe": ship_gate_metric_result(
+            None,
+            float(policy["sharpe_min"]),
+            None,
+            "requires a multi-period return series; this single execution report does not compute it",
+        ),
+        "max_drawdown": ship_gate_metric_result(
+            max_drawdown_value,
+            max_drawdown_threshold,
+            max_drawdown_passed,
+            max_drawdown_reason,
+        ),
+        "forward_live_months": ship_gate_metric_result(
+            0.0,
+            float(policy["forward_live_months_min"]),
+            False,
+            "backtest reports carry no forward-live observation months",
+        ),
+    }
+    passed_values = [result["passed"] for result in metric_results.values()]
+    if any(value is None for value in passed_values):
+        status = "not_evaluable"
+    elif all(bool(value) for value in passed_values):
+        status = "pass"
+    else:
+        status = "fail"
+
+    return {
+        "policy_logic": str(policy["policy_logic"]),
+        "status": status,
+        "full_size_allowed": status == "pass",
+        "failure_mode": str(policy.get("failure_mode") or SHIP_GATE_FAILURE_MODE),
+        "manual_execution_only": bool(capital_context["manual_execution_only"]),
+        "metric_results": metric_results,
+        "limitations": [
+            "monthly_alpha_t_stat and sharpe need multi-period benchmark-aware aggregation outside a single execution report.",
+            "forward_live_months is always 0 for a backtest report; Phase 6 forward tracking must supply live evidence.",
+            "full_size_allowed only turns true when every AND-gate metric is evaluable and passes under the manual-order boundary.",
+        ],
+    }
+
+
 def build_report(
     payload: dict[str, Any],
     input_path: Path,
@@ -1069,10 +1153,15 @@ def build_report(
         simulation = empty_simulation_result(payload, capital_context, skipped_rows)
     candidate_count = len(candidates)
     sim_metrics = dict(simulation["metrics"])
+    report_metrics = {
+        "sample_count": candidate_count,
+        "candidate_count": candidate_count,
+        **sim_metrics,
+    }
 
     return {
         "schema_name": "execution_backtest_report",
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "generated_at": generated_at or iso_now(),
         "preset": str(capital_context["preset"]),
         "mode": args.mode,
@@ -1138,11 +1227,8 @@ def build_report(
             "l3_mode": normalized_l3_mode(payload),
         },
         "outputs": output_refs(out_dir),
-        "metrics": {
-            "sample_count": candidate_count,
-            "candidate_count": candidate_count,
-            **sim_metrics,
-        },
+        "metrics": report_metrics,
+        "ship_gate_evaluation": build_ship_gate_evaluation(report_metrics, capital_context),
         "date_warnings": simulation["date_warnings"],
         "limitations": simulation["limitations"],
     }

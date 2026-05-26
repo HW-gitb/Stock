@@ -8,6 +8,218 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Phase 5 ship-gate evaluation Optional disposition O1-O3)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O3 全部 dispose 完成）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `4610e14`; targets the immediately prior Codex entry "Phase 5 ship-gate evaluation Optional disposition O1-O3")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `runners/backtest_execution.py` ship_gate calc 改动（O1：trade_count==0 时 max_drawdown null handling，L1080-1082）
+- `schemas/execution_backtest_report.schema.json:5` description 加 v1.x unfrozen policy（O3）
+- `tests/execution/test_backtest_execution.py` 加 `test_ship_gate_drawdown_uses_realized_multi_trade_path` (L232) 多-trade DD regression（O2）
+- `docs/CURRENT.md` + `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` + `docs/portfolio_allocation_policy.md` 同步
+- 无 EGS / analyzer / preset / P0a schema / CSV/Tushare materializer / 其他 runner 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest discover` → `Ran 88 tests in 0.643s OK` ✅（87 → 88，新增 1 multi-trade DD test）
+
+**Disposition 逐条核对**:
+
+- **O1 (Pass)** — `runners/backtest_execution.py:1080-1082`:
+  ```python
+  if trade_count == 0:
+      max_drawdown_value = None
+      max_drawdown_reason = "no executed trades to evaluate drawdown signal"
+  ```
+  `max_drawdown_passed` 默认初始 None（L1078），只在 `elif max_drawdown_value is not None` (L1083) 才算 pass/fail。完全按建议 (a) 路径：0-trade 时 passed=null + reason 文案与建议一致 "no executed trades to evaluate drawdown signal"。与 alpha/sharpe 的 null handling 现在一致 — 全部 honest "uncomputable" framing。✅
+- **O2 (Pass with mod)** — 新 test `test_ship_gate_drawdown_uses_realized_multi_trade_path` (L232) 通过修改 price_data 让 600001.SH 在 20260525 low=18.8 触发 stop loss → 真实 multi-trade DD 出现 → ship_gate_evaluation.max_drawdown 反映 realized DD。**部分 reject** "Force pass/fail branch tests with synthetic alpha/sharpe values" — Codex 理由 "those branches belong to a future aggregation layer"。Reject 合理：单期 backtest 强制 sharpe/alpha 算个数 = 重蹈 0-trade DD 假信号的覆辙；branch 覆盖等 multi-period aggregation 真实算出来再加更对。✅
+- **O3 (Pass)** — `schemas/execution_backtest_report.schema.json:5` description 加 `The v1.x execution report contract remains unfrozen while there is no production consumer; required field additions may use v1.x minor bumps until the first production consumer is frozen, after which breaking changes require v2.0.0`。完全按建议 doc 化 v1.x bump policy。Future LLM / consumer 看 schema 顶部就知道 v1.x 阶段语义。✅
+
+**额外观察（非 issue）**:
+
+- **3 个 honest null 现在统一**：alpha t-stat (null + "requires multi-period aggregation") / sharpe (null + 同) / max_drawdown (null when trade_count==0 + "no executed trades to evaluate drawdown signal")。`overall_passed` 与 `status="not_evaluable"` 现在对 0-trade backtest 一致返回 not_evaluable + overall_passed=False — 完整 honest framing ✅
+- **Codex `修复` entry alternatives rejected 2 条**：("Keep 0-trade max_drawdown as gate pass" 否决因 false safety signal / "Force pass/fail branch tests with synthetic alpha/sharpe values" 否决因 branches belong to future layer) — 决策路径可追溯 ✅
+- **Codex 主动指出 `metrics.max_drawdown = 0.0` raw 仍 emit** (Key decisions): raw metric 和 ship_gate evaluation 拆开 — raw metric 是 mechanical output (无 trades 也可以是 0)；ship_gate evaluation 是 policy judgment (无 trades 时 honest null)。这种拆分**比合并好**：raw 报表保留 backward 兼容信号，judgment 层独立诚实 ✅
+- **新 test 复用现有 fixture** (`execution_price_data_minimal.json`)，只 in-memory 改一行 low_qfq 触发 stop loss — 测试简洁 ✅
+- **本轮 working tree 9 文件改动全部一致 O1-O3 scope**，**没** silent 顺手改 protocol / preset / EGS / analyzer / Phase 4 — 在 process meta observation 关注的 protocol-thrashing 风险点上守住了 scope ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1-O3 全部 Pass，无新 finding；O2 部分 reject 理由合理；O3 doc 化让 future LLM 与 consumer 都能看 schema 顶部就懂 v1.x policy）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`。
+
+**Process meta observation（跟踪上轮）**:
+
+- 上轮 review 指出 `4610e14 [trivial] Sync commit hygiene post-commit status` violation of `ccc5c85`。本轮 Codex **没**再发起 protocol 改动，scope 严守 ship_gate Optional dispose — 良性信号 ✅
+- 本轮 `执行` entry 写得 stable wording check：CURRENT.md / SESSION_LOG entry 措辞含 "the reviewed change set adds..." / "after this reviewed change is committed..." 类 stable 措辞，看起来比上轮 `0f90c40` / `ccc5c85` 之前 transient 写法改善 — 可以观察本次 commit 后是否还需 [trivial] sync。如果不需要 → Codex 真内化了 hygiene 规则；如果还需要 → 还要进一步 audit prior docs。
+
+**Next natural step from my view**:
+
+1. 用户 `提交`（单 scope = ship_gate O1-O3 dispose，4 docs + 1 runner + 1 schema + 2 tests，走 `git add -A` 快路径）。
+2. 提交后回到 Codex 自己提的真 P0：
+   - **real-token small Tushare smoke** when credentials available — 用真实 Tushare API + 已 P0a 完成的 capital context + 已 ship gate 嵌入 evaluation 跑一个真实 A 股 as_of 的 execution backtest，第一次看到真实 fill simulation 输出
+   - **multi-period execution aggregation** — 跨 N 期 backtest 聚合算 monthly alpha t-stat / Sharpe (终于能从 null 变成真数字)，第一次让 ship gate "passed=true/false" 成为可能
+3. 这两步完成后是 Phase 5 真正闭环（contract + skeleton + materializer + Tushare provider + fill simulation + ship gate evaluation + multi-period aggregation），可以进 Phase 6 forward observation。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 ship-gate evaluation Optional disposition O1-O3)
+
+**Commits**: none (fix round; commit happens only after Claude Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude review — Pass (Phase 5 preliminary ship-gate evaluation), which had no Required fixes and 3 Optional suggestions pending Codex disposition.
+- Refines the initial v1.2.0 ship-gate evaluation by making 0-trade drawdown handling honest and documenting the unfrozen v1.x schema policy.
+
+**Worked on**:
+1. O1 accepted: 0-trade reports now emit `max_drawdown.value = null` and `passed = null` inside `ship_gate_evaluation`.
+2. O2 accepted with modification: added a multi-trade realized drawdown regression and a 0-trade drawdown-null assertion; deferred artificial pass/fail status branch coverage to the future multi-period aggregation layer.
+3. O3 accepted: schema description now states v1.x execution reports remain unfrozen until the first production consumer is frozen.
+4. Updated CURRENT and Phase 5 handoff with the disposition.
+
+**Key decisions**:
+- Raw `metrics.max_drawdown = 0.0` can still exist for a no-trade equity path, but ship-gate drawdown evidence is not evaluable without executed trades.
+- The single-report runner should not fake ship-gate `pass` / `fail` branch coverage because monthly alpha t-stat and Sharpe are inherently unavailable until multi-period aggregation exists.
+- v1.2.0 remains acceptable for this required-field addition because the execution report contract is explicitly unfrozen in Phase 5.
+
+**Alternatives considered and rejected**:
+- "Keep 0-trade max_drawdown as gate pass" — rejected because it creates a false safety signal.
+- "Force pass/fail branch tests with synthetic alpha/sharpe values in this runner" — rejected because those branches belong to a future aggregation layer, not single execution reports.
+
+**Open questions handed off**:
+- Multi-period aggregation still needs benchmark excess return inputs before monthly alpha t-stat can be evaluated.
+
+**Next natural step from my view**:
+1. Claude re-reviews O1-O3 disposition.
+2. If Pass, user can `提交`.
+3. After commit, continue with real-token small Tushare smoke and multi-period execution aggregation.
+
+## 2026-05-26 — Claude review — Pass (Phase 5 preliminary ship-gate evaluation)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (3 条 active)。1 个 process meta observation 关于 `4610e14` [trivial] sync 违反刚 tighten 的规则。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `4610e14`; targets the immediately prior Codex entry "Phase 5 preliminary ship-gate evaluation")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `schemas/execution_backtest_report.schema.json` v1.1.0 → v1.2.0 升级（加 required `ship_gate_evaluation` block，+103 行）
+- `runners/backtest_execution.py` 加 ship_gate_evaluation 计算 + max_drawdown / 4-metric AND logic（+96 行）
+- `tests/execution/test_materialize_execution_price_data_tushare.py` 加 end-to-end integration test (+46 行)
+- `tests/execution/test_backtest_execution.py` 加 ship_gate 断言（+19 行）
+- `tests/schema/test_execution_backtest_report_schema.py` 加 schema field 测试（+24 行）
+- `docs/CURRENT.md` / `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` / `docs/portfolio_allocation_policy.md` 同步
+- 无 EGS / analyzer / preset / P0a schema / CSV materializer / 其他 runner 改动 ✅
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest discover` → `Ran 87 tests in 0.587s OK` ✅（85 → 87，新增 2 tests）
+
+**Reasons for Pass**:
+
+通过 3 个并发 Explore agent 独立审查（schema design / runner calculation logic / Tushare integration end-to-end）：
+
+- **Schema v1.2.0 design 完整** (Agent 1)：4 个 ship gate metric 全覆盖；每个 metric 3-元组 `value / threshold / passed` + reason 字段；`passed: ["boolean", "null"]` explicit 允许 null；thresholds mirror portfolio_allocation policy（const 2.0 / 1.0 / 0.15 / 12）；`failure_mode` const 与 P0a policy 一致 ✅
+- **Max drawdown 数学正确** (Agent 2)：`drawdown = (equity / peak_equity) - 1.0` peak-to-trough；初始 peak = bucket_capital；从实现的 cash equity 序列计算 ✅
+- **Null handling honest** (Agent 2)：alpha t-stat / sharpe 单期 backtest 算不出 → 真 emit `value: null + passed: null` + reason 文案 "requires a multi-period... this single execution report does not compute it" — 不 silently 算无意义数 ✅
+- **forward_live_months = 0 硬编码** (Agent 2)：所有 backtest report `passed = false`（0 < 12）→ `overall_passed = False` 永久阻止 silent full-size 部署。Design feature 不是 bug ✅
+- **Threshold 单源 of truth** (Agent 2)：runner 从 `capital_context["ship_gate"]` 读 thresholds（由 P0a `build_capital_context` 从 portfolio_allocation pull），不 hardcoded。无 drift 风险 ✅
+- **overall_passed AND 逻辑** (Agent 2)：任一 null/false → not_evaluable / overall_passed=False。safer side 默认正确 ✅
+- **Tushare integration test 端到端完整** (Agent 3)：FakeTusharePro → materializer → schema-valid JSON → 写盘 → `runner.main(--price-data <path>)` → 验证 trade_count==1 from materialized data。锁住 critical contract `Tushare → execution_price_data → backtest fills` ✅
+- **scope 纪律好**：不抓 real token / network，不接 broker / OS automation；不动 P0a schemas / preset / CSV materializer / EGS / analyzer / Phase 3 hard veto ✅
+- **Codex `执行` entry alternatives rejected 3 条**：("单 report 算 sharpe" 否决 / "max DD only 算 gate" 否决 / "start full multi-position engine" 否决)，决策路径可追溯 ✅
+- **Open questions handed off 诚实**：(i) 哪个 historical as_of 用于 real-token smoke / (ii) multi-period aggregation 还需 benchmark excess return input — 没 oversell minimal scope ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — 单期 backtest 无 trades 时 max_drawdown = 0 给假"passed"信号**（`runners/backtest_execution.py` ship_gate calc + `schemas/.../ship_gate_evaluation`）。当前 backtest 如果 0 trades，max_drawdown = 0，自动 `passed = True`（0 < 15%）。这给一个虚假"max DD 通过"信号 — 实际上 0 不是 backtest 评估到的 DD，是没数据可评估。建议两种修法：
+   - (a) 当 `trade_count == 0` 时 `max_drawdown.passed = null`（与 alpha/sharpe 同 honest null pattern）+ reason 文案 "no trades to evaluate drawdown signal"
+   - (b) 在 limitations 段加 `max_drawdown evaluated from single short backtest can be trivially small (e.g., 0 when no trades occurred); not a substitute for multi-period drawdown analysis`
+
+   倾向 (a) — 与 alpha/sharpe 的 null handling 保持一致，给 reviewer/user 清晰信号。Agent 2 specifically flag 这点。
+
+2. **O2 — 测试覆盖偏弱**（`tests/execution/test_backtest_execution.py` ship_gate 部分）。当前只测：`status = "not_evaluable"` + `max_drawdown.passed = True`（无 trades 场景）。**缺**：
+   - multi-trade scenario 下 max_drawdown 真实计算验证
+   - null 传播逻辑（alpha/sharpe passed=null → overall_passed=False）显式验证
+   - 不同 fixture 触发不同 status (pass / fail / not_evaluable) 的分支覆盖
+
+   建议至少补 1 条 multi-trade DD test，确保未来 fill simulation 增量改动不 break DD 计算。
+
+3. **O3 — Schema v1.1.0 → v1.2.0 加 required field SemVer 严格性**（`schemas/execution_backtest_report.schema.json:schema_version`）。严格 SemVer 加 required field 是 breaking change 应该 v2.0.0。当前 v1.2.0 minor bump 理由是"无 production consumer 还可接受"——这与上次 enum-grow-only 决策同方向。建议在 schema description 加 1 行明确 "v1.x bump policy: required field additions are allowed within v1.x while no production consumer exists; bump to v2.0.0 only when first production consumer is freezed"。这条 doc 化让 future LLM 知道 v1.x 是 unfrozen contract 阶段，不会以为 v1.2.0 就是 frozen。
+
+**额外观察（非 issue）**:
+
+- **Codex 这轮成功转向 business**：上次 review 提醒过 "business-first，下一轮做 Tushare execution backtest"，Codex 这轮就把 4 件 substantive 事做了（schema v1.2.0 / runner ship_gate calc / Tushare integration test / doc 同步），**没再发起 protocol 改动**。这是积极信号 ✅
+- **Codex alternatives rejected 写得严密**：3 条具体被否方向都列了，反映 Codex 真的考虑了 sharpe-from-single-report、only-max-DD、full-multi-position-engine 三个诱惑方向，并 reject — scope discipline 在 thinking process 里就生效了 ✅
+- **`ship_gate_evaluation` 与 `capital_context.ship_gate` 关系**：capital_context.ship_gate 是 policy reference（从 portfolio_allocation pull），ship_gate_evaluation 是 evaluation result（runner 算出来的实际值 vs threshold）。两者分工清楚 ✅
+- **test_materialize_execution_price_data_tushare end-to-end integration test 锁住关键 lineage**：`Tushare API families → execution_price_data JSON → backtest fills`。这是 Phase 5 → Phase 6 forward 数据收集 critical path，能 lock contract 是好事 ✅
+- **runner read threshold from capital_context["ship_gate"] 而非重新硬编码**：避免 schema const 与 runner const 漂移。架构正确 ✅
+
+**Documentation issues**: O1 (无 trades 时 max DD null handling) + O2 (测试覆盖) + O3 (SemVer policy doc 化)。
+
+**Pending status**: Required: none / Optional (O1-O3): PENDING CODEX DISPOSITION。
+
+**Process meta observation（非 issue，不阻塞 Pass，但 important to flag）**:
+
+- **`4610e14 [trivial] Sync commit hygiene post-commit status` 紧接 `ccc5c85 Tighten commit documentation hygiene`** — Codex 刚 tighten "post-commit sync 应该是 exception 而非 routine" 的规则，**下一个 commit 立刻做了一个 post-commit sync**。这是 ironic 的 self-violation。
+- 我上次 review 已警告 "如果第 3 次再发起 commit-flow protocol 改动应停下问用户"。本 session 现在共 **4 次** post-commit sync commits (`fb71751` / `7b69254` / `4610e14`，前两次 P0a/Phase 5 之后，第三次是 hygiene tightening 自己之后)。
+- Codex 本轮 ship_gate 改动**没**自反性地再改 protocol — 这是好的 — 但 commit 历史显示 Codex 还没真正内化 "提交前用 stable wording" 的实操。
+- 用户层面建议：下次发现 Codex 又做 [trivial] post-commit sync 时，可以直接告诉它 "violation of ccc5c85; reset and do it right next time"，或者在 SESSION_LOG entry 中 explicit ask Codex 自己 audit 上一轮 docs 哪里写得 transient。
+- 这条不写为 Optional 因为不在本轮 substantive review scope（本轮是 ship_gate evaluation 不是 protocol），但跨 review 跟踪重要。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — dispose O1-O3。O1 最重要（防 0-trade 假"DD pass"信号）。O2/O3 是 quality 改进。
+2. 修复后用户 `审查` → `提交`。
+3. 提交后回到 Codex 自己提的下一步：**real-token small Tushare smoke when credentials available** + **multi-period execution aggregation for monthly alpha t-stat / Sharpe / max drawdown evidence**。
+4. multi-period aggregation 是真正的 ship-gate 第一次能 "passed = true/false" 的关键节点 — 不再是单期 "not_evaluable"。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 preliminary ship-gate evaluation)
+
+**Commits**: none (execution round; commit happens only after Claude Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Codex (Phase 5 minimal fill simulation Optional disposition O1-O5) and the committed minimal fill simulation chain.
+- Refines the prior next step: instead of jumping directly to full portfolio or multi-period aggregation, this step first makes the ship gate visible in each execution report and locks the Tushare-materializer-to-runner path with a regression.
+
+**Worked on**:
+1. Upgraded `execution_backtest_report` to v1.2.0 with required `ship_gate_evaluation`.
+2. Added runner-side preliminary gate evaluation for monthly alpha t-stat, Sharpe, max drawdown, and forward-live months.
+3. Added a Tushare materializer integration regression that feeds fake-provider `execution_price_data` into `backtest_execution.py --price-data`.
+4. Updated CURRENT / Phase 5 handoff so the next task is real-token small smoke plus multi-period ship-gate aggregation, not broad portfolio engine work.
+
+**Key decisions**:
+- A single execution report may evaluate drawdown but cannot honestly evaluate monthly alpha t-stat or Sharpe; those fields are explicit `passed = null` until a multi-period aggregation layer exists.
+- Backtest reports always emit `forward_live_months = 0`, so full-size manual use remains blocked until Phase 6 forward evidence exists.
+- The Tushare integration check stays fake-provider based in unit tests; real token/network smoke is kept as the next operational step because it depends on credentials and data availability.
+
+**Alternatives considered and rejected**:
+- "Compute Sharpe from one report's realized equity rows" — rejected because the current minimal daily equity path is not a robust return series and would overstate statistical evidence.
+- "Treat max drawdown alone as enough to decide ship gate" — rejected because the user-approved policy is a multi metric AND gate.
+- "Start full multi-position portfolio engine now" — rejected as larger than the approved smallest Phase 5 step.
+
+**Open questions handed off**:
+- Which real historical `analysis_input` dates should be used for the first token-backed Tushare smoke, once credentials are available?
+- The multi-period aggregation layer still needs a benchmark excess return input before monthly alpha t-stat can be computed.
+
+**Next natural step from my view**:
+1. Claude reviews the v1.2.0 schema / runner evaluation / Tushare integration regression.
+2. If Pass, user can `提交`.
+3. After commit, run a real-token small Tushare smoke when available, then add multi-period execution aggregation for monthly alpha t-stat / Sharpe / max drawdown evidence.
+
 ## 2026-05-26 — Claude review — Pass (Commit documentation hygiene tightening)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active。1 个 meta observation 关于本 session 第 2 次 protocol 演进。

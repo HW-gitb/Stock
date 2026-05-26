@@ -1,12 +1,15 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（Phase 5 minimal fill simulation 已提交）
+**最后更新**：2026-05-26（Phase 5 ship-gate evaluation step）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-26)
 
+- Phase 5 ship-gate Optional disposition O1-O3：0-trade execution report 的 `ship_gate_evaluation.metric_results.max_drawdown` 不再把 raw `0.0` 当作 gate pass，而是输出 `value=null / passed=null`；测试新增 multi-trade realized drawdown regression；schema description 明确 v1.x execution report contract 在无 production consumer 前仍是 unfrozen contract。
+- Phase 5 ship-gate evaluation step upgrades `execution_backtest_report` to v1.2.0 and adds required `ship_gate_evaluation`: the report now emits AND-gate status, `full_size_allowed`, manual-order boundary, failure mode, and metric-level results for monthly alpha t-stat / Sharpe / max drawdown / forward-live months. Single-report runs mark alpha t-stat and Sharpe as not evaluable, forward-live months as 0, and keep full-size usage blocked.
+- Tushare materializer -> execution runner integration is now regression-covered: a fake Tushare materialized `execution_price_data` payload is written to disk, consumed by `backtest_execution.py --price-data`, and verified to produce a schema-valid v1.2.0 report with provider API lineage and ship-gate evaluation.
 - Commit `ccc5c85` tightens commit hygiene policy：默认用“提交前稳定措辞 + 单 commit”完成 `提交`。`CURRENT.md` / `SESSION_LOG.md` 在 `执行` / `修复` 阶段就必须写成提交后仍成立；post-commit docs-only sync 只在 committed docs 会明显误导下一 LLM 时作为例外，不为补 hash 或普通润色创建第二个 commit。
 - Commit `0f90c40` adds Phase 5 minimal fill simulation. `runners/backtest_execution.py` 已接入 `--price-data` path：按 `capital_context.bucket_capital` 做 T+1 open 入场、涨停不可买、deterministic stop-loss、time-stop exit、A 股 100 股 lot sizing、双边交易成本、cash constraint，并把真实结果写入 `trades.csv` / `daily_equity.csv` / `order_events.csv` / `skipped_candidates.csv`。不传 `--price-data` 时保留原 skeleton skip 行为。
 - Commit `0f90c40` also includes Claude O1-O5 Optional disposition：stop-loss gap-down 修为“后续交易日 open 低于 stop 则按 open 出场，否则 low 触发按 stop 出场”；entry open <= stop 会跳过；补 gap-down / stop>=entry / cash_constrained regression；`total_return` 分母与 event enum grow-only 策略已文档化。
@@ -24,12 +27,12 @@
 - Roadmap policy: user accepted B semi-reorder. Keep A-share short Phase 6 observation running, draft A-long / US-long specs and normalize US-short spec in parallel during Phase 6, then do Phase 7 DataHub/engine modularization based on all four specs. Phase 8/9 swapping may use data readiness examples in `AGENTS.md` #12, without hard-coding strict criteria.
 - P0a capital context contract commit `244353e` adds `portfolio_allocation` and `cash_buffer_state` schemas, upgrades `execution_backtest_report` to v1.1.0 with required `capital_context`, requires `backtest_execution.py --portfolio-allocation --cash-buffer-state --preset-path`, and adds capital/bucket fields to all four presets.
 - P0a review Optional disposition is included: runner now reads preset YAML instead of a hardcoded preset map, `portfolio_allocation` bucket `horizon` was removed, and single-value policy enums were converted to `const`.
-- Next implementation: connect Tushare materializer output to a small real execution run and extend ship-gate metric outputs; do not start a broad portfolio engine yet.
+- Next implementation: run a real-token small Tushare execution smoke when credentials/data are available, then add a multi-period execution aggregation layer for monthly alpha t-stat / Sharpe / max drawdown evidence; do not start a broad portfolio engine yet.
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.1.0 capital-context contract / runner skeleton / execution_price_data contract / loader wiring / CSV materializer / real Tushare provider materializer / minimal fill simulation 已形成连续链路。
-- **当前目标**：进入 Phase 5 下一小步：把 Tushare materializer 输出接到小样本 real execution run，并补 ship-gate metric 输出字段。路线图已改为 B 半重排，但下一 scope 仍不实现长线 spec 或 Phase 7 重构。
+- **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.2.0 ship-gate evaluation / runner skeleton / execution_price_data contract / loader wiring / CSV materializer / real Tushare provider materializer / minimal fill simulation 已形成连续链路。
+- **当前目标**：进入 Phase 5 下一小步：用真实 Tushare 小样本 smoke 和多期 execution aggregation 给 ship gate 提供月度 alpha / Sharpe / drawdown 证据。路线图已改为 B 半重排，但下一 scope 仍不实现长线 spec 或 Phase 7 重构。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -40,8 +43,10 @@
 本节只保留当前接续需要的 high-level snapshot；争议、被否方案、review verdict、pending fixes 统一查 `docs/SESSION_LOG.md` 顶部 1-3 条。
 
 - **协作协议精简**（2026-05-25，commits `ef12fbf` `e9a2b18`）：`docs/REVIEW_PACKET.md` 已移除；Codex 的 SESSION_LOG 顶部 entry 作为 review handoff；`[trivial]` 轻量通道已启用。详 `docs/AI_REVIEW_PROTOCOL.md`。
-- **Reference framework policy**（2026-05-25，当前工作树）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
-- **Phase roadmap B semi-reorder**（2026-05-26，当前工作树）：`AGENTS.md` 固化 B 半重排：Phase 6 继续 A 股短线观察，同时并行产出 A 长 / US 长 spec 并规范化 US 短 spec；Phase 7 以 4 套 spec 做共享层与独立 rule pack 划分；Phase 8 优先 US 短 + US 长 skeleton，Phase 9 A 长 implementation 可按数据准备度与 Phase 8 子项交换；数据准备度示例见 `AGENTS.md` #12。
+- **Phase 5 ship-gate Optional disposition**（2026-05-26）：处理 Claude O1-O3。0-trade max drawdown gate 改为不可评估；新增 multi-trade realized drawdown regression；v1.x unfrozen schema policy 已写入 schema description。
+- **Phase 5 ship-gate evaluation output**（2026-05-26）：`execution_backtest_report` 升到 v1.2.0，新增 required `ship_gate_evaluation`，并用 regression 锁住 Tushare materializer payload 可直接输入 execution runner。单份 execution report 不计算 monthly alpha t-stat / Sharpe，full-size 手动使用仍需后续多期 aggregation 和 forward evidence。
+- **Reference framework policy**（2026-05-25）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
+- **Phase roadmap B semi-reorder**（2026-05-26）：`AGENTS.md` 固化 B 半重排：Phase 6 继续 A 股短线观察，同时并行产出 A 长 / US 长 spec 并规范化 US 短 spec；Phase 7 以 4 套 spec 做共享层与独立 rule pack 划分；Phase 8 优先 US 短 + US 长 skeleton，Phase 9 A 长 implementation 可按数据准备度与 Phase 8 子项交换；数据准备度示例见 `AGENTS.md` #12。
 - **Phase 5 P0a capital context contracts**（2026-05-26，commit `244353e`）：新增 `schemas/portfolio_allocation.schema.json`、`schemas/cash_buffer_state.schema.json`、对应 fixtures/tests；`execution_backtest_report.schema.json` 升 v1.1.0 并要求 `capital_context`；`backtest_execution.py` 新增 `--portfolio-allocation` / `--cash-buffer-state` / `--preset-path`，report 的 `settings.initial_capital` 和 ending equity 均来自 selected bucket capital；4 个 preset 都声明 capital bucket/ceiling。Optional disposition 后，preset YAML 是 capital profile source of truth，portfolio policy bucket 不再重复声明 `horizon`。
 - **Phase 5 minimal fill simulation + Optional disposition**（2026-05-26，commit `0f90c40`）：`backtest_execution.py --price-data` 会从 schema-valid `execution_price_data` 执行最小 daily-OHLC 撮合：T+1 open、涨停不可买、stop-loss 优先、time-stop、bucket sizing、双边成本、CSV/report metrics。O1-O5 disposition 后，新增 gap-down open stop fill、entry open <= stop skip、cash_constrained regression；broader Phase 5 suite 50 tests passed，full unittest 85 tests passed。
 - **Git remote privacy policy 放开**（2026-05-26，commit `28cdc30`）：绝对禁止 `git push` / `git remote add` 改成 private-remote + 用户明确指令 + 隐私审计后允许；secrets / logs / caches / 实盘状态 / ignored artifacts 仍禁上传。详 `AGENTS.md §Git remote privacy policy`。

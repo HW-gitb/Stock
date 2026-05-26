@@ -1239,3 +1239,100 @@ git diff --check
 1. 让 Claude 复审 O1-O5 disposition。
 2. 若 Pass，用户可 `提交`。
 3. 下一条 `执行` 仍应保持小 scope：优先把 Tushare materializer 输出接到一个小样本 execution run，并补 ship-gate metric 输出字段；不要直接启动 full portfolio engine。
+
+## 2026-05-26 追加：Phase 5 preliminary ship-gate evaluation
+
+### 改了什么
+
+- `schemas/execution_backtest_report.schema.json` 升级 v1.1.0 -> v1.2.0，新增 required `ship_gate_evaluation`。
+  - `ship_gate_evaluation.policy_logic` 继承 AND gate。
+  - `metric_results` 固定输出 `monthly_alpha_t_stat`、`sharpe`、`max_drawdown`、`forward_live_months` 四项。
+  - 单份 execution report 无法计算 monthly alpha t-stat / Sharpe，因此对应 `passed = null`；backtest report 的 forward-live months 固定为 0 且不通过。
+  - `full_size_allowed` 只有当所有 AND 指标都可评估且通过时才为 true；当前最小 report 默认阻止 full-size 手动使用。
+- `runners/backtest_execution.py` 新增 `build_ship_gate_evaluation()`，在 report 中输出 preliminary gate 结果。
+- `capital_context.ship_gate` 同步携带 `failure_mode = paper_or_minimal_size_or_risk_filter_only`，让 report 快照与 portfolio allocation policy 的失败路径一致。
+- 新增 regression：
+  - schema 测试锁住 v1.2.0 required block、四项 gate metric、manual-order boundary。
+  - runner 测试锁住 skeleton 和成交路径的 `ship_gate_evaluation`。
+  - Tushare materializer 测试新增端到端小链路：fake Tushare -> `execution_price_data` JSON -> `backtest_execution.py --price-data` -> v1.2.0 report。
+
+### 为什么改
+
+用户已固定 full-size 手动使用必须满足多 metric AND gate。Phase 5 minimal fill simulation 已能产出交易级结果，但 report 还没有把 gate 评估显式输出，下一轮聚合真实多期结果时容易把“当前只是一份单期 execution report”和“可上 full-size”混在一起。
+
+本轮只做 preliminary evaluation 和集成回归，不实现真实 token 联网抓数、不做多期 alpha / Sharpe 聚合、不启动 full concurrent portfolio engine、不改长线 spec。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution tests.execution.test_materialize_execution_price_data_tushare tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_capital_context_schemas tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+```
+
+### 验证结果
+
+- Focused execution/schema/Tushare integration subset：36 tests passed。
+- Broader Phase 5 suite：52 tests passed。
+- Full unittest discover：87 tests passed。
+- `git diff --check`：通过。
+
+### 失效旧结论
+
+- “execution report 当前版本为 v1.1.0”失效；当前 contract 为 v1.2.0。
+- “ship gate 只存在于 `capital_context.ship_gate` 快照里”失效；当前 report 另有 `ship_gate_evaluation` 记录本次 run 可评估与不可评估的指标结果。
+- “Tushare materializer output 还没有被 execution runner 端到端测试消费”失效；当前 fake-provider regression 已覆盖该链路。真实 token 小样本 smoke 仍留给下一轮。
+
+### 下一步注意事项
+
+1. 让 Claude 审查 v1.2.0 schema / runner evaluation / materializer-to-runner regression。
+2. 若 Pass，用户可 `提交`。
+3. 下一条 `执行` 的自然小 scope：在有 `TUSHARE_TOKEN` 和合适历史 `analysis_input` 时跑真实 Tushare 小样本 smoke；随后再做多期 execution aggregation，计算 monthly alpha t-stat / Sharpe / max drawdown 的 ship-gate evidence。
+
+## 2026-05-26 追加：Phase 5 ship-gate evaluation Optional disposition O1-O3
+
+### 改了什么
+
+- O1 accepted：`build_ship_gate_evaluation()` 对 `trade_count == 0` 的 report 不再把 raw `metrics.max_drawdown = 0.0` 解释成 ship-gate drawdown pass。
+  - `ship_gate_evaluation.metric_results.max_drawdown.value = null`
+  - `passed = null`
+  - reason 明确为 `no executed trades to evaluate drawdown signal`
+- O2 accepted with modification：
+  - 新增 `test_ship_gate_drawdown_uses_realized_multi_trade_path`，构造两个可执行 candidate，其中第二笔 stop-loss 亏损，验证 realized multi-trade daily equity drawdown 进入 ship gate metric。
+  - 在 cash-constrained 0-trade 场景加断言，锁住 max_drawdown gate 的 null handling。
+  - 未加人工 pass/fail status branch fixture，因为单份 execution report 仍因 monthly alpha t-stat / Sharpe 不可评估而必然 `status = not_evaluable`；完整 pass/fail branch 应由后续 multi-period aggregation 层测试。
+- O3 accepted：`execution_backtest_report.schema.json` description 说明 v1.x execution report contract 在无 production consumer 前仍是 unfrozen contract；required field additions 可用 v1.x minor bump，冻结第一个 production consumer 后 breaking changes 才走 v2.0.0。
+
+### 为什么改
+
+Claude review 虽然 Pass，但 O1 指出 0-trade report 的 drawdown gate 会给出虚假通过信号。这个信号会直接影响后续 ship-gate 解释，因此本轮改为和 alpha / Sharpe 一样的 honest null pattern。
+
+O2 补的是未来 fill simulation 扩展最容易误伤的路径：多笔交易后的 realized drawdown。O3 则把当前 Phase 5 schema 仍未冻结的版本策略写进 contract，避免后续 LLM 按严格 SemVer 误判 v1.2.0。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution tests.execution.test_materialize_execution_price_data_tushare tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_capital_context_schemas tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+```
+
+### 验证结果
+
+- Focused execution/schema/Tushare subset：37 tests passed。
+- Broader Phase 5 suite：53 tests passed。
+- Full unittest discover：88 tests passed。
+- `git diff --check`：通过。
+
+### 失效旧结论
+
+- “0-trade execution report 可把 max_drawdown=0.0 视为 ship-gate drawdown pass”失效；当前 0-trade drawdown gate 不可评估。
+- “v1.2.0 required field addition 的 SemVer policy 未写明”失效；当前 schema description 已明确 v1.x unfrozen contract policy。
+
+### 下一步注意事项
+
+1. 让 Claude 复审 O1-O3 disposition。
+2. 若 Pass，用户可 `提交`。
+3. 后续 multi-period aggregation 层必须重新测试 ship gate `pass` / `fail` 状态分支；单份 execution report 不适合伪造这些分支。

@@ -93,7 +93,7 @@ P0a 应拆清静态政策、动态状态和 report 快照：
   - drawdown state
   - last update metadata
   - 必须沿用现有 state manager pattern 做 atomic JSON write
-- `schemas/execution_backtest_report.schema.json` v1.1.0：本次回测的资金上下文快照。
+- `schemas/execution_backtest_report.schema.json`：本次回测的资金上下文快照；当前 v1.2.0 还承载 preliminary ship-gate evaluation。
   - `capital_context` 只记录本次 run 使用的 capital context。
   - 它不能成为资金政策源头。
 - `presets/*.yaml`：preset 身份和静态 bucket ceiling reference。

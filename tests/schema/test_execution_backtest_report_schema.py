@@ -19,7 +19,8 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
 
         Draft7Validator.check_schema(schema)
         self.assertEqual(schema["properties"]["schema_name"]["const"], "execution_backtest_report")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.2.0")
+        self.assertIn("contract remains unfrozen", schema["description"])
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(
             schema["required"],
@@ -36,6 +37,7 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
                 "data_lineage",
                 "outputs",
                 "metrics",
+                "ship_gate_evaluation",
                 "date_warnings",
                 "limitations",
             ],
@@ -113,6 +115,27 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
             False,
         )
         self.assertEqual(capital_context["properties"]["manual_execution_only"]["const"], True)
+        self.assertIn("failure_mode", schema["$defs"]["shipGateSnapshot"]["required"])
+
+    def test_ship_gate_evaluation_is_required_and_metric_complete(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+        self.assertIn("ship_gate_evaluation", schema["required"])
+        ship_gate = schema["$defs"]["shipGateEvaluation"]
+        self.assertEqual(ship_gate["properties"]["policy_logic"]["enum"], ["and"])
+        self.assertEqual(
+            ship_gate["properties"]["failure_mode"]["const"],
+            "paper_or_minimal_size_or_risk_filter_only",
+        )
+        self.assertEqual(ship_gate["properties"]["manual_execution_only"]["const"], True)
+
+        metric_results = schema["$defs"]["shipGateMetricResults"]
+        self.assertEqual(
+            metric_results["required"],
+            ["monthly_alpha_t_stat", "sharpe", "max_drawdown", "forward_live_months"],
+        )
+        metric_result = schema["$defs"]["shipGateMetricResult"]
+        self.assertEqual(metric_result["properties"]["passed"]["type"], ["boolean", "null"])
 
 
 if __name__ == "__main__":
