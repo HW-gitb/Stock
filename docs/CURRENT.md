@@ -7,7 +7,7 @@
 
 ## 0. Latest Delta (2026-05-26)
 
-- Commit hygiene policy update（当前工作树）：默认用“提交前稳定措辞 + 单 commit”完成 `提交`。`CURRENT.md` / `SESSION_LOG.md` 在 `执行` / `修复` 阶段就必须写成提交后仍成立；post-commit docs-only sync 只在 committed docs 会明显误导下一 LLM 时作为例外，不为补 hash 或普通润色创建第二个 commit。
+- Commit `ccc5c85` tightens commit hygiene policy：默认用“提交前稳定措辞 + 单 commit”完成 `提交`。`CURRENT.md` / `SESSION_LOG.md` 在 `执行` / `修复` 阶段就必须写成提交后仍成立；post-commit docs-only sync 只在 committed docs 会明显误导下一 LLM 时作为例外，不为补 hash 或普通润色创建第二个 commit。
 - Commit `0f90c40` adds Phase 5 minimal fill simulation. `runners/backtest_execution.py` 已接入 `--price-data` path：按 `capital_context.bucket_capital` 做 T+1 open 入场、涨停不可买、deterministic stop-loss、time-stop exit、A 股 100 股 lot sizing、双边交易成本、cash constraint，并把真实结果写入 `trades.csv` / `daily_equity.csv` / `order_events.csv` / `skipped_candidates.csv`。不传 `--price-data` 时保留原 skeleton skip 行为。
 - Commit `0f90c40` also includes Claude O1-O5 Optional disposition：stop-loss gap-down 修为“后续交易日 open 低于 stop 则按 open 出场，否则 low 触发按 stop 出场”；entry open <= stop 会跳过；补 gap-down / stop>=entry / cash_constrained regression；`total_return` 分母与 event enum grow-only 策略已文档化。
 - Scope boundary：本轮不抓 provider、不改 Tushare materializer、不写长线 spec、不做 Phase 7 DataHub，不做 full concurrent multi-position accounting，不接券商或 OS 自动下单；所有 order events 都是 backtest/manual-analysis 输出。
