@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（P0a capital context contracts；fill simulation 尚未开始）
+**最后更新**：2026-05-26（P0a capital context contracts 已提交；fill simulation 下一步）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -18,14 +18,14 @@
 - This provider materializer still does not simulate fills, apply stops, or do portfolio accounting. Validation used the Codex bundled Python: `python -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 38 tests.
 - Capital allocation policy: user confirmed `A = 35% / US = 65%`, A-share cash and US cash default non-fungible, full-size manual-use ship gate uses multi metric AND, and the system is analysis/screening only with manual order placement.
 - Roadmap policy: user accepted B semi-reorder. Keep A-share short Phase 6 observation running, draft A-long / US-long specs and normalize US-short spec in parallel during Phase 6, then do Phase 7 DataHub/engine modularization based on all four specs. Phase 8/9 swapping may use data readiness examples in `AGENTS.md` #12, without hard-coding strict criteria.
-- P0a capital context contract change set adds `portfolio_allocation` and `cash_buffer_state` schemas, upgrades `execution_backtest_report` to v1.1.0 with required `capital_context`, requires `backtest_execution.py --portfolio-allocation --cash-buffer-state --preset-path`, and adds capital/bucket fields to all four presets.
+- P0a capital context contract commit `244353e` adds `portfolio_allocation` and `cash_buffer_state` schemas, upgrades `execution_backtest_report` to v1.1.0 with required `capital_context`, requires `backtest_execution.py --portfolio-allocation --cash-buffer-state --preset-path`, and adds capital/bucket fields to all four presets.
 - P0a review Optional disposition is included: runner now reads preset YAML instead of a hardcoded preset map, `portfolio_allocation` bucket `horizon` was removed, and single-value policy enums were converted to `const`.
-- Next implementation after P0a acceptance and commit: Phase 5 fill simulation using bucket capital. Fill/simulator logic is still not implemented.
+- Next implementation: Phase 5 fill simulation using bucket capital. Fill/simulator logic is still not implemented.
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.1.0 capital-context contract / runner skeleton / execution_price_data contract / loader wiring / CSV materializer / real Tushare provider materializer 已形成连续链路；simulator / fill logic 尚未开始
-- **当前目标**：完成 P0a capital context contracts reviewed change set。Claude 首轮已 Pass 且无 Required；O1-O3 Optional disposition 是该 change set 的收口部分。通过复审并提交后，下一条实现 scope 才是 fill simulation；路线图已改为 B 半重排，但本轮不实现长线 spec 或 Phase 7 重构。
+- **当前目标**：启动 Phase 5 fill simulation，基于 P0a 的 bucket-aware capital context 实现 entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束；路线图已改为 B 半重排，但下一条 scope 不实现长线 spec 或 Phase 7 重构。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -38,7 +38,7 @@
 - **协作协议精简**（2026-05-25，commits `ef12fbf` `e9a2b18`）：`docs/REVIEW_PACKET.md` 已移除；Codex 的 SESSION_LOG 顶部 entry 作为 review handoff；`[trivial]` 轻量通道已启用。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **Reference framework policy**（2026-05-25，当前工作树）：`AGENTS.md` 明确 A 股短线 / 美股短线 reference 文档是工程设计参考源；两套 v14.x 是独立框架，不是版本继承；长线框架尚未建立，不能硬套短线。
 - **Phase roadmap B semi-reorder**（2026-05-26，当前工作树）：`AGENTS.md` 固化 B 半重排：Phase 6 继续 A 股短线观察，同时并行产出 A 长 / US 长 spec 并规范化 US 短 spec；Phase 7 以 4 套 spec 做共享层与独立 rule pack 划分；Phase 8 优先 US 短 + US 长 skeleton，Phase 9 A 长 implementation 可按数据准备度与 Phase 8 子项交换；数据准备度示例见 `AGENTS.md` #12。
-- **Phase 5 P0a capital context contracts**（2026-05-26，reviewed change set）：新增 `schemas/portfolio_allocation.schema.json`、`schemas/cash_buffer_state.schema.json`、对应 fixtures/tests；`execution_backtest_report.schema.json` 升 v1.1.0 并要求 `capital_context`；`backtest_execution.py` 新增 `--portfolio-allocation` / `--cash-buffer-state` / `--preset-path`，report 的 `settings.initial_capital` 和 ending equity 均来自 selected bucket capital；4 个 preset 都声明 capital bucket/ceiling。Optional disposition 后，preset YAML 是 capital profile source of truth，portfolio policy bucket 不再重复声明 `horizon`。
+- **Phase 5 P0a capital context contracts**（2026-05-26，commit `244353e`）：新增 `schemas/portfolio_allocation.schema.json`、`schemas/cash_buffer_state.schema.json`、对应 fixtures/tests；`execution_backtest_report.schema.json` 升 v1.1.0 并要求 `capital_context`；`backtest_execution.py` 新增 `--portfolio-allocation` / `--cash-buffer-state` / `--preset-path`，report 的 `settings.initial_capital` 和 ending equity 均来自 selected bucket capital；4 个 preset 都声明 capital bucket/ceiling。Optional disposition 后，preset YAML 是 capital profile source of truth，portfolio policy bucket 不再重复声明 `horizon`。
 - **Git remote privacy policy 放开**（2026-05-26，commit `28cdc30`）：绝对禁止 `git push` / `git remote add` 改成 private-remote + 用户明确指令 + 隐私审计后允许；secrets / logs / caches / 实盘状态 / ignored artifacts 仍禁上传。详 `AGENTS.md §Git remote privacy policy`。
 - **Phase 5 execution price data CSV materializer**（2026-05-26，commit `ece86b1`）：`runners/materialize_execution_price_data.py` 可把本地 OHLC CSV 转成 schema-valid `execution_price_data` JSON；真实 Tushare fetch / fill logic 未实现。9 测试新增（22 → 26 total）。
 - **Phase 5 execution price data Tushare materializer**（2026-05-26，commit `cfa1c57`）：`runners/materialize_execution_price_data_tushare.py` 复用同一 `execution_price_data` v1.0.0 契约，接入 Tushare provider + ignored cache；initial review 的 6 条 Optional 已处理；fill logic 未实现。
@@ -167,8 +167,8 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **P0a capital context contracts 复审** — 当前 change set 已把静态政策、动态 cash state、execution report runtime snapshot 和 4 个 preset capital fields 接上，并处理 Claude O1-O3 Optional；需 Claude 复审后提交。
-2. **Fill simulation 起步** — P0a 通过复审并提交后，下一条 scope 单独实现 entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束，按 bucket capital 运行，不再混入 provider materializer 或 capital-policy 变更。
+1. **Fill simulation 起步** — P0a 已提交；下一条 scope 单独实现 entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束，按 bucket capital 运行，不再混入 provider materializer 或 capital-policy 变更。
+2. **保持 P0a contract 边界** — fill simulation 必须使用 `capital_context.bucket_capital` / `bucket_ceiling_pct` / manual-order-only boundary，不得退回 total-account `initial_capital` 假设。
 3. **Reference 框架约束** — 后续设计必须参考 A 股短线 / 美股短线 reference 文档的业务逻辑，但不能把 chatbox 框架机械照搬为运行时提示词或代码。
 4. **Claude 审查点** — execution runner、撮合假设、输出目录隔离、capital context contract 均需 Claude 独立审查后由用户确认。
 5. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。

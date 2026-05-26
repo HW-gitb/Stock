@@ -8,6 +8,30 @@
 
 ---
 
+## 2026-05-26 — Codex (P0a post-commit status sync)
+
+**Commits**: 244353e
+
+**Relationship to prior session(s)**:
+- Builds on the Claude Pass entry immediately below and the Codex P0a implementation / Optional disposition entries.
+- Refines post-commit handoff state only: the reviewed P0a work is now committed, so CURRENT should route the next LLM to fill simulation instead of another P0a review/commit step.
+
+**Worked on**:
+1. Committed P0a capital context contracts as `244353e`.
+2. Updated `docs/CURRENT.md` from reviewed-change-set wording to committed-state wording.
+
+**Key decisions**:
+- No new design decision. This is the commit-flow exception for post-commit documentation sync because the committed CURRENT wording would otherwise still point at P0a review/commit.
+
+**Alternatives considered and rejected**:
+- "Leave CURRENT as-is until the next execution" — rejected because it would materially mislead the next LLM about the current target.
+
+**Open questions handed off**:
+- None new.
+
+**Next natural step from my view**:
+1. Start Phase 5 fill simulation as a separate scope using bucket capital.
+
 ## 2026-05-26 — Claude review — Pass (P0a Optional disposition O1-O3)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O3 全部 dispose 完成 + 多条额外 cross-validation strengthening）。
