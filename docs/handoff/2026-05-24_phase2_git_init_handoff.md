@@ -51,6 +51,8 @@ result/*/backtest/generated/_intermediate/
 
 ## 私密性约束（**严格遵守，不可绕过**）
 
+> 2026-05-26 更新：本节记录 2026-05-24 git init 时的初始 local-only 规则；remote 相关绝对禁令已由本文末尾“2026-05-26 追加：private remote allowed under constraints”覆盖。secrets / caches / logs / 未脱敏数据禁止上传的约束仍然有效。
+
 ### 必须做的
 
 - ✅ 本地 commit 即可（默认私有）
@@ -125,3 +127,39 @@ cd D:\cnhea\Stock
 git add docs/handoff/2026-05-24_phase2_git_init_handoff.md AGENTS.md
 git commit -m "Add git init handoff; link in AGENTS.md"
 ```
+
+## 2026-05-26 追加：private remote allowed under constraints
+
+### 改了什么
+
+- 原“不可 `git remote add` / 不可 `git push` / 不创建远程仓库”的绝对禁令，调整为：允许用户本人控制的 **private** Git remote，但必须满足 AGENTS.md 的 `Git remote privacy policy`。
+- `AGENTS.md` 新增 remote 隐私策略：默认仍本地处理；只有用户明确要求时才可添加 remote 或 push；remote 必须 private；禁止 public remote、未授权 collaborator、secrets、日志、缓存、未脱敏实盘状态和 `.gitignore` 已排除产物进入远端。
+- `docs/CURRENT.md` 同步把“不碰 remote”的雷区改为“不可无约束 remote；private remote allowed under constraints”。
+
+### 为什么改
+
+用户明确希望可以把项目上传到 GitHub private repo 用于私密备份 / 个人版本管理。完全禁止 remote 会阻断这个合理用途；但本项目含交易系统设计、数据缓存、日志和潜在 token 风险，因此不能放开成任意 push。新规则保留安全边界，同时允许受控 private remote。
+
+### 验证命令
+
+```powershell
+rg -n "push|remote|private|GitHub|私密|不可 `git push`|不可 `git remote add`" AGENTS.md docs\CURRENT.md docs\handoff\2026-05-24_phase2_git_init_handoff.md
+git diff --check
+```
+
+### 验证结果
+
+- 相关文档均已出现 private remote constrained policy。
+- 旧 handoff 历史段落保留原始 git init 事实；新增追加段明确覆盖后续规则。
+- `git diff --check` 通过。
+
+### 失效旧结论
+
+- “LLM 永远不可添加 remote / push”已失效；现在只有在用户明确指令、目标为用户本人控制的 private remote、且通过隐私审计时，才允许执行。
+- “remote 必须永远为 none 才能保证私密”已失效；private remote 可作为受控备份手段，但 public remote 和未授权 collaborator 仍禁止。
+
+### 下一步注意事项
+
+1. 真正执行 `git remote add` 或 `git push` 前，必须重新审计 `.gitignore`、`git status --short`、`git remote -v`、staged/tracked 文件中的 secret / token / credentials / logs / caches / live-state data。
+2. 若用户只说“上传 GitHub”但未说明 private，必须先确认 private；不得默认创建 public repo。
+3. 不要把本轮规则变更理解为可以上传 `.gitignore` 已排除文件或任何未脱敏数据。

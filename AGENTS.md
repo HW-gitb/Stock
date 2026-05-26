@@ -176,7 +176,7 @@ Common aliases:
 
 1. `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — EGS v7.8/v7.9 的脚本修改、正式周五实盘重跑、24 期 production 回测验收、当前有效 findings、下一步策略优化优先级
 2. `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Tier1-only 主口径切片实施、stats CSV 加 `subset` 列、schema 升 1.6.0、settings.primary_subset 字段
-3. `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — **项目首次进入 git 管理**（私密本地仓库，不可 push / 不可 add remote）、`.gitignore` 排除清单、commit hash `dca8367`、git 私密性约束
+3. `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — **项目首次进入 git 管理**（初始为私密本地仓库；2026-05-26 起允许受约束 private remote）、`.gitignore` 排除清单、commit hash `dca8367`、git 私密性约束
 4. `docs/handoff/2026-05-24_phase2_validation_tooling_handoff.md` — EGS v7.10、rank backtest schema 1.8.0、split/variant/eligible benchmark/T+1 不可买/portfolio stats/reason observability
 5. `docs/handoff/2026-05-24_phase2_6_datahub_guardrail_handoff.md` — Phase 2.6 DataHub guardrail，固定“先补 lineage、不做大重构”的边界
 6. `docs/handoff/2026-05-24_phase2_24p_v710_results_handoff.md` — v7.10 24 期 production 实跑结果、schema 校验、核心 findings 和结论边界
@@ -292,6 +292,17 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 
 **身份定位**：AI 协作者在本项目中是建造者，不是顾问。优先输出代码、schema、测试，而不是讨论方案。除非用户明确问意见，默认动手。
 
+## Git remote privacy policy
+
+本项目允许推送到用户本人控制的 **private** Git remote，但必须满足以下硬约束：
+
+- 默认仍按本地仓库处理；只有用户明确要求添加 remote 或 push 时，AI 协作者才可执行相关 git remote 操作。
+- 远程仓库必须是 private；禁止 public / internal 公开范围不明的仓库，禁止添加 collaborator，除非用户另行明确授权。
+- 允许的用途是私密备份、跨设备同步和用户个人版本管理；不得把 private remote 当作共享发布渠道。
+- 添加 remote 或 push 前必须先检查：`git status --short`、`git remote -v`、`.gitignore` 覆盖范围，以及 staged / tracked 文件中是否有 token、secret、credentials、日志、缓存、实盘状态或大体量结果产物。
+- 禁止上传：`TUSHARE_TOKEN` 或其他 API key / token / credentials、`.env*`、`logs/`、可再生缓存、`state/*/l3_snapshots/`、未脱敏实盘状态、个人账户信息、以及 `.gitignore` 已排除的结果或临时文件。
+- `git remote add` / `git push` 仍属于高风险操作；AI 协作者执行前必须得到用户明确指令，并遵守当前工具环境的审批机制。
+
 **代码改动前必先 view**：改 `egs_main.py` 之前先查看当前状态，不基于记忆假设。`egs_main.py` 当前版本以文件为准，不按旧版本提建议。
 
 **v14.2 规则定位**：用户提到任何 v14.2 规则时，先识别该规则属于五段拆解的哪一段，在对应介质里讨论实现，不在原 Markdown 框架里叠加。
@@ -342,7 +353,7 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `schemas/analysis_input_coverage.md` — schema 覆盖率与修复记录
 - `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — Phase 2 v7.9 交接记录
 - `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Phase 2 Tier1-only 主口径切片交接记录
-- `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — Phase 2 git init 交接记录（私密本地仓库约束）
+- `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — Phase 2 git init 交接记录（初始 local-only；2026-05-26 amendment 允许受约束 private remote）
 - `docs/handoff/2026-05-24_phase2_validation_tooling_handoff.md` — Phase 2 验证工具升级交接记录
 - `docs/handoff/2026-05-24_phase2_6_datahub_guardrail_handoff.md` — Phase 2.6 DataHub guardrail 交接记录
 - `docs/handoff/2026-05-24_phase2_24p_v710_results_handoff.md` — Phase 2 v7.10 24 期 production 实跑交接记录

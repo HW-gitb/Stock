@@ -10,7 +10,7 @@
 
 ## 不可碰（在你做任何改动前必须知道）
 
-- **不可 `git push`，不可 `git remote add`** — 私密本地仓库
+- **`git push` / `git remote add` 仅在用户明确指令 + private remote + 隐私审计后允许** — 默认仍按本地仓库处理；细则见 `AGENTS.md §Git remote privacy policy`
 - **不可改 `skills/a_short_analysis/reference/v14.2_spec.md`** 等规格文档（设计已固化）
 - **不可写到 `result/a_short/<YYYYMMDD>/`** — 回测必须用 `result/a_short/backtest/generated/<YYYYMMDD>/`
 - **不可绕过** `production` 模式对 `--reuse-l3-cache` / `--include-immature` 的拒绝

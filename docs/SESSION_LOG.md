@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-05-26 — Claude (private remote policy R1 + O1 disposition)
+
+**Commits**: none (trivial doc sync; commit waits for user `提交`)
+
+**Relationship to prior session(s)**:
+- 紧接 2026-05-26 Claude review "Required fix needed (private remote policy)"。
+- 按 multi_llm serial 协议默认应由 Codex 修；本轮 R1/O1 都是单行 doc sync，无歧义，用户口头授权"批准修复"后由 Claude 直接 dispose，避免协议 overhead。下一轮非 trivial 改动仍走 Codex `修复`。
+
+**Worked on**:
+1. **R1 修**：`CLAUDE.md:13` 由 `**不可 `git push`，不可 `git remote add`** — 私密本地仓库` 改为 `**`git push` / `git remote add` 仅在用户明确指令 + private remote + 隐私审计后允许** — 默认仍按本地仓库处理；细则见 `AGENTS.md §Git remote privacy policy``。入口路由与 AGENTS.md 新 §Git remote privacy policy 对齐。
+2. **O1 dispose**：`AGENTS.md:356` 由 `Phase 2 git init 交接记录（**私密本地仓库约束**）` 改为 `Phase 2 git init 交接记录（初始 local-only；2026-05-26 amendment 允许受约束 private remote）`，与同文件 L179 同步。
+
+**Key decisions**:
+- 历史 SESSION_LOG entry (L309/L469/L631) "Repo remains local-only; no push or remote changes." 是历史事实，不回改。
+- 2026-05-24 git init handoff L54 admonition + L135 amendment 段的旧规则引用是覆盖关系描述，不改。
+- 之前 review entry 里"引用 CLAUDE.md 旧文本"作为证据的 quote block (L122) 不改，否则 review entry 读不通。
+
+**Validation**:
+- `rg "不可 `git push`|不可 `git remote add`" D:\cnhea\Stock` —— 剩余 hits 全部为历史 entry / review 证据 quote / amendment 段描述旧规则被覆盖，无 active rule 引用。
+- 无代码改动，不需要跑测试。
+
+**Alternatives considered and rejected**:
+- "切到 Codex `修复`" — rejected：单行 doc sync 用建议措辞直接照抄，没决策空间；走协议反而拖累节奏。memory feedback "business work 优先于协议设计"支持。
+
+**Open questions handed off**:
+- None。
+
+**Next natural step from my view**:
+1. 用户 `审查` (R1/O1 trivial sync 重审一遍) 或直接 `提交`（路径 B 两块一起 commit）。
+2. `提交` 时按上一条 CSV materializer review entry 提的两 commit 方案：commit A = CSV materializer + 测试 + handoff/README + CURRENT/SESSION_LOG 中 CSV 相关段；commit B = CLAUDE.md + AGENTS.md + git init handoff amendment + CURRENT/SESSION_LOG 中 policy 相关段。
+
+---
+
 ## 2026-05-26 — Claude review — Pass (Phase 5 CSV materializer Optional disposition)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O5 全部 dispose 完成；O6 保持 archived 在 `CURRENT.md §P2`）。
@@ -98,6 +131,107 @@ This entry is for cross-LLM continuity. It is **not** a direct execution order t
 **Next natural step from my view**:
 1. User sends `审查`; Claude re-reviews the Optional disposition diff.
 2. If Pass, user sends `提交`.
+
+## 2026-05-26 — Claude review — Required fix needed (private remote policy)
+
+**Status**: REVIEW VERDICT RECORDED. **Required fixes: 1 条 (R1 — CLAUDE.md 入口路由未同步)**. Optional suggestions: 1 条 (O1 — AGENTS.md L356 文件描述未同步).
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `be68abe`; targets the Codex entry "private remote policy")
+
+**Verdict**: Required fix needed — **不阻塞已 Pass 的 CSV materializer disposition 单独 commit**，但本 policy 改动**不可单独 commit**，必须先修 R1。
+
+**Scope checked**:
+- `AGENTS.md` 新增 §Git remote privacy policy（L295-304）+ L179 handoff 描述更新
+- `docs/handoff/2026-05-24_phase2_git_init_handoff.md` L54 admonition + L130-165 2026-05-26 追加段
+- `docs/CURRENT.md` L16 Latest Delta + L221 "不可碰"列表（已同步 ✅）
+- `docs/SESSION_LOG.md` Codex 自描述 entry
+- 无代码 / schema / 测试改动 ✅（policy 是纯文档/规则变更）
+
+**Reasons for not Pass**:
+
+新 policy 内容设计 OK（详见下方 "Reasons the policy itself is fine"），但**入口路由文档没同步**。CLAUDE.md 是 Claude Code 默认每次 session 加载的强信号文件，其 L13 "不可碰"硬警告列表里写：
+
+```
+- **不可 `git push`，不可 `git remote add`** — 私密本地仓库
+```
+
+这与 AGENTS.md 新 §Git remote privacy policy（"允许用户本人控制的 private Git remote"）**直接矛盾**。后果：
+
+- 新 Claude session 加载 CLAUDE.md → 看到"不可碰"硬禁令 → 用户说"push 到 GitHub private repo"时会拒绝，与 AGENTS.md 新 policy 自相矛盾。
+- 入口路由的"不可碰"硬警告比 AGENTS.md §Git remote privacy policy（在 L295 中段）信号更强 + 出现更早，先入为主。
+- 该项目就靠 CLAUDE.md → AGENTS.md → handoff 三层路由跨 LLM 同步认知，入口层失同步等于规则没改成。
+
+**Required fixes (MUST FIX before private-remote-policy commit)**:
+
+1. **R1 — CLAUDE.md L13 同步**（`CLAUDE.md:13`）。"不可 `git push`，不可 `git remote add`"绝对禁令必须改成与 AGENTS.md §Git remote privacy policy 对齐的措辞。建议改为：
+
+   ```
+   - **`git push` / `git remote add` 仅在用户明确指令 + private remote + 隐私审计后允许** — 默认仍按本地仓库处理；细则见 `AGENTS.md §Git remote privacy policy`
+   ```
+
+   关键要点：(a) 不再是绝对禁令，(b) 点到必须满足条件，(c) 把决策细则路由到 AGENTS.md 新章节。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — AGENTS.md L356 文件描述未同步**（`AGENTS.md:356`）。文件链接列表里 `docs/handoff/2026-05-24_phase2_git_init_handoff.md — Phase 2 git init 交接记录（**私密本地仓库约束**）` 描述仍只提"私密本地仓库约束"，没体现 2026-05-26 amendment。L179 同一文件的描述已更新为"初始为私密本地仓库；2026-05-26 起允许受约束 private remote"。建议把 L356 同步成 `Phase 2 git init 交接记录（初始 local-only；2026-05-26 amendment 允许受约束 private remote）` 或类似。
+
+**Reasons the policy itself is fine (内容设计层面是 Pass)**:
+
+- AGENTS.md §Git remote privacy policy 六条硬约束覆盖完整：明确指令触发 / private only / 不发布共享 / 推前审计 / 禁上传清单 / 仍属高风险需 user 指令 ✅
+- 禁上传清单具体到名字：`TUSHARE_TOKEN` / `.env*` / `logs/` / 可再生缓存 / `state/*/l3_snapshots/` / 未脱敏实盘状态 / 个人账户信息 / `.gitignore` 已排除 — 都是本项目的真实风险面 ✅
+- 兜底说"`.gitignore` 已排除"都禁止上传 — `tushare_cache` / `result/forward/` / `*.parquet` 等如果在 ignore 范围内自动覆盖 ✅
+- 旧 handoff 文件用 L54 admonition 标注覆盖、不直接删旧段落，保留历史事实 ✅（与项目 handoff 不变性原则一致）
+- `docs/CURRENT.md` L221 "不可碰"列表已同步：`不可无约束 git push / git remote add；允许用户本人控制的 private remote，但必须遵守 AGENTS.md §Git remote privacy policy` ✅
+- 2026-05-24 git init handoff 末尾追加段的"失效旧结论"段精确：明确 "LLM 永远不可添加 remote / push" 已失效 ✅
+
+**额外观察（非 issue）**:
+
+- Policy 关注**文件层级**，没显式提 **commit message 内容**是否可能 leak 实盘 ts_code / 仓位 / 个人账户信息。边界 case，本轮不涉及，但未来真要 push 时可能踩。属于 push-time runtime check 而非 policy 文本问题，不写为 R/O。
+- "默认仍按本地仓库处理"措辞够明确，但**没说"如果 user 单说 '上传 GitHub' 但没说 private，AI 必须先确认 private"** — 这点 `docs/handoff/2026-05-24_phase2_git_init_handoff.md:164` 的"下一步注意事项"第 2 条已经写了。建议未来若再加补丁把它提到 AGENTS.md 主文。**本轮不必**，重复在 handoff 也够。
+- `docs/SESSION_LOG.md` 之前几条历史 entry（L237 / L397 / L559）写 "Repo remains local-only; no push or remote changes." — 这些是历史事实不应回改 ✅。
+
+**Documentation issues**: R1（已列 Required）+ O1（已列 Optional）。
+
+**Pending status**: Required (R1): MUST FIX before private-remote-policy commit / Optional (O1): PENDING CODEX DISPOSITION。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — 修 R1（必），dispose O1（可选）。CLAUDE.md 是入口路由，本轮必须随 policy 一起同步，否则规则反向冲突。
+2. **CSV materializer disposition (上一条 entry)** 已 Pass，**可以独立先 commit**（不依赖本 policy 修复）。两种路径：
+   - **路径 A（推荐）**：先 commit CSV materializer disposition；Codex 修 R1 后再 commit private remote policy。两个 commit scope 干净。
+   - **路径 B**：等 Codex 修完 R1，两块一起再 review 通过后再各自 commit。
+3. 提交后下一步是真实 Tushare provider materializer 或 fill simulation。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+## 2026-05-26 — Codex (private remote policy)
+
+**Commits**: none (documentation/rule change only; commit waits for review per AGENTS.md change policy)
+
+**Relationship to prior session(s)**:
+- Refines the original git init privacy rule from `docs/handoff/2026-05-24_phase2_git_init_handoff.md`.
+- Does not alter the pending Phase 5 CSV materializer review state.
+
+**Worked on**:
+1. Added `AGENTS.md §Git remote privacy policy`.
+2. Updated `docs/CURRENT.md` so the active "do not touch remote" warning now points to constrained private remote rules.
+3. Appended a 2026-05-26 amendment to the git init handoff.
+
+**Key decisions**:
+- Private remote is allowed only when user explicitly requests it, the remote is user-controlled and private, and pre-push privacy checks pass.
+- Public remote, unauthorized collaborators, secrets, logs, caches, live-state data, and ignored generated artifacts remain prohibited.
+- `git remote add` / `git push` remain high-risk operations requiring explicit user direction and tool approval where applicable.
+
+**Alternatives considered and rejected**:
+- "Keep absolute local-only forever" — rejected because the user explicitly wants private GitHub backup/sync.
+- "Allow any GitHub upload" — rejected because this project may contain tokens, logs, caches, live-state data, and private strategy work.
+
+**Open questions handed off**:
+- None; the next remote action still requires a separate explicit user instruction.
+
+**Next natural step from my view**:
+1. Review this AGENTS/CURRENT/git-handoff policy diff.
+2. Continue the pending Phase 5 CSV materializer Optional disposition separately.
 
 ## 2026-05-26 — Claude review — Pass (Phase 5 execution price data CSV materializer)
 

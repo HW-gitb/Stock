@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（Phase 5 CSV materializer Optional disposition 已完成，等待提交）
+**最后更新**：2026-05-26（Phase 5 CSV materializer Optional 已处理；private remote policy 已写入）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -13,6 +13,7 @@
 - The materializer is a provider-boundary helper only; it does not fetch Tushare data, simulate fills, apply stops, or do portfolio accounting.
 - Validation used the Codex bundled Python: `python -m unittest tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 26 tests after Optional disposition.
 - Claude reviewed this CSV materializer twice (verdict: Pass, no Required fixes). Codex has now disposed active Optional O1-O5; O6 remains archived to §P2. The next P0 is Claude re-review → user `提交`; do not implement Tushare provider fetch or fill simulation before commit.
+- Git privacy policy changed: private remote is allowed only under AGENTS.md constraints. Public remote, collaborators, secrets, logs, caches, unredacted live-state data, and ignored generated artifacts remain prohibited.
 
 ## 1. 当前 Phase 与目标
 
@@ -217,7 +218,7 @@ python runners\backtest_rank.py --mode smoke --periods 3 --freq monthly --window
 ## 8. 注意事项 / 雷区
 
 ### 不可碰
-- **不可 `git push`，不可 `git remote add`**（私密本地仓库，commit `dca8367` 之后所有提交同规则）
+- **不可无约束 `git push` / `git remote add`**；允许用户本人控制的 private remote，但必须遵守 `AGENTS.md §Git remote privacy policy`：先审计 secrets / logs / caches / 实盘状态 / ignored artifacts，禁止 public remote 和未授权 collaborator。
 - **不可改 v14.2 原文档**（已迁到 `skills/a_short_analysis/reference/v14.2_spec.md` 作设计参考）
 - **不可写到 `result/a_short/YYYYMMDD/`**（回测必须用 `result/a_short/backtest/generated/YYYYMMDD/`）
 
