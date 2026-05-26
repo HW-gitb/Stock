@@ -41,6 +41,16 @@
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
+### 待用户决策（blocking / hot queue）
+
+格式：每条带 Pending / Recommendation / Blocks / Rule 四段。**决策完成后立刻删除该条或改成已决策结论**，避免 CURRENT.md 变成长期 todo 垃圾堆。**未决前 LLM 不得 silent default 进入相关 implementation**。
+
+1. **A 短 benchmark monthly return source**
+   - **Pending**: CSI300 / CSI1000 / dual reporting / other
+   - **Recommendation**: Phase 6a 先做 candidate universe overlap audit；若候选池偏大盘，用 CSI300 作 primary；若偏中小盘（24p Tier1-only N≈305 暗示中小盘倾向），用 CSI1000 作 primary；另一个作为 secondary sensitivity，让 ship gate alpha 自带敏感性分析。
+   - **Blocks**: Phase 6a benchmark contract + 所有 benchmark-aware alpha t-stat interpretation。
+   - **Rule**: 未决前不得 silent default 进入 benchmark-dependent implementation。
+
 ---
 
 ## 2. 已完成事项（最近 8 条；过程细节见 SESSION_LOG）

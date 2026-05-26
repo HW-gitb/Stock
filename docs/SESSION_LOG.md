@@ -8,6 +8,81 @@
 
 ---
 
+## 2026-05-26 — Claude (CURRENT.md 待决策 hot queue cleanup + memory question handoff)
+
+**Commits**: none (docs-only hot queue cleanup; commit waits for review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- 接在 commit `f74ff40 docs: synthesize strategy design and routing` 之后。strategy synthesis / docs routing / O1 dispose 已落地，本 entry 不与 strategy synthesis 同 commit。
+- 强化 [[feedback-session-log]] doc layering 原则：CURRENT.md = hot queue (blocking)，SESSION_LOG.md = cognitive 悬念 (non-blocking handoff)。
+
+**Worked on**:
+1. CURRENT.md §1 末加的 "### 待用户决策（blocking / hot queue）" section **只保留 1 条**：A 短 benchmark monthly return source（真 blocks Phase 6a）。
+2. 删除原第 2 条 "是否新加 memory `feedback_reviewer_false_positive_audit.md`" — 不阻塞 production scope，不应在 CURRENT.md hot queue。
+
+**Key decisions**:
+- CURRENT.md "待决策" section 严格定义为 **hot queue (blocking only)**；non-blocking 决策走 SESSION_LOG "Open questions handed off" 层。否则 hot queue 退化成 todo backlog。
+- 反例修正：我加 memory question 时自己 admit "Blocks: 无 production scope" — 这就 admit 不该在 CURRENT.md 那个位置。用户 catch 了我的内部矛盾。
+
+**Open questions handed off**（移到 SESSION_LOG 层的 memory question）:
+- 是否新加 memory `feedback_reviewer_false_positive_audit.md` 记录 2026-05-26 Phase 5 aggregation Optional O1 案例（Agent 2 "L181 schema_version 无验证" misread 被我直接 promote 成 Optional → Codex 反驳后发现 `load_execution_report` 已 schema validation）的教训？不紧急，下次 Claude session 启动读到本 entry 时再决策。如加，内容大致："reviewer promote Agent finding 前必须自己 grep verify，不直接 trust agent report"。
+
+**Alternatives considered and rejected**:
+- "保留 memory question 在 CURRENT.md 待决策" — 否决。non-blocking 项进 hot queue 会稀释 blocking 信号，让 future LLM 不知道哪条真阻塞。
+- "新加完整 7-section entry 专门记 hot queue cleanup" — 否决。本动作是 doc layering refinement，不是 phase event；走精简 entry。
+
+**Next natural step from my view**:
+1. 用户 `提交`（独立 docs-only hot queue cleanup scope，单 commit；与已 commit 的 strategy synthesis `f74ff40` 不混 scope）。
+2. 提交后 `/clear` 安全 — CURRENT.md hot queue 只剩 benchmark 1 条 blocking 信号；memory question 在本 entry 备忘。
+3. 新 session 进场读 SESSION_LOG 顶 1-3 条会看到 memory question，可主动问用户。
+
+---
+
+## 2026-05-26 — Claude review — Pass (docs routing + strategy synthesis O1 disposition) [RETROSPECTIVE for `f74ff40`]
+
+**Status**: RETROSPECTIVE REVIEW VERDICT for already-committed `f74ff40 docs: synthesize strategy design and routing`. Required fixes: none. Optional follow-ups: none active（O1 dispose 完成 + bonus docs routing 改进高 value）。
+
+**Commits covered**: `f74ff40` (已 commit；本 entry 不会改动现有 commit，仅补 cross-LLM 协议链中遗漏的 Claude Pass 节点)
+
+**Hygiene note**: 本 entry 是**补写 retrospective**。当时 review 我在 chat 给了 Pass verdict + bonus 观察但**没 prepend SESSION_LOG entry**，违反 `[[feedback-session-log]]` #10 ("review verdict 必须先落 SESSION_LOG 再告诉用户")。用户提醒后补写本条让 SESSION_LOG 链闭合：Codex 修复 entry → Claude Pass entry → ... 顺序对齐。注意：补写时机晚于实际 commit，因此本 entry 不影响 `f74ff40` 内容、不要求新 commit、不主张任何 pending action。
+
+**Verdict** (历史): Pass.
+
+**Scope reviewed** (commit `f74ff40` 包含):
+- `docs/strategy_design_synthesis.md:111` O1 dispose（burst lane 6-month preliminary pass falsifiability requirement）
+- `docs/README.md` 新增 document routing table + maintenance rules（Codex bonus 工作）
+- `AGENTS.md §文档路由` 新增 fast path（Codex bonus 工作）
+- 无 code / schema / preset / test 改动 ✅
+
+**Disposition 核对** (历史):
+
+- **O1 (Pass with mod)** — `synthesis doc L111` 加 "The 6-month preliminary pass must be falsifiable and defined in the Phase 6c burst-lane spec. It cannot be a passive 'six months elapsed' promotion. The Phase 6c spec should define explicit preliminary criteria, such as weaker-than-full ship-gate thresholds for alpha, Sharpe, drawdown, and live-month coverage; exact numbers are not locked here." 完全按建议方向：(a) falsifiability explicit (b) 直接 callout passive time-based promote 风险 (c) weaker-than-full ship-gate framing (d) 不 hardcode 数字（合理 defer 到 Phase 6c spec）。`Open questions handed off` 也明确 "Phase 6c must define numeric preliminary-pass criteria"。✅
+
+**Bonus 工作（unsolicited 但 high-value）**:
+
+- **`docs/README.md` document routing table**：8 行 routing 表 + 5 条 maintenance rules。解决"future LLM 进项目读哪里"问题 ✅
+- **AGENTS.md §文档路由 fast path**：8 个常用入口快速 list ✅
+- **Codex alternatives rejected 3 条**：决策路径可追溯 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1 已 Pass，bonus 工作无新 finding）。
+
+**Process meta observation（hygiene streak 跟踪）**:
+
+- 自 `ccc5c85 Tighten commit documentation hygiene` 之后**连续 4 次** substantive commit 都没 follow-up [trivial] sync：
+  - `a784b18` (Phase 5 ship-gate evaluation) ✅
+  - `87a1a5a` (Phase 5 aggregation) ✅
+  - `f74ff40` (strategy synthesis + docs routing + O1 dispose) ✅
+- 节省 3+ 个 [trivial] commits。hygiene 规则真稳定下来了。
+- 本 entry 是 reviewer (Claude) 自查 hygiene violation 的 case — 用户 catch 后补写。提醒下次 review verdict 必须先 prepend SESSION_LOG entry。
+
+**Status retrospective only**: 本 entry 不要求任何 commit 行动；`f74ff40` 已落地。
+
+This entry is for cross-LLM continuity and SESSION_LOG chain integrity. It is **not** a direct execution order to Codex.
+
+---
+
 ## 2026-05-26 — Codex (docs routing + strategy synthesis O1 disposition)
 
 **Commits**: none (`批准做` docs update; commit happens only after Claude Pass and user `提交`)
