@@ -8,6 +8,187 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Phase 5 execution runner skeleton review fixes)
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `e4ce3a2`; targets the immediately prior Codex 修复 entry "Phase 5 execution runner skeleton review fixes")
+
+**Verdict**: Pass.
+
+**Notes**: R1 + 全部 4 条 Optional 正确落地。独立验证 `tests.execution.test_backtest_execution -v` → `Ran 5 tests in 0.056s OK`（增量 +4：l3_mode pit / missing / invalid / trade_date mismatch）。R1：`normalized_l3_mode` 改为缺失→today / pit·today·neutralize→原样 / invalid→ValueError，与 Phase 4 runner `_analysis_input_l3_mode` 对齐。O1 accept：`classify_skips` 在 `main()` 单次算后传给 `build_report` + `write_outputs`（两者保留 None fallback 不破坏独立调用）。O2 accept：`analyzer_reason_codes` 用 `,` 替代 `|`。O3 accept：补 4 个新测试。O4 accept：新函数 `event_message_for_skip` 给 missing_stop / analyzer_hard_veto 两路径分别生成有信息量 message。Codex 的 `Optional disposition` 段格式符合新协议 §修复 step 14。无新 Required / Optional / open questions。可以 `提交`。
+
+---
+
+## 2026-05-26 — Codex (Phase 5 execution runner skeleton review fixes)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for clean `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude review "Pass with fixes (Phase 5 execution runner skeleton)".
+- Repairs approved Required fix R1 and disposes Optional suggestions O1-O4.
+
+**Worked on**:
+1. Fixed `normalized_l3_mode()` so `pit` / `today` / `neutralize` are preserved, missing `source.l3_mode` falls back to `today`, and unsupported values raise `ValueError`.
+2. Tightened runner skeleton internals and tests without implementing real price simulation or fill logic.
+
+**Key decisions**:
+- Kept Phase 5 skeleton scope unchanged: no price fetch, no fill simulator, no stop/take-profit/time-stop execution, no portfolio accounting.
+- Treated analyzer hard-veto as skip audit data, not an execution event enum extension.
+- Kept `execution_assumptions` as the single authority for execution parameters.
+
+**Optional disposition**:
+- O1 accept: `classify_skips()` is now computed once in `main()` and passed into `build_report()` / `write_outputs()`.
+- O2 accept: `analyzer_reason_codes` now uses comma separation instead of `|`.
+- O3 accept: added tests for `pit`, missing `l3_mode`, invalid `l3_mode`, and `trade_date` / `--as-of` mismatch.
+- O4 accept: `missing_stop` order-event messages now explain that deterministic stop input is not wired in the skeleton.
+
+**Alternatives considered and rejected**:
+- "Keep `historical_replay` compatibility" — rejected because it is not a valid `analysis_input.source.l3_mode` enum and would hide invalid lineage.
+- "Add a new analyzer-veto event code now" — rejected because that would require schema expansion and Claude already judged current `skipped_candidates.csv` audit sufficient for skeleton v1.
+
+**Open questions handed off**:
+- None for this repair round. Price data input contract remains the next post-commit design task.
+
+**Next natural step from my view**:
+1. User sends `审查`; Claude re-reviews the repair diff.
+2. If Pass, user sends `提交`.
+3. After commit, next `执行` should define the price data input contract before implementing real fill logic.
+
+---
+
+## 2026-05-26 — Claude review — Pass with fixes (Phase 5 execution runner skeleton) — R1 APPROVED by user 2026-05-26
+
+**Status**: **R1 APPROVED 2026-05-26** ("批准修改R1")。Required fix R1 (normalized_l3_mode lineage bug) ready for Codex `修复`. Optional suggestions (O1-O4) PENDING CODEX DISPOSITION as usual under the new protocol.
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `e4ce3a2`; targets the immediately prior Codex entry "Phase 5 execution runner skeleton")
+
+**Verdict**: Pass with fixes.
+
+**Scope checked**:
+- `runners/backtest_execution.py`（runner skeleton 主体）
+- `tests/execution/__init__.py` + `tests/execution/test_backtest_execution.py`（smoke 测试）
+- `docs/CURRENT.md` + `docs/SESSION_LOG.md` + Phase 5 handoff 追加 + `runners/README.md`
+
+**Verification re-run** (独立于 Codex 声明):
+- `python -m unittest tests.execution.test_backtest_execution -v` → `Ran 1 test in 0.030s OK`
+- 跑出来的 report 通过 schema validation（test 内置 `Draft7Validator.iter_errors(report) == []`）
+- Grep `historical_replay` 全仓只在 `runners/backtest_execution.py` 一处出现 → confirm 该值是 Codex 编造，不在任何 schema
+- Grep `l3_mode` 在 `schemas/analysis_input.schema.json` line 85-88：enum 是 `["pit", "today", "neutralize"]`，缺失按 schema 说明 fallback "today"
+- Grep `EXECUTION_LOG_PATH` 在 `engine/analyzer/state_manager.py` line 18 已声明 → state_refs 中引用合法（即使文件未必存在）
+
+**Reasons for Pass-with-fixes**:
+- 架构合规：单一 primary input = `analysis_input.json`，不读 Markdown / LLM 自由文本 ✅
+- 输出隔离 `result/a_short/backtest/execution/` 符合 Phase 5 handoff §5 ✅
+- schema 验证写入前完成（`validate_report` in `write_outputs`）✅
+- execution_assumptions 11 块全配齐，event_codes 含 entry + exit（符合 v1.0.0 hardened schema 约束）✅
+- settings 只含 6 项 run-level 字段，无 cost_pct/max_position_pct 等冗余（符合 Optional hardening 之 single authority）✅
+- analyzer replay 通过 `run_veto(candidate)` 合规，未 veto 候选标 `missing_stop` 符合 Phase 5 handoff §6.2 "若输入没有 stop，则交易必须 skipped 或标 missing_stop" ✅
+- limitations / pit_limitations / date_warnings 显式说明 skeleton 只验证 contract，不模拟撮合 ✅
+
+**Required fixes (PENDING USER APPROVAL)**:
+
+1. **`normalized_l3_mode` 是 lineage bug — `data_lineage.l3_mode` 会被错误标记**（`runners/backtest_execution.py` line 104-110）
+
+   现实现：
+   ```python
+   def normalized_l3_mode(payload):
+       mode = payload.get("source", {}).get("l3_mode")
+       if mode == "today":
+           return "today"
+       if mode == "historical_replay":
+           return "pit"
+       return "neutralize"  # ← 默认值
+   ```
+
+   问题：
+   - `"historical_replay"` **不在** `schemas/analysis_input.schema.json` 的 l3_mode enum（enum 是 `["pit", "today", "neutralize"]`），是 Codex 编造的值，永不触发
+   - 实战中 `payload.l3_mode == "pit"` 时会落到 `return "neutralize"`，**lineage 字段被污染**
+   - 缺失 l3_mode（legacy 文件）应按 schema 注释 fallback `"today"`，当前却被标 `"neutralize"`
+   - 现有 fixture `tests/fixtures/analysis_input_minimal.json` 的 l3_mode 是 `"today"`，恰好走 happy path，掩盖了这个 bug
+
+   后果：Phase 5 execution backtest 与 Phase 2 rank backtest / Phase 4 deterministic report 的 L3 lineage 比对会失真，未来 audit 时找不到根因。
+
+   修复方向：对齐 Phase 4 runner 的实现 `runners/run_analysis_report.py:466-470` 的 `_analysis_input_l3_mode`：
+   ```python
+   def normalized_l3_mode(payload):
+       mode = str(payload.get("source", {}).get("l3_mode") or "today")
+       if mode not in {"pit", "today", "neutralize"}:
+           raise ValueError(f"unsupported analysis_input.source.l3_mode: {mode!r}")
+       return mode
+   ```
+   保持"缺失→today、unknown→raise、其余→原样"的 invariant 与 Phase 4 一致。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **`classify_skips` 被重复调用**（`build_report` line 258 + `write_outputs` line 383 各一次）。`run_veto` 也跟着跑两次。功能正确但浪费 + 设计漏洞。建议：在更高层（main 或 build_report 入口）算一次，把 `skipped_rows` 作为参数传给 `write_outputs`，或让 `build_report` 返回 `(report, skipped_rows)` 元组。
+
+2. **`skipped_candidates.csv` 的 `analyzer_reason_codes` 用 `|` 分隔**（line 207）。Phase 4 runner 已在 `runners/run_analysis_report.py:133-135` 显式把 `|` 改成 `,`，原因是 `|` 与 Markdown table cell 边界冲突，下游消费时需要 escape。建议与 Phase 4 对齐，统一用 `,`。
+
+3. **测试只有 1 个 smoke**，没覆盖 R1 类 lineage 分支。建议补：
+   - `l3_mode="pit"` → lineage 标 "pit"
+   - `l3_mode` 缺失 → lineage 标 "today"
+   - `l3_mode="invalid_value"` → raise ValueError
+   - `trade_date` 与 `--as-of` 不一致 → raise ValueError（`main` line 436-439 已实现，但无测试）
+
+4. **`build_order_events` 对 `missing_stop` 路径的 message 偏冗余**（line 232）。当 reason="missing_stop" 时 `analyzer_reason_codes` 为空字符串，`message` 计算为 `"" or "missing_stop"` = `"missing_stop"`，与 `event_code` 字段重复。建议改成更有信息量的描述，如 `"candidate skipped: no deterministic stop input wired in skeleton"`。
+
+**Codex 两条 open questions — 回答**:
+
+1. *"Should the next runner increment add a dedicated schema field/event for analyzer hard-veto skips, or keep analyzer veto only in `skipped_candidates.csv`?"* — **当前在 `skipped_candidates.csv` 已经足够**。analyzer veto 不是 execution-level event（不是撮合行为），强行塞进 schema event_codes 会污染语义边界。`skipped_candidates.csv` 是 row-level audit，配合 `metrics.skipped_count` 就够后续 review 追溯。如果 future 需要 metric 细分（如 "analyzer_skip_count" vs "missing_stop_count"），那是 schema minor 升级的范围，不是当前 skeleton 任务。
+
+2. *"Before implementing fill logic, define the price data input contract and whether it lives inside `inputs.price_data.path` as a generated cache or a pre-existing data source"* — **优先 pre-existing data source**（典型走 `engine/data/` 或 tushare provider 直读），避免 Phase 5 引入额外缓存维护责任；如确需缓存，应作为独立 Phase 7 DataHub 范围。当前 schema `priceDataRef` 已要求 `start_date / end_date / adj / path` 四字段，未来 fill logic 实现时只需保证 path 指向真实 OHLC 数据源即可。这条留作下一轮 `执行` 的 design call。
+
+**协议合规**:
+- 范围：未动 EGS / analyzer / rank backtest / Phase 4 runner / state 文件 ✅
+- Pattern B 未 commit ✅
+- handoff 同 phase 追加，未新建文件 ✅
+- 测试 + schema 双验证通过 ✅
+
+**Documentation issues**: 无。
+
+**Pending status**: Required (R1) → PENDING USER APPROVAL；Optional (O1-O4) → PENDING CODEX DISPOSITION（新协议首次实战）。
+
+**Next natural step from my view**:
+1. 用户 `批准修改`（或 `批准修改 1` — 只一条 Required） → 切到 Codex → `修复`（Codex 同时 dispose O1-O4，按新协议在 entry 内写 `Optional disposition` 段）。
+2. Codex `修复` 完 → 用户 `审查` → Pass → `提交`。
+3. 提交后下一条 `执行` 进入 price data 输入 contract 设计 + fill logic 实现起步。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (Phase 5 execution runner skeleton)
+
+**Commits**: none (Pattern A: `执行` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-25 Codex (execution_backtest_report Optional contract hardening) and the committed Phase 5 schema-first contract.
+
+**Worked on**:
+1. Added `runners/backtest_execution.py` as the first Phase 5 runner skeleton.
+2. Added smoke coverage in `tests/execution/test_backtest_execution.py` and updated `docs/CURRENT.md`, `runners/README.md`, and the Phase 5 handoff.
+
+**Key decisions**:
+- The skeleton uses `analysis_input.json` as the sole primary input and does not consume Phase 4 Markdown or LLM free text.
+- Analyzer replay is allowed at this stage via `run_veto(candidate)`; candidates passing analyzer replay are skipped as `missing_stop` until deterministic stop inputs and price simulation are wired.
+- Real price fetch, fill simulation, limit-up handling, stop/take-profit/time-stop execution, portfolio accounting, and cooldown effects remain intentionally unimplemented.
+- `execution_assumptions` stays the single authority for cost, position caps, time stop, and event-code declarations; `settings` remains run-level only.
+
+**Alternatives considered and rejected**:
+- "Implement real simulator immediately" — rejected because Claude has not reviewed the first runner contract wiring yet, and price data input contract is not defined.
+- "Consume deterministic_report JSON first" — rejected for v1 skeleton because Phase 5 handoff already names the conservative path: `analysis_input.json` + analyzer/state directly.
+- "Reference analyzer hard-veto as a new event code in schema assumptions" — rejected after schema validation showed the v1 event enum is fixed; analyzer skip detail is kept in `skipped_candidates.csv` instead.
+
+**Open questions handed off**:
+- Should the next runner increment add a dedicated schema field/event for analyzer hard-veto skips, or keep analyzer veto only in `skipped_candidates.csv`?
+- Before implementing fill logic, define the price data input contract and whether it lives inside `inputs.price_data.path` as a generated cache or a pre-existing data source.
+
+**Next natural step from my view**:
+1. User sends `审查`; Claude reviews the uncommitted runner skeleton against the top SESSION_LOG entry and git diff.
+2. If Pass, user sends `提交`.
+3. After commit, implement price data input contract before real execution simulation.
+
+---
+
 ## 2026-05-26 — Claude review — Pass (approved Required fixes for Optional disposition protocol)
 
 **Commits**: none (review-only entry; reviews working tree diff vs HEAD `b2d6ec4`; targets the immediately prior Codex 修复 entry "approved Required fixes for Optional disposition protocol")

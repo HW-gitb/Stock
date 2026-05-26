@@ -340,3 +340,88 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest te
 1. 先让 Claude 复审 Optional 修复后的 uncommitted diff。
 2. 通过并提交后，再实现最小 runner / simulator skeleton。
 3. 后续 runner 写入 report 时，必须让 `settings` 只表达 run-level 设置，撮合细节统一写入 `execution_assumptions`。
+
+## 2026-05-26 追加：execution runner skeleton
+
+### 改了什么
+
+- 新增 `runners/backtest_execution.py`，作为 Phase 5 execution backtest 的最小 runner skeleton。
+- Runner 读取 `analysis_input.json` 作为唯一 primary input，调用 Phase 3 `run_veto(candidate)` 做 analyzer replay，不读取 Phase 4 Markdown 或 LLM free text。
+- 默认输出目录为 `result/a_short/backtest/execution/`，输出：
+  - `execution_report.json`
+  - `trades.csv`
+  - `daily_equity.csv`
+  - `order_events.csv`
+  - `skipped_candidates.csv`
+- `execution_report.json` 写入前必须通过 `schemas/execution_backtest_report.schema.json` v1.0.0 校验。
+- 新增 `tests/execution/test_backtest_execution.py`，覆盖最小 fixture 到 schema-valid report + CSV shells 的 smoke path。
+- 更新 `docs/CURRENT.md` 与 `runners/README.md`，标记 runner skeleton 已实现但真实 simulator / fill logic 尚未开始。
+
+### 为什么改
+
+Phase 5 已完成 schema-first contract，下一条最小实现任务就是把 contract 接到一个可运行、可审查的 runner skeleton。此轮刻意不实现行情获取、撮合、止损触发、组合记账或退出模拟，避免在 contract 还未由 Claude 复审前扩大实现面。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m pip install -r requirements-dev.txt
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_backtest_report_schema -v
+```
+
+### 验证结果
+
+- `jsonschema>=4.0` 已按 `requirements-dev.txt` 安装到本次 Codex bundled Python runtime。
+- `tests.execution.test_backtest_execution`：1 test passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- Smoke test 实际写出临时目录下的 `execution_report.json` 与 4 个 CSV，并用 JSON Schema 校验 report。
+
+### 失效旧结论
+
+- “Phase 5 runner / simulator 尚未开始”已失效；当前准确状态是 runner skeleton 已开始并待审，真实 simulator / fill logic 尚未开始。
+- “下一步是实现 runner skeleton”已失效；下一步是 Claude 审查当前 uncommitted runner skeleton，通过并提交后再进入 price simulation / fill logic。
+
+### 下一步注意事项
+
+1. Claude 审查重点应放在：schema 输出是否严格对齐 v1.0.0、`execution_assumptions` 是否仍是撮合参数唯一权威、输出目录是否隔离、是否误读了 Markdown/LLM 文本。
+2. 通过并提交前，不继续写真实 fill simulator。
+3. 后续实现 price simulation 时，先定义 price data 输入 contract；不能把 rank backtest 的 `ret_*` 当作 execution fill 结果复用。
+
+## 2026-05-26 追加：execution runner skeleton review fixes
+
+### 改了什么
+
+- 修复 Claude review R1：`normalized_l3_mode()` 现在与 `analysis_input.schema.json` 和 Phase 4 runner 对齐。
+  - 缺失 `source.l3_mode` -> `today`
+  - `pit` / `today` / `neutralize` 原样保留
+  - 其他值直接 `ValueError`
+- 采纳 Optional O1：`main()` 只计算一次 `classify_skips()`，并把 `skipped_rows` 传给 `build_report()` / `write_outputs()`，避免重复跑 `run_veto()`。
+- 采纳 Optional O2：`skipped_candidates.csv.analyzer_reason_codes` 改为逗号分隔，避免与 Markdown table cell 的 `|` 冲突。
+- 采纳 Optional O3：补充 L3 lineage 分支测试与 `trade_date` / `--as-of` 不一致测试。
+- 采纳 Optional O4：`missing_stop` 的 order event message 改成明确说明 skeleton 尚未接入 deterministic stop input，而不是重复 event code。
+
+### 为什么改
+
+R1 是实际 lineage bug：`pit` 会被错误写成 `neutralize`，legacy 缺失值也会被错误写成 `neutralize`。这会污染 Phase 5 execution report 的数据血缘。O1-O4 都是低成本的 contract hygiene 和测试加固，接受后不扩大 simulator scope。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution tests.schema.test_execution_backtest_report_schema -v
+```
+
+### 验证结果
+
+- `tests.execution.test_backtest_execution`：5 tests passed。
+- `tests.schema.test_execution_backtest_report_schema`：3 tests passed。
+- 总计 8 tests passed，smoke report 继续通过 `execution_backtest_report.schema.json` v1.0.0 校验。
+
+### 失效旧结论
+
+- `normalized_l3_mode()` 不再接受或转换 `"historical_replay"`；该值不属于 `analysis_input.schema.json` 的合法 enum。
+- 当前 skeleton 不再重复执行 analyzer replay；后续若 `run_veto()` 有副作用或成本上升，这一路径已规避重复调用。
+
+### 下一步注意事项
+
+1. 让 Claude 复审本轮 repair diff，尤其确认 R1 lineage invariant 和 Optional disposition 记录是否完整。
+2. 复审 Pass 并提交前，不继续实现真实 price simulation / fill logic。
+3. 下一轮实现 fill logic 前，先明确 `inputs.price_data.path` 指向的真实 OHLC 数据来源与最小字段契约。
