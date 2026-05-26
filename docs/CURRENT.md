@@ -1,6 +1,6 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（capital allocation preflight documented；fill simulation 尚未开始）
+**最后更新**：2026-05-26（P0c user decisions recorded；fill simulation 尚未开始）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
@@ -16,13 +16,13 @@
 - Substantive commit `cfa1c57` adds `runners/materialize_execution_price_data_tushare.py`: it fetches Tushare `daily` / `adj_factor` / `stk_limit` / `trade_cal`, writes the same schema-valid `execution_price_data` v1.0.0 JSON, and caches provider payloads under `result/a_short/backtest/cache/`.
 - Tushare materializer review returned Pass with 6 active Optional suggestions; Codex disposed all 6 before commit `cfa1c57`. The materializer gives a clear non-trading `--as-of` error, hard-fails broken Tushare base-URL pinning, treats row `source_flags` as API lineage, simplifies limit-column handling, and adds CLI/cache/token coverage.
 - This provider materializer still does not simulate fills, apply stops, or do portfolio accounting. Validation used the Codex bundled Python: `python -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 38 tests.
-- Capital allocation preflight: `docs/portfolio_allocation_policy.md` records the P0c decision draft. Phase 5 fill simulation must wait until P0a capital context contracts define bucket-aware capital inputs.
-- Next P0: resolve/encode P0c allocation decisions, then implement P0a capital context contracts before fill simulation.
+- Capital allocation policy: user confirmed `A = 35% / US = 65%`, A-share cash and US cash default non-fungible, full-size manual-use ship gate uses multi metric AND, and the system is analysis/screening only with manual order placement.
+- Next P0: implement P0a capital context contracts before fill simulation.
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 4 minimal 已完成；Phase 5 kickoff spec 已建立；deterministic report v1.1.0 / execution report schema v1.0.0 / runner skeleton / execution_price_data contract / loader wiring / CSV materializer / real Tushare provider materializer 全部已 commit；simulator / fill logic 尚未开始
-- **当前目标**：下一条最小流程任务是用户解决或显式 reserve P0c pending decisions，然后实现 P0a capital context contracts；fill simulation 暂缓到 bucket-aware capital inputs 明确之后。
+- **当前目标**：下一条最小流程任务是实现 P0a capital context contracts；fill simulation 暂缓到 bucket-aware capital inputs 明确之后。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -143,7 +143,7 @@
 - `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md` — Phase 4 开工规格：deterministic_report schema first + runner-as-executor + Skill-as-doc
 - `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` — Phase 5 kickoff 规格与追加记录：execution report schema、runner skeleton、price data input contract
 - `docs/AI_REVIEW_PROTOCOL.md` — Codex / Claude / 用户三方审查流程
-- `docs/portfolio_allocation_policy.md` — P0c 资金分配与流动资金使用规则草案；P0a capital context contract 的前置决策面
+- `docs/portfolio_allocation_policy.md` — P0c 用户确认资金政策；P0a capital context contract 的前置决策面
 
 ### 报告产出
 - `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.11.0, primary_subset=tier1_only
@@ -159,11 +159,12 @@
 
 ### P0 — Phase 5 启动边界
 
-1. **Capital context preflight** — Tushare provider materializer 已提交为 `cfa1c57`，但 fill simulation 不能直接按总账户 `initial_capital` 起步。先按 `docs/portfolio_allocation_policy.md` 解决或显式编码 P0c 决策，再做 P0a capital context contracts。
+1. **P0a capital context contracts** — Tushare provider materializer 已提交为 `cfa1c57`，但 fill simulation 不能直接按总账户 `initial_capital` 起步。P0c 用户决策已记录到 `docs/portfolio_allocation_policy.md`；下一步实现 P0a capital context contracts。
 2. **Fill simulation 起步** — P0a 完成后，下一条 scope 单独实现 entry/exit + 涨停不可买 + 止损 + 时间止损 + 组合约束，不再混入 provider materializer 或 capital-policy 变更。
 3. **Reference 框架约束** — 后续设计必须参考 A 股短线 / 美股短线 reference 文档的业务逻辑，但不能把 chatbox 框架机械照搬为运行时提示词或代码。
 4. **Claude 审查点** — execution runner、撮合假设、输出目录隔离、capital context contract 均需 Claude 独立审查后由用户确认。
 5. **保留所有 Phase 3 / Phase 4 既定结论**：4 条 hard veto 不动 / `esp_non_positive` v2 保留 / `score_ge_60` variant 保留 / 不改 EGS / Phase 4 runner v1 只输出 `skip/watch`。
+6. **Phase roadmap follow-up** — AGENTS.md 固化了 4 套子系统同等重要，但执行路线图仍保留 Phase 8 美股短线、Phase 9 长线的旧顺序。是否重排路线图是单独用户决策；P0a 只先把 4 个 preset 的 capital/bucket 契约一起设计，避免后续 breaking change。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）
 

@@ -9,10 +9,13 @@
 
 **资金分布与设计目标**（2026-05-26 用户明确）：
 
+- 顶层市场资金比例 = **A 股 35% / 美股 65%**。
 - each market = **1/3 长线 + 1/3 短线 + 1/3 流动资金**（A 股内部 1/3+1/3+1/3，美股内部 1/3+1/3+1/3）。
+- A 股 cash 与美股 cash 默认**不互通**；跨市场资金转移必须是显式人工决策或后续 coordinator 规则，不能隐式混池。
 - 长线和短线**同等重要**；4 套子系统**全部都是真实需求**，phase 路线图不能让任何一套被长期搁置。
 - 跨子系统的 portfolio coordination 是真需求：长短可以共享 cash buffer，但触发规则需明确（如短线熔断时 cash 默认转向长线 averaging-down 而非 short re-entry）。每个 runner 启动前必须能拿到自己 preset 的 capital ceiling，不超过所属 bucket 的 1/3。
-- **Ship gate**：每套子系统 ship 实盘前必须给出对应 bucket 净 alpha 的 evidence。alpha 不足时定位为"风控 filter"（仍可 ship 但 sizing 缩到 minimal 或仅跑 paper trade），不能 silent 走全仓实盘。
+- **Ship gate**：每套子系统支持 full-size 手动实盘使用前，必须同时满足多 metric AND：monthly alpha t-stat ≥ 2.0、Sharpe ≥ 1.0、max drawdown ≤ 15%、forward live data ≥ 12 个月。任一不达标时定位为"风控 filter"（仍可 ship 但 sizing 缩到 minimal 或仅跑 paper trade），不能 silent 走 full-size 手动实盘。
+- **执行边界**：本系统只做分析、筛选、回测、复盘和报告；用户之后**手动下单**。不得接入券商、操作系统或自动化工具执行自动下单。Phase 5 execution backtest 只模拟交易规则和风控结果，不是 live trading/order execution engine。
 
 ## 当前进度
 
@@ -29,7 +32,7 @@
 ## 三条不可动摇的原则
 
 1. **v14.2 是规格说明书，不是运行时提示词。** 所有规则拆到代码、配置、状态、Skill、提示词五个介质。
-2. **先把 A 股短线做成完整可复用样板**，即 Phase 1-6 全跑通并实盘一个季度，再扩展其他市场。
+2. **先把 A 股短线做成完整可复用样板**，即 Phase 1-6 全跑通并完成一个季度 forward/paper 或 minimal-size 手动观察；full-size 手动实盘使用仍必须满足 Ship gate（含 ≥12 个月 forward live data），不能把一季度工程闭环误读为 full-size 放行。
 3. **回测分两层。** rank 回测先做，execution 回测后做。
 
 ## Reference framework policy
@@ -130,7 +133,7 @@ Stock/
 | 3+ | minimal analyzer + state 接口同步建立 | 1-2 周 | ✅ |
 | 4 | minimal Skill：读 input，调 analyzer，出 M6.7 | 3-5 天 | ✅ minimal 完成 |
 | 5 | execution 回测 | 1-2 周 | ⬜ |
-| 6 | A 股短线完整闭环跑一个季度 | 实盘期 | ⬜ |
+| 6 | A 股短线完整闭环跑一个季度（forward/paper 或 minimal-size 手动观察；非 full-size ship gate） | 观察期 | ⬜ |
 | 7 | 引擎模块化重构，美股扩展硬前置 | 1-2 周 | ⬜ |
 | 8 | 美股短线：data provider + preset + skill | 1-2 周 | ⬜ |
 | 9 | 长线系统：架构复用，规则全新设计 | 2-4 周 | ⬜ |
@@ -146,7 +149,8 @@ Stock/
 7. Skill 走渐进路线，第一版只做读 input、调 analyzer、出 M6.7，不追求自动批量。
 8. v14.2.md 不废弃，已移到 `skills/a_short_analysis/reference/v14.2_spec.md` 作设计文档。
 9. `A-EGS/egs_main.py` 当前不移动，等 Phase 7 再拆进 `engine/`。
-10. 资金分布固化为 each market = 1/3 长线 + 1/3 短线 + 1/3 流动资金。4 套子系统同等重要；phase 路线图不能让任何一套被长期搁置；每套 ship 实盘前必须给出净 alpha 的 evidence，alpha 不足则定位为风控 filter。详 §项目背景。
+10. 资金分布固化为 A 股 35% / 美股 65%；each market = 1/3 长线 + 1/3 短线 + 1/3 流动资金；A 股 cash 与美股 cash 默认不互通。4 套子系统同等重要；phase 路线图不能让任何一套被长期搁置；每套支持 full-size 手动实盘使用前必须通过多 metric AND ship gate，alpha 不足则定位为风控 filter。详 §项目背景。
+11. 系统执行边界固化为分析筛选 + 回测复盘 + 报告输出；用户手动下单。不得接入券商、操作系统或自动化工具做自动下单；execution backtest 只是模拟规则，不是 live trading/order execution engine。
 
 ## AI 协作者在本项目中的工作守则
 

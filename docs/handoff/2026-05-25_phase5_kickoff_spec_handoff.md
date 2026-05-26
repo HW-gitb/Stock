@@ -813,3 +813,95 @@ git status --short
 3. `A = 50% / US = 50%` 只能作为待确认的中性规划假设，不能无声写成代码默认值。
 4. 后续 schema 和 runner 需要显式 capital input path，否则 report 中的 `capital_context` 不可复现。
 5. P0a 可先把 liquidity strictness 设为 `hard_floor` 起步默认；长线调用 liquidity 条件先 reserve 字段，等长线 spec 建立后再补 enum 值。
+
+## 2026-05-26 追加：P0c user-confirmed capital decisions
+
+### 改了什么
+
+- `docs/portfolio_allocation_policy.md` 从 P0c 决策草案更新为用户确认决策。
+- `AGENTS.md` 记录顶层资金比例、跨市场 cash 默认不互通、多 metric AND ship gate，以及“分析筛选 + 手动下单、不做自动下单”的执行边界。
+- `docs/CURRENT.md` 更新当前目标：P0c 用户决策已确认，下一步是 P0a capital context contracts。
+
+### 为什么改
+
+用户确认了 P0a 需要的关键资金政策：
+
+- 顶层市场资金比例：`A = 35%`、`US = 65%`。
+- A 股 cash 与美股 cash 默认不互通。
+- full-size 手动实盘使用采用多 metric AND ship gate：monthly alpha t-stat ≥ 2.0、Sharpe ≥ 1.0、max drawdown ≤ 15%、forward live data ≥ 12 个月。
+- 系统只用于分析筛选、回测复盘和报告；用户手动下单，不接券商、操作系统或自动化工具自动下单。
+
+这使 P0a 可以不再用 `50/50` 占位，也不需要在跨市场 cash 和 ship gate 上继续 pending。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['AGENTS.md','docs/portfolio_allocation_policy.md','docs/CURRENT.md','docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md','docs/SESSION_LOG.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok')"
+git diff --check
+git status --short
+```
+
+### 验证结果
+
+- `utf8 ok`
+- `git diff --check` 通过
+- `git status --short` 只显示本次文档 scope 相关文件
+
+### 失效旧结论
+
+- “`A = 50% / US = 50%` 是中性规划假设”已失效；用户确认 `A = 35% / US = 65%`。
+- “A/US cash 互通仍待确认”已失效；用户确认默认不互通。
+- “ship gate 阈值仍待确认”已失效；用户确认多 metric AND gate。
+- 任何把 Phase 5 解释为自动下单或 live order execution engine 的方向均失效。
+
+### 下一步注意事项
+
+1. P0a 可以开始设计 `portfolio_allocation` / `cash_buffer_state` / `execution_report.capital_context` 契约。
+2. P0a 必须保留 manual-order boundary；不得新增 broker / OS 自动下单接口。
+3. Execution backtest 输出用于评估手动交易计划、风险约束和 full-size gate，不用于自动执行交易。
+
+## 2026-05-26 追加：P0c user-confirmed decisions optional disposition
+
+### 改了什么
+
+- 修正 `AGENTS.md` 中 Phase 6 口径：一个季度 closed-loop 是 forward/paper 或 minimal-size 手动观察，不等于 full-size ship gate。
+- 在 `docs/portfolio_allocation_policy.md` 明确 bucket 比例是 within-market percentage，并补充 A 股 long bucket 的 total portfolio 示例。
+- 在 `docs/portfolio_allocation_policy.md` 明确实际 cash 调拨由用户手动执行，系统只生成 signal / recommendation。
+- 在 `docs/CURRENT.md` 标注 Phase roadmap 是否重排是单独用户决策；P0a 仍应一次性设计四个 preset 的 capital/bucket 契约。
+
+### 为什么改
+
+Claude review 指出 4 条 Optional 文档风险：
+
+- Phase 6 “实盘一个季度”会与 full-size ship gate 的 ≥12 个月 forward data 冲突。
+- “申请 liquidity”容易被误读成系统自动调拨资金。
+- `33.3333%` bucket target 未明说是市场内部比例，P0a schema 设计时可能误当 total portfolio 比例。
+- 已固化决策 #10 的“四套子系统同等重要”与旧 Phase 表中长线最后实现有潜在冲突，但路线图重排超出本轮 decision-recording scope。
+
+本轮处理前三条为文档修复；第四条只记录为待用户决策，不直接重排 Phase 表。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['AGENTS.md','docs/portfolio_allocation_policy.md','docs/CURRENT.md','docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md','docs/SESSION_LOG.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok')"
+git diff --check
+git status --short
+```
+
+### 验证结果
+
+- `utf8 ok`
+- `git diff --check` 通过
+- `git status --short` 只显示本次文档 scope 相关文件
+
+### 失效旧结论
+
+- “Phase 6 一季度实盘 = full-size ship 放行”失效；Phase 6 只是工程闭环 / paper / minimal-size 手动观察。
+- “系统可以自动调拨 cash bucket”失效；系统只生成建议，实际资金调拨由用户手动执行。
+- “bucket target 可能是 total portfolio percentage”失效；bucket target 是 within-market percentage。
+
+### 下一步注意事项
+
+1. P0a 设计四个 preset 的 bucket/capital ceiling 字段，避免未来长线接入时 schema breaking。
+2. Phase 路线图是否重排仍需用户单独决定；本轮未改 AGENTS.md Phase 表顺序。
+3. 不要把 manual-order boundary 误解为 live order execution engine。

@@ -1,10 +1,199 @@
-# Session Log
+﻿# Session Log
 
 跨 LLM 认知交接日志。**reverse-chronological，最新 entry 在顶部**。
 
 本文件存在的目的：commit message 和 handoff 记录"改了什么 / 为什么改"，但不记录 "试过什么没成 / 试过的方案为什么被否决 / 当前 LLM 的纠结点 / 下一步该做什么的判断"。这一层认知信息在跨 LLM 协作时最容易丢失。
 
 进项目前每个 LLM 必读：本文顶部 1-3 条最近 entry。完整规则见 `AGENTS.md §Session log discipline`。
+
+---
+
+## 2026-05-26 — Claude review — Pass (P0c user-confirmed decisions Optional disposition)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O4 全部 dispose 完成）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `9e05b31`; targets the immediately prior Codex entry "P0c user-confirmed decisions Optional disposition")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `AGENTS.md` §三条原则 #2 + §执行路线图 Phase 6 改动（O1）
+- `docs/portfolio_allocation_policy.md` 第 2 条加 example + 第 5 条加 manual transfer wording + 第 4 条 P0a per-market cash state（O2/O3）
+- `docs/CURRENT.md` §6 P0 新加 #6 "Phase roadmap follow-up"（O4）
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 追加 "P0c user-confirmed decisions optional disposition" 段
+- `docs/SESSION_LOG.md` Codex `修复` entry
+- 无 schema / runner / preset / 测试改动 ✅
+
+**Disposition 逐条核对**:
+
+- **O1 (Pass with mod — option B)** — AGENTS.md §三条原则 #2 改成 `完成一个季度 forward/paper 或 minimal-size 手动观察；full-size 手动实盘使用仍必须满足 Ship gate（含 ≥12 个月 forward live data），不能把一季度工程闭环误读为 full-size 放行`。§执行路线图 Phase 6 同步改成 `(forward/paper 或 minimal-size 手动观察；非 full-size ship gate)`，时长标 "观察期" 而非 "实盘期"。完全按建议选项 B 路径，并加了防御性 framing "不能把一季度工程闭环误读为 full-size 放行" — 显著降低 future LLM 误解风险。✅
+- **O2 (Pass)** — `portfolio_allocation_policy.md` 第 5 条末尾加 `实际 cash 调拨决策由用户手动执行；系统只生成 signal / recommendation，不直接 transfer capital between buckets`。措辞 match 建议。第 4 条同步加 `P0a 先按 per-market cash state 设计，不做 unified cash pool，不做自动 currency conversion`，防止 future LLM 给 P0a 加 unified pool。✅
+- **O3 (Pass)** — `portfolio_allocation_policy.md` 第 2 条加 `示例：A 股 long bucket = total portfolio × 35% × 33.3333% ≈ total portfolio 的 11.67%`。Section title 仍是中文 "市场内部 bucket 比例"（中文已含 within-market 语义，example 行明确数学），不必再 rename。P0a schema 设计时不会再误把 33.3333% 当 total portfolio percentage。✅
+- **O4 (Pass with mod)** — `docs/CURRENT.md §6 P0` 加 #6 `Phase roadmap follow-up — AGENTS.md 固化了 4 套子系统同等重要，但执行路线图仍保留 Phase 8 美股短线、Phase 9 长线的旧顺序。是否重排路线图是单独用户决策；P0a 只先把 4 个 preset 的 capital/bucket 契约一起设计，避免后续 breaking change`。完全按建议：标"待用户决策" + P0a 4 preset 同时设计避免 breaking change。没动 AGENTS.md Phase 表（符合 separate user decision 原则）。✅
+
+**额外观察（非 issue）**:
+
+- Codex `修复` entry 在 alternatives rejected 中列了 3 条具体被否方向（"扩 Phase 6 到 12 月"否决 / "系统自动 transfer cash"否决 / "本轮重排 phase 表"否决），决策路径可追溯。✅
+- Codex `修复` entry 主动总结了 phase 重排 tradeoff：`reordering better matches four-system equality and long-spec needs; not reordering preserves A-short sample-first momentum and avoids large planning churn`。中立 framing，没倾向任一方，留给用户决策。✅
+- Phase 6 措辞从 "实盘一个季度" → "forward/paper 或 minimal-size 手动观察" 还隐式 align 了执行边界（用户手动下单，不能 silently 走 full-size）。一致性好 ✅
+- 5 个文档 cross-link 全部一致：AGENTS / policy doc / CURRENT / handoff / SESSION_LOG 同一 disposition 在每处都对齐 ✅
+- 没在 dispose 中 silently 重排 Phase 表，scope 纪律好 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1-O4 全部 Pass，无新 finding）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`（单 scope = P0c user-confirmed decisions doc + O1-O4 dispose；走 `git add -A` 快路径）。
+
+**Next natural step from my view**:
+
+1. 用户 `提交`。working tree 单 scope（5 个文档同步），可走 `git add -A` 快路径。
+2. 提交后用户决策两件事：
+   - **Phase 路线图是否重排**：我已 chat 给完 A/B/C 三选项 + 推荐 B（spec 提前到 Phase 5/6 之间，实施仍 Phase 9）。倾向 B 则 Codex 下一轮直接改 AGENTS.md Phase 表；不重排则进 P0a。
+   - **A 长 / US 长 spec 谁先写**（如果选 B）：A 长先（你更熟 + 美股长线可参考） vs 并行。
+3. 决策完后启动 P0a capital context contracts 实施（4 个 schema + 4 个 preset + runner CLI flag，仍走 review-dispose-commit）。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (P0c user-confirmed decisions Optional disposition)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior Claude review entry: "Pass (P0c user-confirmed capital decisions)".
+- No Required fixes were present; this round disposes active Optional suggestions O1-O4.
+
+**Worked on**:
+1. Clarified Phase 6 wording in `AGENTS.md`: one-quarter closed-loop run is forward/paper or minimal-size manual observation, not full-size ship approval.
+2. Clarified `docs/portfolio_allocation_policy.md`: cash transfer is user-manual signal/recommendation only, and `33.3333%` bucket weights are within-market percentages.
+3. Added `docs/CURRENT.md` P0 roadmap follow-up: phase reordering is a separate user decision; P0a should still design all four preset capital/bucket contracts now.
+
+**Key decisions**:
+- Accept O1 with Claude's recommended option B: keep Phase 6 as one-quarter engineering/manual-observation loop, while full-size manual use remains gated by 12 months forward data plus other metrics.
+- Accept O2: systems may recommend liquidity use, but actual cash movement is manual; P0a must not create runtime transfer APIs.
+- Accept O3: bucket percentages are within-market values; total-portfolio exposure is market allocation times bucket allocation.
+- Accept O4 with modification: do not reorder the Phase table in this repair. Record the route-map inconsistency as a P0 follow-up and leave the actual reorder as a user decision.
+
+**Optional disposition**:
+- O1 accept with modification — updated AGENTS principle #2 and Phase 6 row to distinguish one-quarter engineering/manual observation from full-size ship gate.
+- O2 accept — added manual cash-transfer wording to policy doc.
+- O3 accept — renamed the bucket section to `within-market percentage` and added the A-share long example.
+- O4 accept with modification — added `docs/CURRENT.md §6` follow-up note instead of changing AGENTS phase table order.
+
+**Alternatives considered and rejected**:
+- "Expand Phase 6 to 12 months now" — rejected because Phase 6 is the A-share short engineering closed-loop checkpoint; full-size deployment is separately governed by ship gate.
+- "Let system transfer capital between buckets" — rejected because the user explicitly set manual order/operation boundaries.
+- "Reorder the full roadmap inside this repair" — rejected because it is a separate strategic decision and would exceed the current review-disposition scope.
+
+**Open questions handed off**:
+- Whether to reorder the phase roadmap remains a user decision. Tradeoff summary: reordering better matches four-system equality and long-spec needs; not reordering preserves A-short sample-first momentum and avoids large planning churn.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude reviews this Optional disposition diff.
+2. If Pass, user invokes `提交`.
+3. Separately decide whether the phase roadmap should be reordered before or after P0a.
+
+---
+
+## 2026-05-26 — Claude review — Pass (P0c user-confirmed capital decisions)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (4 条 active)。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `9e05b31`; targets the immediately prior Codex entry "P0c user-confirmed capital decisions")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `AGENTS.md` §项目背景 资金分布段扩了 35/65 + 不互通 + ship gate 数字 + 新增执行边界；§已固化决策 #10 扩展 + #11 新增
+- `docs/portfolio_allocation_policy.md` 状态从"草案"升级为"用户确认决策"；加 #7 Ship gate + #8 执行边界；末尾 P0a 启动状态段
+- `docs/CURRENT.md` Latest Delta + §1 当前目标 + §5 关键文件描述 + §6 P0 #1 同步
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 追加 "P0c user-confirmed capital decisions" 段
+- `docs/SESSION_LOG.md` Codex `执行` entry
+- 无 schema / runner / preset / 测试改动 ✅（仍是 decision-recording scope）
+
+**Reasons for Pass**:
+
+- 4 处文档（AGENTS / policy / CURRENT / handoff）的用户确认决策完全一致：A=35%/US=65% / 不互通 / multi-metric AND ship gate (t≥2.0 + sharpe≥1.0 + DD≤15% + 12 月) / 手动下单 ✅
+- policy doc #7 明确 acknowledge "A 股短线当前证据不足以支持 full-size 手动实盘；这不否定系统作为筛选分析和风控 filter 的价值" — 用户接受了 ship gate 的 implication ✅
+- 执行边界（#11 / policy #8）是用户**新加的约束**，Codex 系统化到 P0a 契约边界（`portfolio_allocation` schema 含 `manual-execution-only boundary` 字段）✅
+- handoff "失效旧结论" 段精确列了 4 条：50/50 假设失效 / cash 互通待确认失效 / ship gate 待确认失效 / 自动下单解读失效 ✅
+- 没在本轮顺手实现 P0a schema，scope 纪律好 ✅
+- `33.3333%` bucket 比例保留（policy #2），与用户 35/65 顶层比例相乘得 A long=11.67%/US long=21.67% of total，数学一致 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — Phase 6 "实盘一个季度" 与新 ship gate "12 个月 forward live data" 不一致**（`AGENTS.md §三条不可动摇的原则 #2` + `§执行路线图 Phase 6` 描述）。原 Phase 6 设计是"A 股短线完整闭环跑一个季度"（3 个月），但新 ship gate 要求 forward live data ≥ 12 个月。两者直接矛盾。修法：
+   - 选项 A — Phase 6 时长扩到 ≥ 12 个月（如 "跑一年"）
+   - 选项 B — Phase 6 维持 3 个月，但显式说明"期间只能 paper trade / minimal-size manual-use，不能 full-size"
+
+   倾向 (B)：Phase 6 是工程闭环验证，full-size 部署的门槛是 ship gate（12 个月数据 + 4 metric AND），两者解耦更清晰。但需要用户决策。建议先按 (B) 改措辞，避免下次 LLM 按"实盘一季"误解执行边界。
+
+2. **O2 — Cross-bucket / cross-market cash 调拨是否由 system 自动 vs 用户手动 不清晰**（`docs/portfolio_allocation_policy.md:48` 第 5 条 + #8 执行边界）。第 5 条说"长线系统只有在满足长线框架条件时才可**申请** liquidity"，但 #8 执行边界说"用户手动下单"。**申请** 是 system 自动调拨还是 system 给 signal user 手动调？policy doc 没明示。建议第 5 条末尾加一行 `实际 cash 调拨决策由用户手动执行；系统只生成 signal/recommendation，不直接 transfer capital between buckets`。否则 future LLM 可能给 P0a 加一个 `cross_bucket_transfer` runtime API。
+
+3. **O3 — `33.3333%` bucket 比例 within-market vs of-total 应在 policy doc 明示**（`docs/portfolio_allocation_policy.md:32-36` 第 2 条）。当前 `long bucket target: 33.3333%` 没说是 within-market（即 A 股 long = 0.35 × 0.3333 = 11.67% of total）还是 of-total。数学上是 within-market（policy #1 已说 35/65 是 top-level，再乘 1/3 才对），但 P0a schema 设计时容易歧义。建议第 2 条标题改成 `**市场内部 bucket 比例（within-market percentage）**`，并加 example: `示例：A 股 long bucket = 0.35 × 0.3333 = 11.67% of total portfolio`。
+
+4. **O4 — Phase 路线图重排是 separate user decision，未被本轮 commit 覆盖；P0a 实施顺序仍待**（`AGENTS.md §执行路线图` 仍是 Phase 8 美股 / Phase 9 长线）。Codex 本轮只 record 用户答的 3 个 P0c 问题，没改 phase 路线图 — 这符合 scope discipline。但已固化决策 #10 说"4 套子系统同等重要，phase 路线图不能让任何一套被长期搁置"，与 §执行路线图 Phase 9 (长线最后) 隐含冲突。建议本轮在 SESSION_LOG entry 或 CURRENT.md §6 P1 加一行 `Phase 路线图重排待用户决策；当前 Phase 表与已固化决策 #10 (4 套同等重要) 有潜在不一致`，避免 P0a 默默按"短线优先"的旧顺序设计 4 个 preset 的实施优先级。
+
+**额外观察（非 issue）**:
+
+- 用户接受 ship gate `t-stat ≥ 2.0` 数字 → A 股短线 24p t=1.60 已 silently 不达标。policy doc #7 已 frame 为"不否定风控 filter 价值"，是用户接受的 implication，不算漏洞 ✅
+- AGENTS.md §决策 #10 + #11 拆两条而非合一条，可读性好 ✅
+- Codex `修复` entry alternatives rejected 写清楚（"50/50 占位"否决 / "ship gate advisory only"否决 / "execution backtest = auto-trading readiness"否决）✅
+- P0a 契约边界扩了 `manual-execution-only boundary` 字段（policy doc L86），与新 #8 执行边界一致 ✅
+
+**Documentation issues**: O1-O4（均已列 Optional）。
+
+**Pending status**: Required: none / Optional (O1-O4): PENDING CODEX DISPOSITION。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — dispose O1-O4。O1 (Phase 6 vs ship gate 矛盾) 是最重要的，影响 future LLM 对 ship 含义的理解。O4 (phase 路线图重排) 需要用户参与，Codex 可以先在 doc 标注"待决策"。
+2. 修复后用户 `审查` → `提交`。
+3. 提交后：用户决策 (a) Phase 6 措辞用 (A) 12 月还是 (B) paper trade 表述；(b) Phase 路线图是否重排。两个决策完后启动 P0a capital context contracts 实施。
+4. P0a 实施时务必 4 个 preset (a_short / us_short / a_long / us_long) 同时设计 bucket/capital ceiling 字段，否则后续加长线会 schema breaking change。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (P0c user-confirmed capital decisions)
+
+**Commits**: none (decision-recording doc update; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on `9e05b31` (`Document capital allocation preflight`) and resolves the remaining P0c user decision questions except long-liquidity enum details, which remain reserved until long specs exist.
+- Refines the execution boundary: Phase 5 execution backtest remains analysis/simulation only, not broker or OS automation.
+
+**Worked on**:
+1. Updated `AGENTS.md` with the user-confirmed top-level market split `A = 35% / US = 65%`, default non-fungible A/US cash, multi metric AND ship gate, and manual-order-only boundary.
+2. Updated `docs/portfolio_allocation_policy.md` from draft recommendations to user-confirmed P0c policy.
+3. Updated `docs/CURRENT.md` and the Phase 5 handoff so the next P0 is P0a capital context contracts.
+
+**Key decisions**:
+- P0a should encode `A = 35%` and `US = 65%` as static market allocation policy.
+- A-share cash and US cash are separate by default; P0a should not build a unified cash pool or automatic currency conversion path.
+- Full-size manual-use ship gate is an AND condition: monthly alpha t-stat >= 2.0, Sharpe >= 1.0, max drawdown <= 15%, and forward live data >= 12 months.
+- The system must not add broker, OS, or automation-tool order execution. Execution backtest is for evaluating manual trading plans and risk rules only.
+
+**Alternatives considered and rejected**:
+- "Keep `50/50` as neutral placeholder" — rejected because the user explicitly confirmed `A = 35% / US = 65%`.
+- "Treat ship gate as advisory only" — rejected because the user adopted the multi metric AND gate.
+- "Let execution backtest imply auto-trading readiness" — rejected because the user explicitly limits the system to analysis/screening with manual orders.
+
+**Open questions handed off**:
+- Long-liquidity enum values remain reserved until A-long / US-long specs exist.
+- P0a still needs concrete schema design for static policy, dynamic cash state, report snapshot, preset bucket fields, and runner capital input flags.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude reviews this decision-recording diff.
+2. If Pass, user invokes `提交`.
+3. After commit, start P0a capital context contracts before Phase 5 fill simulation.
 
 ---
 
