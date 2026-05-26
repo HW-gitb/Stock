@@ -168,6 +168,57 @@ Rationale:
 
 Exception (must be explicitly stated by the user): a work block too large for one review round may use checkpoint commits prefixed with `WIP:`. Default is no exception.
 
+### Commit Documentation Hygiene
+
+Default `提交` path stays small:
+
+1. Verify the latest SESSION_LOG review verdict is a clean Claude Pass.
+2. Run `git status --short`.
+3. If the working tree is single-scope, run `git add -A`. If it contains two or more independent scopes, use §Multi-scope Commit Splitting instead.
+4. Run `git commit`.
+5. Run `git status --short`.
+
+Before `审查` / `提交`, Codex should phrase `docs/CURRENT.md` and `docs/SESSION_LOG.md` so they remain true after the reviewed change is committed. Prefer stable wording such as:
+- "the reviewed change set adds ..."
+- "after this reviewed change is committed, the next natural step is ..."
+- "Phase 5 step 3 added ..." for an intermediate step in a longer phase
+
+Avoid wording that becomes stale immediately after commit, such as:
+- "current uncommitted work ..."
+- "pending review / pending commit ..."
+- "latest commit will be ..."
+- "today / this round added ..." when a phase or step identifier would be more stable
+
+Do not try to write the new commit hash into the same commit that creates it. The final Codex response and `git log` carry the hash.
+
+#### Post-commit exception
+
+Do **not** create a routine post-commit documentation sync commit.
+
+Post-commit doc sync is an exception only when the just-created commit leaves `docs/CURRENT.md` or `docs/SESSION_LOG.md` materially misleading for the next LLM. Concrete triggers:
+- a committed doc still says the already-committed work is pending review, pending commit, or only in the working tree
+- `docs/CURRENT.md` Latest Delta has a commit chain or current-state statement that would point the next LLM at the wrong next task without the just-created hash or state correction
+- a handoff or session entry says "next round does X" when the just-created commit already did X
+
+Non-triggers:
+- adding the new hash when the committed docs already identify the scope clearly enough
+- polishing wording that is not misleading
+- keeping a chronological hash list perfectly complete when it is not needed for the next handoff decision
+
+If the exception is needed, keep the sync docs-only, small, and prefixed `[trivial]`; explain both hashes in the final response. This exception is not part of the normal `提交` flow.
+
+### Multi-scope Commit Splitting
+
+A scope is one coherent, reviewable change set. A working tree is multi-scope when it contains two or more independent topics that can be reviewed, reverted, or shipped separately, for example a business-code fix plus an unrelated protocol rule change.
+
+When the working tree is multi-scope:
+
+1. Do not use `git add -A` to create one mixed commit.
+2. Prefer path-limited staging (`git add <paths>`) when each scope lives in distinct files.
+3. If the same file contains multiple independent scopes, split it before committing. Use the least risky local method available: apply a partial patch, edit the file down to one scope and restore the remaining scope after commit, or make a temporary backup while splitting.
+4. Commit one scope at a time, then run `git status --short` before deciding whether another scope remains.
+5. If scopes depend on each other, commit the prerequisite first and state that relationship in the commit message.
+
 ## Lightweight Track Exemption
 
 For trivial changes the standard review cycle is over-engineered. Codex may self-route to the lightweight track:
@@ -383,13 +434,14 @@ Codex must automatically do all of the following:
 4. If the latest verdict is Fail, Pass with unresolved Required fixes, or a review entry still has unresolved `PENDING CODEX DISPOSITION` Optional suggestions (meaning Codex has not yet run `修复` and reached a clean re-review Pass): refuse to commit. Output the reason and instruct user to run `批准修改` if Required fixes are pending, then `修复`, then `审查`.
 5. If the latest verdict is a clean Pass with no pending Required fixes or Optional dispositions: run `git status` to see the change set.
 6. If `git status` shows nothing to stage, refuse and output `nothing to commit; no changes pending`.
-7. Run `git add -A` to stage all working tree changes. Pattern B assumes the whole working tree has been reviewed; files matching `.gitignore` are skipped automatically.
+7. If the reviewed working tree is single-scope, run `git add -A` to stage all working tree changes; files matching `.gitignore` are skipped automatically. If it is multi-scope, follow §Multi-scope Commit Splitting and commit one scope at a time.
 8. Run `git commit` with a descriptive message that references the latest SESSION_LOG entry and lists the items in the change set.
 9. Run `git status` again to verify clean working tree.
 10. Do not push. Do not add remotes. Do not amend prior commits unless the user explicitly authorizes.
+11. Do not create a post-commit sync commit by default. Use §Commit Documentation Hygiene / Post-commit exception only if the committed docs would materially mislead the next LLM.
 
 After finishing, Codex must output only a concise summary:
-- Commit hash
+- Commit hash(es)
 - Files committed
 - git status clean: Yes / No
 - Ready for next `执行`: Yes / No
@@ -405,6 +457,7 @@ If a short command is ambiguous or unsafe, stop and ask the user for confirmatio
 ## Documentation Rules
 
 - docs/CURRENT.md is the current state snapshot.
+- docs/CURRENT.md should avoid transient "pending review / pending commit" wording when the same reviewed change is expected to be committed immediately after Claude Pass; write stable state statements whenever possible.
 - docs/SESSION_LOG.md is for cross-LLM cognitive continuity. The top entry written by Codex after each `执行` / `修复` doubles as the Codex-to-Claude review handoff (no separate REVIEW_PACKET file as of 2026-05-25).
 - docs/handoff files are for phase or major milestone handoff only.
 - Claude memory is not shared with Codex.

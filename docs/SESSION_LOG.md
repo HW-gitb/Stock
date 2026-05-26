@@ -8,6 +8,188 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (commit-flow optimization review fixes)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（R1 + O1-O3 全部 dispose 完成）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `b208a95`; targets the immediately prior Codex entry "commit-flow optimization review fixes")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `docs/AI_REVIEW_PROTOCOL.md` 改动（R1 修 + O1/O2/O3 dispose 都在此文件）
+- `docs/CURRENT.md` Latest Delta commit workflow policy 行扩了 multi-scope 提示
+- `docs/SESSION_LOG.md` Codex `修复` entry
+- 无代码改动 ✅
+
+**Disposition 逐条核对**:
+
+- **R1 (Pass)** — §Commit Documentation Hygiene step 3 现在 `If the working tree is single-scope, run git add -A. If it contains two or more independent scopes, use §Multi-scope Commit Splitting instead.`。新增 §Multi-scope Commit Splitting 段定义 scope 概念 + 5 步操作（path-limited staging / split-then-restore / 单 commit 后再 status 检查 / 依赖型先做 prerequisite）。§Codex `提交` step 7 同步更新。Cross-LLM 知识同步问题解决。✅
+- **O1 (Pass)** — "stable wording" 列表新增 `"Phase 5 step 3 added ..." for an intermediate step in a longer phase`；"avoid" 列表新增 `"today / this round added ..." when a phase or step identifier would be more stable`。完全 cover 我建议的"phase identifier 替时间词"边界。✅
+- **O2 (Pass)** — §Post-commit exception 段列了 3 个具体 trigger（pending review wording / Latest Delta 缺 hash 误导 next LLM / handoff 说"下一轮做 X" 但已做）+ 3 个具体 non-trigger（已识别 scope 不必加 hash / polish 措辞不误导 / 维护完整 hash 列表不必）。Exception boundary 现在 falsifiable。✅
+- **O3 (Pass with mod)** — Codex step 11 现在 `Use §Commit Documentation Hygiene / Post-commit exception only if...`。用 子段名 reference 替代 markdown anchor，与我建议的方向一致；future rename 时仍需手工 grep 但不会 silently break。Mod 合理。✅
+
+**额外观察（非 issue）**:
+- §Multi-scope Commit Splitting 第 3 步 "Use the least risky local method available: apply a partial patch, edit the file down to one scope and restore the remaining scope after commit, or make a temporary backup while splitting" — 这正是 2026-05-26 上午 CSV materializer + private remote policy 分 commit 时用的 backup-edit-restore pattern，已经在 [[feedback-commit-scope-discipline]] 记忆里。protocol 与 memory 现在对齐 ✅。
+- CURRENT.md L11 commit workflow policy 一行写法稳定（不含 "today" / "本轮"），与新 §Commit Documentation Hygiene "avoid transient wording" 自洽 ✅。
+- Codex `修复` entry 七节齐全，alternatives rejected 写清楚（"keep `git add -A` unconditional"否决 / "ban `git add -A` entirely"否决）✅。
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（R1 + O1-O3 全部 Pass，无新 finding）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`（单 scope，走新定义的快路径 `git add -A`）。
+
+**Next natural step from my view**:
+1. 用户 `提交`。working tree 单 scope（commit-flow optimization protocol 改动），可走新定义的 `git add -A` 快路径。
+2. 提交后回到用户原始 business 请求："重新梳理框架设计是否最优 / 有无逻辑漏洞"。3 个调研 agent 结果已在 chat 历史，等 commit 后给 systemic verdict。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (commit-flow optimization review fixes)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior Claude review entry: "Required fix needed (commit-flow optimization)".
+- Repairs R1 and disposes O1-O3 within the workflow-doc scope only.
+
+**Worked on**:
+1. Updated `docs/AI_REVIEW_PROTOCOL.md` so `git add -A` is explicitly single-scope only and multi-scope working trees use a separate splitting rule.
+2. Clarified stable wording guidance, post-commit exception triggers/non-triggers, and the `提交` step reference.
+3. Updated `docs/CURRENT.md` to reflect single-scope vs multi-scope commit policy.
+
+**Key decisions**:
+- Single-scope remains the fast default path; multi-scope work must be split so unrelated topics do not land in one commit.
+- Post-commit sync remains exception-only, with concrete triggers and non-triggers to avoid routine noise.
+
+**Required fixes repaired**:
+- R1 repaired — `git add -A` now says single-scope only; new §Multi-scope Commit Splitting defines trigger judgment and splitting methods.
+
+**Optional disposition**:
+- O1 accept — added phase/step identifier guidance for intermediate commits and avoided unstable "today / this round" wording.
+- O2 accept — added concrete post-commit sync triggers and non-triggers.
+- O3 accept with modification — used the concrete reference `§Commit Documentation Hygiene / Post-commit exception` instead of a raw markdown anchor.
+
+**Alternatives considered and rejected**:
+- "Keep `git add -A` as unconditional default" — rejected because it can mix independent scopes.
+- "Ban `git add -A` entirely" — rejected because it remains the cleanest path for a reviewed single-scope working tree.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude re-reviews this repair diff.
+2. If Claude returns Pass, user invokes `提交`.
+
+---
+
+## 2026-05-26 — Claude review — Required fix needed (commit-flow optimization)
+
+**Status**: REVIEW VERDICT RECORDED. **Required fixes: 1 条 (R1 — `git add -A` 与 multi-scope discipline 冲突)**. Optional suggestions: 3 条 (O1-O3)。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `b208a95`; targets the Codex entry "commit-flow optimization")
+
+**Verdict**: Required fix needed — protocol 改动整体方向合理，但默认 `git add -A` 与 multi-scope situation 不兼容，须在 protocol 文本里写明例外。
+
+**Scope checked**:
+- `docs/AI_REVIEW_PROTOCOL.md` §Commit Documentation Hygiene 新增段 + §Codex `提交` 步骤新增 step 11 + §Documentation Rules 新增一行
+- `docs/CURRENT.md` Latest Delta 新增 commit workflow policy 行 + 措辞从 "Initial Claude review returned Pass" 改成 "Tushare materializer review returned Pass" + Next P0 改成 fill simulation
+- `docs/SESSION_LOG.md` 顶部新增 Codex commit-flow optimization entry
+- 无代码改动 ✅
+
+**Reasons for not Pass (R1)**:
+
+新 §Commit Documentation Hygiene step 3 是 `git add -A`。这在**单 scope working tree**没问题，但**多 scope working tree** 会一次性把所有 scope 撞进同一个 commit，违反 `[[feedback-commit-scope-discipline]]` 的"一 scope 一 commit"原则。
+
+2026-05-26 早些时候 working tree 同时含 CSV materializer dispose + private remote policy 两个独立 scope，当时手工 backup-edit-restore 拆成 commit A + commit B，避免了混 commit。如果按新 protocol 默认 `git add -A`，下次类似情况会被 "默认快路径" 误导一气 commit 完。
+
+**这条 protocol 改动需要 cross-LLM 知识同步**：scope discipline 当前只在 Claude 的 user memory 里（Codex 看不到），protocol 文本里没体现。建议把它提到 `AI_REVIEW_PROTOCOL.md` 或 `AGENTS.md` 共享层。
+
+**Required fixes (MUST FIX before commit)**:
+
+1. **R1 — §Commit Documentation Hygiene 加 multi-scope 例外**（`docs/AI_REVIEW_PROTOCOL.md` 新增段第 3 步附近）。当前文本：
+
+   > 3. Run `git add -A`.
+
+   建议改成：
+
+   > 3. Run `git add -A` (single-scope working tree only). **若工作树包含两个或更多独立 scope 的改动**（如同时含一个代码修复 + 一个无关文档/规则变更），按 §Multi-scope commit splitting 拆 commit，不要 `git add -A` 一气 commit 完。
+
+   并在 §Commit Documentation Hygiene 末尾或单独新增 §Multi-scope commit splitting 段，简要给方法（backup → 编辑成单 scope → commit → 还原 → commit）和触发判断（doc 同一文件被两个无关 topic 改了？两个 scope 互相不依赖？→ 拆）。Codex 看到这条会避免误用 `git add -A`。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — "transient 措辞避免"段缺反面例子的边界**（`AI_REVIEW_PROTOCOL.md` 新增段中段）。当前列了"avoid"和"prefer"两组措辞，但没说"如果本轮 commit 本身就是 ongoing/staged 多步工作的中间态怎么写"。建议加一条 "如果 commit 是中间步骤（如多 phase 中的一步），用 phase identifier 而非时间词：`Phase 5 step 3 added X` 而非 `今天添加了 X` 或 `本轮添加了 X`"。
+
+2. **O2 — exception boundary "materially mislead" 模糊**（同段末尾）。"Post-commit doc sync is an exception only when the just-created commit leaves docs materially misleading" 没给 falsifiable test。建议给 2-3 个具体触发例（如 `(a) CURRENT.md Latest Delta 完整 commit hash 链需要更新；(b) docs 还说 "pending review" 但已 Pass committed；(c) handoff 中提到 "下一轮做 X" 但本轮已做 X`），并明确 "其余措辞延迟到下次 substantive commit 时一起改"。
+
+3. **O3 — Codex step 11 提到的"materially mislead exception" 应链接到具体段落锚**（`AI_REVIEW_PROTOCOL.md:11`）。当前只说 "Use the §Commit Documentation Hygiene exception only if..."。如果 §Commit Documentation Hygiene 后续被分割或改名，step 11 的 reference 会断。建议加 markdown 锚 link 或具体子段名（如 §Commit Documentation Hygiene §Post-commit exception）。
+
+**Reasons the change itself is sound (内容设计层面合理)**:
+
+- 真问题：`b208a95` 那种 routine post-commit sync 确实是 noise，每次 substantive commit 后都做一次浪费一次 commit ✅
+- 解决方案对路：commit 前用 stable 措辞（"the reviewed change set adds..." 而非 "current uncommitted work..."），让 commit 后 doc 自然仍然 true ✅
+- "不要把 commit hash 写进同一个 commit" 这条 logic 严密：hash 是 commit 后才有的，物理不可能 ✅
+- exception boundary 保留 — 不是绝对禁止 post-commit sync，只是改成 exception，弹性合理 ✅
+- 改动 scope 小（3 文件 doc），不破坏 review/dispose/commit 闭环 ✅
+- Codex 的 SESSION_LOG entry 把 alternatives rejected 写得清楚（"始终做 sync"否决、"删 Pass gate"否决、"提前写 hash"否决）✅
+
+**额外观察（meta-level，非 issue）**:
+
+- 这是 **protocol 改动而非 business work**。用户当前 session 已开问的是"重新梳理框架设计"（business 优先级），Codex 在 dispose 完 Tushare materializer 后**自发**提了这个 protocol 优化。memory `[[feedback-protocol-overengineering]]` 警示"加新规则前问解决真问题还是假想问题；business work 应优先于协议设计"。本轮 protocol 优化**确实解决真问题**（不算 over-engineer），但 timing 上插在用户 business 请求之间。**用户已说"先审查"接受了这次 protocol review，所以本评论仅作 observation，不影响 Pass/Fail verdict**。
+- 如果用户希望 Codex 严守 business-first，可以在用户消息或 protocol 里加一条"自发 protocol 改动需经用户预批"。本轮不必加。
+
+**Documentation issues**: R1 + O1-O3。
+
+**Pending status**: Required (R1): MUST FIX before commit / Optional (O1-O3): PENDING CODEX DISPOSITION。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — 修 R1（必），dispose O1-O3。R1 是 cross-LLM 知识同步问题，把 scope discipline 写进共享 protocol 才能让 Codex 在未来 multi-scope 场景按规则行事。
+2. 修复完 → 用户 `审查` → Pass → `提交`（注意这次 commit 本身就是 protocol 改动，单 scope，可以走新定义的快路径 `git add -A`）。
+3. 提交后回到用户原始 business 请求："重新梳理框架设计是否最优 / 有无逻辑漏洞"。我已并发跑了 3 个 调研 agent（architecture / v14.2 框架 / 美股 + 长线 SKILL 状态）+ 1 个被用户 interrupt（findings agent）。用户中断时让我"先审查"，所以这条 business 请求会在 protocol 改动 commit 后继续。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (commit-flow optimization)
+
+**Commits**: none (workflow docs change; commit waits for Claude review and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the `cfa1c57` substantive commit and the later `b208a95` post-commit sync commit.
+- Refines prior behavior: post-commit CURRENT/SESSION_LOG sync becomes exception-only, not routine.
+
+**Worked on**:
+1. Updated `docs/AI_REVIEW_PROTOCOL.md` to define the minimal default `提交` path and the exception boundary for post-commit doc sync.
+2. Updated `docs/CURRENT.md` with the current commit workflow policy.
+
+**Key decisions**:
+- Keep the Claude clean Pass gate; it is the review boundary, not the redundant part.
+- Default `提交` path is Pass check, `git status --short`, `git add -A`, `git commit`, `git status --short`.
+- Do not write the new commit hash into the same commit that creates it; the final response and `git log` carry the hash.
+- Post-commit doc sync is allowed only when committed docs would materially mislead the next LLM.
+
+**Alternatives considered and rejected**:
+- "Always do a post-commit doc sync" — rejected because it turns a recoverable wording problem into routine extra commits.
+- "Drop the Claude Pass gate" — rejected because the gate is the core role-separation rule.
+- "Write the new commit hash into CURRENT/SESSION_LOG during the same commit" — rejected because the hash does not exist until after the commit.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude reviews the workflow-doc diff.
+2. If Claude returns Pass, user invokes `提交`.
+
+---
+
 ## 2026-05-26 — Codex (post-commit: Phase 5 Tushare materializer)
 
 **Commits**: cfa1c57

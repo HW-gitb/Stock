@@ -1,19 +1,20 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（真实 Tushare provider materializer Optional 已处理待复审；fill simulation 尚未开始）
+**最后更新**：2026-05-26（commit-flow optimization documented；fill simulation 尚未开始）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-26)
 
+- Commit workflow policy: default single-scope `提交` path is Claude Pass check + `git status --short` + `git add -A` + `git commit` + `git status --short`; multi-scope working trees must split commits by scope, and post-commit CURRENT/SESSION_LOG sync is exception-only when committed docs would materially mislead the next LLM.
 - Phase 5 chain committed so far: skeleton `8488427` → execution_price_data contract `ad4068f` → loader wiring `be68abe` → CSV materializer `ece86b1` → Tushare provider materializer `cfa1c57`. Fill/simulator logic still not implemented.
 - CSV materializer (`runners/materialize_execution_price_data.py`, commit `ece86b1`): provider-boundary helper that converts a local OHLC CSV to schema-valid `execution_price_data` JSON for `backtest_execution.py --price-data`. Does not fetch Tushare data, simulate fills, apply stops, or do portfolio accounting.
 - 4 rounds of Claude review fully consumed: 5 active Optional (O1-O5) disposed by Codex; O6 archived to §P2 cleanup followup (shared-util extraction across runners). 26 tests pass.
 - Git remote policy (`28cdc30`): the original absolute prohibition on `git push` / `git remote add` was relaxed to a constrained private-remote allowance. Public remote, unauthorized collaborators, secrets, logs, caches, live-state data, and ignored generated artifacts remain prohibited. See `AGENTS.md §Git remote privacy policy`.
 - Commit `b2c78a3` stopped tracking generated outputs for private GitHub backup hygiene; `.gitignore` now excludes generated screening/backtest/state artifacts.
 - Substantive commit `cfa1c57` adds `runners/materialize_execution_price_data_tushare.py`: it fetches Tushare `daily` / `adj_factor` / `stk_limit` / `trade_cal`, writes the same schema-valid `execution_price_data` v1.0.0 JSON, and caches provider payloads under `result/a_short/backtest/cache/`.
-- Initial Claude review returned Pass with 6 active Optional suggestions; Codex disposed all 6 in the current working tree. The materializer now gives a clear non-trading `--as-of` error, hard-fails broken Tushare base-URL pinning, treats row `source_flags` as API lineage, simplifies limit-column handling, and adds CLI/cache/token coverage.
+- Tushare materializer review returned Pass with 6 active Optional suggestions; Codex disposed all 6 before commit `cfa1c57`. The materializer gives a clear non-trading `--as-of` error, hard-fails broken Tushare base-URL pinning, treats row `source_flags` as API lineage, simplifies limit-column handling, and adds CLI/cache/token coverage.
 - This provider materializer still does not simulate fills, apply stops, or do portfolio accounting. Validation used the Codex bundled Python: `python -m unittest tests.execution.test_materialize_execution_price_data_tushare tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema -v` passed with 38 tests.
 - Next P0: start fill simulation as a separate Phase 5 scope.
 
