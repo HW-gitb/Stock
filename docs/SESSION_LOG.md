@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (review protocol mandatory fast path)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs HEAD)
+
+**Verdict**: Pass.
+
+**Scope reviewed**: Codex protocol update — `docs/AI_REVIEW_PROTOCOL.md` 加 Claude review 4-step mandatory fast path / `[tracked]/[untracked]` SESSION_LOG handoff tag rule / §Reviewer Behavior Rules (self-review direct amend + single recommend workflow path) / §Working Tree Completeness Guard / Claude automatic actions 11→21；`AGENTS.md` 加 Claude 审查 fast path pointer 指向 protocol §Review Continuity Without Packet / §Working Tree Completeness Guard；`docs/SESSION_LOG.md` Codex entry 七节齐全 + in-context demo `[tracked]/[untracked]` 格式 + validation run/result + current review state。4 commitment fully disposed + bonus (staged-change `git diff --cached` add-on, binary/large file 处理 flag as review blocker, "Pass invalid if ignores staged/untracked" 严格 lock).
+
+---
+
+## 2026-05-26 — Codex (review protocol mandatory fast path)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Refines `docs/AI_REVIEW_PROTOCOL.md` after the Phase 6b variant tracking round exposed a review visibility gap: `git diff` alone omits untracked files, and review state can drift when the latest SESSION_LOG entry is not reread.
+- Replaces this round's narrower working-tree completeness draft with the user-scoped protocol update: Claude mandatory fast path, Codex tracked/untracked handoff tags, reviewer behavior rules, and AGENTS pointer.
+
+**Worked on**:
+1. [tracked] `docs/AI_REVIEW_PROTOCOL.md`: added Claude review mandatory four-step fast path, staged-change add-on, Codex `[tracked]` / `[untracked]` SESSION_LOG handoff rule, and reviewer behavior rules for self-review findings plus workflow recommendations.
+2. [tracked] `AGENTS.md`: added a Claude 审查 fast-path pointer so future sessions see the mandatory review route from the project entry file.
+3. [tracked] `docs/SESSION_LOG.md`: rewrote this top handoff as a seven-section `执行` entry with explicit tracked/untracked markers.
+4. [untracked] none.
+5. Validation run/result: `git diff --check` passed.
+6. Current review state: waiting for Claude review of this protocol-only diff.
+
+**Key decisions**:
+- This is protocol-only. It does not change business code, schema contracts, phase status, or CURRENT.md.
+- Claude review now has a repo-visible mandatory fast path: `git status --short`, `git diff`, read every `??` untracked file body, and read `docs/SESSION_LOG.md` top 1-3 entries before verdict.
+- Codex SESSION_LOG `Worked on` entries for file-changing rounds must explicitly distinguish `[tracked]` and `[untracked]` files, or use equivalent explicit tracked/untracked sub-bullets.
+- Reviewer behavior is locked: self-review findings amend SESSION_LOG directly without asking the user; workflow-path advice should be a single recommendation with reasoning plus an override condition, not an options menu.
+- `AGENTS.md` points to the fast path but does not duplicate the full protocol; `docs/AI_REVIEW_PROTOCOL.md` remains the detailed owner to avoid drift.
+
+**Alternatives considered and rejected**:
+- "Only remind Claude in chat to check untracked files" — rejected. The failure mode happened across sessions; it needs a repo-visible protocol rule.
+- "Reintroduce REVIEW_PACKET" — rejected. The missing piece was working-tree completeness, not lack of another packet artifact.
+- "Put the full mandatory checklist in AGENTS.md" — rejected. `AGENTS.md` should expose the fast-path pointer; `docs/AI_REVIEW_PROTOCOL.md` should own the detailed mandatory steps.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews the protocol-only diff using the updated completeness guard.
+2. If Pass, user `提交`.
+
+---
+
 ## 2026-05-26 — Claude re-re-review — Pass (Phase 6b variant tracking const alignment)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active. **Ready to commit.**

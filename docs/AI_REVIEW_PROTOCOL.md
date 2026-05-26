@@ -24,6 +24,7 @@ Codex is responsible for:
 - running relevant checks or tests
 - updating docs/CURRENT.md after meaningful changes
 - prepending docs/SESSION_LOG.md when there is a non-trivial commit, key judgement, failed attempt, or open issue
+- making each Codex-to-Claude SESSION_LOG handoff reviewable from repository state alone: in the `Worked on` section, tag file lists as `[tracked]` or `[untracked]` (or use equivalent explicit tracked/untracked sub-bullets), then list validation run/result and current review state / expected next reviewer action when the round changes files
 
 Codex must not:
 - override AGENTS.md
@@ -39,7 +40,7 @@ Codex must not:
 
 Claude is responsible for:
 - independently reviewing Codex's plan
-- independently reviewing Codex's diff (read the actual git diff directly when repo access is available)
+- independently reviewing Codex's working tree, not only `git diff`: mandatory fast path is `git status --short`, `git diff`, every `??` untracked file body, and docs/SESSION_LOG.md top 1-3 entries; staged changes also require `git diff --cached`
 - checking whether Codex followed AGENTS.md
 - checking whether docs/CURRENT.md matches the actual project state
 - checking bugs, edge cases, tests, security risks, and data risks
@@ -53,6 +54,12 @@ Claude must not:
 - expand the project scope
 - create unrelated redesign tasks
 - treat Claude memory as cross-LLM shared state
+
+### Reviewer Behavior Rules
+
+If Claude discovers a self-review finding while drafting or revising Claude's own review entry, Claude must amend the SESSION_LOG review entry directly. Do not ask the user whether to record that self-review finding. Required / Optional classification still follows §Review Recording.
+
+When Claude needs to recommend a workflow path, Claude should give one recommended path with reasoning and mention the override condition if one is useful. Do not present an options menu for the user to choose unless the user explicitly asks for options or repository evidence makes a single recommendation impossible.
 
 ## User Responsibilities
 
@@ -89,8 +96,8 @@ For Claude:
 4. Codex implements only that task.
 5. Codex runs checks or tests.
 6. Codex updates docs/CURRENT.md when the change is meaningful.
-7. Codex prepends docs/SESSION_LOG.md if the change is non-trivial (Codex's entry IS the handoff to Claude; there is no separate REVIEW_PACKET).
-8. Claude reviews the actual git diff plus the top SESSION_LOG entry. When the review contains Required fixes, Optional suggestions, open questions, a non-trivial verdict, or a phase/process decision, Claude prepends a review entry to `docs/SESSION_LOG.md` marking Required fixes as PENDING USER APPROVAL and Optional suggestions as PENDING CODEX DISPOSITION (see §Review Recording below). A pure Pass writes a minimal PASS-only entry (see §Review Recording).
+7. Codex prepends docs/SESSION_LOG.md if the change is non-trivial (Codex's entry IS the handoff to Claude; there is no separate REVIEW_PACKET). For file-changing rounds, the entry's `Worked on` section must tag file lists as `[tracked]` or `[untracked]` (or equivalent explicit tracked/untracked sub-bullets), and must include validation run/result plus current review state / expected next reviewer action.
+8. Claude reviews the actual working tree plus the top SESSION_LOG entry. Working-tree review mandatory fast path: `git status --short`, `git diff`, every `??` untracked file body, and docs/SESSION_LOG.md top 1-3 entries. If status shows staged changes, Claude also inspects `git diff --cached`. When the review contains Required fixes, Optional suggestions, open questions, a non-trivial verdict, or a phase/process decision, Claude prepends a review entry to `docs/SESSION_LOG.md` marking Required fixes as PENDING USER APPROVAL and Optional suggestions as PENDING CODEX DISPOSITION (see §Review Recording below). A pure Pass writes a minimal PASS-only entry (see §Review Recording).
 9. The user decides Required fixes (approve via `批准修改` / defer via `暂缓修改`). Optional suggestions skip user approval and route to Codex disposition during the next `修复` round.
 10. Codex repairs user-approved Required fixes AND disposes of each Optional suggestion (accept / accept with modification / reject + reason). See §修复.
 11. After Claude returns Pass on the latest iteration, the user invokes `提交`; Codex commits the reviewed working tree as a single coherent commit. Codex must not commit during `执行` or `修复` (see §Commit Timing Rule below).
@@ -144,7 +151,7 @@ Minimal PASS-only entry format (4 fields max, terse):
 ```markdown
 ## YYYY-MM-DD — Claude review — Pass (<one-line scope>)
 
-**Commits**: none (review-only entry; reviews <target>: working tree diff vs <ref-commit-or-HEAD>)
+**Commits**: none (review-only entry; reviews <target>: working tree status/diffs/untracked files vs <ref-commit-or-HEAD>)
 
 **Verdict**: Pass.
 
@@ -158,7 +165,7 @@ No `Required fixes`, `Optional suggestions`, `Open questions`, `Worked on`, `Alt
 Pattern B: commit happens **after** Claude returns Pass, not during `执行` or `修复`.
 
 - `执行` and `修复` modify the working tree only. They must not run `git commit`.
-- `审查` reviews the working tree diff (uncommitted) plus the top SESSION_LOG entry written by Codex.
+- `审查` reviews the uncommitted working tree (status, unstaged diff, cached diff, and untracked files) plus the top SESSION_LOG entry written by Codex.
 - After Claude returns Pass (or Pass with all Required fixes resolved via approved `修复` rounds reaching a clean Pass), the user invokes `提交` and Codex commits.
 
 Rationale:
@@ -254,14 +261,28 @@ User override: user may revert any `[trivial]` commit with `git revert` if they 
 
 ## Review Continuity Without Packet
 
-After removing the short-lived REVIEW_PACKET document (decision 2026-05-25), all Codex-to-Claude handoff information lives in the SESSION_LOG entry written by Codex after each `执行` or `修复`. Claude reads:
+After removing the short-lived REVIEW_PACKET document (decision 2026-05-25), all Codex-to-Claude handoff information lives in the SESSION_LOG entry written by Codex after each `执行` or `修复`.
 
-1. SESSION_LOG.md top 1-3 entries
-2. git diff (working tree vs HEAD)
+Claude review has four mandatory fast-path steps before any verdict:
+
+1. Run `git status --short`.
+2. Inspect `git diff` directly.
+3. Read the body of every file listed as `??` by `git status --short`.
+4. Read docs/SESSION_LOG.md top 1-3 entries, including the top Codex handoff for this round.
+
+Staged-change add-on: if `git status --short` shows staged changes, Claude also inspects `git diff --cached`.
 
 That is sufficient for Claude to review. There is no separate short-lived file to consult or update.
 
 Codex must not repair Required fixes unless the user approves them. Optional suggestions are disposed by Codex during `修复` per this protocol; they are not executed directly from review text.
+
+### Working Tree Completeness Guard
+
+Claude review must treat `git status --short` as the source of truth for review scope. `git diff` alone is incomplete because it omits untracked files, and `git diff --cached` may contain staged changes that are not visible in the unstaged diff.
+
+If `git status --short` contains `??` files, Claude must inspect their contents before issuing a verdict. If a `??` file is binary or too large to read safely, Claude must flag it as a review blocker or scope/ignore issue instead of issuing Pass. Intentional source, schema, example, test, or docs files are fully in scope.
+
+If `git status --short` contains staged changes, Claude must inspect `git diff --cached` in addition to `git diff`. A Pass verdict is invalid if it ignores staged or untracked files that are part of the working tree under review.
 
 ## Short Command Aliases
 
@@ -322,17 +343,21 @@ Claude must automatically do all of the following:
 4. Read the top 1-3 entries of docs/SESSION_LOG.md.
 5. Read the relevant docs/handoff files for the current phase.
 6. Read the top SESSION_LOG entry written by Codex for this round.
-7. Inspect the current git diff directly.
-8. Review whether Codex followed the approved task.
-9. Review whether Codex modified files outside scope.
-10. Review whether existing working logic was broken.
-11. Review bugs, edge cases, tests, security, data, and state risks.
-12. Review whether docs/CURRENT.md and the SESSION_LOG entry were updated correctly.
-13. Output Verdict: Pass / Pass with fixes / Fail.
-14. If there are Required fixes, Optional suggestions, open questions, or process decisions, write the review result into docs/SESSION_LOG.md using the separate Required / Optional pending statuses from §Review Recording. For pure Pass, write a minimal PASS-only entry (see §Review Recording).
-15. Do not directly modify business code.
-16. Do not directly instruct Codex to execute fixes.
-17. Do not expand the project scope.
+7. Run `git status --short` and use it as the review scope index.
+8. Inspect `git diff` directly.
+9. Inspect `git diff --cached` directly.
+10. Read every `??` untracked file body listed by `git status --short`; if a `??` file is binary or too large to read safely, flag it as a review blocker or scope/ignore issue.
+11. Confirm the top Codex SESSION_LOG entry's `Worked on` section tags file lists as `[tracked]` and `[untracked]` (or equivalent explicit tracked/untracked sub-bullets), and lists validation run/result plus current review state / expected next reviewer action.
+12. Review whether Codex followed the approved task.
+13. Review whether Codex modified files outside scope.
+14. Review whether existing working logic was broken.
+15. Review bugs, edge cases, tests, security, data, and state risks.
+16. Review whether docs/CURRENT.md and the SESSION_LOG entry were updated correctly.
+17. Output Verdict: Pass / Pass with fixes / Fail.
+18. If there are Required fixes, Optional suggestions, open questions, or process decisions, write the review result into docs/SESSION_LOG.md using the separate Required / Optional pending statuses from §Review Recording. For pure Pass, write a minimal PASS-only entry (see §Review Recording).
+19. Do not directly modify business code.
+20. Do not directly instruct Codex to execute fixes.
+21. Do not expand the project scope.
 
 Claude output should be concise:
 - Verdict
