@@ -8,6 +8,293 @@
 
 ---
 
+## 2026-05-26 — Claude re-re-review — Pass (Phase 6b variant tracking const alignment)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active. **Ready to commit.**
+
+**Scope reviewed**: Codex 2026-05-26 `修复` round 2（本 SESSION_LOG 下一条 entry "Codex (Phase 6b variant tracking const alignment)"）含 O-fol4 dispose:
+- `schemas/a_short_variant_tracking.schema.json` L93 / L266 / L340: 3 处 single-value enum 改 const
+  - `scope.contract_status`: `enum: ["tracking_contract_only"]` → `const: "tracking_contract_only"`
+  - `variantFamily.track_status`: `enum: ["tracking_only"]` → `const: "tracking_only"`
+  - `evidencePolicy.source`: `enum: ["pre_outcome_live_captured_analysis_input"]` → `const: "pre_outcome_live_captured_analysis_input"`
+- `tests/schema/test_a_short_variant_tracking_schema.py` L61 / L64 / L93: 3 处对应 assertions 同步改 `["const"]` 检查
+- 剩余 multi-value enum 保留不动（variant `id` 6 values、`evaluation_scope` 4 values、`outputTrack.comparison_unit` 3 values）
+
+**Validation 报告**:
+- `tests.schema.test_a_short_variant_tracking_schema` — 9 tests passed
+- `tests/schema/` discover — 24 tests passed
+- `git diff --check` — passed
+
+**Verdict**: Pass (clean).
+
+**Disposition 核对**:
+
+- **O-fol4 — FULLY DISPOSED**: 3 处 single-value enum 全改 const，与 `portfolio_allocation.schema.json` / P0a Optional disposition 既定 project pattern 完全一致。Test assertions 同步从 `["enum"]` 改成 `["const"]`，no regression — 9 + 24 tests passed。Schema semantics 不变（accept exactly same values），只是 jsonschema 表达形式 align。✅
+
+**Codex draft 亮点**:
+
+- **Alternatives explicit rejection**: Codex repair entry "Alternatives considered and rejected" 列了 "Leave O-fol4 for the next implementation commit — rejected because the user invoked 修复, the diff is small, and fixing now keeps the first `a_short_variant_tracking` commit internally consistent with the existing P0a schema pattern." — 给了 rationale 为什么不延后到 next commit（保持 first commit internally consistent），符合 a-path "single-scope commit" 设计意图。
+- **Key decisions explicit 锁 zero behavior change**: "schema semantics unchanged: `contract_status`, `track_status`, and `evidence_policy.source` still accept exactly the same values" — 防止 future LLM 误以为是 semantic change。
+- **Test sync 完整**: 不是只改 schema 留 test 错位，而是 schema + test 同 round 同步 — 防止 test 把旧 `["enum"]` 检查继续跑 cause false fail。
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无。
+
+**Process meta observation**:
+
+- 自 `ccc5c85 Tighten commit documentation hygiene` 之后 **连续 7 次** substantive commit 都没 follow-up [trivial] sync（`a784b18` `87a1a5a` `f74ff40` `3ae448b` `56277b6` `ec9cacb` + 本轮即将 commit Phase 6b variant tracking contract round）。本轮 commit 后 8 次。hygiene 稳定。
+- **完整 review 循环走通**: "执行 → 审查 → 修复 → re-审查 → 修复 round 2 → re-re-审查" — 第一次出现 mini-cycle (round 2 修复 for new finding emerged from re-review)。Process 验证：reviewer re-review 时发现 new finding 不阻塞已 dispose 部分，但需要 round 2 mini-cycle dispose 才完整 closure。整个 round 仍维持 single-scope commit (Phase 6b variant tracking contract + 全部 dispose)。
+
+**Next natural step from my view**:
+
+1. 用户 `提交` 全部改动（6 文件 working tree + 本 re-re-review entry，单 commit，scope "Phase 6b A-short variant tracking contract + Optional follow-up disposition"）。本 commit 含原 Phase 6b 起草 6 文件 + Codex repair 1 (3 Optional dispose) + Codex repair 2 (O-fol4 const alignment) + SESSION_LOG 5 条新 entries (3 Codex + 1 Claude Pass + 1 Claude Pass clean-after-repair + 1 Claude Pass clean-after-repair-2)。
+2. 下一轮 `执行`: Phase 6b 第二切片（Codex Open questions handed off 留了选择：minimal `a_short_variant_tracking` consumer / plan writer vs benchmark monthly-return materialization）。本 round 已 closure，无 carry-over Optional。
+
+This entry records the Pass verdict for the second repair round (O-fol4 const alignment). No Required or Optional follow-ups remain active. **Ready to commit.**
+
+---
+
+## 2026-05-26 — Codex (Phase 6b variant tracking const alignment)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior 2026-05-26 Claude re-review — Pass with 1 minor note (Phase 6b variant tracking Optional follow-up disposition), which had no Required fixes and 1 non-blocking Optional follow-up.
+
+**Worked on**:
+1. Disposed O-fol4 by aligning single-value policy fields in `schemas/a_short_variant_tracking.schema.json` to the project `const` pattern.
+2. Kept the schema semantics unchanged: `contract_status`, `track_status`, and `evidence_policy.source` still accept exactly the same values.
+
+**Optional disposition**:
+- O-fol4 accepted: changed `scope.contract_status`, `variantFamily.track_status`, and `evidencePolicy.source` from single-value `enum` to `const`; updated schema tests to assert the `const` shape.
+
+**Key decisions**:
+- This is a schema-shape alignment only. It does not change the six variant families, evidence source, tracking-only status, baseline comparison, promotion policy, or any runtime behavior.
+
+**Alternatives considered and rejected**:
+- "Leave O-fol4 for the next implementation commit" — rejected because the user invoked `修复`, the diff is small, and fixing now keeps the first `a_short_variant_tracking` commit internally consistent with the existing P0a schema pattern.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_short_variant_tracking_schema -v` — 9 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v` — 24 tests passed.
+- `git diff --check` — passed.
+
+**Open questions handed off**:
+- None from this repair round.
+
+**Next natural step from my view**:
+1. Claude re-reviews this const-alignment repair.
+2. If Pass, user `提交`.
+3. Next `执行`: choose between a minimal `a_short_variant_tracking` consumer / plan writer and benchmark monthly-return materialization.
+
+---
+
+## 2026-05-26 — Claude re-review — Pass with 1 minor note (Phase 6b variant tracking Optional follow-up disposition)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: 1 new active (O-fol4 single-value enum → const, **do not block commit**).
+
+**Scope reviewed**: Codex 2026-05-26 `修复` round（本 SESSION_LOG 下一条 entry "Codex (Phase 6b variant tracking Optional follow-up disposition)"）含的 dispose:
+- O-fol1 (handoff append vs new file): repair entry 加 explicit alternatives "Open a dedicated Phase 6b handoff now — rejected" + reasoning "first 6b slice + same handoff owns 6a/6b boundary + split later if content grows"。
+- O-fol2 (两个 6 数字 coincidence): `schemas/a_short_variant_tracking.schema.json` L390-392 加 `shutdown_after_consecutive_underperformance` 的 `description`: "Variant lifecycle threshold. This is independent from the Phase 6a benchmark primary-switch prerequisite that also uses 6 forward live months."
+- O-fol3 (additional rejection tests): `tests/schema/test_a_short_variant_tracking_schema.py` 加 4 tests（含 bonus shutdown-annotation 测试）: `test_extra_variant_family_is_rejected` / `test_wrong_variant_id_is_rejected` / `test_non_tracking_status_is_rejected` / `test_shutdown_threshold_note_is_independent_from_benchmark_switch`。5 → 9 tests。
+
+**Validation 报告**:
+- `tests.schema.test_a_short_variant_tracking_schema` — 9 tests passed
+- `tests/schema/` discover — 24 tests passed
+- `git diff --check` — passed
+
+**Verdict**: Pass with 1 new minor Optional follow-up (not blocking).
+
+**Disposition 核对**:
+
+- **O-fol1 — FULLY DISPOSED**: Codex repair entry "Alternatives considered and rejected" 现在 explicit list "Open a dedicated Phase 6b handoff now — rejected for this slice. The current content is a schema contract plus validation result, and appending keeps the 6a/6b boundary and first 6b contract in one place; split later if Phase 6b content stops being readable as an appendix." — 比单纯 "follow default rule" 更 forward-looking，给了 split-later trigger condition。✅
+
+- **O-fol2 — FULLY DISPOSED + bonus test**: Schema L390-392 加 `description` 字段 explicit lock 两个 6 是 independent design choice。**Bonus**: 加 `test_shutdown_threshold_note_is_independent_from_benchmark_switch` 验证 schema annotation 真存在 + 包含 "independent" + "benchmark primary-switch" — 防止 future LLM accidentally 删 annotation 而无 test catch。这超出我原 Optional 要求（我只说 "加 annotation"，没要求 test lock）。✅
+
+- **O-fol3 — FULLY DISPOSED, 三层 rejection 全覆盖**: 加 3 个 rejection tests 完全对应 我建议的 (a) extra family rejection、(b) wrong variant id rejection、(c) `track_status` 非 "tracking_only" rejection。每个 test 用 `copy.deepcopy(example)` + 修改 + assert errors — 防止 mutation affect 后续 tests。Defense in depth 完整。✅
+
+**Codex repair 亮点**:
+
+- **Bonus test lock annotation**: O-fol2 不只是加 schema description，还加 test 验证 annotation 字段存在 + 关键词存在 — schema 文字层 lock 后 test 层 cross-lock，防止 future "看起来无关的 schema cleanup" 不慎删除 annotation。这是 spec-and-test defense in depth 加分项。
+- **Alternatives 明确 split-later trigger condition**: "split later if Phase 6b content stops being readable as an appendix" — 给了 future LLM 判断何时开新 Phase 6b handoff 的具体标准（appendix 可读性），不是模糊 "later when justified"。
+- **Validation 完整**: 不只跑 schema test，还跑整个 `tests/schema/` discover (24 tests) — sanity check 新 schema 没破坏其他 schema test。
+
+**Self-review 新发现 finding (re-review 阶段)**:
+
+- **O-fol4 (single-value enum → const, project pattern alignment)**: 新 schema 有 3 处 single-value enum 违反 project pattern:
+  1. `scope.contract_status`: `enum: ["tracking_contract_only"]` — 应 `const`
+  2. `variantFamily.track_status`: `enum: ["tracking_only"]` — 应 `const`
+  3. `evidencePolicy.source`: `enum: ["pre_outcome_live_captured_analysis_input"]` — 应 `const`
+
+  Verify `portfolio_allocation.schema.json` 跟 P0a Optional disposition pattern 一致：single-value 全用 `const`（"A", "US", "long", "short", "manual_only_non_fungible" 等）；multi-value 用 `enum`（`["mixed", "CNY", "USD"]`、`["A", "US"]`、`["CNY", "USD"]`、`["long", "short", "liquidity"]` 等）。
+
+  这跟 P0a Optional disposition **既定结论 "single-value policy enums were converted to const"**（CURRENT.md §0 P0a entry）冲突。本轮 schema 起草和 review 都漏 catch — 我之前 review entry 没 flag，Codex 起草时也没 catch。
+
+  Severity: minor（不影响 schema 功能，但 inconsistent with project pattern）。Optional: Codex 在 [trivial] sync 或下一轮 commit 顺手 fix — 同时 update test `test_variant_family_set_is_exact_and_tracking_only` (L61) `["tracking_only"]` enum 检查改成 `"tracking_only"` const 检查。
+
+  **Note on review-discipline**: 这条是 self-review 在 re-review 阶段发现的 — 不是 Codex repair 引入的 issue，是上轮 review packet 我自己漏 flag。按 review-discipline 应该这轮 Pass，不为 reviewer 自己漏的 finding 阻塞 commit；Codex 自决何时 fix。
+
+**Required fixes**: 无。
+
+**Process meta observation**:
+
+- 自 `ccc5c85 Tighten commit documentation hygiene` 之后 **连续 7 次** substantive commit 都没 follow-up [trivial] sync（`a784b18` `87a1a5a` `f74ff40` `3ae448b` `56277b6` `ec9cacb` + 本轮即将 commit Phase 6b variant tracking contract round）。本轮 commit 后 8 次。hygiene 稳定。
+- 本 round 完整跑完 "执行 → 审查 → 修复 → re-审查" 循环 — Phase 6a 后第二轮完整循环；首次实际有 schema/test 代码进入 review + repair；schema-first 设计 + Codex bonus test annotation lock 都是 high-quality outcome。
+- **Review-process improvement landed**: 用户 propose "self-review finding 直接 amend SESSION_LOG，让 Codex 自决 dispose 像 Optional 操作一样"。本轮实际不需要 amend 原 Pass entry（Codex 已 dispose 3 条），新 finding O-fol4 直接进 re-review entry — 同样实现"让 Codex 自决"目标 + 保留 review entry 历史完整性。
+
+**Next natural step from my view**:
+
+1. 用户 `提交` 全部改动（6 文件 working tree + 本 re-review entry，单 commit，scope "Phase 6b A-short variant tracking contract + Optional follow-up disposition"）。本 commit 含原 Phase 6b 起草 6 文件 + Codex repair edit (schema description + 4 new tests) + SESSION_LOG 4 条新 entries (2 Codex + 1 Claude Pass + 1 Claude Pass clean-after-repair)。
+2. 下一轮 `执行`: Phase 6b 第二切片（Codex Open questions handed off 留了选择：minimal `a_short_variant_tracking` consumer / plan writer vs benchmark monthly-return materialization）。**+ Codex 可顺手 fix O-fol4 single-value enum → const 在下一轮 commit 同 scope**。
+3. O-fol4 也可走 [trivial] sync 路径，由用户 / Codex 决定时机。
+
+This entry records the Pass verdict for the repair round. O-fol4 is a new minor finding from re-review; Codex self-dispose 时机 by next-commit or [trivial] sync. **Ready to commit.**
+
+---
+
+## 2026-05-26 — Codex (Phase 6b variant tracking Optional follow-up disposition)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior 2026-05-26 Claude review — Pass with minor notes (Phase 6b variant tracking contract), which had no Required fixes and 3 non-blocking Optional follow-ups.
+
+**Worked on**:
+1. Disposed all 3 Optional follow-ups from the latest Claude review.
+2. Kept the Phase 6b contract scope unchanged: six A-short variants remain tracking-only comparison tracks against `steady_a_short_baseline`; no EGS, hard-veto, `burst_lane`, runner, preset, or production behavior changed.
+
+**Optional disposition**:
+- O-fol1 accepted in this entry: the append-vs-new-handoff decision is now explicit. I chose to append the Phase 6b schema contract to the existing Phase 6a handoff because this is still the first Phase 6b implementation slice and the same handoff already owns the 6a/6b boundary. A dedicated Phase 6b handoff can be opened later if implementation/evidence content grows enough to justify it.
+- O-fol2 accepted: `schemas/a_short_variant_tracking.schema.json` now annotates `shutdown_after_consecutive_underperformance = 6` as an independent variant lifecycle threshold, not coupled to the Phase 6a benchmark primary-switch prerequisite that also uses 6 forward live months.
+- O-fol3 accepted: `tests/schema/test_a_short_variant_tracking_schema.py` now rejects extra variant family keys, wrong per-family `id`, and non-`tracking_only` status; it also asserts the shutdown-threshold independence note.
+
+**Key decisions**:
+- No threshold, family set, promotion policy, or lane routing changed. This repair only clarifies policy intent and hardens schema rejection coverage.
+
+**Alternatives considered and rejected**:
+- "Open a dedicated Phase 6b handoff now" — rejected for this slice. The current content is a schema contract plus validation result, and appending keeps the 6a/6b boundary and first 6b contract in one place; split later if Phase 6b content stops being readable as an appendix.
+- "Change one of the two 6-month numbers to avoid apparent coupling" — rejected. The numbers are policy choices with different semantics; the right fix is explicit annotation, not changing thresholds without evidence.
+- "Leave the extra rejection tests for a later trivial sync" — rejected because the user invoked `修复`, the tests are small, and they directly cover Claude's defense-in-depth suggestions.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_short_variant_tracking_schema -v` — 9 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v` — 24 tests passed.
+- `git diff --check` — passed.
+
+**Open questions handed off**:
+- None from this repair round.
+
+**Next natural step from my view**:
+1. Claude re-reviews this Optional disposition diff.
+2. If Pass, user `提交`.
+3. Next `执行`: choose between a minimal `a_short_variant_tracking` consumer / plan writer and benchmark monthly-return materialization.
+
+---
+
+## 2026-05-26 — Claude review — Pass with minor notes (Phase 6b variant tracking contract)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: 3 (all minor, **do not block commit**).
+
+**Scope reviewed**: Codex 2026-05-26 起草（本 SESSION_LOG 下一条 entry "Codex (Phase 6b variant tracking contract)"）的 6 文件改动:
+- **3 新文件**: `schemas/a_short_variant_tracking.schema.json` v1.0.0 (434 行) + `schemas/examples/a_short_variant_tracking.example.json` (160 行) + `tests/schema/test_a_short_variant_tracking_schema.py` (114 行 5 tests)
+- **3 修改**: `docs/CURRENT.md` (§0 latest delta / §1 当前 Phase 更新 / §2 加 entry+删 Phase 5 fill entry / §5 加 2 path / §6 P0#1 update) + `docs/SESSION_LOG.md` (prepend Codex entry) + `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` (append "Phase 6b variant tracking contract" section)
+
+**Verdict**: Pass with 3 minor Optional follow-ups (not blocking).
+
+**Schema 设计质量**:
+
+- **Hard locks 严密**: `schema_name` / `schema_version` / `scope.market="A"` / `scope.system="a_short"` / `scope.phase="6b"` / `lane` / `primary_baseline` / `contract_status` / `track_status="tracking_only"` / `comparison_baseline="steady_a_short_baseline"` / `promotion_rule_ref="promotion_policy"` 全 const，杜绝 future LLM 在 scope 外重用 schema。
+- **Scope creep prevention**: `data_boundaries` 5 个 const 锁（`mutates_egs=false` / `mutates_phase3_hard_veto=false` / `implements_burst_lane=false` / `research_output_feeds_production=false` + `manual_order_only=true` + `requires_p0a_capital_context=true`）+ `evidence_policy.backtest_only_promotion_allowed=false` + `evidence_policy.forward_live_only=true` — 防止 variant track 退化成 EGS 修补、Phase 3 veto 修改、burst lane 实现、research 直进 production、backtest-only promotion。
+- **6 family exact set with `additionalProperties: false`** — 防止 future LLM 在 schema 范围外新加 variant family（要新 family 必须 schema v1.1.0 升级 + review）。
+- **`max_variant_families_per_review: 1`** — 强制一次 review 只 dispose 1 个 variant family，防止 batch promotion 草率。
+- **`shutdown_after_consecutive_underperformance: 6`** — Hard lock variant shutdown threshold，防止 underperforming variant 长期挂在 production。
+
+**Example 质量**:
+
+- 6 family 完整 covered，每个含 11 个 required field。
+- variant `objective` 直接 reference CURRENT.md §3.2 24p 信号统计 ground truth："追高风险，周一确认" (N=40, t=-2.36)、OVERHEAT (N=25, t=-2.34)、Tier1-only (vs Tier2 N=58, t=-2.27)、`rank_bucket_split` Top 1-5/6-10/11-15 (跟 "24p Top 11-15 优于 Top 1-5" 一致)。**Cross-doc 数据一致** ✅
+- prohibited_actions 都包含 "promote from backtest-only evidence" + family-specific scope (e.g., "change production hard veto before review")。
+
+**Test 质量**:
+
+- 5 tests 覆盖：schema meta validation / 6 family exact set + tracking-only / scope creep boundaries / example validation / missing variant rejection。
+- `jsonschema` unavailable → SkipTest 跟 project pattern 一致。
+
+**Alternatives considered and rejected 设计审查（Codex 已 list 3 条）**:
+
+- "Start with benchmark monthly-return materialization" — rejected：6b main axis 是 variants，先建 contract。
+- "Implement a variant runner immediately" — rejected：没 schema 会让 runner output drift on family names / baseline semantics / promotion gates。
+- "Reuse `rank_backtest` `strategy_variants` shape" — rejected：existing shape 是 backtest/report oriented，6b 需要 forward/live tracking + P0a context + no-promotion rules。
+- **加分项**：Codex 主动 verify 现有 schema 是否可复用（第 3 条），然后 reject 因为 scope mismatch — design discipline 而非 reinvention。
+
+**Optional follow-ups (minor, do not block commit)**:
+
+- **O-fol1 (handoff append vs new file 决定无 explicit alternative)**: Codex 选 append Phase 6b 内容到 Phase 6a handoff 末尾（vs 新开 Phase 6b handoff），但 SESSION_LOG Alternatives section 没列这个决定。AGENTS 规则允许 cross-phase 新 handoff 但没 mandate sub-phase 新 handoff。Future LLM 不知道为什么不开 Phase 6b handoff。Optional: Codex 在 next SESSION_LOG entry 或 [trivial] sync 时补一条 alternatives entry — "Open new Phase 6b handoff vs append to Phase 6a handoff — chose append because Phase 6b spec is still initial slice with only schema contract; will graduate to dedicated handoff when accumulated content justifies"。
+
+- **O-fol2 (promotion_policy 两个 6 数字 coincidence)**: schema `shutdown_after_consecutive_underperformance: 6` 跟 Phase 6a handoff §3.5 "At least 6 forward live months (primary switch prerequisite)" 数字一致但**语义不同**（shutdown threshold vs primary switch threshold）。两个 6 都是 month based but for different policy purposes。Future LLM 可能误以为是 coupling，或 wonder "如果 shutdown=6 月 underperform，那 primary switch 也是 6 月最小观察，似乎 underperforming variant 在 primary switch 评估之前就 shutdown 了 — 是否设计 conflict？"。Optional: 加一句 schema description annotation 或 example "note" 说明这俩 6 是 **independent design choice**（一个是 variant lifecycle threshold，一个是 benchmark switch lifecycle threshold），避免 future LLM 误 coupling。
+
+- **O-fol3 (test additional rejection cases)**: 5 tests 覆盖主要场景，但没 test (a) extra variant family rejection (`variantFamilies.additionalProperties: false` 是否真 reject extra key)、(b) wrong variant `id` rejection、(c) `track_status` 改成除 "tracking_only" 之外的 value 是否被 reject。Optional: 加 2-3 个 rejection tests for defense in depth。当前 5 tests 已达 project schema test 平均深度（与 Phase 5 各 schema 类似），所以本轮非必要。
+
+**Codex draft 亮点**:
+
+- **Schema-first 选择**: 选 schema contract 而非直接 runner — 防止 runner 在 family names / baseline semantics / promotion rules 上 drift。
+- **Example 跟 24p Tier1 信号 cross-reference**: 让 Phase 6b variant 跟 Phase 2 已验证的负信号 statistic ground truth 对齐，Phase 6b 实证有锚点。不是 abstract spec 而是 connected-to-data spec。
+- **`research_output_feeds_production: false` const lock**: 跟 `docs/strategy_design_synthesis.md` "research has promotion gate" 一致，schema 层 lock 而非纯 doc 层。
+- **`promotion_rule_ref: "promotion_policy"` const + per-family** + **`promotionPolicy` 全局** — defense in depth: top-level 锁 requirement，per-family 锁 reference target，schema-level 强制每个 family 必须走 promotion_policy。
+- **CURRENT.md §2 维持 8 条限制**: 加 Phase 6b entry 时删 "Phase 5 minimal fill simulation" entry，archive routing pointer 句 update 为 "Phase 5 fill/materializer/schema 细节"。delta 维护正确。
+
+**Required fixes**: 无。
+
+**Process meta observation**:
+
+- 自 `ccc5c85 Tighten commit documentation hygiene` 之后 **连续 7 次** substantive commit 都没 follow-up [trivial] sync（`a784b18` `87a1a5a` `f74ff40` `3ae448b` `56277b6` `ec9cacb` + 本轮即将 commit Phase 6b variant tracking contract）。hygiene 稳定。
+- 本 round 是 Phase 6a kickoff handoff commit 之后第一个 "执行 → 审查" turnaround，**首次进入实际有 schema/test 代码的 review 范围**（之前 5 轮 docs-only）。流程顺利，schema-first 设计选择正确。
+
+**Next natural step from my view**:
+
+1. 用户 `提交` Codex 6 文件改动 + 本 review entry（单 commit，scope "Phase 6b A-short variant tracking contract"）。
+2. 下一轮 `执行`: Phase 6b 第二切片。Codex 在 Open questions handed off 留了 next-session decision: minimal `a_short_variant_tracking` consumer / plan writer vs benchmark monthly-return materialization。两者都是合理路径；用户决策依据可考虑数据可用性（plan writer 需 captured `analysis_input` fixtures；benchmark materializer 需 Tushare `index_daily`）。
+3. 3 条 Optional follow-up（O-fol1/2/3）可在 (a) 本轮 commit 前 fix 后再 review、(b) 下一轮 commit 顺手 fix、(c) 下次 [trivial] sync — 由用户决定。
+
+This entry records the Pass verdict and 3 minor Optional follow-ups. It is **not** a direct execution order to Codex; the Optional follow-ups can be addressed at user's discretion across future commits.
+
+---
+
+## 2026-05-26 — Codex (Phase 6b variant tracking contract)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Claude re-review — Pass (Phase 6a kickoff Optional follow-up disposition), which committed as `ec9cacb docs: add Phase 6a kickoff handoff`.
+- Implements the first Phase 6b slice from `docs/CURRENT.md §6 P0`: A-short variants are the main axis, while audit / forward / benchmark-aware alpha are supporting evidence pipeline.
+
+**Worked on**:
+1. Added `schemas/a_short_variant_tracking.schema.json` v1.0.0 as the Phase 6b A-short variant tracking contract.
+2. Added `schemas/examples/a_short_variant_tracking.example.json` and `tests/schema/test_a_short_variant_tracking_schema.py`.
+3. Updated `docs/CURRENT.md` and appended the Phase 6 handoff with the contract details and validation result.
+
+**Key decisions**:
+- First Phase 6b implementation slice is variant tracking contract, not benchmark monthly-return materialization. Reason: variants are the 6b main axis, and a schema-first contract prevents later runner work from inventing family names, baseline semantics, or promotion rules ad hoc.
+- The contract locks exactly six variant families: `chasing_high_veto`, `overheat_veto`, `tier1_only_trading`, `esp_cap_or_winsorize`, `rank_bucket_split`, and `exit_policy_variants`.
+- All variants are `tracking_only`, compare against `steady_a_short_baseline`, require forward/live evidence and benchmark sensitivity, and must not mutate `A-EGS`, Phase 3 hard veto, `burst_lane`, or research-to-production boundaries.
+
+**Alternatives considered and rejected**:
+- "Start with benchmark monthly-return materialization" — rejected for this slice because it supports evidence, but the Phase 6b main axis needs a contract for the six variant tracks first.
+- "Implement a variant runner immediately" — rejected. Without a stable schema/example, runner outputs could drift in family names, baseline semantics, or promotion gates.
+- "Reuse rank_backtest `strategy_variants` shape" — rejected. That shape is backtest/report oriented; Phase 6b needs forward/live tracking boundaries, P0a capital context, and no-promotion rules.
+
+**Open questions handed off**:
+- Should the next Phase 6b slice implement a minimal plan/materialization runner that emits schema-valid `a_short_variant_tracking` artifacts, or benchmark monthly-return materialization for CSI1000/CSI300?
+- Should `benchmark_sensitive` remain a sidecar artifact or become optional fields in `execution_aggregate_report` v1.1.0 after the first forward/variant comparison runner exists?
+
+**Next natural step from my view**:
+1. Claude reviews this schema-first Phase 6b contract diff.
+2. If Pass, user `提交`.
+3. Next `执行`: choose between a minimal `a_short_variant_tracking` consumer / plan writer and benchmark monthly-return materialization.
+
+---
+
 ## 2026-05-26 — Claude re-review — Pass (Phase 6a kickoff Optional follow-up disposition)
 
 **Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active. **Ready to commit.**

@@ -1,0 +1,160 @@
+{
+  "schema_name": "a_short_variant_tracking",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-26T00:00:00Z",
+  "scope": {
+    "market": "A",
+    "system": "a_short",
+    "phase": "6b",
+    "lane": "steady_a_short_variants",
+    "primary_baseline": "steady_a_short_baseline",
+    "contract_status": "tracking_contract_only"
+  },
+  "baseline": {
+    "id": "steady_a_short_baseline",
+    "description": "Current A-short steady lane using existing screening, analyzer, execution runner, P0a capital context, and manual-order-only boundaries.",
+    "uses_existing_screening": true,
+    "uses_phase3_hard_veto": true,
+    "requires_p0a_capital_context": true,
+    "manual_execution_only": true,
+    "full_size_requires_ship_gate": true
+  },
+  "variant_families": {
+    "chasing_high_veto": {
+      "id": "chasing_high_veto",
+      "objective": "Track entry flag '追高风险，周一确认' as a veto candidate versus steady baseline.",
+      "routing": "candidate-level veto candidate comparison",
+      "track_status": "tracking_only",
+      "comparison_baseline": "steady_a_short_baseline",
+      "evaluation_scope": ["candidate_universe", "execution_report", "aggregate_report"],
+      "data_requirements": ["entry_flag", "captured analysis_input", "execution report"],
+      "allowed_actions": ["exclude flagged candidates in variant track", "compare against steady baseline"],
+      "prohibited_actions": ["change production hard veto before review", "promote from backtest-only evidence"],
+      "output_track": {
+        "track_id": "variant_chasing_high_veto",
+        "comparison_unit": "same_candidate_universe",
+        "generated_artifacts": ["variant execution report", "variant aggregate comparison"]
+      },
+      "promotion_rule_ref": "promotion_policy"
+    },
+    "overheat_veto": {
+      "id": "overheat_veto",
+      "objective": "Track OVERHEAT as a veto candidate versus steady baseline.",
+      "routing": "candidate-level veto candidate comparison",
+      "track_status": "tracking_only",
+      "comparison_baseline": "steady_a_short_baseline",
+      "evaluation_scope": ["candidate_universe", "execution_report", "aggregate_report"],
+      "data_requirements": ["OVERHEAT flag", "captured analysis_input", "execution report"],
+      "allowed_actions": ["exclude OVERHEAT candidates in variant track", "compare against steady baseline"],
+      "prohibited_actions": ["change production hard veto before review", "promote from backtest-only evidence"],
+      "output_track": {
+        "track_id": "variant_overheat_veto",
+        "comparison_unit": "same_candidate_universe",
+        "generated_artifacts": ["variant execution report", "variant aggregate comparison"]
+      },
+      "promotion_rule_ref": "promotion_policy"
+    },
+    "tier1_only_trading": {
+      "id": "tier1_only_trading",
+      "objective": "Track Tier1-only trading evidence while Tier2 remains observation-only.",
+      "routing": "trading-eligibility comparison",
+      "track_status": "tracking_only",
+      "comparison_baseline": "steady_a_short_baseline",
+      "evaluation_scope": ["candidate_universe", "execution_report", "aggregate_report"],
+      "data_requirements": ["tier label", "captured analysis_input", "execution report"],
+      "allowed_actions": ["mark Tier2 as observation-only in variant track", "compare Tier1-only evidence against steady baseline"],
+      "prohibited_actions": ["delete Tier2 from source candidate universe", "promote from backtest-only evidence"],
+      "output_track": {
+        "track_id": "variant_tier1_only_trading",
+        "comparison_unit": "same_candidate_universe",
+        "generated_artifacts": ["variant execution report", "variant aggregate comparison"]
+      },
+      "promotion_rule_ref": "promotion_policy"
+    },
+    "esp_cap_or_winsorize": {
+      "id": "esp_cap_or_winsorize",
+      "objective": "Track ESP cap or winsorize behavior without turning extreme ESP into an immediate hard veto.",
+      "routing": "score-transform comparison",
+      "track_status": "tracking_only",
+      "comparison_baseline": "steady_a_short_baseline",
+      "evaluation_scope": ["candidate_universe", "forward_tracker_diagnostic", "execution_report", "aggregate_report"],
+      "data_requirements": ["esp_raw", "growth fields", "captured analysis_input", "execution report"],
+      "allowed_actions": ["cap or winsorize extreme ESP inside variant track", "compare against steady baseline"],
+      "prohibited_actions": ["create immediate hard veto for extreme ESP", "promote from backtest-only evidence"],
+      "output_track": {
+        "track_id": "variant_esp_cap_or_winsorize",
+        "comparison_unit": "same_candidate_universe",
+        "generated_artifacts": ["variant execution report", "variant aggregate comparison"]
+      },
+      "promotion_rule_ref": "promotion_policy"
+    },
+    "rank_bucket_split": {
+      "id": "rank_bucket_split",
+      "objective": "Track Top 1-5, 6-10, and 11-15 rank buckets separately against the same captured candidate universe.",
+      "routing": "rank-bucket comparison",
+      "track_status": "tracking_only",
+      "comparison_baseline": "steady_a_short_baseline",
+      "evaluation_scope": ["candidate_universe", "forward_tracker_diagnostic", "execution_report", "aggregate_report"],
+      "data_requirements": ["rank order", "captured analysis_input", "execution report"],
+      "allowed_actions": ["emit separate bucket tracks", "compare each bucket against steady baseline"],
+      "prohibited_actions": ["promote a bucket without forward evidence", "change baseline rank construction"],
+      "output_track": {
+        "track_id": "variant_rank_bucket_split",
+        "comparison_unit": "same_candidate_universe",
+        "generated_artifacts": ["bucket execution reports", "bucket aggregate comparison"]
+      },
+      "promotion_rule_ref": "promotion_policy"
+    },
+    "exit_policy_variants": {
+      "id": "exit_policy_variants",
+      "objective": "Track 10d baseline exit against 5d time stop, 5d profit-take, and trailing-stop variants.",
+      "routing": "exit-policy comparison",
+      "track_status": "tracking_only",
+      "comparison_baseline": "steady_a_short_baseline",
+      "evaluation_scope": ["execution_report", "aggregate_report"],
+      "data_requirements": ["same entry universe", "same price data", "same P0a capital context"],
+      "allowed_actions": ["run alternate exit policy tracks", "compare against the same entry universe and capital context"],
+      "prohibited_actions": ["change entry universe for exit-only comparison", "promote from backtest-only evidence"],
+      "output_track": {
+        "track_id": "variant_exit_policy_variants",
+        "comparison_unit": "same_entry_universe",
+        "generated_artifacts": ["variant execution report", "variant aggregate comparison"]
+      },
+      "promotion_rule_ref": "promotion_policy"
+    }
+  },
+  "evidence_policy": {
+    "source": "pre_outcome_live_captured_analysis_input",
+    "forward_live_only": true,
+    "manual_trade_isolated": true,
+    "same_candidate_universe_required": true,
+    "backtest_only_promotion_allowed": false,
+    "benchmark_sensitivity_required": true
+  },
+  "promotion_policy": {
+    "minimum_forward_observations": 12,
+    "requires_baseline_comparison": true,
+    "requires_review_pass": true,
+    "max_variant_families_per_review": 1,
+    "shutdown_after_consecutive_underperformance": 6,
+    "full_size_requires_ship_gate": true,
+    "candidate_metric_examples": [
+      "Sharpe improvement versus baseline",
+      "monthly alpha t-stat improvement without worse drawdown",
+      "max drawdown no worse than baseline"
+    ]
+  },
+  "data_boundaries": {
+    "mutates_egs": false,
+    "mutates_phase3_hard_veto": false,
+    "implements_burst_lane": false,
+    "manual_order_only": true,
+    "requires_p0a_capital_context": true,
+    "research_output_feeds_production": false
+  },
+  "limitations": [
+    "This contract defines tracking shape only; it does not compute variant evidence.",
+    "Backtest-only improvement cannot promote a variant.",
+    "Generated forward evidence artifacts remain ignored unless a later task adds sanitized fixtures."
+  ]
+}

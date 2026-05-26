@@ -1,0 +1,429 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.stock/schemas/a_short_variant_tracking.schema.json",
+  "title": "A-short variant tracking contract",
+  "description": "Phase 6b contract for tracking six bounded A-short variant families as comparison tracks. This is a tracking-plan contract, not promotion evidence, not a trading instruction, and not burst-lane implementation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "baseline",
+    "variant_families",
+    "evidence_policy",
+    "promotion_policy",
+    "data_boundaries",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "a_short_variant_tracking"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "baseline": {
+      "$ref": "#/$defs/baseline"
+    },
+    "variant_families": {
+      "$ref": "#/$defs/variantFamilies"
+    },
+    "evidence_policy": {
+      "$ref": "#/$defs/evidencePolicy"
+    },
+    "promotion_policy": {
+      "$ref": "#/$defs/promotionPolicy"
+    },
+    "data_boundaries": {
+      "$ref": "#/$defs/dataBoundaries"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "system",
+        "phase",
+        "lane",
+        "primary_baseline",
+        "contract_status"
+      ],
+      "properties": {
+        "market": {
+          "const": "A"
+        },
+        "system": {
+          "const": "a_short"
+        },
+        "phase": {
+          "const": "6b"
+        },
+        "lane": {
+          "const": "steady_a_short_variants"
+        },
+        "primary_baseline": {
+          "const": "steady_a_short_baseline"
+        },
+        "contract_status": {
+          "const": "tracking_contract_only"
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "description",
+        "uses_existing_screening",
+        "uses_phase3_hard_veto",
+        "requires_p0a_capital_context",
+        "manual_execution_only",
+        "full_size_requires_ship_gate"
+      ],
+      "properties": {
+        "id": {
+          "const": "steady_a_short_baseline"
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "uses_existing_screening": {
+          "const": true
+        },
+        "uses_phase3_hard_veto": {
+          "const": true
+        },
+        "requires_p0a_capital_context": {
+          "const": true
+        },
+        "manual_execution_only": {
+          "const": true
+        },
+        "full_size_requires_ship_gate": {
+          "const": true
+        }
+      }
+    },
+    "variantFamilies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chasing_high_veto",
+        "overheat_veto",
+        "tier1_only_trading",
+        "esp_cap_or_winsorize",
+        "rank_bucket_split",
+        "exit_policy_variants"
+      ],
+      "properties": {
+        "chasing_high_veto": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/variantFamily"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "chasing_high_veto"
+                }
+              }
+            }
+          ]
+        },
+        "overheat_veto": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/variantFamily"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "overheat_veto"
+                }
+              }
+            }
+          ]
+        },
+        "tier1_only_trading": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/variantFamily"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "tier1_only_trading"
+                }
+              }
+            }
+          ]
+        },
+        "esp_cap_or_winsorize": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/variantFamily"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "esp_cap_or_winsorize"
+                }
+              }
+            }
+          ]
+        },
+        "rank_bucket_split": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/variantFamily"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "rank_bucket_split"
+                }
+              }
+            }
+          ]
+        },
+        "exit_policy_variants": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/variantFamily"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "exit_policy_variants"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "variantFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "objective",
+        "routing",
+        "track_status",
+        "comparison_baseline",
+        "evaluation_scope",
+        "data_requirements",
+        "allowed_actions",
+        "prohibited_actions",
+        "output_track",
+        "promotion_rule_ref"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": [
+            "chasing_high_veto",
+            "overheat_veto",
+            "tier1_only_trading",
+            "esp_cap_or_winsorize",
+            "rank_bucket_split",
+            "exit_policy_variants"
+          ]
+        },
+        "objective": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "routing": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "track_status": {
+          "const": "tracking_only"
+        },
+        "comparison_baseline": {
+          "const": "steady_a_short_baseline"
+        },
+        "evaluation_scope": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "candidate_universe",
+              "forward_tracker_diagnostic",
+              "execution_report",
+              "aggregate_report"
+            ]
+          }
+        },
+        "data_requirements": {
+          "$ref": "#/$defs/stringList"
+        },
+        "allowed_actions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "prohibited_actions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "output_track": {
+          "$ref": "#/$defs/outputTrack"
+        },
+        "promotion_rule_ref": {
+          "const": "promotion_policy"
+        }
+      }
+    },
+    "outputTrack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "track_id",
+        "comparison_unit",
+        "generated_artifacts"
+      ],
+      "properties": {
+        "track_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "comparison_unit": {
+          "type": "string",
+          "enum": [
+            "same_candidate_universe",
+            "same_entry_universe",
+            "same_capital_context"
+          ]
+        },
+        "generated_artifacts": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "evidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "forward_live_only",
+        "manual_trade_isolated",
+        "same_candidate_universe_required",
+        "backtest_only_promotion_allowed",
+        "benchmark_sensitivity_required"
+      ],
+      "properties": {
+        "source": {
+          "const": "pre_outcome_live_captured_analysis_input"
+        },
+        "forward_live_only": {
+          "const": true
+        },
+        "manual_trade_isolated": {
+          "const": true
+        },
+        "same_candidate_universe_required": {
+          "const": true
+        },
+        "backtest_only_promotion_allowed": {
+          "const": false
+        },
+        "benchmark_sensitivity_required": {
+          "const": true
+        }
+      }
+    },
+    "promotionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_forward_observations",
+        "requires_baseline_comparison",
+        "requires_review_pass",
+        "max_variant_families_per_review",
+        "shutdown_after_consecutive_underperformance",
+        "full_size_requires_ship_gate",
+        "candidate_metric_examples"
+      ],
+      "properties": {
+        "minimum_forward_observations": {
+          "const": 12
+        },
+        "requires_baseline_comparison": {
+          "const": true
+        },
+        "requires_review_pass": {
+          "const": true
+        },
+        "max_variant_families_per_review": {
+          "const": 1
+        },
+        "shutdown_after_consecutive_underperformance": {
+          "description": "Variant lifecycle threshold. This is independent from the Phase 6a benchmark primary-switch prerequisite that also uses 6 forward live months.",
+          "const": 6
+        },
+        "full_size_requires_ship_gate": {
+          "const": true
+        },
+        "candidate_metric_examples": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "dataBoundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mutates_egs",
+        "mutates_phase3_hard_veto",
+        "implements_burst_lane",
+        "manual_order_only",
+        "requires_p0a_capital_context",
+        "research_output_feeds_production"
+      ],
+      "properties": {
+        "mutates_egs": {
+          "const": false
+        },
+        "mutates_phase3_hard_veto": {
+          "const": false
+        },
+        "implements_burst_lane": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "requires_p0a_capital_context": {
+          "const": true
+        },
+        "research_output_feeds_production": {
+          "const": false
+        }
+      }
+    }
+  }
+}

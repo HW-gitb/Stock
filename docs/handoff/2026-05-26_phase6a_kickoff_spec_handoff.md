@@ -285,3 +285,44 @@ No unit tests are required for this handoff-only docs change.
 3. Any future code task that adds benchmark monthly return materialization should keep CSI1000 primary and CSI300 secondary artifacts side by side.
 4. Do not modify `A-EGS/egs_main.py` for Phase 6a; weekly capture and aggregate evidence should consume existing outputs.
 5. Keep generated forward evidence artifacts ignored unless a later test task intentionally creates small sanitized fixtures.
+
+---
+
+## 2026-05-26 追加：Phase 6b variant tracking contract
+
+### 改了什么
+
+- 新增 `schemas/a_short_variant_tracking.schema.json` v1.0.0，作为 Phase 6b A-short 六个 bounded variants 的 tracking-only comparison contract。
+- 新增 `schemas/examples/a_short_variant_tracking.example.json`，记录六个 variant family 的初始 track routing。
+- 新增 `tests/schema/test_a_short_variant_tracking_schema.py`，覆盖 schema meta validation、六个 family exact set、tracking-only / baseline comparison / no scope-creep boundaries、example validation、missing / extra variant rejection、wrong family id rejection、non-tracking status rejection。
+- 修复阶段按项目 schema pattern 将单值 policy fields 从 single-value `enum` 对齐为 `const`：`contract_status`、`track_status`、`evidence_policy.source`。
+
+### 为什么
+
+Phase 6b 的主轴是 A-short variants 并行验证。先落 schema contract，可以让后续 runner / plan materialization 使用同一组 family、同一 steady baseline、同一 forward evidence / benchmark sensitivity / P0a capital context 边界，避免 future LLM 直接写策略逻辑或把 backtest-only improvement 当成 promotion evidence。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_short_variant_tracking_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+### 验证结果
+
+- `tests.schema.test_a_short_variant_tracking_schema`：9 tests passed。
+- `unittest discover -s tests/schema`：24 tests passed。
+- `git diff --check`：passed。
+
+### 失效旧结论
+
+- “Phase 6b variants 只有文档 routing、没有机器可校验 contract”失效；现在有 `a_short_variant_tracking` v1.0.0 contract。
+- “第一批 variant tracking 可以自行增删 family”失效；contract 要求六个 family exact set。
+- “variant tracking 可以顺手修改 EGS、Phase 3 hard veto 或实现 burst lane”失效；contract 明确禁止这些 scope。
+
+### 下一步注意事项
+
+1. 下一条 Phase 6b implementation slice 可围绕该 schema 写最小 plan / materialization runner，或先写 benchmark monthly-return materializer。
+2. `a_short_variant_tracking` 只定义 tracking shape，不计算证据、不提供 promotion decision。
+3. Future runner must compare variants against `steady_a_short_baseline` and must not treat backtest-only improvement as promotion evidence.
