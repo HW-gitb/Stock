@@ -8,6 +8,187 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (capital allocation preflight Optional disposition)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional follow-ups: none active（O1-O3 全部 dispose 完成）。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `503694e`; targets the immediately prior Codex entry "capital allocation preflight Optional disposition")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `docs/portfolio_allocation_policy.md` 改动（O1 改第 3 条+pending #2；O2 改第 5 条+pending #4）
+- `docs/CURRENT.md` §1 当前目标改动（O3）
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` "下一步注意事项" 新增第 3-5 条配合 O1/O2/O3 一致性
+- `docs/SESSION_LOG.md` Codex `修复` entry
+- 无 schema / runner / preset / 测试改动 ✅
+
+**Disposition 逐条核对**:
+
+- **O1 (Pass)** — `portfolio_allocation_policy.md:40` 第 3 条加 `P0a schema 起始默认：hard_floor。只有 explicit rule 可以穿透该下限；后续如用户确认改为 tolerance band 或 reserve-drawdown 模式，应通过兼容字段扩展完成，避免 breaking change`。措辞完全覆盖建议的"hard floor + 可后续 in-place upgrade 而非 breaking"。pending decisions #2 (L90) 同步改成 `P0a 起始按 hard_floor 设计；用户仍可确认改为带容忍区间的目标...`。P0a 不再卡 user-decision。✅
+- **O2 (Pass)** — `portfolio_allocation_policy.md:50` 第 5 条加 `A 股长线 / 美股长线框架尚未建立，因此 P0a 只 reserve 条件字段，例如 long_liquidity_use_conditions: []；具体 enum 值等长线 spec 建立后再补，不阻塞 P0a 启动`。pending decisions #4 (L92) 同步改成 `P0a 不等待长线 spec；先 reserve long_liquidity_use_conditions: []`。逻辑顺序倒置修正。✅
+- **O3 (Pass)** — `docs/CURRENT.md:25` §1 当前目标改成 `下一条最小流程任务是用户解决或显式 reserve P0c pending decisions，然后实现 P0a capital context contracts；fill simulation 暂缓到 bucket-aware capital inputs 明确之后`。措辞完全 match 建议。✅
+
+**额外观察（非 issue）**:
+
+- handoff 追加段"下一步注意事项"新增第 3-5 条（`A = 50% / US = 50%` 不能 silent default / `hard_floor` 起步 / `long_liquidity_use_conditions` reserve）与 policy doc + CURRENT 三处同步。多文件 cross-link 一致，未来 LLM 任何一处读都能拿到完整 P0a 边界。✅
+- Codex `修复` entry alternatives rejected 写清楚（"Keep all five pending decisions blocking P0a"否决 / "Treat liquidity strictness as fully undecided"否决），决策可追溯。✅
+- 没有 silent 把任一 pending decision 落地为 schema default（验证：policy doc 第 1 / 3 / 4 条仍标"待用户确认"，未跳到"已确认"）。✅
+- 没在本轮顺手实现 P0a schema，scope 纪律好。✅
+
+**Required fixes**: 无。
+
+**Optional suggestions**: 无（O1-O3 全部 Pass，无新 finding）。
+
+**Documentation issues**: 无。
+
+**Pending status**: 全部 dispose 完成；本轮可直接 `提交`（单 scope = capital allocation preflight 文档；走新 §Commit Documentation Hygiene 单 scope 快路径）。
+
+**Next natural step from my view**:
+
+1. 用户 `提交`。working tree 单 scope（4 个文件：policy 新文件 + 3 个文档同步），可走 `git add -A` 快路径。
+2. 提交后，**真正的瓶颈是用户决策**：P0c 剩余 3 个 pending decisions（A 股 vs 美股比例 / 跨市场 cash 互通 / ship gate 阈值）。Liquidity 严格度 (#2) 与长线动 liquidity 条件 (#4) 现已 P0a-safe 默认，可不答。
+3. 用户决策完后 → P0a schema 实现（4 个 schema 改动 + 4 个 preset 草案 + runner CLI flag），仍走 review-dispose-commit。
+4. P0a 完成 → Phase 5 fill simulation 起步。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (capital allocation preflight Optional disposition)
+
+**Commits**: none (Pattern B: `修复` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the immediately prior Claude review entry: "Pass (capital allocation preflight)".
+- No Required fixes were present; this round disposes active Optional suggestions O1-O3.
+
+**Worked on**:
+1. Clarified `docs/portfolio_allocation_policy.md` so P0a can start with liquidity strictness as `hard_floor`, while preserving future compatibility for band/reserve modes.
+2. Changed long-liquidity conditions from a P0a blocker into a reserved field path because long specs do not exist yet.
+3. Updated `docs/CURRENT.md` to say the next task is resolving or reserving P0c pending decisions before P0a, not jumping straight into P0a.
+
+**Key decisions**:
+- Accept O1: `hard_floor` is the safest P0a starting default for the liquidity bucket; explicit rules can later authorize exceptions.
+- Accept O2: long-liquidity conditions should be reserved now and filled after A-long / US-long specs exist.
+- Accept O3: CURRENT must show the P0c decision step before P0a so the next LLM does not start schema work prematurely.
+
+**Optional disposition**:
+- O1 accept — added `hard_floor` as the P0a starting default and documented future non-breaking extension to band/reserve modes.
+- O2 accept — added `long_liquidity_use_conditions: []` reserve guidance and marked it non-blocking for P0a.
+- O3 accept — rewrote CURRENT §1 current target to include "用户解决或显式 reserve P0c pending decisions" before P0a.
+
+**Alternatives considered and rejected**:
+- "Keep all five pending decisions blocking P0a" — rejected because long-liquidity conditions depend on long specs that do not exist yet.
+- "Treat liquidity strictness as fully undecided" — rejected because P0a needs a conservative starting default to avoid stalling.
+
+**Open questions handed off**:
+- User still needs to confirm A-share vs US total split, cross-market cash transfer policy, and ship-gate threshold.
+- Long-liquidity condition details remain deferred until long specs are designed.
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude reviews this Optional disposition diff.
+2. If Pass, user invokes `提交`.
+3. After commit, implement P0a capital context contracts using explicit pending/reserved fields where user policy is still unresolved.
+
+---
+
+## 2026-05-26 — Claude review — Pass (capital allocation preflight)
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes: none. Optional suggestions PENDING CODEX DISPOSITION (3 条 active)。
+
+**Commits**: none (review-only entry; reviews working tree diff vs HEAD `503694e`; targets the immediately prior Codex entry "capital allocation preflight")
+
+**Verdict**: Pass.
+
+**Scope checked**:
+- `docs/portfolio_allocation_policy.md` 新文件（99 行 P0c 决策草案 + P0a 契约边界）
+- `docs/CURRENT.md` Latest Delta + §1 当前目标 + §5 关键文件 + §6 P0 列表同步
+- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 追加 "capital allocation preflight" 段
+- `docs/SESSION_LOG.md` Codex `执行` entry 七节齐全
+- 无 schema / runner / 测试 / preset 改动 ✅（policy 是纯决策草案，没 silently 落地任何技术选择）
+
+**Reasons for Pass**:
+
+- 严守 scope：纯 decision draft，不写 schema、不改 runner、不实现撮合 ✅
+- 关键架构判断对：把 P0a 拆成三类 schema（`portfolio_allocation` 静态政策 / `cash_buffer_state` 动态状态 / `execution_backtest_report.capital_context` runtime 快照），三者来源不同，绝不互相替代 ✅
+- 没在 schema/runner 里 silently 默认 50/50 split 等用户敏感决策；所有政策选择都明确标"待用户确认" ✅
+- "建议默认口径" 6 条措辞克制：每条都 frame 为"建议起始口径"而非"已落地默认" ✅
+- runner explicit capital input path 论点合理：没 input → `capital_context` 变成人工拼字段不可复现，破坏 audit trail ✅
+- 沿用现有 state_manager pattern 做 atomic JSON write，没造新轮子 ✅
+- handoff 追加段写在主 Phase 5 handoff 末尾，没新建独立 handoff（符合 AGENTS.md "默认追加" 原则）✅
+- CURRENT.md §6 P0 把 capital context preflight 排成 P0 #1、原 fill simulation 降到 P0 #2，顺序对 ✅
+
+**Required fixes**: 无。
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+1. **O1 — pending decision #2（流动资金硬度）应给 P0a 起步用的建议默认**（`docs/portfolio_allocation_policy.md:88`）。当前列了"硬下限 / 容忍 band / 可按显式规则动用"三选一未确认。但 P0a schema 写出来必须有一个 enum default，否则用户每次回答前 P0a 都卡住。建议在"建议默认口径"第 3 条加一行 `"P0a schema 起始默认 hard floor，仅 explicit rule 允许穿透；后续用户可改为 band 或 reserve；schema 设计为可后续 in-place upgrade 而非 breaking"`。让 P0a 不被 user-decision 阻塞。
+
+2. **O2 — pending decision #4（长线调 liquidity 条件）逻辑顺序倒了**（`docs/portfolio_allocation_policy.md:90`）。当前把它列为"P0a 前必须解决"，但**长线框架本身还没设计**（AGENTS.md L34-35 长线 spec 推到 Phase 9）— 用户无法在长线 spec 不存在时回答"什么长线条件允许动 liquidity"。建议改成 `"P0a 先 reserve 该字段（如 long_liquidity_use_conditions: [] 占位），具体条件等长线 spec 出来再 in-place 加 enum 值；P0a 启动不阻塞于此项"`。这条 unblock 了 P0a 启动顺序。
+
+3. **O3 — `docs/CURRENT.md §1 当前目标` 措辞跳了一步**（`docs/CURRENT.md:25`）。当前 "下一条最小流程任务是 P0a capital context contract" — 但本轮 Codex 做的是 P0c 决策草案，**P0a 还没启动**。措辞跳过了 "用户决策 P0c pending decisions" 这一步。建议改成 `"下一条最小流程任务是用户解决（或显式 reserve）P0c pending decisions，然后实现 P0a capital context contracts"`。让 next LLM 不会以为 P0a 已经可以直接动手。
+
+**额外观察（非 issue）**:
+
+- **"降低风险的操作允许继续执行"** (L50)：好 nuance，我之前没列。短线熔断时禁止加新仓但允许 exit / 减仓，这是正确的 risk-management framing。
+- **"capital_context 不能成为政策源头，只能 runtime snapshot"**（L73-74）：架构分离清晰，避免 report 反向决定 policy 的混乱。
+- **runner explicit `--portfolio-allocation` + `--cash-buffer-state` input** (L81)：reproducibility argument 合理；与 Phase 5 `--price-data` 的 explicit input 设计一致。
+- **policy doc 位置**（`docs/portfolio_allocation_policy.md`）：放 `docs/` 根而非 `handoff/` 子目录，与 `docs/AI_REVIEW_PROTOCOL.md` 同级，OK。
+- **policy doc 没被 AGENTS.md §文件参考列表索引**：CURRENT.md §5 已加；AGENTS.md 暂不必加（待 P0a schema 正式落地时再加更稳定）。
+
+**Documentation issues**: O1-O3（均已列 Optional）。
+
+**Pending status**: Required: none / Optional (O1-O3): PENDING CODEX DISPOSITION。
+
+**Next natural step from my view**:
+
+1. **切到 Codex `修复`** — dispose O1-O3，全是 policy doc 措辞细化，scope 极小。无 Required 不需用户审批。
+2. 修复后用户 `审查` → `提交`。
+3. 提交后**回到用户原始决策**：用户答 P0c 5 个 pending decisions（A 股 vs 美股比例 / liquidity 硬度 / cash 互通 / 长线动 liquidity 条件 / ship gate 阈值），或者让 Codex 把 unanswered 项以 reserve 字段形式写入 P0a schema（O2 后续路径）。
+4. 然后启动 P0a capital context contract 实现（4 个 schema + 4 个 preset + runner CLI flag），仍要 review-dispose-commit 流程。
+
+This entry is for cross-LLM continuity. It is **not** a direct execution order to Codex.
+
+---
+
+## 2026-05-26 — Codex (capital allocation preflight)
+
+**Commits**: none (Pattern B: `执行` modifies working tree only; commit waits for Claude `审查` Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the user-confirmed allocation rule now recorded in `AGENTS.md`: each market uses `1/3 long + 1/3 short + 1/3 liquidity`.
+- Refines the prior Phase 5 next step. `docs/CURRENT.md` previously pointed directly to fill simulation; this entry records why capital context must precede it.
+
+**Worked on**:
+1. Added `docs/portfolio_allocation_policy.md` as the P0c decision draft for A/US market split, long/short/liquidity buckets, cash transfer boundaries, and P0a contract decomposition.
+2. Updated `docs/CURRENT.md` so the next P0 is capital context preflight/P0a, not direct fill simulation.
+3. Appended the Phase 5 handoff with the same scope boundary: no schema implementation, no runner change, no fill simulation.
+
+**Key decisions**:
+- P0a capital context contract is now a hard prerequisite to fill simulation. Otherwise the simulator would encode single-account `initial_capital` as the de facto capital model.
+- P0c remains a decision layer, not runtime logic. The document recommends defaults but marks user-sensitive choices as pending until confirmed or explicitly represented in schema.
+- `capital_context` should be a run-time report snapshot, not the static policy source of truth. Static policy belongs in a future `portfolio_allocation` contract; dynamic cash belongs in a future `cash_buffer_state` contract.
+
+**Alternatives considered and rejected**:
+- "Start fill simulation now and retrofit capital buckets later" — rejected because it would force schema, runner, and accounting rewrites.
+- "Write full P0a schemas immediately" — rejected because A/US total split, liquidity strictness, cross-market cash transfer, and ship-gate thresholds are policy decisions that should not be invented silently.
+- "Put all capital data into execution report only" — rejected because reports should be reproducible snapshots, not the source of portfolio policy or cash state.
+
+**Open questions handed off**:
+- What is the A-share vs US total capital split? `50/50` is only a neutral planning assumption unless the user confirms it.
+- Is the `1/3 liquidity` bucket a hard floor, a target with tolerance band, or a reserve that can be drawn by explicit rules?
+- Should A-share and US cash remain fully non-fungible by default?
+- What long-framework condition allows liquidity use for averaging-down or valuation-zone accumulation?
+- What quantitative or qualitative ship-gate threshold is enough for full-size real-money deployment?
+
+**Next natural step from my view**:
+1. User invokes `审查`; Claude reviews the documentation diff and checks that P0c/P0a ordering is clear.
+2. If Pass, user invokes `提交`.
+3. After commit, resolve or explicitly encode the pending P0c choices, then implement P0a capital context contracts before fill simulation.
+
+---
+
 ## 2026-05-26 — Claude (project goal clarification: capital allocation policy)
 
 **Commits**: pending (single-scope AGENTS.md doc change; commit per [[feedback-auto-commit]])

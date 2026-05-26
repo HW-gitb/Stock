@@ -772,3 +772,44 @@ git diff --check
 1. 让 Claude 复审本轮 Optional disposition diff。
 2. 通过并提交前，不实现 fill simulation。
 3. 提交后下一条大 scope 才是 fill simulation 起步：entry/exit、涨停不可买、止损、时间止损和组合约束。
+
+## 2026-05-26 追加：capital allocation preflight
+
+### 改了什么
+
+- 新增 `docs/portfolio_allocation_policy.md`，作为 P0c 资金分配与流动资金使用规则草案。
+- 将 Phase 5 下一步从“直接起步 fill simulation”改为“先解决或显式编码 P0c 决策，再做 P0a capital context contracts”。
+- 更新 `docs/CURRENT.md`，让后续 LLM 明确：fill simulation 不能基于单一总账户 `initial_capital` 直接开写。
+
+### 为什么改
+
+用户已明确每个市场内部采用 `1/3 长线 + 1/3 短线 + 1/3 流动资金`。现有 `execution_backtest_report` v1.0.0 和 `backtest_execution.py` 仍主要围绕 run-level `initial_capital` 和普通 `position_sizing` 表达资金。若先写 fill simulation，会把“单账户本金”假设锁进执行回测，后续再接长短线 bucket、流动资金和跨市场资金规则时需要返工。
+
+本次只落地决策草案，不写 schema、不改 runner、不实现撮合，避免把尚未确认的投资政策误编码为运行时默认值。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['docs/portfolio_allocation_policy.md','docs/CURRENT.md','docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md','docs/SESSION_LOG.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok')"
+git diff --check
+git status --short
+```
+
+### 验证结果
+
+- `utf8 ok`
+- `git diff --check` 通过
+- `git status --short` 只显示本次文档 scope 相关文件
+
+### 失效旧结论
+
+- `docs/CURRENT.md` 旧口径“Next P0: start fill simulation as a separate Phase 5 scope”失效。
+- Phase 5 fill simulation 仍是核心目标，但必须排在 P0a capital context contracts 之后。
+
+### 下一步注意事项
+
+1. 不要在 P0a 前实现 fill simulation。
+2. P0a 应拆清静态政策、动态 cash state、execution report runtime snapshot，不能把 `capital_context` 当成政策源头。
+3. `A = 50% / US = 50%` 只能作为待确认的中性规划假设，不能无声写成代码默认值。
+4. 后续 schema 和 runner 需要显式 capital input path，否则 report 中的 `capital_context` 不可复现。
+5. P0a 可先把 liquidity strictness 设为 `hard_floor` 起步默认；长线调用 liquidity 条件先 reserve 字段，等长线 spec 建立后再补 enum 值。
