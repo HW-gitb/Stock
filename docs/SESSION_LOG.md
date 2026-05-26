@@ -8,6 +8,47 @@
 
 ---
 
+## 2026-05-26 — Claude (reconstructed post-commit: Phase 5 CSV materializer + private remote policy)
+
+**Commits**: `ece86b1`, `28cdc30`
+
+**Relationship to prior session(s)**:
+- Reconstructs the two local commits Claude created at user's `提交` after the corresponding review-disposition-Pass loops:
+  - `ece86b1` = Claude review Pass entry "Phase 5 CSV materializer Optional disposition" (5 entries below).
+  - `28cdc30` = Claude private-remote-policy R1+O1 dispose (entry below) + earlier Codex policy entry.
+- Added by the SESSION_LOG fallback rule because both commits existed after the latest in-session entry.
+
+**Worked on**:
+1. Split mixed working-tree into two scope-clean commits per user's "严格" choice and the [[feedback-commit-scope-discipline]] rule.
+2. Backup-edit-restore pattern: backed up the mixed `docs/CURRENT.md` + `docs/SESSION_LOG.md` to `$TEMP`, hand-edited each down to A-only state (CSV materializer), staged + committed A; restored the backup to recover the B-scope diff (private remote policy), staged + committed B.
+3. Updated auto-commit memory ([[feedback-auto-commit]]) — old push/remote prohibition language removed, points to new AGENTS.md §Git remote privacy policy.
+4. New memory [[feedback-commit-scope-discipline]] capturing the "one scope = one commit, commit each as soon as it's done" rule + the backup-edit-restore fallback for already-mixed trees.
+5. Updated `MEMORY.md` index for both.
+
+**Key decisions**:
+- Two commits over one: future `git revert` / `git blame` per scope; review trail stays atomic. Cost is one-time hand-surgery on mixed docs.
+- `git add -p` rejected for hunk splitting: PowerShell interactive flow is fragile, multi-line entries are easy to mis-select. Python line-range deletion script was more reliable.
+- Reconstructed entry written as a single entry covering both commits (instead of one entry per commit), because both commits are from the same Claude session in tight sequence; the per-commit context is in their respective review entries below.
+
+**Validation**:
+- `git status` working tree clean after commit B.
+- `python -m unittest tests.execution.test_materialize_execution_price_data tests.execution.test_backtest_execution tests.schema.test_execution_price_data_schema tests.schema.test_execution_backtest_report_schema` → 26 tests OK after commit A.
+- `git log --oneline -5` shows the new order: `28cdc30` → `ece86b1` → `be68abe` → `ad4068f` → `8488427`.
+
+**Alternatives considered and rejected**:
+- Single commit double scope — rejected per user "严格" + scope discipline.
+- Codex disposes R1+O1 instead of Claude — rejected as protocol overhead for trivial single-line doc sync (user explicitly authorized "批准修复").
+
+**Open questions handed off**:
+- None for the commits themselves. The next implementation scope is open: Tushare provider materializer vs fill simulation. CURRENT.md §6 P0 #1 records the recommendation (provider materializer, scope-clean continuation of the same `execution_price_data` v1.0.0 contract).
+
+**Next natural step from my view**:
+1. Codex `执行` — preferred: real Tushare provider materializer reusing `execution_price_data` v1.0.0; alternative: fill simulation start.
+2. Do not modify the `execution_price_data` v1.0.0 schema — provider materializer should conform to the existing contract just as the CSV materializer does.
+3. Provider materializer test scope should include: real fetch path (mocked or sandboxed), cache hit/miss, lineage fields, and parity with CSV materializer output structure.
+
+---
+
 ## 2026-05-26 — Claude (private remote policy R1 + O1 disposition)
 
 **Commits**: none (trivial doc sync; commit waits for user `提交`)
