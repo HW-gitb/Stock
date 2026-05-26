@@ -1,12 +1,13 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-26（Phase 6b variant tracking contract）
+**最后更新**：2026-05-26（Phase 6b variant tracking plan materializer）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-26)
 
+- Phase 6b variant tracking first consumer is now available in `runners/materialize_a_short_variant_tracking.py`. It materializes the canonical `a_short_variant_tracking` template into a schema-valid tracking plan under ignored `result/a_short/backtest/variants/` by default, with regression coverage in `tests/phase6/test_materialize_a_short_variant_tracking.py`. This is plan materialization only: no evidence computation, no promotion decision, no EGS mutation, and no `burst_lane` implementation.
 - Phase 6b A-short variant tracking contract is now established in `schemas/a_short_variant_tracking.schema.json` v1.0.0 with a validating example and schema tests. It locks the six bounded variant families as tracking-only comparison tracks against `steady_a_short_baseline`, requires forward/live evidence and benchmark sensitivity, and blocks EGS, Phase 3 hard-veto, `burst_lane`, or research-to-production mutation in this contract.
 - Phase 6a boundary kickoff spec is now established in `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: it defines valid forward evidence, CSI1000 primary / CSI300 secondary benchmark monthly return policy, `benchmark_sensitive` triggers, primary-switch prerequisites, forward tracker → execution aggregate flow, and steady / variants / burst / long-spec boundaries. This is docs-only; no EGS, runner, schema, or preset behavior changed.
 - Phase 5 aggregation review Optional disposition O1-O3: input reports are already schema-validated against `execution_backtest_report` v1.2.0, and the reviewed change set now adds a v1.1 rejection regression, a single-report Sharpe-null regression, and expanded capital_context mismatch coverage for preset / market / bucket / currency.
@@ -61,6 +62,7 @@
 
 本节只保留当前接续需要的 high-level snapshot；争议、被否方案、review verdict、pending fixes 统一查 `docs/SESSION_LOG.md` 顶部 1-3 条。
 
+- **Phase 6b variant tracking plan materializer**（2026-05-26）：新增 `runners/materialize_a_short_variant_tracking.py` 和 Phase 6 tests，能把 canonical contract template 写成 schema-valid tracking plan；只做 plan materialization，不算 evidence、不做 promotion。
 - **Phase 6b variant tracking contract**（2026-05-26）：新增 `schemas/a_short_variant_tracking.schema.json` v1.0.0、example 和 schema tests，锁定六个 bounded variants 的 tracking-only comparison contract；不改 EGS / hard veto / `burst_lane`。
 - **Phase 6a boundary kickoff spec**（2026-05-26）：新增 `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`，定义 forward evidence、CSI1000/CSI300 benchmark policy、`benchmark_sensitive`、forward tracker → aggregate flow、steady/variant/burst/long-spec 边界；纯文档，不改代码/schema。
 - **Phase 5 aggregation Optional disposition**（2026-05-26）：处理 Claude O1-O3。补 v1.1 input report reject、single-report Sharpe null、preset/market/bucket/currency capital_context mismatch 回归；未改聚合算法。
@@ -68,7 +70,6 @@
 - **Phase 5 multi-period execution aggregation**（2026-05-26）：新增 `execution_aggregate_report` v1.0.0 和 `aggregate_execution_reports.py`；可把多份 v1.2.0 execution reports 聚合成月度 return / Sharpe / worst drawdown / 可选 benchmark-aware alpha t-stat 的 ship-gate evidence。真实 Tushare 3-date smoke 已跑通，但都在同月，Sharpe / alpha 仍不可评估。
 - **Phase 5 ship-gate evaluation output**（2026-05-26）：`execution_backtest_report` 升到 v1.2.0，新增 required `ship_gate_evaluation`，并用 regression 锁住 Tushare materializer payload 可直接输入 execution runner。单份 execution report 不计算 monthly alpha t-stat / Sharpe，full-size 手动使用仍需后续多期 aggregation 和 forward evidence。
 - **Phase roadmap B semi-reorder**（2026-05-26）：`AGENTS.md` 固化 B 半重排：Phase 6 继续 A 股短线观察，同时并行产出 A 长 / US 长 spec 并规范化 US 短 spec；Phase 7 以 4 套 spec 做共享层与独立 rule pack 划分；Phase 8 优先 US 短 + US 长 skeleton，Phase 9 A 长 implementation 可按数据准备度与 Phase 8 子项交换；数据准备度示例见 `AGENTS.md` #12。
-- **Phase 5 P0a capital context contracts**（2026-05-26，commit `244353e`）：新增 `schemas/portfolio_allocation.schema.json`、`schemas/cash_buffer_state.schema.json`、对应 fixtures/tests；`execution_backtest_report.schema.json` 升 v1.1.0 并要求 `capital_context`；`backtest_execution.py` 新增 `--portfolio-allocation` / `--cash-buffer-state` / `--preset-path`，report 的 `settings.initial_capital` 和 ending equity 均来自 selected bucket capital；4 个 preset 都声明 capital bucket/ceiling。Optional disposition 后，preset YAML 是 capital profile source of truth，portfolio policy bucket 不再重复声明 `horizon`。
 
 更早事项（协作协议精简、Reference framework policy、Git remote privacy、Phase 5 fill/materializer/schema 细节、deterministic report、Phase 4、Phase 3、Phase 2 工程链路、v7.10、git init 等）→ 见 `AGENTS.md §交接记录`、相关 handoff、`docs/AI_REVIEW_PROTOCOL.md`、`docs/SESSION_LOG.md` 与 `git log --all`。
 
@@ -127,6 +128,7 @@
 - `runners/data_canary.py` — 旁路数据对账；不阻断主流程
 - `runners/materialize_execution_price_data.py` — Phase 5 provider-boundary helper；把本地 OHLC CSV 转成 `execution_price_data` JSON；不抓 Tushare、不做撮合
 - `runners/materialize_execution_price_data_tushare.py` — Phase 5 provider-boundary helper；抓 Tushare `daily` / `adj_factor` / `stk_limit` / `trade_cal` 生成同一 `execution_price_data` JSON；不做撮合
+- `runners/materialize_a_short_variant_tracking.py` — Phase 6b tracking-plan helper；把 canonical `a_short_variant_tracking` template materialize 成 schema-valid plan；不计算 evidence、不 promotion、不改 EGS / `burst_lane`
 - `runners/backtest_execution.py` — Phase 5 execution runner；读取 `analysis_input`、可引用 `execution_price_data`，并要求 `--portfolio-allocation` / `--cash-buffer-state` / `--preset-path` 生成 bucket-aware `capital_context`；传入 `--price-data` 时执行 minimal daily-OHLC fill simulation，不传时保留 skeleton skip 行为
 - `runners/aggregate_execution_reports.py` — Phase 5 多期 execution 聚合 runner；读取 v1.2.0 `execution_report.json`，输出 v1.0.0 `execution_aggregate_report`，用于 ship-gate evidence，不重建完整组合权益曲线
 - `engine/analyzer/rule6_hard_veto.py` — Phase 3 首轮 deterministic hard veto：`chasing_high` / `overheat` / `l2_unknown` / `esp_non_positive`
@@ -188,7 +190,7 @@
 
 ### P0 — Phase 6b A-short observation
 
-1. **A-short variants 并行验证（主轴）** — `a_short_variant_tracking` contract 已建立；下一步按该 contract 建 first consumer / plan materialization / comparison tracks，不直接 promote、不改 EGS 主通道。
+1. **A-short variants 并行验证（主轴）** — `a_short_variant_tracking` contract 和 plan materializer 已建立；下一步按该 contract 建 comparison tracks / evidence materialization，不直接 promote、不改 EGS 主通道。
 2. **Candidate-universe overlap audit（evidence pipeline）** — 为 benchmark policy 补真实候选池风格/指数 overlap 证据；禁止主观切换 primary benchmark。
 3. **Benchmark monthly-return materialization（evidence pipeline）** — 产出 CSI1000 primary 与 CSI300 secondary 的月度 return JSON，供 `aggregate_execution_reports.py` 与 sensitivity report 使用。
 4. **Forward evidence accumulation（evidence pipeline）** — 继续 weekly capture / mature-window execution replay；`forward_live_months` 只按有效 live evidence 月份计数。

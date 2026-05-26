@@ -326,3 +326,46 @@ git diff --check
 1. 下一条 Phase 6b implementation slice 可围绕该 schema 写最小 plan / materialization runner，或先写 benchmark monthly-return materializer。
 2. `a_short_variant_tracking` 只定义 tracking shape，不计算证据、不提供 promotion decision。
 3. Future runner must compare variants against `steady_a_short_baseline` and must not treat backtest-only improvement as promotion evidence.
+
+---
+
+## 2026-05-26 追加：Phase 6b variant tracking plan materializer
+
+### 改了什么
+
+- 新增 `runners/materialize_a_short_variant_tracking.py`，作为 `a_short_variant_tracking` v1.0.0 的 first consumer / plan materialization runner。
+- Runner 默认读取 `schemas/examples/a_short_variant_tracking.example.json`，刷新 `generated_at`，按 `schemas/a_short_variant_tracking.schema.json` 校验，并写入默认忽略路径 `result/a_short/backtest/variants/a_short_variant_tracking_plan.json`。
+- `.gitignore` 新增 `result/*/backtest/variants/`，确保默认 materialized plan / 后续 variant evidence artifacts 不会误入版本控制。
+- 新增 `tests/phase6/test_materialize_a_short_variant_tracking.py`，覆盖 CLI 写出 schema-valid plan、默认输出路径、template 不被原地修改、scope-creep template 在写出前被 schema validation 拒绝。
+- 更新 `runners/README.md` 与 `docs/CURRENT.md` 的 Phase 6b 状态。
+
+### 为什么
+
+Phase 6b contract 已有机器可校验 schema，但还没有任何 runner 消费它。这个切片只建立 plan materialization 入口，让后续 comparison tracks / evidence materialization 从同一个 canonical plan 出发，避免 future LLM 直接绕过 contract 写 variant 逻辑。
+
+### 验证命令
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.phase6.test_materialize_a_short_variant_tracking -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_short_variant_tracking_schema -v
+git diff --check
+git check-ignore result/a_short/backtest/variants/a_short_variant_tracking_plan.json
+```
+
+### 验证结果
+
+- `tests.phase6.test_materialize_a_short_variant_tracking`：4 tests passed。
+- `tests.schema.test_a_short_variant_tracking_schema`：9 tests passed。
+- `git diff --check`：passed。
+- `git check-ignore result/a_short/backtest/variants/a_short_variant_tracking_plan.json`：confirmed ignored。
+
+### 失效旧结论
+
+- “Phase 6b variant tracking 只有 schema/example、没有 consumer”失效；现在有最小 plan materialization runner。
+- “下一步仍是 first consumer / plan materialization”失效；该切片已完成，下一步应转向 comparison tracks / evidence materialization 或 benchmark monthly-return materialization。
+
+### 下一步注意事项
+
+1. `materialize_a_short_variant_tracking.py` 仍只生成 tracking plan，不计算 evidence、不改 EGS、不 promotion、不实现 `burst_lane`。
+2. 下一条 Phase 6b implementation slice 可围绕 materialized plan 生成 variant comparison track inputs，或实现 CSI1000 / CSI300 benchmark monthly-return materializer。
+3. Generated variant plan artifacts 默认位于 ignored `result/a_short/backtest/variants/`；不要把真实 forward evidence 产物纳入 git。

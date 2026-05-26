@@ -32,6 +32,7 @@ result/*/backtest/*.xlsx
 result/*/backtest/execution/
 result/*/backtest/generated/
 result/*/backtest/snapshot_seed/
+result/*/backtest/variants/
 result/*/backtest/**/_intermediate/
 
 # --- Local live state ---

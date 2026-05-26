@@ -8,6 +8,56 @@
 
 ---
 
+## 2026-05-26 — Claude review — Pass (Phase 6b variant tracking plan materializer)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs HEAD)
+
+**Verdict**: Pass.
+
+**Scope reviewed**: Codex 2026-05-26 `执行` round 起草 Phase 6b first consumer — `runners/materialize_a_short_variant_tracking.py` (97 行, schema-driven plan materializer via `validate_json_schema` reuse from `backtest_execution`, deepcopy 防 template mutation, `iso_now()` for generated_at default, optional `--generated-at` for test/replay determinism, output 默认到 ignored `result/a_short/backtest/variants/`)；`tests/phase6/test_materialize_a_short_variant_tracking.py` (4 tests: CLI integration / default path / immutability / scope-creep template rejection at write time)；`tests/phase6/__init__.py` (empty package marker)；`.gitignore` 加 `result/*/backtest/variants/` (`git check-ignore` confirmed)；`runners/README.md` 加 helper entry；`docs/CURRENT.md` (§0 latest delta / §2 加 entry + 删 P0a 保 8 条 / §5 加 path / §6 P0#1 update)；`docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` append "Phase 6b plan materializer" section；`docs/SESSION_LOG.md` Codex entry 七节齐全 + 新 protocol `[tracked]/[untracked]` tags + validation run/result + current review state (4 + 9 tests passed, git diff --check passed, git check-ignore confirmed)；scope-bound (plan materialization only, no evidence/promotion/EGS mutation/`burst_lane`)；3 alternatives considered + rejected (benchmark materialization first / schema widening for source-analysis-input / actual evidence computation now).
+
+---
+
+## 2026-05-26 — Codex (Phase 6b variant tracking plan materializer)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-26 Codex/Claude Phase 6b variant tracking contract, which established `schemas/a_short_variant_tracking.schema.json` v1.0.0 as a tracking-only comparison contract.
+- Follows 2026-05-26 protocol update commit `685f67a` by marking this handoff's file list with explicit `[tracked]` / `[untracked]` tags for Claude review.
+
+**Worked on**:
+1. [untracked] `runners/materialize_a_short_variant_tracking.py`: added the first consumer for `a_short_variant_tracking`; it materializes the canonical template into a schema-valid plan and writes to ignored `result/a_short/backtest/variants/` by default.
+2. [untracked] `tests/phase6/__init__.py` and `tests/phase6/test_materialize_a_short_variant_tracking.py`: added Phase 6 regression coverage for CLI output, default path, non-mutating materialization, and schema rejection of scope-creep templates.
+3. [tracked] `runners/README.md`: documented the new Phase 6b helper and its non-evidence / non-promotion boundary.
+4. [tracked] `.gitignore`: added `result/*/backtest/variants/` so the default materialized plan path stays generated/ignored.
+5. [tracked] `docs/CURRENT.md`: updated Latest Delta, current Phase 6b next-step routing, and key file list.
+6. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: appended the Phase 6b plan materializer implementation slice with validation and next-step notes.
+7. [tracked] `docs/SESSION_LOG.md`: prepended this seven-section handoff for Claude review.
+8. Validation run/result: `tests.phase6.test_materialize_a_short_variant_tracking` passed (4 tests); `tests.schema.test_a_short_variant_tracking_schema` passed (9 tests); `git diff --check` passed; `git check-ignore result/a_short/backtest/variants/a_short_variant_tracking_plan.json` confirmed ignored.
+9. Current review state: waiting for Claude review of this Phase 6b plan-materializer diff.
+
+**Key decisions**:
+- I chose the first consumer / plan materialization path before benchmark monthly-return materialization because it directly consumes the just-established Phase 6b contract and gives future comparison-track work a canonical runner entry.
+- The runner intentionally does not extend the schema. It reads the canonical example template, refreshes `generated_at`, validates against the existing contract, and writes a plan artifact.
+- The runner does not compute variant evidence, modify EGS, change Phase 3 hard vetoes, promote variants, write production behavior, or implement `burst_lane`.
+- Generated plan output remains under ignored `result/a_short/backtest/variants/`; no real forward evidence artifact enters git.
+
+**Alternatives considered and rejected**:
+- "Implement benchmark monthly-return materialization first" — rejected for this slice because CURRENT lists variant observation as the Phase 6b main axis, and the newly created contract needed an immediate consumer before evidence pipelines fan out.
+- "Add source-analysis-input fields to the schema now" — rejected. That would widen the v1.0.0 contract before the first materialized plan exists; a later comparison-track/evidence schema can add source linkage deliberately.
+- "Compute actual variant evidence in this runner" — rejected. The current contract explicitly defines tracking shape only; evidence computation belongs to a later slice after plan materialization is reviewable.
+
+**Open questions handed off**:
+- Next Phase 6b slice should choose one concrete branch: materialized-plan driven comparison track inputs, or CSI1000 / CSI300 benchmark monthly-return materializer.
+
+**Next natural step from my view**:
+1. Claude reviews this working tree using the mandatory fast path, including both `??` untracked files under `runners/` and `tests/phase6/`.
+2. If Pass, user `提交`.
+3. After commit, continue Phase 6b with either comparison-track input materialization or benchmark monthly-return materialization.
+
+---
+
 ## 2026-05-26 — Claude review — Pass (review protocol mandatory fast path)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs HEAD)
