@@ -8,6 +8,60 @@
 
 ---
 
+## 2026-05-27 — Claude review — Pass (US-short spec normalization)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `dd5e40c`)
+
+**Verdict**: Pass.
+
+**Notes**: P0 要求三要素覆盖：reference → production-facing spec mapping (§2 表，含 SKILL.md reserved)、与 A-short 平行 spec 形态（screening §5 / analysis §6 M1-M6 / state §7 / benchmark §8）、scope docs-only (§1 4 条 non-scope lock). 关键创新 §3 MAP/高速 rule 4-way routing lock：reference 中 MAP / gamma / options flow / catalyst acceleration 必须 explicit routing 到 steady diagnostic / burst input / research-only / reject-defer，防止 reference 自动等同 production logic 这一 reference-driven spec 特有的 anti-pattern. 多层 anti-pattern lock：§1 reference thresholds 不是 production constants；§3 双向 lock (steady evidence ↛ burst full-size + burst evidence ↛ steady risk gate)；§6.3 明确不照搬 reference total-account sizing → 改用 P0a US short bucket capital，不混 A/US cash pools；§6.4 execution backtest 必须 simulate deterministic exits / re-entry 必须 stateful / MAP 必须 explicit routing；§6.5 user-facing table 必须从 structured fields 生成 + OrderAudit 不接 broker/OS；§8 不继承 A-short CSI1000/CSI300 + 不继承 us_short_burst gate. Cross-spec consistency：ship gate 4 数字门槛与 AGENTS / long / burst 一致；§8 forward evidence 引用 Phase 6a §3.2 semantics；§9 Phase 6e Data Requirements Input 与 burst_lane_spec §11 / long_alpha_spec §9/§10.4/§11.8 结构对称；§6.3 P0a bucket capital 与 long_alpha_spec §6 cross-reference 一致. 5 处 routing 同步（AGENTS routing pointer/进度勾/Reference framework policy/文件参考/roadmap 6d 改 ✅；README routing table；strategy_synthesis §6 ownership 转移 + §8 重编号 2→1；CURRENT §0/§1/§2/§3/§5/§6 P0 5→4 干净 + §2 milestone 维持 8 条；handoff append + supersede 旧 "下一步 #1" + 5 条 failed-conclusion lock）. 验证完整性提升：Codex 主动加 stale next-step wording scan 超出常规模式. Scope 严守 docs-only（1 新 spec + 6 处 routing，0 schema/runner/test/provider/Skill/DataHub；`skills/us_short_analysis/SKILL.md` 仍 reserved 未被 touch）. 5 alternatives reject 理由清楚（不放 strategy_synthesis / 不实现 Skill 或 runner / reference thresholds 不当 production constants / 不继承 A-short benchmark / MAP 不直接归 burst）. 5 条 failed-conclusion lock 覆盖 reference→production 所有可能误解. 无 Required fixes、无 Optional suggestions、无新 open question（除 Codex 自己 flag 的 US-short implementation contract 仍需 schema/report interface / primary benchmark / numeric thresholds-config placement / MAP routing / options-dark-pool reliability policy / provider evidence，这些是 deferred 不是 issue）、无 scope creep、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (US-short spec normalization)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `dd5e40c` Add burst lane spec, which left US-short spec normalization as the next docs-only Phase 6 spec-pack slice.
+- Implements the next P0 spec-pack slice from `docs/CURRENT.md §6`: normalize US-short reference material into a production-facing owner spec.
+
+**Worked on**:
+1. [untracked] `docs/us_short_spec.md`: created the Phase 6d US-short steady-lane normalized owner spec with source-reference mapping, steady vs burst lane boundary, candidate lifecycle, screening / analysis contracts, risk gates, bucket capital boundary, state requirements, benchmark / evidence boundary, deferred decisions, completion line, and Phase 6e data-requirements input.
+2. [tracked] `AGENTS.md`: added the US-short spec routing pointer, current-progress marker, reference-policy boundary, Phase 6d roadmap status, and file reference.
+3. [tracked] `docs/README.md`: added the US-short normalized production-facing spec routing-table row.
+4. [tracked] `docs/CURRENT.md`: updated Latest Delta, current target, recent milestones, reference policy, key files, and P0 queue; the next recommended docs-only slice is now Phase 6e provider/data requirements audit.
+5. [tracked] `docs/strategy_design_synthesis.md`: kept synthesis as route-level architecture and routed detailed US-short ownership to `docs/us_short_spec.md`; §8 now points to provider/data requirements audit.
+6. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: appended this Phase 6d docs-only slice and superseded the prior "next US-short spec" note.
+7. [tracked] `docs/SESSION_LOG.md`: prepended this execution handoff for Claude review.
+8. Validation run/result: `git diff --check` passed (CRLF warnings only); changed-doc trailing-whitespace check passed; stale next-step wording scan passed.
+9. Current review state: waiting for Claude review of this docs-only US-short normalization baseline.
+
+**Key decisions**:
+- `docs/us_short_spec.md` is the detailed owner for US-short steady-lane normalization; `skills/us_short_analysis/reference/` remains source-reference archive.
+- `steady_us_short` and `us_short_burst` are separate lanes. MAP / options-flow / high-velocity reference material must be explicitly routed later instead of automatically becoming burst production logic.
+- US-short sizing must be rewritten around P0a US short bucket capital; the reference's total-account sizing language is not production-ready.
+- `skills/us_short_analysis/SKILL.md` stays reserved until Phase 7 / Phase 8 implementation; this slice does not create prompts or a Skill workflow.
+- This slice remains docs-only: no schema, runner, provider selection, DataHub implementation, prompt implementation, order automation, numeric threshold lock, benchmark decision, or ship-gate relaxation.
+
+**Alternatives considered and rejected**:
+- "Put US-short normalization only in `docs/strategy_design_synthesis.md`" — rejected. The synthesis should stay route-level; the normalized screening / analysis / risk / state contract needs an owner spec.
+- "Implement US-short Skill or runner now" — rejected. Phase 6d only normalizes the spec; implementation remains gated behind reviewed specs, provider audit, and Phase 7 shared-engine work.
+- "Treat reference thresholds as production constants" — rejected. They are candidate defaults until moved into reviewed config / preset fields with tests.
+- "Let US-short inherit A-short CSI1000 / CSI300 benchmark policy" — rejected. US-short benchmark choice is deferred to evidence and provider/data audit.
+- "Route MAP and high-velocity rules directly into burst lane" — rejected. Each rule needs explicit later routing to steady diagnostic / risk adjustment, burst input, research-only, or reject/defer.
+
+**Open questions handed off**:
+- Phase 6e provider/data requirements audit remains the next docs-only slice and should consume `docs/us_short_spec.md §9`, `docs/burst_lane_spec.md §11`, and `docs/long_alpha_spec.md §9 / §10.4 / §11.8`.
+- US-short implementation contract later still needs schema/report interfaces, primary benchmark, numeric threshold/config placement, MAP routing, options/dark-pool reliability policy, and provider evidence.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only US-short normalization slice using the mandatory fast path.
+2. If Pass, user `提交`.
+3. After commit, start Phase 6e provider/data requirements audit; do not add provider, DataHub, runner, schema, Skill, or prompt implementation in that slice.
+
+---
+
 ## 2026-05-27 — Claude review — Pass (A/US burst_lane spec)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `c27ff3e`)

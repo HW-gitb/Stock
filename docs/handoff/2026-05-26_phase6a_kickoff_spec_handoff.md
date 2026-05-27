@@ -688,6 +688,77 @@ foreach ($file in $files) {
 
 ### 下一步注意事项
 
-1. 下一条 `执行` 推荐做 US-short spec normalization，docs-only，不新增 schema / runner / provider。
+1. Superseded by the following 2026-05-27 US-short append: `docs/us_short_spec.md` is now completed; next default slice is Phase 6e provider/data requirements audit.
 2. Phase 6e provider/data requirements audit 应引用 `docs/burst_lane_spec.md` §11、`docs/long_alpha_spec.md` §9 / §10.4 / §11.8，但不能把这些 spec 视为 provider selection verdict。
 3. 后续 burst implementation contract 仍需补 exact thresholds、report/schema interfaces、provider evidence、benchmark finalization 和 risk-lock numeric values。
+
+---
+
+## 2026-05-27 追加：US-short spec normalization
+
+### 改了什么
+
+- 新增 `docs/us_short_spec.md`，作为 US-short steady-lane normalized owner spec。
+- 把 `skills/us_short_analysis/reference/us_short_screening_spec.md` 和 `skills/us_short_analysis/reference/us_short_analysis_spec.md` 从 AI chatbox 资料规范成 production-facing spec shape。
+- 写入 source-reference normalization、`steady_us_short` vs `us_short_burst` lane boundary、candidate lifecycle、screening contract、analysis contract、hard veto / risk gates、bucket capital、exit / stop / re-entry、state requirements、benchmark / evidence boundary、Phase 6e data-requirements input。
+- 同步 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/strategy_design_synthesis.md` 的路由和下一步状态。
+
+### 为什么
+
+Phase 6 route amendment 要求四套系统 spec 在 DataHub / implementation 前到位。US-short 原先只有 `skills/us_short_analysis/reference/` 下的筛选与分析参考资料，缺少与 A-short 平行的 production-facing owner spec。该切片把 reference 中的 L0-L5 screening 与 M1-M6 analysis 拆成未来 schema / Python / config / state / Skill 的边界输入，并为 Phase 6e provider / data requirements audit 提供 US-short 字段清单。
+
+### Scope lock
+
+- 本切片是 docs-only。
+- 不新增 schema、runner、migration、provider、DataHub implementation、Skill implementation、prompt implementation。
+- 不锁定 numeric thresholds、primary US-short benchmark、provider choice、report schema 或 production config。
+- `skills/us_short_analysis/SKILL.md` 仍保持 reserved，直到 Phase 7 / Phase 8 implementation。
+- Reference thresholds 只是 candidate defaults，不能凭本文件直接进入 production runner。
+- US-short steady evidence 不能解锁 `us_short_burst` full-size；burst evidence 也不能替换 steady-lane risk gate。
+- M6.3 reference 中的 total-account sizing 不能照搬；后续实现必须使用 P0a US short bucket capital。
+- 不降低 ship gate；full-size 仍需 monthly alpha t-stat >= 2.0、Sharpe >= 1.0、max drawdown <= 15%、forward live data >= 12 个月。
+- 不改变 manual-order-only 边界。
+
+### 验证命令
+
+```powershell
+git diff --check
+```
+
+```powershell
+$files = @(
+  'AGENTS.md',
+  'docs/CURRENT.md',
+  'docs/README.md',
+  'docs/strategy_design_synthesis.md',
+  'docs/us_short_spec.md',
+  'docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md',
+  'docs/SESSION_LOG.md'
+)
+foreach ($file in $files) {
+  $lines = Get-Content -Encoding utf8 $file
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match '\s+$') { "${file}:$($i + 1)" }
+  }
+}
+```
+
+### 验证结果
+
+- `git diff --check` passed（CRLF warnings only）。
+- Checked changed docs for trailing whitespace：passed。
+- Stale next-step wording scan：passed（no remaining active "US-short is next" wording outside superseded historical notes）。
+
+### 失效旧结论
+
+- “US-short 只有 raw reference docs，没有 production-facing owner spec”失效；现在 owner 是 `docs/us_short_spec.md`。
+- “US-short Skill 可以在 Phase 7 / Phase 8 前实现”明确失效；Skill 仍 reserved。
+- “US-short M6.3 total-account sizing 可照搬”明确失效；后续实现必须改用 P0a US short bucket capital。
+- “MAP / high-velocity reference material 自动归 burst lane”明确失效；后续必须逐条 routing 到 steady diagnostic / burst input / research-only / reject-defer。
+- “US-short 可默认继承 A-short CSI1000 / CSI300 benchmark contract”明确失效；US-short benchmark 选择 deferred 到后续 evidence / provider audit。
+
+### 下一步注意事项
+
+1. 下一条 `执行` 推荐做 Phase 6e provider/data requirements audit，docs-only，不新增 provider / DataHub / runner。
+2. Phase 6e provider/data requirements audit 应引用 `docs/us_short_spec.md` §9、`docs/burst_lane_spec.md` §11、`docs/long_alpha_spec.md` §9 / §10.4 / §11.8，但不能把这些 spec 视为 provider selection verdict。
+3. 后续 US-short implementation contract 仍需补 schema/report interface、primary benchmark、numeric thresholds/config placement、MAP routing、options/dark-pool reliability policy 和 provider evidence。
