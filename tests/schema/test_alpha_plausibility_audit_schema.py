@@ -8,6 +8,7 @@ from pathlib import Path
 
 SCHEMA_PATH = Path("schemas/alpha_plausibility_audit.schema.json")
 EXAMPLE_PATH = Path("schemas/examples/alpha_plausibility_audit.example.json")
+PROVIDER_STATUS_SNAPSHOT_PATH = Path("docs/phase7a_provider_status_snapshot.json")
 
 
 class AlphaPlausibilityAuditSchemaTest(unittest.TestCase):
@@ -138,6 +139,48 @@ class AlphaPlausibilityAuditSchemaTest(unittest.TestCase):
         errors = list(Draft7Validator(schema).iter_errors(example))
 
         self.assertEqual(errors, [])
+
+    def test_phase7a_provider_status_snapshot_can_drive_example(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        example = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
+        snapshot = json.loads(PROVIDER_STATUS_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+
+        example["provider_status_snapshot"] = snapshot
+        for lane_record in example["lane_records"]:
+            lane_record["provider_readiness"]["provider_status_snapshot_ref"] = snapshot["snapshot_id"]
+            lane_record["provider_readiness"]["provider_status_source"] = snapshot["provider_status_source"]
+            lane_record["provider_readiness"]["provider_status_limitations"] = snapshot[
+                "provider_status_limitations"
+            ]
+
+        errors = list(Draft7Validator(schema).iter_errors(example))
+
+        self.assertEqual(errors, [])
+
+    def test_phase7a_provider_status_snapshot_remains_lightweight(self) -> None:
+        snapshot = json.loads(PROVIDER_STATUS_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+        status_by_area = {item["area"]: item["status"] for item in snapshot["status_items"]}
+
+        self.assertEqual(snapshot["snapshot_id"], "provider_status_snapshot_20260527_phase7a1")
+        self.assertEqual(snapshot["provider_readiness_confidence"], "medium")
+        self.assertIn("schemas/provider_capability_catalog.schema.json", snapshot["provider_status_source"])
+        self.assertTrue(any("does not select a final provider" in item for item in snapshot["provider_status_limitations"]))
+        self.assertEqual(status_by_area["Provider capability and field catalog contract"], "ready")
+        self.assertEqual(
+            status_by_area[
+                "US fundamentals, SEC filings, filing dates, restatements, cash-flow fields, corporate actions, buybacks, dilution, and dividends"
+            ],
+            "unknown",
+        )
+        self.assertEqual(
+            status_by_area["A/US burst full-data event, flow, options, borrow, and catalyst tier"],
+            "blocked",
+        )
 
     def test_missing_required_lane_is_rejected_when_jsonschema_available(self) -> None:
         try:

@@ -1,0 +1,91 @@
+{
+  "snapshot_id": "provider_status_snapshot_20260527_phase7a1",
+  "snapshot_generated_at": "2026-05-27T16:00:00Z",
+  "provider_readiness_confidence": "medium",
+  "provider_status_source": [
+    "docs/provider_data_requirements_audit.md",
+    "schemas/provider_capability_catalog.schema.json",
+    "schemas/examples/provider_capability_catalog.example.json",
+    "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+    "docs/CURRENT.md"
+  ],
+  "provider_status_limitations": [
+    "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+    "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+    "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+    "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+    "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+  ],
+  "status_items": [
+    {
+      "area": "Provider capability and field catalog contract",
+      "status": "ready",
+      "notes": "schemas/provider_capability_catalog.schema.json v1.0.0 and its validating example exist. This proves the contract shape only; it does not select a provider or populate a production field catalog."
+    },
+    {
+      "area": "A-share EOD price, adjustment, limit, and trade-calendar helper surface",
+      "status": "ready",
+      "notes": "Existing Phase 5 and Phase 6 evidence has exercised Tushare daily, adj_factor, stk_limit, and trade_cal helper surfaces for A-short execution evidence. Authorization, quota, and DataHub-ready lineage still require later provider review."
+    },
+    {
+      "area": "A-share CSI benchmark returns and candidate-universe overlap helpers",
+      "status": "ready",
+      "notes": "CSI1000 and CSI300 monthly return materialization plus index_weight-based candidate-universe overlap audit have been implemented for A-short evidence plumbing. This readiness is narrow and should be recorded as ready evidence, not used as the default implementation sink."
+    },
+    {
+      "area": "A-share fundamentals and announcement dates",
+      "status": "unknown",
+      "notes": "Provider requirements are documented, but no reviewed provider evidence confirms PIT-safe financial statement line items, announcement dates, restatement flags, or original disclosure versions. Tushare latest-revised financial data remains a known PIT blocker until proven otherwise."
+    },
+    {
+      "area": "A-share SW L1/L2 industry history",
+      "status": "unknown",
+      "notes": "Long-lane industry normalization requires SW L2 history with effective dates and SW L1 fallback behavior. Current docs identify the requirement, but provider PIT support and sample-count lineage are not yet evidenced."
+    },
+    {
+      "area": "A-share events, regulatory evidence, audit opinions, penalties, pledges, and governance red flags",
+      "status": "unknown",
+      "notes": "These fields are required for A-long risk control and catalyst review, but current readiness is manual or unknown. They must not become deterministic factors without observed dates, sources, and provider or manual-evidence review."
+    },
+    {
+      "area": "US security master, listing state, delisting, OTC, ADR, ETF, SPAC, bankruptcy, reverse split, and halt coverage",
+      "status": "unknown",
+      "notes": "US security-master requirements are documented, but no reviewed provider evidence exists. Historical universe and survivorship-safe backtests remain blocked until listing and delisting coverage is proven."
+    },
+    {
+      "area": "US fundamentals, SEC filings, filing dates, restatements, cash-flow fields, corporate actions, buybacks, dilution, and dividends",
+      "status": "unknown",
+      "notes": "This remains the highest alpha-leverage provider area for US-long. No provider has been selected or validated for PIT-safe 10-K, 10-Q, 8-K, FCF, debt, cash, interest expense, share-count, buyback, SBC, or restatement data."
+    },
+    {
+      "area": "US adjusted OHLCV, benchmark, sector ETF, VIX, TNX, and macro context",
+      "status": "unknown",
+      "notes": "US price, benchmark, sector, and macro requirements are documented, but no provider capability evidence has been populated. These fields remain unavailable for production evidence claims."
+    },
+    {
+      "area": "US-short and US-burst borrow, short interest, options, IV, gamma, extended-hours, LULD, SSR, and market microstructure fields",
+      "status": "unknown",
+      "notes": "Provider and execution constraints are known requirements, but readiness is unproven. These fields cannot support live-eligible burst or short-lane claims until Phase 7a-2 and later provider evidence address microstructure and field reliability."
+    },
+    {
+      "area": "A/US burst minimal-data OHLCV plus benchmark tier",
+      "status": "partial",
+      "notes": "A-share OHLCV and benchmark helpers support a minimal-data paper tier for A-burst research. US minimal-data paper tier is not provider-ready yet. Minimal-data tier is paper/research only and does not support minimal live eligibility by itself."
+    },
+    {
+      "area": "A/US burst full-data event, flow, options, borrow, and catalyst tier",
+      "status": "blocked",
+      "notes": "Full-data burst requires provider evidence for event timing, flow reliability, options or borrow fields, and market-specific execution constraints. These are not ready and should remain deferred or research-only in the first audit."
+    },
+    {
+      "area": "Manual evidence workflow for semantic news, regulatory interpretation, guidance, and hard-to-license datasets",
+      "status": "partial",
+      "notes": "Docs require observed date, source, reviewer or process tag, and promotion review before manual evidence can influence production. Storage schema and reconciliation workflow are not implemented yet."
+    },
+    {
+      "area": "Data quality, provider drift, reproducibility, and incident monitoring",
+      "status": "blocked",
+      "notes": "These controls are mandatory later but not implemented in this snapshot. Phase 7b/7c must add coverage, freshness, schema drift, outlier, revision-rate, incident-log, and silent semantic-change monitoring."
+    }
+  ]
+}

@@ -8,6 +8,60 @@
 
 ---
 
+## 2026-05-27 — Claude review — Pass (Phase 7a-1 provider status snapshot)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `b6f46c6`)
+
+**Verdict**: Pass.
+
+**Notes**: Codex `执行` round Phase 7a-1 第二刀 — 1 untracked new (`docs/phase7a_provider_status_snapshot.json` 91 行) + 4 tracked routing/test (`docs/CURRENT.md` / `docs/README.md` / `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` / `tests/schema/test_alpha_plausibility_audit_schema.py`) + SESSION_LOG prepend。Scope 严守：0 provider 选择 / 0 数据抓取 / 0 adapter / 0 DataHub table / 0 runner 改 / 0 schema 改（schema 已 commit `b6f46c6`，本刀只加 snapshot artifact 不改 schema）。Snapshot 设计合理：`snapshot_id: "provider_status_snapshot_20260527_phase7a1"` 对应 schema example `provider_status_snapshot_ref`；`provider_readiness_confidence: "medium"` aggregate；5 条 `provider_status_limitations` 显式 disclaimer（lightweight + not provider registry + no data fetch + no adapter + no DataHub）；14 status items 分布 3 ready / 7 unknown / 2 partial / 2 blocked，3 ready 自我 narrow（"narrow A-share EOD helper" / "narrow and should be recorded as ready evidence, not used as the default implementation sink"）防止 ready label 被误读为 implementation-ready；unknown / blocked 覆盖跟 ACTION_GUIDE §7-§11 / provider_data_requirements_audit 一致（A-share fundamentals / SW PIT / events / US security master / US fundamentals / US OHLCV / US microstructure / burst full-data / data quality monitor）。Tests 加 2 个 regression：`test_phase7a_provider_status_snapshot_can_drive_example`（schema integration 确保 snapshot 能 drive audit example）+ `test_phase7a_provider_status_snapshot_remains_lightweight`（防 silent grow 成 provider registry），覆盖 scope creep 关键路径。Validation 完整：12 focused tests pass（从 10 增 2）/ 49 schema discover pass（从 47 增 2）/ git diff --check clean / no trailing whitespace / `[System.IO.File]::ReadAllLines` 给 CURRENT.md 142 行 — 用上轮 O1 disposition 后 authoritative method，与 wc -l 独立验证一致。Cross-doc consistency: README routing 加 snapshot entry；CURRENT P0 改为 "first formal audit using snapshot"；handoff 追加 Phase 7a-1 snapshot section。无 Required fixes、无 Optional、无 open question、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (Phase 7a-1 provider status snapshot)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `b6f46c6` (`Add alpha plausibility audit schema contract`).
+- Continues Phase 7a-1 by adding the lightweight provider readiness input required before the first formal alpha plausibility audit.
+
+**Worked on**:
+1. [untracked] `docs/phase7a_provider_status_snapshot.json`: added the first lightweight provider readiness snapshot for Phase 7a-1 audit input.
+2. [tracked] `tests/schema/test_alpha_plausibility_audit_schema.py`: added regression coverage proving the snapshot can drive the alpha audit example and remains a lightweight inventory, not provider selection.
+3. [tracked] `docs/README.md`: routed the new provider status snapshot artifact.
+4. [tracked] `docs/CURRENT.md`: updated P0 so the next step is the first formal 6 parent / 11 sub-lane audit using the snapshot.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7a-1 provider status snapshot handoff section.
+
+**Key decisions**:
+- Kept this slice to provider readiness inventory only. It does not select a final provider, fetch data, create adapters, implement DataHub tables, change runners, or produce the first formal audit.
+- The snapshot records narrow A-share EOD / CSI helper readiness as ready evidence while keeping A-share fundamentals, SW PIT history, A-share governance/audit red flags, US security master, US fundamentals/filings, US market microstructure, and burst full-data fields unknown or blocked.
+- The next formal audit should reference `provider_status_snapshot_20260527_phase7a1` through `provider_status_snapshot_ref` instead of re-deriving provider readiness ad hoc per lane.
+
+**Alternatives considered and rejected**:
+- "Put provider readiness only inside the next audit artifact" — rejected. The audit needs a stable shared input so lane verdicts do not each infer readiness differently.
+- "Populate the real provider capability catalog now" — rejected. That belongs to Phase 7b; this slice is a best-effort snapshot from existing docs/schema/examples, with no data fetch or provider selection.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_alpha_plausibility_audit_schema -v` passed: 12 tests.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v` passed: 49 tests.
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs/test files.
+- `rg -n "[ \t]+$" docs\phase7a_provider_status_snapshot.json tests\schema\test_alpha_plausibility_audit_schema.py docs\README.md docs\CURRENT.md docs\handoff\2026-05-27_phase7_kickoff_spec_handoff.md` found no trailing whitespace.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reports `142`, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7a-1 provider status snapshot slice.
+2. If Pass and user commits, the next `执行` slice should create the first formal alpha plausibility audit artifact covering 11 sub-lanes and 6 parent lanes.
+
+---
+
 ## 2026-05-27 — Claude re-review — Pass (Phase 7a-1 alpha audit Optional O1 disposition)
 
 **Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `11d6977`)
