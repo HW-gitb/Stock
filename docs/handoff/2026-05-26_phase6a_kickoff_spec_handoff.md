@@ -572,6 +572,54 @@ git diff --check
 
 ### 下一步注意事项
 
-1. 下一条 `执行` 推荐在 `docs/long_alpha_spec.md` 内补 A-long annex，仍保持 docs-only，不新增 schema / runner。
+1. Superseded by the following 2026-05-27 A-long append: A-long annex skeleton is now completed as a docs-only slice; next default slice is A/US `burst_lane` spec.
 2. Phase 6e provider/data requirements audit 应引用本文件 §9 / §10.4，但不能把本文件视为 provider selection verdict。
 3. 后续 US-long 完整 annex 仍需补 exact universe、primary benchmark、provider evidence、numeric factor weights / thresholds 和 report/schema interfaces。
+
+---
+
+## 2026-05-27 追加：A-long annex skeleton
+
+### 改了什么
+
+- 在 `docs/long_alpha_spec.md` 新增 `## 11. A-Long Annex Skeleton`。
+- 写入 A-long taxonomy / universe：SW L2 primary、SW L1 fallback、ST / suspension / illiquidity / IPO / restructuring eligibility considerations。
+- 写入 A-share factor emphasis：financial-statement reliability、operating cash flow vs net profit、ROIC / ROE SW-normalized quality、balance-sheet resilience、dividend / buyback discipline、policy / regulatory / industry-cycle context、governance risk、valuation context。
+- 写入 A-share-specific reliability、cash-flow, policy / cycle / dividend / buyback, benchmark candidates, data requirements, output expectations, and deferred decisions。
+- 同步 `AGENTS.md`、`docs/CURRENT.md`、`docs/strategy_design_synthesis.md` 的当前状态和下一步路由。
+
+### 为什么
+
+上一切片已经建立 long alpha common spec 与 US-long skeleton，但 A-long 仍只有 route-level 要素清单。A 股长线不能用短线 v14.x 或美股长线字段替代；它需要单独锁定 SW 行业归一化、财报可靠性、经营现金流 vs 净利润、政策 / 周期 / 分红 / 回购语义，以及 A 股 benchmark candidate set。该 annex 仍然服务 Phase 6 spec pack，不提前进入 schema、runner、provider 或 DataHub implementation。
+
+### Scope lock
+
+- 本切片是 docs-only。
+- 不新增 schema、runner、migration、provider、DataHub implementation。
+- 不锁定 numeric factor weights、thresholds、exact A-long universe、primary A-long benchmark 或 provider choice。
+- 不继承 A-short CSI1000 primary / CSI300 secondary benchmark policy；A-long benchmark 单独 deferred。
+- 不降低 ship gate；full-size 仍需 monthly alpha t-stat ≥ 2.0、Sharpe ≥ 1.0、max drawdown ≤ 15%、forward live data ≥ 12 个月。
+- 不改变 manual-order-only 边界。
+
+### 验证命令
+
+```powershell
+git diff --check
+```
+
+### 验证结果
+
+- `git diff --check` passed（CRLF warnings only）。
+- Checked changed docs for trailing whitespace：passed。
+
+### 失效旧结论
+
+- “A 股长线 annex 尚待补齐”失效；现在 `docs/long_alpha_spec.md §11` 已有 A-long skeleton。
+- “A-long 可以沿用 US-long 数据字段或 A-short 技术字段起步”明确失效；A-long data requirements 和 output expectations 已单独列出。
+- “A-long benchmark 可以默认继承 A-short CSI1000 / CSI300 policy”明确失效；A-long benchmark candidate set 单独 deferred。
+
+### 下一步注意事项
+
+1. 下一条 `执行` 推荐做 A/US `burst_lane` spec，docs-only，不新增 schema / runner。
+2. Phase 6e provider/data requirements audit 应引用 `docs/long_alpha_spec.md` §9、§10.4、§11.8，但不能把本文件视为 provider selection verdict。
+3. 后续 A-long 完整 annex 仍需补 exact universe、primary benchmark、provider evidence、numeric factor weights / thresholds 和 report/schema interfaces。

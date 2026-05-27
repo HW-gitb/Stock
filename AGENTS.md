@@ -11,7 +11,7 @@
 - 最新跨 LLM 交接、review verdict、pending Optional：`docs/SESSION_LOG.md` 顶部 1-3 条
 - Review 流程和短命令：`docs/AI_REVIEW_PROTOCOL.md`
 - 策略总设计：`docs/strategy_design_synthesis.md`
-- 长线 alpha 共同规格 / US 长线 skeleton：`docs/long_alpha_spec.md`
+- 长线 alpha 共同规格 / A / US 长线 skeleton：`docs/long_alpha_spec.md`
 - 资金政策：`docs/portfolio_allocation_policy.md`
 - DataHub / provider / factor guardrail：`docs/datahub_design.md`
 - phase 历史：`docs/handoff/` 下由本文件“交接记录”列出的 handoff
@@ -36,7 +36,7 @@
 - ✅ A 股短线分析框架：`skills/a_short_analysis/reference/v14.2_spec.md` 已定位为规格说明书，不作为运行时提示词
 - ✅ 美股短线资料：已整理到 `skills/us_short_analysis/reference/`
 - ✅ 策略设计综合版：`docs/strategy_design_synthesis.md` 已固化为短线双通道 + 长线 alpha 主系统 + research / coordinator 的设计入口
-- ✅ Phase 6d 第一刀：`docs/long_alpha_spec.md` 已建立长线 alpha 共同规格与 US 长线 skeleton（docs-only；A-long annex / provider audit 尚待补）
+- ✅ Phase 6d 长线规格：`docs/long_alpha_spec.md` 已建立长线 alpha 共同规格、US 长线 skeleton、A 股长线 skeleton（docs-only；provider audit 尚待补）
 - ✅ Phase 1a：`schemas/analysis_input.schema.json` 已完成，当前输出 schema 版本 `1.1.0`
 - ✅ Phase 1b：`egs_main.py` 已接入 `analysis_input.json`、`snapshot.json`、`candidates.csv` 导出器
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
@@ -57,7 +57,7 @@
 - A 股短线框架与美股短线框架虽然都可能使用 `v14.x` 版本号，但它们是两套独立框架；不是前后版本关系，也不能把一个市场的 v14.x 当作另一个市场的升级版或替代版。
 - 这些 reference 文档原始目标是 AI chatbox 工作流。后续做 schema、runner、analyzer、Skill、prompt 或 preset 设计时，必须参考其业务逻辑、流程结构和判断维度，但不能机械照搬为运行时提示词或代码规则。
 - 可确定、可回测、可结构化的规则应拆入 Python / schema / config / state；需要语义判断、新闻理解、行业判断的部分才进入 Skill prompts。
-- 长线共同规格与 US 长线 skeleton 已在 `docs/long_alpha_spec.md` 建立；A 股长线 annex 尚待 Phase 6d 后续切片补齐。不得用短线框架硬套长线系统。
+- 长线共同规格、US 长线 skeleton、A 股长线 skeleton 已在 `docs/long_alpha_spec.md` 建立；provider audit 与后续完整 implementation 仍待后续 Phase。不得用短线框架硬套长线系统。
 
 ## Strategy design synthesis policy
 
@@ -400,7 +400,7 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `schemas/deterministic_report.schema.json` — deterministic report 契约，当前 `1.0.0`，Phase 4 runner 输出 JSON 必须通过该 schema
 - `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.11.0`（含 date_warnings + data_lineage + analyzer veto replay）
 - `schemas/analysis_input_coverage.md` — schema 覆盖率与修复记录
-- `docs/long_alpha_spec.md` — Phase 6d 长线 alpha 共同规格与 US 长线 skeleton（docs-only；不锁 provider / runner / schema）
+- `docs/long_alpha_spec.md` — Phase 6d 长线 alpha 共同规格与 A / US 长线 skeleton（docs-only；不锁 provider / runner / schema）
 - `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — Phase 2 v7.9 交接记录
 - `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Phase 2 Tier1-only 主口径切片交接记录
 - `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — Phase 2 git init 交接记录（初始 local-only；2026-05-26 amendment 允许受约束 private remote）

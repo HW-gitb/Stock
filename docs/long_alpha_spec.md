@@ -1,6 +1,6 @@
 # Long Alpha Common Spec
 
-**Status**: Phase 6d first slice, docs-only baseline. This document defines the common long-alpha contract and the first US-long annex skeleton. It does not implement schemas, runners, providers, DataHub, or order execution.
+**Status**: Phase 6d docs-only baseline. This document defines the common long-alpha contract plus US-long and A-long annex skeletons. It does not implement schemas, runners, providers, DataHub, or order execution.
 
 **Owner role**: detailed spec owner for A-long / US-long common long-alpha design. `docs/strategy_design_synthesis.md` remains the strategy architecture entry; `docs/datahub_design.md` remains the DataHub / provider guardrail owner.
 
@@ -244,3 +244,130 @@ These remain open until later Phase 6d / 6e work:
 - Numeric factor weights, caps, and thresholds.
 - Report schema and runner interfaces.
 - Whether guidance / estimate revisions are structured data or manual evidence in the first implementation.
+
+## 11. A-Long Annex Skeleton
+
+### 11.1 Scope and Status
+
+A-long is a long-alpha market annex for the A-share long bucket. This skeleton specializes the common long-alpha contract for A-share fundamentals, SW industry normalization, policy / cycle context, cash-flow quality, and A-share benchmark selection. It is docs-only and does not select a final fundamentals provider.
+
+### 11.2 Taxonomy and Universe
+
+Default taxonomy:
+
+- Primary: SW L2 industry.
+- Fallback: SW L1 when comparable SW L2 sample count is below 20 or when SW L2 history is not sufficiently stable.
+
+Initial universe assumptions to validate later:
+
+- A-share common stocks with sufficient listing history, liquidity, trading-status observability, and fundamentals coverage.
+- ST / *ST names, long suspensions, materially illiquid names, and names with unresolved major regulatory or accounting flags require explicit eligibility rules before inclusion.
+- IPOs and newly restructured names require a minimum post-listing and post-restructuring evidence window before normal long-alpha scoring.
+- State-owned enterprise, private enterprise, and strategic-industry policy exposure should be visible as context fields, not hidden narrative assumptions.
+
+### 11.3 A-Share Factor Emphasis
+
+A-long keeps the common factor domains and adds A-share-specific emphasis:
+
+- Financial-statement reliability: audit opinion, restatement / correction record, receivables quality, related-party transactions, pledged-share / guarantee exposure where available.
+- Operating cash flow versus net profit: CFO / net income, FCF conversion, working-capital drag, receivables and inventory build, and capex quality.
+- Profitability quality: ROIC / ROE relative to SW L2 peers and own 5-year history, with cycle-aware treatment for commodity, equipment, property-chain, and financial names.
+- Balance-sheet resilience: net debt, interest coverage, refinancing pressure, short-term debt versus cash, contingent liabilities, and off-balance risk when data exists.
+- Dividend and buyback discipline: payout sustainability, buyback price discipline, cancellation versus treasury treatment where observable, and whether capital return improves per-share value.
+- Policy and regulatory exposure: policy tailwind / headwind, procurement / localization policy, price controls, anti-corruption or sector rectification risk, and subsidy dependence.
+- Industry cycle and pricing indicators: capacity cycle, product price trend, inventory cycle, utilization, and upstream / downstream bargaining power.
+- Governance and control risk: controlling-shareholder pledge, related-party tunneling risk, management turnover, and ownership incentives.
+- Valuation context: PE / PB / EV-style measures where meaningful, dividend yield, FCF yield, SW L2 percentile, own-history percentile, and cycle-adjusted valuation.
+
+### 11.4 A-Share Financial Reliability Rules
+
+Financial statement quality must be a first-class gate before factor scoring is trusted.
+
+Required reliability checks for future implementation:
+
+- Report audit opinion and non-standard opinion history.
+- Restatement, correction, or regulatory inquiry history where data is available.
+- CFO / net income persistence, not just a single-period value.
+- Receivables, inventory, and contract-asset growth versus revenue growth.
+- Related-party transactions, guarantees, and pledged-share exposure where provider coverage exists.
+- Subsidy and fair-value gain dependence for profit quality.
+- Segment or business-model changes that make five-year history non-comparable.
+
+Missing reliability fields must be reported as data limitations. They must not be silently treated as clean evidence.
+
+### 11.5 Operating Cash Flow Versus Net Profit
+
+A-long should treat net profit as lower-confidence evidence when cash conversion is weak.
+
+Default interpretation:
+
+- Persistent CFO / net income below industry peers is a negative quality signal unless there is a documented business-model reason.
+- One-year CFO spikes are not enough to override multi-year weak cash conversion.
+- Receivables / inventory expansion can downgrade reported earnings quality even when headline growth is high.
+- Capex-heavy businesses need maintenance-capex versus growth-capex reasoning before FCF weakness is judged negative.
+- Dividend or buyback quality should be assessed against durable cash generation, not only reported net profit.
+
+Exact thresholds and lookback windows are deferred to implementation specs after provider field availability is known.
+
+### 11.6 Policy, Cycle, Dividend, And Buyback Context
+
+A-share long thesis often depends on regime context. The annex requires this context to be explicit:
+
+- Policy catalyst: source, announcement date, affected industry, expected mechanism, and whether the catalyst is recurring or one-off.
+- Regulatory risk: sector rectification, price control, procurement rule changes, environmental / safety enforcement, and anti-corruption cycles.
+- Industry cycle: capacity additions, inventory cycle, product price trend, demand cycle, and whether valuation is being measured at cycle peak or trough.
+- Dividend thesis: payout history, cash coverage, balance-sheet support, policy incentive, and sustainability across downturns.
+- Buyback thesis: buyback size, execution progress, price discipline, cancellation / share-count effect, and whether buybacks offset dilution or improve per-share value.
+
+Narrative policy or cycle claims require dated evidence and follow §5 `event_date` / `catalyst_observed_date` rules.
+
+### 11.7 A-Share Benchmark Candidates
+
+Final primary benchmark is deferred. Candidate benchmark set for A-long validation:
+
+- CSI300: large-cap core opportunity cost and institutional benchmark context.
+- CSI All Share / broad A-share total-market proxy where provider coverage supports it.
+- SW L2 industry index or equivalent industry benchmark for attribution and industry-relative alpha checks.
+- CSI500 / CSI1000 may be secondary sensitivity candidates when the A-long universe materially tilts toward mid/small-cap quality names.
+
+A-long benchmark choice must be reported separately from A-short's CSI1000 primary / CSI300 secondary policy. Do not inherit the A-short benchmark contract by default.
+
+### 11.8 A-Share Data Requirements
+
+A-share provider audit must determine whether the system can reliably obtain:
+
+- Adjusted daily prices, trading status, suspensions, limit-up / limit-down status, dividends, splits, and share count.
+- Financial statement line items with report dates / announcement dates sufficient for PIT filtering.
+- Cash-flow statement fields sufficient for CFO / net income, FCF conversion, capex, and working-capital diagnostics.
+- Balance-sheet fields for debt structure, cash, receivables, inventory, contract assets, guarantees, and pledge-related risk where available.
+- Audit opinion, restatement / correction, regulatory inquiry, and penalty fields where available.
+- SW L1 / SW L2 classification history or provider-stable industry classification.
+- Dividend, buyback, share-count, and capital-action details.
+- Policy / regulatory / industry-cycle evidence, either as structured fields or explicit manual evidence.
+- Benchmark and SW industry index returns with known PIT and survivorship limitations.
+
+If provider readiness is insufficient, A-long implementation must stop at data-requirements documentation and paper research. It must not substitute A-short technical fields for missing long fundamentals.
+
+### 11.9 A-Long Output Expectations
+
+Future A-long reports should expose:
+
+- Primary lane and thesis.
+- SW-normalized quality, cash-flow, valuation, catalyst, and risk evidence.
+- Financial reliability status and missing-data limitations.
+- Policy / cycle / dividend / buyback evidence with dates.
+- Benchmark context against the selected A-long primary benchmark and relevant industry benchmark.
+- Market-long bucket sizing recommendation and liquidity-buffer request, if any.
+- Exit / review triggers tied to the written thesis.
+- Ship-gate status: research, paper, minimal, preliminary, or full-size eligible.
+
+### 11.10 Deferred A-Long Decisions
+
+These remain open until later Phase 6d / 6e work:
+
+- Exact A-long universe and exclusion rules.
+- Primary A-long benchmark and secondary sensitivity set.
+- Fundamentals provider choice and paid / free data split.
+- Whether audit opinion, pledge, inquiry, penalty, and buyback details are structured fields or manual evidence in the first implementation.
+- Numeric factor weights, caps, and thresholds.
+- Report schema and runner interfaces.

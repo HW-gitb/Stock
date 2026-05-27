@@ -8,6 +8,57 @@
 
 ---
 
+## 2026-05-27 — Claude review — Pass (A-long annex skeleton)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `4f28a3b`)
+
+**Verdict**: Pass.
+
+**Notes**: P0 #1 五要素全部覆盖：SW L2 / SW L1 fallback (§11.2)、财报可靠性 7 条 (§11.4)、经营现金流 vs 净利润 5 条 default interpretation (§11.5)、政策/周期/分红/回购 5 条 context + §5 event_date 引用 (§11.6)、A 股 benchmark candidate set 4 项 + primary deferred (§11.7)。3 条关键 anti-pattern lock 内嵌：§11.1 docs-only / 不选 provider；§11.7 末段 "A-long benchmark choice must be reported separately from A-short's CSI1000 primary / CSI300 secondary policy. Do not inherit the A-short benchmark contract by default." 新建立关键 lock；§11.8 末段 "must not substitute A-short technical fields for missing long fundamentals" 与 §10.4 US-long 镜像对称。与 §1-§10 consistency 良好：§11.3 明确不 redefine common §3 而是 emphasis 复用；§11.6 引用 §5 PIT；§11.10 Deferred Decisions 6 项与 §10.6 US 结构对称。5 处 routing 同步一致：AGENTS.md routing pointer / 进度勾 / Reference framework policy / 文件参考；CURRENT §0 / §1 / §2 / §5 / §6（P0 7→6 重编号干净，§2 milestone 维持 8 条）；strategy_synthesis §6 ownership 句更新、§8 重编号 4→3；handoff append + supersede 旧 "下一步 #1"。Scope 严守 docs-only（6 M 文件全部 docs，0 schema / runner / test / provider / DataHub）。handoff append 完整 5 条 scope lock 重申 + 3 条 failed-conclusion lock（A-long benchmark 不继承 A-short / A-long 不借用 A-short 技术字段）。4 alternatives reject 理由清楚（不 renumber US-long / 不锁 primary benchmark / 不选 provider / 不开 schema runner）。无 Required fixes、无 Optional suggestions、无新 open question、无 scope creep、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (A-long annex skeleton)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `4f28a3b` Long alpha common spec, which established `docs/long_alpha_spec.md` as the long-alpha owner document with common contract plus US-long skeleton.
+- Implements the next P0 spec-pack slice from `docs/CURRENT.md §6`: A-long annex skeleton.
+
+**Worked on**:
+1. [tracked] `docs/long_alpha_spec.md`: added `## 11. A-Long Annex Skeleton` covering SW L2 / SW L1 fallback, A-share universe assumptions, financial-statement reliability, operating cash flow versus net profit, policy / cycle / dividend / buyback context, benchmark candidates, A-share data requirements, output expectations, and deferred decisions.
+2. [tracked] `AGENTS.md`: updated routing/current-progress wording so A-long skeleton is no longer marked pending.
+3. [tracked] `docs/CURRENT.md`: updated Latest Delta, current target, recent milestones, key-file wording, and P0 queue; the next recommended docs-only slice is now A/US `burst_lane` spec.
+4. [tracked] `docs/strategy_design_synthesis.md`: kept strategy synthesis as architecture/route owner and moved the next execution implication past A-long toward burst-lane spec.
+5. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: appended this A-long docs-only slice and superseded the prior "next A-long annex" note.
+6. [tracked] `docs/SESSION_LOG.md`: prepended this execution handoff for Claude review and cleaned three pre-existing trailing-whitespace-only lines found during validation.
+7. Validation run/result: `git diff --check` passed (CRLF warnings only); changed-doc trailing-whitespace check passed.
+8. Current review state: waiting for Claude review of this docs-only A-long annex slice.
+
+**Key decisions**:
+- A-long gets its own market annex instead of inheriting US-long fields or A-short technical fields.
+- A-long benchmark candidates are listed, but primary benchmark remains deferred; A-long must not inherit A-short's CSI1000 primary / CSI300 secondary policy by default.
+- The A-long annex is appended as §11 rather than inserted before US-long, preserving prior §10.4 references to US-long data requirements.
+- This slice remains docs-only: no schema, runner, provider, DataHub implementation, numeric weights, or threshold locks.
+
+**Alternatives considered and rejected**:
+- "Renumber US-long to place A-long before it" — rejected. The prior reviewed slice and handoff already reference US-long §10.4; appending A-long as §11 avoids stale references.
+- "Lock A-long primary benchmark now" — rejected. The annex can list CSI300, broad A-share, SW industry, and CSI500/CSI1000 sensitivity candidates, but final primary benchmark needs later evidence.
+- "Choose a fundamentals provider now" — rejected. Provider selection belongs to Phase 6e provider/data requirements audit.
+- "Start A-long schema or runner interfaces now" — rejected. Implementation stays gated until reviewed specs and provider audit are in place.
+
+**Open questions handed off**:
+- A-long full annex later still needs exact universe / exclusion rules, final primary benchmark, provider evidence, numeric factor weights / thresholds, and report/schema interface decisions.
+- The next docs-only slice should be A/US `burst_lane` spec unless the user explicitly redirects.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only A-long annex slice using the mandatory fast path.
+2. If Pass, user `提交`.
+3. After commit, start A/US `burst_lane` spec as the next docs-only slice; do not add schema, runner, or DataHub implementation in that slice.
+
+---
+
 ## 2026-05-27 — Claude re-review — Pass (Long alpha spec Optional disposition)
 
 **Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `eb09804`)
@@ -1829,14 +1880,14 @@ This entry is for cross-LLM continuity. It is **not** a direct execution order t
 - **O1 (Pass — implementation actually better than suggested)** — `runners/backtest_execution.py:908-912` 用 hybrid logic：`exit_price = open_price if open_price is not None and open_price <= stop_loss else stop_loss`。
   - Gap-down (T+1 open ≤ stop_loss): fill at open（最坏可观测价）
   - Intraday touch (open > stop, intraday low < stop): fill at stop（假设 stop-limit order 触发）
-  
+
   **这比我原建议 `max(low_qfq, stop_loss)` 更准确**：我的 max(low, stop) 在 gap-down 时仍等于 stop（因为 low < stop），等于没改；Codex 区分 gap-down vs intraday touch 是 daily OHLC 数据下能做的最准确推断。`limitations` L1033 显式 doc 化此行为。`test_gap_down_stop_loss_fills_at_open` (L263) 锁住。✅ Codex 的实现优于我的建议。
 - **O2 (Pass)** — `candidate_stop_loss(candidate, entry_price)` (L499-514) + entry-time validation (L871) 要求 stop 严格 < entry_price，否则 `missing_stop` skip。Codex `alternatives rejected` 注明 "Add `stop_below_entry` as a new event code — rejected to avoid another enum expansion when existing `missing_stop` already represents no valid deterministic stop below entry" — 复用现有 event code 避免 schema 又升级，scope 纪律好。`test_entry_open_at_or_below_stop_is_skipped` (L316) 锁住。✅
 - **O3 (Pass with mod)** — 3 个新 tests：
   - `test_gap_down_stop_loss_fills_at_open` (L263) — 覆盖 (a) gap-down stop
   - `test_entry_open_at_or_below_stop_is_skipped` (L316) — 覆盖 (e) stop ≥ entry
   - `test_cash_constrained_candidate_is_skipped` (L365) — 覆盖 (c) cash 不足 skip
-  
+
   **未加 multi-candidate concurrent cash competition test** — Codex 明确 reject 因为 "current minimal simulator explicitly does not model concurrent open positions"。但**实际 cash 是 sequential 累计扣除的**（L927 `cash -= entry_gross + entry_cost` + L941 `cash += exit_gross - exit_cost`），所以 sequential 多 candidate cash 共享是 implicitly modeled，cash_constrained test 已 cover 第二 candidate cash 不足场景。Codex 的 framing 是关于"同时持仓"（concurrent open positions）而非"cash 共享"——这是 accurate scope statement。`limitations` L1034 doc 化 "processes candidates sequentially and does not yet model concurrent open positions"。✅
 - **O4 (Pass — doc-only)** — `limitations` L1036 加 `total_return is realized total_pnl divided by initial bucket_capital; no alternate ending-equity-normalized return is emitted yet`。选择 (a) doc 化路径而非加新 metric — 符合 minimal scope。✅
 - **O5 (Pass — doc-only)** — `schemas/execution_backtest_report.schema.json:5` description 加 `event_log.event_codes is grow-only within v1.x; consumers should handle unknown event codes gracefully`。L367 在 enum 字段下也重复同样 description（防 future reader 只看 nested 字段时漏掉）。选择 (b) grow-only policy 而非升 v1.2.0 — Codex `alternatives rejected` 注明 "no production consumer yet"，合理。✅
@@ -2105,7 +2156,7 @@ This entry is for cross-LLM continuity. It is **not** a direct execution order t
   - `liquidityPolicy.short_circuit_breaker_liquidity_use: const "blocked_for_new_short_risk"`
   - `shipGatePolicy.logic: const "and"`
   - `shipGatePolicy.failure_mode: const "paper_or_minimal_size_or_risk_filter_only"`
-  
+
   `applies_to_presets.items.enum: ["a_short","us_short","a_long","us_long"]` **保持 enum**（4 值真 multi-value enum，不应改 const）— Codex 正确区分 single-value 和 multi-value enum ✅
 
 **额外观察（非 issue）**:
