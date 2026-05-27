@@ -108,7 +108,7 @@ Sizing gate uses per-market short bucket math:
 | 6-month preliminary pass | Up to 20% of the relevant short bucket |
 | 12-month independent ship-gate pass | Up to 30% of the relevant short bucket |
 
-The 6-month preliminary pass must be falsifiable and defined in the Phase 6c burst-lane spec. It cannot be a passive "six months elapsed" promotion. The Phase 6c spec should define explicit preliminary criteria, such as weaker-than-full ship-gate thresholds for alpha, Sharpe, drawdown, and live-month coverage; exact numbers are not locked here.
+The 6-month preliminary pass must be falsifiable and defined in the Phase 6c burst-lane spec. It cannot be a passive "six months elapsed" promotion. The detailed Phase 6c baseline now lives in `docs/burst_lane_spec.md`; exact preliminary threshold numbers are still deferred to the first reviewed implementation contract.
 
 Per-market examples:
 
@@ -293,6 +293,8 @@ Write the A/US burst lane contract as the short-term alpha-source spec:
 - independent ship gate,
 - research / paper output format.
 
+Detailed burst-lane ownership now lives in `docs/burst_lane_spec.md`. This synthesis document keeps the route and architecture only.
+
 ### Phase 6d - Long Alpha Spec Pack And US-Short Normalization
 
 Write long-term specs as alpha-push systems and normalize US-short before DataHub implementation:
@@ -346,10 +348,9 @@ Write and then implement cross-system coordinator once the four systems have eno
 
 ## 8. Next Execution Implication
 
-The next `执行` after the long-alpha annex skeletons should stay docs-only and continue the Phase 6 spec pack:
+The next `执行` after the burst-lane baseline should stay docs-only and continue the Phase 6 spec pack:
 
-1. A/US burst lane spec.
-2. US-short normalization.
-3. Provider / data requirements audit.
+1. US-short normalization.
+2. Provider / data requirements audit.
 
 A-short continues as maintenance / evidence accumulation while those specs are written.

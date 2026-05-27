@@ -11,6 +11,7 @@
 - 最新跨 LLM 交接、review verdict、pending Optional：`docs/SESSION_LOG.md` 顶部 1-3 条
 - Review 流程和短命令：`docs/AI_REVIEW_PROTOCOL.md`
 - 策略总设计：`docs/strategy_design_synthesis.md`
+- 短线 `burst_lane` 规格：`docs/burst_lane_spec.md`
 - 长线 alpha 共同规格 / A / US 长线 skeleton：`docs/long_alpha_spec.md`
 - 资金政策：`docs/portfolio_allocation_policy.md`
 - DataHub / provider / factor guardrail：`docs/datahub_design.md`
@@ -36,6 +37,7 @@
 - ✅ A 股短线分析框架：`skills/a_short_analysis/reference/v14.2_spec.md` 已定位为规格说明书，不作为运行时提示词
 - ✅ 美股短线资料：已整理到 `skills/us_short_analysis/reference/`
 - ✅ 策略设计综合版：`docs/strategy_design_synthesis.md` 已固化为短线双通道 + 长线 alpha 主系统 + research / coordinator 的设计入口
+- ✅ Phase 6c burst lane 规格：`docs/burst_lane_spec.md` 已建立 A / US 短线 burst lane docs-only baseline（独立 signal / risk / sizing / ship gate；provider audit 尚待补）
 - ✅ Phase 6d 长线规格：`docs/long_alpha_spec.md` 已建立长线 alpha 共同规格、US 长线 skeleton、A 股长线 skeleton（docs-only；provider audit 尚待补）
 - ✅ Phase 1a：`schemas/analysis_input.schema.json` 已完成，当前输出 schema 版本 `1.1.0`
 - ✅ Phase 1b：`egs_main.py` 已接入 `analysis_input.json`、`snapshot.json`、`candidates.csv` 导出器
@@ -64,7 +66,7 @@
 - 详细设计入口是 `docs/strategy_design_synthesis.md`；本节只保留所有 LLM 必须遵守的摘要。
 - 短线系统不再被定义为 alpha 主引擎；短线 = 稳健风控过滤 + bounded variants + 独立 `burst_lane`。A 短现有主通道不得为追爆发力而整体放松风控。
 - A 短优化先走有限 variants：追高 veto、OVERHEAT veto、Tier1-only trading、ESP cap/winsorize、rank bucket split、exit policy variants。variant promote 必须有 forward evidence，不得凭单次回测直接替换主策略。
-- `burst_lane` 是独立爆发力通道，必须有自己的 signal spec、risk lock、sizing gate 和 ship gate。Production sizing 按阶段推进：paper 可模拟 30% of relevant short bucket；minimal live <=10%；6 个月 preliminary pass <=20%；12 个月独立 ship gate pass 后才可到 30%。
+- `burst_lane` 是独立爆发力通道，必须有自己的 signal spec、risk lock、sizing gate 和 ship gate。详细 baseline 在 `docs/burst_lane_spec.md`。Production sizing 按阶段推进：paper 可模拟 30% of relevant short bucket；minimal live <=10%；6 个月 preliminary pass <=20%；12 个月独立 ship gate pass 后才可到 30%。
 - 长线系统是 push alpha 的主战场。A 长 / US 长从头设计为 `core quality compounding` + `re-rating / catalyst long` 两层，不复用短线 v14.x 规则。
 - 长线阈值必须行业归一化：A 股默认 SW L2 + 5 年滚动，样本 <20 回退 SW L1；美股默认 GICS industry + 5 年滚动，样本 <20 回退 GICS industry group。
 - `research/` 允许更快实验，但必须记录 data lineage / parameters / seed / experiment log。Research 输出不得直接喂 production runner；进主线必须 schema-first + tests + review。
@@ -162,7 +164,7 @@ Stock/
 | 5b | Ship gate policy + preliminary gate status（非 full-size 最终放行；full-size 仍需 ≥12 个月 forward live data） | 1-2 天 | ✅ preliminary 完成 |
 | 6a | Phase 6 boundary kickoff：forward evidence、benchmark、记录格式、steady/variant/burst/long-spec 边界 | 1-2 天 | ✅ |
 | 6b | A 股短线 maintenance / evidence line：weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩新小工具，除非直接服务 evidence clock | 观察期 | ⬜ |
-| 6c | A / US 短线 `burst_lane` spec：共用 signal family、市场字段差异、独立 risk lock / sizing gate / ship gate | 2-4 天 | ⬜ |
+| 6c | A / US 短线 `burst_lane` spec：共用 signal family、市场字段差异、独立 risk lock / sizing gate / ship gate | 2-4 天 | ✅ docs-only baseline |
 | 6d | 长线 alpha spec pack：long alpha common spec + A-long annex + US-long annex + US-short spec normalization | spec 设计 | ⬜ |
 | 6e | Provider / fundamentals data requirements audit：列出 A/US long、A/US burst、US-short 所需字段、PIT、频率、lineage、授权/成本/稳定性要求；不在本步锁最终 provider | 2-4 天 | ⬜ |
 | 7 | DataHub / engine 模块化重构；按 4 套 spec + provider/data requirements audit 划分共享层与独立 rule pack | 1-2 周 | ⬜ |
@@ -400,6 +402,7 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `schemas/deterministic_report.schema.json` — deterministic report 契约，当前 `1.0.0`，Phase 4 runner 输出 JSON 必须通过该 schema
 - `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.11.0`（含 date_warnings + data_lineage + analyzer veto replay）
 - `schemas/analysis_input_coverage.md` — schema 覆盖率与修复记录
+- `docs/burst_lane_spec.md` — Phase 6c A / US 短线 burst lane docs-only baseline（独立 signal / risk / sizing / ship gate；不继承 steady lane gate）
 - `docs/long_alpha_spec.md` — Phase 6d 长线 alpha 共同规格与 A / US 长线 skeleton（docs-only；不锁 provider / runner / schema）
 - `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — Phase 2 v7.9 交接记录
 - `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Phase 2 Tier1-only 主口径切片交接记录

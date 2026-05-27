@@ -8,6 +8,60 @@
 
 ---
 
+## 2026-05-27 — Claude review — Pass (A/US burst_lane spec)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `c27ff3e`)
+
+**Verdict**: Pass.
+
+**Notes**: P0 要求 7 要素全部覆盖：短线 alpha source 独立性 (§1+§2)、共用 signal family 7 项 (§4)、A/US 分市场字段差异 (§6/§7)、独立 risk lock 8 条 (§8)、独立 sizing gate 4 stage (§9)、独立 ship gate (§9 末段)、不继承 steady gate (§2+§6.1+§9 三处). 多层 anti-pattern lock 覆盖所有退路：§4 liquidity 与 risk_state 是 hard preconditions 不计 positive trigger family（防止用 precondition 凑足 3 个 family 数）；§6.1 CSI1000/CSI300 数据源复用 ≠ 继承 gate（关键 lock 防止把 A-short benchmark plumbing 当 burst gate）；§9 末段 steady-lane / A-short variant pass 不 unlock burst full-size. 关键设计精度：§5 trigger hierarchical（≥3 family 总数 + ≥1 来自 catalyst/capital_inflow/relative_strength 三选一）+ §5 independence rules 4 条防止 trigger 注水；§9 6-month preliminary pass falsifiability 明确 evidence packet 6 要素，非被动"六个月已过". Cross-reference 干净：Phase 6a forward-evidence semantics (§10)、PIT event_date / catalyst_observed_date (与 long_alpha_spec §5 一致)、sizing 数字与 strategy §2.3 完全一致 (30%/10%/20%/30%)、ship gate 4 数字门槛与 AGENTS §10 / long_alpha_spec §8 完全一致. 5 处 routing 同步：AGENTS（routing pointer + 进度勾 + Strategy synthesis policy 段引用 + roadmap 6c 改 ✅ + 文件参考）/ README routing table / strategy_synthesis §2.3 末段更新 + §6 ownership 转移 + §8 重编号 3→2 / CURRENT §0/§1/§2/§3/§5/§6（P0 6→5 干净，§2 milestone 维持 8 条）/ handoff append + supersede 旧 "下一步 #1" + 4 条 failed-conclusion lock. Scope 严守 docs-only（1 新 spec + 6 处 routing，0 schema/runner/test/provider/DataHub）；Codex 主动跑 powershell trailing-whitespace check 超出常规 `git diff --check`. 4 alternatives reject 理由清楚. 无 Required fixes、无 Optional suggestions、无新 open question（除 Codex 自己 flag 的 burst implementation contract 仍需 exact thresholds / report-schema interface / provider evidence / benchmark finalization / risk-lock numeric values，这些是 deferred 不是 issue）、无 scope creep、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (A/US burst_lane spec)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `c27ff3e` A-long annex skeleton, which left A/US `burst_lane` spec as the next docs-only Phase 6 spec-pack slice.
+- Implements the next P0 spec-pack slice from `docs/CURRENT.md §6`: A/US `burst_lane` baseline.
+
+**Worked on**:
+1. [untracked] `docs/burst_lane_spec.md`: created the Phase 6c burst-lane owner spec with scope / non-scope, lane relationship, candidate lifecycle, common signal families, trigger contract, A-share annex, US annex, risk locks, staged sizing, evidence / output expectations, Phase 6e data-requirements inputs, completion line, and next work.
+2. [tracked] `AGENTS.md`: added the burst-lane routing pointer, current-progress marker, policy pointer, Phase 6c roadmap status, and file reference.
+3. [tracked] `docs/README.md`: added the burst-lane routing-table row and updated long-alpha wording to A/US long annex skeletons.
+4. [tracked] `docs/CURRENT.md`: updated Latest Delta, current target, recent milestones, key files, and P0 queue; the next recommended docs-only slice is now US-short spec normalization.
+5. [tracked] `docs/strategy_design_synthesis.md`: kept the synthesis as architecture/route owner and routed detailed burst-lane content to `docs/burst_lane_spec.md`; §8 now points to US-short normalization then provider/data requirements audit.
+6. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: appended this Phase 6c docs-only slice and superseded the prior "next burst-lane spec" note.
+7. [tracked] `docs/SESSION_LOG.md`: prepended this execution handoff for Claude review.
+8. Validation run/result: `git diff --check` passed (CRLF warnings only); changed-doc trailing-whitespace check passed.
+9. Current review state: waiting for Claude review of this docs-only burst-lane baseline.
+
+**Key decisions**:
+- `docs/burst_lane_spec.md` is the detailed owner for A/US burst-lane design; `docs/strategy_design_synthesis.md` remains the architecture / route entry.
+- Burst lane is an independent short-term alpha-source lane, not a relaxation of steady-lane risk filters.
+- Liquidity / executability and `risk_state` are hard preconditions, not positive trigger families.
+- A-share burst may reuse CSI1000 / CSI300 return-source plumbing for reporting, but it must keep independent burst-lane evidence and ship-gate evaluation.
+- This slice remains docs-only: no schema, runner, provider selection, DataHub implementation, order automation, numeric thresholds, or ship-gate relaxation.
+
+**Alternatives considered and rejected**:
+- "Put all burst details directly into `docs/strategy_design_synthesis.md`" — rejected. The synthesis should stay route-level; signal / risk / sizing / evidence detail needs an owner spec.
+- "Start a burst runner or schema now" — rejected. Phase 6c first locks the contract; implementation stays gated until reviewed specs and provider audit are in place.
+- "Let burst inherit steady-lane gate status" — rejected. Burst targets different evidence and must carry an independent gate.
+- "Lock US and A-share burst primary benchmarks now" — rejected. Benchmark candidates and reuse boundaries are documented, but final benchmark choices need provider/data evidence and later review.
+
+**Open questions handed off**:
+- US-short spec normalization remains the next docs-only slice.
+- Phase 6e provider/data requirements audit should consume `docs/burst_lane_spec.md §11` plus `docs/long_alpha_spec.md §9 / §10.4 / §11.8`.
+- Future burst implementation contract still needs exact numeric thresholds, report/schema interface, provider evidence, benchmark finalization, and risk-lock numeric values.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only burst-lane slice using the mandatory fast path.
+2. If Pass, user `提交`.
+3. After commit, start US-short spec normalization; do not add schema, runner, provider, or DataHub implementation in that slice.
+
+---
+
 ## 2026-05-27 — Claude review — Pass (A-long annex skeleton)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs vs `4f28a3b`)

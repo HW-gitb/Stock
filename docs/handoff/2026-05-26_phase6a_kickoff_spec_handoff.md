@@ -620,6 +620,74 @@ git diff --check
 
 ### 下一步注意事项
 
-1. 下一条 `执行` 推荐做 A/US `burst_lane` spec，docs-only，不新增 schema / runner。
+1. Superseded by the following 2026-05-27 burst-lane append: A/US `burst_lane` docs-only baseline is now completed; next default slice is US-short spec normalization.
 2. Phase 6e provider/data requirements audit 应引用 `docs/long_alpha_spec.md` §9、§10.4、§11.8，但不能把本文件视为 provider selection verdict。
 3. 后续 A-long 完整 annex 仍需补 exact universe、primary benchmark、provider evidence、numeric factor weights / thresholds 和 report/schema interfaces。
+
+---
+
+## 2026-05-27 追加：A/US burst_lane spec
+
+### 改了什么
+
+- 新增 `docs/burst_lane_spec.md`，作为 A / US 短线 `burst_lane` owner spec。
+- 写入 common burst signal families：volume expansion、capital inflow、breakout quality、catalyst、relative strength、theme breadth、risk state；liquidity / executability 与 risk_state 是 hard preconditions，不计入 positive trigger family。
+- 写入 trigger contract：liquidity pass、data freshness pass、至少 3 个 independent positive signal families、默认至少含 catalyst / capital inflow / relative strength 之一、无 hard risk lock。
+- 写入 A-share annex 与 US annex：市场字段差异、执行约束、benchmark candidates、deferred decisions。
+- 写入 risk lock、staged sizing、6-month preliminary pass falsifiability、12-month independent ship gate、forward evidence / output expectations、Phase 6e data requirements input。
+- 同步 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/strategy_design_synthesis.md` 的路由和下一步状态。
+
+### 为什么
+
+Phase 6 route amendment 已明确 `burst_lane` 是短线新 alpha-source spec，不能长期排在 A-short steady variants 内部优化之后，也不能通过放松 steady lane 风控实现。该切片把 burst lane 写成独立 owner spec：共用 signal family，分市场处理数据字段与执行约束，独立 risk / sizing / ship gate，并把 provider / DataHub 所需字段输入留给 Phase 6e。
+
+### Scope lock
+
+- 本切片是 docs-only。
+- 不新增 schema、runner、migration、provider、DataHub implementation。
+- 不锁定 numeric trigger thresholds、primary US burst benchmark、A-share burst final benchmark 或 provider choice。
+- 不继承 steady lane gate、A-short variant promotion evidence、或 A-short benchmark gate result；即使复用 CSI1000 / CSI300 return source，也只复用数据源，不复用 gate。
+- 不降低 ship gate；full-size 仍需 monthly alpha t-stat >= 2.0、Sharpe >= 1.0、max drawdown <= 15%、forward live data >= 12 个月。
+- 不改变 manual-order-only 边界。
+
+### 验证命令
+
+```powershell
+git diff --check
+```
+
+```powershell
+$files = @(
+  'AGENTS.md',
+  'docs/CURRENT.md',
+  'docs/README.md',
+  'docs/strategy_design_synthesis.md',
+  'docs/burst_lane_spec.md',
+  'docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md',
+  'docs/SESSION_LOG.md'
+)
+foreach ($file in $files) {
+  $lines = Get-Content -Encoding utf8 $file
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match '\s+$') { "${file}:$($i + 1)" }
+  }
+}
+```
+
+### 验证结果
+
+- `git diff --check` passed（CRLF warnings only）。
+- Checked changed docs for trailing whitespace：passed。
+
+### 失效旧结论
+
+- “A/US `burst_lane` 只有 strategy synthesis 摘要，没有 owner spec”失效；现在 owner 是 `docs/burst_lane_spec.md`。
+- “Phase 6c burst spec 仍是下一刀 pending baseline”失效；下一刀默认转向 US-short spec normalization。
+- “Burst lane 可以靠放松 steady lane 风控实现”明确失效；burst lane 必须有独立 signal / risk / sizing / ship gate。
+- “Burst lane 可继承 A-short steady lane gate 或 variant promotion evidence”明确失效；它只能复用已审查的数据源，不能复用 gate verdict。
+
+### 下一步注意事项
+
+1. 下一条 `执行` 推荐做 US-short spec normalization，docs-only，不新增 schema / runner / provider。
+2. Phase 6e provider/data requirements audit 应引用 `docs/burst_lane_spec.md` §11、`docs/long_alpha_spec.md` §9 / §10.4 / §11.8，但不能把这些 spec 视为 provider selection verdict。
+3. 后续 burst implementation contract 仍需补 exact thresholds、report/schema interfaces、provider evidence、benchmark finalization 和 risk-lock numeric values。
