@@ -526,7 +526,52 @@ git diff --check
 
 ### 下一步注意事项
 
-1. 下一条 `执行` 推荐做 `long alpha common spec + US-long annex skeleton`，docs-only，不新增 schema / runner。
+1. Superseded by the following 2026-05-27 long-alpha append: `long alpha common spec + US-long annex skeleton` is now completed as a docs-only slice; next default slice is A-long annex.
 2. 后续每份 spec 独立一轮 `执行 → 审查 → 修复 → 提交`，避免一次性大文档无法审查。
 3. A-short 只保留 evidence clock 相关小步，不继续扩无关辅助工具。
 4. Phase 7 DataHub 不应启动，直到 long alpha common spec、A-long annex、US-long annex、A/US burst spec、US-short normalization、provider/data requirements audit 至少都有 reviewed baseline。
+
+---
+
+## 2026-05-27 追加：Long alpha common spec + US-long annex skeleton
+
+### 改了什么
+
+- 新增 `docs/long_alpha_spec.md`，作为 A-long / US-long 长线 alpha 共同规格 owner 文档。
+- 写入 long alpha common spec：factor catalog、PIT rules、industry normalization、portfolio construction、thesis-broken exit、quarterly review、validation / promotion、common data requirements。
+- 写入 US-long annex skeleton：GICS taxonomy、10-K / 10-Q、FCF margin、ROIC、buyback efficiency、guidance credibility、US benchmark candidates、provider-readiness dependencies。
+- 同步 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/strategy_design_synthesis.md` 的路由和下一步状态。
+
+### 为什么
+
+Phase 6 route amendment 已把 spec pack 定为下一阶段主线，且要求 DataHub Phase 7 由四套 spec + provider/data requirements audit 反向定义字段。长线是 push alpha 主战场；先建立 common spec 可以避免 A-long / US-long 各自重复定义 factor semantics、PIT 规则、行业归一化、exit 和 ship-gate 边界。US-long skeleton 同步写入，是因为 US-long 是最大单 bucket，且其 provider/data 需求会直接影响后续 Phase 6e audit。
+
+### Scope lock
+
+- 本切片是 docs-only。
+- 不新增 schema、runner、migration、provider、DataHub implementation。
+- 不锁定 numeric factor weights、thresholds、exact US universe、primary US benchmark 或 provider choice。
+- 不降低 ship gate；full-size 仍需 monthly alpha t-stat ≥ 2.0、Sharpe ≥ 1.0、max drawdown ≤ 15%、forward live data ≥ 12 个月。
+- 不改变 manual-order-only 边界。
+
+### 验证命令
+
+```powershell
+git diff --check
+```
+
+### 验证结果
+
+- `git diff --check` passed（CRLF warnings only）。
+
+### 失效旧结论
+
+- “长线 alpha spec 只有 strategy synthesis 摘要，没有 owner 文档”失效；现在 owner 是 `docs/long_alpha_spec.md`。
+- “Phase 6d 第一刀仍待定”失效；第一刀已完成为 common spec + US-long skeleton，下一刀默认转向 A-long annex。
+- “US-long spec 必须等 provider 选择后才能写”失效；本切片只列 data requirements 和 readiness dependencies，provider 选择留给 Phase 6e。
+
+### 下一步注意事项
+
+1. 下一条 `执行` 推荐在 `docs/long_alpha_spec.md` 内补 A-long annex，仍保持 docs-only，不新增 schema / runner。
+2. Phase 6e provider/data requirements audit 应引用本文件 §9 / §10.4，但不能把本文件视为 provider selection verdict。
+3. 后续 US-long 完整 annex 仍需补 exact universe、primary benchmark、provider evidence、numeric factor weights / thresholds 和 report/schema interfaces。

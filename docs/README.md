@@ -13,6 +13,7 @@ Use this routing table instead of guessing which file to read.
 | Latest cross-LLM reasoning, review verdicts, rejected alternatives, pending Optional disposition | `docs/SESSION_LOG.md` top 1-3 entries |
 | Review workflow and exact short-command expansions | `docs/AI_REVIEW_PROTOCOL.md` |
 | Strategy architecture: short-term lanes, burst lane, long-term alpha systems, research, coordinator | `docs/strategy_design_synthesis.md` |
+| Long alpha common spec and US-long annex skeleton | `docs/long_alpha_spec.md` |
 | Capital allocation and liquidity policy | `docs/portfolio_allocation_policy.md` |
 | DataHub / provider / factor-layer guardrails | `docs/datahub_design.md` |
 | Phase-level historical context and validation records | `docs/handoff/<phase>_handoff.md` files named in `AGENTS.md` |

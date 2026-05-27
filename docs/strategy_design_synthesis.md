@@ -302,6 +302,8 @@ Write long-term specs as alpha-push systems and normalize US-short before DataHu
 - US-long annex: GICS, 10-K / 10-Q, FCF margin, ROIC, buyback efficiency, guidance credibility, US benchmarks,
 - US-short normalization: convert the existing US-short references into a spec shape parallel to A-short.
 
+Detailed long-alpha ownership now lives in `docs/long_alpha_spec.md`. This synthesis document keeps the route and architecture only.
+
 ### Phase 6e - Provider / Data Requirements Audit
 
 List the data requirements that the four-system spec pack creates:
@@ -344,12 +346,11 @@ Write and then implement cross-system coordinator once the four systems have eno
 
 ## 8. Next Execution Implication
 
-The next `执行` after this route revision should not jump into implementation code. It should start the Phase 6 spec pack as docs-only slices:
+The next `执行` after the first long-alpha slice should stay docs-only and continue the Phase 6 spec pack:
 
-1. Long alpha common spec + US-long annex skeleton.
-2. A-long annex.
-3. A/US burst lane spec.
-4. US-short normalization.
-5. Provider / data requirements audit.
+1. A-long annex in `docs/long_alpha_spec.md`.
+2. A/US burst lane spec.
+3. US-short normalization.
+4. Provider / data requirements audit.
 
 A-short continues as maintenance / evidence accumulation while those specs are written.

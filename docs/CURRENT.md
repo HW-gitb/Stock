@@ -1,12 +1,13 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-27（Phase 6 route amendment：spec-parallel / implementation-gated）
+**最后更新**：2026-05-27（Long alpha common spec + US-long annex skeleton）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-27)
 
+- Phase 6d first docs-only slice is now established in `docs/long_alpha_spec.md`: it defines the long-alpha common factor catalog, PIT rules, industry normalization, portfolio-construction contract, thesis-broken exit, quarterly review, validation / ship-gate boundaries, common data requirements, and a US-long annex skeleton covering GICS, 10-K / 10-Q, FCF margin, ROIC, buyback efficiency, guidance credibility, US benchmarks, and provider-readiness dependencies. No schema, runner, provider, DataHub implementation, or ship-gate relaxation was introduced.
 - Phase 6 route is now reframed as **spec 层并行 + implementation 层串行受控**. A-short Phase 6b remains active but is downgraded from exclusive mainline to maintenance / evidence line: weekly forward capture, comparison-track accumulator, and forward evidence accumulation only. New P0 spec-pack work is A/US `burst_lane` spec, long alpha common spec, A-long annex, US-long annex, US-short normalization, and provider/data requirements audit. This does not lower ship gate, does not start parallel implementation, and does not treat DataHub as alpha evidence.
 - Phase 6b candidate-universe overlap audit is now available in `schemas/candidate_universe_overlap_audit.schema.json` v1.0.0 and `runners/audit_candidate_universe_overlap_tushare.py`. It reads one captured `analysis_input.json`, fetches Tushare `index_weight` membership for CSI1000 primary (`000852.SH`) and CSI300 secondary (`000300.SH`), and writes a schema-valid audit artifact under ignored `result/a_short/backtest/execution/forward_aggregate/`. This is benchmark-policy evidence only: a single audit cannot switch the primary benchmark, promote variants, or authorize full-size manual use.
 - Phase 6b benchmark monthly-return materializer is now available in `runners/materialize_benchmark_monthly_returns_tushare.py`. It fetches Tushare `index_daily` for CSI1000 primary (`000852.SH`) and CSI300 secondary (`000300.SH`), writes aggregate-compatible `YYYYMM -> return` JSON files plus metadata sidecars under ignored `result/a_short/backtest/execution/forward_aggregate/`, and uses first-trade-day close to last-trade-day close within each requested month.
@@ -44,7 +45,7 @@
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 5 execution chain 已完成 minimal 闭环；Phase 6a kickoff spec / boundary contract 已建立；Phase 6 路线已修订为 spec-parallel / implementation-gated。
-- **当前目标**：P0 转为 Phase 6 spec pack：先用 docs-only slices 补齐 long alpha common spec、A-long annex、US-long annex、A/US `burst_lane` spec、US-short normalization、provider/data requirements audit。Phase 6b A-short variants 已有 tracking contract、plan materializer、CSI1000/CSI300 benchmark monthly-return materializer、candidate-universe overlap audit；后续只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation，不继续扩无关小工具。真实 Tushare 小样本 smoke 已跑通，但 3 个样本都在 202605 同月，不构成 alpha / Sharpe ship-gate 证据。
+- **当前目标**：P0 继续推进 Phase 6 spec pack：`docs/long_alpha_spec.md` 已补齐 long alpha common spec + US-long annex skeleton；下一步按 docs-only slices 补 A-long annex、A/US `burst_lane` spec、US-short normalization、provider/data requirements audit。Phase 6b A-short variants 已有 tracking contract、plan materializer、CSI1000/CSI300 benchmark monthly-return materializer、candidate-universe overlap audit；后续只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation，不继续扩无关小工具。真实 Tushare 小样本 smoke 已跑通，但 3 个样本都在 202605 同月，不构成 alpha / Sharpe ship-gate 证据。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -72,6 +73,7 @@
 - **Phase 6a boundary kickoff spec**（2026-05-26）：新增 `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`，定义 forward evidence、CSI1000/CSI300 benchmark policy、`benchmark_sensitive`、forward tracker → aggregate flow、steady/variant/burst/long-spec 边界；纯文档，不改代码/schema。
 - **Phase 5 aggregation Optional disposition**（2026-05-26）：处理 Claude O1-O3。补 v1.1 input report reject、single-report Sharpe null、preset/market/bucket/currency capital_context mismatch 回归；未改聚合算法。
 - **Strategy design synthesis**（2026-05-26）：新增 `docs/strategy_design_synthesis.md`，并在 `AGENTS.md` 固化摘要：短线双通道（steady + variants + burst）、长线 alpha 主系统、research promotion gate、coordinator manual-only 边界。
+- **Long alpha common spec + US-long skeleton**（2026-05-27）：新增 `docs/long_alpha_spec.md`，作为 A-long / US-long 共同规格 owner；本轮只写 factor / PIT / normalization / exit / validation / data requirements 和 US-long skeleton，不新增 schema / runner / provider。
 - **Phase 5 multi-period execution aggregation**（2026-05-26）：新增 `execution_aggregate_report` v1.0.0 和 `aggregate_execution_reports.py`；可把多份 v1.2.0 execution reports 聚合成月度 return / Sharpe / worst drawdown / 可选 benchmark-aware alpha t-stat 的 ship-gate evidence。真实 Tushare 3-date smoke 已跑通，但都在同月，Sharpe / alpha 仍不可评估。
 
 更早事项（协作协议精简、Reference framework policy、Git remote privacy、Phase 5 fill/materializer/schema 细节、deterministic report、Phase 4、Phase 3、Phase 2 工程链路、v7.10、git init 等）→ 见 `AGENTS.md §交接记录`、相关 handoff、`docs/AI_REVIEW_PROTOCOL.md`、`docs/SESSION_LOG.md` 与 `git log --all`。
@@ -181,6 +183,7 @@
 - `docs/AI_REVIEW_PROTOCOL.md` — Codex / Claude / 用户三方审查流程
 - `docs/portfolio_allocation_policy.md` — P0c 用户确认资金政策；P0a capital context contract 的前置决策面
 - `docs/strategy_design_synthesis.md` — 短线优化 + 爆发力通道 + 长线 alpha 系统 + research/coordinator 的设计综合版
+- `docs/long_alpha_spec.md` — Phase 6d 长线 alpha common spec + US-long annex skeleton；后续 A-long annex / provider audit 以此为 owner 文档继续补
 
 ### 报告产出
 - `result/a_short/backtest/backtest_report.json` — 最近一次 24p production，schema 1.11.0, primary_subset=tier1_only
@@ -196,14 +199,13 @@
 
 ### P0 — Phase 6 spec pack（spec 并行，implementation 串行）
 
-1. **Long alpha common spec + US-long annex skeleton（第一刀推荐）** — docs-only，先定义长线共用 factor catalog、PIT 规则、行业归一化、quality / cash-flow / valuation / catalyst 因子、组合构建、thesis-broken exit、季度复盘、benchmark / walk-forward 验证要求，再补 US 长线 skeleton：GICS、10-K/10-Q、FCF margin、ROIC、buyback efficiency、guidance credibility、US benchmark；若 provider readiness 不足，只列 data requirements。不新增 schema / runner。
-2. **A-long annex** — 补 A 股长线市场附件：SW L2、财报可靠性、经营现金流 vs 净利润、政策/周期/分红回购、A 股 benchmark。
-3. **A/US `burst_lane` spec** — 短线 alpha source 前置；共用 signal family，分市场列数据字段差异；独立 risk lock / sizing gate / ship gate，不继承 steady lane gate。
-4. **US-short spec normalization** — 把 `skills/us_short_analysis/reference/` 资料规范成与 A-short 平行的 spec 形态。
-5. **Provider / data requirements audit** — 列字段、PIT、频率、lineage、授权/成本/稳定性要求；本步不锁最终 provider。DataHub Phase 7 只能在该 audit 与四套 spec 到位后按需实现。
-6. **A-short maintenance / evidence line** — 继续 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩新小工具，除非直接服务 evidence clock。若 forward evidence 显示可推广 alpha，可显式触发 escape-valve review 重新分配算力。
-7. **Anti-pattern lock** — 本路线修订不是降低 ship gate、不是跳过 A-short forward evidence、不是 implementation 层并行、不是把 DataHub 工程当作 alpha 证据。Full-size 仍需 12+ 个月 forward live data 和多 metric AND gate。
-8. **保持既有边界** — P0a capital context、manual-order-only、Phase 3 hard veto、Phase 4 runner v1、CSI1000 primary / CSI300 secondary sensitivity 均不因本路线修订改变。
+1. **A-long annex（下一刀推荐）** — 在 `docs/long_alpha_spec.md` 里补 A 股长线市场附件：SW L2、财报可靠性、经营现金流 vs 净利润、政策/周期/分红回购、A 股 benchmark；继续 docs-only，不新增 schema / runner。
+2. **A/US `burst_lane` spec** — 短线 alpha source 前置；共用 signal family，分市场列数据字段差异；独立 risk lock / sizing gate / ship gate，不继承 steady lane gate。
+3. **US-short spec normalization** — 把 `skills/us_short_analysis/reference/` 资料规范成与 A-short 平行的 spec 形态。
+4. **Provider / data requirements audit** — 列字段、PIT、频率、lineage、授权/成本/稳定性要求；本步不锁最终 provider。DataHub Phase 7 只能在该 audit 与四套 spec 到位后按需实现。
+5. **A-short maintenance / evidence line** — 继续 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩新小工具，除非直接服务 evidence clock。若 forward evidence 显示可推广 alpha，可显式触发 escape-valve review 重新分配算力。
+6. **Anti-pattern lock** — 本路线修订不是降低 ship gate、不是跳过 A-short forward evidence、不是 implementation 层并行、不是把 DataHub 工程当作 alpha 证据。Full-size 仍需 12+ 个月 forward live data 和多 metric AND gate。
+7. **保持既有边界** — P0a capital context、manual-order-only、Phase 3 hard veto、Phase 4 runner v1、CSI1000 primary / CSI300 secondary sensitivity 均不因本路线修订改变。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）
 

@@ -8,6 +8,117 @@
 
 ---
 
+## 2026-05-27 — Claude re-review — Pass (Long alpha spec Optional disposition)
+
+**Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `eb09804`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 accept verified — `docs/long_alpha_spec.md` §5 PIT 加第 7 个必备日期 `event_date` / `catalyst_observed_date`（line 84），且 §5 Rules 多加 disambiguation rule "when `event_date` and `catalyst_observed_date` differ, `catalyst_observed_date` controls eligibility"（line 89），比原 Optional 建议更精细；§3 Catalyst / re-rating 行 PIT notes 加 cross-reference "see §5 `event_date` / `catalyst_observed_date`"（line 51）。O2 accept verified — §6 Portfolio Construction 加 line 101 "Future implementations should consume the P0a `portfolio_allocation` and `cash_buffer_state` schemas rather than reinventing capital ceiling or bucket-cash math."，紧跟 "Respect the preset capital ceiling" bullet 后逻辑位置合理。O3 accept verified — §8 Validation forward evidence 行（line 150）改为 cross-reference `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md §3.2` 并重申 monthly cohorts / mature windows / consecutive-month 三个 semantics 及 across-systems comparability 目的。Scope 严守：只动 spec + SESSION_LOG，路由文档不重复动。无 Required fixes、无新 Optional、无 open question、无 scope creep、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (Long alpha spec Optional disposition)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the 2026-05-27 Claude review — Pass with Optional suggestions (Long alpha common spec + US-long annex skeleton).
+- Builds on the immediately prior Codex `执行` entry for the docs-only long-alpha spec owner document.
+
+**Worked on**:
+1. [untracked] `docs/long_alpha_spec.md`: added catalyst PIT date fields, P0a capital contract cross-reference, and Phase 6a forward-evidence cross-reference.
+2. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff for Claude re-review.
+3. Validation run/result: `git diff --check` passed (CRLF warnings only); `docs/long_alpha_spec.md` trailing-whitespace check passed.
+4. Current review state: waiting for Claude re-review of O1-O3 disposition.
+
+**Optional disposition**:
+- O1 accept — added `event_date` / `catalyst_observed_date` to §5 PIT required dates, added the catalyst eligibility rule, and cross-referenced it from the Catalyst / re-rating factor row.
+- O2 accept — added §6 cross-reference requiring future implementations to consume the P0a `portfolio_allocation` and `cash_buffer_state` schemas instead of reinventing bucket capital math.
+- O3 accept — added §8 cross-reference to Phase 6a handoff §3.2 forward-evidence semantics so long-system evidence remains comparable with the shared evidence path.
+
+**Key decisions**:
+- All three Optionals are accepted because they tighten existing contract boundaries without expanding this docs-only slice into schema, runner, provider, or DataHub work.
+- The repair does not change CURRENT hot queue ordering, ship gate, manual-only boundary, or provider deferral.
+
+**Alternatives considered and rejected**:
+- "Defer O1 catalyst date fields to the A-long annex" — rejected. Catalyst PIT semantics are common to both long lanes and should live in the common spec.
+- "Document capital ceilings only in portfolio policy" — rejected. The long-alpha implementation path needs an explicit pointer to the existing P0a schemas.
+- "Let each system define forward evidence independently" — rejected. That would fragment ship-gate evidence across the four systems.
+
+**Open questions handed off**:
+- None introduced by this repair round.
+
+**Next natural step from my view**:
+1. Claude re-reviews this Optional disposition using the mandatory fast path.
+2. If Pass, user `提交`.
+3. After commit, start A-long annex inside `docs/long_alpha_spec.md` as the next docs-only slice.
+
+---
+
+## 2026-05-27 — Claude review — Pass (Long alpha common spec + US-long annex skeleton)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `eb09804`)
+
+**Verdict**: Pass with Optional suggestions (no Required fixes).
+
+**Scope reviewed**: Codex `执行` round 第一刀 Phase 6 spec pack — 新增 `docs/long_alpha_spec.md`（243 行 docs-only spec owner）+ 5 处 routing 同步（AGENTS.md routing pointer / 进度勾 / 修旧 "长线 framework 未建立" 说法 / 文件参考 + `docs/README.md` routing table + `docs/strategy_design_synthesis.md §6 §8 ownership 转移 + Next Execution Implication 重编号 5→4` + `docs/CURRENT.md §0 Latest Delta / §1 当前目标 / §2 milestone / §5 key files / §6 P0 重编号 8→7` + `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` append + supersede 旧 "下一步 #1"）。Spec 文件 10 节：§1 Scope（含 5 条 non-scope lock：不锁数字权重 / 不引入 schema runner / 不选 provider / 不放行 full-size / 不接 broker）；§2 Candidate Lifecycle 8 阶段；§3 Common Factor Catalog 9 domains × purpose × PIT notes × failure modes 表（Eligibility / Profitability quality / Cash-flow quality / Balance-sheet resilience / Growth durability / Valuation context / Catalyst·re-rating / Capital allocation / Risk·red flags）；§4 Industry Normalization（5y rolling、SW L2 / GICS 默认、parent industry group fallback when sample <20、percentile/z-score 优先于全局阈值、cyclic industry 单独处理）；§5 PIT Rules（6 必备日期 `as_of` / `fiscal_period_end` / `report_date` / `filing_date` / `fetch_date` / `classification_as_of` / `benchmark_as_of` + 4 条规则含 missing ≠ negative 默认 + 改写/restate 需 lineage flag）；§6 Portfolio Construction（preset ceiling、paper/full 分离、no implicit cross-system cash transfer、averaging-down 需 thesis intact）；§7 Thesis / Exit / Review（required thesis fields 7 项 + 6 触发条件 + 价格 alone 不是 thesis-broken for long + Quarterly/event-driven/annual reset 三层 cadence）；§8 Validation and Promotion（重申 ship gate α t-stat ≥2.0 / Sharpe ≥1.0 / MDD ≤15% / ≥12 月 forward live）；§9 Common Data Requirements（10 类数据 + lineage 要求 + DataHub Phase 7 反向定义字段 lock）；§10 US-Long Annex Skeleton 6 子节（Scope/Status / GICS Taxonomy & Universe / US Factor Emphasis 含 10-K-10-Q / FCF margin / ROIC / buyback efficiency / guidance credibility / dilution / SBC / refinancing / Russell 1000 与 S&P 500 候选 primary deferred / US Data Requirements / US Output Expectations / Deferred US Decisions 6 项）。Anti-pattern lock 强项：§10.4 末段 "if provider readiness insufficient, must stop at data-requirements documentation and paper research; must not invent missing fundamentals or silently reuse A-share fields" 显式封死 US-long 退化为 "借 A 股字段" 的退路。CURRENT P0 8→7 重编号干净（删除已完成的 first slice，剩余 7 项编号无遗漏无重复）；strategy §8 5→4 重编号干净；handoff append "下一步 #1" 加 superseded note 指向新 append；4 alternatives considered + rejected（不写进 strategy synthesis / 新建 handoff / 先 A-long / 现选 US provider）逻辑清楚；2 open questions handed off（A-long annex 需 SW L2 taxonomy / 财报可靠性 / 经营现金流 vs 净利润 / 政策周期分红回购 / A 股 benchmark 候选；US-long 完整 annex 需 exact universe / primary benchmark / provider evidence / numeric factor weights / report-schema interface）。Scope 严格 bounded：1 个新 docs 文件 + 5 处 routing 同步，0 schema / runner / test / provider 选择 / DataHub 实现。`git diff --check` passed (CRLF warnings only)。
+
+**Required fixes**: none.
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+- **O1**: `docs/long_alpha_spec.md` §5 PIT Rules 列了 6 个必备日期（`as_of` / `fiscal_period_end` / `report_date` / `filing_date` / `fetch_date` / `classification_as_of` / `benchmark_as_of`），但缺 `event_date` 或 `catalyst_observed_date`。§3 Common Factor Catalog Catalyst / re-rating 行 PIT notes 明确依赖 "Event evidence must be time-stamped and separable from later outcomes"，且 catalyst lane 是长线两 lane 之一（`re_rating_catalyst_long`）。未来 catalyst tracking schema 时会需要这个 PIT 日期，否则会回头改 spec。建议 §5 显式加 event-date 类日期入 PIT 必备列表，或在 §3 Catalyst 行 PIT notes 加 cross-reference 标记 "see §5 待扩展点 catalyst_observed_date"。延后到 A-long annex 再补也可，但 first slice 直接提及更稳。
+
+- **O2**: `docs/long_alpha_spec.md` §6 Portfolio Construction Contract 说 "Respect the preset capital ceiling for the market long bucket"，但没显式 cross-reference 已 commit 的 P0a `schemas/portfolio_allocation.schema.json` v1.0.0 + `schemas/cash_buffer_state.schema.json` v1.0.0。A-long / US-long runner implementation 必然消费这两份 schema；spec 不引用会让未来 implementation 重新发明 bucket capital 逻辑或绕过 P0a 已固化 contract。建议 §6 加一句 "Future implementations should consume `portfolio_allocation` / `cash_buffer_state` schemas (P0a contract) rather than reinvent capital ceiling math."
+
+- **O3**: `docs/long_alpha_spec.md` §8 Validation and Promotion 说 "Forward evidence log accumulated after the report process is stable"，但没 cross-reference Phase 6a handoff §3.2 forward evidence 定义（mature window / monthly cohort / consecutive month）。长线 spec 若用与短线不同的 forward evidence semantics，会导致 `execution_aggregate_report` / ship gate 路径分裂，最后跨 4 套子系统的 evidence 不可对比。建议 §8 加一句 cross-reference 到 Phase 6a handoff §3.2 "Forward evidence 定义"，明确长线沿用同一 forward evidence semantics。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes; Optional suggestions PENDING CODEX DISPOSITION.
+
+---
+
+## 2026-05-27 — Codex (Long alpha common spec + US-long annex skeleton)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `eb09804` Phase 6 route amendment, which set the spec-parallel / implementation-gated route.
+- Implements the first P0 spec-pack slice from `docs/CURRENT.md §6`: long alpha common spec + US-long annex skeleton.
+
+**Worked on**:
+1. [untracked] `docs/long_alpha_spec.md`: created the long-alpha owner spec with common factor catalog, PIT rules, industry normalization, portfolio construction, thesis-broken exit, quarterly review, validation / promotion, common data requirements, and US-long annex skeleton.
+2. [tracked] `AGENTS.md` and `docs/README.md`: added routing pointers so future sessions can find the long-alpha owner document before Phase 6d / Phase 6e work.
+3. [tracked] `docs/CURRENT.md`: updated Latest Delta, current target, key files, and P0 queue; first slice is now established and the next recommended docs-only slice is A-long annex.
+4. [tracked] `docs/strategy_design_synthesis.md`: kept strategy synthesis as architecture/route owner and routed detailed long-alpha content to `docs/long_alpha_spec.md`.
+5. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: appended this Phase 6d docs-only slice with scope lock, validation, invalidated old conclusions, and next-step notes.
+6. [tracked] `docs/SESSION_LOG.md`: prepended this execution handoff for Claude review.
+7. Validation run/result: `git diff --check` passed (CRLF warnings only).
+8. Current review state: waiting for Claude review of this docs-only spec slice.
+
+**Key decisions**:
+- `docs/long_alpha_spec.md` is the owner for detailed A-long / US-long common long-alpha design; `docs/strategy_design_synthesis.md` stays the architecture and route document.
+- This slice deliberately stops at common spec + US-long skeleton: no schema, runner, provider selection, DataHub implementation, or numeric factor-weight lock.
+- US-long provider readiness is expressed as data requirements and deferred decisions, not as a provider verdict.
+- Ship gate and manual-only boundaries remain unchanged.
+
+**Alternatives considered and rejected**:
+- "Add the long-alpha details directly into `docs/strategy_design_synthesis.md`" — rejected. That file should stay the design synthesis / route owner; detailed factor and PIT contracts need a dedicated owner document.
+- "Create a new handoff file for the spec" — rejected. This is an owner spec, not a phase transition handoff; phase history belongs as an append to the existing Phase 6a handoff.
+- "Start with A-long annex before common spec" — rejected. Common factor semantics, PIT rules, exit logic, and validation rules should be shared before market annexes diverge.
+- "Choose a US provider now" — rejected. Provider choice needs Phase 6e data requirements audit and current evidence.
+
+**Open questions handed off**:
+- A-long annex still needs SW L2 taxonomy details, A-share financial-statement reliability handling, operating cash flow versus net profit rules, policy/cycle/dividend/buyback treatment, and A-share benchmark candidates.
+- US-long full annex later needs exact universe, primary benchmark, provider evidence, numeric factor weights / thresholds, and report/schema interface decisions.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only slice using the mandatory fast path.
+2. If Pass, user `提交`.
+3. After commit, start A-long annex inside `docs/long_alpha_spec.md`; do not add schema, runner, or DataHub implementation in that slice.
+
+---
+
 ## 2026-05-27 — Claude re-review — Pass (Phase 6 route amendment Optional disposition)
 
 **Commits**: none (review-only entry; re-reviews working tree status/diffs vs `831f91e`)
