@@ -1,6 +1,6 @@
 # Burst Lane Spec
 
-**Status**: Phase 6c docs-only baseline. This document defines the A/US short-term `burst_lane` contract. It does not implement schemas, runners, providers, DataHub, or order execution.
+**Status**: Phase 6c docs-only baseline with Phase 7a-2 audit-routing update. This document defines the A/US short-term `burst_lane` contract. It does not implement schemas, runners, providers, DataHub, or order execution.
 
 **Owner role**: detailed spec owner for the short-term burst lane. `docs/strategy_design_synthesis.md` remains the strategy architecture entry; `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` remains the Phase 6 boundary / evidence-routing owner.
 
@@ -51,6 +51,19 @@ Burst lanes are split into two data tiers so implementation is not blocked by a 
 The first implementation may start with `minimal_data_burst` to start paper evidence. It must not describe this as production burst readiness. Minimal live observation requires `full_data_burst` or a reviewed exception that documents equivalent non-price confirmation.
 
 Minimal-to-full promotion criteria are owned by the Phase 7a-4 slice in `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`. At minimum, promotion must prove benchmark-relative paper alpha, acceptable drawdown and false-positive behavior, more than pure price momentum, a credible non-price confirmation path, cost / liquidity / spread / borrow / limit-risk feasibility, retained rejected / failed candidates, and a paired comparison between minimal-only and minimal-plus-full-data evidence after full data is available.
+
+## 2.6 Phase 7a-1 Audit Routing
+
+The first formal audit (`docs/phase7a_alpha_plausibility_audit.json`) keeps burst lanes alive only inside their evidence maturity boundary:
+
+| Lane | Audit verdict | Current allowed work |
+|---|---|---|
+| `a_share_burst_minimal_data` | `continue` | Paper / research only, using OHLCV, benchmark, liquidity, limit / halt, and existing A-short context. |
+| `us_burst_minimal_data` | `continue` | Paper / research only; US OHLCV / benchmark provider readiness still needs later evidence before production claims. |
+| `a_share_burst_full_data` | `defer_until_provider_ready` | Do not move to live eligibility until event / catalyst observed dates, capital-flow or manual evidence, and A-share execution constraints are reviewed. |
+| `us_burst_full_data` | `defer_until_provider_ready` | Do not move to live eligibility until filings / events, options / short-interest / borrow or manual evidence, and US microstructure constraints are reviewed. |
+
+Minimal and full tiers are maturity stages of the same parent lane. Portfolio contribution uses the active stage only; do not add minimal-tier paper contribution and full-tier hypothetical contribution together.
 
 ## 3. Candidate Lifecycle
 
@@ -171,6 +184,10 @@ Future US burst implementation must handle:
 - spread and slippage for lower-liquidity names,
 - earnings / guidance / filing event timing,
 - pre-market and after-hours data lineage if used,
+- LULD halts and volatility pauses,
+- short-side constraints when applicable: locate / borrow availability, Reg SHO threshold list, SSR / uptick restriction after a 10% decline, and hard-to-borrow fees,
+- PDT / day-trade constraints if any workflow expects same-day entry and exit in a small account,
+- odd-lot, sub-penny, and extended-hours liquidity caveats,
 - manual execution feasibility under the US short bucket capital ceiling.
 
 ### 7.3 US Deferred Decisions
@@ -180,6 +197,15 @@ Future US burst implementation must handle:
 - Whether options / short-interest fields are core inputs or supplemental diagnostics.
 - Whether pre-market / after-hours evidence is accepted in production or only in research.
 - US burst report interface and schema shape.
+
+### 7.4 Calendar And Timezone Semantics
+
+Future burst reports must record decision timestamps with market-local calendar context and UTC where available:
+
+- A-share burst uses China Standard Time, the SSE / SZSE trading calendar, T+1 sell constraints, and limit-state evidence as of the decision date.
+- US burst uses US Eastern Time for regular, pre-market, and after-hours context, with explicit market session labels (`pre_market`, `regular`, `after_hours`, `closed`).
+- Filing, earnings, guidance, policy, and manual evidence must record both `event_date` and `observed_at` / `catalyst_observed_date`; after-close events must not be treated as available before the next tradable decision point.
+- Cross-market comparisons must state the calendar used for benchmark alignment. A/US holidays and half-days cannot be silently forward-filled into evidence windows.
 
 ## 8. Risk Lock
 
@@ -199,6 +225,18 @@ Required rules:
 - Halt, limit-lock, stale data, or missing liquidity evidence blocks new entry.
 
 The lane-level pause rule should be falsifiable. A default starting point is six consecutive mature monthly cohorts or review windows underperforming baseline / benchmark, but the exact measurement window belongs in the first reviewed implementation contract.
+
+### 8.1 Monitoring Contract
+
+Before any burst lane can produce live-normalized evidence, its implementation contract must define:
+
+- data freshness and provider-drift checks for every trigger family used,
+- stale / missing critical-field behavior,
+- daily or weekly lane health output showing coverage, rejected candidates, failed breakouts, slippage assumptions, and limit / halt incidents,
+- lane-level pause / kill-switch trigger, manual review requirement, reactivation rule, and cooldown,
+- incident log requirements for provider outage, field semantic change, calendar mismatch, or execution infeasibility.
+
+Monitoring is required for live-normalized evidence. It does not authorize automatic orders or broker integration.
 
 ## 9. Sizing And Promotion
 
@@ -259,8 +297,8 @@ Phase 6c docs-only baseline is complete when:
 
 ## 13. Next Work
 
-After this baseline, the default next docs-only slices remain:
+After this Phase 7a-2 routing update, the next burst-related docs-only slices are:
 
-1. US-short spec normalization.
-2. Provider / data requirements audit.
-3. A-short maintenance only when it directly serves weekly forward capture, comparison-track accumulation, or forward evidence.
+1. Phase 7a-3 provider priority / provisional benchmark routing for burst data fields.
+2. Phase 7a-4 minimal-to-full promotion criteria, concentration / liquidity / ADV sizing, slippage constraints, and circuit-breaker playbook.
+3. Phase 7a-5 burst evidence report schema with immutable decision packet and cost-adjusted return fields.

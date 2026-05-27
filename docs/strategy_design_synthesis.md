@@ -42,6 +42,19 @@ The audit must be schema-first before it can drive implementation decisions. Eac
 
 The Phase 7a-1 audit schema must also capture alpha-reality guardrails: hypothesis registration, multiple-testing risk, statistical power, survivorship and security-master status, fraud/accounting red flags for long lanes, regime sensitivity, factor framework, gross versus net alpha, execution feasibility, risk-filter effectiveness, parent-lane aggregation, correlation basis, and capital-deployment effect.
 
+The first formal audit artifact is `docs/phase7a_alpha_plausibility_audit.json` (`audit_run_id = alpha_audit_20260527_initial`). Its current verdicts are now the Phase 7a-2 routing baseline:
+
+| Parent / lane | Current verdict | Practical effect |
+|---|---|---|
+| A-short steady | `continue_as_risk_filter` | Continue as risk-filter / evidence loop; do not treat as push-alpha lane. |
+| A-short variants | `continue_as_risk_filter` | Continue bounded comparison tracks; no independent bucket or production promotion without forward evidence. |
+| US-short steady | `continue_as_risk_filter` | Continue as risk-filtered support only after US microstructure and provider requirements are specified. |
+| A / US minimal-data burst | `continue` | Continue paper / research only; no live sizing from minimal-data momentum alone. |
+| A / US full-data burst | `defer_until_provider_ready` | Plausible alpha source, but live eligibility waits for event / flow / options / borrow / manual-evidence readiness. |
+| A / US long lanes | `defer_until_provider_ready` | Plausible long-alpha lanes, but implementation waits for PIT fundamentals, survivorship / security-master, benchmark, and fraud red-flag evidence. |
+
+This audit is not ship-gate evidence. It routes spec revisions and provider sequencing only.
+
 This upgrade reverses the older next-step assumption that Phase 7 should first spend implementation attention on already-proven A-share EOD / benchmark surfaces. Those surfaces remain valuable as ready evidence, but provider and schema work should now be ordered by alpha leverage and data blockers:
 
 1. US fundamentals, filing dates, corporate actions, and US benchmark/security-master readiness.
@@ -65,6 +78,8 @@ The steady short lane keeps the existing A-short direction but is treated as a p
 - treat full-size as blocked until ship gate passes.
 
 It is a risk-filtered observation and decision-support lane, not an automatic buy list and not the primary short-term push-alpha engine.
+
+Phase 7a-1 audit status: A-short steady and US-short steady are both `continue_as_risk_filter`. Their evidence value is drawdown, bad-ticket, false-positive / false-negative, and execution-quality control. They do not receive live alpha sizing from this verdict.
 
 ### 2.2 A-Short Optimization Variants
 
@@ -94,6 +109,8 @@ Important non-decisions:
 - LOCK remains observation-only until sample size is meaningful.
 - No current variant is deprecated solely from the existing 24-period evidence; insufficient sample directions remain tracking-only until forward evidence resolves them.
 
+Phase 7a-1 audit status: A-short variants remain `continue_as_risk_filter` and belong under the A-short steady parent lane. They are optimization tracks, not parallel alpha lanes, and must not consume independent capital allocation.
+
 ### 2.3 Burst Lane
 
 The burst lane exists because explosive short-term opportunities are different from steady rank selections. It targets catalyst + volume + relative-strength bursts, but it must not bypass evidence gates.
@@ -106,6 +123,8 @@ Burst implementation is split into two evidence tiers:
 - `full_data_burst`: adds reviewed event, catalyst, filing, guidance, capital-flow, options, borrow / short-interest, or manual evidence. This tier is required before minimal live observation.
 
 Pure EOD momentum must not be described as full burst alpha. Non-price confirmation is required before live observation.
+
+Phase 7a-1 audit status: minimal-data A / US burst tiers may continue as paper / research only; full-data A / US burst tiers are `defer_until_provider_ready`. Minimal and full tiers are maturity stages of the same parent burst lane, not additive portfolio alpha contributions.
 
 Candidate trigger design:
 
@@ -150,6 +169,8 @@ Per-market examples:
 Long-term systems are the primary alpha-push layer. They do not reuse short-term v14.x frameworks.
 
 Long alpha now requires an `expected_alpha_thesis` for each candidate before it can leave research-only status. The thesis must explain benchmark-relative opportunity cost, quality edge, valuation gap or compounding path, catalyst / re-rating path, downside path, sizing rationale, and review / invalidation trigger.
+
+Phase 7a-1 audit status: all A-long and US-long sub-lanes are currently `defer_until_provider_ready`. They remain the intended push-alpha design, but no long lane should move into implementation or live sizing until PIT fundamentals, security-master / survivorship coverage, observed-date catalyst evidence, benchmark data, and fraud / accounting red-flag coverage are reviewed.
 
 ### 3.1 Two Long-Term Lanes
 
@@ -402,10 +423,11 @@ Write and then implement cross-system coordinator once the four systems have eno
 
 ## 8. Next Execution Implication
 
-The next `执行` after the provider capability catalog contract should start Phase 7a:
+Phase 7a-1 is complete as a reviewed audit chain: schema contract, lightweight provider status snapshot, and first formal audit artifact. The current execution path is:
 
-1. Implement Phase 7a-1: `alpha_plausibility_audit` schema, example, tests, lightweight provider status snapshot, and first audit, using `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`.
-2. Use that audit to revise long expected-alpha thesis requirements and A-short steady / variants positioning.
-3. Then update provider priority, provisional evidence benchmarks, burst tiering, evidence capital policy, and evidence report schemas in the 7a-2 through 7a-5 slices.
+1. Phase 7a-2: convert `docs/phase7a_alpha_plausibility_audit.json` into owner-spec routing for long, steady short, US-short, and burst lanes.
+2. Phase 7a-3: update provider priority and provisional benchmark contracts from the audit implications.
+3. Phase 7a-4: define burst minimal-to-full promotion, concentration / liquidity / ADV sizing, slippage, and circuit-breaker playbooks.
+4. Phase 7a-5: define evidence report schemas, immutable decision packets, cost-adjusted returns, cash drag, overrides, reconciliation, thesis outcome logs, and research experiment logs.
 
 A-short continues as maintenance / evidence accumulation while Phase 7a contracts are written. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, fetch provider data, or build DataHub tables before the relevant alpha-audit and provider-evidence contracts are reviewed.

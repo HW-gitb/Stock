@@ -1,6 +1,6 @@
 # US Short Spec
 
-**Status**: Phase 6d docs-only baseline. This document normalizes the existing US-short screening and analysis reference materials into a production-facing spec shape. It does not implement schemas, runners, providers, DataHub, skills, prompts, or order execution.
+**Status**: Phase 6d docs-only baseline with Phase 7a-2 audit-routing update. This document normalizes the existing US-short screening and analysis reference materials into a production-facing spec shape. It does not implement schemas, runners, providers, DataHub, skills, prompts, or order execution.
 
 **Owner role**: detailed spec owner for US-short steady-lane normalization. `skills/us_short_analysis/reference/` remains the source-reference archive; `docs/burst_lane_spec.md` owns the independent US burst lane; `docs/strategy_design_synthesis.md` remains the architecture / route entry.
 
@@ -59,6 +59,8 @@ The existing US reference material contains high-momentum elements such as MAP, 
 - or rejected / deferred rule.
 
 US-short steady evidence cannot unlock `us_short_burst` full-size sizing, and burst evidence cannot silently replace steady-lane risk gates.
+
+Phase 7a-1 audit status: `us_short_steady` is `continue_as_risk_filter`. It remains risk-filtered decision support until US provider data, market microstructure constraints, calendar / timezone semantics, and forward evidence capture are specified. This verdict is not push-alpha approval and does not authorize live full-size use.
 
 ## 4. Candidate Lifecycle
 
@@ -186,7 +188,7 @@ Production contract:
 
 ### 6.3 Position Sizing And Bucket Capital
 
-The reference analysis formula sizes from total account capital. Project implementation must replace that with P0a bucket-aware capital:
+The reference analysis formula sizes from total account capital. Project implementation must replace that with bucket-aware capital:
 
 - Use the US short bucket capital ceiling from `portfolio_allocation` and `cash_buffer_state`.
 - Do not size against total account AUM.
@@ -195,6 +197,20 @@ The reference analysis formula sizes from total account capital. Project impleme
 - Keep per-name cap, total short-bucket cap, liquidity / ADTV cap, max-position count, spread rules, and market-regime reductions visible.
 
 All actions remain manual recommendations.
+
+### 6.3.1 US Market Microstructure Constraints
+
+Future US-short execution backtests and reports must explicitly model or disclose these constraints before any live-normalized evidence claim:
+
+- SSR / uptick restriction after a prior 10% decline when a recommendation involves short-side exposure.
+- Reg SHO threshold-list and hard-to-borrow / locate / borrow-fee status when the strategy depends on short availability.
+- LULD bands, volatility pauses, exchange halts, stale quotes, and event-driven trading halts.
+- PDT / day-trade constraints if a small account would be expected to open and close positions intraday.
+- Pre-market and after-hours liquidity, spread, and event-timing limitations.
+- Odd-lot and sub-penny execution caveats for low-priced or illiquid names.
+- ADR, foreign-holiday, corporate-action, reverse-split, delisting, and bankruptcy workflow risks.
+
+If a provider cannot supply a required microstructure field, the report must mark the candidate as manual evidence, research-only, or blocked for the affected action. Missing microstructure data must not silently pass.
 
 ### 6.4 Exits, Stops, And Re-entry
 
@@ -218,6 +234,15 @@ Production contract:
 - Semantic or provider-dependent exits remain manual / research-only until structured.
 - Re-entry rules require state; they must not be implemented as stateless chat advice.
 - MAP exits may route to steady or burst implementation only after an explicit routing decision.
+
+### 6.4.1 Calendar And Timezone Semantics
+
+US-short reports must record `as_of`, decision timestamp, market session, and timezone. Default interpretation is US Eastern Time plus UTC where provider timestamps allow.
+
+- SEC filing, guidance, earnings, downgrade, short-report, and legal-event evidence must include `event_date` and `observed_at` / `catalyst_observed_date`.
+- After-close and pre-market evidence can affect only the next tradable decision point unless the report explicitly uses a pre-market / after-hours workflow with provider lineage.
+- Half-days, market holidays, halted sessions, and benchmark calendar mismatches must be visible in evidence windows.
+- A/US cross-market comparison must not align dates by local calendar string alone; it needs explicit market calendar alignment.
 
 ### 6.5 Output Shape
 
@@ -271,6 +296,8 @@ Rules:
 - Full-size use requires the project ship gate: monthly alpha t-stat >= 2.0, Sharpe >= 1.0, max drawdown <= 15%, and >=12 months forward live evidence.
 - Before final benchmark choice, reports should carry benchmark candidates and the rationale for any temporary reporting benchmark.
 
+Before US-short can produce live-normalized evidence, the implementation contract must also define a monitoring path for provider freshness, microstructure field coverage, borrow / short-interest staleness, event-file drift, stale benchmark data, manual override frequency, and lane pause / kill-switch triggers.
+
 ## 9. Phase 6e Data Requirements Input
 
 Phase 6e provider / data requirements audit should consume this spec and answer whether reliable providers exist for:
@@ -310,9 +337,8 @@ US-short docs-only baseline is complete when:
 
 ## 12. Next Work
 
-After this baseline, the default next docs-only slice is Phase 6e provider / data requirements audit. That audit should consume:
+After this Phase 7a-2 routing update, the next US-short docs-only slices are:
 
-1. `docs/us_short_spec.md` §9.
-2. `docs/burst_lane_spec.md` §11.
-3. `docs/long_alpha_spec.md` §9, §10.4, and §11.8.
-
+1. Phase 7a-3 provider priority and provisional benchmark routing for US-short steady and US-burst inputs.
+2. Phase 7a-4 concentration, liquidity / ADV, slippage, borrow, and circuit-breaker constraints.
+3. Phase 7a-5 evidence report schema fields for immutable decision packets, manual overrides, cost-adjusted return, and position reconciliation.

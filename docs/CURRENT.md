@@ -1,27 +1,24 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-27（Phase 7a-1 first alpha audit）
+**最后更新**：2026-05-27（Phase 7a-2 owner-spec routing）
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
 ---
 
 ## 0. Latest Delta
 
+- Phase 7a-2 owner-spec routing 已建立：`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/long_alpha_spec.md`、`docs/us_short_spec.md` 已吸收第一版 audit verdict；未改 schema、runner、provider 或 DataHub。
 - Phase 7a-1 first formal alpha plausibility audit 已建立：`docs/phase7a_alpha_plausibility_audit.json`。结论分布为 3 条 `continue_as_risk_filter`、2 条 `continue`、6 条 `defer_until_provider_ready`；该 audit 不是 ship-gate evidence。
 - Phase 7a-1 lightweight provider status snapshot 已建立：`docs/phase7a_provider_status_snapshot.json`。它只 inventory known readiness / blockers，不选 provider、不抓数据、不建 adapter / DataHub table。
-- Phase 7a-1 alpha plausibility audit schema contract 已建立：`schemas/alpha_plausibility_audit.schema.json`、example、schema tests。此刀只建 contract，不选 provider、不抓数据、不建 adapter / DataHub table、不产出真实 audit。
-- Docs hygiene baseline 已收敛：`AGENTS.md` 只保留最高规则 / 固化决策 / 启动顺序，完整 routing table 由 `docs/README.md` 维护。
-- Phase 7a 双文档 owner boundary 已锁定：`docs/ALPHA_VALIDATION_ACTION_GUIDE.md` owns detailed Phase 7a+ mandatory field inventory；`docs/alpha_plausibility_audit.md` owns audit purpose, lane coverage, verdict semantics, execution route，并保留 "must not be duplicated here" 防 drift 措辞。
-- `docs/portfolio_allocation_policy.md` 已去 P0a 活跃命名；仍记录资金政策最初形成于 Phase 5 P0c / P0a，但当前表述为 phase-neutral capital policy。
-- `docs/CURRENT.md` 已压缩为当前事实表；不再承载 long delta history、完整 file index 或 handoff 全清单。
-- `docs/handoff/README.md` 与 `docs/archive/README.md` 作为历史文档索引 / archive 说明入口；旧 handoff 不重组，旧 docx 不作为当前执行依据。
+- Phase 7a-1 alpha plausibility audit schema contract 已建立：`schemas/alpha_plausibility_audit.schema.json`、example、schema tests。该 contract 本身不选 provider、不抓数据、不建 adapter / DataHub table；正式 audit artifact 见上。
+- Docs hygiene baseline 已收敛；完整 routing table 由 `docs/README.md` 维护，长过程记录放 `docs/SESSION_LOG.md` / handoff。
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7a-1 first audit established；下一步进入 Phase 7a-2 spec revisions。
-- **当前 P0 目标**：根据 `docs/phase7a_alpha_plausibility_audit.json` 修订 long / short specs，明确哪些 lane 继续、哪些仅 risk filter、哪些 defer_until_provider_ready；不得把该 audit 当 ship-gate evidence。
+- **当前 Phase**：Phase 7a-2 owner-spec routing established；下一步进入 Phase 7a-3 provider priority / provisional benchmark contract。
+- **当前 P0 目标**：根据 `docs/phase7a_alpha_plausibility_audit.json` 和 Phase 7a-2 owner-spec routing，修订 provider priority 与 provisional benchmark contract；不得选 provider、抓数据或改 runner。
 - **当前 blocker**：无待用户决策 blocker。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
@@ -30,6 +27,7 @@
 
 ## 2. 最近已完成
 
+- **Phase 7a-2 owner-spec routing**（2026-05-27）：`strategy_design_synthesis`、`burst_lane_spec`、`long_alpha_spec`、`us_short_spec` 已记录 audit verdict、minimal/full burst边界、long defer blocker、US microstructure / calendar / monitoring边界。
 - **Phase 7a-1 first formal alpha audit**（2026-05-27）：`docs/phase7a_alpha_plausibility_audit.json` 已建立并通过 schema validation；覆盖 11 sub-lane / 6 parent lane，引用 `provider_status_snapshot_20260527_phase7a1`。
 - **Phase 7a-1 provider status snapshot**（2026-05-27）：`docs/phase7a_provider_status_snapshot.json` 已建立；记录 A-share EOD / CSI helper ready evidence、US fundamentals / filings / security master unknown、burst full-data blocked、manual evidence partial、provider drift monitoring blocked。
 - **Phase 7a-1 alpha audit schema contract**（2026-05-27）：`schemas/alpha_plausibility_audit.schema.json`、example 和 schema tests 已建立；覆盖 11 sub-lane / 6 parent lane、risk-filter evidence、long-lane fraud red flags、hypothesis registration、provider readiness confidence、paper/live-normalized evidence 边界。
@@ -82,16 +80,17 @@
 
 ## 5. 下一步
 
-### P0 — Phase 7a-2 spec revisions after first audit
+### P0 — Phase 7a-3 provider priority / provisional benchmark contract
 
-1. 用 `docs/phase7a_alpha_plausibility_audit.json` 更新 `docs/strategy_design_synthesis.md`、`docs/long_alpha_spec.md`、`docs/burst_lane_spec.md` 和必要的 lane routing。
-2. 保持 A-short steady / variants / US-short steady 为 risk-filter 口径；minimal burst 为 paper/research；full burst 和 long lanes 先解决 provider/PIT blocker。
-3. 记录 Phase 7a-3 provider priority / provisional benchmark 的输入，不提前选 provider 或改 runner。
+1. 将 audit implications 转成 provider priority contract：US fundamentals / filings / corporate actions → A-share fundamentals / announcement dates / SW history → burst event / flow / options / borrow。
+2. 固化 provisional evidence benchmark contract，但仍不锁最终 ship-gate benchmark。
+3. 只写 docs/schema contract；不选 provider、不抓数据、不建 adapter / DataHub table。
 
-### P1 — Provider / evidence sequencing after audit
+### P1 — Phase 7a-4 evidence feasibility controls
 
-- Provider priority 默认按 US fundamentals / filings / corporate actions → A-share fundamentals / announcement dates / SW industry history → burst event / flow / options / borrow。
-- A-share EOD / CSI benchmark surfaces 记录为 ready evidence，但不再作为默认下一刀 implementation sink。
+- Burst minimal-to-full promotion criteria。
+- Concentration / liquidity / ADV sizing、slippage、borrow / limit-risk feasibility。
+- Drawdown / circuit-breaker tiered action playbook。
 
 ### P2 — A-short maintenance line
 

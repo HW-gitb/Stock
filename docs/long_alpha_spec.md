@@ -1,6 +1,6 @@
 # Long Alpha Common Spec
 
-**Status**: Phase 6d docs-only baseline. This document defines the common long-alpha contract plus US-long and A-long annex skeletons. It does not implement schemas, runners, providers, DataHub, or order execution.
+**Status**: Phase 6d docs-only baseline with Phase 7a-2 audit-routing update. This document defines the common long-alpha contract plus US-long and A-long annex skeletons. It does not implement schemas, runners, providers, DataHub, or order execution.
 
 **Owner role**: detailed spec owner for A-long / US-long common long-alpha design. `docs/strategy_design_synthesis.md` remains the strategy architecture entry; `docs/datahub_design.md` remains the DataHub / provider guardrail owner.
 
@@ -22,6 +22,19 @@ Non-scope:
 - No provider is selected here.
 - No full-size manual use is allowed from this document alone; ship gate still requires monthly alpha t-stat >= 2.0, Sharpe >= 1.0, max drawdown <= 15%, and >=12 months forward live evidence.
 - No broker connection, OS automation, or automatic trading is allowed.
+
+## 1.5 Phase 7a-1 Audit Routing
+
+The first formal audit (`docs/phase7a_alpha_plausibility_audit.json`) marks all current long sub-lanes as `defer_until_provider_ready`:
+
+| Lane | Audit role | Current blocker | Practical effect |
+|---|---|---|---|
+| `a_long_core_quality` | Capital stabilizer / long alpha candidate | PIT financials, SW industry history, survivorship, and fraud red-flag coverage | Continue spec and provider-evidence work only; no implementation or live sizing. |
+| `a_long_re_rating_catalyst` | Alpha source | Observed-date catalyst, announcement-date, manual-evidence, and flow/event readiness | Continue thesis/spec work only; no implementation or live sizing. |
+| `us_long_core_quality` | Capital stabilizer / long alpha candidate | US PIT fundamentals, corporate actions, security master, delisting, and factor exposure evidence | Highest-priority provider-evidence area, but still deferred. |
+| `us_long_re_rating_catalyst` | Alpha source | US filings, guidance, buybacks, revisions, and observed-date catalyst evidence | Plausible alpha source, but provider-blocked. |
+
+This verdict does not demote long alpha as a design objective. It blocks implementation until provider/PIT evidence can make expected-alpha theses reproducible and cost-adjusted.
 
 ## 2. Candidate Lifecycle
 
@@ -91,6 +104,12 @@ Rules:
 - Missing data is a data-quality condition, not automatic negative evidence, unless a market annex explicitly defines a missing-field rule.
 - Industry membership and benchmark membership should be point-in-time where providers support it; if not, reports must state the limitation.
 
+Calendar and timezone rules:
+
+- A-long evidence uses China Standard Time and the A-share trading calendar; after-close announcements and filings are eligible only at the next decision point.
+- US-long evidence uses US Eastern Time for SEC filings, earnings, guidance, pre-market / after-hours events, and regular-session decisions; UTC should be stored where the provider supports it.
+- Cross-market portfolio or benchmark comparisons must state the calendar alignment method. Holidays, half-days, filing after-hours, and different market closes cannot be silently forward-filled.
+
 ## 6. Portfolio Construction Contract
 
 Long systems propose manual actions within the relevant market long bucket. They do not size against the whole account and do not move cash across A / US markets without an explicit coordinator rule or user decision.
@@ -98,7 +117,7 @@ Long systems propose manual actions within the relevant market long bucket. They
 Common constraints:
 
 - Respect the preset capital ceiling for the market long bucket.
-- Future implementations should consume the P0a `portfolio_allocation` and `cash_buffer_state` schemas rather than reinventing capital ceiling or bucket-cash math.
+- Future implementations should consume the existing `portfolio_allocation` and `cash_buffer_state` contracts rather than reinventing capital ceiling or bucket-cash math.
 - Separate paper / minimal-size evidence collection from full-size manual use.
 - Keep position, industry, and lane concentration visible in future reports.
 - Treat cash-buffer requests as explicit recommendations, not implicit cross-system transfers.
@@ -170,6 +189,8 @@ Minimum validation requirements before production promotion can be considered:
 - Data limitations stated alongside metrics.
 
 Full-size manual use still requires the project ship gate: monthly alpha t-stat >= 2.0, Sharpe >= 1.0, max drawdown <= 15%, and >=12 months forward live evidence. Until then, output is paper or minimal-size decision support.
+
+Before any long lane can produce live-normalized evidence, its implementation contract must define a monitoring path for provider freshness, filing restatements, revision drift, benchmark / industry taxonomy changes, concentration exposure, thesis-broken alerts, and manual review / pause conditions. Monitoring is decision support only; it does not authorize automatic orders.
 
 ## 9. Common Data Requirements
 

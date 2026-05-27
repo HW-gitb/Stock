@@ -8,6 +8,62 @@
 
 ---
 
+## 2026-05-27 — Claude review — Pass (Phase 7a-2 owner-spec routing)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `d1cc258`)
+
+**Verdict**: Pass.
+
+**Notes**: Codex `执行` round Phase 7a-2 第一刀 — 6 tracked docs-only (`docs/CURRENT.md` / `docs/SESSION_LOG.md` / `docs/strategy_design_synthesis.md` / `docs/burst_lane_spec.md` / `docs/long_alpha_spec.md` / `docs/us_short_spec.md` / `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`)，0 untracked，total 231 insertions / 34 deletions。Scope 严守：0 schema / 0 runner / 0 provider 选择 / 0 数据抓取 / 0 adapter / 0 DataHub / 0 strategy-rule 改 / 0 ship-gate relaxation。ACTION_GUIDE.md §11 Phase 7a-2 cell 4 类要求全部 1:1 落入 spec：(1) **spec revisions for long/short lanes** — strategy_synthesis 完整 audit verdict table 6 类（A-short steady continue_as_risk_filter / A-short variants continue_as_risk_filter / US-short steady continue_as_risk_filter / A/US minimal burst continue paper-only / A/US full burst defer_until_provider_ready / A/US long lanes defer_until_provider_ready），burst_lane_spec 显式 minimal vs full tier verdict 拆分 table，long_alpha_spec 全 long sub-lanes `defer_until_provider_ready` + reasoning，us_short_spec `us_short_steady` risk-filter status；(2) **US market microstructure** — us_short_spec §6.3.1 + burst_lane_spec 含 borrow / short-interest / options / LULD / SSR / extended-hours specific fields，明确 "If a provider cannot supply a required microstructure field, the report must mark the candidate as manual evidence, research-only, or blocked. Missing microstructure data must not silently pass"；(3) **monitoring contract** — burst §8.1 含 incident log / provider outage / field semantic change / calendar mismatch / execution infeasibility 具体字段，long monitoring path 含 provider freshness / filing restatements / revision drift / taxonomy changes / concentration / thesis-broken alerts，us_short monitoring 含 borrow staleness / event drift / manual override frequency / lane pause kill-switch；(4) **trading calendar/timezone semantics** — burst §7.4 含 CST + SSE/SZSE + T+1 + 跨市场 alignment + holiday 防 silent forward-fill，long A-long CST + after-close announcement 次决策点 eligibility，us_short §6.4.1 US ET + UTC + half-days / halted sessions / benchmark mismatches visible in evidence windows + A/US cross-market 不可 local-calendar-string 对齐。Verdict semantics 准确：minimal `continue` 限定 paper/research（"does not imply minimal live observation, ship-gate evidence, or live sizing"），full/long `defer_until_provider_ready` 是 sequencing 不是 rejection。Validation accuracy: `[System.IO.File]::ReadAllLines` 给 CURRENT.md 144 lines = wc -l 144 — authoritative method 第四轮稳定 ✅；no trailing whitespace / git diff --check clean / Codex 自做 stale wording scan（Phase 7a-1 next-step / P0a bucket）无残留。Cross-doc consistency 完整：CURRENT P0 advanced 至 Phase 7a-3 provider priority / provisional benchmark；handoff 追加 Phase 7a-2 routing section；4 spec 一致用 audit lane_id (a_short_steady / a_share_burst_minimal_data 等)。无 Required fixes、无 Optional、无 open question、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (Phase 7a-2 owner-spec routing)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `d1cc258` (`Add first Phase 7a alpha audit`).
+- Converts the first formal audit artifact into owner-spec routing for the next Phase 7a slices.
+
+**Worked on**:
+1. [tracked] `docs/strategy_design_synthesis.md`: recorded the Phase 7a-1 audit verdict table, short / burst / long routing effects, and updated the next execution path to Phase 7a-3 through 7a-5.
+2. [tracked] `docs/burst_lane_spec.md`: added audit routing for minimal-data versus full-data burst tiers, US microstructure constraints, calendar / timezone semantics, monitoring contract, and updated next work.
+3. [tracked] `docs/long_alpha_spec.md`: added audit routing that keeps all long sub-lanes `defer_until_provider_ready`, plus long-lane calendar / timezone and monitoring requirements before live-normalized evidence.
+4. [tracked] `docs/us_short_spec.md`: added `us_short_steady` risk-filter audit status, US market microstructure constraints, calendar / timezone semantics, and monitoring requirements.
+5. [tracked] `docs/CURRENT.md`: advanced current P0 to Phase 7a-3 provider priority / provisional benchmark contract while keeping the snapshot under 150 physical lines.
+6. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7a-2 owner-spec routing handoff section.
+
+**Key decisions**:
+- Minimal-data A/US burst `continue` means paper / research only. It does not imply minimal live observation, ship-gate evidence, or live sizing.
+- Full-data A/US burst and all long sub-lanes remain `defer_until_provider_ready`; this is a sequencing verdict, not a rejection of those alpha sources.
+- US-short and US-burst specs now explicitly require US market microstructure, calendar / timezone, and monitoring contracts before live-normalized evidence.
+- No schema, runner, provider selection, data fetch, adapter, DataHub table, strategy-rule change, or ship-gate relaxation was introduced.
+
+**Alternatives considered and rejected**:
+- "Only update CURRENT and leave owner specs unchanged" — rejected. Future LLMs read owner specs when implementing lanes; audit verdicts must live there, not only in the snapshot.
+- "Start Phase 7a-3 provider priority in the same slice" — rejected. Provider priority and provisional benchmark contract are a separate reviewable task after owner specs absorb the audit.
+
+**Validation run/result**:
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- `rg -n "[ \t]+$" docs\strategy_design_synthesis.md docs\burst_lane_spec.md docs\long_alpha_spec.md docs\us_short_spec.md docs\CURRENT.md docs\handoff\2026-05-27_phase7_kickoff_spec_handoff.md docs\SESSION_LOG.md` found no trailing whitespace.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reports `144`, below the 150-line snapshot target.
+- Stale wording scan for active Phase 7a-1 next-step wording and stale `P0a bucket` references found no matches in touched owner docs.
+- No schema tests were run because this slice is docs-only and does not change schemas, examples, runners, or tests.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7a-2 owner-spec routing slice.
+2. If Pass and user commits, the next `执行` slice should start Phase 7a-3 provider priority / provisional benchmark contract.
+
+---
+
 ## 2026-05-27 — Claude review — Pass (Phase 7a-1 first formal alpha plausibility audit)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `081c5bf`)
