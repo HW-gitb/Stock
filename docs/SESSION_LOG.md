@@ -8,6 +8,115 @@
 
 ---
 
+## 2026-05-27 — Claude re-review — Pass (Phase 7a-1 alpha audit Optional O1 disposition)
+
+**Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `11d6977`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 accept verified — prior Codex entry line 95 数字 `Measure-Object -Line` 报 "98" 已改用 `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` 报 "139 physical lines"；repair entry validation 用同样 .NET method 给 139；独立 `wc -l docs/CURRENT.md` 也给 139 — 两个独立 measurement tool converge，root cause（PowerShell `Measure-Object -Line` 对 Markdown 文件 undercount）已显式记录并 marked "should not be used as authoritative for `CURRENT.md` snapshot line checks"，等于 process-level lesson learned 防止下次再用错 tool。Scope 严守（仅 SESSION_LOG.md 修改，schema/example/tests 未碰 — O1 只是 measurement convention 不影响 schema 实质）。无 Required fixes、无新 Optional、无 open question、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (repair: Phase 7a-1 alpha audit Optional O1)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest Claude review verdict: Pass with 1 Optional suggestion, 0 Required fixes.
+- Builds on `2026-05-27 — Codex (Phase 7a-1 alpha plausibility audit schema contract)`.
+
+**Optional disposition**:
+- O1 accept — corrected the prior Codex validation line count to use physical line counting via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`, which reports 139 lines. The earlier PowerShell `Measure-Object -Line` method undercounted this Markdown file and should not be used as authoritative for `CURRENT.md` snapshot line checks.
+
+**Worked on**:
+1. [tracked] `docs/SESSION_LOG.md`: prepended this repair entry and corrected the prior validation line-count record from 98 to 139 physical lines.
+
+**Validation run/result**:
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reports `139`; this is below the 150-line snapshot target.
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- Focused trailing-whitespace scan on changed files passed.
+
+**Current review state**:
+- Required fixes repaired: 0.
+- Optional dispositions: 1 accepted, 0 accepted with modification, 0 rejected.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude re-reviews this Optional disposition.
+2. If Pass, user can run `提交`.
+
+---
+
+## 2026-05-27 — Claude review — Pass with Optional (Phase 7a-1 alpha plausibility audit schema contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `11d6977`)
+
+**Verdict**: Pass with 1 Optional suggestion (no Required fixes).
+
+**Scope reviewed**: Codex `执行` round Phase 7a-1 schema-first contract 第一刀 — 3 untracked new (`schemas/alpha_plausibility_audit.schema.json` 1382 行 / `schemas/examples/alpha_plausibility_audit.example.json` 1981 行 / `tests/schema/test_alpha_plausibility_audit_schema.py` 205 行) + 2 tracked routing (`docs/CURRENT.md` 139 行实际 / `docs/README.md` routing 加新 schema)。Scope 严守：0 provider 选择 / 0 数据抓取 / 0 adapter / 0 DataHub table / 0 runner 改 / 0 strategy logic 改；first formal audit + provider status snapshot 显式推到下一刀。
+
+**Notes**: Schema 设计完整覆盖 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md §3-§10` mandatory field groups（schema 含 24 个 key field occurrence；example 含 109 个；38 个 `const` lock 网络覆盖 scope/policy/anti-pattern）；mandatory field 全部存在：`hypothesis_registration` / `circuit_breaker_playbook` / `parent_aggregation_rule` / `correlation_basis` / `factor_framework` / `risk_filter_effectiveness_evidence` / `survivorship_handling_status` / `adjustment_method` / `power_status` / `gross_pct` + `net_pct` / `reproducibility_requirements`。Example 覆盖 11 sub-lanes（a_short_steady / a_short_variants / a_share_burst_minimal/full_data / us_short_steady / us_burst_minimal/full_data / a_long_core_quality / a_long_re_rating_catalyst / us_long_core_quality / us_long_re_rating_catalyst）+ 6 parent lanes（a_short_steady / us_short_steady / a_burst / us_burst / a_long / us_long），与 ACTION_GUIDE §3 lane coverage 1:1 对应。Example verdict 分布（6 defer_until_provider_ready / 3 continue_as_risk_filter / 2 continue）与 CURRENT.md §3 现有 baseline 一致，decision_reason 是 specific reasoning 不是 placeholder — 但 `audit_run_id: "alpha_audit_20260527_example"` 含 `_example` 后缀 + 文件路径 `schemas/examples/` + schema_name 是 contract 三层 signal 共同标记 example 身份，所以"no real audit artifact"声明 substantively 成立（first formal audit 仍归下一刀）。Tests 10 个含 4 个 negative tests（missing lane / scope creep flag / risk-filter no-evidence / long-lane no-fraud-red-flag），10 focused tests pass + 47 full schema discovery pass + meta validates + example validates。Validation 完整：`git diff --check` clean / 无 trailing whitespace / Python 3.13 jsonschema 跑 47 tests pass。Cross-doc consistency：CURRENT.md §0 加 Phase 7a-1 schema delta + §5 P0 改为 "provider snapshot + first audit"；README routing 加新 schema entry。
+
+**Required fixes**: none.
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+- **O1**: Codex SESSION_LOG entry §Validation 写 "`(Get-Content -Encoding UTF8 docs\CURRENT.md | Measure-Object -Line).Lines` reports `98`, below the 150-line snapshot target"，但 **`wc -l docs/CURRENT.md` 给 139**（差 41 行，跟上一轮 O1 的 96 vs 137 同样差 ~41 — 这是 systematic tool 行为差异，**不是 estimate 错误**，是 PowerShell `Measure-Object -Line` 跟 `wc -l` count 逻辑不一致）。139 仍 < 150 target 是实质 compliant，但 entry validation 数字不可信。上一轮 O1 disposition Codex 改用 measured method 仍出现同样问题，说明 root cause 是 measurement tool 选择不当。建议：(a) 改用 Python `len(open(path).readlines())` 或 `wc -l` 作为权威 line count；或 (b) 直接调用 git tool 路径里通用的 wc -l；或 (c) 同时报两个数字让 reviewer 知道 tool 不一致。当前 entry 数字 inaccuracy 是 protocol gap 但不阻塞 commit。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes; Optional suggestion PENDING CODEX DISPOSITION.
+
+---
+
+## 2026-05-27 — Codex (Phase 7a-1 alpha plausibility audit schema contract)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `11d6977` (`Add docs slimming baseline`).
+- Starts the first Phase 7a-1 implementation slice after the alpha-validation design baseline was locked into docs.
+
+**Worked on**:
+1. [untracked] `schemas/alpha_plausibility_audit.schema.json`: added the Phase 7a-1 schema-first contract for lane-level and portfolio-level alpha plausibility audit.
+2. [untracked] `schemas/examples/alpha_plausibility_audit.example.json`: added a full validating example covering 11 sub-lanes and 6 parent lanes.
+3. [untracked] `tests/schema/test_alpha_plausibility_audit_schema.py`: added focused schema tests for scope locks, coverage requirements, risk-filter evidence, long-lane fraud red flags, and scope-creep rejection.
+4. [tracked] `docs/CURRENT.md`: updated the snapshot so the next P0 step is provider status snapshot + first formal audit, not schema creation.
+5. [tracked] `docs/README.md`: routed the new alpha plausibility audit schema contract.
+
+**Key decisions**:
+- Kept this slice to schema/example/tests plus routing updates only. No provider selected, no data fetched, no adapter/DataHub table created, no runner changed, and no real audit artifact produced.
+- The schema requires 11 sub-lane records and 6 parent-lane portfolio synthesis records so the first audit cannot be written one lane at a time without exposing portfolio contribution gaps.
+- Ship-gate and capital governance stay locked: paper evidence cannot be used for ship-gate claims, live-normalized evidence remains required, and global AUM pooling remains forbidden.
+- `continue_as_risk_filter` now has a schema-level effectiveness evidence requirement; long lanes now have a schema-level fraud/accounting red-flag requirement.
+
+**Alternatives considered and rejected**:
+- "Do provider snapshot and first real audit in the same slice" — rejected. That would mix contract definition with the first judgment artifact and make Claude review too broad.
+- "Keep the first audit markdown-only" — rejected. Phase 7a requires schema-first verdict evidence so mandatory fields, rerun triggers, and scope locks are machine-checkable.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_alpha_plausibility_audit_schema -v` passed: 10 tests.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_alpha_plausibility_audit_schema tests.schema.test_provider_capability_catalog_schema tests.schema.test_a_short_variant_tracking_schema tests.schema.test_candidate_universe_overlap_audit_schema -v` passed: 32 tests.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v` passed: 47 tests.
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- `rg -n "[ \t]+$" schemas\alpha_plausibility_audit.schema.json schemas\examples\alpha_plausibility_audit.example.json tests\schema\test_alpha_plausibility_audit_schema.py docs\CURRENT.md docs\README.md` found no trailing whitespace.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reports `139` physical lines, below the 150-line snapshot target. The earlier `Measure-Object -Line` method undercounted this Markdown file and is not used as the authoritative snapshot line-count check.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7a-1 schema contract slice.
+2. If Pass and user commits, the next `执行` slice should create the lightweight provider status snapshot and first formal 6 parent / 11 sub-lane audit artifact using this schema.
+
+---
+
 ## 2026-05-27 — Claude re-review — Pass (docs slimming Optional O1/O2 disposition)
 
 **Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `78625c5`)

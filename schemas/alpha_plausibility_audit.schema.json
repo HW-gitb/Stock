@@ -1,0 +1,1382 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/alpha_plausibility_audit/1.0.0/schema.json",
+  "title": "Alpha Plausibility Audit",
+  "description": "Phase 7a-1 schema-first contract for lane-level and portfolio-level alpha plausibility audit. This artifact registers hypotheses, evidence quality, provider/PIT blockers, execution feasibility, risk-filter effectiveness, and capital-deployment effects before broad DataHub, provider, or runner implementation. It does not select providers, fetch data, change strategy rules, relax ship gates, or authorize order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "audit_run_id",
+    "audit_date",
+    "next_review_date",
+    "rerun_trigger",
+    "audit_policy",
+    "provider_status_snapshot",
+    "lane_records",
+    "portfolio_synthesis",
+    "deferred_decisions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "alpha_plausibility_audit"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "audit_run_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "supersedes_audit_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "audit_date": {
+      "$ref": "#/$defs/date"
+    },
+    "next_review_date": {
+      "$ref": "#/$defs/date"
+    },
+    "rerun_trigger": {
+      "$ref": "#/$defs/rerunTrigger"
+    },
+    "audit_policy": {
+      "$ref": "#/$defs/auditPolicy"
+    },
+    "provider_status_snapshot": {
+      "$ref": "#/$defs/providerStatusSnapshot"
+    },
+    "lane_records": {
+      "$ref": "#/$defs/laneRecords"
+    },
+    "portfolio_synthesis": {
+      "$ref": "#/$defs/portfolioSynthesis"
+    },
+    "deferred_decisions": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "nullableNumber": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "confidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "coverageStatus": {
+      "enum": [
+        "supported",
+        "partial",
+        "missing",
+        "manual_only",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "riskLevel": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "laneId": {
+      "enum": [
+        "a_short_steady",
+        "a_short_variants",
+        "a_share_burst_minimal_data",
+        "a_share_burst_full_data",
+        "us_short_steady",
+        "us_burst_minimal_data",
+        "us_burst_full_data",
+        "a_long_core_quality",
+        "a_long_re_rating_catalyst",
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst"
+      ]
+    },
+    "longLaneId": {
+      "enum": [
+        "a_long_core_quality",
+        "a_long_re_rating_catalyst",
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst"
+      ]
+    },
+    "parentLaneId": {
+      "enum": [
+        "a_short_steady",
+        "us_short_steady",
+        "a_burst",
+        "us_burst",
+        "a_long",
+        "us_long"
+      ]
+    },
+    "parentAggregationRule": {
+      "enum": [
+        "active_stage_only",
+        "weighted_by_maturity",
+        "sum_with_overlap_penalty",
+        "take_dominant_role"
+      ]
+    },
+    "laneRole": {
+      "enum": [
+        "risk_filter",
+        "alpha_source",
+        "capital_stabilizer",
+        "research_only",
+        "deferred"
+      ]
+    },
+    "alphaSourceType": {
+      "enum": [
+        "behavioral_edge",
+        "structural_risk_premium",
+        "catalyst_mispricing",
+        "flow_momentum_burst",
+        "valuation_re_rating",
+        "quality_compounding",
+        "explicit_no_alpha_risk_filter"
+      ]
+    },
+    "dataReadiness": {
+      "enum": [
+        "structured_provider",
+        "manual_evidence",
+        "research_only",
+        "missing",
+        "unknown"
+      ]
+    },
+    "evidenceLevel": {
+      "enum": [
+        "paper",
+        "live_normalized"
+      ]
+    },
+    "decision": {
+      "enum": [
+        "continue",
+        "continue_as_risk_filter",
+        "redesign_required",
+        "defer_until_provider_ready",
+        "do_not_implement_now"
+      ]
+    },
+    "correlationBasis": {
+      "enum": [
+        "historical_benchmark_proxy",
+        "factor_model_proxy",
+        "hypothesized",
+        "unknown"
+      ]
+    },
+    "factorFramework": {
+      "enum": [
+        "capm",
+        "fama_french_3",
+        "fama_french_5",
+        "q_factor",
+        "barra_like",
+        "sector_size_value_momentum_proxy",
+        "benchmark_only_proxy",
+        "unknown"
+      ]
+    },
+    "rerunTrigger": {
+      "enum": [
+        "initial_audit",
+        "scheduled_quarterly_review",
+        "provider_status_changed",
+        "forward_evidence_changed",
+        "regime_shift_detected",
+        "user_requested",
+        "schema_revision"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "audit_status",
+        "provider_selection_allowed",
+        "data_fetch_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only",
+        "ship_gate_relaxed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7a-1"
+        },
+        "purpose": {
+          "const": "alpha_plausibility_audit_contract"
+        },
+        "audit_status": {
+          "const": "schema_first_contract_only"
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        }
+      }
+    },
+    "auditPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "detailed_field_inventory_owner",
+        "lane_coverage_required",
+        "parent_lane_coverage_required",
+        "paper_ship_gate_claim_allowed",
+        "live_normalized_required_for_ship_gate",
+        "global_aum_pool_allowed",
+        "fixed_allocation_policy_unchanged"
+      ],
+      "properties": {
+        "detailed_field_inventory_owner": {
+          "const": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md#3-10"
+        },
+        "lane_coverage_required": {
+          "const": 11
+        },
+        "parent_lane_coverage_required": {
+          "const": 6
+        },
+        "paper_ship_gate_claim_allowed": {
+          "const": false
+        },
+        "live_normalized_required_for_ship_gate": {
+          "const": true
+        },
+        "global_aum_pool_allowed": {
+          "const": false
+        },
+        "fixed_allocation_policy_unchanged": {
+          "const": true
+        }
+      }
+    },
+    "providerStatusSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "snapshot_generated_at",
+        "provider_readiness_confidence",
+        "provider_status_source",
+        "provider_status_limitations",
+        "status_items"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "snapshot_generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provider_readiness_confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "provider_status_source": {
+          "$ref": "#/$defs/stringList"
+        },
+        "provider_status_limitations": {
+          "$ref": "#/$defs/stringList"
+        },
+        "status_items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/providerStatusItem"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "providerStatusItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "area",
+        "status",
+        "notes"
+      ],
+      "properties": {
+        "area": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "partial",
+            "blocked",
+            "unknown"
+          ]
+        },
+        "notes": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "laneRecords": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/laneRecord"
+      },
+      "minItems": 11,
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "a_short_steady"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "a_short_variants"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "a_share_burst_minimal_data"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "a_share_burst_full_data"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "us_short_steady"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "us_burst_minimal_data"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "us_burst_full_data"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "a_long_core_quality"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "a_long_re_rating_catalyst"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "us_long_core_quality"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "lane_id": {
+                "const": "us_long_re_rating_catalyst"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        }
+      ]
+    },
+    "laneRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lane_id",
+        "parent_lane_id",
+        "parent_aggregation_rule",
+        "lane_role",
+        "alpha_source_hypothesis",
+        "expected_excess_return_band",
+        "expected_volatility_band",
+        "expected_max_drawdown_band",
+        "data_readiness",
+        "pit_blockers",
+        "provider_blockers",
+        "detectability_horizon_months",
+        "benchmark_plan",
+        "evidence_level_required",
+        "provider_readiness",
+        "hypothesis_registration",
+        "evidence_integrity",
+        "pit_survivorship_security_master",
+        "regime_factor_exposure",
+        "cost_execution_feasibility",
+        "capital_deployment_effect",
+        "portfolio_correlation_assumption",
+        "portfolio_contribution",
+        "decision",
+        "decision_reason",
+        "source_refs"
+      ],
+      "properties": {
+        "lane_id": {
+          "$ref": "#/$defs/laneId"
+        },
+        "parent_lane_id": {
+          "$ref": "#/$defs/parentLaneId"
+        },
+        "parent_aggregation_rule": {
+          "$ref": "#/$defs/parentAggregationRule"
+        },
+        "lane_role": {
+          "$ref": "#/$defs/laneRole"
+        },
+        "alpha_source_hypothesis": {
+          "$ref": "#/$defs/alphaSourceHypothesis"
+        },
+        "expected_excess_return_band": {
+          "$ref": "#/$defs/rangeEstimate"
+        },
+        "expected_volatility_band": {
+          "$ref": "#/$defs/rangeEstimate"
+        },
+        "expected_max_drawdown_band": {
+          "$ref": "#/$defs/rangeEstimate"
+        },
+        "data_readiness": {
+          "$ref": "#/$defs/dataReadiness"
+        },
+        "pit_blockers": {
+          "$ref": "#/$defs/blockerList"
+        },
+        "provider_blockers": {
+          "$ref": "#/$defs/blockerList"
+        },
+        "detectability_horizon_months": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "benchmark_plan": {
+          "$ref": "#/$defs/benchmarkPlan"
+        },
+        "evidence_level_required": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceLevel"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "provider_readiness": {
+          "$ref": "#/$defs/providerReadiness"
+        },
+        "hypothesis_registration": {
+          "$ref": "#/$defs/hypothesisRegistration"
+        },
+        "evidence_integrity": {
+          "$ref": "#/$defs/evidenceIntegrity"
+        },
+        "pit_survivorship_security_master": {
+          "$ref": "#/$defs/pitSurvivorshipSecurityMaster"
+        },
+        "regime_factor_exposure": {
+          "$ref": "#/$defs/regimeFactorExposure"
+        },
+        "cost_execution_feasibility": {
+          "$ref": "#/$defs/costExecutionFeasibility"
+        },
+        "risk_filter_effectiveness_evidence": {
+          "$ref": "#/$defs/riskFilterEffectivenessEvidence"
+        },
+        "fraud_accounting_red_flags": {
+          "$ref": "#/$defs/fraudAccountingRedFlags"
+        },
+        "capital_deployment_effect": {
+          "$ref": "#/$defs/capitalDeploymentEffect"
+        },
+        "portfolio_correlation_assumption": {
+          "$ref": "#/$defs/correlationAssumption"
+        },
+        "portfolio_contribution": {
+          "$ref": "#/$defs/portfolioContribution"
+        },
+        "decision": {
+          "$ref": "#/$defs/decision"
+        },
+        "decision_reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/stringList"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "continue_as_risk_filter"
+              }
+            },
+            "required": [
+              "decision"
+            ]
+          },
+          "then": {
+            "required": [
+              "risk_filter_effectiveness_evidence"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "lane_id": {
+                "$ref": "#/$defs/longLaneId"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          },
+          "then": {
+            "required": [
+              "fraud_accounting_red_flags"
+            ]
+          }
+        }
+      ]
+    },
+    "alphaSourceHypothesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_type",
+        "hypothesis_text",
+        "expected_edge_mechanism"
+      ],
+      "properties": {
+        "source_type": {
+          "$ref": "#/$defs/alphaSourceType"
+        },
+        "hypothesis_text": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "expected_edge_mechanism": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "rangeEstimate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "low",
+        "high",
+        "unit",
+        "time_base",
+        "rationale"
+      ],
+      "properties": {
+        "low": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "high": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "unit": {
+          "enum": [
+            "pct",
+            "t_stat",
+            "ratio",
+            "months",
+            "not_estimable"
+          ]
+        },
+        "time_base": {
+          "enum": [
+            "monthly",
+            "annual",
+            "holding_period",
+            "not_applicable"
+          ]
+        },
+        "rationale": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "blockerList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "benchmarkPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provisional_primary_benchmark",
+        "secondary_benchmarks",
+        "final_benchmark_open_questions"
+      ],
+      "properties": {
+        "provisional_primary_benchmark": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "secondary_benchmarks": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "final_benchmark_open_questions": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "providerReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_status_snapshot_ref",
+        "provider_readiness_confidence",
+        "provider_status_source",
+        "provider_status_limitations"
+      ],
+      "properties": {
+        "provider_status_snapshot_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "provider_readiness_confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "provider_status_source": {
+          "$ref": "#/$defs/stringList"
+        },
+        "provider_status_limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "hypothesisRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timestamp",
+        "hypothesis_text",
+        "registered_by_session_id",
+        "data_window_at_registration",
+        "evidence_available_at_registration",
+        "source_doc_refs"
+      ],
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "hypothesis_text": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "registered_by_session_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "data_window_at_registration": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidence_available_at_registration": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_doc_refs": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "evidenceIntegrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_window_type",
+        "tests_performed_count",
+        "multiple_testing_notes",
+        "adjustment_method",
+        "minimum_effective_sample_required",
+        "current_effective_sample",
+        "power_status"
+      ],
+      "properties": {
+        "evidence_window_type": {
+          "enum": [
+            "in_sample",
+            "out_of_sample",
+            "forward",
+            "live_normalized"
+          ]
+        },
+        "tests_performed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "multiple_testing_notes": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "adjustment_method": {
+          "enum": [
+            "none",
+            "bonferroni",
+            "fdr",
+            "holdout",
+            "forward_confirmation",
+            "not_applicable"
+          ]
+        },
+        "minimum_effective_sample_required": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "current_effective_sample": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "power_status": {
+          "enum": [
+            "insufficient",
+            "preliminary",
+            "adequate"
+          ]
+        }
+      }
+    },
+    "pitSurvivorshipSecurityMaster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "survivorship_handling_status",
+        "security_master_status",
+        "delisting_coverage_status",
+        "listing_status_coverage",
+        "halt_suspension_status_coverage",
+        "corporate_action_adjustment_status",
+        "industry_classification_pit_status",
+        "survivorship_bias_risk"
+      ],
+      "properties": {
+        "survivorship_handling_status": {
+          "$ref": "#/$defs/coverageStatus"
+        },
+        "security_master_status": {
+          "$ref": "#/$defs/coverageStatus"
+        },
+        "delisting_coverage_status": {
+          "$ref": "#/$defs/coverageStatus"
+        },
+        "listing_status_coverage": {
+          "$ref": "#/$defs/coverageStatus"
+        },
+        "halt_suspension_status_coverage": {
+          "$ref": "#/$defs/coverageStatus"
+        },
+        "corporate_action_adjustment_status": {
+          "$ref": "#/$defs/coverageStatus"
+        },
+        "industry_classification_pit_status": {
+          "$ref": "#/$defs/coverageStatus"
+        },
+        "survivorship_bias_risk": {
+          "$ref": "#/$defs/riskLevel"
+        }
+      }
+    },
+    "regimeFactorExposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "regime_sensitivity_declaration",
+        "style_beta_or_factor_exposure_risk",
+        "factor_framework"
+      ],
+      "properties": {
+        "regime_sensitivity_declaration": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/regimeScenario"
+          },
+          "minItems": 1
+        },
+        "style_beta_or_factor_exposure_risk": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "factor_framework": {
+          "$ref": "#/$defs/factorFramework"
+        }
+      }
+    },
+    "regimeScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "regime",
+        "expected_alpha_decay",
+        "expected_drawdown_risk",
+        "data_availability"
+      ],
+      "properties": {
+        "regime": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "expected_alpha_decay": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "expected_drawdown_risk": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "data_availability": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "costExecutionFeasibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_alpha_return_gross_pct",
+        "expected_alpha_return_net_pct",
+        "cost_adjustment_required",
+        "cost_model_scope",
+        "execution_cost_feasibility_status",
+        "capacity_status",
+        "slippage_confidence",
+        "manual_execution_feasibility",
+        "net_alpha_not_estimable_reason"
+      ],
+      "properties": {
+        "expected_alpha_return_gross_pct": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "expected_alpha_return_net_pct": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "cost_adjustment_required": {
+          "type": "boolean"
+        },
+        "cost_model_scope": {
+          "enum": [
+            "gross_only",
+            "commissions_only",
+            "commissions_slippage_tax_fx_dividend",
+            "not_estimable"
+          ]
+        },
+        "execution_cost_feasibility_status": {
+          "enum": [
+            "feasible",
+            "constrained",
+            "blocked",
+            "unknown"
+          ]
+        },
+        "capacity_status": {
+          "enum": [
+            "sufficient_for_bucket",
+            "capacity_limited",
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "slippage_confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "manual_execution_feasibility": {
+          "enum": [
+            "feasible",
+            "requires_manual_review",
+            "blocked",
+            "unknown"
+          ]
+        },
+        "net_alpha_not_estimable_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "riskFilterEffectivenessEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "with_filter_vs_without_filter_drawdown",
+        "win_rate_comparison",
+        "false_positive_comparison",
+        "false_negative_risk",
+        "strong_candidate_kill_risk",
+        "regime_sensitivity"
+      ],
+      "properties": {
+        "with_filter_vs_without_filter_drawdown": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "win_rate_comparison": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "false_positive_comparison": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "false_negative_risk": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "strong_candidate_kill_risk": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "regime_sensitivity": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "fraudAccountingRedFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audit_opinion_or_auditor_change_evidence",
+        "key_audit_matters_evidence",
+        "receivables_vs_revenue_growth",
+        "cfo_vs_net_income_divergence",
+        "interest_coverage_deterioration",
+        "related_party_transaction_exposure",
+        "restatement_or_late_filing_evidence"
+      ],
+      "properties": {
+        "audit_opinion_or_auditor_change_evidence": {
+          "$ref": "#/$defs/redFlagEvidence"
+        },
+        "key_audit_matters_evidence": {
+          "$ref": "#/$defs/redFlagEvidence"
+        },
+        "receivables_vs_revenue_growth": {
+          "$ref": "#/$defs/redFlagEvidence"
+        },
+        "cfo_vs_net_income_divergence": {
+          "$ref": "#/$defs/redFlagEvidence"
+        },
+        "interest_coverage_deterioration": {
+          "$ref": "#/$defs/redFlagEvidence"
+        },
+        "related_party_transaction_exposure": {
+          "$ref": "#/$defs/redFlagEvidence"
+        },
+        "restatement_or_late_filing_evidence": {
+          "$ref": "#/$defs/redFlagEvidence"
+        }
+      }
+    },
+    "redFlagEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverage_status",
+        "evidence_source",
+        "current_assessment",
+        "limitations"
+      ],
+      "properties": {
+        "coverage_status": {
+          "$ref": "#/$defs/coverageStatus"
+        },
+        "evidence_source": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "current_assessment": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "capitalDeploymentEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capital_deployment_effect",
+        "bucket_status",
+        "deployment_scope",
+        "release_to_liquidity_reserve",
+        "requires_user_capital_decision",
+        "effect_rationale"
+      ],
+      "properties": {
+        "capital_deployment_effect": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "bucket_status": {
+          "enum": [
+            "available_for_approved_lane",
+            "held_as_reserve",
+            "paper_only",
+            "minimal_observation_only",
+            "blocked"
+          ]
+        },
+        "deployment_scope": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "release_to_liquidity_reserve": {
+          "type": "boolean"
+        },
+        "requires_user_capital_decision": {
+          "type": "boolean"
+        },
+        "effect_rationale": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "correlationAssumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correlation_basis",
+        "expected_correlation_to_other_lanes",
+        "lane_level_override_rationale"
+      ],
+      "properties": {
+        "correlation_basis": {
+          "$ref": "#/$defs/correlationBasis"
+        },
+        "expected_correlation_to_other_lanes": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "lane_level_override_rationale": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "portfolioContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_alpha_contribution_pct",
+        "drawdown_control_contribution",
+        "diversification_contribution",
+        "rationale"
+      ],
+      "properties": {
+        "expected_alpha_contribution_pct": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "drawdown_control_contribution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "diversification_contribution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "rationale": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "portfolioSynthesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "default_correlation_basis",
+        "parent_lanes",
+        "correlation_assumption_matrix",
+        "total_portfolio_expected_excess_return_band",
+        "total_portfolio_drawdown_implication",
+        "evidence_clock_bottlenecks",
+        "implementation_sequence_implications"
+      ],
+      "properties": {
+        "default_correlation_basis": {
+          "$ref": "#/$defs/correlationBasis"
+        },
+        "parent_lanes": {
+          "$ref": "#/$defs/parentLanes"
+        },
+        "correlation_assumption_matrix": {
+          "$ref": "#/$defs/stringList"
+        },
+        "total_portfolio_expected_excess_return_band": {
+          "$ref": "#/$defs/rangeEstimate"
+        },
+        "total_portfolio_drawdown_implication": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidence_clock_bottlenecks": {
+          "$ref": "#/$defs/stringList"
+        },
+        "implementation_sequence_implications": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "parentLanes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/parentLaneRecord"
+      },
+      "minItems": 6,
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "parent_lane_id": {
+                "const": "a_short_steady"
+              }
+            },
+            "required": [
+              "parent_lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "parent_lane_id": {
+                "const": "us_short_steady"
+              }
+            },
+            "required": [
+              "parent_lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "parent_lane_id": {
+                "const": "a_burst"
+              }
+            },
+            "required": [
+              "parent_lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "parent_lane_id": {
+                "const": "us_burst"
+              }
+            },
+            "required": [
+              "parent_lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "parent_lane_id": {
+                "const": "a_long"
+              }
+            },
+            "required": [
+              "parent_lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "parent_lane_id": {
+                "const": "us_long"
+              }
+            },
+            "required": [
+              "parent_lane_id"
+            ]
+          }
+        }
+      ]
+    },
+    "parentLaneRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parent_lane_id",
+        "active_child_lane_ids",
+        "parent_aggregation_rule",
+        "expected_portfolio_role",
+        "expected_contribution",
+        "capital_policy_effect",
+        "notes"
+      ],
+      "properties": {
+        "parent_lane_id": {
+          "$ref": "#/$defs/parentLaneId"
+        },
+        "active_child_lane_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/laneId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "parent_aggregation_rule": {
+          "$ref": "#/$defs/parentAggregationRule"
+        },
+        "expected_portfolio_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "expected_contribution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "capital_policy_effect": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "notes": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    }
+  }
+}

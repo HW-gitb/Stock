@@ -1,12 +1,13 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-27（docs slimming baseline）
+**最后更新**：2026-05-27（Phase 7a-1 alpha audit schema contract）
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
 ---
 
 ## 0. Latest Delta
 
+- Phase 7a-1 alpha plausibility audit schema contract 已建立：`schemas/alpha_plausibility_audit.schema.json`、example、schema tests。此刀只建 contract，不选 provider、不抓数据、不建 adapter / DataHub table、不产出真实 audit。
 - Docs hygiene baseline 已收敛：`AGENTS.md` 只保留最高规则 / 固化决策 / 启动顺序，完整 routing table 由 `docs/README.md` 维护。
 - Phase 7a 双文档 owner boundary 已锁定：`docs/ALPHA_VALIDATION_ACTION_GUIDE.md` owns detailed Phase 7a+ mandatory field inventory；`docs/alpha_plausibility_audit.md` owns audit purpose, lane coverage, verdict semantics, execution route，并保留 "must not be duplicated here" 防 drift 措辞。
 - `docs/portfolio_allocation_policy.md` 已去 P0a 活跃命名；仍记录资金政策最初形成于 Phase 5 P0c / P0a，但当前表述为 phase-neutral capital policy。
@@ -17,8 +18,8 @@
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7a-1 前置。Phase 6 spec-pack docs-only baselines 已完成；Phase 7 provider capability / field catalog contract v1.0.0 已建立；下一步是 alpha plausibility audit schema-first。
-- **当前 P0 目标**：新增 `schemas/alpha_plausibility_audit.schema.json`、example、tests、lightweight provider status snapshot 和第一版 audit。字段要求以 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §3-§10 为准。
+- **当前 Phase**：Phase 7a-1 进行中。Phase 6 spec-pack docs-only baselines 已完成；Phase 7 provider capability / field catalog contract v1.0.0 已建立；alpha plausibility audit schema/example/tests 已建立。
+- **当前 P0 目标**：下一刀写 lightweight provider status snapshot 作为 audit 输入，并产出第一版 6 parent lane / 11 sub-lane audit。字段要求以 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §3-§10 为准。
 - **当前 blocker**：无待用户决策 blocker。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
@@ -27,6 +28,7 @@
 
 ## 2. 最近已完成
 
+- **Phase 7a-1 alpha audit schema contract**（2026-05-27）：`schemas/alpha_plausibility_audit.schema.json`、example 和 schema tests 已建立；覆盖 11 sub-lane / 6 parent lane、risk-filter evidence、long-lane fraud red flags、hypothesis registration、provider readiness confidence、paper/live-normalized evidence 边界。
 - **Docs routing / owner cleanup**（2026-05-27）：`AGENTS.md` / `docs/README.md` 路由职责分离，`alpha_plausibility_audit.md` 删除字段 mirror，`portfolio_allocation_policy.md` phase-neutral 化。
 - **Phase 7a+ alpha reality action guide**（2026-05-27）：`docs/ALPHA_VALIDATION_ACTION_GUIDE.md` 固化为当前 Phase 7a+ 最高行动指南，覆盖 survivorship、multiple testing、statistical power、PIT/security master、fraud red flags、regime / factor exposure、execution cost、risk-filter evidence、decision reproducibility、position reconciliation、production monitoring 等非可选护栏。
 - **Phase 7a alpha-validation route**（2026-05-27）：`docs/alpha_plausibility_audit.md` 与 `docs/evidence_capital_policy.md` 建立。paper evidence 与 live-normalized ship-gate evidence 必须分离；不改变 35/65、bucket、cash non-fungibility 或 ship gate。
@@ -61,6 +63,7 @@
 - `docs/SESSION_LOG.md` — 最新 cross-LLM reasoning / review verdict；只读顶部 1-3 条。
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` — Phase 7a+ 最高行动指南。
 - `docs/alpha_plausibility_audit.md` — Alpha plausibility / lane objective audit owner。
+- `schemas/alpha_plausibility_audit.schema.json` — Phase 7a-1 audit artifact contract。
 - `docs/evidence_capital_policy.md` — paper vs live-normalized evidence owner。
 - `docs/strategy_design_synthesis.md` — 总体策略架构 owner。
 - `docs/burst_lane_spec.md` / `docs/us_short_spec.md` / `docs/long_alpha_spec.md` — lane owner specs。
@@ -75,10 +78,9 @@
 
 ### P0 — Phase 7a-1 alpha plausibility audit
 
-1. 新增 `schemas/alpha_plausibility_audit.schema.json`、example、tests。
-2. 写 lightweight provider status snapshot 作为 audit 输入。
-3. 产出第一版 6 parent lane / 11 sub-lane audit。
-4. 使用 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §3-§10 的 mandatory fields；不要在 audit route doc 内重复字段 inventory。
+1. 写 lightweight provider status snapshot 作为 audit 输入。
+2. 产出第一版 6 parent lane / 11 sub-lane audit。
+3. 使用 `schemas/alpha_plausibility_audit.schema.json` 与 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §3-§10 的 mandatory fields；不要在 audit route doc 内重复字段 inventory。
 
 ### P1 — Provider / evidence sequencing after audit
 

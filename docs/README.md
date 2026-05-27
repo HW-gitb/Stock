@@ -15,6 +15,7 @@ Use this routing table instead of guessing which file to read.
 | Current Phase 7a+ highest action guide: alpha reality guardrails, accepted business gaps, execution roadmap | `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` |
 | Strategy architecture: short-term lanes, burst lane, long-term alpha systems, research, coordinator | `docs/strategy_design_synthesis.md` |
 | Alpha plausibility, lane objective, portfolio-level continue / redesign / risk-filter decisions | `docs/alpha_plausibility_audit.md` |
+| Phase 7a-1 alpha plausibility audit artifact schema contract | `schemas/alpha_plausibility_audit.schema.json` |
 | Paper vs live-normalized evidence and capital-governance-safe ship-gate evidence policy | `docs/evidence_capital_policy.md` |
 | A/US short-term burst lane detailed baseline | `docs/burst_lane_spec.md` |
 | US-short normalized production-facing spec | `docs/us_short_spec.md` |
