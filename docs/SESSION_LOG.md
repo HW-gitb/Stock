@@ -8,6 +8,81 @@
 
 ---
 
+## 2026-05-27 — Claude re-review — Pass (docs hygiene Optional O1/O2 disposition)
+
+**Commits**: none (review-only entry; re-reviews working tree status/diffs vs `1ddf47d`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 accept-with-modification verified — `docs/alpha_plausibility_audit.md` §2.1 末段 fraud red-flag inline inventory 已删除，换为一行 link：owner = `long_alpha_spec.md` §7 + A/US annexes，required by `ALPHA_VALIDATION_ACTION_GUIDE.md` §7；routing verify 准确（long §7 line 137 含 7 项 common inventory；§10/§11 annex 含市场 specific 扩展如 A-long line 296-330 audit opinion / CFO persistence / 应收扩张；ACTION_GUIDE §7 line 137-148 是 audit 必填要求）；§7 比我原建议的 §10/§11 更准确（§10/§11 是 annex，§7 是 common owner）。O2 accept-with-modification verified — 新 `修复` entry 七节齐全含 Optional disposition section（O1/O2 各一行 disposition）+ Validation run/result + Current review state "Ready for Claude re-review: Yes" + [tracked] tags；选择在新 entry 补齐而非改写历史 entry 是 reverse-chrono 协议下的正确做法。Scope 严守（仅 2 文件 docs-only：alpha_plausibility_audit.md + SESSION_LOG.md）。无 Required fixes、无新 Optional、无 open question、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (repair: docs hygiene Optional O1/O2)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest Claude docs-hygiene review verdict: Pass with 2 Optional, 0 Required.
+- Builds on `2026-05-27 — Codex (docs hygiene: routing and owner boundaries)`.
+
+**Optional disposition**:
+- O1 accept with modification — removed the inline long-lane fraud / accounting red-flag inventory from `docs/alpha_plausibility_audit.md`; routed detailed ownership to `docs/long_alpha_spec.md` §7 plus A / US annexes and the audit requirement to `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §7. Modification: used §7 plus annexes instead of only §10 / §11 because the common long-thesis fraud requirement lives in §7, while annexes carry market-specific details.
+- O2 accept with modification — this new repair entry supplies the required Optional disposition, validation run/result, and current review state instead of rewriting the prior historical Codex entry.
+
+**Worked on**:
+1. [tracked] `docs/alpha_plausibility_audit.md`: removed the remaining detailed fraud red-flag mirror from §2.1.
+2. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff for Claude re-review.
+
+**Validation run/result**:
+- `git diff --check` passed; only existing LF/CRLF normalization warnings were reported.
+- Focused duplicate scan passed: `docs/alpha_plausibility_audit.md` no longer contains the detailed fraud checklist terms or the removed Phase 7a-1 field-group mirror.
+- Focused routing scan passed: `docs/README.md` still owns the complete routing table; `AGENTS.md` only keeps the minimum startup list.
+
+**Current review state**:
+- Required fixes repaired: 0.
+- Optional dispositions: 0 accepted, 2 accepted with modification, 0 rejected.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude re-review this docs-only repair scope.
+2. If Claude returns Pass, user can run `提交`.
+
+---
+
+## 2026-05-27 — Codex (docs hygiene: routing and owner boundaries)
+
+**Commits**: none (working tree docs-only cleanup; commit waits for review/pass flow if requested)
+
+**Relationship to prior session(s)**:
+- Refines the Phase 7a+ documentation baseline after the user's documentation redundancy audit request.
+- **Refines**: `AGENTS.md` and `docs/README.md` routing split. Adjustment: `AGENTS.md` keeps root rules and startup order; `docs/README.md` remains the complete routing table.
+
+**Worked on**:
+1. Removed the mirrored Phase 7a-1 field inventory from `docs/alpha_plausibility_audit.md` §2.1 and routed detailed mandatory field groups to `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §3-§10.
+2. Simplified `AGENTS.md` §文档路由 so new docs do not require duplicating the full routing table in both AGENTS and README.
+3. Renamed stale P0a-facing headings and active wording in `docs/portfolio_allocation_policy.md` to phase-neutral capital-policy language.
+
+**Key decisions**:
+- `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` owns the detailed Phase 7a+ mandatory field inventory; `docs/alpha_plausibility_audit.md` owns audit purpose, lane coverage, verdict semantics, and execution route.
+- `docs/README.md` is the single complete document routing table. `AGENTS.md` remains the highest rule file, not a full index.
+
+**Alternatives considered and rejected**:
+- "Delete or merge root spec docs" — rejected. Current root docs still have distinct owner roles; the problem was duplicated policy text, not document count.
+- "Archive `docs/SESSION_LOG.md` now" — rejected. The file is large but still follows the current single-file policy and only the top 1-3 entries are required reading.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Run focused diff checks for the docs hygiene slice.
+2. If requested, send to Claude review before commit.
+
+---
+
 ## 2026-05-27 — Claude re-review — Pass (Phase 7a+ action guide O1 disposition)
 
 **Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `5034e47`)

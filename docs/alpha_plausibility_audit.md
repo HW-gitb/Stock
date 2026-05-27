@@ -49,21 +49,9 @@ The audit may cite academic literature, existing project backtests, provider aud
 
 ### 2.1 Phase 7a-1 Mandatory Schema Additions
 
-`docs/ALPHA_VALIDATION_ACTION_GUIDE.md` is the current detailed action guide. The first audit schema must include these groups before the audit can drive implementation:
+Mandatory Phase 7a-1 field groups are defined in `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §3-§10. This document owns audit purpose, lane coverage, verdict semantics, and execution route; the detailed mandatory field inventory must not be duplicated here.
 
-- Provider snapshot and uncertainty: `provider_status_snapshot_ref`, `provider_readiness_confidence`, `provider_status_source`, `provider_status_limitations`.
-- Parent aggregation: `parent_lane_id`, `parent_aggregation_rule` with `active_stage_only`, `weighted_by_maturity`, `sum_with_overlap_penalty`, or `take_dominant_role`.
-- Audit rerun and decision history: `audit_run_id`, `supersedes_audit_id`, `audit_date`, `next_review_date`, `rerun_trigger`, `verdict_history`.
-- Decision effect: `capital_deployment_effect`, `bucket_status`, `deployment_scope`, `release_to_liquidity_reserve`, `requires_user_capital_decision`, `effect_rationale`.
-- Hypothesis registration: `hypothesis_registration.timestamp`, `hypothesis_text`, `registered_by_session_id`, `data_window_at_registration`, `evidence_available_at_registration`, and `source_doc_refs`.
-- Statistical integrity: `evidence_window_type`, `tests_performed_count`, `multiple_testing_notes`, `adjustment_method`, `minimum_effective_sample_required`, `current_effective_sample`, `power_status`.
-- PIT and survivorship: `survivorship_handling_status`, `security_master_status`, `delisting_coverage_status`, `listing_status_coverage`, `halt_suspension_status_coverage`, `corporate_action_adjustment_status`, `industry_classification_pit_status`, `survivorship_bias_risk`.
-- Regime and factor exposure: `regime_sensitivity_declaration`, `style_beta_or_factor_exposure_risk`, `factor_framework`.
-- Cost and execution feasibility: `expected_alpha_return_gross_pct`, `expected_alpha_return_net_pct`, `cost_adjustment_required`, `cost_model_scope`, `execution_cost_feasibility_status`, `capacity_status`, `slippage_confidence`, `manual_execution_feasibility`.
-- Risk-filter effectiveness when `decision = continue_as_risk_filter`: `risk_filter_effectiveness_evidence` covering with-filter vs without-filter drawdown, win rate, false positives, false negatives, strong-candidate kill risk, and regime sensitivity.
-- Reproducibility placeholder: `decision_packet_ref` or `reproducibility_requirements`, with the full immutable packet schema deferred to Phase 7a-5.
-
-For long lanes, the schema must also require accounting-quality / fraud red-flag coverage. At minimum this includes audit opinion or auditor-change evidence where available, key audit matters where available, receivables growth versus revenue growth, CFO versus net income divergence, interest coverage deterioration, related-party exposure, and restatement / late-filing evidence.
+Long-lane fraud / accounting red-flag coverage is owned by `docs/long_alpha_spec.md` §7 plus the A / US long annexes, and required by `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §7. Do not duplicate the detailed red-flag inventory in this audit route document.
 
 ## 3. Lane Coverage
 

@@ -5,23 +5,14 @@
 
 ## 文档路由
 
-先读本文件，再按任务查 `docs/README.md` 的 routing table。常用入口：
+先读本文件，再按任务查 `docs/README.md` 的完整 routing table。`AGENTS.md` 只维护最高规则、固化决策、启动顺序和强制流程；不要在这里复制完整文档索引。
 
-- 当前状态 / 下一步：`docs/CURRENT.md`
-- 最新跨 LLM 交接、review verdict、pending Optional：`docs/SESSION_LOG.md` 顶部 1-3 条
-- Review 流程和短命令：`docs/AI_REVIEW_PROTOCOL.md`
-- 当前 Phase 7a+ 最高行动指南：`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`
-- 策略总设计：`docs/strategy_design_synthesis.md`
-- Alpha plausibility / lane objective audit：`docs/alpha_plausibility_audit.md`
-- Evidence capital / paper vs live-normalized policy：`docs/evidence_capital_policy.md`
-- 短线 `burst_lane` 规格：`docs/burst_lane_spec.md`
-- US-short normalized spec：`docs/us_short_spec.md`
-- 长线 alpha 共同规格 / A / US 长线 skeleton：`docs/long_alpha_spec.md`
-- Provider / data requirements audit：`docs/provider_data_requirements_audit.md`
-- Provider capability / field catalog contract：`schemas/provider_capability_catalog.schema.json`
-- 资金政策：`docs/portfolio_allocation_policy.md`
-- DataHub / provider / factor guardrail：`docs/datahub_design.md`
-- phase 历史：`docs/handoff/` 下由本文件“交接记录”列出的 handoff
+常规启动至少读取：
+
+- `docs/README.md`：完整文档路由。
+- `docs/CURRENT.md`：当前状态 / 下一步。
+- `docs/SESSION_LOG.md` 顶部 1-3 条：最新跨 LLM 交接、review verdict、pending Optional。
+- `docs/AI_REVIEW_PROTOCOL.md`：review 流程和短命令。
 
 ## 项目背景
 
