@@ -22,7 +22,10 @@ The DataHub idea is accepted, but implementation is staged:
 - **Phase 2.6**: document the DataHub design and strengthen data lineage in existing reports.
 - **Phase 3-6**: continue building the A-share short-term analyzer/state/Skill/closed-loop workflow. Do not split `A-EGS/egs_main.py` into a full DataHub during this period.
 - **Phase 6e**: establish `docs/provider_data_requirements_audit.md` so Phase 7 starts from four-system data requirements instead of A-short-only convenience.
-- **Phase 7**: perform the engine modularization and DataHub implementation before expanding to US short-term. The first schema-first contract baseline is `schemas/provider_capability_catalog.schema.json`.
+- **Phase 7a**: perform schema-first alpha-validation work before broad engine modularization. The current action guide is `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`; the next route is the alpha plausibility audit schema and first audit in `docs/alpha_plausibility_audit.md`.
+- **Phase 7b**: populate provider capability evidence and add data quality / provider drift monitoring.
+- **Phase 7c**: implement broad DataHub / engine modularization with reproducibility plumbing and data quality monitor.
+- **Phase 7 implementation**: broad DataHub / engine modularization starts only after provider capability, alpha plausibility, evidence-capital, and early report contracts are reviewed.
 
 Reason: `A-EGS/egs_main.py` v7.10 and `runners/backtest_rank.py` have just passed a 24-period production rank-backtest engineering validation. Large structural rewrites now would add breakage risk before the A-share short-term loop is closed.
 
@@ -134,13 +137,17 @@ Recommended future additions:
 
 ## Phase 7 Scope
 
-Phase 7 is the formal engine modularization and DataHub implementation phase.
+Phase 7 is the formal provider capability, alpha-validation, and DataHub implementation phase.
 
-Phase 7 starts only after the A-share short-term sample loop is stable enough to avoid losing the validated behavior of `A-EGS/egs_main.py`, and after `docs/provider_data_requirements_audit.md` has a reviewed baseline.
+Phase 7 starts only after the A-share short-term sample loop is stable enough to avoid losing the validated behavior of `A-EGS/egs_main.py`, and after `docs/provider_data_requirements_audit.md` has a reviewed baseline. Broad DataHub implementation should not start until the Phase 7a alpha plausibility route has clarified lane priority and provider blockers.
 
 Completion criteria:
 
 - Provider capability / field catalog contract exists for the data classes required by A-short, US-short, A-long, US-long, and burst lanes. Current baseline: `schemas/provider_capability_catalog.schema.json` v1.0.0.
+- Alpha plausibility audit contract exists and has reviewed lane-level verdicts before large implementation investments.
+- Evidence capital policy is reflected in aggregate/report schemas so paper evidence cannot be mistaken for live-normalized ship-gate evidence.
+- Data quality / provider drift monitoring exists before provider-backed evidence is treated as stable. It must cover coverage, freshness, schema drift, outliers, revision rate, provider incidents, and silently changed provider semantics.
+- Reproducibility plumbing exists for decision packets before live-normalized or production-like claims depend on DataHub outputs.
 - `A-EGS/egs_main.py` no longer performs scattered direct provider calls for core reusable data.
 - Provider access is centralized under `engine/data/`.
 - Standardized data contracts exist for daily history, daily basic, moneyflow, financials, stock basic, industry membership, limit prices, and benchmark indices.
@@ -155,3 +162,4 @@ Completion criteria:
 - Do not change field units or naming silently.
 - Do not let backtest and production read different definitions for the same factor.
 - Do not treat DataHub work as a strategy-performance fix. It improves reproducibility and reuse; it does not by itself prove alpha.
+- Do not treat provider readiness as permanent. Provider drift, API schema changes, delayed fields, revised fundamentals, and classification changes must be logged and reviewable.

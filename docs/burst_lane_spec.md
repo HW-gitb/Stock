@@ -39,6 +39,19 @@ Non-scope:
 
 The burst lane may compare against steady-lane candidates and market benchmarks, but it cannot borrow a steady-lane ship gate result. A burst candidate must be explainable from burst-specific evidence.
 
+## 2.5 Evidence Tiers
+
+Burst lanes are split into two data tiers so implementation is not blocked by a monolithic provider gate, while pure EOD momentum is not mislabeled as full burst alpha.
+
+| Tier | Required data | Allowed stage | Live eligibility |
+|---|---|---|---|
+| `minimal_data_burst` | OHLCV, volume / turnover, relative strength, benchmark context, liquidity, market mechanics, and existing candidate context | Research / paper only by default | Not live-eligible unless a later reviewed contract adds non-price confirmation and risk controls. |
+| `full_data_burst` | Minimal tier plus reviewed event / catalyst / filing / guidance / capital-flow / options / borrow / short-interest or manual evidence | Paper and minimal live observation | Live-eligible only after provider/manual evidence path, bucket capital context, report path, and forward evidence capture are active. |
+
+The first implementation may start with `minimal_data_burst` to start paper evidence. It must not describe this as production burst readiness. Minimal live observation requires `full_data_burst` or a reviewed exception that documents equivalent non-price confirmation.
+
+Minimal-to-full promotion criteria are owned by the Phase 7a-4 slice in `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`. At minimum, promotion must prove benchmark-relative paper alpha, acceptable drawdown and false-positive behavior, more than pure price momentum, a credible non-price confirmation path, cost / liquidity / spread / borrow / limit-risk feasibility, retained rejected / failed candidates, and a paired comparison between minimal-only and minimal-plus-full-data evidence after full data is available.
+
 ## 3. Candidate Lifecycle
 
 Each burst candidate should move through this lifecycle:
@@ -90,19 +103,25 @@ Independence rules:
 
 Exact numeric thresholds are deferred until provider fields, backtest surfaces, and forward evidence are available. The first implementation should expose raw and normalized values rather than hiding them behind a single opaque score.
 
+Before a candidate enters minimal live observation, the report must also prove that the candidate is not only a minimal-data momentum case. At least one non-price confirmation source must be reviewed or manually evidenced, such as catalyst, filing/event, capital flow, options/borrow, or dated policy / company evidence.
+
 ## 6. A-Share Burst Annex
 
 ### 6.1 Data Fields
 
-A-share burst evaluation may use:
+A-share `minimal_data_burst` evaluation may use:
 
 - daily OHLCV, turnover, amount, and rolling volume / turnover baselines,
 - limit-up / limit-down state, trading halt / suspension, ST status, and listing-age flags,
 - industry / concept / L3 context where available,
 - existing A-short candidate context from `analysis_input.json`,
+- CSI1000 / CSI300 benchmark monthly returns for Phase 6 reporting until a burst-specific benchmark review changes the policy.
+
+A-share `full_data_burst` evaluation may add:
+
 - policy, regulatory, earnings, product, or industry-cycle catalyst evidence with observed date,
 - capital-flow or northbound-flow fields if a reviewed provider makes them available,
-- CSI1000 / CSI300 benchmark monthly returns for Phase 6 reporting until a burst-specific benchmark review changes the policy.
+- manual evidence with source, observed date, and reviewer/process tag.
 
 The A-share burst lane may reuse the existing A-short benchmark return materializer as an input source for benchmark-aware reporting, but it must keep independent burst-lane evidence and ship-gate evaluation. Reusing a data source does not mean inheriting the steady A-short gate.
 
@@ -128,14 +147,18 @@ Future A-share burst implementation must handle:
 
 ### 7.1 Data Fields
 
-US burst evaluation may use:
+US `minimal_data_burst` evaluation may use:
 
 - daily OHLCV, gap, intraday range summary when available, and rolling volume baselines,
-- earnings date, guidance, analyst revision, SEC filing, product / regulatory / legal event, and company news evidence with observed date,
 - sector / industry / peer relative strength,
+- benchmark candidates such as S&P 500, Russell 1000, Nasdaq 100 / QQQ, and sector ETF proxies.
+
+US `full_data_burst` evaluation may add:
+
+- earnings date, guidance, analyst revision, SEC filing, product / regulatory / legal event, and company news evidence with observed date,
 - pre-market / after-hours context when a reviewed provider supports it,
 - options, short interest, borrow, or dark-pool style fields only after provider reliability is reviewed,
-- benchmark candidates such as S&P 500, Russell 1000, Nasdaq 100 / QQQ, and sector ETF proxies.
+- manual evidence with source, observed date, and reviewer/process tag.
 
 Benchmark choice for US burst is deferred. Candidate benchmark set should be logged early because it affects alpha t-stat interpretation and Phase 6e provider requirements.
 
@@ -167,6 +190,8 @@ Required rules:
 - No averaging down by default.
 - Time stop must be harder than the steady lane; exact holding windows are deferred to implementation evidence.
 - Breakout failure must trigger fast exit / reject logic.
+- Position sizing must respect future concentration and liquidity / ADV limits before any live-normalized evidence claim.
+- Market impact, spread, borrow, halt, and limit-lock feasibility must be part of promotion and sizing evidence.
 - Trailing stop or equivalent give-back control must be defined before minimal-size manual recommendations.
 - No immediate re-entry after a failed burst trigger without a new catalyst or new independent signal evidence.
 - Per-name cooldown and weekly trade-count cap are required before any minimal-size live observation.

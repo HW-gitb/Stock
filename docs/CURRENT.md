@@ -1,12 +1,17 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-27（Phase 7 provider capability / field catalog contract）
+**最后更新**：2026-05-27（Phase 7a+ alpha reality action guide）
 **文档定位**：跨会话接续的精简事实表。AGENTS.md 是不变约定，本文件是动态状态。**所有新会话先读这两个文件，再按需读 handoff。**
 
 ---
 
 ## 0. Latest Delta (2026-05-27)
 
+- Phase 7a+ alpha reality action guide is now accepted in `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` and routed from `AGENTS.md` as the current highest action guide. It folds the latest vulnerability analysis into the roadmap without opening a new design loop: Phase 7a-1 must add audit schema/example/tests, lightweight provider status snapshot, first audit, and alpha-reality fields for survivorship, multiple testing, statistical power, regime sensitivity, factor framework, execution cost, risk-filter effectiveness, parent aggregation, correlation basis, and decision effect.
+- Phase 7a alpha-validation route is now the next design and execution route: `docs/alpha_plausibility_audit.md` defines the schema-first lane objective / plausibility audit, and `docs/evidence_capital_policy.md` defines paper vs live-normalized evidence without changing capital allocation. This supersedes the prior default next step of spending the next implementation slice on already-proven A-share EOD / benchmark surfaces.
+- Provider capability evidence priority is now alpha-leverage-first: first US fundamentals / filings / corporate actions, then A-share fundamentals / announcement dates / SW industry history, then burst event / flow / options / borrow fields by structured / manual / research-only status. Already-proven A-share EOD / CSI benchmark surfaces should be recorded as ready evidence, but they are no longer the default next resource sink.
+- Short-term design is sharpened: A-short steady is treated as a permanent risk filter / evidence loop unless future forward evidence explicitly overturns that role; A-short variants target bad-ticket / drawdown / execution-quality improvement with higher promotion gates; burst lanes split into minimal-data paper tiers and full-data live-eligible tiers.
+- Long-alpha design is sharpened: every long candidate needs an `expected_alpha_thesis` covering benchmark opportunity cost, quality edge, valuation / compounding path, catalyst / re-rating path, downside path, sizing rationale, and review / invalidation trigger before it can leave research-only status.
 - Phase 7 provider capability / field catalog contract is now established in `schemas/provider_capability_catalog.schema.json` v1.0.0 with validating example `schemas/examples/provider_capability_catalog.example.json` and schema tests. It records data class, required systems, PIT status, frequency, lineage, authorization, cost, stability, fallback, provider evaluation dimensions, and production-use guardrails. It does not select a provider, fetch data, add a provider adapter, create DataHub tables, change strategy logic, or relax ship gate.
 - Phase 6e provider/data requirements audit is now established in `docs/provider_data_requirements_audit.md`: it consolidates A-long, US-long, A/US burst, US-short steady, and existing A-short data constraints into field-class, PIT, frequency, lineage, authorization / cost, stability, and fallback requirements. It does not select a final provider, create schemas, implement DataHub, fetch data, add a US provider adapter, or relax ship gate.
 - US-short docs-only baseline is now established in `docs/us_short_spec.md`: it normalizes `skills/us_short_analysis/reference/` into a production-facing steady-lane owner spec, separates `steady_us_short` from `us_short_burst`, maps screening / analysis / risk / state / bucket-capital / benchmark boundaries, and provides Phase 6e data-requirements inputs. No schema, runner, provider, DataHub implementation, Skill implementation, prompt implementation, order automation, or ship-gate relaxation was introduced.
@@ -45,12 +50,12 @@
 - Roadmap policy: user accepted B semi-reorder refined to spec-parallel / implementation-gated. Keep A-share short Phase 6 evidence clock running, but move main design attention to the Phase 6 spec pack before Phase 7 DataHub/engine modularization. Phase 8/9 ordering uses `capital weight × alpha leverage × data readiness`, not a hard-coded market order.
 - P0a capital context contract commit `244353e` adds `portfolio_allocation` and `cash_buffer_state` schemas, upgrades `execution_backtest_report` to v1.1.0 with required `capital_context`, requires `backtest_execution.py --portfolio-allocation --cash-buffer-state --preset-path`, and adds capital/bucket fields to all four presets.
 - P0a review Optional disposition is included: runner now reads preset YAML instead of a hardcoded preset map, `portfolio_allocation` bucket `horizon` was removed, and single-value policy enums were converted to `const`.
-- Next implementation: populate or review provider capability evidence against `schemas/provider_capability_catalog.schema.json`, starting from already-proven A-share EOD / benchmark surfaces. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data before a reviewed provider-evidence slice exists. A-short continues only as maintenance / evidence accumulation unless forward evidence creates an explicit escape-valve case.
+- Next implementation route: start with the schema-first alpha plausibility audit, then revise provider evidence order, provisional benchmarks, burst tiering, evidence capital policy, and evidence report schemas in separate reviewed slices. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, fetch provider data, or build DataHub tables before the relevant alpha-audit and provider-evidence contracts are reviewed.
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 5 execution chain 已完成 minimal 闭环；Phase 6a kickoff spec / boundary contract 已建立；Phase 6 spec-pack docs-only baselines 已补齐到 Phase 6e；Phase 7 schema-first provider capability / field catalog contract 已建立。
-- **当前目标**：P0 用 `schemas/provider_capability_catalog.schema.json` 约束后续 provider capability evidence / field catalog population。下一刀应先基于已证明的 A-share EOD / benchmark surfaces 填充或审查 provider capability evidence，不直接重写 `A-EGS/egs_main.py`、不新增 US provider adapter、不抓新 provider 数据。Phase 6b A-short variants 已有 tracking contract、plan materializer、CSI1000/CSI300 benchmark monthly-return materializer、candidate-universe overlap audit；后续只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation，不继续扩无关小工具。真实 Tushare 小样本 smoke 已跑通，但 3 个样本都在 202605 同月，不构成 alpha / Sharpe ship-gate 证据。
+- **当前目标**：P0 先做 Phase 7a-1 schema-first alpha plausibility audit：新增 schema / example / tests、lightweight provider status snapshot 和第一版 audit，并按 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` 把 survivorship、multiple testing、statistical power、PIT/security master、fraud red flags、regime sensitivity、factor framework、execution cost、risk-filter effectiveness、parent aggregation、correlation basis、decision effect 等写入 audit contract。该 audit 反转旧的 "A-share EOD / benchmark surfaces first" 默认下一步，后续 provider evidence 按 alpha leverage / data blocker 排序。Phase 6b A-short 继续只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation，不继续扩无关小工具。
 - **当前协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`
 - **后台任务**：Phase 3.5 forward tracker 继续后台累积，不阻塞
 
@@ -67,11 +72,13 @@
 
 ---
 
-## 2. 已完成事项（最近 8 条；过程细节见 SESSION_LOG）
+## 2. 已完成事项（最近关键条目；过程细节见 SESSION_LOG）
 
 本节只保留当前接续需要的 high-level snapshot；争议、被否方案、review verdict、pending fixes 统一查 `docs/SESSION_LOG.md` 顶部 1-3 条。
 
 - **Phase 7 provider capability / field catalog contract**（2026-05-27）：新增 `schemas/provider_capability_catalog.schema.json` v1.0.0、`schemas/examples/provider_capability_catalog.example.json` 和 `tests/schema/test_provider_capability_catalog_schema.py`；锁定 schema-first contract、requirement labels、data classes、systems、PIT/frequency/lineage/provider evaluation/default-value guardrails；不选 provider、不抓数据、不建 adapter / DataHub table。
+- **Phase 7a+ alpha reality action guide**（2026-05-27）：新增 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`，作为当前 Phase 7a+ 最高行动指南；把三轮漏洞分析全部纳入已有 phase：Tier 1 alpha 真实性进 Phase 7a-1，Tier 2 实战可用性进 Phase 7a-2/7a-4/Phase 8，Tier 3 工作流进 Phase 7a-5/Phase 9，DataHub operation gaps 进 Phase 7b/7c/8/9。
+- **Phase 7a alpha-validation route**（2026-05-27）：新增 `docs/alpha_plausibility_audit.md` 和 `docs/evidence_capital_policy.md`；明确 alpha plausibility audit 必须 schema-first，provider priority 改为 alpha-leverage-first，paper evidence 与 live-normalized ship-gate evidence 必须分离；不改变资金政策、不放松 ship gate、不抓数据。
 - **Phase 6e provider/data requirements audit**（2026-05-27）：新增 `docs/provider_data_requirements_audit.md`，作为 Phase 6e owner；汇总 A-long、US-long、A/US burst、US-short steady 与既有 A-short 数据约束，覆盖字段、PIT、frequency、lineage、授权/成本、stability、fallback；不选 provider、不写 runner / DataHub。
 - **US-short spec normalization**（2026-05-27）：新增 `docs/us_short_spec.md`，作为 US-short steady-lane normalized owner spec；覆盖 source-reference normalization、steady vs burst lane 边界、screening / analysis contract、risk gates、state、bucket capital、benchmark 和 Phase 6e data-requirements inputs；仍是 docs-only。
 - **A/US burst_lane spec**（2026-05-27）：新增 `docs/burst_lane_spec.md`，作为短线 burst lane owner spec；覆盖 common signal family、trigger sufficiency、A / US field differences、risk locks、staged sizing、independent ship gate、forward evidence 和 Phase 6e data-requirements inputs；仍是 docs-only。
@@ -154,6 +161,9 @@
 - `schemas/a_short_variant_tracking.schema.json` — v1.0.0（Phase 6b A-short 六个 bounded variants 的 tracking-only comparison contract）
 - `schemas/candidate_universe_overlap_audit.schema.json` — v1.0.0（Phase 6b candidate universe vs CSI1000/CSI300 overlap audit contract；single audit cannot switch primary）
 - `schemas/provider_capability_catalog.schema.json` — v1.0.0（Phase 7 provider capability / field catalog contract；不选 provider、不抓数据、不建 adapter / DataHub table）
+- `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` — Phase 7a+ 最高行动指南；alpha 真实性护栏、业务漏洞、执行路线和 phase 挂载 owner
+- `docs/alpha_plausibility_audit.md` — Phase 7a alpha plausibility / lane objective owner；后续正式 audit 必须 schema-first
+- `docs/evidence_capital_policy.md` — Phase 7a paper vs live-normalized evidence policy；不改变 35/65、bucket 或 cash non-fungibility
 - `schemas/examples/a_short_variant_tracking.example.json` — Phase 6b variant tracking contract example
 - `schemas/examples/provider_capability_catalog.example.json` — Phase 7 provider capability catalog schema example；不是 production provider registry
 - `tests/schema/test_provider_capability_catalog_schema.py` — Phase 7 provider capability catalog schema regression tests
@@ -196,6 +206,9 @@
 - `docs/us_short_spec.md` — Phase 6d US-short steady-lane normalized spec；reference-to-production mapping，不锁 provider / runner / schema / Skill
 - `docs/long_alpha_spec.md` — Phase 6d 长线 alpha common spec + A / US long annex skeletons；后续 provider 选择、schema 和 implementation contract 仍需单独 review
 - `docs/provider_data_requirements_audit.md` — Phase 6e provider/data requirements audit；后续 Phase 7 provider capability / field catalog contract 的输入
+- `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` — Phase 7a+ 最高行动指南；所有后续 schema / provider / DataHub / runner / report / live evidence 工作必须遵守
+- `docs/alpha_plausibility_audit.md` — Phase 7a lane objective / alpha plausibility route
+- `docs/evidence_capital_policy.md` — Phase 7a evidence-level / normalized-return route
 - `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` — Phase 7 kickoff handoff；provider capability / field catalog contract 边界
 
 ### 报告产出
@@ -210,12 +223,12 @@
 
 ## 6. 下一步（按优先级 P0 → P3）
 
-### P0 — Phase 7 kickoff（schema-first，implementation 串行）
+### P0 — Phase 7a alpha validation（schema-first，implementation 串行）
 
-1. **Provider capability evidence / field catalog population（下一刀推荐）** — 用 `schemas/provider_capability_catalog.schema.json` 填充或审查第一份 provider capability evidence，优先从已证明的 A-share EOD / benchmark surfaces 入手；不重写 `A-EGS/egs_main.py`、不新增 US provider adapter、不抓新 provider 数据。
-2. **A-short maintenance / evidence line** — 继续 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩新小工具，除非直接服务 evidence clock。若 forward evidence 显示可推广 alpha，可显式触发 escape-valve review 重新分配算力。
-3. **Anti-pattern lock** — 本路线修订不是降低 ship gate、不是跳过 A-short forward evidence、不是 implementation 层并行、不是把 DataHub 工程当作 alpha 证据。Full-size 仍需 12+ 个月 forward live data 和多 metric AND gate。
-4. **保持既有边界** — P0a capital context、manual-order-only、Phase 3 hard veto、Phase 4 runner v1、CSI1000 primary / CSI300 secondary sensitivity 均不因本路线修订改变。
+1. **Phase 7a-1 alpha plausibility audit contract（下一刀推荐）** — 新增 `schemas/alpha_plausibility_audit.schema.json`、example、tests、lightweight provider status snapshot 和第一版 audit；严格使用 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` 的 mandatory fields，尤其是 hypothesis registration、multiple testing、statistical power、survivorship/security master、regime sensitivity、factor framework、gross/net alpha、execution feasibility、risk-filter evidence、parent aggregation、correlation basis、decision effect。
+2. **Provider priority after audit** — 默认按 US fundamentals / filings / corporate actions → A-share fundamentals / announcement dates / SW industry history → burst event / flow / options / borrow。A-share EOD / CSI benchmark surfaces 记录为 ready evidence，但不再作为默认下一刀 implementation sink。
+3. **A-short maintenance / evidence line** — 继续 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩新小工具，除非直接服务 evidence clock。
+4. **Anti-pattern lock** — 本路线修订不是降低 ship gate、不是跳过 A-short forward evidence、不是 implementation 层并行、不是把 DataHub 工程当作 alpha 证据。Full-size 仍需 12+ 个月 forward live data 和多 metric AND gate。P0a capital context、manual-order-only、Phase 3 hard veto、Phase 4 runner v1、CSI1000 primary / CSI300 secondary sensitivity 均不因本路线修订改变。
 
 ### P1 — Phase 3 后台累积（不阻塞 Phase 4）
 

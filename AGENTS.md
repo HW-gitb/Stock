@@ -10,7 +10,10 @@
 - 当前状态 / 下一步：`docs/CURRENT.md`
 - 最新跨 LLM 交接、review verdict、pending Optional：`docs/SESSION_LOG.md` 顶部 1-3 条
 - Review 流程和短命令：`docs/AI_REVIEW_PROTOCOL.md`
+- 当前 Phase 7a+ 最高行动指南：`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`
 - 策略总设计：`docs/strategy_design_synthesis.md`
+- Alpha plausibility / lane objective audit：`docs/alpha_plausibility_audit.md`
+- Evidence capital / paper vs live-normalized policy：`docs/evidence_capital_policy.md`
 - 短线 `burst_lane` 规格：`docs/burst_lane_spec.md`
 - US-short normalized spec：`docs/us_short_spec.md`
 - 长线 alpha 共同规格 / A / US 长线 skeleton：`docs/long_alpha_spec.md`
@@ -45,6 +48,8 @@
 - ✅ Phase 6d US-short 规格：`docs/us_short_spec.md` 已把 `skills/us_short_analysis/reference/` 资料规范成 production-facing docs-only baseline（provider / DataHub / runner / Skill 尚待后续）
 - ✅ Phase 6e provider/data requirements audit：`docs/provider_data_requirements_audit.md` 已汇总 4 套系统字段、PIT、频率、lineage、授权/成本、稳定性和 fallback 要求（docs-only；不锁最终 provider）
 - ✅ Phase 7 provider capability / field catalog contract：`schemas/provider_capability_catalog.schema.json` v1.0.0 已建立 schema-first contract（不选 provider、不抓数据、不建 adapter / DataHub table）
+- ✅ Phase 7a alpha-validation route：`docs/alpha_plausibility_audit.md` 与 `docs/evidence_capital_policy.md` 已建立设计路由；后续在大规模 DataHub / runner implementation 前，先用 schema-first alpha audit 判断 lane objective / provider priority / evidence horizon，并用 paper vs live-normalized evidence policy 约束 ship-gate 证据
+- ✅ Phase 7a+ alpha reality action guide：`docs/ALPHA_VALIDATION_ACTION_GUIDE.md` 已固化为当前最高行动指南；Phase 7a-1 必须把 survivorship / multiple testing / statistical power / regime / factor exposure / execution-cost feasibility / risk-filter evidence / decision effect 写进 schema-first audit
 - ✅ Phase 1a：`schemas/analysis_input.schema.json` 已完成，当前输出 schema 版本 `1.1.0`
 - ✅ Phase 1b：`egs_main.py` 已接入 `analysis_input.json`、`snapshot.json`、`candidates.csv` 导出器
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
@@ -71,6 +76,7 @@
 ## Strategy design synthesis policy
 
 - 详细设计入口是 `docs/strategy_design_synthesis.md`；本节只保留所有 LLM 必须遵守的摘要。
+- 当前 Phase 7a+ 执行以 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` 为最高行动指南；若旧 roadmap / handoff / design note 与该指南冲突，除 `AGENTS.md` 固化治理规则外，以该指南为准，除非用户明确批准更新的反转。
 - 短线系统不再被定义为 alpha 主引擎；短线 = 稳健风控过滤 + bounded variants + 独立 `burst_lane`。A 短现有主通道不得为追爆发力而整体放松风控。
 - A 短优化先走有限 variants：追高 veto、OVERHEAT veto、Tier1-only trading、ESP cap/winsorize、rank bucket split、exit policy variants。variant promote 必须有 forward evidence，不得凭单次回测直接替换主策略。
 - `burst_lane` 是独立爆发力通道，必须有自己的 signal spec、risk lock、sizing gate 和 ship gate。详细 baseline 在 `docs/burst_lane_spec.md`。Production sizing 按阶段推进：paper 可模拟 30% of relevant short bucket；minimal live <=10%；6 个月 preliminary pass <=20%；12 个月独立 ship gate pass 后才可到 30%。
@@ -78,6 +84,11 @@
 - 长线阈值必须行业归一化：A 股默认 SW L2 + 5 年滚动，样本 <20 回退 SW L1；美股默认 GICS industry + 5 年滚动，样本 <20 回退 GICS industry group。
 - `research/` 允许更快实验，但必须记录 data lineage / parameters / seed / experiment log。Research 输出不得直接喂 production runner；进主线必须 schema-first + tests + review。
 - Cross-system coordinator 先写 spec 后实现，只生成手动建议，不自动调仓、不接券商、不混池 A/US cash。
+- Phase 7 broad implementation 前必须先做 alpha plausibility audit：每条 lane 需明确 alpha source、expected excess / vol / drawdown、data/PIT/provider blockers、detectability horizon、portfolio contribution 和 continue / risk-filter / redesign / defer / do-not-implement verdict。Audit 结果必须 schema-first，不得只是主观 Markdown 判断。
+- Phase 7a-1 audit schema 必须覆盖 alpha 真实性护栏：provider status snapshot、parent aggregation、risk-filter effectiveness、correlation basis、hypothesis registration、multiple testing、statistical power、PIT/survivorship/security master、fraud/accounting red flags（长线必填）、regime sensitivity、factor framework、gross vs net alpha、execution-cost feasibility、decision effect / bucket deployment interface。
+- A-short steady 默认永久定位为 risk filter / evidence loop；A-short variants 主要用于 bad-ticket / drawdown / execution-quality 改善。短线 alpha 期望主要由 A/US burst lanes 承担，且 burst 分 minimal-data paper tier 与 full-data live-eligible tier。
+- Evidence capital 不改变资金政策：禁止 temporary global AUM pool、禁止自动跨市场/跨 bucket pooling。Paper evidence 只能做设计迭代 / preliminary comparison；full-size ship gate 只能接受稳定流程下的 live-normalized forward evidence，并记录 capacity / slippage / scaling validity。
+- 后续 implementation / operation 漏洞不再开新 design loop，直接挂到既有 phase：data quality / provider drift 进 Phase 7b/7c；immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log 进 Phase 7a-5；production monitoring / kill switch 进 Phase 8；coordinator、unified report、cross-lane conflict、alert priority 进 Phase 9。
 
 ## 目标架构
 
@@ -174,10 +185,15 @@ Stock/
 | 6c | A / US 短线 `burst_lane` spec：共用 signal family、市场字段差异、独立 risk lock / sizing gate / ship gate | 2-4 天 | ✅ docs-only baseline |
 | 6d | 长线 alpha spec pack：long alpha common spec + A-long annex + US-long annex + US-short spec normalization | spec 设计 | ✅ docs-only baselines |
 | 6e | Provider / fundamentals data requirements audit：列出 A/US long、A/US burst、US-short 所需字段、PIT、频率、lineage、授权/成本/稳定性要求；不在本步锁最终 provider | 2-4 天 | ✅ docs-only baseline |
-| 7 | DataHub / engine 模块化重构；按 4 套 spec + provider/data requirements audit 划分共享层与独立 rule pack | 1-2 周 | ⬜ schema-first contract baseline |
-| 7.5 | `research/` infrastructure + experiment logging + promotion gate | 2-4 天 | ⬜ |
-| 8 | 四套子系统 implementation wave 1：按资金权重 × alpha leverage × data readiness 排序，默认优先 US-long；若 US provider readiness 不足，A-long 可前置 | 1-2 周 | ⬜ |
-| 9 | 四套子系统 implementation wave 2 + cross-system coordinator spec / first implementation（继续按数据准备度与 evidence readiness 调整） | 2-4 周 | ⬜ |
+| 7a-1 | Alpha plausibility audit schema / example / tests + lightweight provider status snapshot + first audit；按 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` 写入 alpha 真实性护栏 | 2-4 天 | ⬜ 下一刀 |
+| 7a-2 | 根据 audit 修订 long / short specs；补 US microstructure、monitoring contract、calendar / timezone semantics | 1-3 天 | ⬜ |
+| 7a-3 | Provider priority reorder + provisional benchmark contract | 1-2 天 | ⬜ |
+| 7a-4 | Burst minimal→full promotion criteria + evidence capital schema + concentration / liquidity / ADV sizing + slippage constraints + drawdown / circuit-breaker playbook | 2-4 天 | ⬜ |
+| 7a-5 | Evidence report schemas：immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log | 2-4 天 | ⬜ |
+| 7b | Provider capability evidence population + data quality / provider drift monitor | 1-2 周 | ⬜ |
+| 7c | DataHub shared layer / report contracts / reproducibility plumbing | 1-2 周 | ⬜ |
+| 8 | 四套子系统 implementation wave：按资金权重 × alpha leverage × data readiness 排序；每条 lane 配 production monitoring / kill switch | 2-4 周 | ⬜ |
+| 9 | Cross-system coordinator：unified daily / weekly report、cross-lane conflict resolution、full position reconciliation、alert priority | 2-4 周 | ⬜ |
 
 ## 已固化决策
 
@@ -194,6 +210,8 @@ Stock/
 11. 系统执行边界固化为分析筛选 + 回测复盘 + 报告输出；用户手动下单。不得接入券商、操作系统或自动化工具做自动下单；execution backtest 只是模拟规则，不是 live trading/order execution engine。
 12. 路线图采用 B 半重排的修订版：Phase 6 采用 **spec 层并行 + implementation 层串行受控**。A 股短线 Phase 6b 不停止，但降为 maintenance / evidence line（weekly forward capture、comparison-track accumulator、forward evidence accumulation）；同时前置 A/US `burst_lane` spec、long alpha common spec、A-long annex、US-long annex、US-short spec normalization、provider/data requirements audit。Phase 7 DataHub / engine 重构必须以 4 套 spec + provider/data requirements audit 为依据。Phase 8/9 implementation 不再按原固定顺序推进，而按 `资金权重 × alpha leverage × data readiness` 排序：默认倾向 US-long 优先；若 US provider / fundamentals readiness 不足，A-long 或 US-short burst 可前置。数据准备度只作触发条件，不写死门槛；不得因 spec 并行而启动 implementation 层并行、降低 ship gate、跳过 A-short forward evidence，或把 DataHub 工程误读为 alpha 本身。
 13. 策略设计综合版采用 `docs/strategy_design_synthesis.md`：短线 = 稳健通道 + 有限 variants + 独立 `burst_lane`；长线 = `core quality compounding` + `re-rating / catalyst long` 的 alpha 主系统；research 快迭代但不可直连 production；coordinator 只给手动建议。
+14. Phase 7 implementation 顺序采用 alpha-leverage-first，不再默认从已证明的 A-share EOD / benchmark surface 消耗下一刀资源；下一步应先做 schema-first alpha plausibility audit，再据 audit 排序 provider capability evidence。当前设计倾向优先审查 US fundamentals / filings / corporate actions，其次 A-share fundamentals / announcement dates / SW industry history，再审查 burst 所需 event / flow / options / borrow 字段。
+15. Phase 7a+ 最高行动指南采用 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`：所有后续 schema / provider / DataHub / runner / report / live evidence 工作必须先证明 alpha 真实性边界，不得跳过 survivorship、multiple testing、statistical power、PIT/security master、fraud red flags、regime sensitivity、factor exposure、execution cost、decision reproducibility、position reconciliation 和 production monitoring 等护栏。
 
 ## AI 协作者在本项目中的工作守则
 
@@ -407,6 +425,9 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `skills/us_short_analysis/reference/us_short_analysis_spec.md` — 美股短线分析框架资料
 - `skills/us_short_analysis/reference/us_short_screening_spec.md` — 美股短线预测/筛选框架资料
 - `docs/us_short_spec.md` — Phase 6d US-short steady-lane normalized spec（docs-only；不锁 provider / runner / schema / Skill）
+- `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` — Phase 7a+ 最高行动指南（alpha 真实性、业务漏洞、执行路线和后续 phase 挂载）
+- `docs/alpha_plausibility_audit.md` — Phase 7a alpha plausibility / lane objective owner（schema-first audit route；决定 continue / risk-filter / redesign / defer / do-not-implement）
+- `docs/evidence_capital_policy.md` — Phase 7a paper vs live-normalized evidence owner（不改变资金政策；ship gate 证据必须区分 paper / live_normalized）
 - `schemas/analysis_input.schema.json` — analysis_input 契约，当前 `1.1.0`，JSON Schema Draft 7
 - `schemas/deterministic_report.schema.json` — deterministic report 契约，当前 `1.0.0`，Phase 4 runner 输出 JSON 必须通过该 schema
 - `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.11.0`（含 date_warnings + data_lineage + analyzer veto replay）

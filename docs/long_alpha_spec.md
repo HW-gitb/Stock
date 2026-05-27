@@ -121,6 +121,24 @@ Required thesis fields:
 - Major risks and what would disprove the thesis.
 - Next review date and expected evidence update.
 
+Required `expected_alpha_thesis` module:
+
+- Benchmark / opportunity cost: provisional or final benchmark, peer / industry opportunity cost, and why this candidate should outperform it.
+- Quality edge: industry-normalized quality, cash-flow, balance-sheet, moat, or capital-allocation edge.
+- Valuation gap or compounding path: own-history / peer valuation gap, expected compounding mechanism, and whether the edge is valuation re-rating or durable reinvestment.
+- Catalyst / re-rating path: event, filing, guidance, policy, cycle, buyback, capital-return, or company-specific path that can close the gap; include `event_date` and `catalyst_observed_date` when relevant.
+- Downside path: what happens if the thesis is wrong, including drawdown, valuation compression, liquidity, and balance-sheet risks.
+- Sizing rationale: proposed bucket-local sizing, concentration context, liquidity/capacity limits, and whether the idea is paper, minimal, or live-normalized evidence.
+- Review / invalidation trigger: next review date, expected evidence update, and exact thesis-broken conditions.
+
+Phase 7a+ additions from `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`:
+
+- Expected alpha must distinguish gross and net return. `expected_alpha_return_pct` must be cost-adjusted when used for thesis comparison; if only gross is available, the report must mark the thesis as preliminary.
+- Fraud / accounting red flags are mandatory for long lanes: audit opinion or auditor changes where available, key audit matters where available, receivables growth versus revenue growth, CFO versus net income divergence, interest coverage deterioration, related-party exposure, and restatement / late-filing evidence.
+- Thesis outcome logging must distinguish interim milestone review from final horizon review. Full schema ownership is deferred to Phase 7a-5, but every long thesis should reserve a `thesis_outcome_log_ref`.
+
+This module is not optional. Without it, a long candidate is a quality screen or research note, not a push-alpha thesis.
+
 Exit or downgrade triggers:
 
 - Thesis broken: original reason for ownership no longer holds.
@@ -234,12 +252,18 @@ Future US-long reports should expose:
 - Exit / review triggers tied to the written thesis.
 - Ship-gate status: research, paper, minimal, preliminary, or full-size eligible.
 
-### 10.6 Deferred US Decisions
+### 10.6 Provisional US Benchmark Policy
+
+Before the final ship-gate benchmark is selected, US-long evidence may use Russell 1000 as the provisional primary benchmark, S&P 500 as secondary broad-market context, and sector ETF attribution where the candidate thesis is sector-sensitive.
+
+This provisional benchmark policy starts evidence accumulation only. It does not finalize the full ship-gate benchmark.
+
+### 10.7 Deferred US Decisions
 
 These remain open until later Phase 6d / 6e work:
 
 - Exact US universe and exclusion rules.
-- Primary US-long benchmark.
+- Final primary US-long benchmark.
 - Provider choice and paid / free data split.
 - Numeric factor weights, caps, and thresholds.
 - Report schema and runner interfaces.
@@ -321,16 +345,18 @@ A-share long thesis often depends on regime context. The annex requires this con
 
 Narrative policy or cycle claims require dated evidence and follow §5 `event_date` / `catalyst_observed_date` rules.
 
-### 11.7 A-Share Benchmark Candidates
+### 11.7 A-Share Provisional Benchmark Policy
 
-Final primary benchmark is deferred. Candidate benchmark set for A-long validation:
+Final ship-gate benchmark remains deferred. Provisional evidence benchmark set for A-long validation:
 
-- CSI300: large-cap core opportunity cost and institutional benchmark context.
+- CSI300: provisional primary benchmark for large-cap core opportunity cost and institutional benchmark context.
 - CSI All Share / broad A-share total-market proxy where provider coverage supports it.
 - SW L2 industry index or equivalent industry benchmark for attribution and industry-relative alpha checks.
 - CSI500 / CSI1000 may be secondary sensitivity candidates when the A-long universe materially tilts toward mid/small-cap quality names.
 
 A-long benchmark choice must be reported separately from A-short's CSI1000 primary / CSI300 secondary policy. Do not inherit the A-short benchmark contract by default.
+
+The difference is intentional: A-short uses CSI1000 primary because the short candidate pool has historically tilted toward small/mid-cap, theme, and elasticity exposure. A-long uses CSI300 as provisional primary because long alpha is expected to come more from quality compounding, fundamentals, and institutional opportunity cost. If the A-long universe later tilts materially toward mid/small-cap quality names, CSI500 / CSI1000 sensitivity must be reported.
 
 ### 11.8 A-Share Data Requirements
 
@@ -366,7 +392,7 @@ Future A-long reports should expose:
 These remain open until later Phase 6d / 6e work:
 
 - Exact A-long universe and exclusion rules.
-- Primary A-long benchmark and secondary sensitivity set.
+- Final A-long benchmark and secondary sensitivity set.
 - Fundamentals provider choice and paid / free data split.
 - Whether audit opinion, pledge, inquiry, penalty, and buyback details are structured fields or manual evidence in the first implementation.
 - Numeric factor weights, caps, and thresholds.

@@ -182,13 +182,15 @@ Do not average these dimensions into a single provider score. Field-level blocke
 
 Phase 7 should use this audit as a requirement input, not as a provider verdict.
 
-Recommended first Phase 7 slices:
+Recommended Phase 7 / 7a slices:
 
 1. Create a provider capability / field catalog contract before broad provider adapters. This is now established as `schemas/provider_capability_catalog.schema.json` v1.0.0. It records data class, required systems, PIT status, frequency, lineage, authorization, cost, stability, and fallback without selecting a provider.
-2. Standardize already-proven A-share EOD / benchmark surfaces without rewriting `A-EGS/egs_main.py` wholesale.
-3. Define fundamentals and event-data contracts before long-system implementation.
-4. Define US security-master / price / benchmark contracts before US-short or US-long implementation.
-5. Keep manual evidence lanes explicit for semantic news, regulatory interpretation, and hard-to-license datasets.
+2. Run the schema-first alpha plausibility audit defined in `docs/alpha_plausibility_audit.md` and `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` before spending major implementation capacity on any lane.
+3. Reorder provider capability evidence by alpha leverage and data blockers: US fundamentals / filings / corporate actions first; A-share fundamentals / announcement dates / SW industry history second; burst event / flow / options / borrow fields third.
+4. Record already-proven A-share EOD / CSI benchmark surfaces as ready evidence, but do not let convenience of those surfaces consume the default next implementation slice.
+5. Define fundamentals and event-data contracts before long-system implementation.
+6. Define US security-master / price / benchmark contracts before US-short or US-long implementation.
+7. Keep manual evidence lanes explicit for semantic news, regulatory interpretation, and hard-to-license datasets.
 
 Anti-patterns:
 
@@ -224,4 +226,4 @@ Phase 6e docs-only baseline is complete when:
 
 ## 12. Next Work
 
-After this baseline, the first Phase 7 schema-first slice derived `schemas/provider_capability_catalog.schema.json` from this audit. The next recommended smallest task is to populate or review provider capability evidence against that contract, starting from already-proven A-share EOD / benchmark surfaces. That follow-up should still not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data until the evidence contract is reviewed.
+After this baseline, the first Phase 7 schema-first slice derived `schemas/provider_capability_catalog.schema.json` from this audit. The next route is Phase 7a alpha validation: add the schema-first alpha plausibility audit, then use it to order provider capability evidence by alpha leverage and data blockers. The old "A-share EOD / benchmark first" path is superseded as the default next implementation slice, though those proven surfaces should still be recorded as ready evidence. Follow-up work should still not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data until the relevant evidence contract is reviewed. Phase 7b provider capability evidence must also plan data quality / provider drift monitoring for coverage, freshness, schema drift, outliers, revision rate, provider incidents, and silent provider semantic changes.

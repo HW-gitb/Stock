@@ -1,6 +1,6 @@
 # Strategy Design Synthesis
 
-**Status**: user-approved design direction, 2026-05-26.
+**Status**: user-approved design direction, revised 2026-05-27 with Phase 7a alpha-validation route.
 **Scope**: four-system strategy architecture after Phase 5 execution aggregation.
 **Authority**: this document explains the design; `AGENTS.md` carries the binding summary for all LLM collaborators.
 
@@ -15,8 +15,8 @@ The stock system is not an "always maximize short-term hit rate" engine. The pro
 
 Alpha improvement is still a real goal, but it is split by horizon:
 
-- **Short-term systems**: improve current rule-based filters, run variants, and add a controlled burst lane for explosive opportunities.
-- **Long-term systems**: become the main alpha-push layer through quality, valuation, cash flow, cycle, and catalyst research.
+- **Short-term systems**: keep steady lanes as risk filters / evidence loops, run variants for bad-ticket and drawdown reduction, and make controlled burst lanes the short-term alpha candidates.
+- **Long-term systems**: become the main alpha-push layer only when each candidate has an expected-alpha thesis, benchmark-relative opportunity cost, and provider/PIT evidence.
 - **Research layer**: explore faster ideas without contaminating production contracts.
 - **Coordinator layer**: reconcile cash, drawdown, bucket usage, and extreme-risk locks across all four systems.
 
@@ -28,13 +28,34 @@ This preserves the user's constraints:
 - The system outputs analysis, screening, backtests, reviews, and recommendations only; the user manually places orders.
 - Full-size manual use still requires multi-metric AND ship gate: monthly alpha t-stat >= 2.0, Sharpe >= 1.0, max drawdown <= 15%, and forward live data >= 12 months.
 
+## 1.5 Alpha Validation Upgrade
+
+The design now inserts a Phase 7a alpha-validation layer before broad DataHub / runner implementation.
+
+Required owners:
+
+- `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: current Phase 7a+ highest action guide. It lists alpha-reality guardrails, accepted business gaps, and their roadmap placement. It supersedes older roadmap wording except for fixed governance in `AGENTS.md`.
+- `docs/alpha_plausibility_audit.md`: system-level audit of lane objective, expected excess return, volatility, drawdown, data readiness, PIT/provider blockers, detectability horizon, and portfolio-level contribution.
+- `docs/evidence_capital_policy.md`: evidence-level policy separating `paper` evidence from `live_normalized` evidence without changing fixed capital allocation.
+
+The audit must be schema-first before it can drive implementation decisions. Each lane receives one verdict: continue, continue as risk filter, redesign required, defer until provider ready, or do not implement now.
+
+The Phase 7a-1 audit schema must also capture alpha-reality guardrails: hypothesis registration, multiple-testing risk, statistical power, survivorship and security-master status, fraud/accounting red flags for long lanes, regime sensitivity, factor framework, gross versus net alpha, execution feasibility, risk-filter effectiveness, parent-lane aggregation, correlation basis, and capital-deployment effect.
+
+This upgrade reverses the older next-step assumption that Phase 7 should first spend implementation attention on already-proven A-share EOD / benchmark surfaces. Those surfaces remain valuable as ready evidence, but provider and schema work should now be ordered by alpha leverage and data blockers:
+
+1. US fundamentals, filing dates, corporate actions, and US benchmark/security-master readiness.
+2. A-share fundamentals, announcement dates, SW industry history, and A-long benchmark/industry attribution readiness.
+3. Burst event / flow / options / borrow fields, classified as structured, manual evidence, research-only, or deferred.
+4. Already-proven A-share EOD / CSI benchmark surfaces recorded as ready evidence, not the default next implementation sink.
+
 ## 2. Short-Term Architecture
 
 Short-term is a two-lane system, not a single relaxed risk model.
 
 ### 2.1 Steady Short Lane
 
-The steady short lane keeps the existing A-short direction:
+The steady short lane keeps the existing A-short direction but is treated as a permanent risk filter / evidence loop unless future forward evidence explicitly overturns that role:
 
 - rank / filter / analyze candidates,
 - prefer Tier1 evidence,
@@ -43,7 +64,7 @@ The steady short lane keeps the existing A-short direction:
 - evaluate with bucket-aware capital context,
 - treat full-size as blocked until ship gate passes.
 
-It is a risk-filtered observation and decision-support lane, not an automatic buy list.
+It is a risk-filtered observation and decision-support lane, not an automatic buy list and not the primary short-term push-alpha engine.
 
 ### 2.2 A-Short Optimization Variants
 
@@ -62,21 +83,29 @@ Promotion rules:
 
 - Each variant needs at least 12 forward observations before promotion decisions.
 - Compare against the current baseline, not just absolute return.
-- Candidate promotion requires materially better risk-adjusted evidence, such as Sharpe improving by at least 0.3 and alpha t-stat improving without worse drawdown.
+- Candidate promotion requires materially better risk-adjusted evidence, such as Sharpe improving by at least 0.5, alpha t-stat improving by at least 0.5, and drawdown not worsening.
 - Promote at most one variant family per review round.
-- Shut down a variant after six consecutive forward observations underperforming baseline unless there is a documented regime explanation.
+- Shut down or redesign-review a variant after four consecutive mature forward observations underperforming baseline unless there is a documented regime explanation.
 
 Important non-decisions:
 
 - The 5d positive signal is not enough to hard-code a 5d take-profit rule. A-share short returns are right-skewed; early profit-taking can cut off rare winners.
 - ESP extreme positive values are not yet a hard veto. Use cap / winsorize / downgrade variants first.
 - LOCK remains observation-only until sample size is meaningful.
+- No current variant is deprecated solely from the existing 24-period evidence; insufficient sample directions remain tracking-only until forward evidence resolves them.
 
 ### 2.3 Burst Lane
 
 The burst lane exists because explosive short-term opportunities are different from steady rank selections. It targets catalyst + volume + relative-strength bursts, but it must not bypass evidence gates.
 
 Burst lane entry is a separate signal family. It does not inherit the steady lane's ship-gate result.
+
+Burst implementation is split into two evidence tiers:
+
+- `minimal_data_burst`: uses OHLCV, volume / turnover, relative strength, benchmark context, limit / halt status, liquidity, and existing candidate context. This tier is paper / research only by default.
+- `full_data_burst`: adds reviewed event, catalyst, filing, guidance, capital-flow, options, borrow / short-interest, or manual evidence. This tier is required before minimal live observation.
+
+Pure EOD momentum must not be described as full burst alpha. Non-price confirmation is required before live observation.
 
 Candidate trigger design:
 
@@ -119,6 +148,8 @@ Per-market examples:
 ## 3. Long-Term Alpha System
 
 Long-term systems are the primary alpha-push layer. They do not reuse short-term v14.x frameworks.
+
+Long alpha now requires an `expected_alpha_thesis` for each candidate before it can leave research-only status. The thesis must explain benchmark-relative opportunity cost, quality edge, valuation gap or compounding path, catalyst / re-rating path, downside path, sizing rationale, and review / invalidation trigger.
 
 ### 3.1 Two Long-Term Lanes
 
@@ -320,6 +351,25 @@ This audit defines what Phase 7 must support. It does not lock final provider ch
 
 Detailed Phase 6e ownership now lives in `docs/provider_data_requirements_audit.md`. This synthesis document keeps the route and architecture only.
 
+### Phase 7a-1 - Alpha Validation Schema And First Audit
+
+Before broad DataHub implementation, write the alpha plausibility audit schema, example, tests, lightweight provider status snapshot, and first audit. Mandatory field groups are defined in `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`.
+
+This is still implementation-gated. It does not relax ship gate, select providers, fetch data, or change production strategy rules.
+
+### Phase 7a-2 Through 7a-5 - Evidence Contracts Before Implementation
+
+Split the post-audit work into small reviewed slices:
+
+- Phase 7a-2: revise long / short specs; add US microstructure, monitoring contract, calendar and timezone semantics.
+- Phase 7a-3: provider priority reorder and provisional benchmark contract.
+- Phase 7a-4: burst minimal-to-full promotion criteria, evidence capital schema, concentration limits, liquidity / ADV sizing, slippage constraints, and drawdown / circuit-breaker tiered action playbook.
+- Phase 7a-5: evidence report schemas, immutable decision packet, cost-adjusted return details, cash drag, manual override, minimal reconciliation, long thesis outcome log, and research experiment log.
+
+### Phase 7b / 7c - Provider Evidence And DataHub
+
+Phase 7b populates provider capability evidence and adds data quality / provider drift monitoring. Phase 7c implements the DataHub shared layer, report contracts, reproducibility plumbing, and data quality monitor.
+
 ### Phase 7 - DataHub / Engine Modularization
 
 Use the four specs plus the provider/data requirements audit to split shared engine from independent rule packs:
@@ -331,15 +381,15 @@ The first Phase 7 schema-first baseline is `schemas/provider_capability_catalog.
 
 ### Phase 7.5 - Research Infrastructure
 
-Create `research/` structure, minimal experiment logging, and promotion policy.
+Create or expand `research/` structure, minimal experiment logging, and promotion policy after the Phase 7a scope is clear. Early research is allowed only through logged, isolated experiments; it must not feed production runners directly.
 
 ### Phase 8+
 
-Implement the four systems based on `capital weight × alpha leverage × data readiness`, not a hard-coded market order. Default tendency is US-long first because it has the largest single bucket and is a long-term alpha system; if US provider or fundamentals readiness is insufficient, A-long or US-short burst may move ahead. Do not let A-short implementation remain the only mature subsystem.
+Implement the four systems based on `capital weight × alpha leverage × data readiness`, not a hard-coded market order. Default tendency is US-long first because it has the largest single bucket and is a long-term alpha system; if US provider or fundamentals readiness is insufficient, A-long or US-short burst may move ahead. Do not let A-short implementation remain the only mature subsystem. Each lane implementation must include production monitoring, degradation detection, and a kill-switch / pause path before it can produce live-normalized evidence.
 
 ### Phase 9+
 
-Write and then implement cross-system coordinator once the four systems have enough state shape to coordinate.
+Write and then implement cross-system coordinator once the four systems have enough state shape to coordinate. Coordinator scope includes unified daily / weekly reports, cross-lane conflict resolution, alert priority, full position reconciliation, and manual override visibility.
 
 ## 7. Invalidated Or Refined Prior Ideas
 
@@ -352,8 +402,10 @@ Write and then implement cross-system coordinator once the four systems have eno
 
 ## 8. Next Execution Implication
 
-The next `执行` after the provider/data requirements audit established the first Phase 7 schema-first contract:
+The next `执行` after the provider capability catalog contract should start Phase 7a:
 
-1. Provider capability / field catalog contract: `schemas/provider_capability_catalog.schema.json`.
+1. Implement Phase 7a-1: `alpha_plausibility_audit` schema, example, tests, lightweight provider status snapshot, and first audit, using `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`.
+2. Use that audit to revise long expected-alpha thesis requirements and A-short steady / variants positioning.
+3. Then update provider priority, provisional evidence benchmarks, burst tiering, evidence capital policy, and evidence report schemas in the 7a-2 through 7a-5 slices.
 
-A-short continues as maintenance / evidence accumulation while Phase 7 contracts are written. The next natural slice is to populate or review provider capability evidence against this contract, starting from already-proven A-share EOD / benchmark surfaces. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data before a reviewed provider-evidence slice exists.
+A-short continues as maintenance / evidence accumulation while Phase 7a contracts are written. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, fetch provider data, or build DataHub tables before the relevant alpha-audit and provider-evidence contracts are reviewed.

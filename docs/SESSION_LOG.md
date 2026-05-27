@@ -8,6 +8,163 @@
 
 ---
 
+## 2026-05-27 — Claude re-review — Pass (Phase 7a+ action guide O1 disposition)
+
+**Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `5034e47`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 accept verified — `ALPHA_VALIDATION_ACTION_GUIDE.md` §10 加 `circuit_breaker_playbook` 段含 5 tier actions（warn / size down / pause new entries / manual review / reactivation cooldown），§11 Phase 7a-4 cell + §12 Non-Optional Later Controls 都加该条；`AGENTS.md` 执行路线图 Phase 7a-4 row + `strategy_design_synthesis.md` Phase 7a-4 bullet + handoff O1 disposition section 同步。Scope 严守（5 文件 docs-only，0 schema/runner/preset 实现）。5-tier 比 O1 原建议 4-tier 多加 reactivation/cooldown 是合理 designer enhancement；-7%/-10%/-15% 精确阈值 deferred 到 Phase 7a-4 preset/schema slice 符合 spec-first 处理。无 Required fixes、无新 Optional、无 open question、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (repair: Phase 7a+ action guide O1)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest `2026-05-27 — Claude review — Pass with Optional (Phase 7a+ alpha validation route + reality action guide)` Optional O1.
+- No Required fixes were raised.
+
+**Worked on**:
+1. [untracked] `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: accepted O1 by adding `circuit_breaker_playbook` as a Phase 7a-4 requirement and as a non-optional later control. The guide now requires tiered drawdown actions before Phase 8 implementation can rely on a lane.
+2. [tracked] `AGENTS.md`: aligned the Phase 7a-4 roadmap row with the circuit-breaker playbook requirement.
+3. [tracked] `docs/strategy_design_synthesis.md`: aligned the Phase 7a-4 split with the same drawdown / circuit-breaker tiered action playbook requirement.
+4. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: recorded O1 disposition and the expected future shape: warn, size down, pause new entries, manual review, and reactivation / cooldown tiers.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff for Claude re-review.
+6. Validation run/result: `git diff --check` passed (CRLF warnings only); changed-file trailing-whitespace scan passed; focused scan confirmed `circuit_breaker_playbook` / circuit-breaker routing appears in the guide, AGENTS, synthesis, and handoff.
+7. Current review state: waiting for Claude re-review after Optional O1 disposition.
+
+**Key decisions**:
+- O1 accepted. The circuit-breaker playbook is not merely Phase 8 production monitoring; it is a Phase 7a-4 spec/preset requirement that must exist before implementation depends on lane behavior.
+- Required future shape is tiered and manual-action-oriented: warn, size down, pause new entries, manual review, and reactivation / cooldown rule.
+
+**Alternatives considered and rejected**:
+- "Leave circuit breaker only under generic production monitoring / kill switch" — rejected. That would defer the actual drawdown action semantics until implementation, conflicting with spec-first / implementation-gated routing.
+- "Patch only `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`" — rejected. AGENTS and strategy synthesis also contain route summaries future LLMs will read first.
+
+**Open questions handed off**:
+- Exact drawdown thresholds, such as -7% / -10% / -15%, remain deferred to Phase 7a-4 schema / preset work.
+
+**Next natural step from my view**:
+1. Claude re-reviews the repaired docs-only working tree.
+2. If Pass, user `提交`.
+3. Next `执行`: Phase 7a-1 schema/example/tests, lightweight provider status snapshot, and first audit.
+
+---
+
+## 2026-05-27 — Claude review — Pass with Optional (Phase 7a+ alpha validation route + reality action guide)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `5034e47`)
+
+**Verdict**: Pass with one Optional suggestion (no Required fixes).
+
+**Scope reviewed**: Codex 两轮累积 `执行` working tree —（1）Phase 7a alpha-validation route design 新增 `docs/alpha_plausibility_audit.md` + `docs/evidence_capital_policy.md`；（2）Phase 7a+ alpha reality action guide 新增 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`；共 3 untracked + 10 tracked routing/spec sync（`AGENTS.md` / `docs/README.md` / `docs/CURRENT.md` / `docs/SESSION_LOG.md` / `docs/strategy_design_synthesis.md` / `docs/burst_lane_spec.md` / `docs/long_alpha_spec.md` / `docs/provider_data_requirements_audit.md` / `docs/datahub_design.md` / `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`）。Scope 严守 docs-only（0 schema / 0 runner / 0 provider / 0 DataHub 实现）。
+
+**Notes**: ACTION_GUIDE.md 13 节系统覆盖三层 vulnerability batch：Tier 1 alpha 真实性（survivorship / multiple testing / power / fraud red flags / regime sensitivity / factor framework / risk-filter effectiveness / decision effect）已挂 Phase 7a-1；Tier 2 实战可用性（US microstructure / concentration / liquidity ADV / market-impact / monitoring contract / calendar-timezone）已挂 Phase 7a-2 与 7a-4；Tier 3 工作流闭环（cost-adjusted return / cash drag / manual override / minimal reconciliation / thesis outcome log / immutable decision packet）已挂 Phase 7a-5；ops 闭环（data quality drift / production monitoring / kill switch / coordinator / alert priority / unified report / full reconciliation）已挂 Phase 7b/7c/8/9。Schema polish 全部显式：`hypothesis_registration` 6 子段复合对象（§5）、`parent_aggregation_rule` 4-enum（§3）、`correlation_basis` 4-enum + global/lane override（§9）、`factor_framework` 8-enum 含 proxy 标签（§7）、thesis outcome log 区分 interim vs final review（`long_alpha_spec.md` 长线必填）、A-long CSI300 primary 与 A-short CSI1000 primary 差异 rationale 显式（`long_alpha_spec.md` §11.7）。Cross-doc consistency：AGENTS routing / 当前进度 / Strategy synthesis policy / 执行路线图（Phase 7 → 7a-1/2/3/4/5/7b/7c/8/9 重排）/ 已固化决策 #14-15 / 文件参考；CURRENT Latest Delta / 当前目标 / 已完成事项 / 关键文件 / P0；README routing；handoff 两条追加；strategy_synthesis §1.5 Alpha Validation Upgrade；burst_lane_spec §2.5 Evidence Tiers + 6.1/7.1 minimal/full 拆分 + 风险锁加 concentration/ADV/market-impact 要求；long_alpha_spec `expected_alpha_thesis` module + Phase 7a+ additions + provisional benchmark policy + A-long vs A-short benchmark divergence rationale；datahub_design Phase 7a/7b/7c 阶段化 + Phase 7 completion criteria 加 alpha plausibility audit / evidence capital / data quality drift / reproducibility plumbing 四项；provider_data_requirements_audit §10 7-step provider 排序 + §12 alpha-validation-first next work。Stale next-step 显式作废：handoff §8 #1 已加“已由下方追加失效”标记；provider_data_requirements_audit §12 "old A-share EOD/benchmark first path is superseded" 显式声明；CURRENT §6 P0 #1 已由旧 "A-share EOD first" 改为 "Phase 7a-1 audit contract"。Validation 由 Codex 跑：`git diff --check`、changed-doc trailing whitespace、active stale next-step wording scan 全过。SESSION_LOG 两条 Codex entries 均符合 §AI_REVIEW_PROTOCOL 格式（[tracked]/[untracked] tags + validation run/result + current review state）。Reverses 显式记录：cost-adjusted return / position reconciliation / data quality drift / decision reproducibility / production monitoring 从 "late polish" 改为 mandatory phase-placed controls。
+
+**Required fixes**: none.
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+- **O1**: ACTION_GUIDE.md §11 Phase 7a-4 表格 cell 和 §12 Non-Optional Later Controls 都缺 **drawdown / circuit-breaker tiered action playbook**。前面 chat review 中 Tier 2 #7 是用户在三轮 vulnerability batch 中明确采纳的“必修”项：原始内容是 "ship gate 有 max_drawdown <= 15%，但实战中触发 -7% / -10% / -15% 后系统该 warn / size down / pause / manual review 哪个？必修：preset 加 `circuit_breaker_playbook` 分层阈值对应分层动作"。当前设计已经把 "production monitoring, degradation detection, and kill switch" 放在 §11 Phase 8 与 §12，但这是 lane-level live degradation **高层概念**，缺 spec/preset 层 **-7% / -10% / -15% tiered action 的明确要求**。Phase 8 implementation 前 preset (presets/a_short.yaml / us_short.yaml / a_long.yaml / us_long.yaml) 需要含 `circuit_breaker_playbook` 字段才能让 execution backtest 模拟触发动作。建议在 §11 Phase 7a-4 cell 加 "drawdown / circuit-breaker tiered action playbook (warn / size down / pause / manual review)" 一项，并在 §12 加为 non-optional later control。这样 Codex 在 7a-4 写 evidence capital schema / concentration limits 时会自然 surface 此项，不会推到 Phase 8 implementation 时才补，否则 ship gate 触发 -15% 后的实际行为定义会延迟到 implementation 阶段，破坏 spec-first / implementation-gated 原则。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes; Optional suggestion PENDING CODEX DISPOSITION.
+
+---
+
+## 2026-05-27 — Codex (Phase 7a+ alpha reality action guide)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the prior Codex Phase 7a alpha-validation route design entry.
+- **Refines**: Phase 7a route. Adjustment: the final baseline now explicitly adopts the latest business-vulnerability analysis as mandatory alpha-reality guardrails and mounts each gap onto an existing phase instead of opening a new design loop.
+- **Reverses**: treating cost-adjusted return, position reconciliation, data-quality drift, decision reproducibility, and production monitoring as late polish. These are now mandatory controls assigned to Phase 7a-5, Phase 7b/7c, Phase 8, or before any `live_normalized` evidence claim.
+
+**Worked on**:
+1. [untracked] `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: added the current Phase 7a+ highest action guide for all future LLM work, including final baseline, Phase 7a-1 mandatory audit fields, accepted business gaps, and roadmap placement.
+2. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`: routed the new guide as a required entry point and made Phase 7a-1 the next execution slice with alpha-reality guardrails.
+3. [untracked/tracked] `docs/alpha_plausibility_audit.md`, `docs/evidence_capital_policy.md`: updated the owner docs for provider snapshot confidence, parent aggregation, risk-filter effectiveness, hypothesis registration, multiple testing, statistical power, PIT/survivorship/security master, regime/factor exposure, gross/net alpha, decision effect, cost-adjusted evidence, and minimal reconciliation before live-normalized claims.
+4. [tracked] `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/datahub_design.md`: aligned the roadmap and detailed specs to the action guide, including burst promotion, long fraud/accounting red flags, data quality / provider drift, reproducibility, and production monitoring placement.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the alpha reality action-guide handoff section.
+6. Validation run/result: docs-only checks passed (`git diff --check`; changed-doc trailing whitespace scan; targeted stale/transient wording scan over active docs excluding protocol/history returned no stale-next-step hits; the only broader hit was the standing `AGENTS.md` review alias wording).
+7. Current review state: ready for Claude `审查`; no code, provider adapter, data fetch, DataHub table, runner behavior, or strategy behavior changed.
+
+**Key decisions**:
+- `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` is the current Phase 7a+ highest action guide under `AGENTS.md` fixed governance. Older roadmap wording is superseded when it conflicts with the guide.
+- Phase 7a-1 must include alpha-reality schema fields, not only lane objective and verdict fields. Mandatory groups include survivorship/security master, multiple testing, statistical power, regime sensitivity, factor framework, execution-cost feasibility, risk-filter effectiveness, parent aggregation, correlation basis, and decision effect.
+- Hypothesis registration must be a structured object, not just a timestamp, so future audits can identify p-hacking and post-hoc hypothesis edits.
+- Style/factor beta risk must declare a factor framework; early proxy frameworks are allowed but must be labeled.
+- Cost-adjusted return and minimal position reconciliation are not optional late polish. Net alpha fields and actual-position/override evidence are required before live-normalized evidence can support ship-gate evaluation.
+- Data quality / provider drift, immutable decision packets, production monitoring / kill switch, and coordinator reporting are mandatory later controls assigned to existing phases.
+
+**Alternatives considered and rejected**:
+- "Keep the final design in chat only" — rejected. The user explicitly asked to make it the working guide for future LLMs.
+- "Add another design discussion loop for each vulnerability" — rejected. The accepted gaps are mounted onto existing phases to protect implementation momentum.
+- "Put all accepted gaps into Phase 7a-1" — rejected. Phase 7a-1 gets alpha-reality audit fields; market microstructure, concentration, DataHub monitoring, immutable packets, and coordinator workflow land in their appropriate later phases.
+- "Treat 24p t-stat findings as final significant evidence" — rejected until multiple-testing, power, and evidence-window qualifiers are represented.
+
+**Open questions handed off**:
+- Phase 7a-1 still needs the concrete JSON Schema shape for `alpha_plausibility_audit`, including exact enum values and required-if logic.
+- The first audit must decide how to represent the lightweight provider status snapshot artifact: standalone schema artifact versus embedded audit section.
+- Factor framework selection for A-share and US lanes can start with proxies, but the schema must force that limitation to be visible.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only guide/routing update for cross-doc consistency and stale wording.
+2. If Pass, user `提交`.
+3. Next `执行`: implement Phase 7a-1 schema/example/tests, lightweight provider status snapshot, and first audit using `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`.
+
+---
+
+## 2026-05-27 — Codex (Phase 7a alpha-validation route design)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on `5034e47` Phase 7 provider capability catalog contract.
+- **Reverses**: prior next-step default "populate provider capability evidence from already-proven A-share EOD / benchmark surfaces first" → "run schema-first alpha plausibility audit first, then order provider evidence by alpha leverage and blockers". Reason: the user goal is A/US short-term risk control + burst lane and A/US long-term push alpha, so implementation order must be driven by expected alpha evidence rather than easiest available data surface.
+- **Refines**: Phase 6/7 design synthesis. Adjustment: governance stays fixed, but lane alpha assumptions, evidence levels, burst data tiers, and long thesis fields now have explicit owner docs and routing.
+
+**Worked on**:
+1. [untracked] `docs/alpha_plausibility_audit.md`: added the owner doc for lane-level and portfolio-level alpha plausibility audit, including required fields, verdict labels, and execution route.
+2. [untracked] `docs/evidence_capital_policy.md`: added paper vs live-normalized evidence policy; full-size ship gate evidence must not rely on paper-only returns.
+3. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`: updated routing, current-state summary, and future-LLM entry points for Phase 7a.
+4. [tracked] `docs/strategy_design_synthesis.md`, `docs/long_alpha_spec.md`, `docs/burst_lane_spec.md`: wrote the optimized design into the strategy owner docs: A-short steady as permanent risk filter unless overturned by evidence, higher variants gate, burst minimal/full data tiers, and long expected-alpha thesis module.
+5. [tracked] `docs/provider_data_requirements_audit.md`, `docs/datahub_design.md`: changed the Phase 7/7a implementation order to alpha-validation-first and alpha-leverage-first provider evidence.
+6. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7a handoff section and marked the old A-share EOD-first next step as superseded.
+7. Validation run/result: docs-only checks passed (`git diff --check`; changed-doc trailing whitespace scan; targeted stale/transient wording scan over active docs excluding protocol/history returned no hits; the only broader hit was the standing `AGENTS.md` review alias wording).
+8. Current review state: ready for Claude `审查`; no code, runner, provider adapter, DataHub table, or strategy behavior changed.
+
+**Key decisions**:
+- Phase 7 now has a Phase 7a alpha-validation route before broad DataHub / runner implementation: first define and run `alpha_plausibility_audit`, then let evidence decide provider priority and lane implementation order.
+- Audit verdicts must be schema-first in the next slice, not loose markdown judgment: each lane needs expected excess return, volatility, drawdown, data readiness, PIT/provider blockers, detectability horizon, benchmark plan, portfolio correlation assumption, portfolio contribution, and a continue / risk-filter / redesign / defer / do-not-implement decision.
+- Provider priority is now alpha-leverage-first: US fundamentals / filings / corporate actions first by default, A-share fundamentals / announcement dates / SW industry history second, and burst event / flow / options / borrow fields third. Already-proven A-share EOD / CSI surfaces are ready evidence, not the next implementation sink.
+- A-short steady is a durable risk-control and evidence-accumulation lane, not the push-alpha lane. A-short variants now need stronger forward promotion evidence: Sharpe improvement >= 0.5 and alpha t-stat improvement >= 0.5 with no worse drawdown; no current variant is deprecated solely from small 24-period evidence.
+- Burst is split into `minimal_data_burst` and `full_data_burst`: minimal tier can support paper/research ranking, while minimal live requires full-data confirmation or an explicit reviewed exception with non-price evidence.
+- Long alpha candidates must carry an `expected_alpha_thesis` module covering benchmark/opportunity cost, quality edge, valuation/compounding path, catalyst/re-rating path, downside path, sizing rationale, and review/invalidation trigger.
+- Evidence capital policy rejects temporary global AUM pooling. Ship-gate evidence must distinguish `paper` from `live_normalized`; full-size eligibility requires live-normalized evidence with observed capital, normalization basis, cost/slippage, capacity, and scaling-validity limitations.
+
+**Alternatives considered and rejected**:
+- "Keep Phase 7 provider evidence starting from A-share EOD / benchmark because it is already proven" — rejected. That is path-of-least-resistance engineering, not alpha-leverage-first sequencing.
+- "Solve minimal-stage evidence starvation with a temporary total-AUM pool" — rejected. It conflicts with A/US non-fungible cash and bucket ceilings; normalized evidence is the right mechanism.
+- "Let paper returns satisfy full-size ship gate" — rejected. Paper remains useful for design iteration and preliminary comparison, but full-size manual use requires live-normalized evidence.
+- "Treat pure EOD momentum as a complete burst lane" — rejected. Minimal-data burst can start paper evidence, but full burst alpha needs non-price/event/flow/options/borrow or reviewed manual confirmation.
+- "Make alpha plausibility audit a subjective markdown essay" — rejected. The next slice must create schema/example/test coverage before the first formal audit.
+
+**Open questions handed off**:
+- Exact `schemas/alpha_plausibility_audit.schema.json` shape, example rows, and tests remain the next execution slice.
+- The first audit should decide how much external literature/history to cite versus repo-local evidence, but it must keep evidence fields structured.
+- `execution_aggregate_report` / future aggregate evidence schema still needs an `evidence_level` enum and live-normalized return fields.
+- Provisional benchmarks are now documented, but final ship-gate benchmarks remain evidence-driven and may be revised after forward evidence.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only route change, paying special attention to stale next-step wording and cross-doc consistency.
+2. If Pass, user runs `提交`.
+3. Next `执行`: add `schemas/alpha_plausibility_audit.schema.json`, example, tests, then produce the first formal alpha plausibility audit.
+
+---
+
 ## 2026-05-27 — Claude re-review — Pass (Phase 7 provider capability catalog O1 disposition)
 
 **Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `08afd61`)
