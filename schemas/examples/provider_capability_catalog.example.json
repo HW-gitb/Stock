@@ -1,0 +1,539 @@
+{
+  "schema_name": "provider_capability_catalog",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-27T12:00:00Z",
+  "scope": {
+    "phase": "7",
+    "purpose": "provider_capability_field_catalog_contract",
+    "contract_status": "schema_first_contract_only",
+    "provider_selection_status": "not_selected",
+    "data_fetch_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "catalog_policy": {
+    "requirement_status_labels": [
+      "structured_required",
+      "structured_optional",
+      "manual_evidence",
+      "research_only",
+      "deferred"
+    ],
+    "default_value_policy": {
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "missing_required_field_rule": "block_automated_rule_or_mark_manual",
+      "benchmark_missing_month_rule": "do_not_fill_zero"
+    },
+    "provider_evaluation_policy": {
+      "overall_score_allowed": false,
+      "field_level_blockers_required": true,
+      "required_dimensions": [
+        "coverage",
+        "pit_support",
+        "history_depth",
+        "corporate_actions",
+        "units_currency",
+        "update_latency",
+        "stability",
+        "authorization",
+        "cost",
+        "fallback"
+      ]
+    },
+    "manual_evidence_policy": {
+      "requires_observed_date": true,
+      "requires_source": true,
+      "requires_reviewer_or_process_tag": true,
+      "can_be_deterministic_factor_without_promotion": false
+    }
+  },
+  "provider_profiles": [
+    {
+      "provider_id": "tushare_current_a_eod",
+      "provider_name": "Tushare current A-share EOD surface",
+      "provider_type": "mixed",
+      "market_coverage": [
+        "A"
+      ],
+      "provider_product_or_tier": "current local token tier, not final provider verdict",
+      "selection_status": "not_selected",
+      "authorization_license_class": "restricted_review_required",
+      "cost_quota_risk_class": "unknown",
+      "stability_risk_class": "medium",
+      "evaluation_dimensions": {
+        "coverage": "limited",
+        "pit_support": "limited",
+        "history_depth": "unknown",
+        "corporate_actions": "limited",
+        "units_currency": "limited",
+        "update_latency": "unknown",
+        "stability": "limited",
+        "authorization": "unknown",
+        "cost": "unknown",
+        "fallback": "limited"
+      },
+      "limitations": [
+        "Proven only for current A-short EOD, benchmark return, and candidate-overlap helper surfaces.",
+        "This profile does not select Tushare for long fundamentals, events, or final DataHub implementation."
+      ]
+    },
+    {
+      "provider_id": "us_fundamentals_provider_tbd",
+      "provider_name": "US fundamentals and filings provider TBD",
+      "provider_type": "fundamentals",
+      "market_coverage": [
+        "US"
+      ],
+      "provider_product_or_tier": "not selected",
+      "selection_status": "not_selected",
+      "authorization_license_class": "unknown",
+      "cost_quota_risk_class": "unknown",
+      "stability_risk_class": "unknown",
+      "evaluation_dimensions": {
+        "coverage": "unknown",
+        "pit_support": "unknown",
+        "history_depth": "unknown",
+        "corporate_actions": "unknown",
+        "units_currency": "unknown",
+        "update_latency": "unknown",
+        "stability": "unknown",
+        "authorization": "unknown",
+        "cost": "unknown",
+        "fallback": "unknown"
+      },
+      "limitations": [
+        "Placeholder for contract validation only.",
+        "No US provider selection, adapter, or fetch is introduced by this example."
+      ]
+    }
+  ],
+  "field_catalog": {
+    "catalog_status": "contract_fields_only",
+    "fields": [
+      {
+        "field_id": "a_price.eod.adjusted_ohlcv",
+        "data_class": "adjusted_eod_ohlcv_liquidity",
+        "description": "A-share adjusted EOD OHLCV and liquidity fields used by A-short evidence, A-share burst, and A-long data contracts.",
+        "required_systems": [
+          "a_short_steady",
+          "a_short_evidence",
+          "a_share_burst",
+          "a_long",
+          "phase7_shared"
+        ],
+        "requirement_status": "structured_required",
+        "automation_status": "automatable_after_provider_review",
+        "pit_status": "pit_safe",
+        "frequency": "daily",
+        "history_requirement": "At least the strategy evidence window; five years preferred where available.",
+        "lineage_requirements": [
+          "provider_id",
+          "api_family",
+          "provider_symbol_or_identifier",
+          "request_parameters",
+          "fetch_timestamp",
+          "source_date_range",
+          "frequency",
+          "currency",
+          "unit",
+          "adjustment_mode",
+          "pit_status",
+          "as_of_eligibility_rule",
+          "row_count",
+          "missing_required_fields",
+          "known_provider_limitations",
+          "retry_stability_status",
+          "authorization_license_class",
+          "cost_quota_risk_class",
+          "fallback_path"
+        ],
+        "provider_requirements": {
+          "authorization_license_class": "restricted_review_required",
+          "cost_quota_risk_class": "unknown",
+          "stability_risk_class": "medium",
+          "fallback_path": "block_rule",
+          "required_provider_evidence": [
+            "daily OHLCV endpoint",
+            "adjustment factor endpoint",
+            "limit or suspension mechanics endpoint",
+            "trade calendar endpoint"
+          ],
+          "provider_review_required": true
+        },
+        "production_use_policy": {
+          "use_status": "allowed_after_provider_review",
+          "missing_data_rule": "block_rule",
+          "silent_default_allowed": false,
+          "latest_only_historical_evidence_allowed": false
+        },
+        "provider_capabilities": [
+          {
+            "provider_id": "tushare_current_a_eod",
+            "support_status": "partial",
+            "pit_status": "pit_safe",
+            "frequency": "daily",
+            "available_lineage_fields": [
+              "provider_id",
+              "api_family",
+              "provider_symbol_or_identifier",
+              "request_parameters",
+              "fetch_timestamp",
+              "source_date_range",
+              "frequency",
+              "adjustment_mode",
+              "row_count",
+              "missing_required_fields",
+              "known_provider_limitations",
+              "retry_stability_status",
+              "fallback_path"
+            ],
+            "missing_required_fields": [
+              "authorization_license_class",
+              "cost_quota_risk_class"
+            ],
+            "known_limitations": [
+              "Existing scripts prove only the current EOD helper surface, not a full DataHub contract.",
+              "Intraday and semantic event fields are out of this provider surface."
+            ]
+          }
+        ],
+        "limitations": [
+          "This field definition does not move A-EGS provider calls or change execution behavior."
+        ]
+      },
+      {
+        "field_id": "a_benchmark.csi_monthly_returns",
+        "data_class": "benchmark_returns_membership",
+        "description": "CSI1000 primary and CSI300 secondary monthly benchmark returns for A-short evidence and A-share reporting contexts.",
+        "required_systems": [
+          "a_short_evidence",
+          "a_share_burst",
+          "a_long",
+          "phase7_shared"
+        ],
+        "requirement_status": "structured_required",
+        "automation_status": "automatable_after_provider_review",
+        "pit_status": "pit_safe",
+        "frequency": "monthly",
+        "history_requirement": "Same window as the strategy evidence under review.",
+        "lineage_requirements": [
+          "provider_id",
+          "api_family",
+          "provider_symbol_or_identifier",
+          "request_parameters",
+          "fetch_timestamp",
+          "source_date_range",
+          "frequency",
+          "unit",
+          "pit_status",
+          "as_of_eligibility_rule",
+          "row_count",
+          "known_provider_limitations",
+          "fallback_path"
+        ],
+        "provider_requirements": {
+          "authorization_license_class": "restricted_review_required",
+          "cost_quota_risk_class": "unknown",
+          "stability_risk_class": "medium",
+          "fallback_path": "block_rule",
+          "required_provider_evidence": [
+            "index daily endpoint",
+            "benchmark symbol mapping",
+            "missing-month policy"
+          ],
+          "provider_review_required": true
+        },
+        "production_use_policy": {
+          "use_status": "allowed_after_provider_review",
+          "missing_data_rule": "block_rule",
+          "silent_default_allowed": false,
+          "latest_only_historical_evidence_allowed": false
+        },
+        "provider_capabilities": [
+          {
+            "provider_id": "tushare_current_a_eod",
+            "support_status": "partial",
+            "pit_status": "pit_safe",
+            "frequency": "daily",
+            "available_lineage_fields": [
+              "provider_id",
+              "api_family",
+              "provider_symbol_or_identifier",
+              "request_parameters",
+              "fetch_timestamp",
+              "source_date_range",
+              "frequency",
+              "row_count",
+              "known_provider_limitations",
+              "fallback_path"
+            ],
+            "missing_required_fields": [
+              "authorization_license_class",
+              "cost_quota_risk_class"
+            ],
+            "known_limitations": [
+              "The current helper materializes benchmark returns but does not decide non-A-short benchmark gates.",
+              "Missing benchmark months must not be filled with zero."
+            ]
+          }
+        ],
+        "limitations": [
+          "This field does not finalize A-long, US-long, US-short, A-burst, or US-burst primary benchmark policy."
+        ]
+      },
+      {
+        "field_id": "a_industry.sw_l2_membership",
+        "data_class": "industry_taxonomy",
+        "description": "A-share SW L2 industry membership and fallback taxonomy evidence required for industry-normalized long factors and short reporting context.",
+        "required_systems": [
+          "a_short_steady",
+          "a_share_burst",
+          "a_long",
+          "phase7_shared"
+        ],
+        "requirement_status": "structured_required",
+        "automation_status": "automatable_after_provider_review",
+        "pit_status": "unknown",
+        "frequency": "snapshot",
+        "history_requirement": "Effective-date or versioned SW L2 membership is required; SW L1 fallback must record the sample-count or provider-limit reason.",
+        "lineage_requirements": [
+          "provider_id",
+          "api_family",
+          "provider_symbol_or_identifier",
+          "fetch_timestamp",
+          "source_date_range",
+          "frequency",
+          "pit_status",
+          "as_of_eligibility_rule",
+          "coverage_count",
+          "known_provider_limitations",
+          "authorization_license_class",
+          "cost_quota_risk_class",
+          "fallback_path"
+        ],
+        "provider_requirements": {
+          "authorization_license_class": "restricted_review_required",
+          "cost_quota_risk_class": "unknown",
+          "stability_risk_class": "medium",
+          "fallback_path": "block_rule",
+          "required_provider_evidence": [
+            "SW L2 membership source",
+            "effective-date or versioning rule",
+            "SW L1 fallback rule",
+            "coverage count by review date"
+          ],
+          "provider_review_required": true
+        },
+        "production_use_policy": {
+          "use_status": "blocked_until_provider_review",
+          "missing_data_rule": "block_rule",
+          "silent_default_allowed": false,
+          "latest_only_historical_evidence_allowed": false
+        },
+        "provider_capabilities": [
+          {
+            "provider_id": "tushare_current_a_eod",
+            "support_status": "unknown",
+            "pit_status": "unknown",
+            "frequency": "snapshot",
+            "available_lineage_fields": [
+              "provider_id",
+              "known_provider_limitations",
+              "fallback_path"
+            ],
+            "missing_required_fields": [
+              "api_family",
+              "provider_symbol_or_identifier",
+              "fetch_timestamp",
+              "source_date_range",
+              "as_of_eligibility_rule",
+              "coverage_count",
+              "authorization_license_class",
+              "cost_quota_risk_class"
+            ],
+            "known_limitations": [
+              "This example intentionally decouples technical automation readiness from production use approval.",
+              "The field stays production-blocked until PIT, fallback, coverage, authorization, and cost evidence are reviewed."
+            ]
+          }
+        ],
+        "limitations": [
+          "A technically automatable field can still be blocked by production policy until provider evidence is reviewed."
+        ]
+      },
+      {
+        "field_id": "us_fundamentals.filing_dates_cash_flow",
+        "data_class": "financial_statements_filings",
+        "description": "US filing dates and cash-flow statement fields required before US-long and US-short fundamentals can be automated historically.",
+        "required_systems": [
+          "us_short_steady",
+          "us_burst",
+          "us_long",
+          "phase7_shared"
+        ],
+        "requirement_status": "structured_required",
+        "automation_status": "blocked_until_provider_review",
+        "pit_status": "unknown",
+        "frequency": "quarterly",
+        "history_requirement": "Five-year rolling history preferred for long normalization; event observed dates required for catalyst usage.",
+        "lineage_requirements": [
+          "provider_id",
+          "provider_product_or_tier",
+          "api_family",
+          "endpoint_or_table",
+          "provider_symbol_or_identifier",
+          "request_parameters",
+          "fetch_timestamp",
+          "source_date_range",
+          "frequency",
+          "currency",
+          "unit",
+          "pit_status",
+          "as_of_eligibility_rule",
+          "row_count",
+          "coverage_count",
+          "missing_required_fields",
+          "known_provider_limitations",
+          "authorization_license_class",
+          "cost_quota_risk_class",
+          "fallback_path"
+        ],
+        "provider_requirements": {
+          "authorization_license_class": "unknown",
+          "cost_quota_risk_class": "unknown",
+          "stability_risk_class": "unknown",
+          "fallback_path": "block_rule",
+          "required_provider_evidence": [
+            "10-K and 10-Q filing dates",
+            "cash-flow statement line items",
+            "restatement or latest-only limitation flag",
+            "as-of eligibility rule"
+          ],
+          "provider_review_required": true
+        },
+        "production_use_policy": {
+          "use_status": "blocked_until_provider_review",
+          "missing_data_rule": "block_rule",
+          "silent_default_allowed": false,
+          "latest_only_historical_evidence_allowed": false
+        },
+        "provider_capabilities": [
+          {
+            "provider_id": "us_fundamentals_provider_tbd",
+            "support_status": "unknown",
+            "pit_status": "unknown",
+            "frequency": "quarterly",
+            "available_lineage_fields": [],
+            "missing_required_fields": [
+              "provider_id",
+              "api_family",
+              "fetch_timestamp",
+              "as_of_eligibility_rule",
+              "authorization_license_class",
+              "cost_quota_risk_class"
+            ],
+            "known_limitations": [
+              "No US fundamentals provider is selected.",
+              "This field must remain blocked until provider capability evidence exists."
+            ]
+          }
+        ],
+        "limitations": [
+          "Latest-only fundamentals may support live reports if labeled, but cannot claim historical PIT evidence."
+        ]
+      },
+      {
+        "field_id": "manual_event.observed_date_source",
+        "data_class": "news_legal_regulatory_short_reports",
+        "description": "Manual or LLM-assisted event evidence must carry observed date, source, and reviewer/process identity before it can be used in reports.",
+        "required_systems": [
+          "a_share_burst",
+          "a_long",
+          "us_short_steady",
+          "us_burst",
+          "us_long",
+          "phase7_shared"
+        ],
+        "requirement_status": "manual_evidence",
+        "automation_status": "manual_evidence_only",
+        "pit_status": "manual_evidence",
+        "frequency": "event",
+        "history_requirement": "Observed date is required for every event; event date alone is insufficient when the two differ.",
+        "lineage_requirements": [
+          "provider_id",
+          "provider_symbol_or_identifier",
+          "fetch_timestamp",
+          "source_date_range",
+          "pit_status",
+          "as_of_eligibility_rule",
+          "known_provider_limitations",
+          "fallback_path"
+        ],
+        "provider_requirements": {
+          "authorization_license_class": "manual_source_only",
+          "cost_quota_risk_class": "unknown",
+          "stability_risk_class": "unknown",
+          "fallback_path": "manual_evidence",
+          "required_provider_evidence": [
+            "source identifier or URL",
+            "observed date",
+            "reviewer or process tag",
+            "scope of use"
+          ],
+          "provider_review_required": true
+        },
+        "production_use_policy": {
+          "use_status": "manual_evidence_only",
+          "missing_data_rule": "manual_review_required",
+          "silent_default_allowed": false,
+          "latest_only_historical_evidence_allowed": false
+        },
+        "provider_capabilities": [
+          {
+            "provider_id": "us_fundamentals_provider_tbd",
+            "support_status": "manual_only",
+            "pit_status": "manual_evidence",
+            "frequency": "event",
+            "available_lineage_fields": [
+              "provider_id",
+              "provider_symbol_or_identifier",
+              "fetch_timestamp",
+              "source_date_range",
+              "pit_status",
+              "as_of_eligibility_rule",
+              "known_provider_limitations",
+              "fallback_path"
+            ],
+            "missing_required_fields": [
+              "authorization_license_class",
+              "cost_quota_risk_class"
+            ],
+            "known_limitations": [
+              "Semantic interpretation cannot silently become a deterministic factor.",
+              "Promotion requires a later schema-first reviewed workflow."
+            ]
+          }
+        ],
+        "limitations": [
+          "Manual evidence can support report context but cannot become production scoring without promotion review."
+        ]
+      }
+    ]
+  },
+  "deferred_decisions": [
+    "Final A-share provider set.",
+    "Final US provider set.",
+    "Paid or free data split and cost ceiling.",
+    "Exact DataHub table schemas after this catalog contract.",
+    "Primary benchmark choices outside the already-fixed A-short CSI1000 primary / CSI300 secondary policy."
+  ],
+  "limitations": [
+    "This example is contract validation data, not a production provider registry.",
+    "It records already-known current A-share EOD surfaces and US provider gaps without selecting a final provider.",
+    "It does not fetch data, add adapters, create DataHub tables, change strategy logic, or relax ship gates."
+  ]
+}

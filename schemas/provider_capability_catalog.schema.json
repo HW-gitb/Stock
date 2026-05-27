@@ -1,0 +1,707 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_capability_catalog/1.0.0/schema.json",
+  "title": "Provider Capability Catalog",
+  "description": "Phase 7 schema-first contract for provider capability and field catalog review. This contract records field requirements, provider capability evidence, PIT status, lineage, authorization, cost, stability, and fallback policy. It does not select a final provider, fetch data, create a provider adapter, implement DataHub tables, or authorize production strategy changes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "catalog_policy",
+    "provider_profiles",
+    "field_catalog",
+    "deferred_decisions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_capability_catalog"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "catalog_policy": {
+      "$ref": "#/$defs/catalogPolicy"
+    },
+    "provider_profiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/providerProfile"
+      },
+      "minItems": 1
+    },
+    "field_catalog": {
+      "$ref": "#/$defs/fieldCatalog"
+    },
+    "deferred_decisions": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "marketId": {
+      "enum": [
+        "A",
+        "US",
+        "global"
+      ]
+    },
+    "systemId": {
+      "enum": [
+        "a_short_steady",
+        "a_short_evidence",
+        "a_share_burst",
+        "a_long",
+        "us_short_steady",
+        "us_burst",
+        "us_long",
+        "phase7_shared"
+      ]
+    },
+    "dataClass": {
+      "enum": [
+        "instrument_master_listing_state",
+        "trading_calendar_market_status",
+        "adjusted_eod_ohlcv_liquidity",
+        "limit_halt_suspension_mechanics",
+        "industry_taxonomy",
+        "benchmark_returns_membership",
+        "financial_statements_filings",
+        "cash_flow_quality_valuation",
+        "corporate_actions_capital_actions",
+        "analyst_guidance_consensus",
+        "sec_exchange_filings_events",
+        "ownership_borrow_short_options",
+        "news_legal_regulatory_short_reports",
+        "macro_regime"
+      ]
+    },
+    "requirementStatus": {
+      "enum": [
+        "structured_required",
+        "structured_optional",
+        "manual_evidence",
+        "research_only",
+        "deferred"
+      ]
+    },
+    "automationStatus": {
+      "enum": [
+        "automatable_after_provider_review",
+        "blocked_until_provider_review",
+        "manual_evidence_only",
+        "research_only",
+        "deferred"
+      ]
+    },
+    "pitStatus": {
+      "enum": [
+        "pit_safe",
+        "latest_only",
+        "manual_evidence",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "frequency": {
+      "enum": [
+        "daily",
+        "monthly",
+        "quarterly",
+        "annual",
+        "event",
+        "intraday",
+        "snapshot",
+        "mixed",
+        "unknown"
+      ]
+    },
+    "riskClass": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "licenseClass": {
+      "enum": [
+        "allowed_private_analysis",
+        "restricted_review_required",
+        "manual_source_only",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "evaluationStatus": {
+      "enum": [
+        "acceptable",
+        "limited",
+        "blocked",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "supportStatus": {
+      "enum": [
+        "available",
+        "partial",
+        "missing",
+        "manual_only",
+        "research_only",
+        "unknown",
+        "deferred"
+      ]
+    },
+    "lineageField": {
+      "enum": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "adjustment_mode",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "row_count",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "provider_selection_status",
+        "data_fetch_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7"
+        },
+        "purpose": {
+          "const": "provider_capability_field_catalog_contract"
+        },
+        "contract_status": {
+          "const": "schema_first_contract_only"
+        },
+        "provider_selection_status": {
+          "const": "not_selected"
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        }
+      }
+    },
+    "catalogPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement_status_labels",
+        "default_value_policy",
+        "provider_evaluation_policy",
+        "manual_evidence_policy"
+      ],
+      "properties": {
+        "requirement_status_labels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requirementStatus"
+          },
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "default_value_policy": {
+          "$ref": "#/$defs/defaultValuePolicy"
+        },
+        "provider_evaluation_policy": {
+          "$ref": "#/$defs/providerEvaluationPolicy"
+        },
+        "manual_evidence_policy": {
+          "$ref": "#/$defs/manualEvidencePolicy"
+        }
+      }
+    },
+    "defaultValuePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "silent_default_allowed",
+        "latest_only_historical_evidence_allowed",
+        "missing_required_field_rule",
+        "benchmark_missing_month_rule"
+      ],
+      "properties": {
+        "silent_default_allowed": {
+          "const": false
+        },
+        "latest_only_historical_evidence_allowed": {
+          "const": false
+        },
+        "missing_required_field_rule": {
+          "const": "block_automated_rule_or_mark_manual"
+        },
+        "benchmark_missing_month_rule": {
+          "const": "do_not_fill_zero"
+        }
+      }
+    },
+    "providerEvaluationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "overall_score_allowed",
+        "field_level_blockers_required",
+        "required_dimensions"
+      ],
+      "properties": {
+        "overall_score_allowed": {
+          "const": false
+        },
+        "field_level_blockers_required": {
+          "const": true
+        },
+        "required_dimensions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "coverage",
+              "pit_support",
+              "history_depth",
+              "corporate_actions",
+              "units_currency",
+              "update_latency",
+              "stability",
+              "authorization",
+              "cost",
+              "fallback"
+            ]
+          },
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true
+        }
+      }
+    },
+    "manualEvidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requires_observed_date",
+        "requires_source",
+        "requires_reviewer_or_process_tag",
+        "can_be_deterministic_factor_without_promotion"
+      ],
+      "properties": {
+        "requires_observed_date": {
+          "const": true
+        },
+        "requires_source": {
+          "const": true
+        },
+        "requires_reviewer_or_process_tag": {
+          "const": true
+        },
+        "can_be_deterministic_factor_without_promotion": {
+          "const": false
+        }
+      }
+    },
+    "providerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "provider_name",
+        "provider_type",
+        "market_coverage",
+        "provider_product_or_tier",
+        "selection_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "stability_risk_class",
+        "evaluation_dimensions",
+        "limitations"
+      ],
+      "properties": {
+        "provider_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+        },
+        "provider_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "provider_type": {
+          "enum": [
+            "market_data",
+            "fundamentals",
+            "filings_events",
+            "benchmark",
+            "manual_evidence",
+            "mixed"
+          ]
+        },
+        "market_coverage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/marketId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "provider_product_or_tier": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "selection_status": {
+          "const": "not_selected"
+        },
+        "authorization_license_class": {
+          "$ref": "#/$defs/licenseClass"
+        },
+        "cost_quota_risk_class": {
+          "$ref": "#/$defs/riskClass"
+        },
+        "stability_risk_class": {
+          "$ref": "#/$defs/riskClass"
+        },
+        "evaluation_dimensions": {
+          "$ref": "#/$defs/evaluationDimensions"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "evaluationDimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverage",
+        "pit_support",
+        "history_depth",
+        "corporate_actions",
+        "units_currency",
+        "update_latency",
+        "stability",
+        "authorization",
+        "cost",
+        "fallback"
+      ],
+      "properties": {
+        "coverage": {
+          "$ref": "#/$defs/evaluationStatus"
+        },
+        "pit_support": {
+          "$ref": "#/$defs/evaluationStatus"
+        },
+        "history_depth": {
+          "$ref": "#/$defs/evaluationStatus"
+        },
+        "corporate_actions": {
+          "$ref": "#/$defs/evaluationStatus"
+        },
+        "units_currency": {
+          "$ref": "#/$defs/evaluationStatus"
+        },
+        "update_latency": {
+          "$ref": "#/$defs/evaluationStatus"
+        },
+        "stability": {
+          "$ref": "#/$defs/evaluationStatus"
+        },
+        "authorization": {
+          "$ref": "#/$defs/evaluationStatus"
+        },
+        "cost": {
+          "$ref": "#/$defs/evaluationStatus"
+        },
+        "fallback": {
+          "$ref": "#/$defs/evaluationStatus"
+        }
+      }
+    },
+    "fieldCatalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalog_status",
+        "fields"
+      ],
+      "properties": {
+        "catalog_status": {
+          "const": "contract_fields_only"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldDefinition"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "fieldDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_id",
+        "data_class",
+        "description",
+        "required_systems",
+        "requirement_status",
+        "automation_status",
+        "pit_status",
+        "frequency",
+        "history_requirement",
+        "lineage_requirements",
+        "provider_requirements",
+        "production_use_policy",
+        "provider_capabilities",
+        "limitations"
+      ],
+      "properties": {
+        "field_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+        },
+        "data_class": {
+          "$ref": "#/$defs/dataClass"
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required_systems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/systemId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "requirement_status": {
+          "$ref": "#/$defs/requirementStatus"
+        },
+        "automation_status": {
+          "description": "Technical automation readiness for this field. It records whether provider capability and field shape could support automation; it does not by itself authorize production use.",
+          "$ref": "#/$defs/automationStatus"
+        },
+        "pit_status": {
+          "$ref": "#/$defs/pitStatus"
+        },
+        "frequency": {
+          "$ref": "#/$defs/frequency"
+        },
+        "history_requirement": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "lineage_requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lineageField"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "provider_requirements": {
+          "$ref": "#/$defs/providerRequirements"
+        },
+        "production_use_policy": {
+          "$ref": "#/$defs/productionUsePolicy"
+        },
+        "provider_capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/providerCapability"
+          },
+          "minItems": 1
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "providerRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "stability_risk_class",
+        "fallback_path",
+        "required_provider_evidence",
+        "provider_review_required"
+      ],
+      "properties": {
+        "authorization_license_class": {
+          "$ref": "#/$defs/licenseClass"
+        },
+        "cost_quota_risk_class": {
+          "$ref": "#/$defs/riskClass"
+        },
+        "stability_risk_class": {
+          "$ref": "#/$defs/riskClass"
+        },
+        "fallback_path": {
+          "description": "Design-time routing when provider capability is unsupported, unreliable, or not yet reviewed before runtime.",
+          "enum": [
+            "block_rule",
+            "omit_with_limitation",
+            "manual_evidence",
+            "research_only",
+            "defer"
+          ]
+        },
+        "required_provider_evidence": {
+          "$ref": "#/$defs/stringList"
+        },
+        "provider_review_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "productionUsePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "use_status",
+        "missing_data_rule",
+        "silent_default_allowed",
+        "latest_only_historical_evidence_allowed"
+      ],
+      "properties": {
+        "use_status": {
+          "description": "Policy/governance permission for production use. It is evaluated independently from automation_status and can veto a technically automatable field.",
+          "enum": [
+            "allowed_after_provider_review",
+            "blocked_until_provider_review",
+            "manual_evidence_only",
+            "research_only",
+            "deferred"
+          ]
+        },
+        "missing_data_rule": {
+          "description": "Runtime behavior when this field is missing for a candidate, run, or report after provider and field policy have already been defined.",
+          "enum": [
+            "block_rule",
+            "omit_with_limitation",
+            "manual_review_required",
+            "research_only",
+            "defer"
+          ]
+        },
+        "silent_default_allowed": {
+          "const": false
+        },
+        "latest_only_historical_evidence_allowed": {
+          "const": false
+        }
+      }
+    },
+    "providerCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "support_status",
+        "pit_status",
+        "frequency",
+        "available_lineage_fields",
+        "missing_required_fields",
+        "known_limitations"
+      ],
+      "properties": {
+        "provider_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+        },
+        "support_status": {
+          "$ref": "#/$defs/supportStatus"
+        },
+        "pit_status": {
+          "$ref": "#/$defs/pitStatus"
+        },
+        "frequency": {
+          "$ref": "#/$defs/frequency"
+        },
+        "available_lineage_fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lineageField"
+          },
+          "uniqueItems": true
+        },
+        "missing_required_fields": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "known_limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    }
+  }
+}

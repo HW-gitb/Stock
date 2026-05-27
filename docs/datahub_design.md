@@ -22,7 +22,7 @@ The DataHub idea is accepted, but implementation is staged:
 - **Phase 2.6**: document the DataHub design and strengthen data lineage in existing reports.
 - **Phase 3-6**: continue building the A-share short-term analyzer/state/Skill/closed-loop workflow. Do not split `A-EGS/egs_main.py` into a full DataHub during this period.
 - **Phase 6e**: establish `docs/provider_data_requirements_audit.md` so Phase 7 starts from four-system data requirements instead of A-short-only convenience.
-- **Phase 7**: perform the engine modularization and DataHub implementation before expanding to US short-term.
+- **Phase 7**: perform the engine modularization and DataHub implementation before expanding to US short-term. The first schema-first contract baseline is `schemas/provider_capability_catalog.schema.json`.
 
 Reason: `A-EGS/egs_main.py` v7.10 and `runners/backtest_rank.py` have just passed a 24-period production rank-backtest engineering validation. Large structural rewrites now would add breakage risk before the A-share short-term loop is closed.
 
@@ -140,7 +140,7 @@ Phase 7 starts only after the A-share short-term sample loop is stable enough to
 
 Completion criteria:
 
-- Provider capability / field catalog exists for the data classes required by A-short, US-short, A-long, US-long, and burst lanes.
+- Provider capability / field catalog contract exists for the data classes required by A-short, US-short, A-long, US-long, and burst lanes. Current baseline: `schemas/provider_capability_catalog.schema.json` v1.0.0.
 - `A-EGS/egs_main.py` no longer performs scattered direct provider calls for core reusable data.
 - Provider access is centralized under `engine/data/`.
 - Standardized data contracts exist for daily history, daily basic, moneyflow, financials, stock basic, industry membership, limit prices, and benchmark indices.

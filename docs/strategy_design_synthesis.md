@@ -327,6 +327,8 @@ Use the four specs plus the provider/data requirements audit to split shared eng
 - shared: data providers, validation, cache/retry, backtest skeletons, utility code,
 - independent: factors, scoring, analyzers, risk model, position sizing, exits.
 
+The first Phase 7 schema-first baseline is `schemas/provider_capability_catalog.schema.json`, which records provider capability and field requirements without selecting a provider, fetching data, adding adapters, or creating DataHub tables.
+
 ### Phase 7.5 - Research Infrastructure
 
 Create `research/` structure, minimal experiment logging, and promotion policy.
@@ -350,8 +352,8 @@ Write and then implement cross-system coordinator once the four systems have eno
 
 ## 8. Next Execution Implication
 
-The next `执行` after the provider/data requirements audit should start Phase 7 with the smallest schema-first DataHub slice:
+The next `执行` after the provider/data requirements audit established the first Phase 7 schema-first contract:
 
-1. Provider capability / field catalog contract derived from `docs/provider_data_requirements_audit.md`.
+1. Provider capability / field catalog contract: `schemas/provider_capability_catalog.schema.json`.
 
-A-short continues as maintenance / evidence accumulation while Phase 7 contracts are written. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data before the reviewed contract exists.
+A-short continues as maintenance / evidence accumulation while Phase 7 contracts are written. The next natural slice is to populate or review provider capability evidence against this contract, starting from already-proven A-share EOD / benchmark surfaces. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data before a reviewed provider-evidence slice exists.

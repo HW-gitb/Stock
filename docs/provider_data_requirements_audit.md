@@ -2,7 +2,7 @@
 
 **Status**: Phase 6e docs-only baseline. This document consolidates the data requirements created by the Phase 6 spec pack before Phase 7 DataHub / engine implementation.
 
-**Owner role**: detailed owner for provider capability, data-class, PIT, frequency, lineage, authorization / cost, and stability requirements. It does not select a final provider, create schemas, implement DataHub, or start production data ingestion.
+**Owner role**: detailed owner for provider capability, data-class, PIT, frequency, lineage, authorization / cost, and stability requirements. It does not select a final provider, implement DataHub, or start production data ingestion. Phase 7 has since derived the first schema contract in `schemas/provider_capability_catalog.schema.json`.
 
 ## 1. Scope
 
@@ -184,7 +184,7 @@ Phase 7 should use this audit as a requirement input, not as a provider verdict.
 
 Recommended first Phase 7 slices:
 
-1. Create a provider capability / field catalog contract before broad provider adapters. It should record data class, required systems, PIT status, frequency, lineage, authorization, cost, stability, and fallback.
+1. Create a provider capability / field catalog contract before broad provider adapters. This is now established as `schemas/provider_capability_catalog.schema.json` v1.0.0. It records data class, required systems, PIT status, frequency, lineage, authorization, cost, stability, and fallback without selecting a provider.
 2. Standardize already-proven A-share EOD / benchmark surfaces without rewriting `A-EGS/egs_main.py` wholesale.
 3. Define fundamentals and event-data contracts before long-system implementation.
 4. Define US security-master / price / benchmark contracts before US-short or US-long implementation.
@@ -204,7 +204,7 @@ These decisions remain open after this audit:
 
 - Final provider or provider set.
 - Paid / free data split and user-approved cost ceiling.
-- Exact schemas for provider capability registry, security master, fundamentals, events, and benchmark series.
+- Exact schemas for security master, fundamentals, events, and benchmark series. The provider capability / field catalog contract now has v1.0.0, but a real provider registry artifact and provider selection remain deferred.
 - Primary benchmarks for A-long, US-long, US-short steady, A-share burst, and US burst.
 - Numeric field thresholds, factor weights, and production configs.
 - Whether options / dark-pool / off-exchange diagnostics become production inputs.
@@ -224,4 +224,4 @@ Phase 6e docs-only baseline is complete when:
 
 ## 12. Next Work
 
-After this baseline, the next recommended smallest task is a Phase 7 first slice: define a provider capability / field catalog contract from this audit. That slice should remain schema-first and should not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data until the contract is reviewed.
+After this baseline, the first Phase 7 schema-first slice derived `schemas/provider_capability_catalog.schema.json` from this audit. The next recommended smallest task is to populate or review provider capability evidence against that contract, starting from already-proven A-share EOD / benchmark surfaces. That follow-up should still not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data until the evidence contract is reviewed.

@@ -15,6 +15,7 @@
 - US-short normalized spec：`docs/us_short_spec.md`
 - 长线 alpha 共同规格 / A / US 长线 skeleton：`docs/long_alpha_spec.md`
 - Provider / data requirements audit：`docs/provider_data_requirements_audit.md`
+- Provider capability / field catalog contract：`schemas/provider_capability_catalog.schema.json`
 - 资金政策：`docs/portfolio_allocation_policy.md`
 - DataHub / provider / factor guardrail：`docs/datahub_design.md`
 - phase 历史：`docs/handoff/` 下由本文件“交接记录”列出的 handoff
@@ -43,6 +44,7 @@
 - ✅ Phase 6d 长线规格：`docs/long_alpha_spec.md` 已建立长线 alpha 共同规格、US 长线 skeleton、A 股长线 skeleton（docs-only；provider/data audit baseline 已补；provider 选择仍未锁）
 - ✅ Phase 6d US-short 规格：`docs/us_short_spec.md` 已把 `skills/us_short_analysis/reference/` 资料规范成 production-facing docs-only baseline（provider / DataHub / runner / Skill 尚待后续）
 - ✅ Phase 6e provider/data requirements audit：`docs/provider_data_requirements_audit.md` 已汇总 4 套系统字段、PIT、频率、lineage、授权/成本、稳定性和 fallback 要求（docs-only；不锁最终 provider）
+- ✅ Phase 7 provider capability / field catalog contract：`schemas/provider_capability_catalog.schema.json` v1.0.0 已建立 schema-first contract（不选 provider、不抓数据、不建 adapter / DataHub table）
 - ✅ Phase 1a：`schemas/analysis_input.schema.json` 已完成，当前输出 schema 版本 `1.1.0`
 - ✅ Phase 1b：`egs_main.py` 已接入 `analysis_input.json`、`snapshot.json`、`candidates.csv` 导出器
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
@@ -172,7 +174,7 @@ Stock/
 | 6c | A / US 短线 `burst_lane` spec：共用 signal family、市场字段差异、独立 risk lock / sizing gate / ship gate | 2-4 天 | ✅ docs-only baseline |
 | 6d | 长线 alpha spec pack：long alpha common spec + A-long annex + US-long annex + US-short spec normalization | spec 设计 | ✅ docs-only baselines |
 | 6e | Provider / fundamentals data requirements audit：列出 A/US long、A/US burst、US-short 所需字段、PIT、频率、lineage、授权/成本/稳定性要求；不在本步锁最终 provider | 2-4 天 | ✅ docs-only baseline |
-| 7 | DataHub / engine 模块化重构；按 4 套 spec + provider/data requirements audit 划分共享层与独立 rule pack | 1-2 周 | ⬜ |
+| 7 | DataHub / engine 模块化重构；按 4 套 spec + provider/data requirements audit 划分共享层与独立 rule pack | 1-2 周 | ⬜ schema-first contract baseline |
 | 7.5 | `research/` infrastructure + experiment logging + promotion gate | 2-4 天 | ⬜ |
 | 8 | 四套子系统 implementation wave 1：按资金权重 × alpha leverage × data readiness 排序，默认优先 US-long；若 US provider readiness 不足，A-long 可前置 | 1-2 周 | ⬜ |
 | 9 | 四套子系统 implementation wave 2 + cross-system coordinator spec / first implementation（继续按数据准备度与 evidence readiness 调整） | 2-4 周 | ⬜ |
@@ -241,6 +243,7 @@ Claude 审查 fast path lives in `docs/AI_REVIEW_PROTOCOL.md §Review Continuity
 10. `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md` — Phase 4 开工规格：deterministic_report schema first + runner 纯 Python + Skill 是使用文档（非执行入口）
 11. `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` — Phase 5 kickoff 规格：execution backtest contract 边界；schema / runner / simulator 代码尚未开始
 12. `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` — Phase 6a 开工边界：forward evidence、A 短 benchmark sensitivity、forward tracker → aggregate evidence flow、steady/variant/burst/long-spec 边界
+13. `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` — Phase 7 开工边界：provider capability / field catalog contract v1.0.0；schema-first，不选 provider、不抓数据、不建 adapter / DataHub table
 
 完成一轮重要修改后，收尾时必须同步更新 handoff。**默认追加到同 phase 主 handoff，不要轻易新建文件**（2026-05-24 当天 8 个 handoff 是历史教训：碎片化让接手者读到第 5 个就开始跳读）。
 
@@ -407,6 +410,8 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `schemas/analysis_input.schema.json` — analysis_input 契约，当前 `1.1.0`，JSON Schema Draft 7
 - `schemas/deterministic_report.schema.json` — deterministic report 契约，当前 `1.0.0`，Phase 4 runner 输出 JSON 必须通过该 schema
 - `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.11.0`（含 date_warnings + data_lineage + analyzer veto replay）
+- `schemas/provider_capability_catalog.schema.json` — Phase 7 provider capability / field catalog 契约，当前 `1.0.0`（schema-first；不锁最终 provider / adapter / DataHub table）
+- `schemas/examples/provider_capability_catalog.example.json` — Phase 7 provider capability catalog 示例（验证 schema；不是生产 provider registry）
 - `schemas/analysis_input_coverage.md` — schema 覆盖率与修复记录
 - `docs/burst_lane_spec.md` — Phase 6c A / US 短线 burst lane docs-only baseline（独立 signal / risk / sizing / ship gate；不继承 steady lane gate）
 - `docs/long_alpha_spec.md` — Phase 6d 长线 alpha 共同规格与 A / US 长线 skeleton（docs-only；不锁 provider / runner / schema）
@@ -422,6 +427,7 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格交接记录（minimal veto analyzer + JSON state + replay/ablation）
 - `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md` — Phase 4 开工规格交接记录（deterministic_report schema first + runner-as-executor + Skill-as-doc）
 - `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` — Phase 5 kickoff 规格交接记录（execution backtest contract 边界；代码未开始）
+- `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` — Phase 7 kickoff 规格交接记录（provider capability / field catalog contract）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_codex_24p_v7.10.md` — 当前有效 Phase 2 findings（Codex 24p v7.10 视角）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md` — 当前有效 Phase 2 findings（cc 互补合并版，含 OVERHEAT/entry_flag/LOCK 三个负信号 + 2024 vs 2025 regime 拆分）
 ## DataHub / Data Middle Platform Guardrail

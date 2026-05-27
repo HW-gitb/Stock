@@ -17,6 +17,7 @@ Use this routing table instead of guessing which file to read.
 | US-short normalized production-facing spec | `docs/us_short_spec.md` |
 | Long alpha common spec and A/US long annex skeletons | `docs/long_alpha_spec.md` |
 | Provider / data requirements audit before Phase 7 DataHub | `docs/provider_data_requirements_audit.md` |
+| Phase 7 provider capability / field catalog schema contract | `schemas/provider_capability_catalog.schema.json` |
 | Capital allocation and liquidity policy | `docs/portfolio_allocation_policy.md` |
 | DataHub / provider / factor-layer guardrails | `docs/datahub_design.md` |
 | Phase-level historical context and validation records | `docs/handoff/<phase>_handoff.md` files named in `AGENTS.md` |

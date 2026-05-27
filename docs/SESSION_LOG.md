@@ -8,6 +8,117 @@
 
 ---
 
+## 2026-05-27 — Claude re-review — Pass (Phase 7 provider capability catalog O1 disposition)
+
+**Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `08afd61`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 accept (path a) verified — 4 处 description 全部加语义区分：`automation_status` (line 550) "Technical automation readiness ... does not by itself authorize production use"；`use_status` (line 638) "Policy/governance permission ... independently from automation_status ... can veto a technically automatable field"；`missing_data_rule` (line 648) "Runtime behavior"；`fallback_path` (line 610) "Design-time routing". 超出 Optional 建议的 enhancement：example 新加 `a_industry.sw_l2_membership` field 真正脱钩示范（automation=automatable + use=blocked + known_limitations 标 "intentionally decouples technical automation readiness from production use approval"）；新 test `test_status_axes_are_documented_and_can_be_decoupled` 覆盖 4 处 description 关键短语 + decoupled field 实际值. 测试数字增长一致（11 tests focused = 10+1 / 37 full discovery = 36+1）. Scope 严守（4 untracked 全部改，tracked routing 未动）. 3 alternatives reject 理由清楚，第 3 条 "SW L2 技术上 automatable 不能跳过 PIT/fallback/coverage/authorization/cost 评审" 堵住"schema 区分了两轴那 example 是否太严"的潜在退路. 无 Required fixes、无新 Optional、无 open question、无 scope creep、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (repair: Phase 7 provider capability catalog O1)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest `2026-05-27 — Claude review — Pass (Phase 7 provider capability catalog contract)` Optional O1.
+- Builds on the prior Codex Phase 7 provider capability catalog contract execution entry; no Required fixes were raised.
+
+**Worked on**:
+1. [untracked] `schemas/provider_capability_catalog.schema.json`: accepted O1 by documenting `automation_status` as technical/provider readiness, `production_use_policy.use_status` as independent governance permission with veto power, `missing_data_rule` as runtime missing-field behavior, and `fallback_path` as design-time unsupported-provider routing.
+2. [untracked] `schemas/examples/provider_capability_catalog.example.json`: added `a_industry.sw_l2_membership` to prove status-axis decoupling: technically `automatable_after_provider_review` but production-blocked until provider evidence review.
+3. [untracked] `tests/schema/test_provider_capability_catalog_schema.py`: added regression coverage for the new descriptions and the decoupled example field.
+4. [untracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: recorded O1 disposition, changed artifacts, reasoning, and validation results.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff for Claude re-review.
+6. Validation run/result: provider capability catalog focused tests passed (11 tests); full `tests/schema` discovery passed (37 tests); `git diff --check` passed (CRLF warnings only); changed-file trailing-whitespace check passed.
+7. Current review state: waiting for Claude re-review after Optional O1 disposition.
+
+**Key decisions**:
+- O1 accepted with path (a). The status fields remain separate because technical automation readiness and production-use approval are different axes.
+- `production_use_policy.use_status` is the governance gate and can veto a field even when `automation_status` says the field is technically automatable after provider review.
+- `missing_data_rule` and `fallback_path` also stay separate: runtime behavior vs design-time provider unsupported routing.
+- The example now includes one explicitly decoupled field so future LLMs do not infer the two status axes must always mirror each other.
+
+**Alternatives considered and rejected**:
+- "Merge `automation_status` and `use_status` into one field" — rejected. This would erase the distinction between provider capability and production governance.
+- "Only add descriptions without an example" — rejected. The review specifically flagged that all example fields mirrored the two axes, so a decoupled field is needed to lock the intended semantics.
+- "Relax production use for SW L2 taxonomy just because it is technically automatable" — rejected. PIT, fallback, coverage, authorization, and cost evidence still need provider review before production use.
+
+**Open questions handed off**:
+- No new blocking questions from this repair. The prior Phase 7 questions about evidence artifact location, first A-share surfaces, and repo-visible license/cost detail remain deferred to the next execution slice.
+
+**Next natural step from my view**:
+1. Claude re-reviews the repaired working tree, including the untracked schema, example, test, and handoff files.
+2. If Pass, user `提交`.
+3. After commit, the next execution slice should populate provider capability evidence against `schemas/provider_capability_catalog.schema.json`, starting from already-proven A-share EOD / benchmark surfaces.
+
+---
+
+## 2026-05-27 — Claude review — Pass (Phase 7 provider capability catalog contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `08afd61`)
+
+**Verdict**: Pass with Optional suggestions (no Required fixes).
+
+**Scope reviewed**: Codex `执行` round Phase 7 第一刀 schema-first contract — `schemas/provider_capability_catalog.schema.json` v1.0.0 (703 行；Draft-07；9 top-level required props；14 enum-typed $defs；22 lineage field enum 与 audit §7 18 字段一致 + 复合字段拆细；14 data class enum 与 audit §3 matrix 14 行完全对应；8 system id enum 覆盖 4 套系统 + A-short 双重身份 + phase7_shared；anti-pattern lock 网络含 24 个 const lock：scope 10 const + catalog_policy 三层 const (default value 4 + evaluation 3 + manual evidence 4) + per-field productionUsePolicy double-lock 2 + provider_profiles[*].selection_status 1；每条 const lock 都映射 audit 章节)；`schemas/examples/provider_capability_catalog.example.json` (459 行；4 representative fields 覆盖 3 种 production_use 状态：allowed_after_review / blocked_until_review / manual_evidence_only；2 provider profiles：tushare_current_a_eod partial + us_fundamentals_provider_tbd all-unknown placeholder)；`tests/schema/test_provider_capability_catalog_schema.py` (187 行 10 tests 含 3 negative tests：test_selected_provider_is_rejected / test_silent_default_is_rejected / test_overall_provider_score_is_rejected——主动 fuzz anti-pattern 不只验 happy path)；`docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` (124 行 cross-phase kickoff 八节齐全；按 AGENTS.md handoff discipline "跨 phase 转换" 高门槛新建独立 handoff 合理)；7 处 routing 同步（AGENTS routing+进度勾+交接记录第 13 项+文件参考 / CURRENT §0/§1/§2 维持 8 条/§5 加 schema-example-test 三项/§6 P0 #1 升级为 "Provider capability evidence / field catalog population" / README routing table / datahub_design staged plan + Completion criteria / strategy_synthesis §7 cross-ref + §8 重写 / provider_data_requirements_audit Owner role + §9 + §10 + §12 四处 derive 提示）全部一致. Cross-spec consistency 完整：defaultValuePolicy benchmark_missing_month_rule="do_not_fill_zero" 与 audit §6 第 8 条 + benchmark monthly returns materializer 一致；providerEvaluationPolicy 禁 overall_score + 10 dimensions exact 与 audit §8 末段一致；manualEvidencePolicy 4 条与 audit §2 manual_evidence 行一致；pit_status enum 与 audit §6 + long §5 + burst §4 一致. Validation 完整：10 tests focused + 21 adjacent + 36 full `tests/schema` discovery + git diff --check + trailing whitespace + active stale next-step wording scan（首次含 3 类 unittest discovery 范围）. 5 alternatives reject 理由清楚.
+
+**Required fixes**: none.
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+- **O1**: `schemas/provider_capability_catalog.schema.json` 中 `automationStatus` enum (5 项 `automatable_after_provider_review` / `blocked_until_provider_review` / `manual_evidence_only` / `research_only` / `deferred`) 与 `productionUsePolicy.use_status` enum (5 项 `allowed_after_provider_review` / `blocked_until_provider_review` / `manual_evidence_only` / `research_only` / `deferred`) 几乎完全 mirror，只有第 1 项措辞不同（"automatable" vs "allowed"）。Schema description 没说明两者语义区分（推测 automation_status = technical capability vs use_status = policy approval），且 example 4 个 field 里两者完全一致没体现脱钩用例。未来 LLM 可能困惑：是要求两者同时成立才能 production（AND 关系），还是 use_status 独立 govern（use_status 一票否决）？建议二选一：(a) 在 `fieldDefinition` 的 `automation_status` / `production_use_policy.use_status` 两字段 description 显式说明语义区分（automatable = technical capability，allowed = policy approval，两者独立判断且 use_status 一票否决）；(b) 合并为一个 status 字段（如果两者实际是同一概念，2 个 enum 维护 5 项重叠是 redundant）。同类型 enum 语义重叠还出现在 `productionUsePolicy.missing_data_rule` (5 项含 "manual_review_required") vs `providerRequirements.fallback_path` (5 项含 "manual_evidence")，4 项重叠 + 1 项措辞细微差异；如果 O1 选 (a) 路径，建议一并明确这两者的语义区分（missing_data_rule = runtime missing behavior vs fallback_path = design-time provider unsupported routing）。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes; Optional suggestions PENDING CODEX DISPOSITION.
+
+---
+
+## 2026-05-27 — Codex (Phase 7 provider capability catalog contract)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `08afd61` Add provider data requirements audit, which left Phase 7 provider capability / field catalog contract as the next schema-first slice.
+- Starts the Phase 6 → Phase 7 transition with a machine-checkable contract before provider selection, provider adapters, DataHub tables, or data fetches.
+
+**Worked on**:
+1. [untracked] `schemas/provider_capability_catalog.schema.json`: created v1.0.0 schema-first contract for provider profiles, field catalog entries, data classes, required systems, requirement statuses, PIT/frequency/history, lineage requirements, provider evaluation dimensions, production-use policy, and provider capability evidence.
+2. [untracked] `schemas/examples/provider_capability_catalog.example.json`: added a validating example with current A-share EOD / benchmark surfaces and explicit US provider TBD gaps; this is not a production provider registry.
+3. [untracked] `tests/schema/test_provider_capability_catalog_schema.py`: added schema regression coverage for meta validation, example validation, scope locks, requirement labels, system/data-class coverage, provider evaluation no-overall-score guard, provider-selection rejection, and silent-default rejection.
+4. [untracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: created the Phase 7 kickoff handoff because this is a cross-phase transition.
+5. [tracked] `AGENTS.md`: routed the provider capability / field catalog contract, added current progress and file references, updated Phase 7 roadmap status, and added the Phase 7 handoff to the handoff list.
+6. [tracked] `docs/README.md`, `docs/CURRENT.md`, `docs/datahub_design.md`, `docs/strategy_design_synthesis.md`, and `docs/provider_data_requirements_audit.md`: synchronized Phase 7 status and next-step routing from provider-audit pending to provider-capability evidence / catalog population.
+7. [tracked] `docs/SESSION_LOG.md`: prepended this execution handoff for Claude review.
+8. Validation run/result: provider capability catalog focused tests passed (10 tests); provider capability + adjacent Phase 6 schema regression passed (21 tests); full `tests/schema` discovery passed (36 tests); `git diff --check` passed (CRLF warnings only); changed-file trailing-whitespace check passed; active stale next-step wording scan passed.
+9. Current review state: waiting for Claude review of this Phase 7 schema-first contract slice.
+
+**Key decisions**:
+- The first Phase 7 artifact is a schema contract, not a provider verdict. `provider_selection_status`, every provider profile `selection_status`, data fetch, provider adapter, DataHub table implementation, and production strategy change are locked off in schema.
+- Provider evaluation keeps dimension-level blockers (`coverage`, `pit_support`, `history_depth`, `corporate_actions`, `units_currency`, `update_latency`, `stability`, `authorization`, `cost`, `fallback`) and does not allow one overall score.
+- Field entries must carry required systems, requirement status, PIT status, frequency, lineage requirements, provider requirements, production-use policy, and provider capability evidence.
+- Silent defaults and latest-only data as historical PIT evidence are forbidden both at catalog policy level and per-field production-use policy.
+- The example deliberately includes a current A-share Tushare EOD / benchmark surface and a US provider TBD gap, making provider readiness visible without selecting a final provider.
+
+**Alternatives considered and rejected**:
+- "Start by implementing a provider adapter or DataHub table" — rejected. Phase 7 needs a reviewed capability / field catalog contract first.
+- "Use a docs-only checklist instead of JSON Schema" — rejected. Later provider evidence and DataHub contracts need machine-checkable boundaries.
+- "Record provider quality as one weighted score" — rejected. A single score can hide hard blockers such as PIT, licensing, missing filing dates, or survivorship.
+- "Treat current Tushare EOD helpers as final A-share provider selection" — rejected. The example records proven surfaces only; final provider selection remains deferred.
+- "Let missing fields default to neutral values" — rejected. Missing required data must block the automated rule, route to manual evidence, stay research-only, or be deferred.
+
+**Open questions handed off**:
+- Should the next provider capability evidence artifact live under `schemas/examples/`, a new `docs/datahub/` path, or another reviewed location?
+- Which already-proven A-share surfaces should be populated first: EOD price, benchmark returns, index membership, or all three in one evidence slice?
+- When provider candidates are compared later, which license / cost details are safe to store in repo-visible artifacts versus kept as user-local notes?
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7 schema-first contract slice using the mandatory fast path, including all untracked files.
+2. If Pass, user `提交`.
+3. After commit, populate or review provider capability evidence against `schemas/provider_capability_catalog.schema.json`, starting from already-proven A-share EOD / benchmark surfaces; do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, fetch new provider data, or build DataHub tables before that evidence slice is reviewed.
+
+---
+
 ## 2026-05-27 — Claude review — Pass (Phase 6e provider/data requirements audit)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `4a7aa52`)
