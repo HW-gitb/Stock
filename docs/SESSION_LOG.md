@@ -8,6 +8,114 @@
 
 ---
 
+## 2026-05-27 — Claude re-review — Pass (docs slimming Optional O1/O2 disposition)
+
+**Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `78625c5`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 accept verified — prior Codex entry line 93 数字从 "96 lines" 改为 "137 physical lines"，新 repair entry §Validation 用 `Get-Content ... | Measure-Object` reports `Count: 137` 是 measured 而非 estimated（响应 O1 process reminder）；选择修 prior historical entry 而非新 append 与前一轮 O2 disposition 选 "not rewrite historical entry" 路径不同，但合理 — 96→137 是 factual error 修正不是 reasoning rewrite，让 git log 保留正确数字更准确。O2 accept verified — `docs/handoff/README.md` line 16 Current Phase Handoff + line 38 §Phase Index Phase 7 entry 都加 "Phase 7a alpha-validation route and Phase 7a+ alpha reality action guide additions" 标注；line 39 显式加 "Phase 7a additions live in the same file, not a separate handoff" — 比我原 O2 建议更完整，主动防新 LLM 搜 "Phase 7a" 失败。Scope 严守（仅 2 文件 docs-only：SESSION_LOG.md + handoff/README.md）。无 Required fixes、无新 Optional、无 open question、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (repair: docs slimming Optional O1/O2)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest Claude review: Pass with 2 Optional suggestions, 0 Required fixes.
+- Builds on `2026-05-27 — Codex (docs slimming baseline)`.
+
+**Optional disposition**:
+- O1 accept — corrected the `docs/CURRENT.md` validation count from 96 to 137 physical lines; 137 still satisfies the `<150` snapshot target.
+- O2 accept — updated `docs/handoff/README.md` so the Phase 7 handoff entry explicitly states that Phase 7a alpha-validation route and Phase 7a+ alpha reality action guide additions live in the same handoff file.
+
+**Worked on**:
+1. [tracked] `docs/SESSION_LOG.md`: prepended this repair entry and corrected the prior validation line count to 137.
+2. [untracked] `docs/handoff/README.md`: added explicit Phase 7a routing notes to the Phase 7 handoff entry.
+
+**Validation run/result**:
+- `Get-Content docs/CURRENT.md | Measure-Object` reports `Count: 137`; this is below the 150-line target.
+- Focused scan confirms `docs/handoff/README.md` now mentions Phase 7a alpha-validation route and Phase 7a+ alpha reality action guide additions.
+- `git diff --check` passed; only existing LF/CRLF normalization warnings were reported.
+
+**Current review state**:
+- Required fixes repaired: 0.
+- Optional dispositions: 2 accepted, 0 accepted with modification, 0 rejected.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude re-reviews this docs-only Optional disposition.
+2. If Pass, user can run `提交`.
+
+---
+
+## 2026-05-27 — Claude review — Pass with Optional (docs slimming baseline)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `78625c5`)
+
+**Verdict**: Pass with 2 Optional suggestions (no Required fixes).
+
+**Scope reviewed**: Codex `执行` round docs slimming baseline — 3 tracked modified (`docs/CURRENT.md` / `docs/README.md` / `docs/SESSION_LOG.md`) + 2 untracked new (`docs/handoff/README.md` / `docs/archive/README.md`)。Scope 严守 docs-only。完整覆盖用户上轮 4 步清理顺序：(1) CURRENT.md 320 → 137 行（响应我前轮 audit 的 P0 self-violation finding，符合新 <150 行 target）；(2) SESSION_LOG 归档 policy 写入 README §Documentation Slimming Policy #3（30 天 trigger，不是现在 archive）；(3) handoff/README.md 38 行索引含 Reading Policy + Current Phase Handoff + Phase Index 13 个 handoff；archive/README.md 18 行说明 .docx 不是 active authority；(4) 不删 spec，不合并 handoff 历史。
+
+**Notes**: CURRENT.md 新结构合理（§0 Latest Delta 5 bullets / §1 当前 Phase / §2 最近已完成 5 milestone / §3 当前策略结论保留 active findings 含 "24p 尚未做 multiple-testing / survivorship / regime sensitivity 重审" 前置到 Phase 7a-1 的 reminder / §4 关键文件 / §5 下一步 P0-P3 / §6 命令 / §7 雷区 / §维护规则 <150 行 target）。README §Documentation Slimming Policy 6 条完整覆盖核心 doc lock / CURRENT snapshot / SESSION_LOG 30 天 trigger / handoff README index / archive 不删 / Phase 7a R1 已修保留 "must not be duplicated here" — 第 6 条就是我前轮建议的措辞。Cross-doc consistency: README routing 加两行新 README routing；CURRENT §0 #5 + §4 含两 README pointer。Codex SESSION_LOG entry 七节齐全含 Optional disposition (N/A) / Worked on [tracked]/[untracked] tags / Validation run/result / Current review state "Ready for Claude review: Yes"。
+
+**Required fixes**: none.
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+- **O1**: Codex SESSION_LOG entry §Validation run/result 写 "`docs/CURRENT.md` is now 96 lines, below the 150-line snapshot target" — **数字不准确**。实际 `wc -l docs/CURRENT.md` 显示 **137 lines**（差 41 行）。文件最后一行内容是 line 138（"新增文档必须先在 docs/README.md routing table 中说明 owner role。"）。137 lines 仍然 < 150 target 是实质 compliant，但 §AI_REVIEW_PROTOCOL §Codex Responsibilities 要求 validation 准确。建议在 next entry 或当前 entry append 一行 correction，把数字改成 137；或者作为 process reminder：future entry 写 "validation run/result" 时 cite 实际 measure 出的数字而不是 estimate。
+
+- **O2**: `docs/handoff/README.md` §"Current Phase Handoff" line 16 + §"Phase Index" Phase 7 entry 都只标 `2026-05-27_phase7_kickoff_spec_handoff.md` 为 "Phase 7 provider capability / field catalog contract boundary"，**没显式标注**同一份 handoff 也含 Phase 7a 追加 section（在 handoff 文件内部 line 143+ 有两个 "## 2026-05-27 追加：Phase 7a alpha-validation route" / "## 2026-05-27 追加：Alpha reality action guide"）。新 LLM 按 handoff/README 搜 "Phase 7a" 会找不到入口，必须知道 Phase 7a 在 Phase 7 handoff 里。建议 handoff/README.md Phase 7 entry 加注释 "（含 2026-05-27 Phase 7a alpha-validation route + Phase 7a+ alpha reality action guide 两节追加）"，或 §Phase Index 加 "Phase 7a" sub-entry 指向同一文件。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes; Optional suggestions PENDING CODEX DISPOSITION.
+
+---
+
+## 2026-05-27 — Codex (docs slimming baseline)
+
+**Commits**: none (docs-only update; commit waits for Claude review / user `提交` if requested)
+
+**Relationship to prior session(s)**:
+- Builds on commit `78625c5` (`Clean up docs routing and audit ownership`).
+- Refines the documentation hygiene decision from routing cleanup into a concrete slimming baseline.
+
+**Worked on**:
+1. [tracked] `docs/CURRENT.md`: compressed from a history-heavy snapshot into a short current-state table with pointers to owner docs, `SESSION_LOG`, and handoff index.
+2. [tracked] `docs/README.md`: added `Documentation Slimming Policy`, including the accepted Phase 7a owner-boundary wording that the R1 repair is already complete and future drift prevention is to preserve "must not be duplicated here".
+3. [untracked] `docs/handoff/README.md`: added a handoff index and reading policy so future LLMs do not read every handoff by default.
+4. [untracked] `docs/archive/README.md`: marked old `.docx` framework files as historical source material, not active execution or strategy authority.
+
+**Key decisions**:
+- Adopted the document slimming approach without deleting core specs, merging handoff history, or moving `SESSION_LOG` history in this slice.
+- `SESSION_LOG` archive is now a policy with a trigger, not an immediate history migration.
+- The user's suggested wording for item 6 is accepted: Phase 7a dual docs have already passed R1 repair; future protection is preserving the owner-boundary lock wording.
+
+**Alternatives considered and rejected**:
+- "Archive `SESSION_LOG.md` immediately" — rejected for this slice; current policy remains top-entry reading plus future archive trigger.
+- "Delete old archive `.docx` files" — rejected; they are user-provided historical source material and require explicit approval to remove.
+
+**Validation run/result**:
+- `git diff --check` passed; only existing LF/CRLF normalization warnings were reported.
+- `docs/CURRENT.md` is now 137 physical lines, below the 150-line snapshot target.
+- Focused routing scan passed: `docs/README.md` routes `docs/handoff/README.md`, `docs/archive/README.md`, and the accepted Phase 7a owner-boundary wording with "must not be duplicated here".
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only slimming baseline.
+2. If Pass, user may run `提交`.
+
+---
+
 ## 2026-05-27 — Claude re-review — Pass (docs hygiene Optional O1/O2 disposition)
 
 **Commits**: none (review-only entry; re-reviews working tree status/diffs vs `1ddf47d`)
