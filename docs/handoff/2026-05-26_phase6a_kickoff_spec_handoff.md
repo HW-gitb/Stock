@@ -759,6 +759,76 @@ foreach ($file in $files) {
 
 ### 下一步注意事项
 
-1. 下一条 `执行` 推荐做 Phase 6e provider/data requirements audit，docs-only，不新增 provider / DataHub / runner。
+1. Superseded by the following 2026-05-27 provider/data audit append: `docs/provider_data_requirements_audit.md` is now completed; next default slice is Phase 7 provider capability / field catalog contract.
 2. Phase 6e provider/data requirements audit 应引用 `docs/us_short_spec.md` §9、`docs/burst_lane_spec.md` §11、`docs/long_alpha_spec.md` §9 / §10.4 / §11.8，但不能把这些 spec 视为 provider selection verdict。
 3. 后续 US-short implementation contract 仍需补 schema/report interface、primary benchmark、numeric thresholds/config placement、MAP routing、options/dark-pool reliability policy 和 provider evidence。
+
+---
+
+## 2026-05-27 追加：Provider / data requirements audit
+
+### 改了什么
+
+- 新增 `docs/provider_data_requirements_audit.md`，作为 Phase 6e provider / data requirements audit owner doc。
+- 汇总 `docs/long_alpha_spec.md` §9 / §10.4 / §11.8、`docs/burst_lane_spec.md` §11、`docs/us_short_spec.md` §9，以及 `docs/datahub_design.md` 的 DataHub guardrail。
+- 写入 requirement status labels、cross-system data-class matrix、A-share provider requirements、US provider requirements、PIT / frequency / history rules、minimum lineage contract、provider evaluation rubric、DataHub Phase 7 implications、deferred decisions 和 completion line。
+- 同步 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/strategy_design_synthesis.md`、`docs/datahub_design.md` 的路由和下一步状态。
+
+### 为什么
+
+Phase 6 route amendment 要求 DataHub Phase 7 由四套系统 spec 和 provider/data requirements audit 反向定义字段。此前 long / burst / US-short spec 已分别列出数据需求，但还缺一个跨系统 owner，把字段、PIT、频率、lineage、授权 / 成本、稳定性和 fallback 要求合并成 Phase 7 的输入。该切片让下一步 DataHub 不再按 A-short 现有 convenience field 重构，而是从四套系统共同需求出发。
+
+### Scope lock
+
+- 本切片是 docs-only。
+- 不新增 schema、runner、migration、provider adapter、cache format、DataHub table 或 provider fetch。
+- 不选择最终 provider 或 paid / free split。
+- 不锁定 primary benchmarks（除已决 A-short CSI1000 / CSI300 policy 外）、numeric thresholds、factor weights 或 production configs。
+- 不把 provider availability 当成 alpha evidence。
+- 不降低 ship gate；full-size 仍需 monthly alpha t-stat >= 2.0、Sharpe >= 1.0、max drawdown <= 15%、forward live data >= 12 个月。
+- 不改变 manual-order-only 边界。
+
+### 验证命令
+
+```powershell
+git diff --check
+```
+
+```powershell
+$files = @(
+  'AGENTS.md',
+  'docs/CURRENT.md',
+  'docs/README.md',
+  'docs/strategy_design_synthesis.md',
+  'docs/datahub_design.md',
+  'docs/provider_data_requirements_audit.md',
+  'docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md',
+  'docs/SESSION_LOG.md'
+)
+foreach ($file in $files) {
+  $lines = Get-Content -Encoding utf8 $file
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match '\s+$') { "${file}:$($i + 1)" }
+  }
+}
+```
+
+### 验证结果
+
+- `git diff --check` passed（CRLF warnings only）。
+- Checked changed docs for trailing whitespace：passed。
+- Active stale next-step wording scan：passed（only superseded historical SESSION_LOG entries still mention Phase 6e as the then-next step）。
+
+### 失效旧结论
+
+- “Phase 6e provider/data requirements audit 仍是 pending P0”失效；现在 owner 是 `docs/provider_data_requirements_audit.md`。
+- “Phase 7 DataHub 可以先按 A-short 当前字段 convenience 重构”明确失效；Phase 7 必须从四套系统数据需求和 capability catalog 起步。
+- “Provider audit 等于最终 provider selection verdict”明确失效；本文件只定义 requirements 和 evaluation rubric。
+- “缺少 provider 字段时可以用默认值或 latest-only 数据静默补齐”明确失效；必须标记 PIT / latest-only / manual / deferred 状态。
+- “DataHub 工程完成即可视为 alpha 进展”明确失效；DataHub 只改善复现性和共享层，不是 ship-gate evidence。
+
+### 下一步注意事项
+
+1. 下一条 `执行` 推荐做 Phase 7 provider capability / field catalog contract，schema-first，不重写 `A-EGS/egs_main.py`、不新增 US provider adapter、不抓新 provider 数据。
+2. Phase 7 第一刀应从 `docs/provider_data_requirements_audit.md` §7 / §8 / §9 派生 capability fields：data class、required systems、PIT status、frequency、lineage、authorization、cost、stability、fallback。
+3. 若后续 provider readiness 不足，implementation 必须停在 paper / research / manual-evidence 路径；不得 invent missing fundamentals 或把 unsupported fields 直接接入 production scoring。

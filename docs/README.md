@@ -16,6 +16,7 @@ Use this routing table instead of guessing which file to read.
 | A/US short-term burst lane detailed baseline | `docs/burst_lane_spec.md` |
 | US-short normalized production-facing spec | `docs/us_short_spec.md` |
 | Long alpha common spec and A/US long annex skeletons | `docs/long_alpha_spec.md` |
+| Provider / data requirements audit before Phase 7 DataHub | `docs/provider_data_requirements_audit.md` |
 | Capital allocation and liquidity policy | `docs/portfolio_allocation_policy.md` |
 | DataHub / provider / factor-layer guardrails | `docs/datahub_design.md` |
 | Phase-level historical context and validation records | `docs/handoff/<phase>_handoff.md` files named in `AGENTS.md` |

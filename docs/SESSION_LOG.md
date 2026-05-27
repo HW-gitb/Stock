@@ -8,6 +8,62 @@
 
 ---
 
+## 2026-05-27 — Claude review — Pass (Phase 6e provider/data requirements audit)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `4a7aa52`)
+
+**Verdict**: Pass.
+
+**Notes**: P0 七要素全部覆盖：字段 (§3 13×7 matrix + §4 + §5)、PIT (§2 labels + §6 8 rules + §3 implications + §7 lineage)、频率 (§6 + §7)、lineage (§7 18 字段)、授权-成本 (§7 + §8 rubric + §10)、稳定性 (§7 + §8 rubric)、不锁 provider (§1 + §9 + §11). §3 Common Data-Class Matrix 13 data class × 7 system 列是 spec pack 里横向最完整的设计；每 cell 写需求 + Phase 7 implication 列总结 DataHub 必须如何处理. 多层 anti-pattern lock 覆盖 Phase 6→7 转折关键陷阱：§5 末段 "fields without reliable PIT support must not be silently imputed"（防 latest-only 假装 PIT）；§6 第 7 条 "latest-only 可 live 用但不能 claim historical PIT evidence"；§6 第 8 条 "benchmark monthly returns must not fill missing months with zero"；§8 末段 "do not average dimensions into single provider score, field-level blockers matter"（防 evaluation 用单一加权 score 隐藏 hard veto dimension）；§9 5 条 anti-patterns（不按 A-short field 重构 DataHub / DataHub ≠ alpha / 不用 default 隐藏 provider gap / research 不直接喂 production / 不开 parallel pipeline per subsystem）. Cross-spec consistency 完整：§1 显式引用 long_alpha §9/§10.4/§11.8 + burst §11 + us_short §9 + datahub_design；event_date / observed_date disambiguation 与 long §5 / burst §4 一致；ship gate 4 数字门槛全 spec 一致；§3 benchmark 行明确 A-share burst 可复用 CSI1000/CSI300 plumbing 但不继承 gate（与 burst §6.1 双向一致）. 首次扩展 routing 到 `docs/datahub_design.md`：staged plan 加 Phase 6e bullet / Phase 7 starts only after audit reviewed baseline / Phase 7 Completion criteria 加 capability catalog 要求，与 audit §9 first slice 第 1 项闭环. CURRENT 不是简单重编号而是 Phase 6→7 转折标记：P0 section title 改 "Phase 7 kickoff（schema-first，implementation 串行）"，P0 #1 升级为 "Phase 7 provider capability / field catalog contract"，§1 当前 Phase 明确 "Phase 6 spec-pack docs-only baselines 已补齐 ... 下一步进入 Phase 7". 7 处 routing 同步（AGENTS / README / CURRENT / strategy_synthesis / datahub_design / handoff / SESSION_LOG）全部一致，§2 milestone 维持 8 条. 5 条 failed-conclusion lock 覆盖 Phase 6→7 转折所有认知陷阱（Phase 6e 仍 pending / Phase 7 可按 A-short field 重构 / audit = provider verdict / 缺字段用 default 静默补齐 / DataHub = alpha 进展）. Scope 严守 docs-only（1 新 spec + 6 处 routing，0 schema/runner/test/provider/DataHub）；Codex 主动加 stale next-step wording scan 持续提升验证细致度. 5 alternatives reject 理由清楚. 无 Required fixes、无 Optional suggestions、无新 open question（除 Codex 自己 flag 的具体 provider 选择 / schema 命名 / US primary benchmark / options-borrow-dark-pool eligibility，这些是 deferred 到 Phase 7 不是 issue）、无 scope creep、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (Phase 6e provider/data requirements audit)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `4a7aa52` Add US-short normalized spec, which left Phase 6e provider/data requirements audit as the next docs-only P0 slice.
+- Implements `docs/CURRENT.md §6` P0: consolidate four-system data requirements before Phase 7 DataHub / provider-capability contract work.
+
+**Worked on**:
+1. [untracked] `docs/provider_data_requirements_audit.md`: created the Phase 6e owner doc covering A-short existing constraints, A/US burst, US-short steady, A-long, and US-long data classes, PIT rules, frequency/history expectations, lineage, authorization/cost, stability, fallback, and Phase 7 implications.
+2. [tracked] `AGENTS.md`: added the provider-audit routing pointer, current-progress marker, Phase 6e roadmap completion marker, long-reference policy update, and file reference.
+3. [tracked] `docs/README.md`: added the provider/data requirements audit routing-table row.
+4. [tracked] `docs/CURRENT.md`: updated Latest Delta, current phase, recent milestones, reference policy, key files, and P0 queue; the next recommended slice is now Phase 7 provider capability / field catalog contract.
+5. [tracked] `docs/strategy_design_synthesis.md`: routed detailed Phase 6e ownership to `docs/provider_data_requirements_audit.md` and updated the next execution target to the Phase 7 schema-first provider-capability contract.
+6. [tracked] `docs/datahub_design.md`: made the provider/data requirements audit a Phase 7 input and added provider capability / field catalog baseline to Phase 7 completion criteria.
+7. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: appended the Phase 6e audit slice, superseded the prior "Phase 6e pending" next-step note, and recorded failed-conclusion locks.
+8. [tracked] `docs/SESSION_LOG.md`: prepended this execution handoff for Claude review.
+9. Validation run/result: `git diff --check` passed (CRLF warnings only); changed-doc trailing-whitespace check passed; active stale next-step wording scan passed.
+10. Current review state: waiting for Claude review of this docs-only Phase 6e provider/data requirements audit.
+
+**Key decisions**:
+- `docs/provider_data_requirements_audit.md` is a requirements audit, not a provider-selection verdict. It lists required / optional / manual / research-only / deferred data classes before any provider, schema, adapter, or fetch implementation.
+- Phase 7 should start with a provider capability / field catalog contract derived from the four-system spec pack and this audit, not with a broad `A-EGS/egs_main.py` rewrite or US provider adapter.
+- Missing or weak provider coverage must be represented as explicit unsupported / manual-evidence / research-only / deferred status; production code must not silently default unavailable fields.
+- DataHub remains reproducibility and shared-contract infrastructure. It is not an alpha source by itself, and it must not be optimized only around existing A-short EOD convenience.
+
+**Alternatives considered and rejected**:
+- "Choose the final A / US fundamentals providers now" — rejected. Selection needs current capability evidence, cost/auth constraints, stability checks, and review; this slice only defines requirements.
+- "Start DataHub schema / adapter implementation now" — rejected. Phase 6e is docs-only; the next safe implementation-adjacent slice is a reviewed provider capability / field catalog contract.
+- "Keep the audit inside `docs/datahub_design.md` or `docs/strategy_design_synthesis.md`" — rejected. The audit is cross-system and detailed enough to need a dedicated owner doc while synthesis/DataHub docs stay route-level.
+- "Collapse provider evaluation into one weighted score" — rejected. Hard veto dimensions such as PIT, license, fallback, corporate actions, and survivorship must stay visible separately.
+- "Treat existing A-short Tushare EOD coverage as sufficient for all four systems" — rejected. Long, burst, and US-short requirements need fundamentals, event dates, corporate actions, filings, benchmarks, and manual evidence boundaries beyond current A-short output.
+
+**Open questions handed off**:
+- Which concrete A-share and US providers satisfy the required / optional fields, with acceptable license, cost, quota, stability, PIT, fallback, and history depth?
+- What exact schema names and directory placement should Phase 7 use for provider capability / field catalog contracts?
+- Which US primary benchmark and sector benchmark set should be locked for US-short, US-burst, and US-long after provider evidence is available?
+- Which options / borrow / dark-pool fields are production-eligible versus research-only after provider reliability review?
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only Phase 6e provider/data requirements audit using the mandatory fast path.
+2. If Pass, user `提交`.
+3. After commit, start Phase 7 provider capability / field catalog contract as a schema-first docs/contract slice; do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, fetch provider data, or implement DataHub before that contract is reviewed.
+
+---
+
 ## 2026-05-27 — Claude review — Pass (US-short spec normalization)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `dd5e40c`)

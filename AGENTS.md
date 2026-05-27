@@ -14,6 +14,7 @@
 - 短线 `burst_lane` 规格：`docs/burst_lane_spec.md`
 - US-short normalized spec：`docs/us_short_spec.md`
 - 长线 alpha 共同规格 / A / US 长线 skeleton：`docs/long_alpha_spec.md`
+- Provider / data requirements audit：`docs/provider_data_requirements_audit.md`
 - 资金政策：`docs/portfolio_allocation_policy.md`
 - DataHub / provider / factor guardrail：`docs/datahub_design.md`
 - phase 历史：`docs/handoff/` 下由本文件“交接记录”列出的 handoff
@@ -38,9 +39,10 @@
 - ✅ A 股短线分析框架：`skills/a_short_analysis/reference/v14.2_spec.md` 已定位为规格说明书，不作为运行时提示词
 - ✅ 美股短线资料：已整理到 `skills/us_short_analysis/reference/`
 - ✅ 策略设计综合版：`docs/strategy_design_synthesis.md` 已固化为短线双通道 + 长线 alpha 主系统 + research / coordinator 的设计入口
-- ✅ Phase 6c burst lane 规格：`docs/burst_lane_spec.md` 已建立 A / US 短线 burst lane docs-only baseline（独立 signal / risk / sizing / ship gate；provider audit 尚待补）
-- ✅ Phase 6d 长线规格：`docs/long_alpha_spec.md` 已建立长线 alpha 共同规格、US 长线 skeleton、A 股长线 skeleton（docs-only；provider audit 尚待补）
+- ✅ Phase 6c burst lane 规格：`docs/burst_lane_spec.md` 已建立 A / US 短线 burst lane docs-only baseline（独立 signal / risk / sizing / ship gate；provider/data audit baseline 已补；provider 选择仍未锁）
+- ✅ Phase 6d 长线规格：`docs/long_alpha_spec.md` 已建立长线 alpha 共同规格、US 长线 skeleton、A 股长线 skeleton（docs-only；provider/data audit baseline 已补；provider 选择仍未锁）
 - ✅ Phase 6d US-short 规格：`docs/us_short_spec.md` 已把 `skills/us_short_analysis/reference/` 资料规范成 production-facing docs-only baseline（provider / DataHub / runner / Skill 尚待后续）
+- ✅ Phase 6e provider/data requirements audit：`docs/provider_data_requirements_audit.md` 已汇总 4 套系统字段、PIT、频率、lineage、授权/成本、稳定性和 fallback 要求（docs-only；不锁最终 provider）
 - ✅ Phase 1a：`schemas/analysis_input.schema.json` 已完成，当前输出 schema 版本 `1.1.0`
 - ✅ Phase 1b：`egs_main.py` 已接入 `analysis_input.json`、`snapshot.json`、`candidates.csv` 导出器
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
@@ -62,7 +64,7 @@
 - 这些 reference 文档原始目标是 AI chatbox 工作流。后续做 schema、runner、analyzer、Skill、prompt 或 preset 设计时，必须参考其业务逻辑、流程结构和判断维度，但不能机械照搬为运行时提示词或代码规则。
 - US-short normalized spec 已在 `docs/us_short_spec.md` 建立；reference docs 继续作为源资料归档，`skills/us_short_analysis/SKILL.md` 在 Phase 7 / Phase 8 前仍保持 reserved。
 - 可确定、可回测、可结构化的规则应拆入 Python / schema / config / state；需要语义判断、新闻理解、行业判断的部分才进入 Skill prompts。
-- 长线共同规格、US 长线 skeleton、A 股长线 skeleton 已在 `docs/long_alpha_spec.md` 建立；provider audit 与后续完整 implementation 仍待后续 Phase。不得用短线框架硬套长线系统。
+- 长线共同规格、US 长线 skeleton、A 股长线 skeleton 已在 `docs/long_alpha_spec.md` 建立；provider/data audit baseline 已在 `docs/provider_data_requirements_audit.md` 建立；后续 provider 选择、schema 和 implementation 仍待后续 Phase。不得用短线框架硬套长线系统。
 
 ## Strategy design synthesis policy
 
@@ -169,7 +171,7 @@ Stock/
 | 6b | A 股短线 maintenance / evidence line：weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩新小工具，除非直接服务 evidence clock | 观察期 | ⬜ |
 | 6c | A / US 短线 `burst_lane` spec：共用 signal family、市场字段差异、独立 risk lock / sizing gate / ship gate | 2-4 天 | ✅ docs-only baseline |
 | 6d | 长线 alpha spec pack：long alpha common spec + A-long annex + US-long annex + US-short spec normalization | spec 设计 | ✅ docs-only baselines |
-| 6e | Provider / fundamentals data requirements audit：列出 A/US long、A/US burst、US-short 所需字段、PIT、频率、lineage、授权/成本/稳定性要求；不在本步锁最终 provider | 2-4 天 | ⬜ |
+| 6e | Provider / fundamentals data requirements audit：列出 A/US long、A/US burst、US-short 所需字段、PIT、频率、lineage、授权/成本/稳定性要求；不在本步锁最终 provider | 2-4 天 | ✅ docs-only baseline |
 | 7 | DataHub / engine 模块化重构；按 4 套 spec + provider/data requirements audit 划分共享层与独立 rule pack | 1-2 周 | ⬜ |
 | 7.5 | `research/` infrastructure + experiment logging + promotion gate | 2-4 天 | ⬜ |
 | 8 | 四套子系统 implementation wave 1：按资金权重 × alpha leverage × data readiness 排序，默认优先 US-long；若 US provider readiness 不足，A-long 可前置 | 1-2 周 | ⬜ |
@@ -408,6 +410,7 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `schemas/analysis_input_coverage.md` — schema 覆盖率与修复记录
 - `docs/burst_lane_spec.md` — Phase 6c A / US 短线 burst lane docs-only baseline（独立 signal / risk / sizing / ship gate；不继承 steady lane gate）
 - `docs/long_alpha_spec.md` — Phase 6d 长线 alpha 共同规格与 A / US 长线 skeleton（docs-only；不锁 provider / runner / schema）
+- `docs/provider_data_requirements_audit.md` — Phase 6e provider / data requirements audit（docs-only；不锁最终 provider / schema / DataHub implementation）
 - `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — Phase 2 v7.9 交接记录
 - `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Phase 2 Tier1-only 主口径切片交接记录
 - `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — Phase 2 git init 交接记录（初始 local-only；2026-05-26 amendment 允许受约束 private remote）

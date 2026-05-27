@@ -318,6 +318,8 @@ List the data requirements that the four-system spec pack creates:
 
 This audit defines what Phase 7 must support. It does not lock final provider choices by itself.
 
+Detailed Phase 6e ownership now lives in `docs/provider_data_requirements_audit.md`. This synthesis document keeps the route and architecture only.
+
 ### Phase 7 - DataHub / Engine Modularization
 
 Use the four specs plus the provider/data requirements audit to split shared engine from independent rule packs:
@@ -348,8 +350,8 @@ Write and then implement cross-system coordinator once the four systems have eno
 
 ## 8. Next Execution Implication
 
-The next `执行` after the US-short normalization baseline should stay docs-only and continue the Phase 6 spec pack:
+The next `执行` after the provider/data requirements audit should start Phase 7 with the smallest schema-first DataHub slice:
 
-1. Provider / data requirements audit.
+1. Provider capability / field catalog contract derived from `docs/provider_data_requirements_audit.md`.
 
-A-short continues as maintenance / evidence accumulation while the provider/data audit is written.
+A-short continues as maintenance / evidence accumulation while Phase 7 contracts are written. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data before the reviewed contract exists.
