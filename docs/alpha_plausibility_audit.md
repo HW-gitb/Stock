@@ -26,6 +26,8 @@ The first formal audit must be schema-first. Before a completed audit can be use
 - `schemas/examples/alpha_plausibility_audit.example.json`
 - focused schema tests
 
+The first formal Phase 7a-1 audit artifact is `docs/phase7a_alpha_plausibility_audit.json`. It uses `docs/phase7a_provider_status_snapshot.json` as the shared provider readiness baseline and remains an alpha-plausibility routing artifact, not ship-gate evidence.
+
 Each lane record must include at least:
 
 - `lane_id`: one of the lane IDs in section 3.

@@ -8,6 +8,63 @@
 
 ---
 
+## 2026-05-27 — Claude review — Pass (Phase 7a-1 first formal alpha plausibility audit)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `081c5bf`)
+
+**Verdict**: Pass.
+
+**Notes**: Codex `执行` round Phase 7a-1 收尾刀 — 1 untracked new (`docs/phase7a_alpha_plausibility_audit.json` 2155 行) + 5 tracked routing/owner/test (`docs/CURRENT.md` / `docs/README.md` / `docs/SESSION_LOG.md` / `docs/alpha_plausibility_audit.md` / `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` / `tests/schema/test_alpha_plausibility_audit_schema.py`)。Scope 严守：0 provider 选择 / 0 数据抓取 / 0 adapter / 0 DataHub table / 0 runner 改 / 0 schema 改（schema 已 commit `b6f46c6`，snapshot 已 commit `081c5bf`）。Audit 完整 distinguish from example：`audit_run_id: "alpha_audit_20260527_initial"` vs example `_example`；`provider_status_snapshot_ref: "provider_status_snapshot_20260527_phase7a1"` 链入真实 snapshot；audit owner doc `docs/alpha_plausibility_audit.md` 显式 reference 新 audit artifact 路径 + snapshot 关系 + "not ship-gate evidence" disclaimer。Verdict 分布 6 defer_until_provider_ready / 3 continue_as_risk_filter / 2 continue（minimal-data burst paper/research 限定）— 跟 example verdict 100% identical 是 designed choice（example 写时已用 docs/CURRENT.md §3 baseline，audit 直接 lift 该 baseline，Codex 在 alternatives reject 明确说明这不是 example 复用），通过 5 conditions: audit_run_id _initial 后缀 / 真实 snapshot ref / 路径 docs/ 而非 schemas/examples/ / owner doc 显式 reference / tests 强制 distribution preservation + audit ≠ example assertion。Audit 顶层 limitations 5 条 generic disclaimer 含 "plausibility priors from existing docs and project evidence" — 间接 disclose verdict 来源 baseline，未显式 cross-reference example 文件但通过 audit_run_id _initial 后缀 + path 已三层标记差异。Tests 加 2 regression（audit validates / audit 不是 example artifact / audit references real snapshot / preserves current decision distribution），全部 14 focused tests pass（从 12 增 2）+ 51 schema discover pass（从 49 增 2）。Validation accuracy: `[System.IO.File]::ReadAllLines` 给 CURRENT.md 145 = wc -l 145 — authoritative method 持续稳定 ✅；no trailing whitespace / git diff --check clean / rg scan 无 stale example markers in audit JSON。Cross-doc consistency: README routing 加 audit entry / CURRENT P0 改为 "Phase 7a-2 spec revisions based on audit" / alpha_plausibility_audit owner doc 加 first audit artifact pointer / handoff 追加 first-audit section。Phase 7a-1 完整三步链条收尾：schema contract（`b6f46c6`）→ provider snapshot（`081c5bf`）→ first formal audit（本刀），下一步 Phase 7a-2 spec revisions 使用本 audit 作 input。无 Required fixes、无 Optional、无 open question、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (Phase 7a-1 first alpha plausibility audit)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `081c5bf` (`Add Phase 7a provider status snapshot`).
+- Completes the Phase 7a-1 chain after the schema contract and lightweight provider status snapshot by adding the first formal audit artifact.
+
+**Worked on**:
+1. [untracked] `docs/phase7a_alpha_plausibility_audit.json`: added the first formal schema-first alpha plausibility audit covering 11 sub-lanes and 6 parent lanes.
+2. [tracked] `tests/schema/test_alpha_plausibility_audit_schema.py`: added regression coverage proving the formal audit validates, is not the example artifact, references `provider_status_snapshot_20260527_phase7a1`, and preserves current decision distribution.
+3. [tracked] `docs/README.md`: routed the first formal audit artifact.
+4. [tracked] `docs/CURRENT.md`: updated current state so next P0 is Phase 7a-2 spec revisions based on the audit.
+5. [tracked] `docs/alpha_plausibility_audit.md`: documented the formal audit artifact path and its non-ship-gate role.
+6. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the first-audit handoff section.
+
+**Key decisions**:
+- The audit uses `audit_run_id = alpha_audit_20260527_initial` and `provider_status_snapshot_20260527_phase7a1`; it is a formal Phase 7a-1 routing artifact, not a schema example.
+- Current verdict distribution is 3 `continue_as_risk_filter`, 2 `continue`, and 6 `defer_until_provider_ready`.
+- The `continue` verdicts are only for minimal-data burst paper/research tiers. No lane receives ship-gate approval, full-size readiness, or live sizing eligibility.
+- `defer_until_provider_ready` is not a failure verdict; it routes full-data burst and long lanes to provider/PIT evidence sequencing before implementation.
+
+**Alternatives considered and rejected**:
+- "Wait until provider evidence population before writing the first audit" — rejected. Phase 7a explicitly requires a first audit to expose provider/PIT blockers and drive the next spec/provider sequence.
+- "Treat the validated schema example as the first audit" — rejected. The example file remains contract validation only; the formal audit needs a separate artifact, run id, snapshot reference, limitations, and tests.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_alpha_plausibility_audit_schema -v` passed: 14 tests.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v` passed: 51 tests.
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs/test files.
+- `rg -n "[ \t]+$" docs\phase7a_alpha_plausibility_audit.json tests\schema\test_alpha_plausibility_audit_schema.py docs\README.md docs\CURRENT.md docs\alpha_plausibility_audit.md docs\handoff\2026-05-27_phase7_kickoff_spec_handoff.md` found no trailing whitespace.
+- `rg -n "alpha_audit_20260527_example|provider_status_snapshot_20260527_example|phase7a_schema_example|Example demonstrates" docs\phase7a_alpha_plausibility_audit.json` found no stale example markers.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reports `145`, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7a-1 first-audit artifact slice.
+2. If Pass and user commits, the next `执行` slice should start Phase 7a-2 spec revisions using `docs/phase7a_alpha_plausibility_audit.json`.
+
+---
+
 ## 2026-05-27 — Claude review — Pass (Phase 7a-1 provider status snapshot)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `b6f46c6`)

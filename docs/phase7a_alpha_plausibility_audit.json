@@ -1,0 +1,2155 @@
+{
+  "schema_name": "alpha_plausibility_audit",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-27T17:00:00Z",
+  "scope": {
+    "phase": "7a-1",
+    "purpose": "alpha_plausibility_audit_contract",
+    "audit_status": "schema_first_contract_only",
+    "provider_selection_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false
+  },
+  "audit_run_id": "alpha_audit_20260527_initial",
+  "supersedes_audit_id": null,
+  "audit_date": "2026-05-27",
+  "next_review_date": "2026-08-27",
+  "rerun_trigger": "initial_audit",
+  "audit_policy": {
+    "detailed_field_inventory_owner": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md#3-10",
+    "lane_coverage_required": 11,
+    "parent_lane_coverage_required": 6,
+    "paper_ship_gate_claim_allowed": false,
+    "live_normalized_required_for_ship_gate": true,
+    "global_aum_pool_allowed": false,
+    "fixed_allocation_policy_unchanged": true
+  },
+  "provider_status_snapshot": {
+    "snapshot_id": "provider_status_snapshot_20260527_phase7a1",
+    "snapshot_generated_at": "2026-05-27T16:00:00Z",
+    "provider_readiness_confidence": "medium",
+    "provider_status_source": [
+      "docs/provider_data_requirements_audit.md",
+      "schemas/provider_capability_catalog.schema.json",
+      "schemas/examples/provider_capability_catalog.example.json",
+      "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "docs/CURRENT.md"
+    ],
+    "provider_status_limitations": [
+      "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+      "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+      "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+      "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+      "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+    ],
+    "status_items": [
+      {
+        "area": "Provider capability and field catalog contract",
+        "status": "ready",
+        "notes": "schemas/provider_capability_catalog.schema.json v1.0.0 and its validating example exist. This proves the contract shape only; it does not select a provider or populate a production field catalog."
+      },
+      {
+        "area": "A-share EOD price, adjustment, limit, and trade-calendar helper surface",
+        "status": "ready",
+        "notes": "Existing Phase 5 and Phase 6 evidence has exercised Tushare daily, adj_factor, stk_limit, and trade_cal helper surfaces for A-short execution evidence. Authorization, quota, and DataHub-ready lineage still require later provider review."
+      },
+      {
+        "area": "A-share CSI benchmark returns and candidate-universe overlap helpers",
+        "status": "ready",
+        "notes": "CSI1000 and CSI300 monthly return materialization plus index_weight-based candidate-universe overlap audit have been implemented for A-short evidence plumbing. This readiness is narrow and should be recorded as ready evidence, not used as the default implementation sink."
+      },
+      {
+        "area": "A-share fundamentals and announcement dates",
+        "status": "unknown",
+        "notes": "Provider requirements are documented, but no reviewed provider evidence confirms PIT-safe financial statement line items, announcement dates, restatement flags, or original disclosure versions. Tushare latest-revised financial data remains a known PIT blocker until proven otherwise."
+      },
+      {
+        "area": "A-share SW L1/L2 industry history",
+        "status": "unknown",
+        "notes": "Long-lane industry normalization requires SW L2 history with effective dates and SW L1 fallback behavior. Current docs identify the requirement, but provider PIT support and sample-count lineage are not yet evidenced."
+      },
+      {
+        "area": "A-share events, regulatory evidence, audit opinions, penalties, pledges, and governance red flags",
+        "status": "unknown",
+        "notes": "These fields are required for A-long risk control and catalyst review, but current readiness is manual or unknown. They must not become deterministic factors without observed dates, sources, and provider or manual-evidence review."
+      },
+      {
+        "area": "US security master, listing state, delisting, OTC, ADR, ETF, SPAC, bankruptcy, reverse split, and halt coverage",
+        "status": "unknown",
+        "notes": "US security-master requirements are documented, but no reviewed provider evidence exists. Historical universe and survivorship-safe backtests remain blocked until listing and delisting coverage is proven."
+      },
+      {
+        "area": "US fundamentals, SEC filings, filing dates, restatements, cash-flow fields, corporate actions, buybacks, dilution, and dividends",
+        "status": "unknown",
+        "notes": "This remains the highest alpha-leverage provider area for US-long. No provider has been selected or validated for PIT-safe 10-K, 10-Q, 8-K, FCF, debt, cash, interest expense, share-count, buyback, SBC, or restatement data."
+      },
+      {
+        "area": "US adjusted OHLCV, benchmark, sector ETF, VIX, TNX, and macro context",
+        "status": "unknown",
+        "notes": "US price, benchmark, sector, and macro requirements are documented, but no provider capability evidence has been populated. These fields remain unavailable for production evidence claims."
+      },
+      {
+        "area": "US-short and US-burst borrow, short interest, options, IV, gamma, extended-hours, LULD, SSR, and market microstructure fields",
+        "status": "unknown",
+        "notes": "Provider and execution constraints are known requirements, but readiness is unproven. These fields cannot support live-eligible burst or short-lane claims until Phase 7a-2 and later provider evidence address microstructure and field reliability."
+      },
+      {
+        "area": "A/US burst minimal-data OHLCV plus benchmark tier",
+        "status": "partial",
+        "notes": "A-share OHLCV and benchmark helpers support a minimal-data paper tier for A-burst research. US minimal-data paper tier is not provider-ready yet. Minimal-data tier is paper/research only and does not support minimal live eligibility by itself."
+      },
+      {
+        "area": "A/US burst full-data event, flow, options, borrow, and catalyst tier",
+        "status": "blocked",
+        "notes": "Full-data burst requires provider evidence for event timing, flow reliability, options or borrow fields, and market-specific execution constraints. These are not ready and should remain deferred or research-only in the first audit."
+      },
+      {
+        "area": "Manual evidence workflow for semantic news, regulatory interpretation, guidance, and hard-to-license datasets",
+        "status": "partial",
+        "notes": "Docs require observed date, source, reviewer or process tag, and promotion review before manual evidence can influence production. Storage schema and reconciliation workflow are not implemented yet."
+      },
+      {
+        "area": "Data quality, provider drift, reproducibility, and incident monitoring",
+        "status": "blocked",
+        "notes": "These controls are mandatory later but not implemented in this snapshot. Phase 7b/7c must add coverage, freshness, schema drift, outlier, revision-rate, incident-log, and silent semantic-change monitoring."
+      }
+    ]
+  },
+  "lane_records": [
+    {
+      "lane_id": "a_short_steady",
+      "parent_lane_id": "a_short_steady",
+      "parent_aggregation_rule": "take_dominant_role",
+      "lane_role": "risk_filter",
+      "alpha_source_hypothesis": {
+        "source_type": "explicit_no_alpha_risk_filter",
+        "hypothesis_text": "A-short steady reduces bad-ticket and drawdown risk more reliably than it pushes standalone alpha.",
+        "expected_edge_mechanism": "Use vetoes and diagnostics to avoid weak short-term candidates."
+      },
+      "expected_excess_return_band": {
+        "low": 0,
+        "high": 1,
+        "unit": "pct",
+        "time_base": "monthly",
+        "rationale": "Current 24p evidence is exploratory and must be multiple-testing adjusted."
+      },
+      "expected_volatility_band": {
+        "low": 3,
+        "high": 8,
+        "unit": "pct",
+        "time_base": "monthly",
+        "rationale": "Short holding periods and concentrated candidates produce noisy monthly returns."
+      },
+      "expected_max_drawdown_band": {
+        "low": 5,
+        "high": 15,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Risk-filter value should be measured by drawdown reduction."
+      },
+      "data_readiness": "structured_provider",
+      "pit_blockers": [
+        "L3 concept PIT is snapshot-limited",
+        "24p findings need multiple-testing adjustment"
+      ],
+      "provider_blockers": [
+        "No blocker for current A-share EOD helper surface"
+      ],
+      "detectability_horizon_months": 12,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "CSI1000",
+        "secondary_benchmarks": [
+          "CSI300"
+        ],
+        "final_benchmark_open_questions": [
+          "Whether small-cap style beta can be separated from alpha after longer forward evidence."
+        ]
+      },
+      "evidence_level_required": [
+        "paper",
+        "live_normalized"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "medium",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "A-short steady remains a risk filter until forward evidence proves otherwise.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "24 production monthly periods through 2026-03-01",
+        "evidence_available_at_registration": "24p rank backtest, Phase 6a benchmark policy, provider requirements audit",
+        "source_doc_refs": [
+          "docs/CURRENT.md",
+          "docs/alpha_plausibility_audit.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 15,
+        "multiple_testing_notes": "Existing t-stat findings are exploratory until adjusted.",
+        "adjustment_method": "forward_confirmation",
+        "minimum_effective_sample_required": 12,
+        "current_effective_sample": 24,
+        "power_status": "preliminary"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "partial",
+        "security_master_status": "partial",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "partial",
+        "halt_suspension_status_coverage": "partial",
+        "corporate_action_adjustment_status": "partial",
+        "industry_classification_pit_status": "partial",
+        "survivorship_bias_risk": "medium"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "2024-2025 A-share strong theme regime",
+            "expected_alpha_decay": "Risk-filter value may persist, but standalone alpha may decay.",
+            "expected_drawdown_risk": "Medium if bad-ticket vetoes fail in reversal regimes.",
+            "data_availability": "Project evidence exists but is short."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "Likely exposed to small-cap and theme beta.",
+        "factor_framework": "benchmark_only_proxy"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 0.8,
+        "expected_alpha_return_net_pct": 0.3,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "commissions_slippage_tax_fx_dividend",
+        "execution_cost_feasibility_status": "feasible",
+        "capacity_status": "sufficient_for_bucket",
+        "slippage_confidence": "medium",
+        "manual_execution_feasibility": "feasible",
+        "net_alpha_not_estimable_reason": null
+      },
+      "risk_filter_effectiveness_evidence": {
+        "with_filter_vs_without_filter_drawdown": "Requires replay with veto on/off comparison.",
+        "win_rate_comparison": "Existing exploratory evidence suggests bad-ticket filtering but needs forward confirmation.",
+        "false_positive_comparison": "Must track candidates filtered out that later perform well.",
+        "false_negative_risk": "Strong candidates may be killed by overheat or chasing-high vetoes.",
+        "strong_candidate_kill_risk": "Medium until false-negative logs accumulate.",
+        "regime_sensitivity": "Must compare 2024 and 2025 regimes."
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Risk-filter only; no full-size alpha claim.",
+        "bucket_status": "minimal_observation_only",
+        "deployment_scope": "A-share short bucket only",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "Fixed allocation policy remains unchanged."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "historical_benchmark_proxy",
+        "expected_correlation_to_other_lanes": "Moderate correlation to A-burst through shared candidate universe.",
+        "lane_level_override_rationale": "No override from global proxy."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": 0.2,
+        "drawdown_control_contribution": "Primary contribution is bad-ticket reduction.",
+        "diversification_contribution": "Low as it shares A-share short universe.",
+        "rationale": "Treat as risk-control contribution until live-normalized evidence accumulates."
+      },
+      "decision": "continue_as_risk_filter",
+      "decision_reason": "Existing evidence supports risk-filter utility but not push-alpha status.",
+      "source_refs": [
+        "docs/CURRENT.md",
+        "docs/strategy_design_synthesis.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "a_short_variants",
+      "parent_lane_id": "a_short_steady",
+      "parent_aggregation_rule": "take_dominant_role",
+      "lane_role": "risk_filter",
+      "alpha_source_hypothesis": {
+        "source_type": "explicit_no_alpha_risk_filter",
+        "hypothesis_text": "Variants should improve execution quality and reduce drawdowns, not become independent alpha lanes.",
+        "expected_edge_mechanism": "Bounded variants compare veto and exit policies against the steady baseline."
+      },
+      "expected_excess_return_band": {
+        "low": 0,
+        "high": 0.8,
+        "unit": "pct",
+        "time_base": "monthly",
+        "rationale": "Variant contribution should be measured as improvement over steady baseline."
+      },
+      "expected_volatility_band": {
+        "low": 3,
+        "high": 8,
+        "unit": "pct",
+        "time_base": "monthly",
+        "rationale": "Same candidate universe as A-short steady."
+      },
+      "expected_max_drawdown_band": {
+        "low": 4,
+        "high": 14,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Promotion requires drawdown improvement."
+      },
+      "data_readiness": "structured_provider",
+      "pit_blockers": [
+        "Variant comparisons need forward-captured pre-outcome inputs"
+      ],
+      "provider_blockers": [
+        "No new provider blocker for tracking-only plan"
+      ],
+      "detectability_horizon_months": 12,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "CSI1000",
+        "secondary_benchmarks": [
+          "CSI300"
+        ],
+        "final_benchmark_open_questions": [
+          "Whether variant improvement survives benchmark sensitivity."
+        ]
+      },
+      "evidence_level_required": [
+        "paper",
+        "live_normalized"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "medium",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "A-short variants are bounded risk-filter improvements.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "24 production monthly periods through 2026-03-01",
+        "evidence_available_at_registration": "Variant tracking schema only",
+        "source_doc_refs": [
+          "schemas/a_short_variant_tracking.schema.json",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 6,
+        "multiple_testing_notes": "Variant family tests require forward confirmation before promotion.",
+        "adjustment_method": "forward_confirmation",
+        "minimum_effective_sample_required": 12,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "partial",
+        "security_master_status": "partial",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "partial",
+        "halt_suspension_status_coverage": "partial",
+        "corporate_action_adjustment_status": "partial",
+        "industry_classification_pit_status": "partial",
+        "survivorship_bias_risk": "medium"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "A-share rotation regime",
+            "expected_alpha_decay": "Variant edge may decay quickly if it overfits recent losers.",
+            "expected_drawdown_risk": "Medium until variant false positives are logged.",
+            "data_availability": "Forward tracker pending."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "Shared with A-short steady.",
+        "factor_framework": "benchmark_only_proxy"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 0.6,
+        "expected_alpha_return_net_pct": 0.2,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "commissions_slippage_tax_fx_dividend",
+        "execution_cost_feasibility_status": "feasible",
+        "capacity_status": "sufficient_for_bucket",
+        "slippage_confidence": "medium",
+        "manual_execution_feasibility": "feasible",
+        "net_alpha_not_estimable_reason": null
+      },
+      "risk_filter_effectiveness_evidence": {
+        "with_filter_vs_without_filter_drawdown": "Must be measured against steady baseline.",
+        "win_rate_comparison": "Pending forward comparison.",
+        "false_positive_comparison": "Pending tracking log.",
+        "false_negative_risk": "Medium for stricter veto variants.",
+        "strong_candidate_kill_risk": "Must be recorded before promotion.",
+        "regime_sensitivity": "Requires rolling comparison by regime."
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Tracking-only; no independent bucket allocation.",
+        "bucket_status": "paper_only",
+        "deployment_scope": "A-share short bucket comparison track",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "Variants cannot consume independent alpha capital."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "historical_benchmark_proxy",
+        "expected_correlation_to_other_lanes": "High with A-short steady.",
+        "lane_level_override_rationale": "Variants are not independent lanes."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": 0.1,
+        "drawdown_control_contribution": "Potential drawdown reduction if promoted.",
+        "diversification_contribution": "None until promoted.",
+        "rationale": "Risk-filter optimization only."
+      },
+      "decision": "continue_as_risk_filter",
+      "decision_reason": "Keep variants as bounded comparison tracks.",
+      "source_refs": [
+        "docs/CURRENT.md",
+        "schemas/a_short_variant_tracking.schema.json",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "a_share_burst_minimal_data",
+      "parent_lane_id": "a_burst",
+      "parent_aggregation_rule": "active_stage_only",
+      "lane_role": "research_only",
+      "alpha_source_hypothesis": {
+        "source_type": "flow_momentum_burst",
+        "hypothesis_text": "Minimal A-share burst can test price/volume eruption patterns on paper before full event/flow data is ready.",
+        "expected_edge_mechanism": "Relative strength, turnover, limit/halt context, and benchmark confirmation may identify short-term bursts."
+      },
+      "expected_excess_return_band": {
+        "low": 0.5,
+        "high": 2,
+        "unit": "pct",
+        "time_base": "holding_period",
+        "rationale": "Paper-only expectation; not ship-gate evidence."
+      },
+      "expected_volatility_band": {
+        "low": 5,
+        "high": 15,
+        "unit": "pct",
+        "time_base": "holding_period",
+        "rationale": "Burst candidates have high dispersion."
+      },
+      "expected_max_drawdown_band": {
+        "low": 8,
+        "high": 20,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Live eligibility requires full-data promotion and risk locks."
+      },
+      "data_readiness": "research_only",
+      "pit_blockers": [
+        "Minimal tier lacks event observed-date evidence"
+      ],
+      "provider_blockers": [
+        "Capital flow and catalyst fields not reviewed"
+      ],
+      "detectability_horizon_months": 6,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "CSI1000",
+        "secondary_benchmarks": [
+          "CSI300"
+        ],
+        "final_benchmark_open_questions": [
+          "Burst benchmark may need size or industry attribution."
+        ]
+      },
+      "evidence_level_required": [
+        "paper"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "medium",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "Minimal-data A-burst can produce research signals but cannot support live sizing.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "Current OHLCV and benchmark helper availability",
+        "evidence_available_at_registration": "Docs-only burst spec and A-short historical candidates",
+        "source_doc_refs": [
+          "docs/burst_lane_spec.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 0,
+        "multiple_testing_notes": "No burst trigger experiment has been registered yet.",
+        "adjustment_method": "not_applicable",
+        "minimum_effective_sample_required": 12,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "partial",
+        "security_master_status": "partial",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "partial",
+        "halt_suspension_status_coverage": "partial",
+        "corporate_action_adjustment_status": "partial",
+        "industry_classification_pit_status": "partial",
+        "survivorship_bias_risk": "medium"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "A-share theme burst regime",
+            "expected_alpha_decay": "High decay if theme liquidity fades.",
+            "expected_drawdown_risk": "High without event/flow confirmation.",
+            "data_availability": "OHLCV available; event data pending."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "High small-cap and momentum beta.",
+        "factor_framework": "sector_size_value_momentum_proxy"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 1.5,
+        "expected_alpha_return_net_pct": null,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "not_estimable",
+        "execution_cost_feasibility_status": "unknown",
+        "capacity_status": "unknown",
+        "slippage_confidence": "low",
+        "manual_execution_feasibility": "requires_manual_review",
+        "net_alpha_not_estimable_reason": "No slippage and capacity study for burst candidates yet."
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Paper research only.",
+        "bucket_status": "paper_only",
+        "deployment_scope": "A-share short bucket research track",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "Minimal-data burst cannot support live capital."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "hypothesized",
+        "expected_correlation_to_other_lanes": "Moderate with A-short steady and A-long catalyst.",
+        "lane_level_override_rationale": "Minimal tier is research-only."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": null,
+        "drawdown_control_contribution": "None until risk locks are validated.",
+        "diversification_contribution": "Potential short-horizon diversification if full tier is proven.",
+        "rationale": "Paper-only contribution should not enter ship-gate evidence."
+      },
+      "decision": "continue",
+      "decision_reason": "Continue only as paper/research minimal tier.",
+      "source_refs": [
+        "docs/burst_lane_spec.md",
+        "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "a_share_burst_full_data",
+      "parent_lane_id": "a_burst",
+      "parent_aggregation_rule": "active_stage_only",
+      "lane_role": "alpha_source",
+      "alpha_source_hypothesis": {
+        "source_type": "flow_momentum_burst",
+        "hypothesis_text": "Full-data A-burst may become a short-term alpha source when event and flow evidence validates price/volume bursts.",
+        "expected_edge_mechanism": "Confluence of price/volume, flow, catalyst, and risk-lock families."
+      },
+      "expected_excess_return_band": {
+        "low": 1,
+        "high": 3,
+        "unit": "pct",
+        "time_base": "holding_period",
+        "rationale": "Expected only if full provider fields become reviewable."
+      },
+      "expected_volatility_band": {
+        "low": 6,
+        "high": 18,
+        "unit": "pct",
+        "time_base": "holding_period",
+        "rationale": "Burst strategy remains high dispersion."
+      },
+      "expected_max_drawdown_band": {
+        "low": 8,
+        "high": 20,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Must be constrained by staged sizing."
+      },
+      "data_readiness": "missing",
+      "pit_blockers": [
+        "Catalyst observed-date evidence not reviewed"
+      ],
+      "provider_blockers": [
+        "Capital flow provider readiness unknown",
+        "Event and manual evidence workflow pending"
+      ],
+      "detectability_horizon_months": 12,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "CSI1000",
+        "secondary_benchmarks": [
+          "CSI300",
+          "SW industry attribution"
+        ],
+        "final_benchmark_open_questions": [
+          "Whether full-data burst requires industry-matched attribution."
+        ]
+      },
+      "evidence_level_required": [
+        "paper",
+        "live_normalized"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "low",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "Full-data A-burst plausibility depends on provider unlock.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "Docs-only requirements",
+        "evidence_available_at_registration": "No full-data live evidence yet",
+        "source_doc_refs": [
+          "docs/burst_lane_spec.md",
+          "docs/provider_data_requirements_audit.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 0,
+        "multiple_testing_notes": "No full-data trigger test has been registered.",
+        "adjustment_method": "not_applicable",
+        "minimum_effective_sample_required": 12,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "partial",
+        "security_master_status": "partial",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "partial",
+        "halt_suspension_status_coverage": "partial",
+        "corporate_action_adjustment_status": "partial",
+        "industry_classification_pit_status": "partial",
+        "survivorship_bias_risk": "medium"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "A-share liquidity contraction",
+            "expected_alpha_decay": "Alpha may decay sharply without flow support.",
+            "expected_drawdown_risk": "High if liquidity exits before manual reaction.",
+            "data_availability": "Provider review pending."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "High momentum and liquidity beta.",
+        "factor_framework": "sector_size_value_momentum_proxy"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 2,
+        "expected_alpha_return_net_pct": null,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "not_estimable",
+        "execution_cost_feasibility_status": "unknown",
+        "capacity_status": "unknown",
+        "slippage_confidence": "low",
+        "manual_execution_feasibility": "requires_manual_review",
+        "net_alpha_not_estimable_reason": "Full-data candidate capacity and slippage remain unmeasured."
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Blocked until provider-ready full-data evidence exists.",
+        "bucket_status": "blocked",
+        "deployment_scope": "A-share short burst allocation",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "Provider evidence must precede live observation."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "hypothesized",
+        "expected_correlation_to_other_lanes": "Moderate to A-short steady and market beta.",
+        "lane_level_override_rationale": "No full-data history yet."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": null,
+        "drawdown_control_contribution": "None until risk locks are validated.",
+        "diversification_contribution": "Potential short-horizon alpha if full-data confluence works.",
+        "rationale": "Defer until provider readiness."
+      },
+      "decision": "defer_until_provider_ready",
+      "decision_reason": "Alpha source is plausible but unobservable without reviewed flow and catalyst data.",
+      "source_refs": [
+        "docs/burst_lane_spec.md",
+        "docs/provider_data_requirements_audit.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "us_short_steady",
+      "parent_lane_id": "us_short_steady",
+      "parent_aggregation_rule": "take_dominant_role",
+      "lane_role": "risk_filter",
+      "alpha_source_hypothesis": {
+        "source_type": "behavioral_edge",
+        "hypothesis_text": "US-short steady can reduce short-side blowups and identify risk-controlled setups.",
+        "expected_edge_mechanism": "Borrow, liquidity, event, and risk filters should avoid fragile shorts."
+      },
+      "expected_excess_return_band": {
+        "low": 0,
+        "high": 1,
+        "unit": "pct",
+        "time_base": "monthly",
+        "rationale": "US-short evidence is not yet implemented."
+      },
+      "expected_volatility_band": {
+        "low": 4,
+        "high": 12,
+        "unit": "pct",
+        "time_base": "monthly",
+        "rationale": "Short-side volatility and gap risk remain material."
+      },
+      "expected_max_drawdown_band": {
+        "low": 6,
+        "high": 18,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "US microstructure and borrow constraints must be modeled."
+      },
+      "data_readiness": "unknown",
+      "pit_blockers": [
+        "US borrow and short-interest observed-date support unknown"
+      ],
+      "provider_blockers": [
+        "Borrow, SSR, LULD, and event provider readiness not reviewed"
+      ],
+      "detectability_horizon_months": 12,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "Russell 1000",
+        "secondary_benchmarks": [
+          "SPY",
+          "QQQ",
+          "sector ETF sensitivity"
+        ],
+        "final_benchmark_open_questions": [
+          "Whether short-side risk should be benchmarked against sector ETFs by candidate."
+        ]
+      },
+      "evidence_level_required": [
+        "paper",
+        "live_normalized"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "low",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "US-short steady is initially a risk-filtered short decision support lane.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "Docs-only US-short normalized spec",
+        "evidence_available_at_registration": "No US-short runner evidence",
+        "source_doc_refs": [
+          "docs/us_short_spec.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 0,
+        "multiple_testing_notes": "No US-short implementation evidence exists.",
+        "adjustment_method": "not_applicable",
+        "minimum_effective_sample_required": 12,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "unknown",
+        "security_master_status": "unknown",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "unknown",
+        "halt_suspension_status_coverage": "unknown",
+        "corporate_action_adjustment_status": "unknown",
+        "industry_classification_pit_status": "unknown",
+        "survivorship_bias_risk": "unknown"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "US meme / squeeze regime",
+            "expected_alpha_decay": "Risk filters may prevent large losses but may also suppress short entries.",
+            "expected_drawdown_risk": "High without borrow and squeeze controls.",
+            "data_availability": "Provider review pending."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "High exposure to growth, momentum, and sector squeeze risk.",
+        "factor_framework": "sector_size_value_momentum_proxy"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": null,
+        "expected_alpha_return_net_pct": null,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "not_estimable",
+        "execution_cost_feasibility_status": "unknown",
+        "capacity_status": "unknown",
+        "slippage_confidence": "low",
+        "manual_execution_feasibility": "requires_manual_review",
+        "net_alpha_not_estimable_reason": "Borrow and short-side execution costs are not modeled."
+      },
+      "risk_filter_effectiveness_evidence": {
+        "with_filter_vs_without_filter_drawdown": "Pending US-short backtest.",
+        "win_rate_comparison": "Pending.",
+        "false_positive_comparison": "Pending.",
+        "false_negative_risk": "Unknown before implementation.",
+        "strong_candidate_kill_risk": "Unknown.",
+        "regime_sensitivity": "Must include squeeze and bear-market regimes."
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Risk-filter research only until provider and microstructure constraints are specified.",
+        "bucket_status": "paper_only",
+        "deployment_scope": "US short bucket",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "No full-size or minimal live support before US constraints."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "hypothesized",
+        "expected_correlation_to_other_lanes": "Potential negative correlation to US-long in bear regimes but high event risk.",
+        "lane_level_override_rationale": "No US-short history yet."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": null,
+        "drawdown_control_contribution": "Potential hedge and risk-control contribution.",
+        "diversification_contribution": "Potential diversification against long exposure.",
+        "rationale": "Requires microstructure and borrow data."
+      },
+      "decision": "continue_as_risk_filter",
+      "decision_reason": "Keep as risk-filtered support until US data and microstructure are specified.",
+      "source_refs": [
+        "docs/us_short_spec.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "us_burst_minimal_data",
+      "parent_lane_id": "us_burst",
+      "parent_aggregation_rule": "active_stage_only",
+      "lane_role": "research_only",
+      "alpha_source_hypothesis": {
+        "source_type": "flow_momentum_burst",
+        "hypothesis_text": "US minimal burst can paper-test gap/range/relative-strength patterns before filings/options/borrow fields are ready.",
+        "expected_edge_mechanism": "Price and volume acceleration with benchmark and sector context."
+      },
+      "expected_excess_return_band": {
+        "low": 0.5,
+        "high": 2.5,
+        "unit": "pct",
+        "time_base": "holding_period",
+        "rationale": "Research-only prior."
+      },
+      "expected_volatility_band": {
+        "low": 6,
+        "high": 20,
+        "unit": "pct",
+        "time_base": "holding_period",
+        "rationale": "US burst candidates are high dispersion."
+      },
+      "expected_max_drawdown_band": {
+        "low": 8,
+        "high": 22,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Live use requires full-data promotion."
+      },
+      "data_readiness": "research_only",
+      "pit_blockers": [
+        "No filings/options/borrow observed-date support in minimal tier"
+      ],
+      "provider_blockers": [
+        "US EOD provider not selected"
+      ],
+      "detectability_horizon_months": 6,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "Russell 1000",
+        "secondary_benchmarks": [
+          "SPY",
+          "QQQ"
+        ],
+        "final_benchmark_open_questions": [
+          "Sector ETF attribution for burst candidates remains open."
+        ]
+      },
+      "evidence_level_required": [
+        "paper"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "low",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "US minimal burst is paper-only until full catalyst and options/borrow fields are reviewed.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "Docs-only baseline",
+        "evidence_available_at_registration": "No US burst implementation evidence",
+        "source_doc_refs": [
+          "docs/burst_lane_spec.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 0,
+        "multiple_testing_notes": "No US burst tests registered.",
+        "adjustment_method": "not_applicable",
+        "minimum_effective_sample_required": 12,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "unknown",
+        "security_master_status": "unknown",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "unknown",
+        "halt_suspension_status_coverage": "unknown",
+        "corporate_action_adjustment_status": "unknown",
+        "industry_classification_pit_status": "unknown",
+        "survivorship_bias_risk": "unknown"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "US high-rate risk-off",
+            "expected_alpha_decay": "Momentum bursts may fail faster in risk-off markets.",
+            "expected_drawdown_risk": "High without catalyst confirmation.",
+            "data_availability": "Provider review pending."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "High momentum and sector beta.",
+        "factor_framework": "sector_size_value_momentum_proxy"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 1.5,
+        "expected_alpha_return_net_pct": null,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "not_estimable",
+        "execution_cost_feasibility_status": "unknown",
+        "capacity_status": "unknown",
+        "slippage_confidence": "low",
+        "manual_execution_feasibility": "requires_manual_review",
+        "net_alpha_not_estimable_reason": "No US slippage and extended-hours liquidity model yet."
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Paper research only.",
+        "bucket_status": "paper_only",
+        "deployment_scope": "US short burst research track",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "Minimal tier cannot support live capital."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "hypothesized",
+        "expected_correlation_to_other_lanes": "Moderate to US-short steady and market momentum.",
+        "lane_level_override_rationale": "No measured evidence yet."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": null,
+        "drawdown_control_contribution": "None until full risk locks exist.",
+        "diversification_contribution": "Potential short-horizon alpha if full tier works.",
+        "rationale": "Research-only."
+      },
+      "decision": "continue",
+      "decision_reason": "Continue as minimal-data paper tier only.",
+      "source_refs": [
+        "docs/burst_lane_spec.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "us_burst_full_data",
+      "parent_lane_id": "us_burst",
+      "parent_aggregation_rule": "active_stage_only",
+      "lane_role": "alpha_source",
+      "alpha_source_hypothesis": {
+        "source_type": "catalyst_mispricing",
+        "hypothesis_text": "US full-data burst may exploit filings, earnings, options, borrow, and catalyst dislocations.",
+        "expected_edge_mechanism": "Confluence of catalyst and positioning data with price/volume confirmation."
+      },
+      "expected_excess_return_band": {
+        "low": 1,
+        "high": 3.5,
+        "unit": "pct",
+        "time_base": "holding_period",
+        "rationale": "Requires full provider unlock."
+      },
+      "expected_volatility_band": {
+        "low": 7,
+        "high": 22,
+        "unit": "pct",
+        "time_base": "holding_period",
+        "rationale": "US catalyst bursts can be volatile."
+      },
+      "expected_max_drawdown_band": {
+        "low": 8,
+        "high": 22,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Must include LULD, SSR, and liquidity constraints."
+      },
+      "data_readiness": "missing",
+      "pit_blockers": [
+        "SEC filings and earnings observed-date workflow not reviewed"
+      ],
+      "provider_blockers": [
+        "Options, borrow, and short-interest fields not reviewed"
+      ],
+      "detectability_horizon_months": 12,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "Russell 1000",
+        "secondary_benchmarks": [
+          "SPY",
+          "QQQ",
+          "sector ETF sensitivity"
+        ],
+        "final_benchmark_open_questions": [
+          "Whether event-specific benchmark attribution is required."
+        ]
+      },
+      "evidence_level_required": [
+        "paper",
+        "live_normalized"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "low",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "US full-data burst depends on filings, options, borrow, and catalyst data quality.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "Docs-only provider requirements",
+        "evidence_available_at_registration": "No full-data US burst evidence",
+        "source_doc_refs": [
+          "docs/burst_lane_spec.md",
+          "docs/provider_data_requirements_audit.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 0,
+        "multiple_testing_notes": "No full-data US burst tests registered.",
+        "adjustment_method": "not_applicable",
+        "minimum_effective_sample_required": 12,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "unknown",
+        "security_master_status": "unknown",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "unknown",
+        "halt_suspension_status_coverage": "unknown",
+        "corporate_action_adjustment_status": "unknown",
+        "industry_classification_pit_status": "unknown",
+        "survivorship_bias_risk": "unknown"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "US earnings shock regime",
+            "expected_alpha_decay": "Catalyst edge decays if filings and guidance are not timely.",
+            "expected_drawdown_risk": "High around gaps and halted names.",
+            "data_availability": "Provider review pending."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "High catalyst, sector, and options-flow exposure.",
+        "factor_framework": "sector_size_value_momentum_proxy"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 2.5,
+        "expected_alpha_return_net_pct": null,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "not_estimable",
+        "execution_cost_feasibility_status": "unknown",
+        "capacity_status": "unknown",
+        "slippage_confidence": "low",
+        "manual_execution_feasibility": "requires_manual_review",
+        "net_alpha_not_estimable_reason": "Options/borrow/extended-hours cost model not built."
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Blocked until full-data provider evidence exists.",
+        "bucket_status": "blocked",
+        "deployment_scope": "US short burst allocation",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "Provider evidence must precede live observation."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "hypothesized",
+        "expected_correlation_to_other_lanes": "Moderate to US-short and US-long catalyst through event exposure.",
+        "lane_level_override_rationale": "No full-data evidence yet."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": null,
+        "drawdown_control_contribution": "None until risk locks exist.",
+        "diversification_contribution": "Potential short-term alpha distinct from long quality.",
+        "rationale": "Defer until provider readiness."
+      },
+      "decision": "defer_until_provider_ready",
+      "decision_reason": "Plausible but provider-blocked.",
+      "source_refs": [
+        "docs/burst_lane_spec.md",
+        "docs/provider_data_requirements_audit.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "a_long_core_quality",
+      "parent_lane_id": "a_long",
+      "parent_aggregation_rule": "weighted_by_maturity",
+      "lane_role": "capital_stabilizer",
+      "alpha_source_hypothesis": {
+        "source_type": "quality_compounding",
+        "hypothesis_text": "A-long core quality may compound steadily and stabilize the portfolio if PIT fundamentals are reliable.",
+        "expected_edge_mechanism": "Market underprices durability and accounting quality over long horizons."
+      },
+      "expected_excess_return_band": {
+        "low": 1,
+        "high": 4,
+        "unit": "pct",
+        "time_base": "annual",
+        "rationale": "Quality premia may be lower t-stat but stabilizing."
+      },
+      "expected_volatility_band": {
+        "low": 12,
+        "high": 25,
+        "unit": "pct",
+        "time_base": "annual",
+        "rationale": "Long equity exposure remains market-sensitive."
+      },
+      "expected_max_drawdown_band": {
+        "low": 10,
+        "high": 25,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Requires long horizon and fraud controls."
+      },
+      "data_readiness": "unknown",
+      "pit_blockers": [
+        "Tushare fundamentals may be latest-revised rather than PIT"
+      ],
+      "provider_blockers": [
+        "A-share announcement dates and financial reliability fields need provider review"
+      ],
+      "detectability_horizon_months": 24,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "CSI300",
+        "secondary_benchmarks": [
+          "CSI All Share",
+          "SW industry attribution"
+        ],
+        "final_benchmark_open_questions": [
+          "Whether quality compounding should be industry-neutralized by SW L2."
+        ]
+      },
+      "evidence_level_required": [
+        "paper",
+        "live_normalized"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "low",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "A-long core quality is a stabilizer unless PIT fundamentals can support alpha claims.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "Docs-only long alpha spec",
+        "evidence_available_at_registration": "No long backtest yet",
+        "source_doc_refs": [
+          "docs/long_alpha_spec.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 0,
+        "multiple_testing_notes": "No A-long quality backtest yet.",
+        "adjustment_method": "not_applicable",
+        "minimum_effective_sample_required": 24,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "unknown",
+        "security_master_status": "unknown",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "unknown",
+        "halt_suspension_status_coverage": "unknown",
+        "corporate_action_adjustment_status": "unknown",
+        "industry_classification_pit_status": "unknown",
+        "survivorship_bias_risk": "high"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "2015 A-share crash",
+            "expected_alpha_decay": "Quality may draw down with market but recover faster if accounting is real.",
+            "expected_drawdown_risk": "High market drawdown risk.",
+            "data_availability": "Historical PIT data uncertain."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "Likely quality, large-cap, and defensive beta.",
+        "factor_framework": "sector_size_value_momentum_proxy"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 3,
+        "expected_alpha_return_net_pct": 2,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "commissions_slippage_tax_fx_dividend",
+        "execution_cost_feasibility_status": "feasible",
+        "capacity_status": "sufficient_for_bucket",
+        "slippage_confidence": "medium",
+        "manual_execution_feasibility": "feasible",
+        "net_alpha_not_estimable_reason": null
+      },
+      "fraud_accounting_red_flags": {
+        "audit_opinion_or_auditor_change_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required before candidate promotion.",
+          "limitations": [
+            "Structured provider not selected."
+          ]
+        },
+        "key_audit_matters_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required where available.",
+          "limitations": [
+            "May be manual evidence initially."
+          ]
+        },
+        "receivables_vs_revenue_growth": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required accounting quality check.",
+          "limitations": [
+            "PIT financials unresolved."
+          ]
+        },
+        "cfo_vs_net_income_divergence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required cash-quality check.",
+          "limitations": [
+            "PIT financials unresolved."
+          ]
+        },
+        "interest_coverage_deterioration": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required balance-sheet check.",
+          "limitations": [
+            "Debt fields need provider review."
+          ]
+        },
+        "related_party_transaction_exposure": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required governance check.",
+          "limitations": [
+            "Manual evidence may be needed."
+          ]
+        },
+        "restatement_or_late_filing_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required restatement check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        }
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Continue only after PIT/fraud provider evidence is reviewed.",
+        "bucket_status": "paper_only",
+        "deployment_scope": "A-share long bucket",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "Capital policy unchanged; no full-size claim."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "factor_model_proxy",
+        "expected_correlation_to_other_lanes": "Moderate to A-long catalyst and A-share market beta.",
+        "lane_level_override_rationale": "Quality factor proxy is more appropriate than pure benchmark."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": 0.5,
+        "drawdown_control_contribution": "Potential stabilizer if quality signal is real.",
+        "diversification_contribution": "Medium against short-term lanes.",
+        "rationale": "Long quality may improve portfolio drawdown even with modest t-stat."
+      },
+      "decision": "defer_until_provider_ready",
+      "decision_reason": "PIT financial and fraud red-flag coverage must be solved before implementation.",
+      "source_refs": [
+        "docs/long_alpha_spec.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "a_long_re_rating_catalyst",
+      "parent_lane_id": "a_long",
+      "parent_aggregation_rule": "weighted_by_maturity",
+      "lane_role": "alpha_source",
+      "alpha_source_hypothesis": {
+        "source_type": "valuation_re_rating",
+        "hypothesis_text": "A-long catalyst lane may push alpha through mispricing and re-rating when catalyst evidence is observed-date safe.",
+        "expected_edge_mechanism": "Valuation gap closes through earnings, policy, cycle, dividend, or buyback catalysts."
+      },
+      "expected_excess_return_band": {
+        "low": 2,
+        "high": 6,
+        "unit": "pct",
+        "time_base": "annual",
+        "rationale": "Catalyst lane should have higher active mispricing capture if data is reliable."
+      },
+      "expected_volatility_band": {
+        "low": 15,
+        "high": 30,
+        "unit": "pct",
+        "time_base": "annual",
+        "rationale": "Catalyst exposure adds event risk."
+      },
+      "expected_max_drawdown_band": {
+        "low": 12,
+        "high": 28,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Catalyst failure and accounting risk can be material."
+      },
+      "data_readiness": "manual_evidence",
+      "pit_blockers": [
+        "Announcement dates and catalyst observed dates need review"
+      ],
+      "provider_blockers": [
+        "A-share fundamentals and announcement provider not selected"
+      ],
+      "detectability_horizon_months": 18,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "CSI300",
+        "secondary_benchmarks": [
+          "CSI All Share",
+          "SW industry attribution"
+        ],
+        "final_benchmark_open_questions": [
+          "Whether catalyst lane needs industry-neutral event attribution."
+        ]
+      },
+      "evidence_level_required": [
+        "paper",
+        "live_normalized"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "low",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "A-long catalyst alpha depends on observed-date-safe catalyst evidence.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "Docs-only long alpha spec",
+        "evidence_available_at_registration": "No A-long catalyst backtest yet",
+        "source_doc_refs": [
+          "docs/long_alpha_spec.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 0,
+        "multiple_testing_notes": "No A-long catalyst test registered.",
+        "adjustment_method": "not_applicable",
+        "minimum_effective_sample_required": 18,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "unknown",
+        "security_master_status": "unknown",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "unknown",
+        "halt_suspension_status_coverage": "unknown",
+        "corporate_action_adjustment_status": "unknown",
+        "industry_classification_pit_status": "unknown",
+        "survivorship_bias_risk": "high"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "A-share policy reversal",
+            "expected_alpha_decay": "Catalyst thesis can fail abruptly when policy reverses.",
+            "expected_drawdown_risk": "High event drawdown risk.",
+            "data_availability": "Manual evidence may be available before structured provider."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "Event, value, and sector beta.",
+        "factor_framework": "sector_size_value_momentum_proxy"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 5,
+        "expected_alpha_return_net_pct": 3.5,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "commissions_slippage_tax_fx_dividend",
+        "execution_cost_feasibility_status": "feasible",
+        "capacity_status": "sufficient_for_bucket",
+        "slippage_confidence": "medium",
+        "manual_execution_feasibility": "feasible",
+        "net_alpha_not_estimable_reason": null
+      },
+      "fraud_accounting_red_flags": {
+        "audit_opinion_or_auditor_change_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required before thesis promotion.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "key_audit_matters_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required where available.",
+          "limitations": [
+            "May be manual evidence."
+          ]
+        },
+        "receivables_vs_revenue_growth": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required for catalyst quality.",
+          "limitations": [
+            "PIT financials unresolved."
+          ]
+        },
+        "cfo_vs_net_income_divergence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required for earnings-quality catalyst.",
+          "limitations": [
+            "PIT financials unresolved."
+          ]
+        },
+        "interest_coverage_deterioration": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required downside check.",
+          "limitations": [
+            "Debt data provider pending."
+          ]
+        },
+        "related_party_transaction_exposure": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required governance check.",
+          "limitations": [
+            "May be manual evidence."
+          ]
+        },
+        "restatement_or_late_filing_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required restatement check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        }
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Defer live use until provider-ready catalyst evidence exists.",
+        "bucket_status": "paper_only",
+        "deployment_scope": "A-share long bucket",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "No live-normalized evidence yet."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "factor_model_proxy",
+        "expected_correlation_to_other_lanes": "Moderate with A-long quality and A-burst during theme regimes.",
+        "lane_level_override_rationale": "Catalyst factor proxy required."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": 0.8,
+        "drawdown_control_contribution": "Low; catalyst lane is alpha-seeking.",
+        "diversification_contribution": "Medium if catalysts differ from short-term signals.",
+        "rationale": "Potential push-alpha lane but data blocked."
+      },
+      "decision": "defer_until_provider_ready",
+      "decision_reason": "Catalyst alpha is plausible but observed-date data is not ready.",
+      "source_refs": [
+        "docs/long_alpha_spec.md",
+        "docs/provider_data_requirements_audit.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "us_long_core_quality",
+      "parent_lane_id": "us_long",
+      "parent_aggregation_rule": "weighted_by_maturity",
+      "lane_role": "capital_stabilizer",
+      "alpha_source_hypothesis": {
+        "source_type": "quality_compounding",
+        "hypothesis_text": "US-long core quality may compound through durable profitability, capital allocation, and lower drawdown.",
+        "expected_edge_mechanism": "Market underprices durability and capital allocation quality over long horizons."
+      },
+      "expected_excess_return_band": {
+        "low": 1,
+        "high": 4,
+        "unit": "pct",
+        "time_base": "annual",
+        "rationale": "Quality premia are plausible but need PIT provider evidence."
+      },
+      "expected_volatility_band": {
+        "low": 12,
+        "high": 25,
+        "unit": "pct",
+        "time_base": "annual",
+        "rationale": "Long equity beta remains material."
+      },
+      "expected_max_drawdown_band": {
+        "low": 10,
+        "high": 25,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Market drawdowns and accounting risk remain."
+      },
+      "data_readiness": "unknown",
+      "pit_blockers": [
+        "US PIT fundamentals and corporate actions provider not selected"
+      ],
+      "provider_blockers": [
+        "US fundamentals provider readiness unknown"
+      ],
+      "detectability_horizon_months": 24,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "Russell 1000",
+        "secondary_benchmarks": [
+          "S&P 500",
+          "sector ETF attribution"
+        ],
+        "final_benchmark_open_questions": [
+          "Whether quality residual should use Fama-French 5 or sector proxy first."
+        ]
+      },
+      "evidence_level_required": [
+        "paper",
+        "live_normalized"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "low",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "US-long core quality depends on PIT fundamentals and corporate actions.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "Docs-only US-long skeleton",
+        "evidence_available_at_registration": "No US-long backtest yet",
+        "source_doc_refs": [
+          "docs/long_alpha_spec.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 0,
+        "multiple_testing_notes": "No US-long quality backtest yet.",
+        "adjustment_method": "not_applicable",
+        "minimum_effective_sample_required": 24,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "unknown",
+        "security_master_status": "unknown",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "unknown",
+        "halt_suspension_status_coverage": "unknown",
+        "corporate_action_adjustment_status": "unknown",
+        "industry_classification_pit_status": "unknown",
+        "survivorship_bias_risk": "high"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "2022 US bear market",
+            "expected_alpha_decay": "Quality may outperform but still draw down with market.",
+            "expected_drawdown_risk": "Medium to high.",
+            "data_availability": "Provider review pending."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "Quality, profitability, and large-cap beta.",
+        "factor_framework": "fama_french_5"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 3,
+        "expected_alpha_return_net_pct": 2.2,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "commissions_slippage_tax_fx_dividend",
+        "execution_cost_feasibility_status": "feasible",
+        "capacity_status": "sufficient_for_bucket",
+        "slippage_confidence": "medium",
+        "manual_execution_feasibility": "feasible",
+        "net_alpha_not_estimable_reason": null
+      },
+      "fraud_accounting_red_flags": {
+        "audit_opinion_or_auditor_change_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required before thesis promotion.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "key_audit_matters_evidence": {
+          "coverage_status": "partial",
+          "evidence_source": "10-K manual evidence",
+          "current_assessment": "May be manually reviewed before structured provider.",
+          "limitations": [
+            "Not automated."
+          ]
+        },
+        "receivables_vs_revenue_growth": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required accounting check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "cfo_vs_net_income_divergence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required cash-quality check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "interest_coverage_deterioration": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required debt-risk check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "related_party_transaction_exposure": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required governance check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "restatement_or_late_filing_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required restatement check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        }
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Continue as paper research until US provider is selected.",
+        "bucket_status": "paper_only",
+        "deployment_scope": "US long bucket",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "No live-normalized evidence yet."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "factor_model_proxy",
+        "expected_correlation_to_other_lanes": "Moderate to US-long catalyst, lower to burst lanes.",
+        "lane_level_override_rationale": "Quality factor framework is available conceptually."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": 0.7,
+        "drawdown_control_contribution": "Potential stabilizer.",
+        "diversification_contribution": "Medium against short-term lanes.",
+        "rationale": "Default high-priority long alpha bucket but provider-blocked."
+      },
+      "decision": "defer_until_provider_ready",
+      "decision_reason": "US fundamentals provider is the main blocker.",
+      "source_refs": [
+        "docs/long_alpha_spec.md",
+        "docs/provider_data_requirements_audit.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    },
+    {
+      "lane_id": "us_long_re_rating_catalyst",
+      "parent_lane_id": "us_long",
+      "parent_aggregation_rule": "weighted_by_maturity",
+      "lane_role": "alpha_source",
+      "alpha_source_hypothesis": {
+        "source_type": "catalyst_mispricing",
+        "hypothesis_text": "US-long re-rating catalyst lane may push alpha through filings, guidance, buybacks, and revisions.",
+        "expected_edge_mechanism": "Active mispricing capture when market underreacts to durable catalyst evidence."
+      },
+      "expected_excess_return_band": {
+        "low": 2,
+        "high": 6,
+        "unit": "pct",
+        "time_base": "annual",
+        "rationale": "Catalyst mispricing should exceed passive quality if data is timely."
+      },
+      "expected_volatility_band": {
+        "low": 15,
+        "high": 30,
+        "unit": "pct",
+        "time_base": "annual",
+        "rationale": "Event risk and valuation re-rating exposure."
+      },
+      "expected_max_drawdown_band": {
+        "low": 12,
+        "high": 30,
+        "unit": "pct",
+        "time_base": "not_applicable",
+        "rationale": "Catalyst failures can be material."
+      },
+      "data_readiness": "unknown",
+      "pit_blockers": [
+        "Filings, guidance, revisions, and buybacks need observed-date lineage"
+      ],
+      "provider_blockers": [
+        "US filings and fundamentals provider not selected"
+      ],
+      "detectability_horizon_months": 18,
+      "benchmark_plan": {
+        "provisional_primary_benchmark": "Russell 1000",
+        "secondary_benchmarks": [
+          "S&P 500",
+          "sector ETF attribution"
+        ],
+        "final_benchmark_open_questions": [
+          "Whether catalyst lane should use event-study attribution."
+        ]
+      },
+      "evidence_level_required": [
+        "paper",
+        "live_normalized"
+      ],
+      "provider_readiness": {
+        "provider_status_snapshot_ref": "provider_status_snapshot_20260527_phase7a1",
+        "provider_readiness_confidence": "low",
+        "provider_status_source": [
+          "docs/provider_data_requirements_audit.md",
+          "schemas/provider_capability_catalog.schema.json",
+          "schemas/examples/provider_capability_catalog.example.json",
+          "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+          "docs/CURRENT.md"
+        ],
+        "provider_status_limitations": [
+          "This is a lightweight best-effort inventory for the first alpha plausibility audit; it is not a provider registry and does not select a final provider.",
+          "No new provider data was fetched, no adapter was created, and no DataHub table was implemented for this snapshot.",
+          "Status is derived from existing project docs, schema contracts, and validated examples; it must be refined during Phase 7b provider capability evidence population.",
+          "A-share EOD and CSI benchmark helper readiness does not imply readiness for A-share fundamentals, PIT industry history, event data, or long-lane accounting evidence.",
+          "US provider readiness remains low until fundamentals, filings, corporate actions, security master, and market microstructure fields receive reviewed provider evidence."
+        ]
+      },
+      "hypothesis_registration": {
+        "timestamp": "2026-05-27T17:00:00Z",
+        "hypothesis_text": "US-long catalyst alpha depends on PIT filings, revisions, buybacks, and guidance evidence.",
+        "registered_by_session_id": "phase7a_initial_audit",
+        "data_window_at_registration": "Docs-only US-long skeleton",
+        "evidence_available_at_registration": "No US-long catalyst backtest yet",
+        "source_doc_refs": [
+          "docs/long_alpha_spec.md",
+          "docs/phase7a_provider_status_snapshot.json"
+        ]
+      },
+      "evidence_integrity": {
+        "evidence_window_type": "in_sample",
+        "tests_performed_count": 0,
+        "multiple_testing_notes": "No US-long catalyst test registered.",
+        "adjustment_method": "not_applicable",
+        "minimum_effective_sample_required": 18,
+        "current_effective_sample": 0,
+        "power_status": "insufficient"
+      },
+      "pit_survivorship_security_master": {
+        "survivorship_handling_status": "unknown",
+        "security_master_status": "unknown",
+        "delisting_coverage_status": "unknown",
+        "listing_status_coverage": "unknown",
+        "halt_suspension_status_coverage": "unknown",
+        "corporate_action_adjustment_status": "unknown",
+        "industry_classification_pit_status": "unknown",
+        "survivorship_bias_risk": "high"
+      },
+      "regime_factor_exposure": {
+        "regime_sensitivity_declaration": [
+          {
+            "regime": "2020 COVID shock",
+            "expected_alpha_decay": "Catalyst timing can be overwhelmed by macro shock.",
+            "expected_drawdown_risk": "High for cyclical catalysts.",
+            "data_availability": "Provider review pending."
+          }
+        ],
+        "style_beta_or_factor_exposure_risk": "Value, quality, growth, and sector event beta.",
+        "factor_framework": "fama_french_5"
+      },
+      "cost_execution_feasibility": {
+        "expected_alpha_return_gross_pct": 5,
+        "expected_alpha_return_net_pct": 3.8,
+        "cost_adjustment_required": true,
+        "cost_model_scope": "commissions_slippage_tax_fx_dividend",
+        "execution_cost_feasibility_status": "feasible",
+        "capacity_status": "sufficient_for_bucket",
+        "slippage_confidence": "medium",
+        "manual_execution_feasibility": "feasible",
+        "net_alpha_not_estimable_reason": null
+      },
+      "fraud_accounting_red_flags": {
+        "audit_opinion_or_auditor_change_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required before thesis promotion.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "key_audit_matters_evidence": {
+          "coverage_status": "partial",
+          "evidence_source": "10-K manual evidence",
+          "current_assessment": "May be manually reviewed before structured provider.",
+          "limitations": [
+            "Not automated."
+          ]
+        },
+        "receivables_vs_revenue_growth": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required accounting check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "cfo_vs_net_income_divergence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required cash-quality check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "interest_coverage_deterioration": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required downside check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "related_party_transaction_exposure": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required governance check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        },
+        "restatement_or_late_filing_evidence": {
+          "coverage_status": "unknown",
+          "evidence_source": "docs/long_alpha_spec.md",
+          "current_assessment": "Required restatement check.",
+          "limitations": [
+            "Provider review pending."
+          ]
+        }
+      },
+      "capital_deployment_effect": {
+        "capital_deployment_effect": "Continue as paper research until US provider evidence is available.",
+        "bucket_status": "paper_only",
+        "deployment_scope": "US long bucket",
+        "release_to_liquidity_reserve": false,
+        "requires_user_capital_decision": false,
+        "effect_rationale": "No live-normalized evidence yet."
+      },
+      "portfolio_correlation_assumption": {
+        "correlation_basis": "factor_model_proxy",
+        "expected_correlation_to_other_lanes": "Moderate with US quality and US burst catalyst exposure.",
+        "lane_level_override_rationale": "Catalyst attribution needs factor proxy."
+      },
+      "portfolio_contribution": {
+        "expected_alpha_contribution_pct": 1,
+        "drawdown_control_contribution": "Low; primary role is alpha.",
+        "diversification_contribution": "Medium if catalyst timing differs from short-term lanes.",
+        "rationale": "Potential push-alpha lane but provider-blocked."
+      },
+      "decision": "defer_until_provider_ready",
+      "decision_reason": "Plausible high-priority lane, but PIT filings and fundamentals provider is unresolved.",
+      "source_refs": [
+        "docs/long_alpha_spec.md",
+        "docs/provider_data_requirements_audit.md",
+        "docs/phase7a_provider_status_snapshot.json"
+      ]
+    }
+  ],
+  "portfolio_synthesis": {
+    "default_correlation_basis": "hypothesized",
+    "parent_lanes": [
+      {
+        "parent_lane_id": "a_short_steady",
+        "active_child_lane_ids": [
+          "a_short_steady",
+          "a_short_variants"
+        ],
+        "parent_aggregation_rule": "take_dominant_role",
+        "expected_portfolio_role": "A-share short risk filter and evidence loop.",
+        "expected_contribution": "Risk-control contribution, not current push-alpha engine.",
+        "capital_policy_effect": "A-share short bucket remains fixed; no global capital pool.",
+        "notes": "Variants are optimization tracks, not independent alpha lanes."
+      },
+      {
+        "parent_lane_id": "us_short_steady",
+        "active_child_lane_ids": [
+          "us_short_steady"
+        ],
+        "parent_aggregation_rule": "take_dominant_role",
+        "expected_portfolio_role": "US short risk-filtered decision support.",
+        "expected_contribution": "Potential hedge and risk-control role after microstructure review.",
+        "capital_policy_effect": "US short bucket remains fixed.",
+        "notes": "Borrow and market-structure provider evidence is required."
+      },
+      {
+        "parent_lane_id": "a_burst",
+        "active_child_lane_ids": [
+          "a_share_burst_minimal_data",
+          "a_share_burst_full_data"
+        ],
+        "parent_aggregation_rule": "active_stage_only",
+        "expected_portfolio_role": "A-share short-term alpha candidate.",
+        "expected_contribution": "Minimal tier is paper-only; full tier is provider-blocked.",
+        "capital_policy_effect": "No live capital until full-data evidence is reviewed.",
+        "notes": "Do not add minimal and full tier contributions together."
+      },
+      {
+        "parent_lane_id": "us_burst",
+        "active_child_lane_ids": [
+          "us_burst_minimal_data",
+          "us_burst_full_data"
+        ],
+        "parent_aggregation_rule": "active_stage_only",
+        "expected_portfolio_role": "US short-term alpha candidate.",
+        "expected_contribution": "Potential high-leverage short-term lane after provider unlock.",
+        "capital_policy_effect": "No live capital until full-data evidence is reviewed.",
+        "notes": "US market microstructure must be handled before live use."
+      },
+      {
+        "parent_lane_id": "a_long",
+        "active_child_lane_ids": [
+          "a_long_core_quality",
+          "a_long_re_rating_catalyst"
+        ],
+        "parent_aggregation_rule": "weighted_by_maturity",
+        "expected_portfolio_role": "A-share long alpha and stabilizer.",
+        "expected_contribution": "Potential long alpha if PIT financial and fraud evidence is solved.",
+        "capital_policy_effect": "A-share long bucket remains fixed.",
+        "notes": "CSI300 provisional benchmark differs from A-short CSI1000 by design."
+      },
+      {
+        "parent_lane_id": "us_long",
+        "active_child_lane_ids": [
+          "us_long_core_quality",
+          "us_long_re_rating_catalyst"
+        ],
+        "parent_aggregation_rule": "weighted_by_maturity",
+        "expected_portfolio_role": "US long push-alpha priority bucket.",
+        "expected_contribution": "High priority after US fundamentals and filings provider evidence.",
+        "capital_policy_effect": "US long bucket remains fixed.",
+        "notes": "Provider selection remains unresolved."
+      }
+    ],
+    "correlation_assumption_matrix": [
+      "A-short steady and A-burst likely share candidate-universe correlation.",
+      "US-long and US-burst may correlate through catalyst exposure.",
+      "A and US cash remain non-fungible by policy."
+    ],
+    "total_portfolio_expected_excess_return_band": {
+      "low": 0,
+      "high": 3,
+      "unit": "pct",
+      "time_base": "annual",
+      "rationale": "Portfolio-level alpha cannot be finalized before provider readiness and live-normalized evidence."
+    },
+    "total_portfolio_drawdown_implication": "Drawdown control currently depends more on risk-filter lanes than proven alpha lanes.",
+    "evidence_clock_bottlenecks": [
+      "US fundamentals and filings provider readiness",
+      "A-share PIT financials and fraud red-flag coverage",
+      "Burst full-data provider unlock",
+      "Live-normalized forward evidence horizon"
+    ],
+    "implementation_sequence_implications": [
+      "Use this first audit to drive provider priority and Phase 7a-2 spec revisions; do not treat it as ship-gate evidence.",
+      "Keep minimal burst tiers paper-only until full-data provider blockers and promotion criteria are resolved.",
+      "Treat current 24p A-short t-stat findings as exploratory until multiple-testing, power, and survivorship review are complete.",
+      "Prioritize US fundamentals and filings provider evidence, A-share PIT fundamentals and SW history, and burst full-data blockers before lane implementation."
+    ]
+  },
+  "deferred_decisions": [
+    "Final provider priority after this first audit is reviewed and converted into Phase 7a-3 provider sequencing.",
+    "Final ship-gate benchmark selection for long and burst lanes.",
+    "Whether minimal-data burst paper evidence justifies full-data provider investment after initial research experiments.",
+    "Exact production sizing, concentration, ADV, and circuit-breaker rules for Phase 7a-4."
+  ],
+  "limitations": [
+    "This is the first formal schema-first alpha plausibility audit, not ship-gate evidence and not a production implementation approval.",
+    "No provider was selected, no provider data was fetched, no adapter was created, and no DataHub table was implemented.",
+    "Expected alpha values are plausibility priors from existing docs and project evidence; they are not live-normalized forward evidence.",
+    "Provider readiness follows docs/phase7a_provider_status_snapshot.json and must be refined during Phase 7b provider capability evidence population.",
+    "Any lane marked continue still requires normal schema-first implementation review and the fixed multi-metric ship gate before full-size manual use."
+  ]
+}
