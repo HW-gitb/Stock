@@ -52,11 +52,12 @@ Phase 6a = kickoff spec / boundary contract。最小范围包括：
 Phase 6 子阶段边界如下：
 
 - **Phase 6a = kickoff spec / boundary contract**：只锁定 forward evidence、benchmark、记录格式、steady / variant / burst / long-spec 边界；不跑观察、不改 runner、不实现 variant。
-- **Phase 6b = A 短观察期**：主轴是六个 A-short variants 并行验证（具体 routing 见 §5.2）；evidence pipeline 支撑包括 (i) candidate-universe overlap audit，(ii) forward evidence accumulation，(iii) benchmark-aware alpha evidence sedimentation。
-- **Phase 6c = `burst_lane` spec**：独立 signal、risk lock、sizing gate、ship gate，不继承 steady lane gate。
-- **Phase 6d = A-long / US-long specs + US-short normalization**：长线系统从 alpha 主系统重新设计，美股短线 reference 规范化。
+- **Phase 6b = A 短 maintenance / evidence line**：继续 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩新小工具，除非直接服务 evidence clock。六个 A-short variants 仍按 §5.2 路由，但不再独占 Phase 6 设计算力。
+- **Phase 6c = A/US `burst_lane` spec**：短线 alpha-source spec，独立 signal、risk lock、sizing gate、ship gate，不继承 steady lane gate。
+- **Phase 6d = long alpha spec pack + US-short normalization**：long alpha common spec、A-long annex、US-long annex、US-short spec normalization；长线系统从 alpha 主系统重新设计，美股短线 reference 规范化。
+- **Phase 6e = provider / data requirements audit**：列出 4 套 spec 对字段、PIT、频率、lineage、授权/成本/稳定性的要求；不在本步锁最终 provider。
 
-This lock prevents treating Phase 6a kickoff text as Phase 6a observation completion, and prevents starting Phase 6b work before the boundary contract is reviewed.
+This lock prevents treating Phase 6a kickoff text as Phase 6a observation completion, and establishes spec-parallel / implementation-gated execution: multiple docs-only specs may be drafted in reviewable slices, while production implementation remains single-threaded through the normal review flow.
 
 ### 3.2 Forward evidence 定义
 
@@ -154,9 +155,9 @@ Until those data fields exist, no primary switch is allowed. The absence of memb
 
 ### 3.6 Considered and deferred benchmarks
 
-CSI500 and size-decile portfolio benchmarks were considered. They are deferred to Phase 6b or later because Phase 6a's immediate need is to unblock a concrete primary/secondary policy for aggregate alpha t-stat. Adding more benchmarks now would widen the contract before the first forward evidence month exists.
+CSI500 and size-decile portfolio benchmarks were considered. They are deferred to the A-short maintenance / evidence line or later because Phase 6a's immediate need is to unblock a concrete primary/secondary policy for aggregate alpha t-stat. Adding more benchmarks now would widen the contract before the first forward evidence month exists.
 
-If Phase 6b A-short observation shows CSI1000 / CSI300 sensitivity is unstable, CSI500 or size-decile benchmark construction can be reopened as a bounded research/variant question.
+If A-short forward evidence shows CSI1000 / CSI300 sensitivity is unstable, CSI500 or size-decile benchmark construction can be reopened as a bounded research/variant question.
 
 ---
 
@@ -209,7 +210,7 @@ Steady lane is the current A-short production-style baseline:
 
 ### 5.2 A-short variants
 
-Phase 6b owns bounded A-short variants as the observation main axis. Candidate-universe audit, forward evidence accumulation, and benchmark-aware alpha sedimentation are the evidence pipeline supporting that axis, not competing main tasks.
+Phase 6b keeps bounded A-short variants alive as a maintenance / evidence line. Candidate-universe audit, forward evidence accumulation, and benchmark-aware alpha sedimentation are the evidence pipeline supporting that line.
 
 The canonical variant family definitions live in `docs/strategy_design_synthesis.md §2.2`. This table records routing only:
 
@@ -222,7 +223,7 @@ The canonical variant family definitions live in `docs/strategy_design_synthesis
 | `rank_bucket_split` | Track rank buckets separately against the same captured candidate universe. |
 | `exit_policy_variants` | Track exit-policy variants against the same entry universe and capital context. |
 
-Variants must compare against the steady baseline and need forward evidence before promotion. Backtest-only improvement is not enough.
+Variants must compare against the steady baseline and need forward evidence before promotion. Backtest-only improvement is not enough. If forward evidence shows a promotable alpha signal, raise an explicit escape-valve review before reallocating implementation capacity back to A-short.
 
 ### 5.3 `burst_lane`
 
@@ -230,7 +231,7 @@ Variants must compare against the steady baseline and need forward evidence befo
 
 ### 5.4 A-long / US-long specs and US-short normalization
 
-Phase 6d owns A-long and US-long specs plus US-short normalization. Long-term systems are alpha-push systems built from scratch; they do not reuse short-term v14.x rules.
+Phase 6d owns the long alpha spec pack plus US-short normalization. Long-term systems are alpha-push systems built from scratch; they do not reuse short-term v14.x rules. Phase 6d should split common long-alpha requirements from market annexes so A-long and US-long do not duplicate or implicitly overwrite each other.
 
 ### 5.5 Research and DataHub
 
@@ -247,7 +248,7 @@ Phase 6a kickoff spec is complete when:
 3. The A-short benchmark policy is explicit: CSI1000 primary, CSI300 secondary sensitivity.
 4. `benchmark_sensitive` semantics and primary switch prerequisites are defined.
 5. Forward evidence counting is separated from historical backtest and manual trade decisions.
-6. Next work is routed to Phase 6b A-short observation: six A-short variants are the main axis; candidate-universe overlap audit, forward evidence accumulation, and benchmark-aware alpha sedimentation are the supporting evidence pipeline. Phase 6c / 6d remain separate later deliverables.
+6. Next work is routed to the Phase 6 spec pack: A-short remains a maintenance / evidence line, while A/US burst, long alpha specs, US-short normalization, and provider/data requirements audit are written as docs-only slices before Phase 7 implementation.
 
 ---
 
@@ -274,14 +275,14 @@ No unit tests are required for this handoff-only docs change.
 - “CURRENT.md should carry the full Phase 6a benchmark trigger text”失效；CURRENT.md 只保留 snapshot，完整规则在本 handoff。
 - “Forward tracker backfilled 5d/10d/20d returns can directly become ship-gate evidence”失效；它们是 diagnostics，ship-gate evidence must flow through execution reports + aggregate reports.
 - “CSI500 / size-decile benchmark must be decided before Phase 6a starts”失效；它们已记录为 considered and deferred.
-- “Phase 6a kickoff spec complete means Phase 6b observation is done”失效；kickoff spec 只是边界建立，Phase 6b 才承接 audit / forward / alpha / variants 观察。
+- “Phase 6a kickoff spec complete means Phase 6b observation is done”失效；kickoff spec 只是边界建立。2026-05-27 route amendment 后，A-short 承接 maintenance / evidence line，Phase 6 spec pack 承接 burst / long / US-short / provider requirements。
 
 ---
 
 ## 10. 下一步注意事项
 
 1. Claude should review whether the benchmark-sensitive triggers are too loose/tight and whether the forward evidence counting rule prevents evidence contamination.
-2. Next `执行` after review/commit should start Phase 6b A-short observation boundary or first implementation slice: candidate-universe overlap audit, benchmark monthly-return materialization, forward evidence accumulation, or variant tracking contract.
+2. Superseded by the 2026-05-27 route amendment below: next `执行` after that amendment should start the Phase 6 spec pack, while A-short continues only as maintenance / evidence line.
 3. Any future code task that adds benchmark monthly return materialization should keep CSI1000 primary and CSI300 secondary artifacts side by side.
 4. Do not modify `A-EGS/egs_main.py` for Phase 6a; weekly capture and aggregate evidence should consume existing outputs.
 5. Keep generated forward evidence artifacts ignored unless a later test task intentionally creates small sanitized fixtures.
@@ -459,4 +460,73 @@ git check-ignore result/a_short/backtest/execution/forward_aggregate/candidate_u
 
 1. 该 runner 只做 count overlap；market-cap percentile、sector/style concentration 仍未实现，后续需要数据字段再扩。
 2. 多期审计结果可以作为 primary-switch review 的输入，但单个 audit artifact 不允许切换 CSI1000 primary。
-3. 下一条 Phase 6b slice 可转向 materialized-plan driven comparison track inputs 或 forward evidence accumulation；不要把 overlap audit 误读为 variant evidence。
+3. Superseded by the following 2026-05-27 route amendment: the next default slice is no longer an A-short Phase 6b slice. A-short comparison-track / forward evidence work remains valid only as maintenance / evidence-clock work.
+
+---
+
+## 2026-05-27 追加：Phase 6 route amendment（spec-parallel / implementation-gated）
+
+### 改了什么
+
+- 修订 `AGENTS.md` Phase roadmap 和已固化决策 #12：Phase 6 改为 **spec 层并行 + implementation 层串行受控**。
+- 修订 `docs/CURRENT.md`：P0 从 “Phase 6b A-short observation 独占主线”改为 Phase 6 spec pack；A-short 降为 maintenance / evidence line。
+- 修订 `docs/strategy_design_synthesis.md §6`：新增 Phase 6e provider / data requirements audit，并把 Phase 8/9 ordering 改为 `capital weight × alpha leverage × data readiness`。
+- 修订本 handoff §3.1 / §5 / §6：同步新的 Phase 6 子阶段边界。
+
+新的 Phase 6 路由：
+
+1. **6b A-short maintenance / evidence line**：weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩新小工具，除非直接服务 evidence clock。
+2. **6c A/US `burst_lane` spec**：短线 alpha-source spec；共用 signal family，分市场定义数据字段差异，独立 risk / sizing / ship gate。
+3. **6d long alpha spec pack + US-short normalization**：long alpha common spec、A-long annex、US-long annex、US-short spec normalization。
+4. **6e provider / data requirements audit**：列字段、PIT、频率、lineage、授权/成本/稳定性要求；不在本步锁最终 provider。
+
+### 为什么
+
+现有策略架构本身不需要推翻：短线仍是 steady risk-filter lane + bounded variants + independent `burst_lane`，长线仍是 alpha 主系统。但执行序列若继续让 A-short Phase 6b 独占算力，会让占比更高的 US-long / US-short 以及长线 alpha spec 过晚启动，并串行放大 12+ 个月 forward evidence 的等待成本。
+
+本次修订只调整执行重心，不降低任何证据门槛：
+
+- A-short 占总组合约 11.67%，不能无限独占 Phase 6 design capacity。
+- `burst_lane` 是短线新 alpha source，不能长期排在 steady variants 内部优化之后才定义。
+- 长线 alpha spec 不依赖 DataHub 先实现；相反，DataHub Phase 7 应由四套 spec 和 provider/data requirements audit 反向定义字段。
+- DataHub 提高可复现性和复用性，不是 alpha evidence 本身。
+
+### Anti-pattern lock
+
+- 这次重排不是降低 ship gate。Full-size 仍需 monthly alpha t-stat ≥ 2.0、Sharpe ≥ 1.0、max drawdown ≤ 15%、forward live data ≥ 12 个月。
+- 这次重排不是跳过 A-short forward evidence。A-short weekly capture 和 mature-window evidence accumulation 必须继续。
+- 这次重排不是 implementation 层并行。代码、schema、runner、migration 仍按单 scope、reviewable commit 串行推进。
+- 这次重排不是直接 provider 选型。Phase 6e 先做 data requirements audit，最终 provider 选择需要单独证据。
+- 这次重排不是把 docs-only spec 当成 production readiness。Spec 只是后续 schema / runner / tests / DataHub 的输入。
+
+### Ship gate 时间现实
+
+Ship gate 的 12 个月 forward live data 是硬约束。即使四套系统尽早开始 paper / minimal evidence clock，full-size 最早也只能在 12+ 个月有效 forward evidence 之后；降低这个门槛不是健康加速路径。健康路径是让多套子系统尽早进入 paper / minimal observation，同时保持 `ship_gate_not_passed` 的 sizing 降级语义。
+
+### A-short escape valve
+
+A-short 默认降为 maintenance / evidence line。但如果 forward evidence 显示可推广 alpha（例如相对 steady baseline 的 risk-adjusted improvement 持续成立，且不依赖单月 / 单 cohort），可显式发起 escape-valve review，重新分配 implementation capacity。该 review 必须引用 forward evidence、benchmark sensitivity、drawdown、capital context 和 ship-gate status，不能只引用历史 backtest 或单次 audit。
+
+### 验证命令
+
+```powershell
+git diff --check
+```
+
+### 验证结果
+
+- `git diff --check` passed（CRLF warnings only）。
+
+### 失效旧结论
+
+- “Phase 6b A-short variants 是 Phase 6 的唯一主轴，6c / 6d 等 6b 完整做完后再开始”失效。
+- “Phase 6b candidate-universe overlap audit 追加段的下一步 #3 表示下一刀默认仍是 A-short Phase 6b slice”失效；A-short comparison-track / forward evidence work 只作为 maintenance / evidence-clock work 保留。
+- “DataHub Phase 7 主要按 A-short 当前需求重构”失效；Phase 7 必须等待四套 spec + provider/data requirements audit 给出字段需求。
+- “Provider 选型可以在 long spec 之后随手决定”失效；provider/data requirements audit 是单独 Phase 6e 输入，不等于最终 provider 选择。
+
+### 下一步注意事项
+
+1. 下一条 `执行` 推荐做 `long alpha common spec + US-long annex skeleton`，docs-only，不新增 schema / runner。
+2. 后续每份 spec 独立一轮 `执行 → 审查 → 修复 → 提交`，避免一次性大文档无法审查。
+3. A-short 只保留 evidence clock 相关小步，不继续扩无关辅助工具。
+4. Phase 7 DataHub 不应启动，直到 long alpha common spec、A-long annex、US-long annex、A/US burst spec、US-short normalization、provider/data requirements audit 至少都有 reviewed baseline。

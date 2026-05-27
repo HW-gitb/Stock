@@ -158,14 +158,15 @@ Stock/
 | 4 | minimal Skill：读 input，调 analyzer，出 M6.7 | 3-5 天 | ✅ minimal 完成 |
 | 5 | P0a capital context contract + A 股短线 execution/fill 回测 | 1-2 周 | ✅ minimal 完成 |
 | 5b | Ship gate policy + preliminary gate status（非 full-size 最终放行；full-size 仍需 ≥12 个月 forward live data） | 1-2 天 | ✅ preliminary 完成 |
-| 6a | Phase 6 boundary kickoff：forward evidence、benchmark、记录格式、steady/variant/burst/long-spec 边界 | 1-2 天 | ⬜ |
-| 6b | A 股短线 variants 并行验证：强负信号、Tier1-only、ESP cap、rank 分层、exit policy variants | 观察期 | ⬜ |
-| 6c | `burst_lane` 爆发力通道 spec：research/paper 先行、独立 risk lock / sizing gate / ship gate | 2-4 天 | ⬜ |
-| 6d | A 股长线 spec + 美股长线 spec + 美股短线 spec 规范化 | spec 设计 | ⬜ |
-| 7 | DataHub / engine 模块化重构；按 4 套 spec 划分共享层与独立 rule pack | 1-2 周 | ⬜ |
+| 6a | Phase 6 boundary kickoff：forward evidence、benchmark、记录格式、steady/variant/burst/long-spec 边界 | 1-2 天 | ✅ |
+| 6b | A 股短线 maintenance / evidence line：weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩新小工具，除非直接服务 evidence clock | 观察期 | ⬜ |
+| 6c | A / US 短线 `burst_lane` spec：共用 signal family、市场字段差异、独立 risk lock / sizing gate / ship gate | 2-4 天 | ⬜ |
+| 6d | 长线 alpha spec pack：long alpha common spec + A-long annex + US-long annex + US-short spec normalization | spec 设计 | ⬜ |
+| 6e | Provider / fundamentals data requirements audit：列出 A/US long、A/US burst、US-short 所需字段、PIT、频率、lineage、授权/成本/稳定性要求；不在本步锁最终 provider | 2-4 天 | ⬜ |
+| 7 | DataHub / engine 模块化重构；按 4 套 spec + provider/data requirements audit 划分共享层与独立 rule pack | 1-2 周 | ⬜ |
 | 7.5 | `research/` infrastructure + experiment logging + promotion gate | 2-4 天 | ⬜ |
-| 8 | 美股短线 implementation + 美股长线 implementation skeleton（数据条件满足时并行） | 1-2 周 | ⬜ |
-| 9 | A 股长线 implementation + cross-system coordinator spec / first implementation（可按数据准备度与 Phase 8 子项交换顺序） | 2-4 周 | ⬜ |
+| 8 | 四套子系统 implementation wave 1：按资金权重 × alpha leverage × data readiness 排序，默认优先 US-long；若 US provider readiness 不足，A-long 可前置 | 1-2 周 | ⬜ |
+| 9 | 四套子系统 implementation wave 2 + cross-system coordinator spec / first implementation（继续按数据准备度与 evidence readiness 调整） | 2-4 周 | ⬜ |
 
 ## 已固化决策
 
@@ -180,7 +181,7 @@ Stock/
 9. `A-EGS/egs_main.py` 当前不移动，等 Phase 7 再拆进 `engine/`。
 10. 资金分布固化为 A 股 35% / 美股 65%；each market = 1/3 长线 + 1/3 短线 + 1/3 流动资金；A 股 cash 与美股 cash 默认不互通。4 套子系统同等重要；phase 路线图不能让任何一套被长期搁置；每套支持 full-size 手动实盘使用前必须通过多 metric AND ship gate，alpha 不足则定位为风控 filter。详 §项目背景。
 11. 系统执行边界固化为分析筛选 + 回测复盘 + 报告输出；用户手动下单。不得接入券商、操作系统或自动化工具做自动下单；execution backtest 只是模拟规则，不是 live trading/order execution engine。
-12. 路线图采用 B 半重排：保留 A 股短线 Phase 6 一季度观察和 Phase 7 DataHub 原则，同时在 Phase 6 并行提前产出 A 股长线 / 美股长线 spec，并规范化美股短线 spec；Phase 7 重构以 4 套 spec 为依据，Phase 8 优先美股短线 + 美股长线 skeleton，Phase 9 做 A 股长线 implementation（可按数据准备度与 Phase 8 子项交换）。数据准备度只作示例性触发，不写死门槛：若 US provider 已能稳定提供 10-K、FCF、guidance、估值等长线维度，可优先推进 US 长线 skeleton / implementation；否则按默认顺序先做 US 短线。
+12. 路线图采用 B 半重排的修订版：Phase 6 采用 **spec 层并行 + implementation 层串行受控**。A 股短线 Phase 6b 不停止，但降为 maintenance / evidence line（weekly forward capture、comparison-track accumulator、forward evidence accumulation）；同时前置 A/US `burst_lane` spec、long alpha common spec、A-long annex、US-long annex、US-short spec normalization、provider/data requirements audit。Phase 7 DataHub / engine 重构必须以 4 套 spec + provider/data requirements audit 为依据。Phase 8/9 implementation 不再按原固定顺序推进，而按 `资金权重 × alpha leverage × data readiness` 排序：默认倾向 US-long 优先；若 US provider / fundamentals readiness 不足，A-long 或 US-short burst 可前置。数据准备度只作触发条件，不写死门槛；不得因 spec 并行而启动 implementation 层并行、降低 ship gate、跳过 A-short forward evidence，或把 DataHub 工程误读为 alpha 本身。
 13. 策略设计综合版采用 `docs/strategy_design_synthesis.md`：短线 = 稳健通道 + 有限 variants + 独立 `burst_lane`；长线 = `core quality compounding` + `re-rating / catalyst long` 的 alpha 主系统；research 快迭代但不可直连 production；coordinator 只给手动建议。
 
 ## AI 协作者在本项目中的工作守则

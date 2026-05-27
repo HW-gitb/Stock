@@ -253,6 +253,10 @@ Non-goal:
 
 ## 6. Revised Phase Route
 
+Execution principle: **spec-parallel / implementation-gated**.
+
+Spec work may proceed in multiple reviewable docs-only slices because it defines contracts, factor catalogs, data requirements, PIT rules, exit logic, benchmark policy, and promotion gates. Implementation work remains single-threaded through the normal multi-LLM `执行 -> 审查 -> 修复 -> 提交` loop. This route revision must not lower ship gates, skip A-short forward evidence, or treat DataHub engineering as alpha evidence.
+
 ### Phase 6a - Boundary Kickoff
 
 Define:
@@ -264,35 +268,55 @@ Define:
 - long spec deliverables,
 - what still counts only as backtest plumbing.
 
-### Phase 6b - A-Short Variant Tracking
+### Phase 6b - A-Short Maintenance / Evidence Line
 
-Implement or document the six bounded A-short variant families as forward / backtest comparison tracks. Do not promote variants without the gates in this document.
+Keep A-short alive as the current proven sample loop, but no longer let it consume all design attention.
+
+Allowed work:
+
+- weekly forward capture,
+- comparison-track accumulator,
+- forward evidence accumulation,
+- minimal fixes required to keep the evidence clock running.
+
+Do not expand new A-short helper tools unless they directly serve the evidence clock. A-short variants are steady-lane internal optimization, not the primary source of new short-term alpha. If forward evidence shows a promotable alpha signal, raise an explicit escape-valve review before reallocating implementation capacity back to A-short.
 
 ### Phase 6c - Burst Lane Spec
 
-Write the burst lane contract first:
+Write the A/US burst lane contract as the short-term alpha-source spec:
 
 - signal inputs,
 - trigger logic,
+- market-specific data field differences,
 - risk locks,
 - sizing stage gates,
 - independent ship gate,
 - research / paper output format.
 
-### Phase 6d - A-Long / US-Long Specs
+### Phase 6d - Long Alpha Spec Pack And US-Short Normalization
 
-Write long-term specs as alpha-push systems:
+Write long-term specs as alpha-push systems and normalize US-short before DataHub implementation:
 
-- core quality compounding,
-- re-rating / catalyst long,
-- industry normalization,
-- exits,
-- position sizing,
-- review cadence.
+- long alpha common spec: factor catalog, PIT rules, industry normalization, quality / cash-flow / valuation / catalyst factors, portfolio construction, thesis-broken exits, quarterly review cadence, benchmark and walk-forward validation requirements,
+- A-long annex: SW L2, A-share financial reliability, operating cash flow versus net profit, policy / cycle / dividend / buyback considerations, A-share benchmarks,
+- US-long annex: GICS, 10-K / 10-Q, FCF margin, ROIC, buyback efficiency, guidance credibility, US benchmarks,
+- US-short normalization: convert the existing US-short references into a spec shape parallel to A-short.
+
+### Phase 6e - Provider / Data Requirements Audit
+
+List the data requirements that the four-system spec pack creates:
+
+- required fields,
+- PIT and as-of semantics,
+- frequency and history depth,
+- provider/API lineage,
+- authorization, cost, stability, and fallback constraints.
+
+This audit defines what Phase 7 must support. It does not lock final provider choices by itself.
 
 ### Phase 7 - DataHub / Engine Modularization
 
-Use the four specs to split shared engine from independent rule packs:
+Use the four specs plus the provider/data requirements audit to split shared engine from independent rule packs:
 
 - shared: data providers, validation, cache/retry, backtest skeletons, utility code,
 - independent: factors, scoring, analyzers, risk model, position sizing, exits.
@@ -303,7 +327,7 @@ Create `research/` structure, minimal experiment logging, and promotion policy.
 
 ### Phase 8+
 
-Implement US short, US long skeleton, and A long based on data readiness and the four specs. Do not let A-short implementation remain the only mature subsystem.
+Implement the four systems based on `capital weight × alpha leverage × data readiness`, not a hard-coded market order. Default tendency is US-long first because it has the largest single bucket and is a long-term alpha system; if US provider or fundamentals readiness is insufficient, A-long or US-short burst may move ahead. Do not let A-short implementation remain the only mature subsystem.
 
 ### Phase 9+
 
@@ -320,9 +344,12 @@ Write and then implement cross-system coordinator once the four systems have eno
 
 ## 8. Next Execution Implication
 
-The next `执行` should not jump into implementation code. It should start Phase 6a:
+The next `执行` after this route revision should not jump into implementation code. It should start the Phase 6 spec pack as docs-only slices:
 
-1. Write the Phase 6 boundary / forward-evidence contract.
-2. Define benchmark monthly return source for A-short aggregation.
-3. Define how forward tracker evidence becomes `forward_live_months`.
-4. Route A-short variants, burst lane, and long specs into separate Phase 6 deliverables.
+1. Long alpha common spec + US-long annex skeleton.
+2. A-long annex.
+3. A/US burst lane spec.
+4. US-short normalization.
+5. Provider / data requirements audit.
+
+A-short continues as maintenance / evidence accumulation while those specs are written.

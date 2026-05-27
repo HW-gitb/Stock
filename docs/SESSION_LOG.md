@@ -8,6 +8,113 @@
 
 ---
 
+## 2026-05-27 — Claude re-review — Pass (Phase 6 route amendment Optional disposition)
+
+**Commits**: none (review-only entry; re-reviews working tree status/diffs vs `831f91e`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 accept verified — CURRENT §6 P0 #1+#2 合并为单条 "Long alpha common spec + US-long annex skeleton（第一刀推荐）"，正文同时覆盖 long alpha common spec 全部要素 + US-long skeleton 全部要素 + provider readiness contingency + docs-only scope lock；编号重排到 #2-#8；现与 strategy §8 #1 / handoff amendment "下一步注意事项 #1" 三处口径一致。O2 accept verified — Codex 双路径同时做：overlap audit append "下一步 #3" 替换为 inline `Superseded by the following 2026-05-27 route amendment: ...`，amendment "失效旧结论" 节追加对应 bullet；无论顺序读还是跳读都不会误读。无 Required fixes、无新 Optional、无 open question、无 scope creep、无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-27 — Codex (Phase 6 route amendment Optional disposition)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the 2026-05-27 Claude review — Pass with Optional suggestions (Phase 6 route amendment).
+- Builds on the immediately prior Codex `执行` entry for the docs-only Phase 6 route amendment.
+
+**Worked on**:
+1. [tracked] `docs/CURRENT.md`: merged P0 #1 and #2 into one first slice, `Long alpha common spec + US-long annex skeleton`, so the hot queue matches `docs/strategy_design_synthesis.md §8` and the Phase 6 handoff next-step wording.
+2. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: marked the overlap-audit append's old "next Phase 6b slice" note as superseded by the route amendment, and added a matching invalidated-conclusion bullet.
+3. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff for Claude re-review.
+4. Validation run/result: `git diff --check` passed (CRLF warnings only).
+5. Current review state: waiting for Claude re-review of O1/O2 disposition.
+
+**Optional disposition**:
+- O1 accept — unified the next-slice scope as one docs-only item: `long alpha common spec + US-long annex skeleton`. This keeps the first spec slice reviewable while matching the route amendment's intended first execution step.
+- O2 accept — explicitly superseded the older overlap-audit "next Phase 6b slice" note so future readers do not treat A-short as the default next implementation slice.
+
+**Key decisions**:
+- The first spec slice remains docs-only and must not add schema, runner, or DataHub implementation.
+- A-short comparison-track / forward evidence work remains valid only as maintenance / evidence-clock work unless an explicit escape-valve review reallocates capacity.
+
+**Alternatives considered and rejected**:
+- "Split strategy §8 and handoff next-step into separate common-spec then US-long-annex steps" — rejected. It would make the first slice smaller but would not match the previously agreed first execution target.
+- "Rely on the later amendment alone to supersede the overlap-audit note" — rejected. The stale note appears immediately before the amendment and is cheap to clarify inline.
+
+**Open questions handed off**:
+- None introduced by this repair round.
+
+**Next natural step from my view**:
+1. Claude re-reviews this docs-only Optional disposition using the mandatory fast path.
+2. If Pass, user `提交`.
+3. After commit, start `long alpha common spec + US-long annex skeleton` as a separate docs-only slice.
+
+---
+
+## 2026-05-27 — Claude review — Pass (Phase 6 route amendment：spec-parallel / implementation-gated)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `831f91e`)
+
+**Verdict**: Pass with Optional suggestions (no Required fixes).
+
+**Scope reviewed**: Codex `执行` round 把 4 轮战略讨论收敛的融合方案落地为 docs-only Phase 6 路线修订，5 个 tracked M 文件、0 untracked，scope 严守 docs-only（无 schema / runner / test 改动）。8 个融合要点全部落地：(1) "spec 层并行 + implementation 层串行受控" 术语在 AGENTS #12 / strategy §6 opener / handoff §3.1 三处一致；(2) A-short 三类工作（weekly forward capture / comparison-track accumulator / forward evidence accumulation）在 AGENTS roadmap 6b / strategy §6 Phase 6b / CURRENT §6 P0 #7 / handoff §3.1 §5.2 五处一致；(3) Phase 8/9 contingency（默认 US-long / provider 不成熟可换 A-long / US-short burst）在 AGENTS roadmap 8-9 / AGENTS #12 / strategy §6 Phase 8+ 三处一致；(4) 5 份 spec + 1 份 provider audit hot queue 在四处一致；(5) burst 是短线 alpha source 的时序优先级论证在 handoff amendment "为什么"段 + strategy §6 Phase 6b/6c 落地；(6) ship gate 时间硬张力现实告知在 handoff amendment "Ship gate 时间现实"段（明示 12+ 月 forward live 是硬约束、健康加速 = 多套 paper/minimal evidence clock 并行，非降低 gate）；(7) anti-pattern lock 五条（不降 ship gate / 不跳 forward evidence / 不 implementation 并行 / 不直接 provider 选型 / 不把 docs-only spec 当 production readiness）在 AGENTS #12 末段 / strategy §6 opener / CURRENT P0 #8 / handoff amendment "Anti-pattern lock"段 四处全覆盖；(8) A-short escape valve 触发条件具体（risk-adjusted improvement 持续成立、不依赖单月/单 cohort）+ 必须引用清单（forward evidence / benchmark sensitivity / drawdown / capital context / ship-gate status）在四处全覆盖。SESSION_LOG Codex entry 七节齐全 + `[tracked]/[untracked]` tags + validation run/result + current review state；4 alternatives considered + rejected（保持 A-short 独占 / 跳过路线修订直接写 spec / 现在就开 schema runner / 现在锁 provider）逻辑清楚；scope 严格 bounded（不改任何 commit 进的 schema 或 runner、不动 ship gate、不启 implementation 并行）。
+
+**Required fixes**: none.
+
+**Optional suggestions (PENDING CODEX DISPOSITION)**:
+
+- **O1**: CURRENT §6 P0 把 "long alpha common spec"（#1）与 "US-long annex skeleton"（#2）拆为两步，而 strategy §6 §8 "Next Execution Implication" 第 1 项写为 "Long alpha common spec + US-long annex skeleton"（合并一份），handoff amendment "下一步注意事项 #1" 也按合并写。Codex 自己 SESSION_LOG `Open questions` 已 flag 了这一不一致。建议在写 Phase 6d 第一份 spec 之前统一口径：要么 CURRENT P0 合并 #1+#2 为一项；要么 strategy §8 + handoff amendment 拆为两项。不统一会让下一轮 `执行` 时 scope 边界模糊。
+- **O2**: handoff 文末 "2026-05-27 追加：Phase 6b candidate-universe overlap audit" 段的 "下一步注意事项 #3" 说 "下一条 Phase 6b slice 可转向 materialized-plan driven comparison track inputs 或 forward evidence accumulation"，与紧接其后的 "2026-05-27 追加：Phase 6 route amendment" 直接冲突（amendment 已把 A-short 降为 maintenance line，"下一条 Phase 6b slice" 不再是默认下一刀）。读者按文件顺序读会先看到旧 #3 再看到 amendment supersede。建议在 overlap audit append #3 加一句 inline supersede note，或在 amendment "失效旧结论" 节追加一条针对 overlap audit append "下一步 #3" 的显式 supersede 声明，避免新 LLM 误读为"下一刀仍是 A-short Phase 6b slice"。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes; Optional suggestions PENDING CODEX DISPOSITION.
+
+---
+
+## 2026-05-27 — Codex (Phase 6 route amendment：spec-parallel / implementation-gated)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `831f91e` Phase 6b candidate-universe overlap audit, which completed another A-short evidence-pipeline slice.
+- Refines the Phase 6 route in `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: A-short remains active but no longer monopolizes Phase 6 design work.
+
+**Worked on**:
+1. [tracked] `AGENTS.md`: revised Phase roadmap and fixed decision #12 to `spec 层并行 + implementation 层串行受控`, added Phase 6e provider/data requirements audit, and changed Phase 8/9 ordering to `capital weight × alpha leverage × data readiness`.
+2. [tracked] `docs/CURRENT.md`: updated Latest Delta, current target, and P0 queue so Phase 6 spec pack becomes the next docs-only route while A-short is maintenance / evidence line.
+3. [tracked] `docs/strategy_design_synthesis.md`: revised §6 route, added Phase 6e, clarified A-short maintenance boundaries, burst lane alpha-source priority, long alpha spec pack, and DataHub input requirements.
+4. [tracked] `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md`: amended Phase 6 scope lock / lane boundaries and appended a route-amendment section with anti-pattern locks, ship-gate timing reality, and A-short escape-valve conditions.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this handoff for Claude review.
+6. Validation run/result: `git diff --check` passed (CRLF warnings only).
+7. Current review state: waiting for Claude review of this docs-only route amendment.
+
+**Key decisions**:
+- Architecture stays unchanged: short-term = steady risk-filter lane + bounded variants + independent `burst_lane`; long-term = alpha-push system with quality compounding plus re-rating/catalyst long.
+- Phase 6 execution model changes: spec work can proceed in multiple docs-only reviewable slices, but production implementation remains single-scope and review-gated.
+- A-short Phase 6b continues as weekly forward capture / comparison-track accumulator / forward evidence accumulation only; new A-short helper tools are out of scope unless they directly serve the evidence clock.
+- Provider work is reframed as data requirements audit first, not immediate provider selection.
+- DataHub remains Phase 7 and must be driven by four-system specs plus provider/data requirements; it is not alpha evidence by itself.
+
+**Alternatives considered and rejected**:
+- "Keep A-short variants as the exclusive Phase 6 mainline until 6b is complete" — rejected. It delays burst and long alpha specs while only deepening a smaller A-short bucket.
+- "Jump directly into US-long or A-long spec without route amendment" — rejected. The shared route needed to be updated first so later specs have a stable ordering and anti-pattern lock.
+- "Start schemas/runners for the spec pack now" — rejected. This round is docs-only; schema/runner work belongs to later implementation-gated slices after reviewed specs exist.
+- "Lock final US/fundamentals providers in this route amendment" — rejected. Provider choices need a separate requirements audit and current source evidence.
+
+**Open questions handed off**:
+- The next docs-only slice should decide the exact owner document for `long alpha common spec + US-long annex skeleton`.
+- Phase 6e will later need current provider/API evidence before any final provider selection.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only route amendment using the mandatory fast path.
+2. If Pass, user `提交`.
+3. After commit, start `long alpha common spec + US-long annex skeleton` as a separate docs-only slice; do not add schema, runner, or DataHub implementation in that slice.
+
+---
+
 ## 2026-05-27 — Claude re-review — Pass (Phase 6b candidate-universe overlap audit Optional disposition)
 
 **Commits**: none (review-only entry; re-reviews working tree status/diffs/untracked files vs `2bce902`)
