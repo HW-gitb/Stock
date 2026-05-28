@@ -299,6 +299,7 @@ Phase 6c docs-only baseline is complete when:
 
 ## 13. Next Work
 
-After the Phase 7a-4 evidence feasibility controls contract, the next burst-related schema slice is:
+After the Phase 7a-5 evidence report schema contract, the next burst-related work is Phase 7b provider capability evidence and drift monitoring:
 
-1. Phase 7a-5 burst evidence report schema with immutable decision packet, cost-adjusted return, manual override, and minimal reconciliation fields.
+1. Follow `docs/provider_priority_benchmark_contract.md` for event / flow / options / borrow evidence priority.
+2. Future burst reports should consume `schemas/evidence_report.schema.json` for immutable decision packet, cost-adjusted return, manual override, and minimal reconciliation fields.

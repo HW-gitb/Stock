@@ -1,0 +1,1077 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/evidence_report/1.0.0/schema.json",
+  "title": "Evidence Report",
+  "description": "Phase 7a-5 schema-first contract for evidence reports that carry immutable decision packets, cost-adjusted return details, cash drag, manual overrides, minimal reconciliation, thesis outcome logs, and research experiment logs. This contract consumes the Phase 7a-3 provider/benchmark contract and Phase 7a-4 feasibility controls; it does not select providers, fetch data, create adapters, implement DataHub tables, change strategy rules, relax ship gates, or authorize order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "report_id",
+    "report_date",
+    "report_family",
+    "lane_id",
+    "parent_lane_id",
+    "market",
+    "horizon",
+    "evidence_level",
+    "evidence_policy",
+    "provider_benchmark_context",
+    "evidence_feasibility_context",
+    "immutable_decision_packet",
+    "cost_adjusted_return",
+    "cash_drag",
+    "manual_override_log",
+    "minimal_reconciliation",
+    "thesis_outcome_log",
+    "research_experiment_log",
+    "ship_gate_claim",
+    "deferred_decisions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "evidence_report"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "report_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "report_date": {
+      "$ref": "#/$defs/date8"
+    },
+    "report_family": {
+      "$ref": "#/$defs/reportFamily"
+    },
+    "lane_id": {
+      "$ref": "#/$defs/laneId"
+    },
+    "parent_lane_id": {
+      "$ref": "#/$defs/parentLaneId"
+    },
+    "market": {
+      "$ref": "#/$defs/marketId"
+    },
+    "horizon": {
+      "$ref": "#/$defs/horizon"
+    },
+    "evidence_level": {
+      "$ref": "#/$defs/evidenceLevel"
+    },
+    "evidence_policy": {
+      "$ref": "#/$defs/evidencePolicy"
+    },
+    "provider_benchmark_context": {
+      "$ref": "#/$defs/providerBenchmarkContext"
+    },
+    "evidence_feasibility_context": {
+      "$ref": "#/$defs/evidenceFeasibilityContext"
+    },
+    "immutable_decision_packet": {
+      "$ref": "#/$defs/immutableDecisionPacket"
+    },
+    "cost_adjusted_return": {
+      "$ref": "#/$defs/costAdjustedReturn"
+    },
+    "cash_drag": {
+      "$ref": "#/$defs/cashDrag"
+    },
+    "manual_override_log": {
+      "$ref": "#/$defs/manualOverrideLog"
+    },
+    "minimal_reconciliation": {
+      "$ref": "#/$defs/minimalReconciliation"
+    },
+    "thesis_outcome_log": {
+      "$ref": "#/$defs/thesisOutcomeLog"
+    },
+    "research_experiment_log": {
+      "$ref": "#/$defs/researchExperimentLog"
+    },
+    "ship_gate_claim": {
+      "$ref": "#/$defs/shipGateClaim"
+    },
+    "deferred_decisions": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "evidence_level": {
+            "const": "paper"
+          }
+        },
+        "required": [
+          "evidence_level"
+        ]
+      },
+      "then": {
+        "properties": {
+          "ship_gate_claim": {
+            "properties": {
+              "claim_status": {
+                "enum": [
+                  "not_eligible",
+                  "not_claimed"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidence_level": {
+            "const": "research_only"
+          }
+        },
+        "required": [
+          "evidence_level"
+        ]
+      },
+      "then": {
+        "properties": {
+          "ship_gate_claim": {
+            "properties": {
+              "claim_status": {
+                "enum": [
+                  "not_eligible",
+                  "not_claimed"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidence_level": {
+            "const": "live_normalized"
+          }
+        },
+        "required": [
+          "evidence_level"
+        ]
+      },
+      "then": {
+        "properties": {
+          "minimal_reconciliation": {
+            "properties": {
+              "reconciliation_status": {
+                "const": "live_reconciled"
+              },
+              "actual_position_reconciliation_available": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "numberNullable": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "date8Nullable": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9]{8}$"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "provider_selection_allowed",
+        "data_fetch_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only",
+        "ship_gate_relaxed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7a-5"
+        },
+        "purpose": {
+          "const": "evidence_report_schema_contract"
+        },
+        "contract_status": {
+          "const": "schema_first_contract_only"
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        }
+      }
+    },
+    "reportFamily": {
+      "enum": [
+        "risk_filter_evidence",
+        "burst_evidence",
+        "long_thesis",
+        "research_experiment",
+        "aggregate_evidence"
+      ]
+    },
+    "laneId": {
+      "enum": [
+        "a_short_steady",
+        "a_short_variants",
+        "a_share_burst_minimal_data",
+        "a_share_burst_full_data",
+        "us_short_steady",
+        "us_burst_minimal_data",
+        "us_burst_full_data",
+        "a_long_core_quality",
+        "a_long_re_rating_catalyst",
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst"
+      ]
+    },
+    "parentLaneId": {
+      "enum": [
+        "a_short",
+        "a_burst",
+        "us_short",
+        "us_burst",
+        "a_long",
+        "us_long"
+      ]
+    },
+    "marketId": {
+      "enum": [
+        "A",
+        "US"
+      ]
+    },
+    "horizon": {
+      "enum": [
+        "short",
+        "long"
+      ]
+    },
+    "evidenceLevel": {
+      "enum": [
+        "paper",
+        "research_only",
+        "live_normalized"
+      ]
+    },
+    "evidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixed_allocation_policy_unchanged",
+        "global_aum_pool_allowed",
+        "cross_market_pooling_allowed",
+        "liquidity_bucket_auto_borrowing_allowed",
+        "paper_ship_gate_claim_allowed",
+        "live_normalized_required_for_ship_gate",
+        "actual_position_reconciliation_required_for_live_normalized",
+        "manual_execution_only"
+      ],
+      "properties": {
+        "fixed_allocation_policy_unchanged": {
+          "const": true
+        },
+        "global_aum_pool_allowed": {
+          "const": false
+        },
+        "cross_market_pooling_allowed": {
+          "const": false
+        },
+        "liquidity_bucket_auto_borrowing_allowed": {
+          "const": false
+        },
+        "paper_ship_gate_claim_allowed": {
+          "const": false
+        },
+        "live_normalized_required_for_ship_gate": {
+          "const": true
+        },
+        "actual_position_reconciliation_required_for_live_normalized": {
+          "const": true
+        },
+        "manual_execution_only": {
+          "const": true
+        }
+      }
+    },
+    "providerBenchmarkContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_priority_contract_ref",
+        "benchmark_set_source",
+        "provider_capability_catalog_ref",
+        "provider_selection_made_by_this_report",
+        "primary_benchmark_id",
+        "secondary_benchmark_ids",
+        "benchmark_switch_packet_required",
+        "benchmark_limitations"
+      ],
+      "properties": {
+        "provider_priority_contract_ref": {
+          "const": "docs/provider_priority_benchmark_contract.md"
+        },
+        "benchmark_set_source": {
+          "const": "docs/provider_priority_benchmark_contract.md"
+        },
+        "provider_capability_catalog_ref": {
+          "const": "schemas/provider_capability_catalog.schema.json"
+        },
+        "provider_selection_made_by_this_report": {
+          "const": false
+        },
+        "primary_benchmark_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "secondary_benchmark_ids": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "benchmark_switch_packet_required": {
+          "const": true
+        },
+        "benchmark_limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "evidenceFeasibilityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "feasibility_controls_doc_ref",
+        "feasibility_controls_schema_ref",
+        "feasibility_control_required",
+        "circuit_breaker_action_set",
+        "control_limitations"
+      ],
+      "properties": {
+        "feasibility_controls_doc_ref": {
+          "const": "docs/evidence_feasibility_controls.md"
+        },
+        "feasibility_controls_schema_ref": {
+          "const": "schemas/evidence_feasibility_controls.schema.json"
+        },
+        "feasibility_control_required": {
+          "const": true
+        },
+        "circuit_breaker_action_set": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "warn",
+              "size_down",
+              "pause_new_entries",
+              "manual_review",
+              "reactivation_cooldown"
+            ]
+          },
+          "minItems": 5,
+          "allOf": [
+            {
+              "contains": {
+                "const": "warn"
+              }
+            },
+            {
+              "contains": {
+                "const": "size_down"
+              }
+            },
+            {
+              "contains": {
+                "const": "pause_new_entries"
+              }
+            },
+            {
+              "contains": {
+                "const": "manual_review"
+              }
+            },
+            {
+              "contains": {
+                "const": "reactivation_cooldown"
+              }
+            }
+          ]
+        },
+        "control_limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "immutableDecisionPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_id",
+        "created_at",
+        "decision_timestamp",
+        "lane_id",
+        "candidate_universe_ref",
+        "input_artifact_refs",
+        "source_schema_refs",
+        "parameter_set_ref",
+        "parameter_hash",
+        "code_version_ref",
+        "benchmark_set_ref",
+        "provider_status_ref",
+        "hypothesis_ref",
+        "decision_outputs",
+        "immutability"
+      ],
+      "properties": {
+        "packet_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "decision_timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lane_id": {
+          "$ref": "#/$defs/laneId"
+        },
+        "candidate_universe_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "input_artifact_refs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "source_schema_refs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "parameter_set_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "parameter_hash": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "code_version_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "benchmark_set_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "provider_status_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "hypothesis_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "decision_outputs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "immutability": {
+          "$ref": "#/$defs/decisionPacketImmutability"
+        }
+      }
+    },
+    "decisionPacketImmutability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mutation_after_issue_allowed",
+        "append_only_corrections_required",
+        "decision_timestamp_before_outcome_required",
+        "parameter_hash_required"
+      ],
+      "properties": {
+        "mutation_after_issue_allowed": {
+          "const": false
+        },
+        "append_only_corrections_required": {
+          "const": true
+        },
+        "decision_timestamp_before_outcome_required": {
+          "const": true
+        },
+        "parameter_hash_required": {
+          "const": true
+        }
+      }
+    },
+    "costAdjustedReturn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "return_window_start",
+        "return_window_end",
+        "gross_return_pct",
+        "net_return_pct",
+        "benchmark_return_pct",
+        "net_excess_return_pct",
+        "cost_basis_status",
+        "cost_components",
+        "cost_disclosure"
+      ],
+      "properties": {
+        "return_window_start": {
+          "$ref": "#/$defs/date8"
+        },
+        "return_window_end": {
+          "$ref": "#/$defs/date8"
+        },
+        "gross_return_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "net_return_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "benchmark_return_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "net_excess_return_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "cost_basis_status": {
+          "enum": [
+            "complete",
+            "estimated",
+            "not_yet_estimable"
+          ]
+        },
+        "cost_components": {
+          "$ref": "#/$defs/costComponents"
+        },
+        "cost_disclosure": {
+          "$ref": "#/$defs/costDisclosure"
+        }
+      }
+    },
+    "costComponents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commissions_pct",
+        "taxes_pct",
+        "stamp_duty_pct",
+        "slippage_pct",
+        "spread_pct",
+        "borrow_fee_pct",
+        "fx_conversion_pct",
+        "dividends_pct",
+        "withholding_tax_pct",
+        "adr_fee_pct",
+        "market_impact_pct",
+        "cash_drag_pct",
+        "missed_trade_opportunity_cost_pct",
+        "other_costs_pct"
+      ],
+      "properties": {
+        "commissions_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "taxes_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "stamp_duty_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "slippage_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "spread_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "borrow_fee_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "fx_conversion_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "dividends_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "withholding_tax_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "adr_fee_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "market_impact_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "cash_drag_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "missed_trade_opportunity_cost_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "other_costs_pct": {
+          "$ref": "#/$defs/numberNullable"
+        }
+      }
+    },
+    "costDisclosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "missing_cost_components",
+        "estimation_method",
+        "limitations"
+      ],
+      "properties": {
+        "missing_cost_components": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "estimation_method": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "cashDrag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicability",
+        "observed_capital_used",
+        "normalization_basis",
+        "bucket_ceiling_context_ref",
+        "available_cash",
+        "deployed_capital",
+        "idle_cash_pct",
+        "cash_drag_return_pct",
+        "missed_trade_opportunity_cost_pct",
+        "calculation_basis",
+        "limitations"
+      ],
+      "properties": {
+        "applicability": {
+          "enum": [
+            "applicable",
+            "not_applicable"
+          ]
+        },
+        "observed_capital_used": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "normalization_basis": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "bucket_ceiling_context_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "available_cash": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "deployed_capital": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "idle_cash_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "cash_drag_return_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "missed_trade_opportunity_cost_pct": {
+          "$ref": "#/$defs/numberNullable"
+        },
+        "calculation_basis": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "manualOverrideLog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "override_status",
+        "manual_execution_only",
+        "entries",
+        "limitations"
+      ],
+      "properties": {
+        "override_status": {
+          "enum": [
+            "no_override",
+            "override_observed",
+            "not_applicable"
+          ]
+        },
+        "manual_execution_only": {
+          "const": true
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/manualOverrideEntry"
+          }
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "manualOverrideEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timestamp",
+        "action",
+        "reason_code",
+        "system_recommendation_ref",
+        "user_action_ref",
+        "effect_on_evidence"
+      ],
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "action": {
+          "enum": [
+            "accept",
+            "reject",
+            "resize",
+            "delay",
+            "cancel",
+            "notes_only"
+          ]
+        },
+        "reason_code": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "system_recommendation_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "user_action_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "effect_on_evidence": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "minimalReconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reconciliation_status",
+        "actual_position_reconciliation_available",
+        "recommended_positions_ref",
+        "actual_positions_ref",
+        "difference_summary",
+        "unmatched_items",
+        "limitations"
+      ],
+      "properties": {
+        "reconciliation_status": {
+          "enum": [
+            "paper_no_actual_position",
+            "live_reconciled",
+            "reconciliation_pending",
+            "not_applicable"
+          ]
+        },
+        "actual_position_reconciliation_available": {
+          "type": "boolean"
+        },
+        "recommended_positions_ref": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "actual_positions_ref": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "difference_summary": {
+          "$ref": "#/$defs/stringList"
+        },
+        "unmatched_items": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "thesisOutcomeLog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicability",
+        "thesis_id",
+        "review_stage",
+        "thesis_status",
+        "thesis_start_date",
+        "review_date",
+        "expected_outcome",
+        "observed_outcome",
+        "outcome_assessment",
+        "thesis_broken_conditions",
+        "next_review_date",
+        "limitations"
+      ],
+      "properties": {
+        "applicability": {
+          "enum": [
+            "applicable",
+            "not_applicable"
+          ]
+        },
+        "thesis_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "review_stage": {
+          "enum": [
+            "interim",
+            "final",
+            "not_applicable"
+          ]
+        },
+        "thesis_status": {
+          "enum": [
+            "open",
+            "confirmed",
+            "weakened",
+            "broken",
+            "not_applicable"
+          ]
+        },
+        "thesis_start_date": {
+          "$ref": "#/$defs/date8Nullable"
+        },
+        "review_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "expected_outcome": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "observed_outcome": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "outcome_assessment": {
+          "enum": [
+            "not_yet_mature",
+            "positive",
+            "mixed",
+            "negative",
+            "not_applicable"
+          ]
+        },
+        "thesis_broken_conditions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "next_review_date": {
+          "$ref": "#/$defs/date8Nullable"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "researchExperimentLog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicability",
+        "experiment_id",
+        "hypothesis_registration_ref",
+        "dataset_refs",
+        "parameter_refs",
+        "random_seed",
+        "reproducibility_artifacts",
+        "result_summary",
+        "production_promotion"
+      ],
+      "properties": {
+        "applicability": {
+          "enum": [
+            "applicable",
+            "not_applicable"
+          ]
+        },
+        "experiment_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "hypothesis_registration_ref": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "dataset_refs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "parameter_refs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "random_seed": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reproducibility_artifacts": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "result_summary": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "production_promotion": {
+          "$ref": "#/$defs/researchPromotionPolicy"
+        }
+      }
+    },
+    "researchPromotionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "no_direct_production_feed",
+        "requires_schema_review",
+        "requires_claude_review",
+        "requires_user_approval",
+        "promotion_status",
+        "promotion_limitations"
+      ],
+      "properties": {
+        "no_direct_production_feed": {
+          "const": true
+        },
+        "requires_schema_review": {
+          "const": true
+        },
+        "requires_claude_review": {
+          "const": true
+        },
+        "requires_user_approval": {
+          "const": true
+        },
+        "promotion_status": {
+          "enum": [
+            "not_requested",
+            "blocked",
+            "eligible_for_review",
+            "approved_after_review"
+          ]
+        },
+        "promotion_limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "shipGateClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_status",
+        "evidence_level_used",
+        "paper_evidence_used_for_ship_gate",
+        "full_size_manual_use_authorized_by_this_report",
+        "existing_ship_gate_policy_ref",
+        "claim_limitations"
+      ],
+      "properties": {
+        "claim_status": {
+          "enum": [
+            "not_eligible",
+            "not_claimed",
+            "eligible_for_review",
+            "claimed"
+          ]
+        },
+        "evidence_level_used": {
+          "$ref": "#/$defs/evidenceLevel"
+        },
+        "paper_evidence_used_for_ship_gate": {
+          "const": false
+        },
+        "full_size_manual_use_authorized_by_this_report": {
+          "const": false
+        },
+        "existing_ship_gate_policy_ref": {
+          "const": "AGENTS.md#项目背景"
+        },
+        "claim_limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    }
+  }
+}

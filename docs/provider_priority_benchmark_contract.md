@@ -122,4 +122,4 @@ Phase 7b provider capability evidence should populate the `schemas/provider_capa
 
 Phase 7a-4 evidence feasibility controls now live in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`. That contract does not revisit provider priority.
 
-Phase 7a-5 should define evidence report schemas that consume both this benchmark / provider-priority contract and the Phase 7a-4 feasibility controls.
+Phase 7a-5 evidence report schemas now live in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`; they consume both this benchmark / provider-priority contract and the Phase 7a-4 feasibility controls.

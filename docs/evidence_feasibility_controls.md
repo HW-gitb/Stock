@@ -138,10 +138,10 @@ The reviewed baseline is complete when:
 2. `schemas/examples/evidence_feasibility_controls.example.json` validates against the schema.
 3. Regression tests prove scope locks, four-lane coverage, paper-only minimal tiers, no capital pooling, and required circuit-breaker actions.
 4. Routing docs point Phase 7a-4 work here.
-5. `docs/CURRENT.md` moves the next P0 to Phase 7a-5 evidence report schemas.
+5. `docs/CURRENT.md` records Phase 7a-4 as complete and points the evidence-report contract to Phase 7a-5.
 
 ## 10. Next Use
 
-Phase 7a-5 should define evidence report schemas that consume this contract: immutable decision packet, cost-adjusted return, cash drag, manual override, minimal reconciliation, thesis outcome log, and research experiment log.
+Phase 7a-5 evidence report schemas now live in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`. They consume this contract through `evidence_feasibility_context`.
 
 Phase 7b provider capability evidence must still follow `docs/provider_priority_benchmark_contract.md`. Phase 7a-4 does not reorder provider priority.

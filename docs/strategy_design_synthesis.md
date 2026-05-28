@@ -66,6 +66,8 @@ The same Phase 7a-3 contract defines provisional evidence benchmarks for A-short
 
 Phase 7a-4 evidence feasibility controls are defined in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`. They lock burst minimal-to-full promotion evidence, concentration / liquidity / ADV sizing, slippage / borrow / limit-risk feasibility, and drawdown / circuit-breaker playbooks without provider selection, data fetch, runner changes, or ship-gate relaxation.
 
+Phase 7a-5 evidence report schemas are defined in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`. They lock immutable decision packets, cost-adjusted return details, cash drag, manual overrides, minimal reconciliation, thesis outcome logs, and research experiment logs without provider selection, data fetch, runner changes, or ship-gate relaxation.
+
 ## 2. Short-Term Architecture
 
 Short-term is a two-lane system, not a single relaxed risk model.
@@ -389,7 +391,7 @@ Split the post-audit work into small reviewed slices:
 - Phase 7a-2: revise long / short specs; add US microstructure, monitoring contract, calendar and timezone semantics.
 - Phase 7a-3: provider priority reorder and provisional benchmark contract.
 - Phase 7a-4: burst minimal-to-full promotion criteria, evidence capital schema, concentration limits, liquidity / ADV sizing, slippage constraints, and drawdown / circuit-breaker tiered action playbook in `docs/evidence_feasibility_controls.md`.
-- Phase 7a-5: evidence report schemas, immutable decision packet, cost-adjusted return details, cash drag, manual override, minimal reconciliation, long thesis outcome log, and research experiment log.
+- Phase 7a-5: evidence report schemas, immutable decision packet, cost-adjusted return details, cash drag, manual override, minimal reconciliation, long thesis outcome log, and research experiment log in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`.
 
 ### Phase 7b / 7c - Provider Evidence And DataHub
 
@@ -432,6 +434,7 @@ Phase 7a-1 is complete as a reviewed audit chain: schema contract, lightweight p
 1. Phase 7a-2: owner-spec routing for long, steady short, US-short, and burst lanes is complete.
 2. Phase 7a-3: provider priority and provisional benchmark contract is defined in `docs/provider_priority_benchmark_contract.md`.
 3. Phase 7a-4: evidence feasibility controls are defined in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`.
-4. Phase 7a-5: define evidence report schemas, immutable decision packets, cost-adjusted returns, cash drag, overrides, reconciliation, thesis outcome logs, and research experiment logs.
+4. Phase 7a-5: evidence report schemas are defined in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`.
+5. Phase 7b: populate provider capability evidence and data quality / provider drift monitoring in the P1-P4 queue from `docs/provider_priority_benchmark_contract.md`.
 
 A-short continues as maintenance / evidence accumulation while Phase 7a contracts are written. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, fetch provider data, or build DataHub tables before the relevant alpha-audit and provider-evidence contracts are reviewed.

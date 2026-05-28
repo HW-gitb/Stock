@@ -1,6 +1,6 @@
 # Evidence Capital Policy
 
-**Status**: Phase 7a design route owner with Phase 7a-4 feasibility-control schema routed. This document defines how paper and live-normalized evidence are interpreted without changing the fixed capital allocation policy.
+**Status**: Phase 7a design route owner with Phase 7a-5 evidence-report schema routed. This document defines how paper and live-normalized evidence are interpreted without changing the fixed capital allocation policy.
 
 **Owner role**: evidence-level, normalized-return, and ship-gate evidence policy owner. It complements `docs/portfolio_allocation_policy.md`, `schemas/portfolio_allocation.schema.json`, and `schemas/execution_aggregate_report.schema.json`.
 
@@ -106,9 +106,9 @@ If the user later approves a real-money evidence budget, it must be:
 
 ## 7. Required Schema Follow-Up
 
-Phase 7a-4 adds `schemas/evidence_feasibility_controls.schema.json` for burst promotion, capacity, liquidity, slippage, borrow / limit-risk, and circuit-breaker feasibility. It is a contract / example / test baseline, not a runner output schema.
+Phase 7a-4 adds `schemas/evidence_feasibility_controls.schema.json` for burst promotion, capacity, liquidity, slippage, borrow / limit-risk, and circuit-breaker feasibility. Phase 7a-5 adds `schemas/evidence_report.schema.json` for evidence report shape, immutable decision packets, cost-adjusted return, cash drag, manual override, minimal reconciliation, thesis outcome logs, and research experiment logs. Both are contract / example / test baselines, not runner output implementations.
 
-Before aggregate reports consume this policy, Phase 7a-5 / later implementation-adjacent slices must update report schemas such as `schemas/execution_aggregate_report.schema.json` and runner output contracts to include:
+Before aggregate reports consume this policy as runner output, later implementation-adjacent slices must wire report schemas such as `schemas/execution_aggregate_report.schema.json` and runner output contracts to include or reference `schemas/evidence_report.schema.json` fields for:
 
 - `evidence_level`,
 - normalization basis,
@@ -122,4 +122,4 @@ Before aggregate reports consume this policy, Phase 7a-5 / later implementation-
 - manual override reason fields,
 - ship-gate eligibility rules that reject paper-only full-size claims.
 
-This schema update is a separate reviewed implementation-adjacent slice. It should happen before `burst_lane_report`, `long_alpha_thesis_report`, or research promotion reports rely on normalized returns.
+That runner/report integration is a separate reviewed implementation-adjacent slice. It should happen before `burst_lane_report`, `long_alpha_thesis_report`, or research promotion reports rely on normalized returns.

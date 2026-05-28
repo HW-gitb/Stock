@@ -1,24 +1,24 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-28（Phase 7a-4 evidence feasibility controls）
+**最后更新**：2026-05-28（Phase 7a-5 evidence report schema contract）
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
 ---
 
 ## 0. Latest Delta
 
-- Phase 7a-4 evidence feasibility controls 已建立：`docs/evidence_feasibility_controls.md` 与 `schemas/evidence_feasibility_controls.schema.json` 固化 burst minimal-to-full promotion、evidence capital、concentration / liquidity / ADV、slippage / borrow / limit-risk、circuit-breaker playbook；未选 provider、未抓数据、未改 runner。
+- Phase 7a-5 evidence report schema contract 已建立：`docs/evidence_report_schema_contract.md` 与 `schemas/evidence_report.schema.json` 固化 immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log；未选 provider、未抓数据、未改 runner。
+- Phase 7a-4 evidence feasibility controls 已建立：`docs/evidence_feasibility_controls.md` 与 `schemas/evidence_feasibility_controls.schema.json` 固化 burst minimal-to-full promotion、evidence capital、concentration / liquidity / ADV、slippage / borrow / limit-risk、circuit-breaker playbook。
 - Phase 7a-3 provider priority / provisional benchmark contract 已建立：`docs/provider_priority_benchmark_contract.md` 将 provider evidence queue 固化为 P1 US fundamentals / filings / security master、P2 A-share fundamentals / announcements / SW history、P3 burst event / flow / options / borrow、P4 already-proven A-share EOD / CSI helpers。
 - Phase 7a-2 owner-spec routing 已建立：`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/long_alpha_spec.md`、`docs/us_short_spec.md` 已吸收第一版 audit verdict。
 - Phase 7a-1 first formal alpha plausibility audit 已建立：`docs/phase7a_alpha_plausibility_audit.json`。结论分布为 3 条 `continue_as_risk_filter`、2 条 `continue`、6 条 `defer_until_provider_ready`；该 audit 不是 ship-gate evidence。
-- Phase 7a-1 lightweight provider status snapshot 已建立：`docs/phase7a_provider_status_snapshot.json`。它只 inventory known readiness / blockers，不选 provider、不抓数据、不建 adapter / DataHub table。
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7a-4 evidence feasibility controls established；下一步进入 Phase 7a-5 evidence report schemas。
-- **当前 P0 目标**：定义 immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log；不得选 provider、抓数据或改 runner。
+- **当前 Phase**：Phase 7a-5 evidence report schema contract established；下一步进入 Phase 7b provider evidence / drift monitor。
+- **当前 P0 目标**：按 `docs/provider_priority_benchmark_contract.md` 的 P1-P4 queue 填充 provider capability evidence，并建立 data quality / provider drift monitor；不得 silent default、latest-only 回填或绕过 reviewed provider evidence。
 - **当前 blocker**：无待用户决策 blocker。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
@@ -27,6 +27,7 @@
 
 ## 2. 最近已完成
 
+- **Phase 7a-5 evidence report schema contract**（2026-05-28）：`docs/evidence_report_schema_contract.md`、`schemas/evidence_report.schema.json`、example 和 schema tests 已建立；覆盖 immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log。
 - **Phase 7a-4 evidence feasibility controls**（2026-05-28）：`docs/evidence_feasibility_controls.md`、`schemas/evidence_feasibility_controls.schema.json`、example 和 schema tests 已建立；覆盖 4 条 burst maturity lanes、paper-only minimal tier、capital pooling lock、liquidity / ADV / slippage / borrow / limit-risk、five-action circuit breaker。
 - **Phase 7a-3 provider priority / provisional benchmark contract**（2026-05-28）：`docs/provider_priority_benchmark_contract.md` 已建立，锁定 provider evidence priority、provisional evidence benchmark table、benchmark switch rule、provider / benchmark evidence packet minimum。
 - **Phase 7a-2 owner-spec routing**（2026-05-27）：`strategy_design_synthesis`、`burst_lane_spec`、`long_alpha_spec`、`us_short_spec` 已记录 audit verdict、minimal/full burst边界、long defer blocker、US microstructure / calendar / monitoring边界。
@@ -38,7 +39,6 @@
 - **Phase 7a alpha-validation route**（2026-05-27）：`docs/alpha_plausibility_audit.md` 与 `docs/evidence_capital_policy.md` 建立。paper evidence 与 live-normalized ship-gate evidence 必须分离；不改变 35/65、bucket、cash non-fungibility 或 ship gate。
 - **Phase 7 provider capability / field catalog contract**（2026-05-27）：`schemas/provider_capability_catalog.schema.json` v1.0.0、example 和 schema tests 已建立；不选 provider、不抓数据、不建 adapter / DataHub table。
 - **Phase 6 spec pack**（2026-05-27）：`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/long_alpha_spec.md`、`docs/provider_data_requirements_audit.md` 完成 docs-only baseline。
-- **Phase 6a / 6b evidence helpers**（2026-05-26/27）：CSI1000 primary / CSI300 secondary benchmark policy、benchmark monthly return materializer、candidate-universe overlap audit、A-short variant tracking contract / materializer 已建立。
 
 更早事项见 `docs/handoff/README.md`、`AGENTS.md §交接记录`、`docs/SESSION_LOG.md` 和 `git log --all`。
 
@@ -72,6 +72,7 @@
 - `docs/phase7a_alpha_plausibility_audit.json` — Phase 7a-1 first formal alpha audit artifact。
 - `docs/provider_priority_benchmark_contract.md` — Phase 7a-3 provider evidence priority / provisional benchmark contract。
 - `docs/evidence_feasibility_controls.md` / `schemas/evidence_feasibility_controls.schema.json` — Phase 7a-4 burst promotion / evidence feasibility controls。
+- `docs/evidence_report_schema_contract.md` / `schemas/evidence_report.schema.json` — Phase 7a-5 evidence report schema contract。
 - `docs/evidence_capital_policy.md` — paper vs live-normalized evidence owner。
 - `docs/strategy_design_synthesis.md` — 总体策略架构 owner。
 - `docs/burst_lane_spec.md` / `docs/us_short_spec.md` / `docs/long_alpha_spec.md` — lane owner specs。
@@ -84,23 +85,17 @@
 
 ## 5. 下一步
 
-### P0 — Phase 7a-5 evidence report schemas
-
-- Immutable decision packet。
-- Cost-adjusted return、cash drag、manual override、minimal reconciliation。
-- Thesis outcome log、research experiment log。
-
-### P1 — Phase 7b provider evidence / drift monitor
+### P0 — Phase 7b provider evidence / drift monitor
 
 - 按 `docs/provider_priority_benchmark_contract.md` 的 P1-P4 queue 填充 provider capability evidence。
 - 建立 data quality / provider drift monitor；仍不得 silent default 或 latest-only 回填历史证据。
 
-### P2 — A-short maintenance line
+### P1 — A-short maintenance line
 
 - 继续 weekly forward capture、comparison-track accumulator、forward evidence accumulation。
 - 12 期新增 forward 样本后再重新审查 score / ESP / veto overlap。
 
-### P3 — Later implementation / cleanup
+### P2 — Later implementation / cleanup
 
 - Phase 8 lane implementation with production monitoring / circuit breaker / execution feasibility controls。
 - Phase 9 coordinator: cross-lane conflict resolution、unified report、position reconciliation、alert priority。

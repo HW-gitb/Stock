@@ -339,6 +339,7 @@ US-short docs-only baseline is complete when:
 
 ## 12. Next Work
 
-After the Phase 7a-4 evidence feasibility controls contract, the next US-short schema slice is:
+After the Phase 7a-5 evidence report schema contract, the next US-short work is Phase 7b provider capability evidence and drift monitoring:
 
-1. Phase 7a-5 evidence report schema fields for immutable decision packets, manual overrides, cost-adjusted return, and position reconciliation.
+1. Follow `docs/provider_priority_benchmark_contract.md` for US fundamentals / filings / security master and US event / microstructure evidence priority.
+2. Future US-short reports should consume `schemas/evidence_report.schema.json` for immutable decision packets, manual overrides, cost-adjusted return, and position reconciliation.

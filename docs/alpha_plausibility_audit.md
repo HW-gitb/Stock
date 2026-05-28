@@ -120,7 +120,7 @@ Recommended route:
 2. Phase 7a-2: use the audit to update `docs/strategy_design_synthesis.md`, `docs/long_alpha_spec.md`, `docs/burst_lane_spec.md`, and `docs/CURRENT.md`.
 3. Phase 7a-3: provider priority reorder and provisional evidence benchmarks are locked in `docs/provider_priority_benchmark_contract.md`.
 4. Phase 7a-4: burst minimal-to-full promotion criteria and evidence capital controls are locked in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`.
-5. Phase 7a-5: add burst / long / research evidence report schemas, immutable decision packet, cost-adjusted return details, minimal reconciliation, manual override records, and thesis outcome log.
+5. Phase 7a-5: add burst / long / research evidence report schemas, immutable decision packet, cost-adjusted return details, minimal reconciliation, manual override records, and thesis outcome log. This now lives in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`.
 6. Phase 7b / 7c / 8 / 9: follow `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` for provider evidence, DataHub monitoring, lane implementation, and coordinator controls.
 
 If the audit reverses an existing next-step assumption, record the reversal explicitly in `docs/SESSION_LOG.md` with reason.

@@ -446,3 +446,47 @@ git diff --check
 1. 下一条 `执行` 推荐 Phase 7a-5：evidence report schemas，覆盖 immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log。
 2. Phase 7a-5 应消费 `docs/provider_priority_benchmark_contract.md` 和 `docs/evidence_feasibility_controls.md`，不要重新打开 provider priority 或 burst feasibility design。
 3. 不要在 Phase 7a-5 选 provider、抓数据、建 adapter / DataHub table 或改 runner。
+
+## 2026-05-28 追加：Phase 7a-5 evidence report schema contract
+
+**改了什么**:
+
+- 新增 `docs/evidence_report_schema_contract.md`，作为 Phase 7a-5 evidence report schema owner。
+- 新增 `schemas/evidence_report.schema.json` v1.0.0、`schemas/examples/evidence_report.example.json` 和 `tests/schema/test_evidence_report_schema.py`。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/strategy_design_synthesis.md`、`docs/alpha_plausibility_audit.md`、`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/long_alpha_spec.md`、`docs/evidence_capital_policy.md`、`docs/provider_priority_benchmark_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- Phase 7a-4 已经锁定 burst feasibility controls；下一步需要让未来 evidence reports 不能丢失决策时间、参数、成本、现金拖累、人工 override、最小 reconciliation、thesis outcome 和 research lineage。
+- `schemas/evidence_report.schema.json` 明确消费 `docs/provider_priority_benchmark_contract.md` 与 `docs/evidence_feasibility_controls.md`，避免 Phase 7a-5 重新打开 provider priority 或 burst feasibility design。
+- Research experiment 仍保持隔离；schema 锁定 `no_direct_production_feed = true`，promotion 仍需 schema review、Claude review 和用户批准。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_evidence_report_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` line count check。
+
+**验证结果**:
+
+- `tests.schema.test_evidence_report_schema`：12 tests passed。
+- Full `tests/schema` discovery：73 tests passed。
+- `git diff --check`：passed（CRLF warnings only）。
+- Changed-file trailing whitespace scan：passed（no matches）。
+- `docs/CURRENT.md` physical line count：141，低于 150 行 snapshot target。
+
+**失效旧结论**:
+
+- “下一条 `执行` 推荐 Phase 7a-5”失效；Phase 7a-5 schema-first baseline 已建立，下一条进入 Phase 7b provider evidence / drift monitor。
+- “Evidence reports 可以稍后再补 decision packet / override / reconciliation / research lineage”失效；Phase 7a-5 schema 已要求七个核心 section 即使不适用也必须显式记录。
+- “Research experiment result 可以直接喂 production runner”继续失效；schema 通过 const lock 禁止 direct production feed。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 推荐 Phase 7b：按 `docs/provider_priority_benchmark_contract.md` 的 P1-P4 queue 填充 provider capability evidence，并建立 data quality / provider drift monitor。
+2. 不要在 Phase 7b silent default、latest-only 回填历史证据，或把 provider status guess 写成 production-ready evidence。
+3. 不要在下一刀改 runner、建 adapter / DataHub table、接 broker / OS automation，除非后续 reviewed slice 明确进入对应 implementation scope。

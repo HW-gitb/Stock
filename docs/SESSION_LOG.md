@@ -8,6 +8,139 @@
 
 ---
 
+## 2026-05-28 — Claude re-review — Pass (Phase 7a-5 O1 repair)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `17ea135`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 两部分完整接受 — (1) `test_policy_links_prior_contracts_and_prevents_pooling` line 76-78 加 3 条 `shipGateClaim` const 断言（`paper_evidence_used_for_ship_gate: false` / `full_size_manual_use_authorized_by_this_report: false` / `existing_ship_gate_policy_ref: "AGENTS.md#项目背景"`）；(2) 新增 `test_research_only_ship_gate_claim_fails` line 159-174，clone paper-fail 模式覆盖 `research_only` 分支（同时改 `evidence_level` + `ship_gate_claim.evidence_level_used` + `claim_status = claimed`，预期 validator 拒绝）。独立 `python -m unittest tests.schema.test_evidence_report_schema -v` 13 tests pass（从 12 增 1）/ `python -m unittest discover -s tests/schema` 74 tests pass（从 73 增 1）。`修复` scope 极小（仅 test file + SESSION_LOG.md）；其余 14 tracked + 4 untracked Phase 7a-5 文件未触动。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-28 — Codex (repair: Phase 7a-5 Optional O1)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Responds to the latest Claude review verdict: Pass with fixes, with 0 Required fixes and 1 Optional suggestion.
+- No Required fixes were pending; only Optional disposition was needed.
+
+**Worked on**:
+1. [tracked] `tests/schema/test_evidence_report_schema.py`: accepted O1 by adding explicit `shipGateClaim` const assertions and a `research_only` ship-gate negative regression.
+2. [tracked] `docs/SESSION_LOG.md`: recorded this repair entry for Claude re-review continuity.
+
+**Optional disposition**:
+- O1 accept — added the requested ship-gate const assertions and cloned the paper ship-gate negative test for the `research_only` branch.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_evidence_report_schema -v`: 13 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 74 tests passed.
+
+**Current review state**:
+- Approved Required fixes repaired: 0.
+- Optional dispositions: 1 accepted, 0 accepted with modification, 0 rejected.
+- Working tree uncommitted.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude re-reviews the repaired Phase 7a-5 change set.
+
+---
+
+## 2026-05-28 — Claude review — Pass with fixes (Phase 7a-5 evidence report schema contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `17ea135`)
+
+**Verdict**: Pass with fixes.
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes (0) — none; Optional suggestions (1) PENDING CODEX DISPOSITION.
+
+**Required fixes**: none.
+
+**Optional suggestions**:
+
+- **O1**: `tests/schema/test_evidence_report_schema.py` 缺 `shipGateClaim` 4 个 const lock 的 explicit 断言：`paper_evidence_used_for_ship_gate: false`、`full_size_manual_use_authorized_by_this_report: false`、`existing_ship_gate_policy_ref: "AGENTS.md#项目背景"`、外加底部 `allOf` `research_only → ship_gate_claim.claim_status ∈ {not_eligible, not_claimed}` 的 negative regression（现 `test_paper_ship_gate_claim_fails` 只覆盖 `paper` 分支，未独立覆盖 `research_only` 分支）。这些 const lock 是整个 Phase 7a 系列防 ship-gate drift 的最后一道保险，如未来 PR 把它们改成普通 boolean / 改 ref 字符串，schema 仍能 meta-validate 通过、example 也仍能通过 — 只能靠人眼 catch。建议下一轮 `修复` 在 `test_policy_links_prior_contracts_and_prevents_pooling` 旁加一组 `assertEqual` 锁住 4 个 const，并 clone 现 paper-fail test 加一个 research_only-fail test（仅改 evidence_level 与 ship_gate_claim.claim_status，预期 schema 拒绝）。这是 Phase 7a-4 O1 同类型的 coverage 完整化，不是新增功能。
+
+**Notes**: Codex `执行` round Phase 7a-5 — 4 untracked new (`docs/evidence_report_schema_contract.md` 100 行 / `schemas/evidence_report.schema.json` 1077 行 v1.0.0 / `schemas/examples/evidence_report.example.json` 241 行 / `tests/schema/test_evidence_report_schema.py` 189 行 12 tests) + 14 tracked routing/handoff updates (`AGENTS.md` / `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` / `docs/CURRENT.md` / `docs/README.md` / `docs/SESSION_LOG.md` / `docs/alpha_plausibility_audit.md` / `docs/burst_lane_spec.md` / `docs/evidence_capital_policy.md` / `docs/evidence_feasibility_controls.md` / `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` / `docs/long_alpha_spec.md` / `docs/provider_priority_benchmark_contract.md` / `docs/strategy_design_synthesis.md` / `docs/us_short_spec.md`), total 157 insertions / 37 deletions。Scope 严守：0 runner / 0 strategy / 0 provider 选择 / 0 数据抓取 / 0 adapter / 0 DataHub / 0 broker / 0 OS automation / 0 ship-gate relaxation — 全部通过 schema `scope` 11 const 强制锁定（phase 7a-5、purpose evidence_report_schema_contract、contract_status schema_first_contract_only、provider_selection/data_fetch/adapter/datahub_table/strategy_rule/broker_or_order_automation 全 false、manual_order_only true、ship_gate_relaxed false）。Schema defensive design 充分：(1) `evidencePolicy` 8 const lock；(2) `providerBenchmarkContext` 3 const ref 回锁 Phase 7a-3 (`provider_priority_contract_ref` / `benchmark_set_source` / `provider_capability_catalog_ref`) + `provider_selection_made_by_this_report: false` + `benchmark_switch_packet_required: true`；(3) `evidenceFeasibilityContext` 2 const ref 回锁 Phase 7a-4 + `feasibility_control_required: true` + `circuit_breaker_action_set` minItems: 5 + 5 个 `allOf.contains` 强制全 5 action；(4) `decisionPacketImmutability` 4 const lock（mutation_after_issue: false / append_only_corrections: true / decision_timestamp_before_outcome: true / parameter_hash_required: true）；(5) `manualOverrideLog.manual_execution_only: true`；(6) `researchPromotionPolicy` 4 const lock（no_direct_production_feed: true、3 review requirements 全 true）；(7) `shipGateClaim` 3 个 const lock + `existing_ship_gate_policy_ref: const "AGENTS.md#项目背景"` 把 ship-gate 政策权威锚定回 AGENTS；(8) 顶层 `allOf` 3 个 if/then 强制 paper / research_only → claim_status ∈ {not_eligible, not_claimed} 和 live_normalized → reconciliation_status const "live_reconciled" + actual_position_reconciliation_available const true。7 workflow-closure 节与 AGENTS.md §7a-5 cell 1:1 对齐：immutable_decision_packet / cost_adjusted_return / cash_drag / manual_override_log / minimal_reconciliation / thesis_outcome_log / research_experiment_log。Lane id enum 覆盖 11 sub-lanes 与 Phase 7a-1 audit artifact 一致。14 cost components 覆盖 A 股 (stamp_duty) + US (borrow_fee / fx_conversion / withholding_tax / adr_fee) 全部市场差异，含 cash_drag + missed_trade_opportunity_cost。Example 是 a_long_core_quality paper research_experiment，正确链 Phase 7a-1 audit + provider snapshot + Phase 7a-4 schema、code_version_ref: git:17ea135、hypothesis_ref 锚 alpha_audit_20260527_initial、reconciliation_status: paper_no_actual_position、ship_gate_claim: not_eligible。Cross-doc consistency 完整：AGENTS.md 路线图 7a-5 ✅ schema-first baseline + 7b ⬜ 下一刀；§当前进度 + §文件参考 + §已固化决策 §14 三处一致更新；CURRENT.md Phase 推进、P0/P1/P2 三档无重复（删了旧 P1=Phase 7a-5 因已并入 P0=Phase 7b）；ALPHA_VALIDATION_ACTION_GUIDE §2 + §13 推进到 Phase 7b 同时保留 §13 "Do not start Phase 7c..."（7b 允许、7c+ 仍 gated）；README routing 加 Phase 7a-5 entry；alpha_plausibility_audit §recommended route Step 5 追加 ref；burst_lane / us_short Next Work 改为 Phase 7b provider evidence 路径；evidence_capital_policy §7 同时含 7a-4 / 7a-5 schema 标注 baseline 非 runner output；evidence_feasibility_controls §9-10 标 Phase 7a-5 owner 现 location + `evidence_feasibility_context` 消费机制；long_alpha §7a+ "Schema ownership now lives in evidence_report.schema.json"；provider_priority_benchmark §8 同步；strategy_design_synthesis §1.x + §388 + §434-438 三处一致；handoff 追加 §失效旧结论 explicit invalidate 旧 next-step + "evidence reports 可以稍后再补" + 再次 invalidate "research 可直接喂 production"。独立 validation: `python -m unittest tests.schema.test_evidence_report_schema -v` 12 tests pass / `python -m unittest discover -s tests/schema` 73 tests pass（61 + 12 = 73）/ `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` 给 141 行 / `git diff --check` clean / `git diff --cached` empty / evidence_report 4 文件 trailing whitespace scan clean。除 O1 外无 scope / contract / risk issue；无 open question；无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-28 — Codex (Phase 7a-5 evidence report schema contract)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `17ea135` (`Add Phase 7a evidence feasibility controls`).
+- Converts the Phase 7a-5 next step from `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, and the Phase 7 handoff into a schema-first evidence report contract.
+- Prepended the required reconstructed SESSION_LOG entry for commit `17ea135` before this work, per `AGENTS.md §Session log discipline` fallback.
+
+**Worked on**:
+1. [untracked] `docs/evidence_report_schema_contract.md`: added the Phase 7a-5 owner doc for immutable decision packets, cost-adjusted return, cash drag, manual override, minimal reconciliation, thesis outcome log, and research experiment log.
+2. [untracked] `schemas/evidence_report.schema.json`, `schemas/examples/evidence_report.example.json`, `tests/schema/test_evidence_report_schema.py`: added schema v1.0.0, example, and regression tests.
+3. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/alpha_plausibility_audit.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`, `docs/long_alpha_spec.md`, `docs/evidence_capital_policy.md`, `docs/provider_priority_benchmark_contract.md`, `docs/evidence_feasibility_controls.md`: routed Phase 7a-5 and advanced current next work to Phase 7b.
+4. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7a-5 handoff section.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this handoff plus the reconstructed commit entry for `17ea135`.
+
+**Key decisions**:
+- Phase 7a-5 is a schema-first report contract slice, not provider selection, provider data fetch, adapter, DataHub table, runner, strategy-rule, broker, or OS automation work.
+- The schema requires all seven workflow-closure sections even when a section is `not_applicable`: `immutable_decision_packet`, `cost_adjusted_return`, `cash_drag`, `manual_override_log`, `minimal_reconciliation`, `thesis_outcome_log`, and `research_experiment_log`.
+- Paper and research-only reports cannot claim ship-gate pass; `live_normalized` reports must have actual-position reconciliation available and `live_reconciled` status.
+- Research experiments remain isolated: direct production feed is forbidden and promotion still requires schema review, Claude review, and user approval.
+
+**Alternatives considered and rejected**:
+- "Update `schemas/execution_aggregate_report.schema.json` directly" — rejected. Phase 7a-5 needs a cross-lane evidence-report contract before runner-specific output wiring; runner integration is a later reviewed slice.
+- "Split seven sections into many separate schema files" — rejected for this baseline. One `evidence_report` contract keeps Claude review and future producer/consumer routing coherent while still exposing each required section under `$defs`.
+- "Let `paper` reports record a claimed ship-gate status for future flexibility" — rejected. Paper evidence remains design / research evidence and must not be representable as a ship-gate pass.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_evidence_report_schema -v`: 12 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 73 tests passed.
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- Changed-file trailing whitespace scan found no matches.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reported `141`, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7a-5 evidence report schema slice.
+2. If Pass and user commits, the next `执行` slice should start Phase 7b provider evidence / drift monitor.
+
+---
+
+## 2026-05-28 — Codex (reconstructed from commit messages: Phase 7a-4 commit)
+
+**Commits**: `17ea135` (`Add Phase 7a evidence feasibility controls`)
+
+**Relationship to prior session(s)**:
+- Reconstructed per `AGENTS.md §Session log discipline` fallback because the reviewed Phase 7a-4 commit existed after the latest SESSION_LOG review entry.
+- Finalizes the Claude-reviewed Phase 7a-4 evidence feasibility controls change set.
+
+**Worked on**:
+1. [tracked] Committed the reviewed Phase 7a-4 evidence feasibility controls scope: owner doc, schema, example, regression tests, routing docs, handoff, SESSION_LOG, and O1 test assertion repair.
+
+**Key decisions**:
+- No new design decision beyond the reviewed change set; commit `17ea135` is the repository state that the next Phase 7a-5 work builds on.
+
+**Alternatives considered and rejected**:
+- None; reconstruction only.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Execute Phase 7a-5 evidence report schemas.
+
+---
+
 ## 2026-05-28 — Claude re-review — Pass (Phase 7a-4 O1 repair)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2dc50c2`)

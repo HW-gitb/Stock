@@ -154,7 +154,7 @@ Phase 7a+ additions from `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`:
 
 - Expected alpha must distinguish gross and net return. `expected_alpha_return_pct` must be cost-adjusted when used for thesis comparison; if only gross is available, the report must mark the thesis as preliminary.
 - Fraud / accounting red flags are mandatory for long lanes: audit opinion or auditor changes where available, key audit matters where available, receivables growth versus revenue growth, CFO versus net income divergence, interest coverage deterioration, related-party exposure, and restatement / late-filing evidence.
-- Thesis outcome logging must distinguish interim milestone review from final horizon review. Full schema ownership is deferred to Phase 7a-5, but every long thesis should reserve a `thesis_outcome_log_ref`.
+- Thesis outcome logging must distinguish interim milestone review from final horizon review. Schema ownership now lives in `schemas/evidence_report.schema.json`; every long thesis should reserve a `thesis_outcome_log_ref`.
 
 This module is not optional. Without it, a long candidate is a quality screen or research note, not a push-alpha thesis.
 
