@@ -15,12 +15,16 @@ P1_BENCHMARK_GICS_PATH = Path("docs/provider_evidence_p1_us_benchmark_gics_candi
 P1_FUNDAMENTALS_OBSERVED_DATE_PATH = Path(
     "docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json"
 )
+P1_COVERAGE_FALLBACK_INCIDENT_PATH = Path(
+    "docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json"
+)
 P1_EVIDENCE_PATHS = [
     P1_PUBLIC_SOURCE_PATH,
     P1_MARKET_DATA_PATH,
     P1_AUTH_COST_PATH,
     P1_BENCHMARK_GICS_PATH,
     P1_FUNDAMENTALS_OBSERVED_DATE_PATH,
+    P1_COVERAGE_FALLBACK_INCIDENT_PATH,
 ]
 
 
@@ -475,6 +479,85 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
                     "limitations"
                 ]
             )
+        )
+
+    def test_p1_coverage_fallback_incident_artifact_is_partial_and_non_authorizing(self) -> None:
+        artifact = json.loads(P1_COVERAGE_FALLBACK_INCIDENT_PATH.read_text(encoding="utf-8"))
+        records = {record["record_id"]: record for record in artifact["provider_evidence_records"]}
+        p1_records = [record for record in artifact["provider_evidence_records"] if record["priority"] == "P1"]
+        reviewed_p1_records = [
+            record for record in p1_records if record["source_basis"] == "reviewed_provider_evidence"
+        ]
+        massive_record = records["p1.us_massive_coverage_status_fallback_candidate"]
+        massive_source_refs = [
+            source_ref
+            for source_ref in massive_record["evidence_source_refs"]
+            if source_ref["source_id"].startswith("massive_")
+        ]
+
+        self.assertEqual(artifact["scope"]["contract_status"], "provider_evidence_population_snapshot")
+        self.assertEqual(artifact["provider_readiness_rollup"]["p1_status"], "partial")
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["implementation_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["provider_selection_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertIn("p1.us_intrinio_coverage_license_incident_candidate", records)
+        self.assertIn("p1.us_fmp_coverage_status_fallback_candidate", records)
+        self.assertIn("p1.us_massive_coverage_status_fallback_candidate", records)
+        self.assertIn("p1.us_norgate_coverage_fallback_limitations_candidate", records)
+        self.assertIn("p1.us_nasdaq_data_link_status_error_fallback_candidate", records)
+        self.assertIn("p1.us_remaining_readiness_review_blocker", records)
+        self.assertTrue(
+            all(
+                record["evidence_source_refs"]
+                and not record["provider_selection_made"]
+                and not record["data_fetch_performed"]
+                for record in reviewed_p1_records
+            )
+        )
+        self.assertTrue(
+            all(
+                "WebFetched on 2026-05-28" in source_ref["evidence_note"]
+                for record in reviewed_p1_records
+                for source_ref in record["evidence_source_refs"]
+            )
+        )
+        self.assertTrue(
+            all(
+                "does not independently prove Polygon-to-Massive rebrand" in source_ref["evidence_note"]
+                for source_ref in massive_source_refs
+            )
+        )
+        self.assertTrue(
+            any(
+                "Exact project coverage counts" in item
+                for item in records["p1.us_intrinio_coverage_license_incident_candidate"][
+                    "missing_required_evidence"
+                ]
+            )
+        )
+        self.assertTrue(
+            any(
+                "status page shell" in limitation
+                for limitation in records["p1.us_fmp_coverage_status_fallback_candidate"]["limitations"]
+            )
+        )
+        self.assertTrue(
+            any(
+                "not complete" in limitation
+                for limitation in records["p1.us_norgate_coverage_fallback_limitations_candidate"]["limitations"]
+            )
+        )
+        self.assertEqual(
+            records["p1.us_remaining_readiness_review_blocker"]["source_basis"],
+            "placeholder_pending_review",
+        )
+        self.assertTrue(
+            any("sample-row" in item for item in records["p1.us_remaining_readiness_review_blocker"]["missing_required_evidence"])
         )
 
     def test_selected_provider_is_rejected_when_jsonschema_available(self) -> None:

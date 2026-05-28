@@ -1,0 +1,870 @@
+{
+  "schema_name": "provider_evidence_drift_monitor",
+  "schema_version": "1.1.0",
+  "generated_at": "2026-05-28T17:00:00Z",
+  "scope": {
+    "phase": "7b",
+    "purpose": "provider_evidence_drift_monitor_contract",
+    "contract_status": "provider_evidence_population_snapshot",
+    "provider_selection_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "contract_refs": {
+    "provider_priority_contract_ref": "docs/provider_priority_benchmark_contract.md",
+    "provider_capability_catalog_schema_ref": "schemas/provider_capability_catalog.schema.json",
+    "provider_capability_catalog_example_ref": "schemas/examples/provider_capability_catalog.example.json",
+    "evidence_report_schema_ref": "schemas/evidence_report.schema.json",
+    "datahub_guardrail_ref": "docs/datahub_design.md"
+  },
+  "evidence_queue": [
+    {
+      "priority": "P1",
+      "evidence_family": "us_fundamentals_filings_security_master",
+      "primary_lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data"
+      ],
+      "queue_source_ref": "docs/provider_priority_benchmark_contract.md",
+      "queue_status": "evidence_populated_from_existing_docs",
+      "implementation_dependency_status": "blocked",
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "notes": "Sixth P1 evidence snapshot reviews official coverage, fallback, incident/status, and unresolved field-license / sample-row validation evidence. P1 remains partial and blocked."
+    },
+    {
+      "priority": "P2",
+      "evidence_family": "a_share_fundamentals_announcements_sw_history",
+      "primary_lane_ids": [
+        "a_long_core_quality",
+        "a_long_re_rating_catalyst"
+      ],
+      "queue_source_ref": "docs/provider_priority_benchmark_contract.md",
+      "queue_status": "blocked_until_provider_review",
+      "implementation_dependency_status": "blocked",
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "notes": "Not populated in this P1-only evidence slice."
+    },
+    {
+      "priority": "P3",
+      "evidence_family": "burst_event_flow_options_borrow",
+      "primary_lane_ids": [
+        "a_share_burst_full_data",
+        "us_burst_full_data"
+      ],
+      "queue_source_ref": "docs/provider_priority_benchmark_contract.md",
+      "queue_status": "manual_or_research_only",
+      "implementation_dependency_status": "manual_or_research_only",
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "notes": "Not populated in this P1-only evidence slice."
+    },
+    {
+      "priority": "P4",
+      "evidence_family": "a_share_eod_csi_helper_surfaces",
+      "primary_lane_ids": [
+        "a_short_steady",
+        "a_short_variants",
+        "a_share_burst_minimal_data"
+      ],
+      "queue_source_ref": "docs/provider_priority_benchmark_contract.md",
+      "queue_status": "ready_evidence_recorded",
+      "implementation_dependency_status": "ready_for_drift_tracking_only",
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "notes": "Retains the previously reviewed P4 helper-surface status; it does not authorize broad DataHub implementation."
+    }
+  ],
+  "provider_evidence_records": [
+    {
+      "record_id": "p1.us_intrinio_coverage_license_incident_candidate",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "financial_statements_filings",
+      "field_family": "Intrinio US fundamentals coverage, history, update latency, business-use licensing, ADR limitation, and status-page incident evidence.",
+      "provider_candidate_id": "intrinio_us_fundamentals_bronze_status",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "intrinio_bronze_fundamentals_coverage",
+          "source_title": "Intrinio Bronze Fundamentals Data Feed Plan",
+          "source_url": "https://intrinio.com/guides/fundamentals-bronze",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://intrinio.com/guides/fundamentals-bronze. Intrinio documents standardized and as-reported financial statements, raw filings, company metadata, security reference data, REST / Snowflake access, update timing after SEC processing, 5 years of trailing fundamentals history, 10,000+ active and delisted companies, 50,000+ active and delisted securities, two-week trial, and business-use licensing with raw redistribution limits. This is reviewed coverage and license evidence, not provider selection."
+        },
+        {
+          "source_id": "intrinio_status_page",
+          "source_title": "Intrinio Status",
+          "source_url": "https://status.intrinio.com/",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://status.intrinio.com/. Intrinio status page exposes current component status, 90-day uptime, past incidents, incident feeds, and support links. Status pages support drift monitoring, but they do not prove field coverage or data correctness."
+        },
+        {
+          "source_id": "intrinio_status_help",
+          "source_title": "Intrinio API Downtime / Outage Help",
+          "source_url": "https://help.intrinio.com/how-can-i-see-if-the-api-has-experienced-downtime-or-outages",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://help.intrinio.com/how-can-i-see-if-the-api-has-experienced-downtime-or-outages. Intrinio says customers can use the API status tracker for downtime and incident alerts, and should file support tickets when status is clean but user-side issues persist. This supports a future incident workflow, not production readiness."
+        },
+        {
+          "source_id": "intrinio_adr_limitation",
+          "source_title": "Intrinio ADRs / Non-US Based Companies",
+          "source_url": "https://help.intrinio.com/adrs-non-us-based-companies",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://help.intrinio.com/adrs-non-us-based-companies. Intrinio states ADR fundamentals coverage is under construction and may contain filings or calculation errors. This is an explicit coverage limitation that must become a universe filter or blocker before implementation."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "unknown",
+      "observed_date_support": "partial",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Exact project coverage counts across the intended US investable universe, backtest window, active/delisted tickers, ADRs, ETFs, SPACs, CIK mappings, fiscal years, statement families, and required fields.",
+        "Sample-row validation for accepted_date, filing_date, updated_date, is_latest, amendments, restatements, units, and standardized vs as-reported field semantics.",
+        "User-approved license path for local storage, retained private artifacts, non-display use, raw redistribution restrictions, and cost ceiling.",
+        "Fallback rule when Intrinio ADR, delisted, amended, or missing-field coverage is incomplete.",
+        "Incident SLA, retry, cache, and freeze policy tied to the status page and support-ticket workflow."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "unit",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "supports_future_review",
+      "limitations": [
+        "Intrinio coverage and status documentation narrows P1 blockers but does not make the provider implementation-ready.",
+        "ADR coverage warnings must be reflected in future universe and fallback rules.",
+        "No Intrinio API calls, sample rows, trial, subscription, or license approval were performed."
+      ]
+    },
+    {
+      "record_id": "p1.us_fmp_coverage_status_fallback_candidate",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "financial_statements_filings",
+      "field_family": "FMP financial coverage, directory / delisted surfaces, cycle times, bulk endpoints, and status-page candidate evidence.",
+      "provider_candidate_id": "financial_modeling_prep_coverage_status",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "fmp_platform_coverage",
+          "source_title": "Financial Modeling Prep Real-Time Financial Data API",
+          "source_url": "https://site.financialmodelingprep.com/",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://site.financialmodelingprep.com/. FMP markets broad coverage including 70,000+ securities, 30+ years of historical daily price data, 30+ years of fundamentals data, bulk APIs, and SOC 2 / FISD claims. This is vendor coverage context, not verified project-row coverage."
+        },
+        {
+          "source_id": "fmp_developer_docs_directory",
+          "source_title": "FMP Developer Docs",
+          "source_url": "https://site.financialmodelingprep.com/developer/docs/",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://site.financialmodelingprep.com/developer/docs/. FMP documents company symbols, financial statement symbols, CIK list, symbol changes, actively trading, delisted companies, SEC filing search, and bulk endpoints. These endpoints are candidates for coverage and fallback review, but not proof of PIT-safe historical factors."
+        },
+        {
+          "source_id": "fmp_cycle_times",
+          "source_title": "FMP Cycle Times",
+          "source_url": "https://site.financialmodelingprep.com/developer/docs/cycle-times",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://site.financialmodelingprep.com/developer/docs/cycle-times. FMP documents update timing for financial statements, as-reported statements, SEC filings, survivorship-bias-free price data, symbol lists, and bulk/batch endpoints. This supports freshness monitoring, not field-level PIT validation."
+        },
+        {
+          "source_id": "fmp_status_page",
+          "source_title": "FMP Endpoint Uptime Status",
+          "source_url": "https://status.financialmodelingprep.com/",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://status.financialmodelingprep.com/. FMP exposes an endpoint uptime status page, but the fetched page showed a status shell and a data-fetching error rather than a reliable incident history in this review. This keeps incident evidence incomplete."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "unknown",
+      "observed_date_support": "partial",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Exact project coverage counts by endpoint, field, date range, active/delisted status, CIK linkage, statement availability, and required universe filters.",
+        "Sample-row validation that historical rows carry reviewed as-of timestamps and do not rely on latest/current endpoint backfill.",
+        "License terms for retained private artifacts, bulk files, derived reports, non-display use, redistribution, quota, and paid tier.",
+        "Incident history and status-page reliability evidence beyond the fetched status shell.",
+        "Fallback policy when FMP endpoints are delayed, missing, revised, rate-limited, or semantically changed."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "unit",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "supports_future_review",
+      "limitations": [
+        "FMP coverage claims are broad but not row-level project coverage counts.",
+        "The FMP status page shell did not provide enough incident history in this review.",
+        "Latest/current endpoints remain forbidden for historical evidence unless as-of eligibility is proven."
+      ]
+    },
+    {
+      "record_id": "p1.us_massive_coverage_status_fallback_candidate",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "adjusted_eod_ohlcv_liquidity",
+      "field_family": "Massive US stock market coverage counts, active/delisted ticker endpoint, direct-source infrastructure, and system-status candidate evidence.",
+      "provider_candidate_id": "massive_us_market_data_coverage_status",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "massive_home_coverage",
+          "source_title": "Massive Stock Market API",
+          "source_url": "https://www.massive.com/",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://www.massive.com/. Massive markets US stocks real-time and historical data, 32,345+ stock tickers since 2003, 350B+ stock data points, direct exchange connectivity, and no-survivorship-bias claims. This is direct Massive coverage evidence; it does not independently prove Polygon-to-Massive rebrand or authorize provider selection."
+        },
+        {
+          "source_id": "massive_stocks_overview",
+          "source_title": "Massive Stocks REST API Overview",
+          "source_url": "https://massive.com/docs/rest/stocks/overview",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://massive.com/docs/rest/stocks/overview. Massive documents US stock coverage across major exchanges, dark pools, FINRA trading facilities, OTC markets, all-tickers endpoint, ticker details with identifiers, and active=false for delisted tickers. This is direct Massive documentation; it does not independently prove Polygon-to-Massive rebrand or authorize provider selection."
+        },
+        {
+          "source_id": "massive_system_status_page",
+          "source_title": "Massive System Status",
+          "source_url": "https://massive.com/system",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://massive.com/system. Massive provides a system status page and points users to a monitoring app for current platform status, alerts, and past resolutions. This is direct Massive operational evidence; it does not independently prove Polygon-to-Massive rebrand or authorize provider selection."
+        },
+        {
+          "source_id": "massive_status_kb",
+          "source_title": "Massive Knowledge Base: System Status Page",
+          "source_url": "https://massive.com/knowledge-base/article/does-massive-have-a-system-status-page",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://massive.com/knowledge-base/article/does-massive-have-a-system-status-page. Massive states its status page returns current status of APIs and WebSockets and checks API endpoints. This is direct Massive status evidence; it does not independently prove Polygon-to-Massive rebrand or authorize provider selection."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "unknown",
+      "observed_date_support": "not_applicable",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Exact project coverage counts for required US short / burst universe, date range, adjusted bars, corporate actions, delistings, liquidity fields, and identifier fields.",
+        "Sample-row validation for active=false delisted handling, split/dividend adjustment semantics, CIK/FIGI identifiers, OTC filtering, and market calendar alignment.",
+        "License, local-storage, non-display, derived report, quota, cost ceiling, and retention-after-subscription review.",
+        "Incident history export, SLA, retry, cache, and fallback policy tied to status-page components.",
+        "Fallback rule when Massive reference data, corporate actions, adjusted bars, or status endpoints are delayed or semantically changed."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "adjustment_mode",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "supports_future_review",
+      "limitations": [
+        "Massive coverage counts are vendor-level claims, not verified project coverage counts.",
+        "Status-page existence does not prove historical incident reliability or data correctness.",
+        "No Massive data fetch, trial, paid tier, or provider selection was performed."
+      ]
+    },
+    {
+      "record_id": "p1.us_norgate_coverage_fallback_limitations_candidate",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "instrument_master_listing_state",
+      "field_family": "Norgate US stock, delisted, major-exchange listing, current fundamentals latest-only, and historical index constituent coverage limitations.",
+      "provider_candidate_id": "norgate_us_data_content_coverage",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "norgate_data_content_tables",
+          "source_title": "Norgate Data Content Tables",
+          "source_url": "https://norgatedata.com/data-content-tables.php",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://norgatedata.com/data-content-tables.php. Norgate documents US stock coverage, US delisted package coverage, US historical index constituents, major-exchange listing identification, current fundamentals, irregular closures / halts / failures / issues, and explicit delisted database caveats including that delisted coverage is extensive but not complete."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "latest_only",
+      "observed_date_support": "not_applicable",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Exact project coverage counts for US stock, delisted, major-exchange, historical constituents, benchmark, and required current-fundamental fields.",
+        "License and export review for local storage, retained artifacts, private reports, plugin use, and retention after subscription lapse.",
+        "Public provider incident / status-page evidence or an alternative incident logging mechanism.",
+        "Fallback policy for the documented incomplete delisted history and latest-only fundamentals.",
+        "Sample-row validation for listing-state, delisted suffixes, index membership dates, and padding / alignment behavior."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_product_or_tier",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "adjustment_mode",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "supports_future_review",
+      "limitations": [
+        "Norgate's own documentation says delisted history is extensive but not complete, especially early decades.",
+        "Current fundamentals remain latest-only and cannot serve US-long historical PIT fundamentals.",
+        "This record does not resolve Windows/plugin access, export, retention, or public incident-monitoring gaps."
+      ]
+    },
+    {
+      "record_id": "p1.us_nasdaq_data_link_status_error_fallback_candidate",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "phase7_shared"
+      ],
+      "data_class": "financial_statements_filings",
+      "field_family": "Nasdaq Data Link status, table API error handling, call-limit, and fallback candidate evidence for Sharadar / table products.",
+      "provider_candidate_id": "nasdaq_data_link_status_error_handling",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "nasdaq_data_link_status",
+          "source_title": "Nasdaq Data Link Status",
+          "source_url": "https://status.data.nasdaq.com/",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://status.data.nasdaq.com/. Nasdaq Data Link status page exposes component status, incident subscriptions, 90-day uptime, and API / website / search / SFTP components. This supports future incident monitoring but does not prove table-level Sharadar coverage."
+        },
+        {
+          "source_id": "nasdaq_data_link_error_codes",
+          "source_title": "Nasdaq Data Link Error Codes",
+          "source_url": "https://docs.data.nasdaq.com/docs/error-codes",
+          "source_type": "official_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "WebFetched on 2026-05-28 at https://docs.data.nasdaq.com/docs/error-codes. Nasdaq Data Link documents HTTPS-only requests, API status link, HTTP status classes, custom error codes, and daily call-limit errors such as 429 for anonymous users. This supports fallback and retry design, not provider selection."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "unknown",
+      "observed_date_support": "unknown",
+      "survivorship_security_master_status": "unknown",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Sharadar / table-level data dictionary and sample rows proving datekey, filing date, report period, restatement, update, and PIT semantics.",
+        "Exact project coverage counts for the licensed product, required fields, historical window, active/delisted security master, and GICS mapping.",
+        "License, local-storage, non-display, derived report, redistribution, quota, and paid-tier review.",
+        "Fallback policy for 429 limits, 5XX server errors, stale SFTP / API components, and missing table rows.",
+        "Incident export and drift-monitor integration beyond manually viewing the status page."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "unit",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "supports_future_review",
+      "limitations": [
+        "Nasdaq Data Link status and error-code docs help future fallback design but do not prove Sharadar field-level readiness.",
+        "No Nasdaq Data Link API or table data was fetched.",
+        "P1 remains blocked until table-level docs or sample rows are reviewed."
+      ]
+    },
+    {
+      "record_id": "p1.us_remaining_readiness_review_blocker",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "financial_statements_filings",
+      "field_family": "Remaining P1 readiness blockers after six documentation-review snapshots.",
+      "provider_candidate_id": "p1_readiness_review_tbd",
+      "source_basis": "placeholder_pending_review",
+      "capability_status": "unknown",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "unknown",
+      "observed_date_support": "unknown",
+      "survivorship_security_master_status": "unknown",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Cross-provider P1 readiness matrix comparing SEC, Intrinio, FMP, Nasdaq Data Link / Sharadar, Massive, Norgate, and benchmark / GICS candidates field-by-field.",
+        "Provider selection decision, if any, with user-approved paid tier, license, cost ceiling, local-storage permission, and fallback chain.",
+        "Direct sample-row validation or reviewed sample artifacts for required fields before any DataHub schema consumes provider-backed data.",
+        "Coverage-count evidence calculated against the intended project universe and backtest window.",
+        "Incident / fallback playbook with freeze, retry, cache, zero-fill prohibition, and manual-review triggers."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "adjustment_mode",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "keeps_lane_blocked",
+      "limitations": [
+        "This placeholder deliberately keeps P1 blocked after the coverage / fallback / incident evidence slice.",
+        "The next logical step is a P1 readiness review matrix, not provider implementation or DataHub tables."
+      ]
+    },
+    {
+      "record_id": "p2.a_share_fundamentals_announcements_sw_history",
+      "priority": "P2",
+      "market": "A",
+      "lane_ids": [
+        "a_long_core_quality",
+        "a_long_re_rating_catalyst",
+        "phase7_shared"
+      ],
+      "data_class": "industry_taxonomy",
+      "field_family": "A-share fundamentals, announcement dates, restatement flags, audit and inquiry evidence, SW L1/L2 history, and A-long benchmark / industry readiness.",
+      "provider_candidate_id": "a_fundamentals_provider_tbd",
+      "source_basis": "existing_repo_docs",
+      "capability_status": "unknown",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "unknown",
+      "observed_date_support": "unknown",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Announcement-date eligible financial statement fields.",
+        "Restatement, correction, audit-opinion, inquiry, and penalty evidence.",
+        "SW L2 historical membership or documented latest-only limitation.",
+        "Benchmark and SW industry lineage."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "api_family",
+        "endpoint_or_table",
+        "fetch_timestamp",
+        "source_date_range",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "known_provider_limitations",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "keeps_lane_blocked",
+      "limitations": [
+        "Existing A-short EOD readiness does not prove A-long fundamentals or SW PIT readiness.",
+        "Latest-revised financial data cannot be used as historical PIT evidence."
+      ]
+    },
+    {
+      "record_id": "p3.burst_event_flow_options_borrow",
+      "priority": "P3",
+      "market": "global",
+      "lane_ids": [
+        "a_share_burst_full_data",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "ownership_borrow_short_options",
+      "field_family": "Burst full-data event timing, capital flow, options, borrow / short-interest, pre-market / after-hours, and manual evidence workflow.",
+      "provider_candidate_id": "burst_event_flow_provider_tbd",
+      "source_basis": "manual_evidence_inventory",
+      "capability_status": "manual_evidence_only",
+      "production_use_status": "manual_evidence_only",
+      "pit_status": "manual_evidence",
+      "observed_date_support": "manual",
+      "survivorship_security_master_status": "unknown",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Reviewed provider support for event observed dates.",
+        "Reviewed flow, options, borrow, and short-interest reliability.",
+        "Market-specific cost, liquidity, halt, borrow, and limit-risk evidence."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_symbol_or_identifier",
+        "fetch_timestamp",
+        "source_date_range",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "known_provider_limitations",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "allows_paper_or_research_only",
+      "limitations": [
+        "P3 remains manual or research only in this P1-first evidence slice."
+      ]
+    },
+    {
+      "record_id": "p4.a_share_eod_csi_helper_surfaces",
+      "priority": "P4",
+      "market": "A",
+      "lane_ids": [
+        "a_short_steady",
+        "a_short_variants",
+        "a_share_burst_minimal_data",
+        "phase7_shared"
+      ],
+      "data_class": "benchmark_returns_membership",
+      "field_family": "Already-proven A-share EOD, limit, calendar, CSI benchmark returns, and candidate-universe overlap helper surfaces.",
+      "provider_candidate_id": "tushare_current_a_eod",
+      "source_basis": "existing_repo_docs",
+      "capability_status": "ready_evidence_recorded",
+      "production_use_status": "allowed_after_provider_review",
+      "pit_status": "pit_safe",
+      "observed_date_support": "not_applicable",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Authorization, cost, quota, and long-run stability evidence.",
+        "DataHub table contract, if later implementation consumes this surface.",
+        "Provider incident and drift-monitor logging."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "api_family",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "adjustment_mode",
+        "pit_status",
+        "row_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "records_ready_helper_surface",
+      "limitations": [
+        "This ready status is limited to the existing helper surface and does not select a final A-share provider.",
+        "It does not authorize broad DataHub implementation ahead of P1-P3 evidence review."
+      ]
+    }
+  ],
+  "provider_readiness_rollup": {
+    "p1_status": "partial",
+    "p2_status": "unknown",
+    "p3_status": "manual_evidence_only",
+    "p4_status": "ready_evidence_recorded",
+    "implementation_authorized_by_this_artifact": false,
+    "provider_selection_authorized_by_this_artifact": false,
+    "ship_gate_claim_authorized_by_this_artifact": false
+  },
+  "drift_monitor": {
+    "monitor_status": "contract_defined_not_running",
+    "dimensions": [
+      {
+        "dimension": "coverage_count",
+        "status": "contract_defined",
+        "trigger": "Coverage count changes, gaps, or missing required fields appear for a provider evidence family.",
+        "blocking_actions": [
+          "warn",
+          "manual_review",
+          "rerun_provider_evidence"
+        ]
+      },
+      {
+        "dimension": "freshness_latency",
+        "status": "contract_defined",
+        "trigger": "Fetch, filing, event, or benchmark availability latency exceeds the lane's reviewed evidence window.",
+        "blocking_actions": [
+          "warn",
+          "block_production_use"
+        ]
+      },
+      {
+        "dimension": "schema_or_field_semantics",
+        "status": "contract_defined",
+        "trigger": "Provider field names, units, meanings, endpoints, or documented semantics change.",
+        "blocking_actions": [
+          "manual_review",
+          "record_incident",
+          "fallback_path_review"
+        ]
+      },
+      {
+        "dimension": "pit_as_of_integrity",
+        "status": "contract_defined",
+        "trigger": "As-of eligibility, filing observed date, announcement date, or latest-only status becomes ambiguous.",
+        "blocking_actions": [
+          "block_production_use",
+          "freeze_latest_only_claims"
+        ]
+      },
+      {
+        "dimension": "survivorship_security_master",
+        "status": "contract_defined",
+        "trigger": "Listing, delisting, ADR, SPAC, ETF, ST, suspension, or security-master coverage changes.",
+        "blocking_actions": [
+          "manual_review",
+          "rerun_provider_evidence"
+        ]
+      },
+      {
+        "dimension": "corporate_action_revision",
+        "status": "contract_defined",
+        "trigger": "Split, dividend, restatement, revised fundamentals, or adjustment behavior changes.",
+        "blocking_actions": [
+          "record_incident",
+          "rerun_provider_evidence"
+        ]
+      },
+      {
+        "dimension": "calendar_timezone_alignment",
+        "status": "contract_defined",
+        "trigger": "Market calendar, holiday, half-day, timezone, pre-market, after-hours, or benchmark alignment changes.",
+        "blocking_actions": [
+          "warn",
+          "manual_review"
+        ]
+      },
+      {
+        "dimension": "authorization_cost_quota",
+        "status": "contract_defined",
+        "trigger": "License scope, local-storage permission, quota, cost, or throttling changes.",
+        "blocking_actions": [
+          "manual_review",
+          "fallback_path_review"
+        ]
+      },
+      {
+        "dimension": "provider_incident",
+        "status": "contract_defined",
+        "trigger": "Provider outage, retry instability, delayed data, or incident notice affects required evidence.",
+        "blocking_actions": [
+          "warn",
+          "record_incident",
+          "fallback_path_review"
+        ]
+      },
+      {
+        "dimension": "outlier_revision_rate",
+        "status": "contract_defined",
+        "trigger": "Outlier rate, revision rate, zero-volume anomalies, or return spikes exceed reviewed expectations.",
+        "blocking_actions": [
+          "manual_review",
+          "rerun_provider_evidence"
+        ]
+      }
+    ],
+    "action_set": [
+      "warn",
+      "block_production_use",
+      "manual_review",
+      "fallback_path_review",
+      "rerun_provider_evidence",
+      "record_incident",
+      "freeze_latest_only_claims"
+    ],
+    "incident_log_required": true,
+    "silent_semantic_change_monitor_required": true,
+    "no_zero_fill_for_benchmarks": true,
+    "latest_only_backfill_allowed": false
+  },
+  "deferred_decisions": [
+    "Final US provider or provider set.",
+    "P1 readiness review matrix that compares candidate providers field-by-field.",
+    "Direct sample-row validation or reviewed sample artifacts for required provider fields.",
+    "User-approved paid tier, cost ceiling, professional / non-professional status classification, local-storage permission, and license terms.",
+    "Fallback chain across SEC public reconstruction, paid fundamentals providers, market-data providers, benchmark providers, and manual review.",
+    "DataHub table schemas, adapters, runners, and production report generation."
+  ],
+  "limitations": [
+    "This Phase 7b-2 snapshot is documentation-review evidence only; it does not fetch provider data, request tokens, start trials, buy subscriptions, or test endpoints.",
+    "The slice narrows coverage, fallback, incident, and license-sample validation evidence but does not make P1 implementation-ready.",
+    "Vendor-level coverage counts are not project coverage counts until checked against the intended universe, fields, and backtest window.",
+    "Status pages and incident histories support monitoring design but do not prove data correctness or PIT safety.",
+    "No provider selection, DataHub implementation, adapter, runner change, ship-gate claim, or broker / OS automation is authorized by this artifact."
+  ]
+}

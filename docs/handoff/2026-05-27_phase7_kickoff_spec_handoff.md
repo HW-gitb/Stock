@@ -792,3 +792,44 @@ git diff --check
 1. 下一条 `执行` 仍应继续 Phase 7b-2 P1，而不是进入 Phase 7c。
 2. P1 剩余主要 blocker 收窄为 coverage counts、fallback behavior、incident / stability evidence、unresolved fundamentals field-level license / sample-row validation。
 3. 不要把 SEC / Intrinio / FMP / Nasdaq Data Link / Sharadar 文档误读为 provider selection、paid-access approval、PIT-safe production factors、local-storage approval 或 DataHub implementation readiness。
+
+## 2026-05-28 追加：Phase 7b-2 P1 US coverage / fallback / incident candidate evidence snapshot
+
+**改了什么**:
+
+- 新增 `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json`，作为 Phase 7b-2 第六份 P1 evidence-population artifact。
+- 该 artifact 基于 Intrinio、FMP、Massive、Norgate、Nasdaq Data Link 官方文档，记录 coverage、status / incident、fallback / error-code、license / sample-row validation evidence。
+- 扩展 `tests/schema/test_provider_evidence_drift_monitor_schema.py`，让 schema 回归同时验证六份 P1 evidence artifacts，并断言 coverage / fallback / incident snapshot 仍为 partial / non-authorizing。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/provider_evidence_drift_monitor.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/datahub_design.md`、`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/evidence_report_schema_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- 上一刀补了 fundamentals observed-date candidate evidence，但 P1 仍缺 coverage、fallback、incident-stability、field-level license / sample-row validation 的 reviewed source basis。
+- 该切片把 vendor-level coverage claims、public status pages、error-code / call-limit docs、license caveats 和 explicit coverage limitations 写入 machine-checkable artifact，防止后续 DataHub 误把 provider docs 当作 implementation readiness。
+- 本刀仍严守 Phase 7b-2 边界：不抓 provider data、不选 provider、不建 adapter / DataHub table、不改 runner、不放松 ship gate。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 JSON parse、changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` authoritative line count check。
+
+**验证结果**:
+
+- 最终验证结果记录在同日 Codex SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “P1 evidence snapshots 只有五份”失效；现在有六份 P1 snapshots。
+- “下一刀应补 coverage / fallback / incident / license-sample evidence”需收窄；该方向已有 documentation-review evidence，但仍非 implementation-ready。
+- “vendor-level coverage counts 或 status pages 可以替代 project coverage / sample-row validation”不成立；artifact 明确保持 P1 blocked。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 应做 P1 readiness review matrix，而不是进入 Phase 7c 或 provider implementation。
+2. Readiness review 应 field-by-field 对比 6 份 P1 snapshots，并明确哪些字段仍需 paid license、sample-row validation、coverage-count check 或 provider decision。
+3. 不要把任何 provider docs、status page 或 coverage claim 误读为 provider selection、paid-access approval、PIT-safe production factors、local-storage approval 或 DataHub implementation readiness。

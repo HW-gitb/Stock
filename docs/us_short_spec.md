@@ -339,7 +339,7 @@ US-short docs-only baseline is complete when:
 
 ## 12. Next Work
 
-Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`; Phase 7b-2 has P1 public-source, market-data-candidate, authorization / cost / stability, benchmark / GICS, and fundamentals observed-date snapshots, but US-short-specific provider evidence still needs population:
+Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`; Phase 7b-2 has six P1 evidence snapshots through coverage / fallback / incident candidate evidence, but US-short-specific provider evidence still needs population:
 
 1. Follow the Phase 7b-1 contract for US fundamentals / filings / security master and US event / microstructure evidence priority.
 2. Populate provider evidence for US fields before US-short can rely on them for live-normalized evidence.

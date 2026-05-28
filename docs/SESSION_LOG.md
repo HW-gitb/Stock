@@ -8,6 +8,103 @@
 
 ---
 
+## 2026-05-28 — Claude review — Pass (Phase 7b-2 P1 US coverage / fallback / incident candidate provider evidence snapshot)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `0780b75`)
+
+**Verdict**: Pass.
+
+**Notes**: 第 6 份 Phase 7b-2 P1 snapshot — 覆盖 6 个 provider candidates 的 coverage / status / fallback / incident docs（Intrinio coverage-license-incident、FMP coverage-status-fallback、Massive coverage-status-fallback、Norgate coverage-fallback-limitations、Nasdaq Data Link status-error-fallback、placeholder readiness review blocker）；JSON 15 WebFetched traces + 4 Massive 源 + **4 disclaimer 串完整匹配 4 Massive refs**（grep 验证：`source_id` 含 `massive_home_coverage` / `massive_stocks_overview` / `massive_system_status_page` / `massive_status_kb`）。**R1 disclaimer pattern 已完整内化**：Codex 在 `执行` round 就把"does not independently prove Polygon-to-Massive rebrand"加到 4 个 Massive refs，无需 Required 修复 — 与上一份 auth/cost slice 的 `执行` round（R1 regression 需修复）形成鲜明对比。Test `test_p1_coverage_fallback_incident_artifact_is_partial_and_non_authorizing`（line 484-565）锁完整 invariant 集：6 record_ids + reviewed records 三 false + WebFetched 串 + **disclaimer 串强制**（与 market-data / auth-cost 测试对称）+ Intrinio missing evidence 含 "Exact project coverage counts" + FMP limitations 含 "status page shell" + Norgate limitations 含 "not complete" + placeholder source_basis "placeholder_pending_review"。Codex Alternatives explicit reject 四类过度解读："Treat vendor coverage pages as project-ready coverage counts" / "Treat status pages as complete incident / stability proof" / "Move straight to Phase 7c / DataHub after six snapshots" / "Select a provider from documentation-only evidence" — 关键 preemptive guards。Key decisions 中 Codex 明确："Vendor coverage claims are not project coverage counts. The next review must compare the six P1 snapshots field-by-field" — 把"vendor 宣称"与"项目所需"概念分开，正确判断。**Line-count method 修正内化**：上一轮我 review 提到 "106" 是 typo / 错位方法；本轮 Codex `执行` entry 显式写 "`docs/CURRENT.md` authoritative line count via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 144"（method explicit + 数值精确），我独立验证也是 144 — 反馈循环 closed without `批准修改 → 修复` 流程开销。Scope 严守：每条 record `capability_status: "partial"` + `production_use_status: "blocked_until_provider_review"`，provider_selection / data_fetch / rollup 三 false 全 const-enforced，schema v1.1.0 未升级。Cross-doc routing 全 align：AGENTS.md §当前进度 6 snapshots 合并 🟡 entry / §执行路线图 §7b-2 status 列 6 snapshot families / §已固化决策 §14 / ALPHA_VALIDATION_ACTION_GUIDE §2 + §11 + §13 / CURRENT.md §0 / §1 / §2 / §4 / §5 / README routing / drift_monitor.md status / handoff append；§5 下一步 P0 现在从 "继续 P1 缺口" 转向 "**P1 readiness review matrix**"（meta-task：跨 6 份 snapshot 做 field-by-field 比对、识别剩余 missing coverage-count / sample-row / license / fallback / incident-monitoring evidence、出 disposition）— 这是 P1 evidence collection 的 closure 阶段，不是新 evidence。独立 validation: 19 / 93 tests pass / `git diff --check` clean / `git diff --cached` empty。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。**Phase 7b-2 P1 evidence collection 阶段事实结束**：6 份对称 snapshot 全部 enforced regression test，剩下是 review-style 工作（不再加 new evidence artifact）。下一刀 `执行` 性质会变 — 从 "collect" 到 "synthesize / decide"，user 可预期下次 review 看到的是 readiness matrix（可能新 schema 或新 JSON 结构），而不是又一份 evidence snapshot。
+
+---
+
+## 2026-05-28 — Codex (Phase 7b-2 P1 US coverage / fallback / incident candidate provider evidence snapshot)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `0780b75` (`Add Phase 7b P1 fundamentals observed-date evidence`) and the top Claude Pass review for the fundamentals observed-date candidate evidence snapshot.
+- Prepends the reconstructed `0780b75` session entry below this entry because AGENTS.md fallback requires a SESSION_LOG entry when a non-trivial commit exists after the latest session log entries.
+
+**Worked on**:
+1. [untracked] `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json`: added the sixth Phase 7b-2 P1 evidence-population snapshot for US coverage-count, fallback-path, incident / stability, and field-license / sample-row candidate evidence.
+2. [tracked] `tests/schema/test_provider_evidence_drift_monitor_schema.py`: expanded P1 artifact validation to six snapshots and added `test_p1_coverage_fallback_incident_artifact_is_partial_and_non_authorizing`.
+3. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/datahub_design.md`, `docs/evidence_report_schema_contract.md`, `docs/evidence_feasibility_controls.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`: routed the sixth P1 snapshot and moved the next step to a P1 readiness review matrix.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: updated startup routing, current snapshot, and roadmap wording so Phase 7b-2 does not jump to Phase 7c.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7b-2 coverage / fallback / incident candidate evidence handoff note.
+6. [tracked] `docs/SESSION_LOG.md`: recorded this execution handoff and the reconstructed commit handoff for Claude review continuity.
+
+**Key decisions**:
+- P1 remains `partial`, not implementation-ready. The sixth snapshot adds candidate evidence only; it does not select a provider, fetch provider data, create adapters, create DataHub tables, or authorize runner work.
+- Vendor coverage claims are not project coverage counts. The next review must compare the six P1 snapshots field-by-field and identify exact missing coverage-count, sample-row, license, fallback, and incident-monitoring evidence.
+- Status pages and API error-code docs are useful monitoring inputs, but they do not prove historical data correctness, PIT safety, survivorship handling, or provider suitability.
+- The next smallest task is a P1 readiness review matrix, not P2-P4, Phase 7c, or DataHub implementation.
+
+**Alternatives considered and rejected**:
+- "Treat vendor coverage pages as project-ready coverage counts" — rejected. They must still map to required universes, fields, PIT windows, sample rows, and local storage rights.
+- "Treat status pages as complete incident / stability proof" — rejected. They are monitoring surfaces, not evidence of data correctness or field-level SLA behavior.
+- "Move straight to Phase 7c / DataHub after six snapshots" — rejected. P1 still needs a readiness review matrix and explicit blocker disposition.
+- "Select a provider from documentation-only evidence" — rejected. Phase 7b-2 evidence population stays schema-first and non-authorizing.
+
+**Source basis reviewed**:
+- Intrinio fundamentals, status, outage-help, and ADR limitation docs: `https://intrinio.com/guides/fundamentals-bronze`, `https://status.intrinio.com/`, `https://help.intrinio.com/how-can-i-see-if-the-api-has-experienced-downtime-or-outages`, `https://help.intrinio.com/adrs-non-us-based-companies`.
+- Financial Modeling Prep coverage / developer docs / cycle-time / status docs: `https://site.financialmodelingprep.com/`, `https://site.financialmodelingprep.com/developer/docs/`, `https://site.financialmodelingprep.com/developer/docs/cycle-times`, `https://status.financialmodelingprep.com/`.
+- Massive stocks overview, system status, and status-page help docs: `https://www.massive.com/`, `https://massive.com/docs/rest/stocks/overview`, `https://massive.com/system`, `https://massive.com/knowledge-base/article/does-massive-have-a-system-status-page`.
+- Norgate data-content table docs plus Nasdaq Data Link status / error-code docs: `https://norgatedata.com/data-content-tables.php`, `https://status.data.nasdaq.com/`, `https://docs.data.nasdaq.com/docs/error-codes`.
+
+**Validation run/result**:
+- New JSON artifact parsed successfully with PowerShell `ConvertFrom-Json`.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v`: 19 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 93 tests passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings were reported for touched files.
+- Changed-file trailing whitespace scan: no matches.
+- Active stale next-step scan: no matches in current active routing files.
+- `docs/CURRENT.md` authoritative line count via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 144, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7b-2 coverage / fallback / incident candidate evidence snapshot.
+2. If Pass and user commits, the next `执行` should build the P1 readiness review matrix across all six P1 snapshots before Phase 7c can consume the evidence.
+
+---
+
+## 2026-05-28 — Codex reconstructed from commit `0780b75` (Phase 7b-2 P1 US fundamentals observed-date provider evidence)
+
+**Commits**: `0780b75`
+
+**Relationship to prior session(s)**:
+- Reconstructs the commit created after the 2026-05-28 Claude Pass review for the fundamentals observed-date candidate evidence snapshot.
+- Builds on the prior Codex execution entry and Claude Pass entry already present below.
+
+**Worked on**:
+1. Committed `docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json` as the fifth Phase 7b-2 P1 evidence-population artifact.
+2. Committed `tests/schema/test_provider_evidence_drift_monitor_schema.py` updates that validate five P1 artifacts and assert fundamentals observed-date snapshots remain partial / non-authorizing.
+3. Committed routing updates across AGENTS / CURRENT / README / Phase 7 docs / handoff / session log to mark P1 as public-source + market-data-candidate + authorization / cost / stability + benchmark / GICS + fundamentals observed-date partial, still blocked.
+
+**Key decisions**:
+- SEC EDGAR evidence supports public filing / XBRL observed-date reconstruction review, but not a normalized production fundamentals feed without parser, amendment, security-master, coverage, and fair-access evidence.
+- Intrinio was the strongest observed-date candidate in that slice because reviewed docs expose filing-linked fundamentals and nested filing `accepted_date`; it still needed tier, license, coverage, revision semantics, sample rows, and stability evidence.
+- FMP and Nasdaq Data Link / Sharadar remained candidate-only because reviewed docs did not yet prove field-level PIT historical fundamentals for this project.
+
+**Alternatives considered and rejected**:
+- "Treat SEC companyfacts as production PIT fundamentals" — rejected because accession-level observed-date reconstruction and parser / amendment handling were still missing.
+- "Treat Intrinio accepted_date documentation as provider selection" — rejected because documentation evidence is not paid-access, local-storage, or implementation approval.
+- "Treat latest/current endpoints as historical PIT evidence" — rejected because latest endpoints cannot backfill historical evidence without reviewed as-of timestamps.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Continue Phase 7b-2 P1 provider evidence population for coverage counts, fallback behavior, incident / stability evidence, and field-level license / sample-row validation.
+
+---
+
 ## 2026-05-28 — Claude review — Pass (Phase 7b-2 P1 US fundamentals observed-date candidate provider evidence snapshot)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `6cfaa37`)
