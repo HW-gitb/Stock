@@ -299,7 +299,7 @@ Phase 6c docs-only baseline is complete when:
 
 ## 13. Next Work
 
-Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`; Phase 7b-2 has started with a P1 US public-source snapshot, but burst-specific provider evidence still needs population:
+Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`; Phase 7b-2 has P1 public-source and market-data-candidate snapshots, but burst-specific provider evidence still needs population:
 
 1. Follow the Phase 7b-1 contract for event / flow / options / borrow evidence priority and drift-monitor dimensions.
 2. Populate provider evidence for event, flow, options, borrow, observed-date support, cost, fallback, and stability before any full-data burst implementation can rely on those fields.

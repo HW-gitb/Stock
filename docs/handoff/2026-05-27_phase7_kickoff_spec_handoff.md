@@ -579,3 +579,87 @@ git diff --check
 1. 下一条 `执行` 仍应继续 Phase 7b-2，而不是进入 Phase 7c；优先补 P1 US adjusted price、corporate action、delisting/security master、benchmark、authorization/cost/fallback/stability evidence。
 2. 不要把 SEC EDGAR / SEC ticker files / Nasdaq symbol directory / GICS methodology 误读为完整 provider selection 或 implementation readiness。
 3. 继续不抓 provider data、不选 provider、不建 adapter / DataHub table、不改 runner。
+
+## 2026-05-28 追加：Phase 7b-2 P1 US market-data candidate evidence snapshot
+
+**改了什么**:
+
+- 新增 `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`，作为 Phase 7b-2 第二份 P1 evidence-population artifact。
+- 该 artifact 基于 Massive / Polygon 与 Norgate 官方文档，记录 US adjusted OHLCV、ticker / security-master surfaces、corporate actions、market status / exchange metadata、survivorship EOD package claims、index membership package claims 等 candidate evidence。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/provider_evidence_drift_monitor.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/datahub_design.md`、`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/evidence_report_schema_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+- 扩展 `tests/schema/test_provider_evidence_drift_monitor_schema.py`，让 schema 回归同时验证两份 P1 evidence artifacts，并断言 market-data snapshot 仍为 partial / non-authorizing。
+
+**为什么改**:
+
+- 上一份 public-source snapshot 只覆盖 SEC / Nasdaq / MSCI 文档，尚未触及 P1 里 price / corporate action / delisting/security-master / benchmark candidate 方向。
+- Massive / Polygon 与 Norgate 文档可把 P1 market-data candidate evidence 从完全未审查推进到 source-backed `partial`，但不能解除 implementation blocker。
+- 本刀仍严守 Phase 7b-2 边界：不抓 provider data、不选 provider、不建 adapter / DataHub table、不改 runner、不放松 ship gate。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` line count check。
+
+**验证结果**:
+
+- `tests.schema.test_provider_evidence_drift_monitor_schema`: 15 tests passed。
+- Full `tests/schema` discovery: 89 tests passed。
+- Final `git diff --check`、trailing whitespace scan、stale wording scan 和 `docs/CURRENT.md` line count 结果记录在同日 Codex SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “Phase 7b-2 只有第一份 P1 public-source snapshot”失效；现在有 public-source + market-data-candidate 两份 P1 snapshots。
+- “P1 仍完全未覆盖 US price / corporate action / security-master provider candidates”失效；现在已有 source-backed candidate evidence，但仍 partial / blocked。
+- “下一刀应补 US adjusted price / corporate action / delisting security master”需收窄；下一刀应继续补 authorization / cost、sandbox / trial、coverage counts、direct benchmark return sources、issuer-level PIT GICS membership、fundamentals / filing observed-date candidates、fallback / stability。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 仍应继续 Phase 7b-2 P1，而不是进入 Phase 7c。
+2. 不要把 Massive / Polygon 或 Norgate 文档误读为 provider selection、paid-access approval、PIT security-master proof、direct benchmark proof 或 production readiness。
+3. 如需 trial / sandbox token、paid access、成本上限或 provider selection，必须另走 reviewed decision；不得在 evidence artifact 中隐式批准。
+
+## 2026-05-28 修复追加：Phase 7b-2 market-data candidate R1 verification trace
+
+**改了什么**:
+
+- 修复 Claude R1：`docs/provider_evidence_p1_us_market_data_candidates_20260528.json` 中 4 条 Massive/Polygon records 的 Massive source refs 已在 `evidence_note` 明确写入 `WebFetched on 2026-05-28 at ...` verification trace。
+- Polygon market-data terms refs 也写入 `WebFetched on 2026-05-28 at https://polygon.io/terms/market_data_terms.pdf`。
+- Massive source refs 额外声明：这些 trace 只证明 Massive docs page 实际可访问并被审阅，不独立证明 Polygon-to-Massive rebrand / legal continuity，也不授权 provider selection。
+- `tests/schema/test_provider_evidence_drift_monitor_schema.py` 新增断言，防止 Massive source refs 再次缺失 WebFetched trace 或 rebrand 非证明声明。
+- `docs/provider_evidence_drift_monitor.md` 同步记录 R1 repair note。
+
+**为什么改**:
+
+- 最新 Claude review 指出 Massive/Polygon 双品牌 evidence chain 需要区分“实际打开过 massive.com 文档”与“依赖训练数据 / 假设 rebrand 成立”。
+- 用户批准 R1 并指定修复路径 `(c)`，即保留 Massive/Polygon evidence，但把 verification path 写进 evidence_note。
+- 修复后 downstream Phase 7b-2 / 7c 可追溯每条 Massive docs evidence 的实际 URL 审阅路径，同时不会把该 trace 误读成 provider selection 或品牌法律连续性的证明。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` line count check。
+
+**验证结果**:
+
+- 最终验证结果记录在同日 Codex `修复` SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “Massive/Polygon source_url 可能是未验证 / 训练数据来源”这条 R1 风险已修复为可追溯 WebFetched trace。
+- “Massive docs trace 可证明 Polygon-to-Massive rebrand / legal continuity”仍不成立；artifact 明确不做该证明。
+
+**下一步注意事项**:
+
+1. Claude re-review 时应重点确认 4 条 Massive records 的 source refs 是否都有 verification trace。
+2. 后续若要证明 Polygon-to-Massive rebrand 或做 provider selection，必须另开 reviewed evidence / decision，不得把本次 trace 当作 selection。
+3. P1 仍 partial / blocked；下一条 `执行` 仍继续 authorization / cost、sandbox / trial、coverage count、benchmark、PIT GICS、fundamentals observed-date、fallback / stability evidence。

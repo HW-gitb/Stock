@@ -9,6 +9,8 @@ from pathlib import Path
 SCHEMA_PATH = Path("schemas/provider_evidence_drift_monitor.schema.json")
 EXAMPLE_PATH = Path("schemas/examples/provider_evidence_drift_monitor.example.json")
 P1_PUBLIC_SOURCE_PATH = Path("docs/provider_evidence_p1_us_public_sources_20260528.json")
+P1_MARKET_DATA_PATH = Path("docs/provider_evidence_p1_us_market_data_candidates_20260528.json")
+P1_EVIDENCE_PATHS = [P1_PUBLIC_SOURCE_PATH, P1_MARKET_DATA_PATH]
 
 
 class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
@@ -158,17 +160,20 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
 
-    def test_p1_public_source_artifact_validates_when_jsonschema_available(self) -> None:
+    def test_p1_evidence_artifacts_validate_when_jsonschema_available(self) -> None:
         try:
             from jsonschema import Draft7Validator
         except ModuleNotFoundError as exc:
             raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
 
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        artifact = json.loads(P1_PUBLIC_SOURCE_PATH.read_text(encoding="utf-8"))
-        errors = list(Draft7Validator(schema).iter_errors(artifact))
 
-        self.assertEqual(errors, [])
+        for path in P1_EVIDENCE_PATHS:
+            with self.subTest(path=str(path)):
+                artifact = json.loads(path.read_text(encoding="utf-8"))
+                errors = list(Draft7Validator(schema).iter_errors(artifact))
+
+                self.assertEqual(errors, [])
 
     def test_p1_public_source_artifact_is_partial_and_non_authorizing(self) -> None:
         artifact = json.loads(P1_PUBLIC_SOURCE_PATH.read_text(encoding="utf-8"))
@@ -196,6 +201,66 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
                 and not record["data_fetch_performed"]
                 for record in p1_records
             )
+        )
+    def test_p1_market_data_artifact_is_partial_and_non_authorizing(self) -> None:
+        artifact = json.loads(P1_MARKET_DATA_PATH.read_text(encoding="utf-8"))
+        records = {record["record_id"]: record for record in artifact["provider_evidence_records"]}
+        p1_records = [record for record in artifact["provider_evidence_records"] if record["priority"] == "P1"]
+
+        self.assertEqual(artifact["scope"]["contract_status"], "provider_evidence_population_snapshot")
+        self.assertEqual(artifact["provider_readiness_rollup"]["p1_status"], "partial")
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["implementation_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["provider_selection_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertGreaterEqual(len(p1_records), 5)
+        self.assertIn("p1.us_massive_tickers_security_master", records)
+        self.assertIn("p1.us_massive_adjusted_ohlcv", records)
+        self.assertIn("p1.us_massive_corporate_actions", records)
+        self.assertIn("p1.us_norgate_survivorship_eod", records)
+        self.assertIn("p1.us_norgate_index_membership_listing", records)
+        self.assertTrue(
+            all(
+                record["source_basis"] == "reviewed_provider_evidence"
+                and record["evidence_source_refs"]
+                and not record["provider_selection_made"]
+                and not record["data_fetch_performed"]
+                for record in p1_records
+            )
+        )
+        massive_records = [
+            records["p1.us_massive_tickers_security_master"],
+            records["p1.us_massive_adjusted_ohlcv"],
+            records["p1.us_massive_corporate_actions"],
+            records["p1.us_massive_market_calendar_exchange_status"],
+        ]
+        massive_source_refs = [
+            source_ref
+            for record in massive_records
+            for source_ref in record["evidence_source_refs"]
+            if source_ref["source_id"].startswith("massive_")
+        ]
+        polygon_terms_refs = [
+            source_ref
+            for record in massive_records
+            for source_ref in record["evidence_source_refs"]
+            if source_ref["source_id"] == "polygon_market_data_terms"
+        ]
+        self.assertTrue(
+            all("WebFetched on 2026-05-28" in source_ref["evidence_note"] for source_ref in massive_source_refs)
+        )
+        self.assertTrue(
+            all(
+                "does not independently prove Polygon-to-Massive rebrand" in source_ref["evidence_note"]
+                for source_ref in massive_source_refs
+            )
+        )
+        self.assertTrue(
+            all("WebFetched on 2026-05-28" in source_ref["evidence_note"] for source_ref in polygon_terms_refs)
         )
 
     def test_selected_provider_is_rejected_when_jsonschema_available(self) -> None:

@@ -1,6 +1,6 @@
 # Provider Evidence And Drift Monitor Contract
 
-**Status**: Phase 7b-1 schema-first baseline plus Phase 7b-2 first P1 public-source evidence snapshot. Broader provider capability evidence population is still in progress.
+**Status**: Phase 7b-1 schema-first baseline plus Phase 7b-2 P1 public-source and market-data-candidate evidence snapshots. Broader provider capability evidence population is still in progress.
 
 **Owner role**: provider capability evidence population and data quality / provider drift monitoring contract after the Phase 7a provider-priority, feasibility, and evidence-report contracts. This document defines the evidence shape and routes reviewed evidence snapshots.
 
@@ -10,7 +10,7 @@ This document does not select providers, fetch data, create adapters, implement 
 
 Phase 7a established the lane verdicts, provider evidence queue, provisional benchmarks, feasibility controls, and evidence report shape. Phase 7b-1 converts the provider evidence queue into a machine-checkable provider evidence and drift-monitor artifact so later provider population, DataHub, or runner work cannot rely on guessed provider readiness. Phase 7b-2 uses that contract to populate actual provider capability evidence from reviewed provider documentation, fields, PIT, coverage, cost, fallback, and stability evidence.
 
-The machine-checkable owner is `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`. The first evidence-population artifact is `docs/provider_evidence_p1_us_public_sources_20260528.json`.
+The machine-checkable owner is `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`. The current evidence-population artifacts are `docs/provider_evidence_p1_us_public_sources_20260528.json` and `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`.
 
 ## 2. Scope Locks
 
@@ -107,8 +107,19 @@ The reviewed contract baseline is complete when:
 
 Verdict: P1 moves from `unknown` to `partial`, but remains implementation-blocked. SEC EDGAR is useful for filing metadata and XBRL source review; SEC / Nasdaq ticker files are current-reference aids, not historical survivorship-safe security masters; GICS methodology is not issuer-level PIT membership history. The artifact does not cover US adjusted prices, delistings, full corporate actions, benchmark returns, paid-provider licensing, sandbox tokens, or DataHub implementation.
 
-## 8. Next Use
+## 8. Second P1 Market-Data Candidate Snapshot
 
-Phase 7b-2 should continue populating provider capability evidence in P1 before moving to P2-P4. Phase 7c may consume the reviewed Phase 7b-2 evidence when designing DataHub shared-layer schemas, report contracts, and reproducibility plumbing. That must be a separate reviewed implementation slice.
+`docs/provider_evidence_p1_us_market_data_candidates_20260528.json` is the second Phase 7b-2 evidence-population artifact. It reviews official provider documentation for:
+
+- Massive / Polygon all tickers, adjusted aggregate bars, dividends, splits, market status, exchanges, and market-data terms,
+- Norgate Data pricing / overview, US data content tables, accessibility, and package FAQ.
+
+Verdict: P1 remains `partial` and implementation-blocked. The reviewed docs establish candidate evidence for US adjusted OHLCV, corporate actions, current/listing-status surfaces, exchange / market-status metadata, survivorship-aware EOD package claims, and some index-membership/package claims. They still do not authorize provider selection or implementation. Remaining blockers include user-approved authorization / cost and license terms, direct trial/sandbox validation, exact coverage counts, benchmark return construction, issuer-level PIT GICS membership history, filing observed-date/fundamental field candidates, stability / quota evidence, and fallback behavior.
+
+R1 repair note: the Massive.com source refs in this artifact include explicit `WebFetched on 2026-05-28 at ...` traces in their `evidence_note` fields. These traces record that the Massive docs pages were actually opened and reviewed for this artifact; they do not by themselves prove Polygon-to-Massive brand or legal continuity, and they do not authorize provider selection.
+
+## 9. Next Use
+
+Phase 7b-2 should continue populating provider capability evidence in P1 before moving to P2-P4. The next P1 slice should focus on authorization / cost, sandbox or trial feasibility, coverage counts, direct benchmark return sources, issuer-level PIT GICS membership, and fundamentals / filing observed-date provider candidates. Phase 7c may consume the reviewed Phase 7b-2 evidence when designing DataHub shared-layer schemas, report contracts, and reproducibility plumbing. That must be a separate reviewed implementation slice.
 
 This Phase 7b baseline does not fetch provider data, implement adapters, create DataHub tables, or modify runners.
