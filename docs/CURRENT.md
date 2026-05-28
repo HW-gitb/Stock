@@ -1,14 +1,15 @@
 # Stock 项目 — 当前状态快照
 
-**最后更新**：2026-05-28（Phase 7b-1 provider evidence / drift monitor contract）
+**最后更新**：2026-05-28（Phase 7b-2 P1 US public-source provider evidence snapshot）
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
 ---
 
 ## 0. Latest Delta
 
-- Phase 7b-1 provider evidence / drift monitor schema-first contract 已建立：`docs/provider_evidence_drift_monitor.md` 与 `schemas/provider_evidence_drift_monitor.schema.json` 固化 P1-P4 provider evidence queue、provider readiness rollup、drift dimensions/action set；未选 provider、未抓数据、未建 adapter / DataHub table。
-- Phase 7b-2 真实 provider capability evidence population 尚未开始；下一刀应按 P1-P4 queue 填充 provider docs / fields / PIT / coverage / cost / fallback / stability evidence。
+- Phase 7b-2 第一份 P1 US public-source provider evidence snapshot 已建立：`docs/provider_evidence_p1_us_public_sources_20260528.json` 基于官方 SEC / Nasdaq / MSCI 文档记录 SEC EDGAR submissions/XBRL、SEC ticker files、Nasdaq symbol directory、GICS methodology；P1 状态从 `unknown` 变为 `partial`，但仍 implementation-blocked。
+- `schemas/provider_evidence_drift_monitor.schema.json` 升至 `1.1.0`：保留 no-selection / no-fetch / no-implementation locks，同时允许 `provider_evidence_population_snapshot` 并要求 `reviewed_provider_evidence` 携带 source refs。
+- Phase 7b-2 provider capability evidence population 仍在进行中；下一刀应继续 P1，补 US price / corporate action / delisting security master / benchmark / paid-provider authorization-cost-stability evidence。
 - Phase 7a-5 evidence report schema contract 已建立：`docs/evidence_report_schema_contract.md` 与 `schemas/evidence_report.schema.json` 固化 immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log；未选 provider、未抓数据、未改 runner。
 - Phase 7a-4 evidence feasibility controls 已建立：`docs/evidence_feasibility_controls.md` 与 `schemas/evidence_feasibility_controls.schema.json` 固化 burst minimal-to-full promotion、evidence capital、concentration / liquidity / ADV、slippage / borrow / limit-risk、circuit-breaker playbook。
 - Phase 7a-3 provider priority / provisional benchmark contract 已建立：`docs/provider_priority_benchmark_contract.md` 将 provider evidence queue 固化为 P1 US fundamentals / filings / security master、P2 A-share fundamentals / announcements / SW history、P3 burst event / flow / options / borrow、P4 already-proven A-share EOD / CSI helpers。
@@ -19,8 +20,8 @@
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7b-1 provider evidence / drift monitor schema-first baseline established；下一步进入 Phase 7b-2 provider capability evidence population。
-- **当前 P0 目标**：按 `docs/provider_priority_benchmark_contract.md` 的 P1-P4 queue 和 `docs/provider_evidence_drift_monitor.md` contract 填充 provider capability evidence；不得 silent default、latest-only 回填、把 provider guess 写成 production-ready evidence，且不得建 adapter / DataHub table 或改 runner。
+- **当前 Phase**：Phase 7b-2 provider capability evidence population 已开始；第一份 P1 US public-source snapshot complete，P1 仍 partial / blocked。
+- **当前 P0 目标**：继续按 `docs/provider_priority_benchmark_contract.md` 的 P1-P4 queue 和 `docs/provider_evidence_drift_monitor.md` contract 填充 provider capability evidence；不得 silent default、latest-only 回填、把 provider guess 写成 production-ready evidence，且不得建 adapter / DataHub table 或改 runner。
 - **当前 blocker**：无待用户决策 blocker。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
@@ -29,7 +30,8 @@
 
 ## 2. 最近已完成
 
-- **Phase 7b-1 provider evidence / drift monitor contract**（2026-05-28）：`docs/provider_evidence_drift_monitor.md`、`schemas/provider_evidence_drift_monitor.schema.json`、example 和 schema tests 已建立；覆盖 P1-P4 queue、provider evidence records、readiness rollup、drift dimensions/action set；provider evidence population 尚未开始。
+- **Phase 7b-2 P1 US public-source evidence snapshot**（2026-05-28）：`docs/provider_evidence_p1_us_public_sources_20260528.json` 已建立；`schemas/provider_evidence_drift_monitor.schema.json` 升至 `1.1.0` 并校验 source-backed evidence snapshot；P1 仍 partial / blocked。
+- **Phase 7b-1 provider evidence / drift monitor contract**（2026-05-28）：`docs/provider_evidence_drift_monitor.md`、`schemas/provider_evidence_drift_monitor.schema.json`、example 和 schema tests 已建立；覆盖 P1-P4 queue、provider evidence records、readiness rollup、drift dimensions/action set。
 - **Phase 7a-5 evidence report schema contract**（2026-05-28）：`docs/evidence_report_schema_contract.md`、`schemas/evidence_report.schema.json`、example 和 schema tests 已建立；覆盖 immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log。
 - **Phase 7a-4 evidence feasibility controls**（2026-05-28）：`docs/evidence_feasibility_controls.md`、`schemas/evidence_feasibility_controls.schema.json`、example 和 schema tests 已建立；覆盖 4 条 burst maturity lanes、paper-only minimal tier、capital pooling lock、liquidity / ADV / slippage / borrow / limit-risk、five-action circuit breaker。
 - **Phase 7a-3 provider priority / provisional benchmark contract**（2026-05-28）：`docs/provider_priority_benchmark_contract.md` 已建立，锁定 provider evidence priority、provisional evidence benchmark table、benchmark switch rule、provider / benchmark evidence packet minimum。
@@ -76,7 +78,8 @@
 - `docs/provider_priority_benchmark_contract.md` — Phase 7a-3 provider evidence priority / provisional benchmark contract。
 - `docs/evidence_feasibility_controls.md` / `schemas/evidence_feasibility_controls.schema.json` — Phase 7a-4 burst promotion / evidence feasibility controls。
 - `docs/evidence_report_schema_contract.md` / `schemas/evidence_report.schema.json` — Phase 7a-5 evidence report schema contract。
-- `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` — Phase 7b-1 provider evidence / drift monitor contract；Phase 7b-2 evidence population 需消费它。
+- `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` — Phase 7b provider evidence / drift monitor contract；Phase 7b-2 evidence population consumes it。
+- `docs/provider_evidence_p1_us_public_sources_20260528.json` — Phase 7b-2 first P1 US public-source evidence snapshot（partial / blocked）。
 - `docs/evidence_capital_policy.md` — paper vs live-normalized evidence owner。
 - `docs/strategy_design_synthesis.md` — 总体策略架构 owner。
 - `docs/burst_lane_spec.md` / `docs/us_short_spec.md` / `docs/long_alpha_spec.md` — lane owner specs。
@@ -89,9 +92,9 @@
 
 ## 5. 下一步
 
-### P0 — Phase 7b-2 provider capability evidence population
+### P0 — Continue Phase 7b-2 provider capability evidence population
 
-- 按 `docs/provider_priority_benchmark_contract.md` 的 P1-P4 queue 填充 provider capability evidence，并引用 Phase 7b-1 drift-monitor contract。
+- 继续 P1 US provider evidence：补 US adjusted price / corporate action / delisting security master / benchmark / paid-provider authorization-cost-stability evidence，并引用 Phase 7b drift-monitor contract。
 - 不得 silent default、latest-only 回填历史证据，或把 provider status guess 写成 production-ready evidence。
 - 不得建 adapter / DataHub table、改 runner 或接 broker / OS automation；provider selection 若需要也必须另走 reviewed decision。
 

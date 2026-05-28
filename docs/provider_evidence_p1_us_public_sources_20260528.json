@@ -1,0 +1,732 @@
+{
+  "schema_name": "provider_evidence_drift_monitor",
+  "schema_version": "1.1.0",
+  "generated_at": "2026-05-28T12:00:00Z",
+  "scope": {
+    "phase": "7b",
+    "purpose": "provider_evidence_drift_monitor_contract",
+    "contract_status": "provider_evidence_population_snapshot",
+    "provider_selection_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "contract_refs": {
+    "provider_priority_contract_ref": "docs/provider_priority_benchmark_contract.md",
+    "provider_capability_catalog_schema_ref": "schemas/provider_capability_catalog.schema.json",
+    "provider_capability_catalog_example_ref": "schemas/examples/provider_capability_catalog.example.json",
+    "evidence_report_schema_ref": "schemas/evidence_report.schema.json",
+    "datahub_guardrail_ref": "docs/datahub_design.md"
+  },
+  "evidence_queue": [
+    {
+      "priority": "P1",
+      "evidence_family": "us_fundamentals_filings_security_master",
+      "primary_lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data"
+      ],
+      "queue_source_ref": "docs/provider_priority_benchmark_contract.md",
+      "queue_status": "evidence_populated_from_existing_docs",
+      "implementation_dependency_status": "blocked",
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "notes": "Initial P1 public-source evidence snapshot covers SEC EDGAR filings and facts, current SEC/Nasdaq ticker references, and GICS methodology evidence only; P1 remains blocked for implementation."
+    },
+    {
+      "priority": "P2",
+      "evidence_family": "a_share_fundamentals_announcements_sw_history",
+      "primary_lane_ids": [
+        "a_long_core_quality",
+        "a_long_re_rating_catalyst"
+      ],
+      "queue_source_ref": "docs/provider_priority_benchmark_contract.md",
+      "queue_status": "blocked_until_provider_review",
+      "implementation_dependency_status": "blocked",
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "notes": "Not populated in this P1-only evidence slice."
+    },
+    {
+      "priority": "P3",
+      "evidence_family": "burst_event_flow_options_borrow",
+      "primary_lane_ids": [
+        "a_share_burst_full_data",
+        "us_burst_full_data"
+      ],
+      "queue_source_ref": "docs/provider_priority_benchmark_contract.md",
+      "queue_status": "manual_or_research_only",
+      "implementation_dependency_status": "manual_or_research_only",
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "notes": "Not populated in this P1-only evidence slice."
+    },
+    {
+      "priority": "P4",
+      "evidence_family": "a_share_eod_csi_helper_surfaces",
+      "primary_lane_ids": [
+        "a_short_steady",
+        "a_short_variants",
+        "a_share_burst_minimal_data"
+      ],
+      "queue_source_ref": "docs/provider_priority_benchmark_contract.md",
+      "queue_status": "ready_evidence_recorded",
+      "implementation_dependency_status": "ready_for_drift_tracking_only",
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "notes": "Retains the previously reviewed P4 helper-surface status; it does not authorize broad DataHub implementation."
+    }
+  ],
+  "provider_evidence_records": [
+    {
+      "record_id": "p1.us_sec_edgar_submissions",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "sec_exchange_filings_events",
+      "field_family": "SEC EDGAR submissions history by CIK: filing metadata, form type, accession routing, current and former names, exchanges, and ticker symbols.",
+      "provider_candidate_id": "sec_edgar_public_apis",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "sec_edgar_api_docs",
+          "source_title": "SEC EDGAR Application Programming Interfaces",
+          "source_url": "https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+          "source_type": "official_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "Official SEC page documents the submissions API, CIK URL shape, metadata contents, no authentication, real-time updates, and bulk submissions archive."
+        },
+        {
+          "source_id": "sec_developer_resources_fair_access",
+          "source_title": "SEC Developer Resources",
+          "source_url": "https://www.sec.gov/about/developer-resources",
+          "source_type": "official_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "Official SEC developer page states fair-access expectations, including efficient scripting and the 10 requests per second guideline."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "pit_safe",
+      "observed_date_support": "supported",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Full delisting, bankruptcy, exchange listing state, ADR, ETF, SPAC, and survivorship coverage beyond SEC filer metadata.",
+        "Production authorization review for local storage, derived private analysis reports, fair-access throttling, retry, and cache policy.",
+        "Coverage count by investable US universe and mapping from trading ticker to CIK across ticker changes."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "supports_future_review",
+      "limitations": [
+        "This record supports filing-observed-date research but does not make SEC EDGAR a full security master.",
+        "No data was fetched in this evidence slice; source review was documentation-only."
+      ]
+    },
+    {
+      "record_id": "p1.us_sec_xbrl_companyfacts",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "financial_statements_filings",
+      "field_family": "SEC XBRL companyconcept, companyfacts, frames, and nightly bulk archives for standardized US-GAAP or IFRS statement facts.",
+      "provider_candidate_id": "sec_edgar_public_apis",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "sec_edgar_api_docs",
+          "source_title": "SEC EDGAR Application Programming Interfaces",
+          "source_url": "https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+          "source_type": "official_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "Official SEC page documents XBRL companyconcept, companyfacts, frames, bulk companyfacts archive, standard taxonomy constraints, and update schedule."
+        },
+        {
+          "source_id": "sec_developer_resources_fair_access",
+          "source_title": "SEC Developer Resources",
+          "source_url": "https://www.sec.gov/about/developer-resources",
+          "source_type": "official_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "Fair-access and bot-identification constraints must become lineage and drift-monitor requirements before automated use."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "unknown",
+      "observed_date_support": "partial",
+      "survivorship_security_master_status": "not_applicable",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Field-level proof that each financial statement factor can be reconstructed using filing availability dates rather than latest revised hindsight.",
+        "Custom taxonomy and company extension handling policy for facts outside standard comparable tags.",
+        "Restatement, amendment, duplicate accession, fiscal-period alignment, unit, and currency normalization rules.",
+        "Coverage and history-depth report for the US-long universe."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "supports_future_review",
+      "limitations": [
+        "SEC XBRL APIs are a strong public-source candidate for filings and statement facts, but this packet does not prove PIT-safe factor construction.",
+        "Company facts do not solve prices, delistings, GICS membership history, benchmarks, consensus, borrow, or options data."
+      ]
+    },
+    {
+      "record_id": "p1.us_sec_company_tickers_exchange",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "instrument_master_listing_state",
+      "field_family": "SEC company_tickers and company_tickers_exchange static files for current CIK, ticker, company-name, and exchange associations.",
+      "provider_candidate_id": "sec_company_tickers_static_files",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "sec_accessing_edgar_data_ticker_files",
+          "source_title": "SEC Accessing EDGAR Data",
+          "source_url": "https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data",
+          "source_type": "official_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "Official SEC page documents company_tickers and company_tickers_exchange files and states they are periodically updated without guaranteed accuracy or scope."
+        },
+        {
+          "source_id": "sec_company_tickers_exchange_file",
+          "source_title": "SEC Company Tickers Exchange",
+          "source_url": "https://www.sec.gov/file/company-tickers-exchange",
+          "source_type": "official_static_file",
+          "reviewed_on": "20260528",
+          "evidence_note": "Official static-file landing page for company_tickers_exchange.json."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "latest_only",
+      "observed_date_support": "not_applicable",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Historical ticker-change, delisting, bankruptcy, exchange-listing-state, issue-type, ADR, ETF, preferred, fund, SPAC, and survivorship coverage.",
+        "Point-in-time effective dates for ticker and exchange associations.",
+        "Coverage and accuracy reconciliation against an exchange-grade security master."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "api_family",
+        "endpoint_or_table",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "keeps_lane_blocked",
+      "limitations": [
+        "SEC ticker files are useful for current CIK mapping and EDGAR lookup, but their documented no-guarantee limitation blocks production security-master use.",
+        "Latest-only current mappings cannot be used as historical survivorship evidence."
+      ]
+    },
+    {
+      "record_id": "p1.us_nasdaq_symbol_directory",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "instrument_master_listing_state",
+      "field_family": "Nasdaq Trader symbol directory definitions and current-day symbol lookup for Nasdaq-listed and other-exchange listed issues.",
+      "provider_candidate_id": "nasdaqtrader_symbol_directory",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "nasdaq_symbol_directory_definitions",
+          "source_title": "Nasdaq Trader Symbol Directory Data Fields and Definitions",
+          "source_url": "https://www.nasdaqtrader.com/trader.aspx?id=symboldirdefs",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "Official Nasdaq Trader page documents downloadable symbol-directory files, field definitions, and file-creation timestamp behavior."
+        },
+        {
+          "source_id": "nasdaq_symbol_lookup",
+          "source_title": "Nasdaq Trader Symbol Lookup",
+          "source_url": "https://www.nasdaqtrader.com/trader.aspx?id=symbollookup",
+          "source_type": "provider_documentation",
+          "reviewed_on": "20260528",
+          "evidence_note": "Official Nasdaq Trader page states Symbol Lookup covers all issues as of the current trading day and describes licensing notes for Nasdaq data."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "latest_only",
+      "observed_date_support": "not_applicable",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Historical delisting, listing state, issue-type, exchange, and ticker-change time series suitable for backtests.",
+        "Authorization review for local storage and derived private analysis use.",
+        "Reconciliation against SEC CIK mappings and later price / corporate-action provider identifiers."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "api_family",
+        "endpoint_or_table",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "keeps_lane_blocked",
+      "limitations": [
+        "The reviewed Nasdaq pages support current-day symbol discovery, not historical survivorship-safe backtesting.",
+        "This evidence does not cover NYSE corporate actions, full delistings, GICS, prices, or fundamentals."
+      ]
+    },
+    {
+      "record_id": "p1.us_gics_methodology",
+      "priority": "P1",
+      "market": "US",
+      "lane_ids": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "industry_taxonomy",
+      "field_family": "GICS methodology and taxonomy hierarchy for US industry normalization requirements.",
+      "provider_candidate_id": "msci_sp_gics_methodology",
+      "source_basis": "reviewed_provider_evidence",
+      "evidence_source_refs": [
+        {
+          "source_id": "msci_gics_overview",
+          "source_title": "MSCI Global Industry Classification Standard",
+          "source_url": "https://www.msci.com/our-solutions/indexes/gics",
+          "source_type": "methodology",
+          "reviewed_on": "20260528",
+          "evidence_note": "Official MSCI page describes GICS as a four-tier hierarchy developed by MSCI and S&P Dow Jones Indices and reviewed annually."
+        }
+      ],
+      "capability_status": "partial",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "unknown",
+      "observed_date_support": "not_applicable",
+      "survivorship_security_master_status": "not_applicable",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Provider and license for issuer-level GICS membership and historical membership effective dates.",
+        "Coverage count, sample-count fallback, and change-log handling for GICS industry and industry-group normalization.",
+        "Mapping from GICS membership to the later security master and benchmark universe."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "keeps_lane_blocked",
+      "limitations": [
+        "The reviewed source proves taxonomy methodology, not issuer-level PIT membership data.",
+        "US-long industry normalization remains blocked until membership history and license evidence are reviewed."
+      ]
+    },
+    {
+      "record_id": "p2.a_share_fundamentals_announcements_sw_history",
+      "priority": "P2",
+      "market": "A",
+      "lane_ids": [
+        "a_long_core_quality",
+        "a_long_re_rating_catalyst",
+        "phase7_shared"
+      ],
+      "data_class": "industry_taxonomy",
+      "field_family": "A-share fundamentals, announcement dates, restatement flags, audit and inquiry evidence, SW L1/L2 history, and A-long benchmark / industry readiness.",
+      "provider_candidate_id": "a_fundamentals_provider_tbd",
+      "source_basis": "existing_repo_docs",
+      "capability_status": "unknown",
+      "production_use_status": "blocked_until_provider_review",
+      "pit_status": "unknown",
+      "observed_date_support": "unknown",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Announcement-date eligible financial statement fields.",
+        "Restatement, correction, audit-opinion, inquiry, and penalty evidence.",
+        "SW L2 historical membership or documented latest-only limitation."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "api_family",
+        "endpoint_or_table",
+        "fetch_timestamp",
+        "source_date_range",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "known_provider_limitations",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "keeps_lane_blocked",
+      "limitations": [
+        "P2 was intentionally not populated in this P1-first evidence slice."
+      ]
+    },
+    {
+      "record_id": "p3.burst_event_flow_options_borrow",
+      "priority": "P3",
+      "market": "global",
+      "lane_ids": [
+        "a_share_burst_full_data",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "data_class": "ownership_borrow_short_options",
+      "field_family": "Burst full-data event timing, capital flow, options, borrow / short-interest, pre-market / after-hours, and manual evidence workflow.",
+      "provider_candidate_id": "burst_event_flow_provider_tbd",
+      "source_basis": "manual_evidence_inventory",
+      "capability_status": "manual_evidence_only",
+      "production_use_status": "manual_evidence_only",
+      "pit_status": "manual_evidence",
+      "observed_date_support": "manual",
+      "survivorship_security_master_status": "unknown",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Reviewed provider support for event observed dates.",
+        "Reviewed flow, options, borrow, and short-interest reliability.",
+        "Market-specific cost, liquidity, halt, borrow, and limit-risk evidence."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "provider_symbol_or_identifier",
+        "fetch_timestamp",
+        "source_date_range",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "known_provider_limitations",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "allows_paper_or_research_only",
+      "limitations": [
+        "P3 remains manual or research only in this P1-first evidence slice."
+      ]
+    },
+    {
+      "record_id": "p4.a_share_eod_csi_helper_surfaces",
+      "priority": "P4",
+      "market": "A",
+      "lane_ids": [
+        "a_short_steady",
+        "a_short_variants",
+        "a_share_burst_minimal_data",
+        "phase7_shared"
+      ],
+      "data_class": "benchmark_returns_membership",
+      "field_family": "Already-proven A-share EOD, limit, calendar, CSI benchmark returns, and candidate-universe overlap helper surfaces.",
+      "provider_candidate_id": "tushare_current_a_eod",
+      "source_basis": "existing_repo_docs",
+      "capability_status": "ready_evidence_recorded",
+      "production_use_status": "allowed_after_provider_review",
+      "pit_status": "pit_safe",
+      "observed_date_support": "not_applicable",
+      "survivorship_security_master_status": "partial",
+      "silent_default_allowed": false,
+      "latest_only_historical_evidence_allowed": false,
+      "provider_selection_made": false,
+      "data_fetch_performed": false,
+      "missing_required_evidence": [
+        "Authorization, cost, quota, and long-run stability evidence.",
+        "DataHub table contract, if later implementation consumes this surface.",
+        "Provider incident and drift-monitor logging."
+      ],
+      "lineage_evidence_required": [
+        "provider_id",
+        "api_family",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "adjustment_mode",
+        "pit_status",
+        "row_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "drift_monitoring_required": true,
+      "readiness_effect": "records_ready_helper_surface",
+      "limitations": [
+        "This ready status is limited to the existing helper surface and does not select a final A-share provider.",
+        "It does not authorize broad DataHub implementation ahead of P1-P3 evidence review."
+      ]
+    }
+  ],
+  "provider_readiness_rollup": {
+    "p1_status": "partial",
+    "p2_status": "unknown",
+    "p3_status": "manual_evidence_only",
+    "p4_status": "ready_evidence_recorded",
+    "implementation_authorized_by_this_artifact": false,
+    "provider_selection_authorized_by_this_artifact": false,
+    "ship_gate_claim_authorized_by_this_artifact": false
+  },
+  "drift_monitor": {
+    "monitor_status": "contract_defined_not_running",
+    "dimensions": [
+      {
+        "dimension": "coverage_count",
+        "status": "contract_defined",
+        "trigger": "Coverage count changes, gaps, or missing required fields appear for a provider evidence family.",
+        "blocking_actions": [
+          "warn",
+          "manual_review",
+          "rerun_provider_evidence"
+        ]
+      },
+      {
+        "dimension": "freshness_latency",
+        "status": "contract_defined",
+        "trigger": "Fetch, filing, event, or benchmark availability latency exceeds the lane's reviewed evidence window.",
+        "blocking_actions": [
+          "warn",
+          "block_production_use"
+        ]
+      },
+      {
+        "dimension": "schema_or_field_semantics",
+        "status": "contract_defined",
+        "trigger": "Provider field names, units, meanings, endpoints, or documented semantics change.",
+        "blocking_actions": [
+          "manual_review",
+          "record_incident",
+          "fallback_path_review"
+        ]
+      },
+      {
+        "dimension": "pit_as_of_integrity",
+        "status": "contract_defined",
+        "trigger": "As-of eligibility, filing observed date, announcement date, or latest-only status becomes ambiguous.",
+        "blocking_actions": [
+          "block_production_use",
+          "freeze_latest_only_claims"
+        ]
+      },
+      {
+        "dimension": "survivorship_security_master",
+        "status": "contract_defined",
+        "trigger": "Listing, delisting, ADR, SPAC, ETF, ST, suspension, or security-master coverage changes.",
+        "blocking_actions": [
+          "manual_review",
+          "rerun_provider_evidence"
+        ]
+      },
+      {
+        "dimension": "corporate_action_revision",
+        "status": "contract_defined",
+        "trigger": "Split, dividend, restatement, revised fundamentals, or adjustment behavior changes.",
+        "blocking_actions": [
+          "record_incident",
+          "rerun_provider_evidence"
+        ]
+      },
+      {
+        "dimension": "calendar_timezone_alignment",
+        "status": "contract_defined",
+        "trigger": "Market calendar, holiday, half-day, timezone, pre-market, after-hours, or benchmark alignment changes.",
+        "blocking_actions": [
+          "warn",
+          "manual_review"
+        ]
+      },
+      {
+        "dimension": "authorization_cost_quota",
+        "status": "contract_defined",
+        "trigger": "License scope, local-storage permission, quota, cost, or throttling changes.",
+        "blocking_actions": [
+          "manual_review",
+          "fallback_path_review"
+        ]
+      },
+      {
+        "dimension": "provider_incident",
+        "status": "contract_defined",
+        "trigger": "Provider outage, retry instability, delayed data, or incident notice affects required evidence.",
+        "blocking_actions": [
+          "warn",
+          "record_incident",
+          "fallback_path_review"
+        ]
+      },
+      {
+        "dimension": "outlier_revision_rate",
+        "status": "contract_defined",
+        "trigger": "Outlier rate, revision rate, zero-volume anomalies, or return spikes exceed reviewed expectations.",
+        "blocking_actions": [
+          "manual_review",
+          "rerun_provider_evidence"
+        ]
+      }
+    ],
+    "action_set": [
+      "warn",
+      "block_production_use",
+      "manual_review",
+      "fallback_path_review",
+      "rerun_provider_evidence",
+      "record_incident",
+      "freeze_latest_only_claims"
+    ],
+    "incident_log_required": true,
+    "silent_semantic_change_monitor_required": true,
+    "no_zero_fill_for_benchmarks": true,
+    "latest_only_backfill_allowed": false
+  },
+  "deferred_decisions": [
+    "Final US provider or provider set.",
+    "Paid or free data split and cost ceiling.",
+    "US adjusted prices, corporate actions, delisting, GICS membership history, and benchmark provider candidates.",
+    "Sandbox token or trial account decision for paid provider candidates.",
+    "DataHub table schemas, adapters, runners, and production report generation."
+  ],
+  "limitations": [
+    "This Phase 7b-2 snapshot is documentation-review evidence only; it does not fetch provider data or test endpoints.",
+    "P1 is only partial after this slice: SEC EDGAR can support filing and XBRL source review, but security master, delisting, prices, corporate actions, PIT GICS membership, benchmark returns, and paid-provider licensing remain unresolved.",
+    "The artifact does not select a provider, implement DataHub, change runner behavior, or relax ship gates."
+  ]
+}

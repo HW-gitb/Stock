@@ -1,16 +1,16 @@
 # Provider Evidence And Drift Monitor Contract
 
-**Status**: Phase 7b-1 schema-first baseline. Phase 7b-2 provider capability evidence population is still pending.
+**Status**: Phase 7b-1 schema-first baseline plus Phase 7b-2 first P1 public-source evidence snapshot. Broader provider capability evidence population is still in progress.
 
-**Owner role**: provider capability evidence population and data quality / provider drift monitoring contract after the Phase 7a provider-priority, feasibility, and evidence-report contracts. This document defines the evidence shape; it does not itself populate real provider capability evidence.
+**Owner role**: provider capability evidence population and data quality / provider drift monitoring contract after the Phase 7a provider-priority, feasibility, and evidence-report contracts. This document defines the evidence shape and routes reviewed evidence snapshots.
 
-This document routes the Phase 7b-1 contract only. It does not select providers, fetch data, create adapters, implement DataHub tables, change strategy rules, relax ship gates, or authorize broker / OS automation.
+This document does not select providers, fetch data, create adapters, implement DataHub tables, change strategy rules, relax ship gates, or authorize broker / OS automation.
 
 ## 1. Purpose
 
-Phase 7a established the lane verdicts, provider evidence queue, provisional benchmarks, feasibility controls, and evidence report shape. Phase 7b-1 converts the provider evidence queue into a machine-checkable provider evidence and drift-monitor artifact so later provider population, DataHub, or runner work cannot rely on guessed provider readiness. Phase 7b-2 still needs to populate actual provider capability evidence from reviewed provider documentation, fields, PIT, coverage, cost, fallback, and stability evidence.
+Phase 7a established the lane verdicts, provider evidence queue, provisional benchmarks, feasibility controls, and evidence report shape. Phase 7b-1 converts the provider evidence queue into a machine-checkable provider evidence and drift-monitor artifact so later provider population, DataHub, or runner work cannot rely on guessed provider readiness. Phase 7b-2 uses that contract to populate actual provider capability evidence from reviewed provider documentation, fields, PIT, coverage, cost, fallback, and stability evidence.
 
-The machine-checkable owner is `schemas/provider_evidence_drift_monitor.schema.json` v1.0.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`.
+The machine-checkable owner is `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`. The first evidence-population artifact is `docs/provider_evidence_p1_us_public_sources_20260528.json`.
 
 ## 2. Scope Locks
 
@@ -18,7 +18,7 @@ The schema scope fixes:
 
 - `phase = 7b`,
 - `purpose = provider_evidence_drift_monitor_contract`,
-- `contract_status = schema_first_contract_only`,
+- `contract_status = schema_first_contract_only` or `provider_evidence_population_snapshot`,
 - `provider_selection_allowed = false`,
 - `data_fetch_allowed = false`,
 - `provider_adapter_allowed = false`,
@@ -64,6 +64,8 @@ Each provider evidence record must state:
 - explicit `provider_selection_made = false`,
 - explicit `data_fetch_performed = false`.
 
+Records with `source_basis = reviewed_provider_evidence` must carry `evidence_source_refs` with reviewed source URL, source type, review date, and evidence note.
+
 The schema intentionally keeps these dimensions separate. A field may be partially supported but still blocked for production use.
 
 ## 5. Drift Monitor
@@ -87,16 +89,26 @@ Missing benchmark sessions must not be zero-filled, latest-only historical backf
 
 ## 6. Validation Contract
 
-The reviewed baseline is complete when:
+The reviewed contract baseline is complete when:
 
 1. `schemas/provider_evidence_drift_monitor.schema.json` validates as Draft 7.
 2. `schemas/examples/provider_evidence_drift_monitor.example.json` validates against the schema.
-3. Regression tests prove scope locks, P1-P4 queue coverage, provider evidence no-default locks, drift dimensions and actions, example validation, provider-selection rejection, latest-only / silent-default rejection, and P4 helper-surface containment.
-4. Routing docs point Phase 7b-1 contract work here and keep Phase 7b-2 evidence population pending.
-5. `docs/CURRENT.md` moves the next P0 to Phase 7b-2 provider capability evidence population.
+3. Regression tests prove scope locks, P1-P4 queue coverage, provider evidence no-default locks, reviewed-evidence source refs, drift dimensions and actions, example validation, provider-selection rejection, latest-only / silent-default rejection, and P4 helper-surface containment.
+4. Evidence-population snapshots validate against the schema and preserve the no-selection / no-fetch / no-implementation locks.
 
-## 7. Next Use
+## 7. First P1 Public-Source Snapshot
 
-Phase 7b-2 should consume this contract when populating provider capability evidence. Phase 7c may consume the reviewed Phase 7b-2 evidence when designing DataHub shared-layer schemas, report contracts, and reproducibility plumbing. That must be a separate reviewed implementation slice.
+`docs/provider_evidence_p1_us_public_sources_20260528.json` is the first Phase 7b-2 evidence-population artifact. It reviews official public documentation for:
 
-This Phase 7b-1 baseline does not fetch provider data, implement adapters, create DataHub tables, or modify runners.
+- SEC EDGAR submissions and XBRL data APIs,
+- SEC current CIK / ticker / exchange static files,
+- Nasdaq Trader current-day symbol directory sources,
+- MSCI / S&P GICS methodology.
+
+Verdict: P1 moves from `unknown` to `partial`, but remains implementation-blocked. SEC EDGAR is useful for filing metadata and XBRL source review; SEC / Nasdaq ticker files are current-reference aids, not historical survivorship-safe security masters; GICS methodology is not issuer-level PIT membership history. The artifact does not cover US adjusted prices, delistings, full corporate actions, benchmark returns, paid-provider licensing, sandbox tokens, or DataHub implementation.
+
+## 8. Next Use
+
+Phase 7b-2 should continue populating provider capability evidence in P1 before moving to P2-P4. Phase 7c may consume the reviewed Phase 7b-2 evidence when designing DataHub shared-layer schemas, report contracts, and reproducibility plumbing. That must be a separate reviewed implementation slice.
+
+This Phase 7b baseline does not fetch provider data, implement adapters, create DataHub tables, or modify runners.

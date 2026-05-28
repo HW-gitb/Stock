@@ -8,6 +8,7 @@ from pathlib import Path
 
 SCHEMA_PATH = Path("schemas/provider_evidence_drift_monitor.schema.json")
 EXAMPLE_PATH = Path("schemas/examples/provider_evidence_drift_monitor.example.json")
+P1_PUBLIC_SOURCE_PATH = Path("docs/provider_evidence_p1_us_public_sources_20260528.json")
 
 
 class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
@@ -21,7 +22,7 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
 
         Draft7Validator.check_schema(schema)
         self.assertEqual(schema["properties"]["schema_name"]["const"], "provider_evidence_drift_monitor")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.0.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.0")
         self.assertIn("Phase 7b", schema["description"])
         self.assertIn("does not select providers", schema["description"])
         self.assertFalse(schema["additionalProperties"])
@@ -32,7 +33,10 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
 
         self.assertEqual(scope["phase"]["const"], "7b")
         self.assertEqual(scope["purpose"]["const"], "provider_evidence_drift_monitor_contract")
-        self.assertEqual(scope["contract_status"]["const"], "schema_first_contract_only")
+        self.assertEqual(
+            set(scope["contract_status"]["enum"]),
+            {"schema_first_contract_only", "provider_evidence_population_snapshot"},
+        )
         self.assertEqual(scope["provider_selection_allowed"]["const"], False)
         self.assertEqual(scope["data_fetch_allowed"]["const"], False)
         self.assertEqual(scope["provider_adapter_allowed"]["const"], False)
@@ -86,6 +90,22 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
         self.assertEqual(rollup["provider_selection_authorized_by_this_artifact"]["const"], False)
         self.assertEqual(rollup["ship_gate_claim_authorized_by_this_artifact"]["const"], False)
 
+    def test_reviewed_provider_evidence_requires_source_refs_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        example = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
+        invalid = copy.deepcopy(example)
+        invalid["provider_evidence_records"][0]["source_basis"] = "reviewed_provider_evidence"
+
+        errors = list(Draft7Validator(schema).iter_errors(invalid))
+
+        self.assertNotEqual(errors, [])
+        self.assertTrue(any("evidence_source_refs" in error.message for error in errors))
+
     def test_drift_dimensions_and_actions_are_required(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         drift = schema["$defs"]["driftMonitor"]["properties"]
@@ -137,6 +157,46 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
         errors = list(Draft7Validator(schema).iter_errors(example))
 
         self.assertEqual(errors, [])
+
+    def test_p1_public_source_artifact_validates_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        artifact = json.loads(P1_PUBLIC_SOURCE_PATH.read_text(encoding="utf-8"))
+        errors = list(Draft7Validator(schema).iter_errors(artifact))
+
+        self.assertEqual(errors, [])
+
+    def test_p1_public_source_artifact_is_partial_and_non_authorizing(self) -> None:
+        artifact = json.loads(P1_PUBLIC_SOURCE_PATH.read_text(encoding="utf-8"))
+        records = {record["record_id"]: record for record in artifact["provider_evidence_records"]}
+        p1_records = [record for record in artifact["provider_evidence_records"] if record["priority"] == "P1"]
+
+        self.assertEqual(artifact["scope"]["contract_status"], "provider_evidence_population_snapshot")
+        self.assertEqual(artifact["provider_readiness_rollup"]["p1_status"], "partial")
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["implementation_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["provider_selection_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertGreaterEqual(len(p1_records), 5)
+        self.assertIn("p1.us_sec_edgar_submissions", records)
+        self.assertIn("p1.us_sec_xbrl_companyfacts", records)
+        self.assertTrue(
+            all(
+                record["source_basis"] == "reviewed_provider_evidence"
+                and record["evidence_source_refs"]
+                and not record["provider_selection_made"]
+                and not record["data_fetch_performed"]
+                for record in p1_records
+            )
+        )
 
     def test_selected_provider_is_rejected_when_jsonschema_available(self) -> None:
         try:

@@ -95,6 +95,6 @@ The reviewed baseline is complete when:
 
 ## 8. Next Use
 
-Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 provider capability evidence population remains pending.
+Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 has started with `docs/provider_evidence_p1_us_public_sources_20260528.json`, but P1 remains partial / blocked and provider capability evidence population must continue before DataHub or runner output contracts rely on it.
 
 Later runner or DataHub output contracts may consume `schemas/evidence_report.schema.json`, but that must be a separate reviewed implementation slice. This Phase 7a-5 baseline does not modify runners or generate production reports.

@@ -395,7 +395,7 @@ Split the post-audit work into small reviewed slices:
 
 ### Phase 7b / 7c - Provider Evidence And DataHub
 
-Phase 7b-1 provider evidence and drift-monitor contracts are defined in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 still needs to populate actual provider capability evidence in the P1-P4 order. Phase 7c designs the DataHub shared layer, report contracts, reproducibility plumbing, and data quality monitor before broad implementation.
+Phase 7b-1 provider evidence and drift-monitor contracts are defined in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 has started with the P1 public-source snapshot in `docs/provider_evidence_p1_us_public_sources_20260528.json`; P1 remains partial / blocked, so provider capability evidence must continue in the P1-P4 order. Phase 7c designs the DataHub shared layer, report contracts, reproducibility plumbing, and data quality monitor before broad implementation.
 
 ### Phase 7 - DataHub / Engine Modularization
 
@@ -436,7 +436,7 @@ Phase 7a-1 is complete as a reviewed audit chain: schema contract, lightweight p
 3. Phase 7a-4: evidence feasibility controls are defined in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`.
 4. Phase 7a-5: evidence report schemas are defined in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`.
 5. Phase 7b-1: provider evidence / drift-monitor schema-first contract is defined in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`.
-6. Phase 7b-2: populate provider capability evidence in the P1-P4 queue; do not treat the Phase 7b-1 contract as population evidence.
+6. Phase 7b-2: continue provider capability evidence in the P1-P4 queue; do not treat the first P1 public-source snapshot as provider selection or implementation readiness.
 7. Phase 7c: design the DataHub shared-layer / report / reproducibility contract that consumes reviewed Phase 7b-2 provider evidence and drift-monitor dimensions.
 
 A-short continues as maintenance / evidence accumulation while Phase 7 contracts are written. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, fetch provider data, or build DataHub tables before the relevant provider-evidence and DataHub implementation contracts are reviewed.

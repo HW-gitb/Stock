@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/provider_evidence_drift_monitor/1.0.0/schema.json",
+  "$id": "https://stock.local/schemas/provider_evidence_drift_monitor/1.1.0/schema.json",
   "title": "Provider Evidence And Drift Monitor",
   "description": "Phase 7b schema-first contract for provider capability evidence population and data quality / provider drift monitoring. This contract consumes the Phase 7a provider-priority contract and provider capability catalog; it does not select providers, fetch data, create adapters, implement DataHub tables, change strategy rules, relax ship gates, or authorize order automation.",
   "type": "object",
@@ -23,7 +23,7 @@
       "const": "provider_evidence_drift_monitor"
     },
     "schema_version": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "generated_at": {
       "type": "string",
@@ -212,7 +212,10 @@
           "const": "provider_evidence_drift_monitor_contract"
         },
         "contract_status": {
-          "const": "schema_first_contract_only"
+          "enum": [
+            "schema_first_contract_only",
+            "provider_evidence_population_snapshot"
+          ]
         },
         "provider_selection_allowed": {
           "const": false
@@ -456,6 +459,48 @@
         "supports_future_review"
       ]
     },
+    "sourceType": {
+      "enum": [
+        "official_documentation",
+        "official_static_file",
+        "provider_documentation",
+        "methodology",
+        "repo_doc"
+      ]
+    },
+    "evidenceSourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "source_title",
+        "source_url",
+        "source_type",
+        "reviewed_on",
+        "evidence_note"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+        },
+        "source_title": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_url": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_type": {
+          "$ref": "#/$defs/sourceType"
+        },
+        "reviewed_on": {
+          "$ref": "#/$defs/date8"
+        },
+        "evidence_note": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
     "lineageEvidenceField": {
       "enum": [
         "provider_id",
@@ -511,6 +556,25 @@
         "readiness_effect",
         "limitations"
       ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_basis": {
+                "const": "reviewed_provider_evidence"
+              }
+            },
+            "required": [
+              "source_basis"
+            ]
+          },
+          "then": {
+            "required": [
+              "evidence_source_refs"
+            ]
+          }
+        }
+      ],
       "properties": {
         "record_id": {
           "type": "string",
@@ -542,6 +606,13 @@
         },
         "source_basis": {
           "$ref": "#/$defs/sourceBasis"
+        },
+        "evidence_source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceSourceRef"
+          },
+          "minItems": 1
         },
         "capability_status": {
           "$ref": "#/$defs/capabilityStatus"

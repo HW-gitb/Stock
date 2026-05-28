@@ -538,3 +538,44 @@ git diff --check
 1. 下一条 `执行` 推荐 Phase 7c：设计 DataHub shared-layer / report / reproducibility contract，消费 Phase 7b provider evidence / drift monitor，不要重开 provider priority。
 2. 不要在 Phase 7c 第一刀抓 provider 数据、选 provider、建 adapter / DataHub table 或改 runner；先写 contract。
 3. 后续 implementation 若需要使用任何 provider-backed field，必须能引用 Phase 7b 的 evidence record 与 drift-monitor dimension/action。
+
+## 2026-05-28 追加：Phase 7b-2 P1 US public-source provider evidence snapshot
+
+**改了什么**:
+
+- 新增 `docs/provider_evidence_p1_us_public_sources_20260528.json`，作为 Phase 7b-2 第一份 P1 US public-source evidence population artifact。
+- `schemas/provider_evidence_drift_monitor.schema.json` 升至 v1.1.0：保留 no-selection / no-fetch / no-implementation locks，允许 `provider_evidence_population_snapshot`，并要求 `reviewed_provider_evidence` 记录 `evidence_source_refs`。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/provider_evidence_drift_monitor.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/datahub_design.md`、`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/evidence_report_schema_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- 上一轮 R1 修复明确 Phase 7b-2 才是真实 provider evidence population；本刀开始填 P1，而不是继续停留在 contract 层。
+- 仅靠 v1.0.0 的 `schema_first_contract_only` 无法准确表达 evidence snapshot，所以 v1.1.0 增加 snapshot status 和 source refs，避免把来源证据写成不可审查的备注。
+- 官方 SEC / Nasdaq / MSCI 文档足以把 P1 从 `unknown` 推进到 `partial`，但不足以解除 implementation blocker：US price、corporate action、delisting/security master、benchmark、paid-provider authorization/cost/stability 仍未完成。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` line count check。
+
+**验证结果**:
+
+- `tests.schema.test_provider_evidence_drift_monitor_schema`: 14 tests passed。
+- Full `tests/schema` discovery、`git diff --check`、trailing whitespace scan、stale wording scan 和 `docs/CURRENT.md` line count 最终结果记录在同日 Codex SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “Phase 7b-2 provider capability evidence population 尚未开始”失效；现在已有第一份 P1 public-source snapshot。
+- “P1 US provider evidence 仍完全 unknown”失效；现在是 `partial`，但仍 blocked。
+- “`schemas/provider_evidence_drift_monitor.schema.json` 当前 `1.0.0`”失效；当前为 `1.1.0`。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 仍应继续 Phase 7b-2，而不是进入 Phase 7c；优先补 P1 US adjusted price、corporate action、delisting/security master、benchmark、authorization/cost/fallback/stability evidence。
+2. 不要把 SEC EDGAR / SEC ticker files / Nasdaq symbol directory / GICS methodology 误读为完整 provider selection 或 implementation readiness。
+3. 继续不抓 provider data、不选 provider、不建 adapter / DataHub table、不改 runner。

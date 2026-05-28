@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-05-28 — Claude review — Pass (Phase 7b-2 P1 US public-source provider evidence snapshot)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `5cf4f4e`)
+
+**Verdict**: Pass.
+
+**Notes**: 这是项目第一份**真实 provider evidence**（虽然仍 documentation-review 性质，不抓数据 / 不选 provider）— 5 条 P1 record 覆盖 SEC EDGAR submissions、SEC XBRL companyfacts/concept、SEC company_tickers 静态文件、Nasdaq symbol directory、GICS methodology，全部基于公开 SEC / Nasdaq / MSCI 官方 API 文档页面，每条带 evidence_source_refs（source_id / source_title / source_url / source_type / reviewed_on / evidence_note）。Scope 严守：每条 record `data_fetch_performed: false` + `provider_selection_made: false`（schema 强制 const），artifact 内容是 "文档说什么"（API 支持哪些 endpoint、有什么 fair-access 限制、有没有 PIT 字段），不是 actual API response（无 CIK 列表 / ticker dump / 财务数值 / 价格序列）— scope-check 通过。Schema v1.0.0 → v1.1.0 是 minimum-necessary upgrade: (1) `contract_status` 由 single const 改为 enum `{schema_first_contract_only, provider_evidence_population_snapshot}` — backward-compatible，v1.0.0 example 仍 validate；(2) 新 `evidenceSourceRef` def 强制 6 字段；(3) **新条件规则** `if source_basis == "reviewed_provider_evidence" then evidence_source_refs required (minItems: 1)` — 这是**反"无源证据"的强 audit trail**，是安全增强而非放松；(4) 12 个 scope 安全 const 全保留（provider_selection_allowed / data_fetch_allowed / provider_adapter_allowed / datahub_table_implementation_allowed / strategy_rule_change_allowed / broker_or_order_automation_allowed / manual_order_only / ship_gate_relaxed / production_ready_claim_allowed 等）。Provider readiness rollup 明确锁：`implementation_authorized_by_this_artifact: false` / `provider_selection_authorized_by_this_artifact: false` / `ship_gate_claim_authorized_by_this_artifact: false`。P1 5 个 record 全 `capability_status: "partial"` + `production_use_status: "blocked_until_provider_review"`，每条带 `missing_required_evidence` 列出仍缺的（delisting / survivorship / corporate actions / PIT GICS membership history / paid-provider licensing / coverage count 等）。P2 / P3 / P4 record 是 placeholder（P2 unknown not populated、P3 manual_evidence_only、P4 既有 helper surface 不授权 broad implementation）。**Cross-doc 标签精准（R1 教训完整内化）**：AGENTS.md §执行路线图 §7b-2 status 用 **🟡 P1 public-source snapshot complete；继续 P1**（正是上一轮 R1 review 我建议过的 🟡 partial 模式），§当前进度新加 entry body 明示 "P1 从 unknown 变为 partial，但仍 implementation-blocked，后续仍需 US price / corporate action / delisting security master / benchmark / paid-provider evidence"，§已固化决策 §14 加 "Phase 7b-2 已从 P1 US public-source evidence 起步，但 P1 仍只是 partial / blocked：SEC / Nasdaq / MSCI public docs 不等于完整 provider selection、security master、price / corporate action、benchmark 或 paid-provider readiness"；ALPHA_VALIDATION_ACTION_GUIDE §2 / §11 table §7b-2 / §13 一致写 "first P1 public-source snapshot complete; continue P1 ..."；CURRENT.md §0 Latest Delta 加 "P1 状态从 unknown 变为 partial，但仍 implementation-blocked" + "Phase 7b-2 provider capability evidence population 仍在进行中"，§1 Phase + P0 改为 "Continue Phase 7b-2"，§5 下一步 P0 列具体待补 P1 字段（US adjusted price / corporate action / delisting security master / benchmark / paid-provider authorization-cost-stability evidence）。Tests: 14 pass（11+3）/ 88 全套 pass / 新 3 test 覆盖 reviewed_provider_evidence-requires-source-refs negative regression / P1 artifact validation / P1 partial 非授权状态 + `record["provider_selection_made"]` 否 + `record["data_fetch_performed"]` 否的断言。独立 validation: `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` 给 149 行（贴近 150 上限但未超）/ `git diff --check` clean / `git diff --cached` empty / trailing whitespace scan clean / Codex 在 Alternatives explicit reject "Treat SEC EDGAR as the selected US provider"（SEC evidence is partial and public-source-only） + "Start Phase 7c after the first P1 snapshot"（P1 still partial）— 防止后续 schema-first 链外加 phase 错位。Codex 处理 Phase 7c framing 也精准：§13 保留 "Phase 7c itself must start as a schema-first DataHub / report / reproducibility contract"，避免 Phase 7c 又走错。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。**用户视角下 milestone**：这是项目第一次真正 touch provider 层（虽然只是文档评审而非数据抓取），对应用户问 "什么时候连真实数据" 的真正起点；P1 完整化（含 paid provider candidate）仍需多个 slices，全 P1-P4 evidence population 估计仍 1-2 周（按 AGENTS.md 路线图 §7b row 估算）。
+
+---
+
+## 2026-05-28 — Codex (Phase 7b-2 P1 US public-source provider evidence snapshot)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `5cf4f4e` (`Add Phase 7b provider evidence contract`).
+- Continues the Claude-approved 7b-1 / 7b-2 split: 7b-1 contract was already complete; this round starts 7b-2 evidence population from the P1 US queue.
+
+**Worked on**:
+1. [untracked] `docs/provider_evidence_p1_us_public_sources_20260528.json`: added the first Phase 7b-2 P1 public-source evidence snapshot covering SEC EDGAR submissions/XBRL, SEC ticker files, Nasdaq symbol directory, and GICS methodology.
+2. [tracked] `schemas/provider_evidence_drift_monitor.schema.json`, `schemas/examples/provider_evidence_drift_monitor.example.json`, `tests/schema/test_provider_evidence_drift_monitor_schema.py`: upgraded the contract to v1.1.0, allowed evidence-population snapshots, required source refs for `reviewed_provider_evidence`, and added regression coverage for the new P1 artifact.
+3. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/datahub_design.md`, `docs/evidence_report_schema_contract.md`, `docs/evidence_feasibility_controls.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`: routed the new P1 partial / blocked status and kept Phase 7c gated.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: updated startup routing, current snapshot, and next-step wording so Phase 7b-2 is started but not complete.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7b-2 P1 evidence population handoff note.
+6. [tracked] `docs/SESSION_LOG.md`: recorded this execution handoff for Claude review continuity.
+
+**Key decisions**:
+- P1 US provider evidence is now `partial`, not `unknown`, because official public sources establish usable documentation evidence for SEC filing metadata, SEC XBRL facts, current ticker references, Nasdaq current-day symbol references, and GICS methodology.
+- P1 remains implementation-blocked. This snapshot does not solve US adjusted prices, full corporate actions, delisting / survivorship security master, issuer-level PIT GICS membership history, benchmark returns, paid-provider licensing, sandbox tokens, or production stability.
+- v1.1.0 keeps all no-selection / no-fetch / no-adapter / no-DataHub / no-runner locks; it only lets the contract validate source-backed evidence snapshots.
+
+**Alternatives considered and rejected**:
+- "Use the 7b-1 v1.0.0 schema unchanged" — rejected because `contract_status = schema_first_contract_only` cannot accurately describe a Phase 7b-2 evidence-population snapshot.
+- "Treat SEC EDGAR as the selected US provider" — rejected. SEC evidence is partial and public-source-only; it does not cover the full P1 field surface.
+- "Start Phase 7c after the first P1 snapshot" — rejected. P1 is still partial / blocked, so 7b-2 should continue before DataHub shared-layer work consumes provider evidence.
+
+**Source basis reviewed**:
+- Official SEC EDGAR API docs, SEC Developer Resources / Fair Access, SEC Accessing EDGAR Data, SEC company ticker static-file pages, Nasdaq Trader symbol directory docs, Nasdaq Symbol Lookup, and MSCI GICS overview. No provider data endpoint was fetched.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v`: 14 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 88 tests passed.
+- `git diff --check`: passed; only existing LF/CRLF working-copy warnings were reported for touched files.
+- Changed-file trailing whitespace scan: no matches.
+- Active stale next-step scan: no matches in active routing docs; only historical SESSION_LOG / handoff entries remain, with this handoff invalidating stale wording.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: `149`, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7b-2 P1 evidence snapshot.
+2. If Pass and user commits, the next `执行` should continue P1 provider evidence for US adjusted price, corporate action, delisting / security master, benchmark, authorization, cost, fallback, and stability.
+
+---
+
 ## 2026-05-28 — Claude re-review — Pass (Phase 7b R1 repair: 7b-1 / 7b-2 split)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `f372bf6`)
