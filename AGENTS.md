@@ -42,6 +42,7 @@
 - ✅ Phase 7a alpha-validation route：`docs/alpha_plausibility_audit.md` 与 `docs/evidence_capital_policy.md` 已建立设计路由；后续在大规模 DataHub / runner implementation 前，先用 schema-first alpha audit 判断 lane objective / provider priority / evidence horizon，并用 paper vs live-normalized evidence policy 约束 ship-gate 证据
 - ✅ Phase 7a+ alpha reality action guide：`docs/ALPHA_VALIDATION_ACTION_GUIDE.md` 已固化为当前最高行动指南；Phase 7a-1 必须把 survivorship / multiple testing / statistical power / regime / factor exposure / execution-cost feasibility / risk-filter evidence / decision effect 写进 schema-first audit
 - ✅ Phase 7a-3 provider priority / provisional benchmark contract：`docs/provider_priority_benchmark_contract.md` 已把 provider evidence queue 与 provisional evidence benchmark 固化为 docs-only contract（不选 provider、不抓数据、不建 adapter / DataHub table、不锁最终 ship-gate benchmark）
+- ✅ Phase 7a-4 evidence feasibility controls：`docs/evidence_feasibility_controls.md` 与 `schemas/evidence_feasibility_controls.schema.json` 已固化 burst minimal-to-full promotion、evidence capital、concentration / liquidity / ADV、slippage / borrow / limit-risk、circuit-breaker playbook contract（不选 provider、不抓数据、不改 runner）
 - ✅ Phase 1a：`schemas/analysis_input.schema.json` 已完成，当前输出 schema 版本 `1.1.0`
 - ✅ Phase 1b：`egs_main.py` 已接入 `analysis_input.json`、`snapshot.json`、`candidates.csv` 导出器
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
@@ -180,8 +181,8 @@ Stock/
 | 7a-1 | Alpha plausibility audit schema / example / tests + lightweight provider status snapshot + first audit；按 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` 写入 alpha 真实性护栏 | 2-4 天 | ✅ |
 | 7a-2 | 根据 audit 修订 long / short specs；补 US microstructure、monitoring contract、calendar / timezone semantics | 1-3 天 | ✅ |
 | 7a-3 | Provider priority reorder + provisional benchmark contract | 1-2 天 | ✅ docs-only baseline |
-| 7a-4 | Burst minimal→full promotion criteria + evidence capital schema + concentration / liquidity / ADV sizing + slippage constraints + drawdown / circuit-breaker playbook | 2-4 天 | ⬜ 下一刀 |
-| 7a-5 | Evidence report schemas：immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log | 2-4 天 | ⬜ |
+| 7a-4 | Burst minimal→full promotion criteria + evidence capital schema + concentration / liquidity / ADV sizing + slippage constraints + drawdown / circuit-breaker playbook | 2-4 天 | ✅ schema-first baseline |
+| 7a-5 | Evidence report schemas：immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log | 2-4 天 | ⬜ 下一刀 |
 | 7b | Provider capability evidence population + data quality / provider drift monitor | 1-2 周 | ⬜ |
 | 7c | DataHub shared layer / report contracts / reproducibility plumbing | 1-2 周 | ⬜ |
 | 8 | 四套子系统 implementation wave：按资金权重 × alpha leverage × data readiness 排序；每条 lane 配 production monitoring / kill switch | 2-4 周 | ⬜ |
@@ -421,6 +422,8 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `docs/alpha_plausibility_audit.md` — Phase 7a alpha plausibility / lane objective owner（schema-first audit route；决定 continue / risk-filter / redesign / defer / do-not-implement）
 - `docs/evidence_capital_policy.md` — Phase 7a paper vs live-normalized evidence owner（不改变资金政策；ship gate 证据必须区分 paper / live_normalized）
 - `docs/provider_priority_benchmark_contract.md` — Phase 7a-3 provider evidence priority / provisional benchmark owner（不选 provider；不锁最终 ship-gate benchmark）
+- `docs/evidence_feasibility_controls.md` — Phase 7a-4 burst promotion / concentration / liquidity / slippage / circuit-breaker owner
+- `schemas/evidence_feasibility_controls.schema.json` — Phase 7a-4 evidence feasibility controls 契约，当前 `1.0.0`
 - `schemas/analysis_input.schema.json` — analysis_input 契约，当前 `1.1.0`，JSON Schema Draft 7
 - `schemas/deterministic_report.schema.json` — deterministic report 契约，当前 `1.0.0`，Phase 4 runner 输出 JSON 必须通过该 schema
 - `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.11.0`（含 date_warnings + data_lineage + analyzer veto replay）

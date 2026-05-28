@@ -1,0 +1,863 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/evidence_feasibility_controls/1.0.0/schema.json",
+  "title": "Evidence Feasibility Controls",
+  "description": "Phase 7a-4 schema-first contract for burst minimal-to-full promotion, evidence capital boundaries, concentration, liquidity/ADV sizing, slippage/borrow/limit-risk feasibility, and drawdown/circuit-breaker playbooks. This contract does not select providers, fetch data, create adapters, implement DataHub tables, change strategy rules, relax ship gates, or authorize order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "control_policy",
+    "lane_controls",
+    "global_circuit_breaker_policy",
+    "deferred_decisions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "evidence_feasibility_controls"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "control_policy": {
+      "$ref": "#/$defs/controlPolicy"
+    },
+    "lane_controls": {
+      "$ref": "#/$defs/laneControls"
+    },
+    "global_circuit_breaker_policy": {
+      "$ref": "#/$defs/globalCircuitBreakerPolicy"
+    },
+    "deferred_decisions": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "boundedPercent": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "provider_selection_allowed",
+        "data_fetch_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only",
+        "ship_gate_relaxed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7a-4"
+        },
+        "purpose": {
+          "const": "evidence_feasibility_controls_contract"
+        },
+        "contract_status": {
+          "const": "schema_first_contract_only"
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        }
+      }
+    },
+    "controlPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixed_allocation_policy_unchanged",
+        "global_aum_pool_allowed",
+        "cross_market_pooling_allowed",
+        "liquidity_bucket_auto_borrowing_allowed",
+        "paper_ship_gate_claim_allowed",
+        "minimal_data_live_eligible_by_default",
+        "live_normalized_required_for_ship_gate",
+        "full_size_requires_existing_ship_gate",
+        "bucket_ceiling_required_before_live_observation",
+        "actual_position_reconciliation_required_for_live_normalized"
+      ],
+      "properties": {
+        "fixed_allocation_policy_unchanged": {
+          "const": true
+        },
+        "global_aum_pool_allowed": {
+          "const": false
+        },
+        "cross_market_pooling_allowed": {
+          "const": false
+        },
+        "liquidity_bucket_auto_borrowing_allowed": {
+          "const": false
+        },
+        "paper_ship_gate_claim_allowed": {
+          "const": false
+        },
+        "minimal_data_live_eligible_by_default": {
+          "const": false
+        },
+        "live_normalized_required_for_ship_gate": {
+          "const": true
+        },
+        "full_size_requires_existing_ship_gate": {
+          "const": true
+        },
+        "bucket_ceiling_required_before_live_observation": {
+          "const": true
+        },
+        "actual_position_reconciliation_required_for_live_normalized": {
+          "const": true
+        }
+      }
+    },
+    "laneId": {
+      "enum": [
+        "a_share_burst_minimal_data",
+        "a_share_burst_full_data",
+        "us_burst_minimal_data",
+        "us_burst_full_data"
+      ]
+    },
+    "parentLaneId": {
+      "enum": [
+        "a_burst",
+        "us_burst"
+      ]
+    },
+    "marketId": {
+      "enum": [
+        "A",
+        "US"
+      ]
+    },
+    "burstTier": {
+      "enum": [
+        "minimal_data_burst",
+        "full_data_burst"
+      ]
+    },
+    "evidenceLevel": {
+      "enum": [
+        "paper",
+        "live_normalized"
+      ]
+    },
+    "liveEligibilityStatus": {
+      "enum": [
+        "paper_only",
+        "minimal_live_blocked_until_full_data",
+        "minimal_live_eligible_after_review",
+        "blocked_until_provider_ready"
+      ]
+    },
+    "promotionStatus": {
+      "enum": [
+        "not_requested",
+        "blocked_until_required_evidence",
+        "eligible_for_review",
+        "approved"
+      ]
+    },
+    "conditionId": {
+      "enum": [
+        "benchmark_relative_paper_alpha_positive_or_explained",
+        "drawdown_within_preliminary_limit",
+        "false_positive_behavior_reviewed",
+        "non_price_confirmation_path_reviewed",
+        "cost_liquidity_spread_borrow_limit_feasible",
+        "rejected_failed_candidates_retained",
+        "minimal_vs_full_data_paired_comparison_available",
+        "provider_manual_evidence_path_reviewed",
+        "bucket_capital_context_available",
+        "forward_capture_stable"
+      ]
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition_id",
+        "status",
+        "evidence_required"
+      ],
+      "properties": {
+        "condition_id": {
+          "$ref": "#/$defs/conditionId"
+        },
+        "status": {
+          "enum": [
+            "required",
+            "satisfied",
+            "blocked",
+            "not_applicable"
+          ]
+        },
+        "evidence_required": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "promotionGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_stage",
+        "target_stage",
+        "promotion_status",
+        "minimum_mature_months",
+        "minimum_mature_candidates",
+        "paired_comparison_required",
+        "non_price_confirmation_required",
+        "required_conditions"
+      ],
+      "properties": {
+        "from_stage": {
+          "enum": [
+            "research_paper",
+            "minimal_live_observation",
+            "preliminary_pass_candidate"
+          ]
+        },
+        "target_stage": {
+          "enum": [
+            "full_data_paper",
+            "minimal_live_observation",
+            "preliminary_pass_candidate",
+            "ship_gate_candidate"
+          ]
+        },
+        "promotion_status": {
+          "$ref": "#/$defs/promotionStatus"
+        },
+        "minimum_mature_months": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "minimum_mature_candidates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "paired_comparison_required": {
+          "const": true
+        },
+        "non_price_confirmation_required": {
+          "const": true
+        },
+        "required_conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          },
+          "minItems": 7
+        }
+      }
+    },
+    "exposureLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_lane_paper_short_bucket_pct",
+        "max_lane_minimal_live_short_bucket_pct",
+        "max_lane_preliminary_short_bucket_pct",
+        "max_lane_ship_gate_short_bucket_pct",
+        "max_single_name_short_bucket_pct",
+        "max_theme_cluster_short_bucket_pct",
+        "daily_new_exposure_cap_short_bucket_pct",
+        "weekly_new_exposure_cap_short_bucket_pct",
+        "global_pooling_allowed",
+        "cross_market_pooling_allowed",
+        "liquidity_bucket_auto_borrowing_allowed"
+      ],
+      "properties": {
+        "max_lane_paper_short_bucket_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "max_lane_minimal_live_short_bucket_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "max_lane_preliminary_short_bucket_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "max_lane_ship_gate_short_bucket_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "max_single_name_short_bucket_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "max_theme_cluster_short_bucket_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "daily_new_exposure_cap_short_bucket_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "weekly_new_exposure_cap_short_bucket_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "global_pooling_allowed": {
+          "const": false
+        },
+        "cross_market_pooling_allowed": {
+          "const": false
+        },
+        "liquidity_bucket_auto_borrowing_allowed": {
+          "const": false
+        }
+      }
+    },
+    "liquidityAdvSizing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adv_window_days",
+        "liquidity_metric",
+        "max_order_adv_pct",
+        "max_participation_rate_pct",
+        "min_liquidity_threshold_description",
+        "spread_required_for_live_normalized",
+        "halt_limit_state_blocks_entry",
+        "scaling_modes_allowed",
+        "insufficient_liquidity_action"
+      ],
+      "properties": {
+        "adv_window_days": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "liquidity_metric": {
+          "enum": [
+            "shares_adv",
+            "turnover_adv",
+            "dollar_adv",
+            "amount_adv"
+          ]
+        },
+        "max_order_adv_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "max_participation_rate_pct": {
+          "$ref": "#/$defs/boundedPercent"
+        },
+        "min_liquidity_threshold_description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "spread_required_for_live_normalized": {
+          "const": true
+        },
+        "halt_limit_state_blocks_entry": {
+          "const": true
+        },
+        "scaling_modes_allowed": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "linear",
+              "capped",
+              "not_valid",
+              "not_assessed"
+            ]
+          },
+          "minItems": 2
+        },
+        "insufficient_liquidity_action": {
+          "enum": [
+            "paper_only",
+            "cap_size",
+            "reject_live_normalized",
+            "manual_review_required"
+          ]
+        }
+      }
+    },
+    "slippageMarketImpact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gross_net_required",
+        "slippage_model_required",
+        "spread_model_required",
+        "market_impact_model_required",
+        "no_zero_cost_default",
+        "cost_components_required",
+        "evidence_level_cost_status"
+      ],
+      "properties": {
+        "gross_net_required": {
+          "const": true
+        },
+        "slippage_model_required": {
+          "const": true
+        },
+        "spread_model_required": {
+          "const": true
+        },
+        "market_impact_model_required": {
+          "const": true
+        },
+        "no_zero_cost_default": {
+          "const": true
+        },
+        "cost_components_required": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "commissions",
+              "stamp_duty",
+              "taxes",
+              "spread",
+              "slippage",
+              "market_impact",
+              "borrow_fee",
+              "fx",
+              "adr_fee",
+              "dividends_withholding",
+              "cash_drag",
+              "opportunity_cost"
+            ]
+          },
+          "minItems": 5
+        },
+        "evidence_level_cost_status": {
+          "enum": [
+            "required_before_paper_comparison",
+            "required_before_live_normalized",
+            "blocked_until_model_ready"
+          ]
+        }
+      }
+    },
+    "borrowLimitFeasibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applies_to_market",
+        "borrow_required_for_short_side",
+        "borrow_fields_required_when_short_side_used",
+        "limit_or_halt_fields_required",
+        "hard_block_conditions"
+      ],
+      "properties": {
+        "applies_to_market": {
+          "$ref": "#/$defs/marketId"
+        },
+        "borrow_required_for_short_side": {
+          "type": "boolean"
+        },
+        "borrow_fields_required_when_short_side_used": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "locate_available",
+              "borrow_fee",
+              "short_interest",
+              "days_to_cover",
+              "reg_sho_threshold",
+              "ssr_state",
+              "not_applicable"
+            ]
+          },
+          "minItems": 1
+        },
+        "limit_or_halt_fields_required": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "limit_up_down_state",
+              "halt_state",
+              "suspension_state",
+              "luld_state",
+              "session_label",
+              "not_applicable"
+            ]
+          },
+          "minItems": 1
+        },
+        "hard_block_conditions": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "breakerAction": {
+      "enum": [
+        "warn",
+        "size_down",
+        "pause_new_entries",
+        "manual_review",
+        "reactivation_cooldown"
+      ]
+    },
+    "breakerTier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tier_id",
+        "trigger",
+        "action",
+        "required_response",
+        "evidence_effect"
+      ],
+      "properties": {
+        "tier_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "trigger": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "action": {
+          "$ref": "#/$defs/breakerAction"
+        },
+        "required_response": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidence_effect": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "circuitBreakerPlaybook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measurement_window",
+        "tiers",
+        "reactivation_rule",
+        "manual_order_boundary"
+      ],
+      "properties": {
+        "measurement_window": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "tiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/breakerTier"
+          },
+          "minItems": 5,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "const": "warn"
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "const": "size_down"
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "const": "pause_new_entries"
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "const": "manual_review"
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "const": "reactivation_cooldown"
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            }
+          ]
+        },
+        "reactivation_rule": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "manual_order_boundary": {
+          "const": true
+        }
+      }
+    },
+    "evidenceRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_evidence_levels",
+        "rejected_candidate_retention_required",
+        "failed_breakout_retention_required",
+        "benchmark_set_source",
+        "cost_adjusted_return_required",
+        "capacity_scaling_assessment_required",
+        "manual_override_logging_required",
+        "live_normalized_requires_position_reconciliation"
+      ],
+      "properties": {
+        "allowed_evidence_levels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceLevel"
+          },
+          "minItems": 1
+        },
+        "rejected_candidate_retention_required": {
+          "const": true
+        },
+        "failed_breakout_retention_required": {
+          "const": true
+        },
+        "benchmark_set_source": {
+          "const": "docs/provider_priority_benchmark_contract.md"
+        },
+        "cost_adjusted_return_required": {
+          "const": true
+        },
+        "capacity_scaling_assessment_required": {
+          "const": true
+        },
+        "manual_override_logging_required": {
+          "const": true
+        },
+        "live_normalized_requires_position_reconciliation": {
+          "const": true
+        }
+      }
+    },
+    "laneControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lane_id",
+        "parent_lane_id",
+        "market",
+        "tier",
+        "live_eligibility_status",
+        "promotion_gate",
+        "exposure_limits",
+        "liquidity_adv_sizing",
+        "slippage_market_impact",
+        "borrow_limit_feasibility",
+        "circuit_breaker_playbook",
+        "evidence_requirements"
+      ],
+      "properties": {
+        "lane_id": {
+          "$ref": "#/$defs/laneId"
+        },
+        "parent_lane_id": {
+          "$ref": "#/$defs/parentLaneId"
+        },
+        "market": {
+          "$ref": "#/$defs/marketId"
+        },
+        "tier": {
+          "$ref": "#/$defs/burstTier"
+        },
+        "live_eligibility_status": {
+          "$ref": "#/$defs/liveEligibilityStatus"
+        },
+        "promotion_gate": {
+          "$ref": "#/$defs/promotionGate"
+        },
+        "exposure_limits": {
+          "$ref": "#/$defs/exposureLimits"
+        },
+        "liquidity_adv_sizing": {
+          "$ref": "#/$defs/liquidityAdvSizing"
+        },
+        "slippage_market_impact": {
+          "$ref": "#/$defs/slippageMarketImpact"
+        },
+        "borrow_limit_feasibility": {
+          "$ref": "#/$defs/borrowLimitFeasibility"
+        },
+        "circuit_breaker_playbook": {
+          "$ref": "#/$defs/circuitBreakerPlaybook"
+        },
+        "evidence_requirements": {
+          "$ref": "#/$defs/evidenceRequirements"
+        }
+      }
+    },
+    "laneControls": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/laneControl"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "lane_id": {
+                "const": "a_share_burst_minimal_data"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "lane_id": {
+                "const": "a_share_burst_full_data"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "lane_id": {
+                "const": "us_burst_minimal_data"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "lane_id": {
+                "const": "us_burst_full_data"
+              }
+            },
+            "required": [
+              "lane_id"
+            ]
+          }
+        }
+      ]
+    },
+    "globalCircuitBreakerPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tier_actions_required",
+        "lane_pause_overrides_new_entries",
+        "reactivation_requires_manual_review",
+        "automatic_order_action_allowed"
+      ],
+      "properties": {
+        "tier_actions_required": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/breakerAction"
+          },
+          "minItems": 5
+        },
+        "lane_pause_overrides_new_entries": {
+          "const": true
+        },
+        "reactivation_requires_manual_review": {
+          "const": true
+        },
+        "automatic_order_action_allowed": {
+          "const": false
+        }
+      }
+    }
+  }
+}

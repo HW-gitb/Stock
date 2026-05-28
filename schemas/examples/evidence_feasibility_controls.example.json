@@ -1,0 +1,756 @@
+{
+  "schema_name": "evidence_feasibility_controls",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-28T12:00:00+08:00",
+  "scope": {
+    "phase": "7a-4",
+    "purpose": "evidence_feasibility_controls_contract",
+    "contract_status": "schema_first_contract_only",
+    "provider_selection_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false
+  },
+  "control_policy": {
+    "fixed_allocation_policy_unchanged": true,
+    "global_aum_pool_allowed": false,
+    "cross_market_pooling_allowed": false,
+    "liquidity_bucket_auto_borrowing_allowed": false,
+    "paper_ship_gate_claim_allowed": false,
+    "minimal_data_live_eligible_by_default": false,
+    "live_normalized_required_for_ship_gate": true,
+    "full_size_requires_existing_ship_gate": true,
+    "bucket_ceiling_required_before_live_observation": true,
+    "actual_position_reconciliation_required_for_live_normalized": true
+  },
+  "lane_controls": [
+    {
+      "lane_id": "a_share_burst_minimal_data",
+      "parent_lane_id": "a_burst",
+      "market": "A",
+      "tier": "minimal_data_burst",
+      "live_eligibility_status": "paper_only",
+      "promotion_gate": {
+        "from_stage": "research_paper",
+        "target_stage": "full_data_paper",
+        "promotion_status": "blocked_until_required_evidence",
+        "minimum_mature_months": 6,
+        "minimum_mature_candidates": 30,
+        "paired_comparison_required": true,
+        "non_price_confirmation_required": true,
+        "required_conditions": [
+          {
+            "condition_id": "benchmark_relative_paper_alpha_positive_or_explained",
+            "status": "required",
+            "evidence_required": "Monthly cohorts versus CSI1000 primary and CSI300 secondary, with weak or negative months retained."
+          },
+          {
+            "condition_id": "drawdown_within_preliminary_limit",
+            "status": "required",
+            "evidence_required": "Paper drawdown must be measured before any stage promotion review."
+          },
+          {
+            "condition_id": "false_positive_behavior_reviewed",
+            "status": "required",
+            "evidence_required": "Rejected and failed breakout candidates must be retained for false-positive review."
+          },
+          {
+            "condition_id": "non_price_confirmation_path_reviewed",
+            "status": "blocked",
+            "evidence_required": "A minimal-data candidate cannot become live-eligible without dated catalyst, capital-flow, event, or manual evidence."
+          },
+          {
+            "condition_id": "cost_liquidity_spread_borrow_limit_feasible",
+            "status": "required",
+            "evidence_required": "A-share amount/turnover, spread proxy, limit-up/down, halt, and T+1 risk must be visible."
+          },
+          {
+            "condition_id": "rejected_failed_candidates_retained",
+            "status": "required",
+            "evidence_required": "The evidence set must include non-selected and failed candidates, not only winners."
+          },
+          {
+            "condition_id": "minimal_vs_full_data_paired_comparison_available",
+            "status": "blocked",
+            "evidence_required": "Comparison waits for full-data evidence availability."
+          }
+        ]
+      },
+      "exposure_limits": {
+        "max_lane_paper_short_bucket_pct": 30,
+        "max_lane_minimal_live_short_bucket_pct": 0,
+        "max_lane_preliminary_short_bucket_pct": null,
+        "max_lane_ship_gate_short_bucket_pct": null,
+        "max_single_name_short_bucket_pct": 5,
+        "max_theme_cluster_short_bucket_pct": 10,
+        "daily_new_exposure_cap_short_bucket_pct": 6,
+        "weekly_new_exposure_cap_short_bucket_pct": 12,
+        "global_pooling_allowed": false,
+        "cross_market_pooling_allowed": false,
+        "liquidity_bucket_auto_borrowing_allowed": false
+      },
+      "liquidity_adv_sizing": {
+        "adv_window_days": 20,
+        "liquidity_metric": "amount_adv",
+        "max_order_adv_pct": 1,
+        "max_participation_rate_pct": 5,
+        "min_liquidity_threshold_description": "A-share paper sizing must record amount/turnover capacity; live-normalized evidence is not allowed for this minimal tier.",
+        "spread_required_for_live_normalized": true,
+        "halt_limit_state_blocks_entry": true,
+        "scaling_modes_allowed": [
+          "capped",
+          "not_valid",
+          "not_assessed"
+        ],
+        "insufficient_liquidity_action": "paper_only"
+      },
+      "slippage_market_impact": {
+        "gross_net_required": true,
+        "slippage_model_required": true,
+        "spread_model_required": true,
+        "market_impact_model_required": true,
+        "no_zero_cost_default": true,
+        "cost_components_required": [
+          "commissions",
+          "stamp_duty",
+          "taxes",
+          "spread",
+          "slippage",
+          "market_impact",
+          "cash_drag",
+          "opportunity_cost"
+        ],
+        "evidence_level_cost_status": "required_before_paper_comparison"
+      },
+      "borrow_limit_feasibility": {
+        "applies_to_market": "A",
+        "borrow_required_for_short_side": false,
+        "borrow_fields_required_when_short_side_used": [
+          "not_applicable"
+        ],
+        "limit_or_halt_fields_required": [
+          "limit_up_down_state",
+          "halt_state",
+          "suspension_state"
+        ],
+        "hard_block_conditions": [
+          "Limit-up or limit-down state prevents reliable entry/exit assumption.",
+          "Suspension or stale market status blocks live-normalized evidence."
+        ]
+      },
+      "circuit_breaker_playbook": {
+        "measurement_window": "Monthly cohort and rolling mature-candidate review.",
+        "tiers": [
+          {
+            "tier_id": "warn",
+            "trigger": "Early drawdown or false-breakout cluster worse than expected but not yet a lane breach.",
+            "action": "warn",
+            "required_response": "Annotate evidence packet and inspect failed-candidate reasons.",
+            "evidence_effect": "Evidence remains paper-only."
+          },
+          {
+            "tier_id": "size_down",
+            "trigger": "Drawdown, failed breakout, or slippage proxy breaches preliminary tolerance.",
+            "action": "size_down",
+            "required_response": "Cap simulated exposure and mark scaling as capped or not valid.",
+            "evidence_effect": "Cannot promote until the next mature review clears the breach."
+          },
+          {
+            "tier_id": "pause_new_entries",
+            "trigger": "Repeated mature cohorts underperform provisional benchmark without regime explanation.",
+            "action": "pause_new_entries",
+            "required_response": "Stop adding paper candidates until manual review records a restart rationale.",
+            "evidence_effect": "Evidence clock for promotion pauses."
+          },
+          {
+            "tier_id": "manual_review",
+            "trigger": "Provider drift, limit/halt incident, or concentrated theme failure invalidates assumptions.",
+            "action": "manual_review",
+            "required_response": "User or reviewer must decide continue, redesign, or stop.",
+            "evidence_effect": "No live-normalized label can be applied."
+          },
+          {
+            "tier_id": "reactivation",
+            "trigger": "Paused lane has a documented fix and a clean cooldown period.",
+            "action": "reactivation_cooldown",
+            "required_response": "Restart only at paper stage with fresh cooldown evidence.",
+            "evidence_effect": "Prior failed window remains in history."
+          }
+        ],
+        "reactivation_rule": "A paused minimal tier restarts only after documented root-cause review and at least one clean monthly paper window.",
+        "manual_order_boundary": true
+      },
+      "evidence_requirements": {
+        "allowed_evidence_levels": [
+          "paper"
+        ],
+        "rejected_candidate_retention_required": true,
+        "failed_breakout_retention_required": true,
+        "benchmark_set_source": "docs/provider_priority_benchmark_contract.md",
+        "cost_adjusted_return_required": true,
+        "capacity_scaling_assessment_required": true,
+        "manual_override_logging_required": true,
+        "live_normalized_requires_position_reconciliation": true
+      }
+    },
+    {
+      "lane_id": "a_share_burst_full_data",
+      "parent_lane_id": "a_burst",
+      "market": "A",
+      "tier": "full_data_burst",
+      "live_eligibility_status": "blocked_until_provider_ready",
+      "promotion_gate": {
+        "from_stage": "research_paper",
+        "target_stage": "minimal_live_observation",
+        "promotion_status": "blocked_until_required_evidence",
+        "minimum_mature_months": 6,
+        "minimum_mature_candidates": 30,
+        "paired_comparison_required": true,
+        "non_price_confirmation_required": true,
+        "required_conditions": [
+          {
+            "condition_id": "benchmark_relative_paper_alpha_positive_or_explained",
+            "status": "required",
+            "evidence_required": "Full-data A-share burst must show incremental evidence versus minimal-data burst and CSI benchmarks."
+          },
+          {
+            "condition_id": "drawdown_within_preliminary_limit",
+            "status": "required",
+            "evidence_required": "Drawdown must remain reviewable after costs and limit-risk assumptions."
+          },
+          {
+            "condition_id": "false_positive_behavior_reviewed",
+            "status": "required",
+            "evidence_required": "False breakouts and stale catalyst cases must remain in the evidence set."
+          },
+          {
+            "condition_id": "non_price_confirmation_path_reviewed",
+            "status": "required",
+            "evidence_required": "Dated policy, event, capital-flow, filing, or manual evidence path must be present."
+          },
+          {
+            "condition_id": "cost_liquidity_spread_borrow_limit_feasible",
+            "status": "required",
+            "evidence_required": "A-share amount, lot size, T+1, limit-lock, and halt feasibility must pass before live observation."
+          },
+          {
+            "condition_id": "rejected_failed_candidates_retained",
+            "status": "required",
+            "evidence_required": "Rejected and failed candidates must be logged from the same stable report path."
+          },
+          {
+            "condition_id": "minimal_vs_full_data_paired_comparison_available",
+            "status": "required",
+            "evidence_required": "Full-data report must be compared with the minimal-only decision for the same candidate/date."
+          },
+          {
+            "condition_id": "provider_manual_evidence_path_reviewed",
+            "status": "blocked",
+            "evidence_required": "Provider or manual evidence path remains blocked until Phase 7b evidence review."
+          }
+        ]
+      },
+      "exposure_limits": {
+        "max_lane_paper_short_bucket_pct": 30,
+        "max_lane_minimal_live_short_bucket_pct": 10,
+        "max_lane_preliminary_short_bucket_pct": 20,
+        "max_lane_ship_gate_short_bucket_pct": 30,
+        "max_single_name_short_bucket_pct": 2.5,
+        "max_theme_cluster_short_bucket_pct": 7.5,
+        "daily_new_exposure_cap_short_bucket_pct": 4,
+        "weekly_new_exposure_cap_short_bucket_pct": 8,
+        "global_pooling_allowed": false,
+        "cross_market_pooling_allowed": false,
+        "liquidity_bucket_auto_borrowing_allowed": false
+      },
+      "liquidity_adv_sizing": {
+        "adv_window_days": 20,
+        "liquidity_metric": "amount_adv",
+        "max_order_adv_pct": 1,
+        "max_participation_rate_pct": 5,
+        "min_liquidity_threshold_description": "A-share live-normalized evidence must be capped when order size exceeds amount/ADV or limit-state feasibility.",
+        "spread_required_for_live_normalized": true,
+        "halt_limit_state_blocks_entry": true,
+        "scaling_modes_allowed": [
+          "linear",
+          "capped",
+          "not_valid",
+          "not_assessed"
+        ],
+        "insufficient_liquidity_action": "reject_live_normalized"
+      },
+      "slippage_market_impact": {
+        "gross_net_required": true,
+        "slippage_model_required": true,
+        "spread_model_required": true,
+        "market_impact_model_required": true,
+        "no_zero_cost_default": true,
+        "cost_components_required": [
+          "commissions",
+          "stamp_duty",
+          "taxes",
+          "spread",
+          "slippage",
+          "market_impact",
+          "cash_drag",
+          "opportunity_cost"
+        ],
+        "evidence_level_cost_status": "required_before_live_normalized"
+      },
+      "borrow_limit_feasibility": {
+        "applies_to_market": "A",
+        "borrow_required_for_short_side": false,
+        "borrow_fields_required_when_short_side_used": [
+          "not_applicable"
+        ],
+        "limit_or_halt_fields_required": [
+          "limit_up_down_state",
+          "halt_state",
+          "suspension_state"
+        ],
+        "hard_block_conditions": [
+          "Limit-lock risk blocks live-normalized evidence unless the report records tradable entry and exit assumptions.",
+          "T+1 and suspension risk must be disclosed in the evidence packet."
+        ]
+      },
+      "circuit_breaker_playbook": {
+        "measurement_window": "Monthly mature cohort plus incident-triggered review.",
+        "tiers": [
+          {
+            "tier_id": "warn",
+            "trigger": "Cost-adjusted underperformance, slippage surprise, or isolated limit/halt incident.",
+            "action": "warn",
+            "required_response": "Annotate the evidence packet and keep live eligibility blocked until reviewed.",
+            "evidence_effect": "No promotion from paper to live observation."
+          },
+          {
+            "tier_id": "size_down",
+            "trigger": "Capacity or liquidity evidence does not scale to target bucket sizing.",
+            "action": "size_down",
+            "required_response": "Reduce candidate sizing cap and mark scaling mode capped.",
+            "evidence_effect": "Preliminary sizing is capped until new evidence clears."
+          },
+          {
+            "tier_id": "pause_new_entries",
+            "trigger": "Two mature review windows breach drawdown or false-breakout tolerance.",
+            "action": "pause_new_entries",
+            "required_response": "Pause new candidates and run root-cause review.",
+            "evidence_effect": "Live-normalized evidence claim is suspended."
+          },
+          {
+            "tier_id": "manual_review",
+            "trigger": "Provider field drift, stale catalyst evidence, or policy reversal invalidates the trigger family.",
+            "action": "manual_review",
+            "required_response": "Reviewer decides continue, redesign, or do-not-implement.",
+            "evidence_effect": "No ship-gate advancement."
+          },
+          {
+            "tier_id": "reactivation",
+            "trigger": "Root cause is fixed and cooldown evidence is clean.",
+            "action": "reactivation_cooldown",
+            "required_response": "Restart at minimal paper/full-data comparison stage.",
+            "evidence_effect": "Prior failed window remains included."
+          }
+        ],
+        "reactivation_rule": "Reactivation requires manual review plus a clean cooldown paper window before any minimal live observation.",
+        "manual_order_boundary": true
+      },
+      "evidence_requirements": {
+        "allowed_evidence_levels": [
+          "paper",
+          "live_normalized"
+        ],
+        "rejected_candidate_retention_required": true,
+        "failed_breakout_retention_required": true,
+        "benchmark_set_source": "docs/provider_priority_benchmark_contract.md",
+        "cost_adjusted_return_required": true,
+        "capacity_scaling_assessment_required": true,
+        "manual_override_logging_required": true,
+        "live_normalized_requires_position_reconciliation": true
+      }
+    },
+    {
+      "lane_id": "us_burst_minimal_data",
+      "parent_lane_id": "us_burst",
+      "market": "US",
+      "tier": "minimal_data_burst",
+      "live_eligibility_status": "paper_only",
+      "promotion_gate": {
+        "from_stage": "research_paper",
+        "target_stage": "full_data_paper",
+        "promotion_status": "blocked_until_required_evidence",
+        "minimum_mature_months": 6,
+        "minimum_mature_candidates": 30,
+        "paired_comparison_required": true,
+        "non_price_confirmation_required": true,
+        "required_conditions": [
+          {
+            "condition_id": "benchmark_relative_paper_alpha_positive_or_explained",
+            "status": "required",
+            "evidence_required": "Monthly cohorts versus Russell 1000 primary plus SPY/QQQ secondary context."
+          },
+          {
+            "condition_id": "drawdown_within_preliminary_limit",
+            "status": "required",
+            "evidence_required": "Gap and extended-hours drawdown must be measured."
+          },
+          {
+            "condition_id": "false_positive_behavior_reviewed",
+            "status": "required",
+            "evidence_required": "Failed gap continuation and reversal cases must remain visible."
+          },
+          {
+            "condition_id": "non_price_confirmation_path_reviewed",
+            "status": "blocked",
+            "evidence_required": "Minimal US price evidence needs dated filing, earnings, guidance, options, borrow, or manual evidence before live use."
+          },
+          {
+            "condition_id": "cost_liquidity_spread_borrow_limit_feasible",
+            "status": "required",
+            "evidence_required": "Dollar ADV, spread, LULD halt, and short-side borrow assumptions must be visible."
+          },
+          {
+            "condition_id": "rejected_failed_candidates_retained",
+            "status": "required",
+            "evidence_required": "Rejected and failed candidates must be retained."
+          },
+          {
+            "condition_id": "minimal_vs_full_data_paired_comparison_available",
+            "status": "blocked",
+            "evidence_required": "Comparison waits for full-data evidence availability."
+          }
+        ]
+      },
+      "exposure_limits": {
+        "max_lane_paper_short_bucket_pct": 30,
+        "max_lane_minimal_live_short_bucket_pct": 0,
+        "max_lane_preliminary_short_bucket_pct": null,
+        "max_lane_ship_gate_short_bucket_pct": null,
+        "max_single_name_short_bucket_pct": 5,
+        "max_theme_cluster_short_bucket_pct": 10,
+        "daily_new_exposure_cap_short_bucket_pct": 6,
+        "weekly_new_exposure_cap_short_bucket_pct": 12,
+        "global_pooling_allowed": false,
+        "cross_market_pooling_allowed": false,
+        "liquidity_bucket_auto_borrowing_allowed": false
+      },
+      "liquidity_adv_sizing": {
+        "adv_window_days": 20,
+        "liquidity_metric": "dollar_adv",
+        "max_order_adv_pct": 0.5,
+        "max_participation_rate_pct": 3,
+        "min_liquidity_threshold_description": "US minimal burst remains paper-only; dollar ADV and spread are still recorded for capacity diagnostics.",
+        "spread_required_for_live_normalized": true,
+        "halt_limit_state_blocks_entry": true,
+        "scaling_modes_allowed": [
+          "capped",
+          "not_valid",
+          "not_assessed"
+        ],
+        "insufficient_liquidity_action": "paper_only"
+      },
+      "slippage_market_impact": {
+        "gross_net_required": true,
+        "slippage_model_required": true,
+        "spread_model_required": true,
+        "market_impact_model_required": true,
+        "no_zero_cost_default": true,
+        "cost_components_required": [
+          "commissions",
+          "taxes",
+          "spread",
+          "slippage",
+          "market_impact",
+          "borrow_fee",
+          "fx",
+          "cash_drag",
+          "opportunity_cost"
+        ],
+        "evidence_level_cost_status": "required_before_paper_comparison"
+      },
+      "borrow_limit_feasibility": {
+        "applies_to_market": "US",
+        "borrow_required_for_short_side": true,
+        "borrow_fields_required_when_short_side_used": [
+          "locate_available",
+          "borrow_fee",
+          "short_interest",
+          "days_to_cover",
+          "reg_sho_threshold",
+          "ssr_state"
+        ],
+        "limit_or_halt_fields_required": [
+          "luld_state",
+          "session_label"
+        ],
+        "hard_block_conditions": [
+          "Short-side evidence is diagnostic only until borrow and locate data are reviewed.",
+          "LULD halt or stale session label blocks live-normalized evidence."
+        ]
+      },
+      "circuit_breaker_playbook": {
+        "measurement_window": "Monthly cohort plus event-session incident review.",
+        "tiers": [
+          {
+            "tier_id": "warn",
+            "trigger": "Gap reversal, spread widening, or benchmark-relative underperformance appears in a mature paper window.",
+            "action": "warn",
+            "required_response": "Annotate cost and session assumptions.",
+            "evidence_effect": "Evidence remains paper-only."
+          },
+          {
+            "tier_id": "size_down",
+            "trigger": "Dollar ADV or spread diagnostics imply non-scalable capacity.",
+            "action": "size_down",
+            "required_response": "Cap simulated sizing and mark scaling capped.",
+            "evidence_effect": "Cannot promote until full-data comparison clears."
+          },
+          {
+            "tier_id": "pause_new_entries",
+            "trigger": "Repeated gap failures or event timing mismatch creates evidence drift.",
+            "action": "pause_new_entries",
+            "required_response": "Pause new paper candidates pending review.",
+            "evidence_effect": "Promotion clock pauses."
+          },
+          {
+            "tier_id": "manual_review",
+            "trigger": "Missing session, LULD, borrow, or event timing data invalidates assumptions.",
+            "action": "manual_review",
+            "required_response": "Reviewer decides whether to continue paper evidence.",
+            "evidence_effect": "No live-normalized claim."
+          },
+          {
+            "tier_id": "reactivation",
+            "trigger": "Evidence issue fixed and cooldown window is clean.",
+            "action": "reactivation_cooldown",
+            "required_response": "Restart at paper stage.",
+            "evidence_effect": "Prior failed window remains included."
+          }
+        ],
+        "reactivation_rule": "A paused US minimal tier restarts only after session/cost issue review and a clean paper month.",
+        "manual_order_boundary": true
+      },
+      "evidence_requirements": {
+        "allowed_evidence_levels": [
+          "paper"
+        ],
+        "rejected_candidate_retention_required": true,
+        "failed_breakout_retention_required": true,
+        "benchmark_set_source": "docs/provider_priority_benchmark_contract.md",
+        "cost_adjusted_return_required": true,
+        "capacity_scaling_assessment_required": true,
+        "manual_override_logging_required": true,
+        "live_normalized_requires_position_reconciliation": true
+      }
+    },
+    {
+      "lane_id": "us_burst_full_data",
+      "parent_lane_id": "us_burst",
+      "market": "US",
+      "tier": "full_data_burst",
+      "live_eligibility_status": "blocked_until_provider_ready",
+      "promotion_gate": {
+        "from_stage": "research_paper",
+        "target_stage": "minimal_live_observation",
+        "promotion_status": "blocked_until_required_evidence",
+        "minimum_mature_months": 6,
+        "minimum_mature_candidates": 30,
+        "paired_comparison_required": true,
+        "non_price_confirmation_required": true,
+        "required_conditions": [
+          {
+            "condition_id": "benchmark_relative_paper_alpha_positive_or_explained",
+            "status": "required",
+            "evidence_required": "US full-data burst must show incremental evidence versus minimal-data and Russell/SPY/QQQ benchmarks."
+          },
+          {
+            "condition_id": "drawdown_within_preliminary_limit",
+            "status": "required",
+            "evidence_required": "Drawdown must include gap, extended-hours, and borrow/cost assumptions where relevant."
+          },
+          {
+            "condition_id": "false_positive_behavior_reviewed",
+            "status": "required",
+            "evidence_required": "False event, gap-fade, and failed breakout cases must be retained."
+          },
+          {
+            "condition_id": "non_price_confirmation_path_reviewed",
+            "status": "required",
+            "evidence_required": "Filing, earnings/guidance, options, borrow, short-interest, or manual evidence path must be reviewed."
+          },
+          {
+            "condition_id": "cost_liquidity_spread_borrow_limit_feasible",
+            "status": "required",
+            "evidence_required": "Dollar ADV, spread, extended-hours, LULD, Reg SHO/SSR, and borrow feasibility must be recorded."
+          },
+          {
+            "condition_id": "rejected_failed_candidates_retained",
+            "status": "required",
+            "evidence_required": "Rejected and failed candidates must be logged from the same stable report path."
+          },
+          {
+            "condition_id": "minimal_vs_full_data_paired_comparison_available",
+            "status": "required",
+            "evidence_required": "Full-data decision must be paired with minimal-only decision for the same candidate/date."
+          },
+          {
+            "condition_id": "provider_manual_evidence_path_reviewed",
+            "status": "blocked",
+            "evidence_required": "Provider or manual event/borrow evidence path remains blocked until Phase 7b evidence review."
+          }
+        ]
+      },
+      "exposure_limits": {
+        "max_lane_paper_short_bucket_pct": 30,
+        "max_lane_minimal_live_short_bucket_pct": 10,
+        "max_lane_preliminary_short_bucket_pct": 20,
+        "max_lane_ship_gate_short_bucket_pct": 30,
+        "max_single_name_short_bucket_pct": 2.5,
+        "max_theme_cluster_short_bucket_pct": 7.5,
+        "daily_new_exposure_cap_short_bucket_pct": 4,
+        "weekly_new_exposure_cap_short_bucket_pct": 8,
+        "global_pooling_allowed": false,
+        "cross_market_pooling_allowed": false,
+        "liquidity_bucket_auto_borrowing_allowed": false
+      },
+      "liquidity_adv_sizing": {
+        "adv_window_days": 20,
+        "liquidity_metric": "dollar_adv",
+        "max_order_adv_pct": 0.5,
+        "max_participation_rate_pct": 3,
+        "min_liquidity_threshold_description": "US live-normalized evidence is capped or invalid if dollar ADV, spread, session, or borrow evidence cannot support scaling.",
+        "spread_required_for_live_normalized": true,
+        "halt_limit_state_blocks_entry": true,
+        "scaling_modes_allowed": [
+          "linear",
+          "capped",
+          "not_valid",
+          "not_assessed"
+        ],
+        "insufficient_liquidity_action": "reject_live_normalized"
+      },
+      "slippage_market_impact": {
+        "gross_net_required": true,
+        "slippage_model_required": true,
+        "spread_model_required": true,
+        "market_impact_model_required": true,
+        "no_zero_cost_default": true,
+        "cost_components_required": [
+          "commissions",
+          "taxes",
+          "spread",
+          "slippage",
+          "market_impact",
+          "borrow_fee",
+          "fx",
+          "adr_fee",
+          "dividends_withholding",
+          "cash_drag",
+          "opportunity_cost"
+        ],
+        "evidence_level_cost_status": "required_before_live_normalized"
+      },
+      "borrow_limit_feasibility": {
+        "applies_to_market": "US",
+        "borrow_required_for_short_side": true,
+        "borrow_fields_required_when_short_side_used": [
+          "locate_available",
+          "borrow_fee",
+          "short_interest",
+          "days_to_cover",
+          "reg_sho_threshold",
+          "ssr_state"
+        ],
+        "limit_or_halt_fields_required": [
+          "luld_state",
+          "session_label"
+        ],
+        "hard_block_conditions": [
+          "Missing borrow/locate evidence blocks short-side live-normalized evidence.",
+          "LULD halt, session mismatch, or stale extended-hours evidence blocks live-normalized evidence."
+        ]
+      },
+      "circuit_breaker_playbook": {
+        "measurement_window": "Monthly mature cohort plus provider/session incident review.",
+        "tiers": [
+          {
+            "tier_id": "warn",
+            "trigger": "Cost-adjusted underperformance, event timing drift, or borrow-cost surprise appears.",
+            "action": "warn",
+            "required_response": "Annotate evidence packet and review data lineage.",
+            "evidence_effect": "No promotion until reviewed."
+          },
+          {
+            "tier_id": "size_down",
+            "trigger": "Capacity, spread, or borrow cost does not scale to bucket target.",
+            "action": "size_down",
+            "required_response": "Reduce sizing cap and mark scaling capped.",
+            "evidence_effect": "Preliminary sizing is capped until new evidence clears."
+          },
+          {
+            "tier_id": "pause_new_entries",
+            "trigger": "Mature windows breach drawdown, false-positive, or borrow/cost tolerance.",
+            "action": "pause_new_entries",
+            "required_response": "Pause candidates and run root-cause review.",
+            "evidence_effect": "Live-normalized evidence claim is suspended."
+          },
+          {
+            "tier_id": "manual_review",
+            "trigger": "Provider drift, LULD/session mismatch, or borrow data failure invalidates the report path.",
+            "action": "manual_review",
+            "required_response": "Reviewer decides continue, redesign, or do-not-implement.",
+            "evidence_effect": "No ship-gate advancement."
+          },
+          {
+            "tier_id": "reactivation",
+            "trigger": "Root cause is fixed and cooldown evidence is clean.",
+            "action": "reactivation_cooldown",
+            "required_response": "Restart at paper/full-data comparison stage.",
+            "evidence_effect": "Prior failed window remains included."
+          }
+        ],
+        "reactivation_rule": "Reactivation requires manual review, clean provider/session evidence, and at least one clean cooldown paper month.",
+        "manual_order_boundary": true
+      },
+      "evidence_requirements": {
+        "allowed_evidence_levels": [
+          "paper",
+          "live_normalized"
+        ],
+        "rejected_candidate_retention_required": true,
+        "failed_breakout_retention_required": true,
+        "benchmark_set_source": "docs/provider_priority_benchmark_contract.md",
+        "cost_adjusted_return_required": true,
+        "capacity_scaling_assessment_required": true,
+        "manual_override_logging_required": true,
+        "live_normalized_requires_position_reconciliation": true
+      }
+    }
+  ],
+  "global_circuit_breaker_policy": {
+    "tier_actions_required": [
+      "warn",
+      "size_down",
+      "pause_new_entries",
+      "manual_review",
+      "reactivation_cooldown"
+    ],
+    "lane_pause_overrides_new_entries": true,
+    "reactivation_requires_manual_review": true,
+    "automatic_order_action_allowed": false
+  },
+  "deferred_decisions": [
+    "Exact numeric drawdown and false-positive thresholds remain deferred to the first implementation or report contract after provider evidence review.",
+    "Final ship-gate benchmarks remain governed by the benchmark switch rule in docs/provider_priority_benchmark_contract.md.",
+    "Real-money evidence budgets require explicit user approval and remain market-local and bucket-local."
+  ],
+  "limitations": [
+    "This example is a contract shape and conservative baseline, not a production runner config.",
+    "It does not select providers, fetch data, or prove alpha.",
+    "Minimal-data burst remains paper/research only by default."
+  ]
+}

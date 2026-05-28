@@ -1,6 +1,6 @@
 # Strategy Design Synthesis
 
-**Status**: user-approved design direction, revised 2026-05-28 with Phase 7a-3 provider priority / provisional benchmark routing.
+**Status**: user-approved design direction, revised 2026-05-28 with Phase 7a-4 evidence feasibility controls.
 **Scope**: four-system strategy architecture after Phase 5 execution aggregation.
 **Authority**: this document explains the design; `AGENTS.md` carries the binding summary for all LLM collaborators.
 
@@ -63,6 +63,8 @@ This upgrade reverses the older next-step assumption that Phase 7 should first s
 4. Already-proven A-share EOD / CSI benchmark surfaces recorded as ready evidence, not the default next implementation sink.
 
 The same Phase 7a-3 contract defines provisional evidence benchmarks for A-short, A/US burst, US-short, A-long, and US-long. These benchmarks start evidence accumulation and sensitivity reporting only. They do not finalize ship-gate benchmarks or convert paper evidence into live-normalized evidence.
+
+Phase 7a-4 evidence feasibility controls are defined in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`. They lock burst minimal-to-full promotion evidence, concentration / liquidity / ADV sizing, slippage / borrow / limit-risk feasibility, and drawdown / circuit-breaker playbooks without provider selection, data fetch, runner changes, or ship-gate relaxation.
 
 ## 2. Short-Term Architecture
 
@@ -386,7 +388,7 @@ Split the post-audit work into small reviewed slices:
 
 - Phase 7a-2: revise long / short specs; add US microstructure, monitoring contract, calendar and timezone semantics.
 - Phase 7a-3: provider priority reorder and provisional benchmark contract.
-- Phase 7a-4: burst minimal-to-full promotion criteria, evidence capital schema, concentration limits, liquidity / ADV sizing, slippage constraints, and drawdown / circuit-breaker tiered action playbook.
+- Phase 7a-4: burst minimal-to-full promotion criteria, evidence capital schema, concentration limits, liquidity / ADV sizing, slippage constraints, and drawdown / circuit-breaker tiered action playbook in `docs/evidence_feasibility_controls.md`.
 - Phase 7a-5: evidence report schemas, immutable decision packet, cost-adjusted return details, cash drag, manual override, minimal reconciliation, long thesis outcome log, and research experiment log.
 
 ### Phase 7b / 7c - Provider Evidence And DataHub
@@ -429,7 +431,7 @@ Phase 7a-1 is complete as a reviewed audit chain: schema contract, lightweight p
 
 1. Phase 7a-2: owner-spec routing for long, steady short, US-short, and burst lanes is complete.
 2. Phase 7a-3: provider priority and provisional benchmark contract is defined in `docs/provider_priority_benchmark_contract.md`.
-3. Phase 7a-4: define burst minimal-to-full promotion, concentration / liquidity / ADV sizing, slippage, and circuit-breaker playbooks.
+3. Phase 7a-4: evidence feasibility controls are defined in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`.
 4. Phase 7a-5: define evidence report schemas, immutable decision packets, cost-adjusted returns, cash drag, overrides, reconciliation, thesis outcome logs, and research experiment logs.
 
 A-short continues as maintenance / evidence accumulation while Phase 7a contracts are written. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, fetch provider data, or build DataHub tables before the relevant alpha-audit and provider-evidence contracts are reviewed.

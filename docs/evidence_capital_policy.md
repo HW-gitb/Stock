@@ -1,6 +1,6 @@
 # Evidence Capital Policy
 
-**Status**: Phase 7a design route owner. This document defines how paper and live-normalized evidence are interpreted without changing the fixed capital allocation policy.
+**Status**: Phase 7a design route owner with Phase 7a-4 feasibility-control schema routed. This document defines how paper and live-normalized evidence are interpreted without changing the fixed capital allocation policy.
 
 **Owner role**: evidence-level, normalized-return, and ship-gate evidence policy owner. It complements `docs/portfolio_allocation_policy.md`, `schemas/portfolio_allocation.schema.json`, and `schemas/execution_aggregate_report.schema.json`.
 
@@ -106,7 +106,9 @@ If the user later approves a real-money evidence budget, it must be:
 
 ## 7. Required Schema Follow-Up
 
-Before aggregate reports consume this policy, update `schemas/execution_aggregate_report.schema.json` and runner output contracts to include:
+Phase 7a-4 adds `schemas/evidence_feasibility_controls.schema.json` for burst promotion, capacity, liquidity, slippage, borrow / limit-risk, and circuit-breaker feasibility. It is a contract / example / test baseline, not a runner output schema.
+
+Before aggregate reports consume this policy, Phase 7a-5 / later implementation-adjacent slices must update report schemas such as `schemas/execution_aggregate_report.schema.json` and runner output contracts to include:
 
 - `evidence_level`,
 - normalization basis,

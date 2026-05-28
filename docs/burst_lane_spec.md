@@ -1,6 +1,6 @@
 # Burst Lane Spec
 
-**Status**: Phase 6c docs-only baseline with Phase 7a-3 benchmark-routing update. This document defines the A/US short-term `burst_lane` contract. It does not implement schemas, runners, providers, DataHub, or order execution.
+**Status**: Phase 6c docs-only baseline with Phase 7a-4 evidence-feasibility controls. This document defines the A/US short-term `burst_lane` contract. It does not implement runners, providers, DataHub, or order execution.
 
 **Owner role**: detailed spec owner for the short-term burst lane. `docs/strategy_design_synthesis.md` remains the strategy architecture entry; `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` remains the Phase 6 boundary / evidence-routing owner.
 
@@ -50,7 +50,7 @@ Burst lanes are split into two data tiers so implementation is not blocked by a 
 
 The first implementation may start with `minimal_data_burst` to start paper evidence. It must not describe this as production burst readiness. Minimal live observation requires `full_data_burst` or a reviewed exception that documents equivalent non-price confirmation.
 
-Minimal-to-full promotion criteria are owned by the Phase 7a-4 slice in `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`. At minimum, promotion must prove benchmark-relative paper alpha, acceptable drawdown and false-positive behavior, more than pure price momentum, a credible non-price confirmation path, cost / liquidity / spread / borrow / limit-risk feasibility, retained rejected / failed candidates, and a paired comparison between minimal-only and minimal-plus-full-data evidence after full data is available.
+Minimal-to-full promotion criteria are owned by the Phase 7a-4 contract in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`. At minimum, promotion must prove benchmark-relative paper alpha, acceptable drawdown and false-positive behavior, more than pure price momentum, a credible non-price confirmation path, cost / liquidity / spread / borrow / limit-risk feasibility, retained rejected / failed candidates, and a paired comparison between minimal-only and minimal-plus-full-data evidence after full data is available.
 
 ## 2.6 Phase 7a-1 Audit Routing
 
@@ -299,7 +299,6 @@ Phase 6c docs-only baseline is complete when:
 
 ## 13. Next Work
 
-After the Phase 7a-3 provider priority / provisional benchmark contract, the next burst-related docs-only slices are:
+After the Phase 7a-4 evidence feasibility controls contract, the next burst-related schema slice is:
 
-1. Phase 7a-4 minimal-to-full promotion criteria, concentration / liquidity / ADV sizing, slippage constraints, and circuit-breaker playbook.
-2. Phase 7a-5 burst evidence report schema with immutable decision packet and cost-adjusted return fields.
+1. Phase 7a-5 burst evidence report schema with immutable decision packet, cost-adjusted return, manual override, and minimal reconciliation fields.

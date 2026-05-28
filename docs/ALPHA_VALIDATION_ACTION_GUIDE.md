@@ -25,9 +25,9 @@ Fixed governance:
 
 ## 2. Current Execution Rule
 
-Stop broad design looping. Phase 7a-1 and Phase 7a-2 are complete. Phase 7a-3 adds the provider priority and provisional benchmark contract in `docs/provider_priority_benchmark_contract.md`.
+Stop broad design looping. Phase 7a-1 through Phase 7a-4 are complete. Phase 7a-3 adds the provider priority and provisional benchmark contract in `docs/provider_priority_benchmark_contract.md`; Phase 7a-4 adds evidence feasibility controls in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`.
 
-The next execution slice after Phase 7a-3 is Phase 7a-4: evidence feasibility controls for burst promotion, concentration, liquidity / ADV sizing, slippage, borrow / limit-risk feasibility, and drawdown / circuit-breaker playbooks.
+The next execution slice after Phase 7a-4 is Phase 7a-5: evidence report schemas for immutable decision packets, cost-adjusted return details, cash drag / opportunity cost, manual override, minimal reconciliation, long thesis outcome log, and research experiment log.
 
 Phase 7a contract slices must not:
 
@@ -255,6 +255,6 @@ These controls are allowed to land later, but they are not optional:
 
 ## 13. Current Next Step
 
-After the Phase 7a-3 provider priority / provisional benchmark contract, the next `执行` should implement Phase 7a-4.
+After the Phase 7a-4 evidence feasibility controls contract, the next `执行` should implement Phase 7a-5.
 
 Do not start Phase 7b, Phase 7c, provider adapters, provider data fetches, or runner changes before the Phase 7a evidence-control slices are reviewed and accepted.

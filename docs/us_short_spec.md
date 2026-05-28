@@ -1,6 +1,6 @@
 # US Short Spec
 
-**Status**: Phase 6d docs-only baseline with Phase 7a-3 benchmark-routing update. This document normalizes the existing US-short screening and analysis reference materials into a production-facing spec shape. It does not implement schemas, runners, providers, DataHub, skills, prompts, or order execution.
+**Status**: Phase 6d docs-only baseline with Phase 7a-4 evidence-feasibility routing. This document normalizes the existing US-short screening and analysis reference materials into a production-facing spec shape. It does not implement runners, providers, DataHub, skills, prompts, or order execution.
 
 **Owner role**: detailed spec owner for US-short steady-lane normalization. `skills/us_short_analysis/reference/` remains the source-reference archive; `docs/burst_lane_spec.md` owns the independent US burst lane; `docs/strategy_design_synthesis.md` remains the architecture / route entry.
 
@@ -339,7 +339,6 @@ US-short docs-only baseline is complete when:
 
 ## 12. Next Work
 
-After the Phase 7a-3 provider priority / provisional benchmark contract, the next US-short docs-only slices are:
+After the Phase 7a-4 evidence feasibility controls contract, the next US-short schema slice is:
 
-1. Phase 7a-4 concentration, liquidity / ADV, slippage, borrow, and circuit-breaker constraints.
-2. Phase 7a-5 evidence report schema fields for immutable decision packets, manual overrides, cost-adjusted return, and position reconciliation.
+1. Phase 7a-5 evidence report schema fields for immutable decision packets, manual overrides, cost-adjusted return, and position reconciliation.

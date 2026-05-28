@@ -8,6 +8,140 @@
 
 ---
 
+## 2026-05-28 — Claude re-review — Pass (Phase 7a-4 O1 repair)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2dc50c2`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 accepted as suggested — `tests/schema/test_evidence_feasibility_controls_schema.py::test_policy_prevents_paper_ship_gate_and_capital_pooling` 现 line 56-57 加了 `full_size_requires_existing_ship_gate` 与 `bucket_ceiling_required_before_live_observation` 两条 `assertEqual`，10 个 `controlPolicy` const 全覆盖；独立 `python -m unittest tests.schema.test_evidence_feasibility_controls_schema -v` 10 tests pass；`修复` scope 极小（仅 test file + SESSION_LOG.md）；test file 无 trailing whitespace；其余 12 modified tracked + 4 untracked Phase 7a-4 文件未触动。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-28 — Codex (repair: Phase 7a-4 Optional O1)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Responds to the latest Claude review verdict: Pass with fixes, with 0 Required fixes and 1 Optional suggestion.
+- No Required fixes were pending; only Optional disposition was needed.
+
+**Worked on**:
+1. [tracked] `tests/schema/test_evidence_feasibility_controls_schema.py`: accepted O1 by adding explicit regression assertions for `full_size_requires_existing_ship_gate` and `bucket_ceiling_required_before_live_observation`.
+2. [tracked] `docs/SESSION_LOG.md`: recorded this repair entry for Claude re-review continuity.
+
+**Optional disposition**:
+- O1 accept — added the two missing `controlPolicy` const assertions exactly as suggested.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_evidence_feasibility_controls_schema -v`: 10 tests passed.
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- `rg -n "[ \t]+$" docs\SESSION_LOG.md tests\schema\test_evidence_feasibility_controls_schema.py` found no trailing whitespace.
+
+**Current review state**:
+- Approved Required fixes repaired: 0.
+- Optional dispositions: 1 accepted, 0 accepted with modification, 0 rejected.
+- Working tree uncommitted.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude re-reviews the repaired Phase 7a-4 change set.
+
+---
+
+## 2026-05-28 — Claude review — Pass with fixes (Phase 7a-4 evidence feasibility controls)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2dc50c2`)
+
+**Verdict**: Pass with fixes.
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes (0) — none; Optional suggestions (1) PENDING CODEX DISPOSITION.
+
+**Required fixes**: none.
+
+**Optional suggestions**:
+
+- **O1**: `tests/schema/test_evidence_feasibility_controls_schema.py::test_policy_prevents_paper_ship_gate_and_capital_pooling` 断言了 `controlPolicy` 10 个 const 字段中的 8 个，遗漏 `full_size_requires_existing_ship_gate` 和 `bucket_ceiling_required_before_live_observation`。这两个 const 在 schema (line 164-169) 里已 lock，但没有 explicit regression 锚点 — 如果未来某个 PR 把它们改成普通 boolean（不再 const true），8 个其余 const 的测试仍 pass，只有 schema 验证链 indirectly 捕获。这两个 lock 跟 paper ship-gate / pooling 的 safety semantics 同级（"full-size 必须先满足 ship gate"、"live observation 前必须有 bucket capital context"），加 2 行 `assertEqual` 是低成本完整化。建议下一轮 `修复` 直接补上。
+
+**Notes**: Codex `执行` round Phase 7a-4 — 4 untracked new (`docs/evidence_feasibility_controls.md` 148 行 / `schemas/evidence_feasibility_controls.schema.json` 864 行 v1.0.0 / `schemas/examples/evidence_feasibility_controls.example.json` 757 行 / `tests/schema/test_evidence_feasibility_controls_schema.py` 177 行 10 tests) + 12 tracked routing/handoff updates (`AGENTS.md` / `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` / `docs/CURRENT.md` / `docs/README.md` / `docs/SESSION_LOG.md` / `docs/alpha_plausibility_audit.md` / `docs/burst_lane_spec.md` / `docs/evidence_capital_policy.md` / `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` / `docs/provider_priority_benchmark_contract.md` / `docs/strategy_design_synthesis.md` / `docs/us_short_spec.md`), total 155 insertions / 34 deletions。Scope 严守：0 runner 改 / 0 strategy 改 / 0 provider 选择 / 0 数据抓取 / 0 adapter / 0 DataHub table / 0 broker / 0 OS automation / 0 ship-gate relaxation — 全部通过 schema `scope` object 11 const 强制（`phase: "7a-4"`、`provider_selection_allowed: false`、`data_fetch_allowed: false`、`provider_adapter_allowed: false`、`datahub_table_implementation_allowed: false`、`strategy_rule_change_allowed: false`、`broker_or_order_automation_allowed: false`、`manual_order_only: true`、`ship_gate_relaxed: false`、`purpose: "evidence_feasibility_controls_contract"`、`contract_status: "schema_first_contract_only"`）。Schema defensive design 充分：(1) `controlPolicy` 10 个 const lock（fixed_allocation_policy_unchanged true、no global/cross-market/liquidity pool、no paper ship-gate claim、no minimal-data live by default、live_normalized 必须 ship gate、full_size 必须 existing ship gate、bucket ceiling 必须先于 live observation、actual_position_reconciliation 必须 for live_normalized）；(2) `laneControls` 用 `minItems: 4` + 4 个 `allOf.contains` 强制 4 条 burst lane 全覆盖（a_share_burst_minimal_data / a_share_burst_full_data / us_burst_minimal_data / us_burst_full_data）；(3) `circuitBreakerPlaybook.tiers` 用 `minItems: 5` + 5 个 `allOf.contains` 强制 5 类 action (warn / size_down / pause_new_entries / manual_review / reactivation_cooldown)；(4) `promotionGate.required_conditions` `minItems: 7`；(5) `evidenceRequirements.benchmark_set_source` 硬编码为 `docs/provider_priority_benchmark_contract.md`（防止 lane drift）；(6) `globalCircuitBreakerPolicy.automatic_order_action_allowed: const false`；(7) production 数值阈值（drawdown / false-positive limits）特意不锁进 schema — 留给后续 implementation contract，对齐 Codex Alternatives rejected。Example 跨 4 lane 一致：A-minimal `paper_only` + `max_lane_minimal_live: 0` + 7 conditions（含 2 `blocked`）；A-full `blocked_until_provider_ready` + `max_lane_minimal_live: 10` + 8 conditions（含 provider_manual_evidence_path `blocked`）；US-minimal `paper_only` + 5% per-name 仿真 cap + dollar_adv + LULD/SSR borrow fields；US-full full microstructure + adr_fee / dividends_withholding / borrow_fee 完整 cost components。Cross-doc consistency 完整：AGENTS.md 执行路线图 7a-4 ✅ schema-first baseline / 7a-5 ⬜ 下一刀 + §当前进度 + §文件参考；CURRENT.md §1 Phase 推进、§2 加 entry、§4 加 entry、§5 P0 → 7a-5 / P1 → 7b（消除前一轮重复隐患再次复发：P0/P1/P2/P3 现为 4 个不同 Phase）/ §3 P3 移除 7b/7c 旧 bullet 避免与新 P1 重复；ALPHA_VALIDATION_ACTION_GUIDE §2 / §13 推进到 7a-5；burst_lane_spec status header 移除 "schemas" non-scope（因为 7a-4 加 schema）、§2.5 路由到 evidence_feasibility_controls、§13 Next Work；us_short_spec status header 同理移除 "schemas" + §12 Next Work 精简到 7a-5；evidence_capital_policy §7 标注 Phase 7a-4 是 contract / example / test baseline 而非 runner output schema（清晰划界 vs Phase 7a-5 report schemas）；provider_priority_benchmark_contract §8 Next Use 标注 7a-4 done、7a-5 应消费两份 contract；alpha_plausibility_audit §recommended route Step 4 更新；strategy_design_synthesis status + §1.x + §Phase 7a 三处一致；handoff append §失效旧结论 explicit 标注 "下一条 推荐 Phase 7a-4" 失效 + "Minimal-data burst 可因 paper signal 进入 live observation" 继续失效 + "Circuit breaker 可留到 Phase 8" 失效。独立 validation: `python -m unittest tests.schema.test_evidence_feasibility_controls_schema -v` 10 tests pass / `python -m unittest discover -s tests/schema` 61 tests pass（51 + 10 = 61 一致）/ `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` 给 146 行（与 Codex 报告一致）/ `git diff --check` clean / `git diff --cached` empty / evidence_feasibility_controls 4 文件 trailing whitespace scan clean。除 O1 外无 scope / contract / risk issue；无 open question；无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-28 — Codex (Phase 7a-4 evidence feasibility controls)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `2dc50c2` (`Add Phase 7a provider benchmark contract`).
+- Converts the Phase 7a-4 next step from `docs/CURRENT.md` and `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` into a schema-first evidence feasibility contract.
+
+**Worked on**:
+1. [untracked] `docs/evidence_feasibility_controls.md`: added the Phase 7a-4 owner doc for burst minimal-to-full promotion, evidence capital, concentration / liquidity / ADV, slippage / borrow / limit-risk, and circuit-breaker controls.
+2. [untracked] `schemas/evidence_feasibility_controls.schema.json`, `schemas/examples/evidence_feasibility_controls.example.json`, `tests/schema/test_evidence_feasibility_controls_schema.py`: added schema v1.0.0, example, and regression tests.
+3. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/alpha_plausibility_audit.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`, `docs/evidence_capital_policy.md`, `docs/provider_priority_benchmark_contract.md`: routed Phase 7a-4 and advanced current next work to Phase 7a-5.
+4. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7a-4 handoff section.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this handoff and the required reconstructed commit entry for `2dc50c2`.
+
+**Key decisions**:
+- Phase 7a-4 is a schema-first contract slice, not provider selection, data fetch, adapter, DataHub, runner, or strategy-rule work.
+- Minimal-data A/US burst remains `paper_only`; live-normalized evidence must wait for the reviewed full-data path and actual-position reconciliation.
+- The schema forces four burst maturity lanes, no paper ship-gate claim, no global / cross-market / liquidity-bucket pooling, cost-adjusted return requirements, capacity scaling assessment, and a five-action circuit-breaker playbook (`warn`, `size_down`, `pause_new_entries`, `manual_review`, `reactivation_cooldown`).
+- Phase 7a-5 is now the next P0: evidence report schemas for immutable decision packets, cost-adjusted return, cash drag, manual override, minimal reconciliation, thesis outcome log, and research experiment log.
+
+**Alternatives considered and rejected**:
+- "Only update `docs/burst_lane_spec.md`" — rejected. Phase 7a-4 includes an evidence capital schema requirement, so the controls need a machine-checkable contract and tests.
+- "Set final production drawdown / false-positive numeric thresholds now" — rejected. The contract locks required fields, playbook actions, and conservative sizing boundaries; exact production thresholds belong to the first implementation/report contract after provider evidence review.
+- "Use Phase 7a-4 to revisit provider priority" — rejected. Provider queue remains owned by `docs/provider_priority_benchmark_contract.md`; this slice only consumes that contract.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_evidence_feasibility_controls_schema -v`: 10 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 61 tests passed.
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- Changed-file trailing whitespace scan found no matches.
+- Active stale next-step scan for Phase 7a-4-as-next wording found no matches in touched active docs.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reports `146`, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7a-4 evidence feasibility controls slice.
+2. If Pass and user commits, the next `执行` slice should start Phase 7a-5 evidence report schemas.
+
+---
+
+## 2026-05-28 — Codex (reconstructed from commit messages: Phase 7a-3 commit)
+
+**Commits**: `2dc50c2` (`Add Phase 7a provider benchmark contract`)
+
+**Relationship to prior session(s)**:
+- Reconstructed per `AGENTS.md §Session log discipline` fallback because the reviewed Phase 7a-3 commit existed after the latest SESSION_LOG review entry.
+- Finalizes the Claude-reviewed Phase 7a-3 provider priority / provisional benchmark contract change set.
+
+**Worked on**:
+1. [tracked] Committed the reviewed Phase 7a-3 docs-only scope: provider priority / provisional benchmark owner contract, routing docs, owner specs, handoff, and the R1 repair in `docs/CURRENT.md` / `docs/SESSION_LOG.md`.
+
+**Key decisions**:
+- No new design decision beyond the reviewed change set; commit `2dc50c2` is the repository state that the next Phase 7a-4 work builds on.
+
+**Alternatives considered and rejected**:
+- None; reconstruction only.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Execute Phase 7a-4 evidence feasibility controls.
+
+---
+
 ## 2026-05-28 — Claude re-review — Pass (Phase 7a-3 R1 repair)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8aabc1b`)
