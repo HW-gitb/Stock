@@ -1,6 +1,6 @@
 # Provider Evidence And Drift Monitor Contract
 
-**Status**: Phase 7b-1 schema-first baseline plus Phase 7b-2 P1 public-source, market-data-candidate, authorization / cost / stability, and benchmark / GICS candidate evidence snapshots. Broader provider capability evidence population is still in progress.
+**Status**: Phase 7b-1 schema-first baseline plus Phase 7b-2 P1 public-source, market-data-candidate, authorization / cost / stability, benchmark / GICS, and fundamentals observed-date candidate evidence snapshots. Broader provider capability evidence population is still in progress.
 
 **Owner role**: provider capability evidence population and data quality / provider drift monitoring contract after the Phase 7a provider-priority, feasibility, and evidence-report contracts. This document defines the evidence shape and routes reviewed evidence snapshots.
 
@@ -10,7 +10,7 @@ This document does not select providers, fetch data, create adapters, implement 
 
 Phase 7a established the lane verdicts, provider evidence queue, provisional benchmarks, feasibility controls, and evidence report shape. Phase 7b-1 converts the provider evidence queue into a machine-checkable provider evidence and drift-monitor artifact so later provider population, DataHub, or runner work cannot rely on guessed provider readiness. Phase 7b-2 uses that contract to populate actual provider capability evidence from reviewed provider documentation, fields, PIT, coverage, cost, fallback, and stability evidence.
 
-The machine-checkable owner is `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`. The current evidence-population artifacts are `docs/provider_evidence_p1_us_public_sources_20260528.json`, `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`, `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`, and `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`.
+The machine-checkable owner is `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`. The current evidence-population artifacts are `docs/provider_evidence_p1_us_public_sources_20260528.json`, `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`, `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`, `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`, and `docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json`.
 
 ## 2. Scope Locks
 
@@ -139,8 +139,19 @@ Verdict: P1 remains `partial` and implementation-blocked. This slice narrows the
 
 Verdict: P1 remains `partial` and implementation-blocked. This slice narrows the direct benchmark and GICS-history candidate evidence gap, but official index pages / methodology docs are not licensed project-ready historical return feeds, and GICS taxonomy / product pages are not yet issuer-level PIT membership history with usable sample rows, data dictionary, license, coverage counts, and as-of semantics.
 
-## 11. Next Use
+## 11. Fifth P1 Fundamentals Observed-Date Candidate Snapshot
 
-Phase 7b-2 should continue populating provider capability evidence in P1 before moving to P2-P4. The next P1 slice should focus on coverage counts, fundamentals / filing observed-date provider candidates beyond latest-only sources, fallback behavior, and incident / stability evidence. Phase 7c may consume the reviewed Phase 7b-2 evidence when designing DataHub shared-layer schemas, report contracts, and reproducibility plumbing. That must be a separate reviewed implementation slice.
+`docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json` is the fifth Phase 7b-2 evidence-population artifact. It reviews official documentation for:
+
+- SEC EDGAR submissions, complete-submission timestamp semantics, extracted XBRL companyfacts, and public-source reconstruction constraints,
+- Intrinio filing-linked fundamentals with filing `accepted_date`, `filing_date`, `is_latest`, and `updated_date` candidate evidence,
+- FMP SEC filings / as-reported statement endpoints and cycle-time documentation, with latest/current endpoint limitations,
+- Nasdaq Data Link / Sharadar Core US Fundamentals product-listing and publisher candidate context, pending table-level date-key review.
+
+Verdict: P1 remains `partial` and implementation-blocked. This slice narrows the fundamentals observed-date candidate gap, especially by separating SEC public reconstruction and Intrinio accepted-date support from latest-only sources. It still does not provide coverage counts, license approval, field-level PIT construction, sample-row validation, fallback behavior, or provider incident / stability evidence.
+
+## 12. Next Use
+
+Phase 7b-2 should continue populating provider capability evidence in P1 before moving to P2-P4. The next P1 slice should focus on coverage counts, fallback behavior, incident / stability evidence, and any unresolved fundamentals field-level license / sample-row validation. Phase 7c may consume the reviewed Phase 7b-2 evidence when designing DataHub shared-layer schemas, report contracts, and reproducibility plumbing. That must be a separate reviewed implementation slice.
 
 This Phase 7b baseline does not fetch provider data, implement adapters, create DataHub tables, or modify runners.

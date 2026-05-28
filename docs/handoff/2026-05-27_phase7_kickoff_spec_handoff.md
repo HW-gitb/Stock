@@ -751,3 +751,44 @@ git diff --check
 1. 下一条 `执行` 仍应继续 Phase 7b-2 P1，而不是进入 Phase 7c。
 2. 不要把 official index pages / methodology docs 误读为 licensed historical benchmark return feed。
 3. 不要把 GICS methodology / product docs 误读为已可用 issuer-level PIT GICS membership；仍需 license、sample、coverage、identifier 和 as-of 证据。
+
+## 2026-05-28 追加：Phase 7b-2 P1 US fundamentals observed-date candidate evidence snapshot
+
+**改了什么**:
+
+- 新增 `docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json`，作为 Phase 7b-2 第五份 P1 evidence-population artifact。
+- 该 artifact 基于 SEC、Intrinio、FMP、Nasdaq Data Link / Sharadar 官方文档，记录 SEC EDGAR public reconstruction、Intrinio filing fundamentals accepted-date candidate、FMP SEC filings / as-reported statement candidate、Nasdaq Data Link / Sharadar SF1 candidate context。
+- 扩展 `tests/schema/test_provider_evidence_drift_monitor_schema.py`，让 schema 回归同时验证五份 P1 evidence artifacts，并断言 fundamentals observed-date snapshot 仍为 partial / non-authorizing。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/provider_evidence_drift_monitor.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/datahub_design.md`、`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/evidence_report_schema_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- 上一刀补了 benchmark / GICS candidate evidence，但 P1 仍缺 fundamentals / filing observed-date provider candidates beyond latest-only sources。
+- SEC EDGAR 能支持 public-source filing/XBRL reconstruction，但需要 accession-level observed-date、taxonomy、amendment、coverage、security-master linking 和 fair-access policy 才能进入 implementation。
+- Intrinio 文档明确给出 filing-linked fundamentals 的 `accepted_date` / `filing_date` / `is_latest` / `updated_date` candidate evidence；FMP 和 Nasdaq Data Link / Sharadar 仍只是 candidate context，不能当作 PIT-ready historical fundamentals。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` line count check。
+
+**验证结果**:
+
+- 最终验证结果记录在同日 Codex SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “P1 evidence snapshots 只有四份”失效；现在有 public-source、market-data-candidate、authorization / cost / stability、benchmark / GICS、fundamentals observed-date 五份 P1 snapshots。
+- “下一刀应补 fundamentals / filing observed-date candidates beyond latest-only sources”需收窄；该方向已有 candidate evidence，但仍非 implementation-ready。
+- “latest/current financial statement endpoints 可以直接作为 historical PIT fundamentals”不成立；artifact 明确禁止 latest-only backfill。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 仍应继续 Phase 7b-2 P1，而不是进入 Phase 7c。
+2. P1 剩余主要 blocker 收窄为 coverage counts、fallback behavior、incident / stability evidence、unresolved fundamentals field-level license / sample-row validation。
+3. 不要把 SEC / Intrinio / FMP / Nasdaq Data Link / Sharadar 文档误读为 provider selection、paid-access approval、PIT-safe production factors、local-storage approval 或 DataHub implementation readiness。

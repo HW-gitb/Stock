@@ -12,11 +12,15 @@ P1_PUBLIC_SOURCE_PATH = Path("docs/provider_evidence_p1_us_public_sources_202605
 P1_MARKET_DATA_PATH = Path("docs/provider_evidence_p1_us_market_data_candidates_20260528.json")
 P1_AUTH_COST_PATH = Path("docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json")
 P1_BENCHMARK_GICS_PATH = Path("docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json")
+P1_FUNDAMENTALS_OBSERVED_DATE_PATH = Path(
+    "docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json"
+)
 P1_EVIDENCE_PATHS = [
     P1_PUBLIC_SOURCE_PATH,
     P1_MARKET_DATA_PATH,
     P1_AUTH_COST_PATH,
     P1_BENCHMARK_GICS_PATH,
+    P1_FUNDAMENTALS_OBSERVED_DATE_PATH,
 ]
 
 
@@ -396,6 +400,81 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
         self.assertEqual(
             records["p1.us_remaining_coverage_fundamentals_fallback_incident"]["source_basis"],
             "placeholder_pending_review",
+        )
+
+    def test_p1_fundamentals_observed_date_artifact_is_partial_and_non_authorizing(self) -> None:
+        artifact = json.loads(P1_FUNDAMENTALS_OBSERVED_DATE_PATH.read_text(encoding="utf-8"))
+        records = {record["record_id"]: record for record in artifact["provider_evidence_records"]}
+        p1_records = [record for record in artifact["provider_evidence_records"] if record["priority"] == "P1"]
+        reviewed_p1_records = [
+            record for record in p1_records if record["source_basis"] == "reviewed_provider_evidence"
+        ]
+
+        self.assertEqual(artifact["scope"]["contract_status"], "provider_evidence_population_snapshot")
+        self.assertEqual(artifact["provider_readiness_rollup"]["p1_status"], "partial")
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["implementation_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["provider_selection_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertIn("p1.us_sec_edgar_xbrl_observed_date_reconstruction_candidate", records)
+        self.assertIn("p1.us_intrinio_filing_fundamentals_observed_date_candidate", records)
+        self.assertIn("p1.us_fmp_sec_filings_as_reported_candidate", records)
+        self.assertIn("p1.us_nasdaq_sharadar_fundamentals_candidate_pending_datekey_review", records)
+        self.assertIn("p1.us_remaining_coverage_fallback_incident", records)
+        self.assertTrue(
+            all(
+                record["evidence_source_refs"]
+                and not record["provider_selection_made"]
+                and not record["data_fetch_performed"]
+                for record in reviewed_p1_records
+            )
+        )
+        self.assertTrue(
+            all(
+                "WebFetched on 2026-05-28" in source_ref["evidence_note"]
+                for record in reviewed_p1_records
+                for source_ref in record["evidence_source_refs"]
+            )
+        )
+        self.assertEqual(
+            records["p1.us_intrinio_filing_fundamentals_observed_date_candidate"][
+                "observed_date_support"
+            ],
+            "supported",
+        )
+        self.assertEqual(
+            records["p1.us_fmp_sec_filings_as_reported_candidate"]["observed_date_support"],
+            "partial",
+        )
+        self.assertEqual(
+            records["p1.us_nasdaq_sharadar_fundamentals_candidate_pending_datekey_review"][
+                "observed_date_support"
+            ],
+            "unknown",
+        )
+        self.assertEqual(
+            records["p1.us_remaining_coverage_fallback_incident"]["source_basis"],
+            "placeholder_pending_review",
+        )
+        self.assertTrue(
+            any(
+                "Coverage counts" in item or "coverage counts" in item
+                for item in records["p1.us_remaining_coverage_fallback_incident"][
+                    "missing_required_evidence"
+                ]
+            )
+        )
+        self.assertTrue(
+            any(
+                "latest" in limitation.lower()
+                for limitation in records["p1.us_fmp_sec_filings_as_reported_candidate"][
+                    "limitations"
+                ]
+            )
         )
 
     def test_selected_provider_is_rejected_when_jsonschema_available(self) -> None:

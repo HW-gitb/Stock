@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-28（Phase 7b-2 P1 US benchmark / GICS candidate provider evidence snapshot）
+**最后更新**：2026-05-28（Phase 7b-2 P1 US fundamentals observed-date candidate evidence snapshot）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -8,10 +8,10 @@
 
 ## 0. Latest Delta
 
-- Phase 7b-2 P1 evidence snapshots now include public-source, market-data-candidate, authorization / cost / stability, and benchmark / GICS candidate evidence: `docs/provider_evidence_p1_us_public_sources_20260528.json`, `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`, `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`, and `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`.
+- Phase 7b-2 P1 evidence snapshots now include public-source, market-data-candidate, authorization / cost / stability, benchmark / GICS, and fundamentals observed-date candidate evidence: `docs/provider_evidence_p1_us_public_sources_20260528.json`, `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`, `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`, `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`, and `docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json`.
 - P1 remains `partial` and implementation-blocked. These snapshots do not select a provider, fetch provider data, approve paid access, build adapters, create DataHub tables, or modify runners.
 - `schemas/provider_evidence_drift_monitor.schema.json` remains v1.1.0: it validates `provider_evidence_population_snapshot` artifacts and requires source refs for `reviewed_provider_evidence`.
-- Next P1 work should focus on coverage counts, fundamentals / filing observed-date provider candidates beyond latest-only sources, fallback behavior, and incident / stability evidence.
+- Next P1 work should focus on coverage counts, fallback behavior, incident / stability evidence, and unresolved fundamentals field-level license / sample-row validation.
 
 ---
 
@@ -27,6 +27,7 @@
 
 ## 2. 最近已完成
 
+- **Phase 7b-2 P1 US fundamentals observed-date candidate evidence snapshot**（2026-05-28）：`docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json` 已建立；覆盖 SEC EDGAR public reconstruction、Intrinio filing fundamentals accepted-date candidate、FMP SEC filings / as-reported candidate、Nasdaq Data Link / Sharadar SF1 candidate context；P1 仍 `partial / blocked`，不选 provider、不抓数据、不建 DataHub。
 - **Phase 7b-2 P1 US benchmark / GICS candidate evidence snapshot**（2026-05-28）：`docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json` 已建立；覆盖 S&P DJI / Nasdaq / FTSE Russell / LSEG benchmark methodology 与 S&P Global / MSCI GICS candidate evidence；P1 仍 partial / blocked，direct index docs 不等于 licensed historical return feed，GICS methodology / product docs 不等于已可用 issuer-level PIT membership。
 - **Phase 7b-2 P1 US authorization / cost / stability evidence snapshot**（2026-05-28）：`docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json` 已建立；覆盖 Massive / Polygon 与 Norgate 官方文档中的 pricing、API-key / subscription / trial access、license / EULA、export / retention、stability constraints、Norgate current-fundamentals latest-only limitation；P1 仍 partial / blocked。
 - **Phase 7b-2 P1 US market-data candidate evidence snapshot**（2026-05-28）：`docs/provider_evidence_p1_us_market_data_candidates_20260528.json` 已建立；覆盖 Massive / Polygon 与 Norgate 官方文档中的 US adjusted OHLCV、corporate actions、ticker/security-master surfaces、market status/exchanges、survivorship/index-membership package claims；P1 仍 partial / blocked。
@@ -72,6 +73,7 @@
 - `docs/provider_evidence_p1_us_market_data_candidates_20260528.json` - Phase 7b-2 P1 market-data-candidate evidence snapshot（partial / blocked）。
 - `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json` - Phase 7b-2 P1 authorization / cost / stability evidence snapshot（partial / blocked）。
 - `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json` - Phase 7b-2 P1 benchmark / GICS candidate evidence snapshot（partial / blocked）。
+- `docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json` - Phase 7b-2 P1 fundamentals observed-date candidate evidence snapshot（partial / blocked）。
 - `docs/evidence_feasibility_controls.md` / `schemas/evidence_feasibility_controls.schema.json` - Phase 7a-4 burst promotion / evidence feasibility controls。
 - `docs/evidence_report_schema_contract.md` / `schemas/evidence_report.schema.json` - Phase 7a-5 evidence report schema contract。
 - `docs/alpha_plausibility_audit.md` / `schemas/alpha_plausibility_audit.schema.json` - Phase 7a-1 audit owner and contract。
@@ -90,7 +92,7 @@
 
 ### P0 - Continue Phase 7b-2 P1 provider capability evidence population
 
-- 继续 P1 US provider evidence：coverage counts、fundamentals / filing observed-date provider candidates beyond latest-only sources、fallback behavior、incident / stability evidence。
+- 继续 P1 US provider evidence：coverage counts、fallback behavior、incident / stability evidence、unresolved fundamentals field-level license / sample-row validation。
 - 不得 silent default、latest-only 回填历史证据，或把 provider status guess 写成 production-ready evidence。
 - 不得建 adapter / DataHub table、改 runner、抓 provider data 或接 broker / OS automation；provider selection 若需要也必须另走 reviewed decision。
 

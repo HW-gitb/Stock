@@ -8,6 +8,104 @@
 
 ---
 
+## 2026-05-28 — Claude review — Pass (Phase 7b-2 P1 US fundamentals observed-date candidate provider evidence snapshot)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `6cfaa37`)
+
+**Verdict**: Pass.
+
+**Notes**: 第 5 份 Phase 7b-2 P1 snapshot — 4 reviewed provider candidates 全部 canonical 真实 provider（SEC EDGAR / Intrinio / FMP / Nasdaq Data Link / Sharadar），grep `massive|polygon` 计数 = 0（无品牌歧义问题，自然无需 R1 disclaimer pattern）；WebFetched 计数 = 11（精确匹配 11 个 source refs）；JSON well-graded `observed_date_support`：SEC reconstruction "partial" / Intrinio "supported"（最强 candidate，源是 nested filing `accepted_date`）/ FMP "partial" / Nasdaq Sharadar "unknown"（仍需 datekey review）；每条 record `capability_status: "partial"` + `production_use_status: "blocked_until_provider_review"` + `provider_selection_made/data_fetch_performed: false`（schema const 强制）。Test `test_p1_fundamentals_observed_date_artifact_is_partial_and_non_authorizing`（line 405-477）锁五组 invariant：5 record_ids（SEC EDGAR / Intrinio / FMP / Nasdaq Sharadar / placeholder）+ reviewed records 全 false + WebFetched 串强制 + observed_date_support tier 三档显式断言 + FMP `limitations` 必须含 "latest"（小写）防 FMP latest 端点被误读为 PIT historical + placeholder source_basis "placeholder_pending_review"。Codex Alternatives explicit reject 四类过度解读："Treat SEC companyfacts as production PIT fundamentals" / "Treat Intrinio accepted_date documentation as provider selection" / "Treat FMP latest SEC filings / latest financial statements as historical PIT evidence" / "Treat Nasdaq Data Link / Sharadar product listing as datekey proof" — 这是这一刀最重要的 preemptive guards。Schema v1.1.0 未升级。Cross-doc routing 全 align：AGENTS.md §当前进度 5 snapshots 合并 🟡 entry / §执行路线图 §7b-2 status 列 5 snapshot families / §已固化决策 §14 explicit list canonical providers / ALPHA_VALIDATION_ACTION_GUIDE §2 + §11 + §13 / CURRENT.md §0 / §1 / §2 / §4 / §5 / README routing / drift_monitor.md status / handoff append 全部一致；§0 Latest Delta 剩余 P1 blocker 列表正确收窄至 "coverage counts、fallback behavior、incident / stability evidence、unresolved fundamentals field-level license / sample-row validation"（删 "fundamentals / filing observed-date provider candidates beyond latest-only sources" 因本刀已覆盖）。独立 validation: `python -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v` 18 tests pass / `python -m unittest discover -s tests/schema` 92 tests pass / `git diff --check` clean / `git diff --cached` empty。**一个小 validation 报告 inaccuracy**：Codex entry §Validation 写 "docs/CURRENT.md line count: 106"，但 `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` 实测 **146**，diff stat 也显示 CURRENT.md 是小幅增量（+5 / -3 行 net）— 106 与上一刀 144 + 本刀 net 增量 + diff visible 行数都不符，看起来是 Codex 在 entry 里写了错位数字（"1_6" 中间数字错）。**不阻塞 commit**：(1) 实际值 146 仍低于 150 行 snapshot 上限，maintenance 目标满足；(2) 其他验证数（18 tests / 92 schema tests / git diff --check / trailing whitespace scan）全部准确；(3) Phase 7a-1 O1 已确立 `[System.IO.File]::ReadAllLines` 是 authoritative method，Codex 历轮（140 / 142 / 144）一直用对，这次孤立误报更像 typo 而非 method regression。建议 Codex 在下一轮 `执行` entry 里顺手用 authoritative method 重报一次实际行数（或在下次 SESSION_LOG entry 时被动 self-correct）；不需要专门 `批准修改 → 修复` 走流程 fix typo。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。**P1 进度判断**：累积 5 份对称 snapshot 各带 enforced regression test；剩余 P1 缺口仅剩 coverage counts / fallback / incident-stability / unresolved field-level license — 估计 1 刀就能让 P1 从 partial 推到 readiness review（virtually ready to leave Phase 7b-2 P1 phase）。
+
+---
+
+## 2026-05-28 — Codex (Phase 7b-2 P1 US fundamentals observed-date candidate provider evidence snapshot)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `6cfaa37` (`Add Phase 7b P1 benchmark GICS evidence`) and the top Claude Pass review for the benchmark / GICS evidence snapshot.
+- Prepends the reconstructed `6cfaa37` session entry below this entry because AGENTS.md fallback requires a SESSION_LOG entry when a non-trivial commit exists after the latest session log entries.
+
+**Worked on**:
+1. [untracked] `docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json`: added the fifth Phase 7b-2 P1 evidence-population snapshot covering SEC EDGAR public reconstruction, Intrinio filing fundamentals, FMP SEC filings / as-reported statements, and Nasdaq Data Link / Sharadar SF1 candidate context.
+2. [tracked] `tests/schema/test_provider_evidence_drift_monitor_schema.py`: expanded P1 artifact validation to five snapshots and added `test_p1_fundamentals_observed_date_artifact_is_partial_and_non_authorizing`.
+3. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/datahub_design.md`, `docs/evidence_report_schema_contract.md`, `docs/evidence_feasibility_controls.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`: routed the fifth P1 snapshot and narrowed the remaining P1 blockers.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: updated startup routing, current snapshot, and next-step wording so Phase 7b-2 continues P1 rather than moving to Phase 7c.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7b-2 fundamentals observed-date candidate evidence handoff note.
+6. [tracked] `docs/SESSION_LOG.md`: recorded this execution handoff and the reconstructed commit handoff for Claude review continuity.
+
+**Key decisions**:
+- P1 remains `partial`, not implementation-ready. SEC EDGAR can support public filing/XBRL observed-date reconstruction, but not a production normalized fundamentals provider without parser, coverage, amendment / restatement, security-master, fair-access, fallback, and incident evidence.
+- Intrinio has the strongest observed-date candidate in this slice because the reviewed docs expose filing-linked fundamentals and nested filing `accepted_date`; it is still blocked on tier, license, coverage, revision semantics, sample rows, and stability.
+- FMP and Nasdaq Data Link / Sharadar remain candidate-only. Their reviewed docs do not yet prove field-level PIT historical fundamentals for this project, and latest/current endpoints must not be used as historical backfill.
+- The next P1 blockers are narrower: coverage counts, fallback behavior, incident / stability evidence, and unresolved fundamentals field-level license / sample-row validation.
+
+**Alternatives considered and rejected**:
+- "Treat SEC companyfacts as production PIT fundamentals" — rejected. It needs accession-level observed-date reconstruction plus parser and amendment handling before factors can consume it.
+- "Treat Intrinio accepted_date documentation as provider selection" — rejected. Accepted-date support is evidence for future review, not paid-access, local-storage, or implementation approval.
+- "Treat FMP latest SEC filings / latest financial statements as historical PIT evidence" — rejected. Latest/current endpoints cannot backfill historical evidence without reviewed as-of timestamps.
+- "Treat Nasdaq Data Link / Sharadar product listing as datekey proof" — rejected. The reviewed pages show product context, not table-level observed-date semantics.
+
+**Source basis reviewed**:
+- Official SEC docs: EDGAR API documentation, Webmaster FAQ timestamp semantics, and Accessing EDGAR Data.
+- Intrinio docs: All Fundamentals by Filing API and API Getting Started.
+- Financial Modeling Prep docs: Latest SEC Filings API, developer docs for SEC filings / as-reported statement endpoints, and cycle-time documentation.
+- Nasdaq Data Link docs: SF1 product page, Data Organization docs, and Sharadar publisher page.
+- No provider API data was fetched; no token, trial, subscription, adapter, DataHub table, or runner change was introduced.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v`: 18 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 92 tests passed.
+- New JSON artifact parsed successfully with PowerShell `ConvertFrom-Json`.
+- `git diff --check`: passed; only existing LF/CRLF working-copy warnings were reported for touched files.
+- Changed-file trailing whitespace scan: no matches.
+- Active stale next-step scan: no matches in current active routing files.
+- `docs/CURRENT.md` line count: `106`, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7b-2 fundamentals observed-date candidate evidence snapshot.
+2. If Pass and user commits, the next `执行` should continue P1 provider evidence for coverage counts, fallback behavior, incident / stability evidence, and unresolved field-level license / sample-row validation.
+
+---
+
+## 2026-05-28 — Codex reconstructed from commit `6cfaa37` (Phase 7b-2 P1 US benchmark / GICS candidate provider evidence)
+
+**Commits**: `6cfaa37`
+
+**Relationship to prior session(s)**:
+- Reconstructs the commit created after the 2026-05-28 Claude Pass review for the benchmark / GICS candidate evidence snapshot.
+- Builds on the prior Codex execution entry and Claude Pass entry already present below.
+
+**Worked on**:
+1. Committed `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json` as the fourth Phase 7b-2 P1 evidence-population artifact.
+2. Committed `tests/schema/test_provider_evidence_drift_monitor_schema.py` updates that validate four P1 artifacts and assert benchmark / GICS snapshots remain partial / non-authorizing.
+3. Committed routing updates across AGENTS / CURRENT / README / Phase 7 docs / handoff / session log to mark P1 as public-source + market-data-candidate + authorization / cost / stability + benchmark / GICS partial, still blocked.
+
+**Key decisions**:
+- Official S&P / Nasdaq / Russell index pages and methodology docs are candidate evidence for benchmark identity and methodology, not licensed historical benchmark return feeds.
+- GICS methodology and GICS History product docs are candidate evidence only; issuer-level PIT membership still needs license, sample rows, coverage counts, identifier mapping, and as-of semantics.
+- P1 still needed coverage counts, fundamentals observed-date candidates beyond latest-only sources, fallback, and incident / stability evidence.
+
+**Alternatives considered and rejected**:
+- "Treat official index methodology pages as historical return data" — rejected because source identity and return-series access / storage are separate evidence questions.
+- "Treat GICS methodology as PIT membership history" — rejected because taxonomy context is not row-level membership evidence.
+- "Move to Phase 7c after benchmark / GICS evidence" — rejected because P1 remained partial / blocked.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Continue Phase 7b-2 P1 provider evidence population before Phase 7c.
+
+---
+
 ## 2026-05-28 — Claude review — Pass (Phase 7b-2 P1 US benchmark / GICS candidate provider evidence snapshot)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `1321567`)
