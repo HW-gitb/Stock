@@ -663,3 +663,46 @@ git diff --check
 1. Claude re-review 时应重点确认 4 条 Massive records 的 source refs 是否都有 verification trace。
 2. 后续若要证明 Polygon-to-Massive rebrand 或做 provider selection，必须另开 reviewed evidence / decision，不得把本次 trace 当作 selection。
 3. P1 仍 partial / blocked；下一条 `执行` 仍继续 authorization / cost、sandbox / trial、coverage count、benchmark、PIT GICS、fundamentals observed-date、fallback / stability evidence。
+
+## 2026-05-28 追加：Phase 7b-2 P1 US authorization / cost / stability evidence snapshot
+
+**改了什么**:
+
+- 新增 `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`，作为 Phase 7b-2 第三份 P1 evidence-population artifact。
+- 该 artifact 基于 Massive / Polygon 与 Norgate 官方文档，记录 pricing、API-key / subscription / trial access、license / EULA、export / retention、stability constraints，以及 Norgate current-fundamentals latest-only limitation。
+- 扩展 `tests/schema/test_provider_evidence_drift_monitor_schema.py`，让 schema 回归同时验证三份 P1 evidence artifacts，并断言 authorization / cost / stability snapshot 仍为 partial / non-authorizing。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/provider_evidence_drift_monitor.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/datahub_design.md`、`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/evidence_report_schema_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- 上一刀已经补了 market-data candidate evidence，但 P1 仍缺 authorization / cost / trial / access / stability 的 reviewed source basis。
+- 官方 terms 显示 Massive / Polygon 与 Norgate 都存在必须单独 review 的使用边界：personal / non-commercial、non-display、local storage、redistribution、subscription lapse、export scope、Windows/plugin access、no-warranty / data-change constraints。
+- Norgate current fundamentals 明确为 latest-only，不能被下游误读成 US-long PIT historical fundamentals provider。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` line count check。
+
+**验证结果**:
+
+- `tests.schema.test_provider_evidence_drift_monitor_schema`: 16 tests passed。
+- Full `tests/schema` discovery: 90 tests passed。
+- `git diff --check`、trailing whitespace scan、stale wording scan 和 `docs/CURRENT.md` line count 的最终结果记录在同日 Codex SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “P1 evidence snapshots 只有 public-source + market-data-candidate 两份”失效；现在有 public-source、market-data-candidate、authorization / cost / stability 三份 P1 snapshots。
+- “下一刀应继续补 authorization / cost、sandbox / trial”需收窄；下一刀应继续补 coverage counts、direct benchmark return sources、issuer-level PIT GICS membership、fundamentals / filing observed-date candidates beyond latest-only sources、fallback behavior、incident / stability evidence。
+- “Norgate current fundamentals 可以作为 US-long historical fundamentals candidate”不成立；本 artifact 明确 latest-only，不得当作 PIT historical fundamentals。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 仍应继续 Phase 7b-2 P1，而不是进入 Phase 7c。
+2. 不要把 Massive / Polygon 或 Norgate 的 pricing / terms / trial evidence 误读为 provider selection、paid-access approval、local-storage approval、non-display approval 或 production readiness。
+3. 如需 trial token、paid access、cost ceiling、provider selection、non-display / local-storage permission，必须另走 reviewed decision。

@@ -10,7 +10,8 @@ SCHEMA_PATH = Path("schemas/provider_evidence_drift_monitor.schema.json")
 EXAMPLE_PATH = Path("schemas/examples/provider_evidence_drift_monitor.example.json")
 P1_PUBLIC_SOURCE_PATH = Path("docs/provider_evidence_p1_us_public_sources_20260528.json")
 P1_MARKET_DATA_PATH = Path("docs/provider_evidence_p1_us_market_data_candidates_20260528.json")
-P1_EVIDENCE_PATHS = [P1_PUBLIC_SOURCE_PATH, P1_MARKET_DATA_PATH]
+P1_AUTH_COST_PATH = Path("docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json")
+P1_EVIDENCE_PATHS = [P1_PUBLIC_SOURCE_PATH, P1_MARKET_DATA_PATH, P1_AUTH_COST_PATH]
 
 
 class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
@@ -202,6 +203,7 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
                 for record in p1_records
             )
         )
+
     def test_p1_market_data_artifact_is_partial_and_non_authorizing(self) -> None:
         artifact = json.loads(P1_MARKET_DATA_PATH.read_text(encoding="utf-8"))
         records = {record["record_id"]: record for record in artifact["provider_evidence_records"]}
@@ -261,6 +263,78 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
         )
         self.assertTrue(
             all("WebFetched on 2026-05-28" in source_ref["evidence_note"] for source_ref in polygon_terms_refs)
+        )
+
+    def test_p1_authorization_cost_artifact_is_partial_and_non_authorizing(self) -> None:
+        artifact = json.loads(P1_AUTH_COST_PATH.read_text(encoding="utf-8"))
+        records = {record["record_id"]: record for record in artifact["provider_evidence_records"]}
+        p1_records = [record for record in artifact["provider_evidence_records"] if record["priority"] == "P1"]
+        reviewed_p1_records = [
+            record for record in p1_records if record["source_basis"] == "reviewed_provider_evidence"
+        ]
+        massive_source_refs = [
+            source_ref
+            for record in reviewed_p1_records
+            for source_ref in record["evidence_source_refs"]
+            if source_ref["source_id"].startswith("massive_")
+        ]
+
+        self.assertEqual(artifact["scope"]["contract_status"], "provider_evidence_population_snapshot")
+        self.assertEqual(artifact["provider_readiness_rollup"]["p1_status"], "partial")
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["implementation_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["provider_selection_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertIn("p1.us_massive_authorization_cost_quota", records)
+        self.assertIn("p1.us_norgate_authorization_cost_access", records)
+        self.assertIn("p1.us_norgate_current_fundamentals_latest_only", records)
+        self.assertIn("p1.us_remaining_benchmark_gics_fallback_stability", records)
+        self.assertEqual(records["p1.us_norgate_current_fundamentals_latest_only"]["pit_status"], "latest_only")
+        self.assertEqual(records["p1.us_norgate_current_fundamentals_latest_only"]["capability_status"], "blocked")
+        self.assertEqual(
+            records["p1.us_remaining_benchmark_gics_fallback_stability"]["source_basis"],
+            "placeholder_pending_review",
+        )
+        self.assertTrue(
+            all(
+                record["evidence_source_refs"]
+                and not record["provider_selection_made"]
+                and not record["data_fetch_performed"]
+                for record in reviewed_p1_records
+            )
+        )
+        self.assertTrue(
+            all(
+                "WebFetched on 2026-05-28" in source_ref["evidence_note"]
+                for record in reviewed_p1_records
+                for source_ref in record["evidence_source_refs"]
+            )
+        )
+        self.assertGreaterEqual(len(massive_source_refs), 4)
+        self.assertTrue(
+            all("WebFetched on 2026-05-28" in source_ref["evidence_note"] for source_ref in massive_source_refs)
+        )
+        self.assertTrue(
+            all(
+                "does not independently prove Polygon-to-Massive rebrand" in source_ref["evidence_note"]
+                for source_ref in massive_source_refs
+            )
+        )
+        self.assertTrue(
+            any(
+                "Massive/Polygon authorization" in limitation
+                for limitation in artifact["limitations"]
+            )
+        )
+        self.assertTrue(
+            any(
+                "latest-only" in limitation
+                for limitation in records["p1.us_norgate_current_fundamentals_latest_only"]["limitations"]
+            )
         )
 
     def test_selected_provider_is_rejected_when_jsonschema_available(self) -> None:

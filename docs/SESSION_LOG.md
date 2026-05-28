@@ -8,6 +8,155 @@
 
 ---
 
+## 2026-05-28 — Claude re-review — Pass (Phase 7b-2 authorization/cost R1 disclaimer regression repair)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `05aa58d`)
+
+**Verdict**: Pass.
+
+**Notes**: R1 修复与上一轮 market-data 修复完全对称 — 4 条 Massive `evidence_note` 末尾追加 "This verifies the Massive docs page was accessible; it does not independently prove Polygon-to-Massive rebrand."（grep 计数 = 4，精确匹配 4 条 ref），`test_p1_authorization_cost_artifact_is_partial_and_non_authorizing` 增加三组新断言：(1) `massive_source_refs` list comprehension filter `source_id.startswith("massive_")`；(2) `assertGreaterEqual(len(massive_source_refs), 4)` 防 ref 被 silent 删；(3) `all("does not independently prove Polygon-to-Massive rebrand" in source_ref["evidence_note"] for source_ref in massive_source_refs)` 强制 disclaimer 串；同时保留 `all("WebFetched on 2026-05-28" in source_ref["evidence_note"])` WebFetched 串断言。这套 test 与 market-data 测试 line 235-264 完全同形 — 两个 P1 artifact 现有对称 regression 保护，未来 Phase 7b-2 后续 slice 加新 Massive ref 时也能 catch 到漏 disclaimer 的 PR。`修复` scope 严守：仅 JSON（4 disclaimer 串追加）+ test file（28 行新断言）+ SESSION_LOG.md prepend；其他 15 个 routing docs / schema / drift_monitor doc 未触动（diff stat 显示的其他文件改动来自上一轮 `执行` round 的 working tree state）。独立 validation: 16 tests pass / 90 全套 pass / Polygon ToS refs / Norgate refs 未被 over-asserted（按 R1 范围只对 Massive refs 强制 disclaimer）。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。Phase 7b-2 三份 P1 snapshot 现都遵守同一套 evidence content 一致性规则；下一刀续 P1（coverage / direct benchmark / PIT GICS membership / fundamentals observed-date beyond latest-only / fallback / incident-stability）时，未来 LLM 若引入新 Massive ref 必须同时加 WebFetched trace + disclaimer，否则 test fail。
+
+---
+
+## 2026-05-28 — Codex (repair: Phase 7b-2 authorization/cost R1)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Responds to the latest Claude review verdict: Pass with fixes, with Required R1 approved by the user as `批准修改 1`.
+- Builds on the prior Codex execution entry for `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`.
+
+**Worked on**:
+1. [untracked] `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`: repaired R1 by adding the same non-proof disclaimer to all four Massive source refs that already had `WebFetched on 2026-05-28` traces.
+2. [tracked] `tests/schema/test_provider_evidence_drift_monitor_schema.py`: added authorization/cost artifact assertions that all Massive refs retain `WebFetched on 2026-05-28` and `does not independently prove Polygon-to-Massive rebrand`.
+3. [tracked] `docs/SESSION_LOG.md`: recorded this repair handoff for Claude re-review.
+
+**Required fix disposition**:
+- R1 repaired exactly as approved: the four Massive refs now state that the Massive docs page was accessible, but the trace does not independently prove Polygon-to-Massive rebrand. The test now prevents this disclaimer from silently disappearing.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v`: 16 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 90 tests passed.
+- `git diff --check`: passed; only existing LF/CRLF working-copy warnings were reported for touched files.
+- Changed-file trailing whitespace scan: no matches.
+- Disclaimer count in `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`: `4`.
+
+**Current review state**:
+- Approved Required fixes repaired: 1.
+- Optional dispositions: 0 accepted, 0 accepted with modification, 0 rejected.
+- Working tree uncommitted.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude re-reviews the repaired authorization / cost / stability Massive-source disclaimer trace.
+
+---
+
+## 2026-05-28 — Claude review — Pass with fixes (Phase 7b-2 P1 US authorization / cost / stability provider evidence snapshot)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `05aa58d`)
+
+**Verdict**: Pass with fixes.
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes (1) PENDING USER APPROVAL; Optional suggestions (0) — none.
+
+**Required fixes**:
+
+- **R1**: `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json` 4 条 Massive evidence_source_refs（`massive_pricing` / `massive_rest_quickstart` / `massive_stocks_overview` / `massive_market_data_terms`，line 105-135）的 `evidence_note` **只应用了上一轮 R1 修复的一半**：(1) `WebFetched on 2026-05-28 at <URL>.` 前缀 ✓ 都有；(2) "This verifies the Massive docs page was accessible; it does not independently prove Polygon-to-Massive rebrand" 非证明 disclaimer ✗ **全部缺失**。同时 `source_title` 第 4 条 "Massive / Polygon Market Data Terms of Service"（line 130）+ artifact 顶层 limitations "The pricing and terms evidence is enough to classify Massive/Polygon authorization and cost as reviewable"（line 178）继续 explicit 用双品牌叙述 — 跟上一轮 market-data candidates artifact 一样的 brand bridging，但**没有同样的 caveat**。如果 Massive 不是 Polygon 真 rebrand，新 artifact 的 WebFetched trace 只证明 URL 可访问，未拦截"Massive == Polygon rebrand"的下游 inference；上一轮 R1 修复的 disclaimer 正是为了拦这条 path。**`test_p1_authorization_cost_artifact_is_partial_and_non_authorizing`（line 268-323）**也不强制 disclaimer 串，与 `test_p1_market_data_artifact_is_partial_and_non_authorizing`（line 235-264 已强制 disclaimer）不对称 — 未来 PR 可以 silent 漏写 disclaimer 而 test 不报。这是 R1 已批准 pattern 的 regression，不是新概念 — 用户上一轮已为同一问题投票路径 (c)。**修复**（与 R1 一致）：(1) 4 条 Massive `evidence_note` 末尾追加 "This verifies the Massive docs page was accessible; it does not independently prove Polygon-to-Massive rebrand."；(2) 扩 `test_p1_authorization_cost_artifact_is_partial_and_non_authorizing` 加入与 market-data 测试同形的两条断言（所有 Massive refs 必须含 `WebFetched on 2026-05-28` 串 + 必须含 disclaimer 串）。Polygon ToS / Norgate refs 不需要此 disclaimer（Polygon.io 与 Norgate 都是 well-known 真实 provider，无品牌歧义）。
+
+**Optional suggestions**: none.
+
+**Notes**: Codex `执行` round Phase 7b-2 第三刀 — 1 untracked new (`docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`) + 16 tracked routing/test updates。Schema **未升级**（仍 v1.1.0）— 第三份 evidence 也是 conforming artifact，scope 正确。Scope 严守（除 R1 disclaimer regression 外）：每条 P1 record `provider_selection_made: false` + `data_fetch_performed: false`（schema const 强制），12 个 scope 安全 const 全保留，provider readiness rollup `implementation / provider_selection / ship_gate_claim_authorized_by_this_artifact` 三 false。新 artifact 内容质量高：4 类 record 覆盖 Massive/Polygon authorization+cost+quota（含 Market Data Terms 限制 personal/non-commercial 等具体 ToS 内容）/ Norgate authorization+cost+access（Windows 平台 + Python 插件 + Free Trial 3-week 限制 + EULA non-exclusive personal use + subscription lapse 数据失效等）/ Norgate current fundamentals 显式 `pit_status: "latest_only"` + `capability_status: "blocked"`（精准防 Norgate fundamentals 被误用做历史 PIT US-long 数据；test line 295-298 强制此 invariant）/ `p1.us_remaining_benchmark_gics_fallback_stability` placeholder record `source_basis: "placeholder_pending_review"` 列出剩余 P1 blocker（test line 299-302 强制此 placeholder 状态）。Cross-doc 标签精准维持 🟡 partial pattern：AGENTS.md §当前进度 把 3 份 snapshot 合并成一条 🟡 entry，§执行路线图 §7b-2 status "🟡 P1 public-source + market-data-candidate + authorization/cost/stability snapshots complete；继续 P1"，§已固化决策 §14 强调 P1 仍 partial / blocked，所有 routing docs（ALPHA_VALIDATION_ACTION_GUIDE §2/§11/§13、CURRENT.md §0/§1/§2/§4/§5、README routing、provider_evidence_drift_monitor.md status、handoff append）一致 "三份 P1 snapshots complete; continue P1 ..."。Codex 在 Alternatives explicit reject "Treat Massive / Polygon individual pricing as paid-access approval" / "Treat Norgate trial availability as implementation readiness" / "Use Norgate current fundamentals for US-long PIT historical fundamentals" / "Move to Phase 7c after this authorization / cost slice" — 4 类 scope 风险全部预防。独立 validation: `python -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v` 16 tests pass / `python -m unittest discover -s tests/schema` 90 tests pass / `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` 给 142 行 / `git diff --check` clean / `git diff --cached` empty / 新 JSON trailing whitespace clean。R1 是 evidence content 一致性 regression，不阻塞 schema / routing / test infrastructure；用户 `批准修改` 后 Codex 可走与上一轮路径 (c) 同形的最小补丁。无 open question / 无 §Optional Re-raise Constraint 触发（这不是 re-raise rejected Optional，是 accepted Required pattern 的 regression）。
+
+---
+
+## 2026-05-28 — Codex (Phase 7b-2 P1 US authorization / cost / stability provider evidence snapshot)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `05aa58d` (`Add Phase 7b P1 market data provider evidence`) and the top Claude Pass review for the market-data candidate evidence snapshot.
+- Prepends the reconstructed `05aa58d` session entry below this entry because AGENTS.md fallback requires a SESSION_LOG entry when a non-trivial commit exists after the last session log top entry.
+
+**Worked on**:
+1. [untracked] `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`: added the third Phase 7b-2 P1 evidence-population snapshot covering Massive / Polygon and Norgate official documentation for authorization, pricing, API-key / subscription / trial access, license / EULA, export / retention, stability constraints, and Norgate current-fundamentals latest-only limitations.
+2. [tracked] `tests/schema/test_provider_evidence_drift_monitor_schema.py`: expanded P1 artifact validation to three snapshots and added `test_p1_authorization_cost_artifact_is_partial_and_non_authorizing`.
+3. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/datahub_design.md`, `docs/evidence_report_schema_contract.md`, `docs/evidence_feasibility_controls.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`: routed the third P1 snapshot and narrowed the remaining P1 blockers.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: updated startup routing, current snapshot, and next-step wording so Phase 7b-2 continues P1 rather than moving to Phase 7c.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7b-2 authorization / cost / stability evidence handoff note.
+6. [tracked] `docs/SESSION_LOG.md`: recorded this execution handoff and the reconstructed commit handoff for Claude review continuity.
+
+**Key decisions**:
+- P1 remains `partial`, not implementation-ready. Massive / Polygon and Norgate authorization / cost evidence is source-backed enough for future review, but it does not approve paid access, trial use, provider selection, local storage, non-display use, adapters, DataHub tables, or runner changes.
+- Norgate current fundamentals are explicitly `latest_only` and `blocked` for historical PIT US-long fundamentals. Norgate can still remain useful as a separate survivorship-aware historical EOD / index-membership candidate.
+- The next P1 blockers are narrower: coverage counts, direct benchmark return sources, issuer-level PIT GICS membership, fundamentals / filing observed-date candidates beyond latest-only sources, fallback behavior, and incident / stability evidence.
+- v1.1.0 schema stays unchanged. This round only adds a conforming evidence-population artifact and regression coverage for it.
+
+**Alternatives considered and rejected**:
+- "Treat Massive / Polygon individual pricing as paid-access approval" — rejected. Pricing and terms are evidence inputs; user cost ceiling, user classification, local-storage / non-display permission, and plan selection remain separate reviewed decisions.
+- "Treat Norgate trial availability as implementation readiness" — rejected. Trial scope is limited and does not resolve Windows / plugin access, export scope, subscription-lapse retention, license, or stability evidence.
+- "Use Norgate current fundamentals for US-long PIT historical fundamentals" — rejected. Official Norgate docs describe current/latest report basis, not historical observed-date fundamentals.
+- "Move to Phase 7c after this authorization / cost slice" — rejected. P1 is still partial / blocked and still lacks coverage, benchmark, PIT GICS, fallback, and incident / stability evidence.
+
+**Source basis reviewed**:
+- Massive official docs: pricing, REST quickstart, Stocks REST overview, and Market Data Terms.
+- Norgate official docs: Stock Market Packages, Overview, Free Trial, Accessibility, Data Content Tables, Data Package FAQ, and End User Licensing Agreement.
+- No provider API data was fetched; no token, trial, subscription, adapter, DataHub table, or runner change was introduced.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v`: 16 tests passed after fixing the new latest-only limitation assertion.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 90 tests passed.
+- `git diff --check`: passed; only existing LF/CRLF working-copy warnings were reported for touched files.
+- Changed-file trailing whitespace scan: no matches.
+- Active stale next-step scan: no stale active-doc matches.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: `142`, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7b-2 authorization / cost / stability evidence snapshot.
+2. If Pass and user commits, the next `执行` should continue P1 provider evidence for coverage counts, direct benchmark return sources, issuer-level PIT GICS membership, fundamentals / filing observed-date candidates beyond latest-only sources, fallback behavior, and incident / stability evidence.
+
+---
+
+## 2026-05-28 — Codex reconstructed from commit `05aa58d` (Phase 7b-2 P1 US market-data candidate provider evidence)
+
+**Commits**: `05aa58d`
+
+**Relationship to prior session(s)**:
+- Reconstructs the commit created after the 2026-05-28 Claude Pass re-review for the market-data candidate R1 verification trace.
+- Builds on the prior Codex repair entry and Claude Pass entry already present below.
+
+**Worked on**:
+1. Committed `docs/provider_evidence_p1_us_market_data_candidates_20260528.json` as the second Phase 7b-2 P1 evidence-population artifact, including the approved R1 WebFetched verification traces for Massive / Polygon source refs.
+2. Committed `tests/schema/test_provider_evidence_drift_monitor_schema.py` updates that validate both P1 artifacts and assert market-data candidate snapshots remain partial / non-authorizing.
+3. Committed routing updates across AGENTS / CURRENT / README / Phase 7 docs / handoff / session log to mark P1 as public-source + market-data-candidate partial, still blocked.
+
+**Key decisions**:
+- The Massive.com WebFetched traces verify reviewed URL accessibility and source review, not Polygon-to-Massive legal continuity or provider selection.
+- The commit did not fetch provider data, approve paid access, select Massive / Polygon or Norgate, build adapters, build DataHub tables, modify runners, or relax ship gates.
+- P1 still needed authorization / cost, sandbox or trial feasibility, coverage counts, benchmark sources, issuer-level PIT GICS, fundamentals / filing observed-date candidates, fallback, and stability evidence.
+
+**Alternatives considered and rejected**:
+- "Treat the Massive / Polygon trace as rebrand proof" — rejected because the repair explicitly limited the trace to URL review and source accessibility.
+- "Move to Phase 7c after market-data candidate evidence" — rejected because P1 was still partial / blocked.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Continue Phase 7b-2 P1 provider evidence population before Phase 7c.
+
+---
+
 ## 2026-05-28 — Claude re-review — Pass (Phase 7b-2 market-data candidate R1 verification trace)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `ea7a644`)

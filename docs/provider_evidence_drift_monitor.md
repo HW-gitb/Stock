@@ -1,6 +1,6 @@
 # Provider Evidence And Drift Monitor Contract
 
-**Status**: Phase 7b-1 schema-first baseline plus Phase 7b-2 P1 public-source and market-data-candidate evidence snapshots. Broader provider capability evidence population is still in progress.
+**Status**: Phase 7b-1 schema-first baseline plus Phase 7b-2 P1 public-source, market-data-candidate, and authorization / cost / stability evidence snapshots. Broader provider capability evidence population is still in progress.
 
 **Owner role**: provider capability evidence population and data quality / provider drift monitoring contract after the Phase 7a provider-priority, feasibility, and evidence-report contracts. This document defines the evidence shape and routes reviewed evidence snapshots.
 
@@ -10,7 +10,7 @@ This document does not select providers, fetch data, create adapters, implement 
 
 Phase 7a established the lane verdicts, provider evidence queue, provisional benchmarks, feasibility controls, and evidence report shape. Phase 7b-1 converts the provider evidence queue into a machine-checkable provider evidence and drift-monitor artifact so later provider population, DataHub, or runner work cannot rely on guessed provider readiness. Phase 7b-2 uses that contract to populate actual provider capability evidence from reviewed provider documentation, fields, PIT, coverage, cost, fallback, and stability evidence.
 
-The machine-checkable owner is `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`. The current evidence-population artifacts are `docs/provider_evidence_p1_us_public_sources_20260528.json` and `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`.
+The machine-checkable owner is `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`. The current evidence-population artifacts are `docs/provider_evidence_p1_us_public_sources_20260528.json`, `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`, and `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`.
 
 ## 2. Scope Locks
 
@@ -118,8 +118,18 @@ Verdict: P1 remains `partial` and implementation-blocked. The reviewed docs esta
 
 R1 repair note: the Massive.com source refs in this artifact include explicit `WebFetched on 2026-05-28 at ...` traces in their `evidence_note` fields. These traces record that the Massive docs pages were actually opened and reviewed for this artifact; they do not by themselves prove Polygon-to-Massive brand or legal continuity, and they do not authorize provider selection.
 
-## 9. Next Use
+## 9. Third P1 Authorization / Cost / Stability Snapshot
 
-Phase 7b-2 should continue populating provider capability evidence in P1 before moving to P2-P4. The next P1 slice should focus on authorization / cost, sandbox or trial feasibility, coverage counts, direct benchmark return sources, issuer-level PIT GICS membership, and fundamentals / filing observed-date provider candidates. Phase 7c may consume the reviewed Phase 7b-2 evidence when designing DataHub shared-layer schemas, report contracts, and reproducibility plumbing. That must be a separate reviewed implementation slice.
+`docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json` is the third Phase 7b-2 evidence-population artifact. It reviews official provider documentation for:
+
+- Massive / Polygon pricing, REST API-key access, stock-plan tiers, regulatory / non-professional framing, and market-data terms,
+- Norgate Data package pricing, subscription / free-trial limits, Windows / plugin access, EULA restrictions, and export / retention constraints,
+- Norgate current-fundamentals latest-only limitations for US-long observed-date reconstruction.
+
+Verdict: P1 remains `partial` and implementation-blocked. This slice narrows the authorization / cost / trial / access evidence gap, but it does not approve paid access or provider selection. Massive / Polygon remains blocked by user classification, local storage, non-display / derived-work use, quota, stability, and business-plan review. Norgate remains blocked by subscription, Windows/plugin access, export, personal-use license, retention-after-lapse, and stability review. Norgate current fundamentals are latest-only and should not be treated as PIT historical fundamentals.
+
+## 10. Next Use
+
+Phase 7b-2 should continue populating provider capability evidence in P1 before moving to P2-P4. The next P1 slice should focus on coverage counts, direct benchmark return sources, issuer-level PIT GICS membership, fundamentals / filing observed-date provider candidates beyond latest-only sources, fallback behavior, and incident / stability evidence. Phase 7c may consume the reviewed Phase 7b-2 evidence when designing DataHub shared-layer schemas, report contracts, and reproducibility plumbing. That must be a separate reviewed implementation slice.
 
 This Phase 7b baseline does not fetch provider data, implement adapters, create DataHub tables, or modify runners.
