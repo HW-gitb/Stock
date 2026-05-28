@@ -706,3 +706,48 @@ git diff --check
 1. 下一条 `执行` 仍应继续 Phase 7b-2 P1，而不是进入 Phase 7c。
 2. 不要把 Massive / Polygon 或 Norgate 的 pricing / terms / trial evidence 误读为 provider selection、paid-access approval、local-storage approval、non-display approval 或 production readiness。
 3. 如需 trial token、paid access、cost ceiling、provider selection、non-display / local-storage permission，必须另走 reviewed decision。
+
+## 2026-05-28 追加：Phase 7b-2 P1 US benchmark / GICS candidate evidence snapshot
+
+**改了什么**:
+
+- 新增 `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`，作为 Phase 7b-2 第四份 P1 evidence-population artifact。
+- 该 artifact 基于 S&P DJI、Nasdaq、FTSE Russell / LSEG、MSCI、S&P Global 官方文档，记录 S&P 500 / Nasdaq-100 / Russell 1000 direct benchmark source candidate evidence 与 GICS taxonomy / GICS History candidate evidence。
+- 扩展 `tests/schema/test_provider_evidence_drift_monitor_schema.py`，让 schema 回归同时验证四份 P1 evidence artifacts，并断言 benchmark / GICS snapshot 仍为 partial / non-authorizing。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/provider_evidence_drift_monitor.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/datahub_design.md`、`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/evidence_report_schema_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- 上一刀补了 authorization / cost / stability，但 P1 仍缺 direct benchmark return source 与 issuer-level PIT GICS candidate review。
+- 官方 index methodology / index pages 可作为 direct benchmark-source candidate evidence，但不能当成已授权、可本地存储、可回测消费的历史 total-return feed。
+- GICS methodology 只能证明 taxonomy context；S&P Global GICS History product docs 只是 issuer-level history candidate，仍需 license、sample rows、data dictionary、coverage counts、identifier mapping 与 as-of semantics 审查。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` line count check。
+
+**验证结果**:
+
+- `tests.schema.test_provider_evidence_drift_monitor_schema`: 17 tests passed。
+- Full `tests/schema` discovery: 91 tests passed。
+- `git diff --check`: passed；仅报告既有 LF/CRLF working-copy warnings。
+- Changed-file trailing whitespace scan: no matches。
+- `docs/CURRENT.md` line count: 144，低于 150-line snapshot target。
+
+**失效旧结论**:
+
+- “P1 evidence snapshots 只有 public-source + market-data-candidate + authorization / cost / stability 三份”失效；现在有四份 P1 snapshots。
+- “下一刀应继续补 direct benchmark return sources、issuer-level PIT GICS membership”需收窄；该方向已有 candidate evidence，但仍非 implementation-ready。下一刀应继续补 coverage counts、fundamentals / filing observed-date candidates beyond latest-only sources、fallback behavior、incident / stability evidence。
+- “S&P / Nasdaq / Russell methodology page 可以直接当历史 benchmark return feed”不成立；本 artifact 明确只记录 candidate evidence，不批准数据抓取、授权、存储或 provider selection。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 仍应继续 Phase 7b-2 P1，而不是进入 Phase 7c。
+2. 不要把 official index pages / methodology docs 误读为 licensed historical benchmark return feed。
+3. 不要把 GICS methodology / product docs 误读为已可用 issuer-level PIT GICS membership；仍需 license、sample、coverage、identifier 和 as-of 证据。

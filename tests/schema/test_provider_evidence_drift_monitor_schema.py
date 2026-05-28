@@ -11,7 +11,13 @@ EXAMPLE_PATH = Path("schemas/examples/provider_evidence_drift_monitor.example.js
 P1_PUBLIC_SOURCE_PATH = Path("docs/provider_evidence_p1_us_public_sources_20260528.json")
 P1_MARKET_DATA_PATH = Path("docs/provider_evidence_p1_us_market_data_candidates_20260528.json")
 P1_AUTH_COST_PATH = Path("docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json")
-P1_EVIDENCE_PATHS = [P1_PUBLIC_SOURCE_PATH, P1_MARKET_DATA_PATH, P1_AUTH_COST_PATH]
+P1_BENCHMARK_GICS_PATH = Path("docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json")
+P1_EVIDENCE_PATHS = [
+    P1_PUBLIC_SOURCE_PATH,
+    P1_MARKET_DATA_PATH,
+    P1_AUTH_COST_PATH,
+    P1_BENCHMARK_GICS_PATH,
+]
 
 
 class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
@@ -335,6 +341,61 @@ class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
                 "latest-only" in limitation
                 for limitation in records["p1.us_norgate_current_fundamentals_latest_only"]["limitations"]
             )
+        )
+
+    def test_p1_benchmark_gics_artifact_is_partial_and_non_authorizing(self) -> None:
+        artifact = json.loads(P1_BENCHMARK_GICS_PATH.read_text(encoding="utf-8"))
+        records = {record["record_id"]: record for record in artifact["provider_evidence_records"]}
+        p1_records = [record for record in artifact["provider_evidence_records"] if record["priority"] == "P1"]
+        reviewed_p1_records = [
+            record for record in p1_records if record["source_basis"] == "reviewed_provider_evidence"
+        ]
+
+        self.assertEqual(artifact["scope"]["contract_status"], "provider_evidence_population_snapshot")
+        self.assertEqual(artifact["provider_readiness_rollup"]["p1_status"], "partial")
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["implementation_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertEqual(
+            artifact["provider_readiness_rollup"]["provider_selection_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertIn("p1.us_spdj_sp500_benchmark_source_candidate", records)
+        self.assertIn("p1.us_nasdaq100_benchmark_source_candidate", records)
+        self.assertIn("p1.us_ftse_russell1000_benchmark_source_candidate", records)
+        self.assertIn("p1.us_gics_taxonomy_and_pit_membership_candidate", records)
+        self.assertIn("p1.us_remaining_coverage_fundamentals_fallback_incident", records)
+        self.assertTrue(
+            all(
+                record["evidence_source_refs"]
+                and not record["provider_selection_made"]
+                and not record["data_fetch_performed"]
+                for record in reviewed_p1_records
+            )
+        )
+        self.assertTrue(
+            all(
+                "WebFetched on 2026-05-28" in source_ref["evidence_note"]
+                for record in reviewed_p1_records
+                for source_ref in record["evidence_source_refs"]
+            )
+        )
+        self.assertEqual(
+            records["p1.us_gics_taxonomy_and_pit_membership_candidate"]["pit_status"],
+            "unknown",
+        )
+        self.assertTrue(
+            any(
+                "Issuer-level PIT GICS membership history" in item
+                for item in records["p1.us_gics_taxonomy_and_pit_membership_candidate"][
+                    "missing_required_evidence"
+                ]
+            )
+        )
+        self.assertEqual(
+            records["p1.us_remaining_coverage_fundamentals_fallback_incident"]["source_basis"],
+            "placeholder_pending_review",
         )
 
     def test_selected_provider_is_rejected_when_jsonschema_available(self) -> None:

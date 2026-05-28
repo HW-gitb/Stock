@@ -8,6 +8,102 @@
 
 ---
 
+## 2026-05-28 — Claude review — Pass (Phase 7b-2 P1 US benchmark / GICS candidate provider evidence snapshot)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `1321567`)
+
+**Verdict**: Pass.
+
+**Notes**: 第 4 份 Phase 7b-2 P1 snapshot — 全部 canonical 真实 provider 源（S&P DJI / Nasdaq / FTSE Russell-LSEG / MSCI / S&P Global），grep `massive|polygon` 计数 = 0（无品牌歧义问题，自然无需 R1 disclaimer pattern）；WebFetched trace 计数 = 12（精确匹配 12 个 source refs，所有 evidence_note 以 `WebFetched on 2026-05-28 at <URL>.` 开头）；JSON 774 行 / CURRENT.md 144 行。Sources cover (1) S&P DJI S&P 500 index page + U.S. Indices Methodology + Index Mathematics Methodology；(2) Nasdaq-100 methodology PDF + overview；(3) LSEG / FTSE Russell US Indexes page + Construction Methodology PDF + annual reconstitution release；(4) MSCI GICS overview + S&P DJI GICS topic + S&P Global GICS Direct/History product page + brochure。每条 record `capability_status: "partial"` + `production_use_status: "blocked_until_provider_review"` + 显式 `missing_required_evidence` 列出 licensed historical return series / API endpoint / 存储授权 / membership history 等 gap，limitations 含 "Official methodology and index pages are not a substitute for a reviewed historical benchmark data feed. ETF proxies such as SPY may remain fallback candidates, but this record is direct-index-source evidence and does not approve proxy substitution" — 把 ETF proxy fallback 与 direct index source 明确分开，防误用。Codex Alternatives reject 两个最易过度解读："Treat official index methodology pages as historical benchmark return feeds" / "Treat GICS methodology as issuer-level PIT membership history" — 这是这一刀最重要的 preemptive guard。Test `test_p1_benchmark_gics_artifact_is_partial_and_non_authorizing`（line 343-397）锁定五组 invariant：5 record_ids（S&P 500 / Nasdaq 100 / Russell 1000 / GICS taxonomy / placeholder）/ reviewed records 全部 `provider_selection_made/data_fetch_performed: false` / WebFetched 串强制 / **GICS PIT membership `pit_status: "unknown"` 显式锁定**（与上一刀 Norgate `latest_only` 同形 invariant）/ **"Issuer-level PIT GICS membership history" 必须在 `missing_required_evidence` 里**（explicit 防 GICS methodology 被误读为 PIT readiness）/ placeholder `source_basis: "placeholder_pending_review"`。Schema 未升级（v1.1.0 不变 — 这是 conforming artifact，无需 contract 扩展）。Cross-doc routing 全 align：AGENTS.md §当前进度 4 snapshots 合并 🟡 entry 含 6 个 canonical provider 列表（SEC / Nasdaq / MSCI / S&P DJI / S&P Global / LSEG + 之前 R1 修复过的 Massive / Polygon / Norgate），§执行路线图 §7b-2 status "🟡 P1 ... + benchmark/GICS snapshots complete；继续 P1"，§已固化决策 §14 explicit "SEC / Nasdaq / MSCI / S&P DJI / S&P Global / LSEG / Massive / Polygon / Norgate docs 不等于完整 provider selection、PIT security master、licensed benchmark return feed、fundamentals observed-date、fallback、incident-stability 或 production readiness"；ALPHA_VALIDATION_ACTION_GUIDE / CURRENT.md / README / drift_monitor.md / handoff 全部 align；§0 Latest Delta 的剩余 P1 blocker 列表正确收窄（移除 "direct benchmark return sources"，保留 coverage / fundamentals observed-date beyond latest-only / fallback / incident-stability）。独立 validation: `python -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v` 17 tests pass / `python -m unittest discover -s tests/schema` 91 tests pass / `git diff --check` clean / `git diff --cached` empty。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。Phase 7b-2 P1 evidence 系列累积到 4 份对称 snapshot，每份都有 enforced regression test。**剩余 P1 缺口**（按 Codex narrative）：coverage counts、fundamentals/filing observed-date provider candidates beyond latest-only sources、fallback behavior、incident/stability evidence — 估计还 1-2 刀就能让 P1 evidence 摆脱 partial 状态进入 readiness review。
+
+---
+
+## 2026-05-28 — Codex (Phase 7b-2 P1 US benchmark / GICS candidate provider evidence snapshot)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `1321567` (`Add Phase 7b P1 authorization cost evidence`) and the top Claude Pass review for the authorization / cost / stability evidence snapshot.
+- Prepends the reconstructed `1321567` session entry below this entry because AGENTS.md fallback requires a SESSION_LOG entry when a non-trivial commit exists after the last session log top entry.
+
+**Worked on**:
+1. [untracked] `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`: added the fourth Phase 7b-2 P1 evidence-population snapshot covering S&P DJI, Nasdaq, FTSE Russell / LSEG, MSCI, and S&P Global official documentation for S&P 500 / Nasdaq-100 / Russell 1000 direct benchmark-source candidates and GICS taxonomy / GICS History candidate evidence.
+2. [tracked] `tests/schema/test_provider_evidence_drift_monitor_schema.py`: expanded P1 artifact validation to four snapshots and added `test_p1_benchmark_gics_artifact_is_partial_and_non_authorizing`.
+3. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/datahub_design.md`, `docs/evidence_report_schema_contract.md`, `docs/evidence_feasibility_controls.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`: routed the fourth P1 snapshot and narrowed the remaining P1 blockers.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: updated startup routing, current snapshot, and next-step wording so Phase 7b-2 continues P1 rather than moving to Phase 7c.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7b-2 benchmark / GICS candidate evidence handoff note.
+6. [tracked] `docs/SESSION_LOG.md`: recorded this execution handoff and the reconstructed commit handoff for Claude review continuity.
+
+**Key decisions**:
+- P1 remains `partial`, not implementation-ready. Official S&P / Nasdaq / Russell index pages and methodology docs are direct benchmark-source candidate evidence, but they are not licensed project-ready historical return feeds and do not approve local storage, redistribution, or provider selection.
+- GICS methodology proves taxonomy context only. S&P Global GICS History product documentation is a candidate for issuer-level history, but it still needs license, data dictionary, sample rows, coverage counts, identifier mapping, and as-of semantics before US-long industry normalization can consume it.
+- The next P1 blockers are narrower: coverage counts, fundamentals / filing observed-date provider candidates beyond latest-only sources, fallback behavior, and incident / stability evidence.
+- v1.1.0 schema stays unchanged. This round only adds a conforming evidence-population artifact and regression coverage for it.
+
+**Alternatives considered and rejected**:
+- "Treat official index methodology pages as historical benchmark return feeds" — rejected. They support benchmark identity and methodology review, but not local return-series access, storage, or licensing.
+- "Treat GICS methodology as issuer-level PIT membership history" — rejected. Taxonomy owner/methodology evidence is not the same as row-level membership history with effective dates and identifiers.
+- "Move to Phase 7c after this benchmark / GICS slice" — rejected. P1 is still partial / blocked and still lacks coverage, fundamentals observed-date candidates beyond latest-only sources, fallback, and incident / stability evidence.
+
+**Source basis reviewed**:
+- Official S&P DJI docs: S&P 500 index page, S&P U.S. Indices Methodology, and Index Mathematics Methodology.
+- Official Nasdaq docs: Nasdaq-100 methodology PDF and Nasdaq-100 overview page.
+- Official LSEG / FTSE Russell docs: Russell US Indexes page, Russell US Indexes Construction and Methodology PDF, and annual Russell US Indexes reconstitution release.
+- Official MSCI / S&P Global docs: MSCI GICS overview, S&P DJI GICS topic page, S&P Global GICS Direct / GICS History page, and S&P Global GICS History brochure.
+- No provider API data was fetched; no token, trial, subscription, adapter, DataHub table, or runner change was introduced.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v`: 17 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 91 tests passed.
+- `git diff --check`: passed; only existing LF/CRLF working-copy warnings were reported for touched files.
+- Changed-file trailing whitespace scan: no matches.
+- Active stale next-step scan: remaining matches were historical SESSION_LOG / handoff notes, immutable prior evidence snapshots, or older snapshot-context sections in the owner doc; current-state / next-step routing is updated.
+- `docs/CURRENT.md` line count: `144`, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7b-2 benchmark / GICS candidate evidence snapshot.
+2. If Pass and user commits, the next `执行` should continue P1 provider evidence for coverage counts, fundamentals / filing observed-date provider candidates beyond latest-only sources, fallback behavior, and incident / stability evidence.
+
+---
+
+## 2026-05-28 — Codex reconstructed from commit `1321567` (Phase 7b-2 P1 US authorization / cost / stability provider evidence)
+
+**Commits**: `1321567`
+
+**Relationship to prior session(s)**:
+- Reconstructs the commit created after the 2026-05-28 Claude Pass re-review for the authorization / cost / stability R1 disclaimer repair.
+- Builds on the prior Codex repair entry and Claude Pass entry already present below.
+
+**Worked on**:
+1. Committed `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json` as the third Phase 7b-2 P1 evidence-population artifact, including the approved Massive-source disclaimer traces.
+2. Committed `tests/schema/test_provider_evidence_drift_monitor_schema.py` updates that validate three P1 artifacts and assert authorization / cost / stability snapshots remain partial / non-authorizing.
+3. Committed routing updates across AGENTS / CURRENT / README / Phase 7 docs / handoff / session log to mark P1 as public-source + market-data-candidate + authorization / cost / stability partial, still blocked.
+
+**Key decisions**:
+- Massive / Polygon and Norgate pricing, API-key / subscription / trial, license / EULA, export / retention, and stability evidence are source-backed inputs for future review, not paid-access approval or provider selection.
+- Norgate current fundamentals are explicitly latest-only and blocked for US-long historical PIT fundamentals, while Norgate remains separately useful as a survivorship-aware historical EOD / index-membership candidate.
+- P1 still needed coverage counts, direct benchmark return source review, issuer-level PIT GICS membership candidate review, fundamentals / filing observed-date candidates beyond latest-only sources, fallback, and incident / stability evidence.
+
+**Alternatives considered and rejected**:
+- "Treat Massive / Polygon individual pricing as paid-access approval" — rejected because cost, user classification, license scope, local storage, and non-display permission require separate reviewed decisions.
+- "Use Norgate current fundamentals for US-long historical PIT fundamentals" — rejected because the reviewed docs describe latest company-report basis, not historical observed-date fundamentals.
+- "Move to Phase 7c after authorization / cost evidence" — rejected because P1 remained partial / blocked.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Continue Phase 7b-2 P1 provider evidence population before Phase 7c.
+
+---
+
 ## 2026-05-28 — Claude re-review — Pass (Phase 7b-2 authorization/cost R1 disclaimer regression repair)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `05aa58d`)
