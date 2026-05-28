@@ -1,6 +1,6 @@
 # Strategy Design Synthesis
 
-**Status**: user-approved design direction, revised 2026-05-27 with Phase 7a alpha-validation route.
+**Status**: user-approved design direction, revised 2026-05-28 with Phase 7a-3 provider priority / provisional benchmark routing.
 **Scope**: four-system strategy architecture after Phase 5 execution aggregation.
 **Authority**: this document explains the design; `AGENTS.md` carries the binding summary for all LLM collaborators.
 
@@ -55,12 +55,14 @@ The first formal audit artifact is `docs/phase7a_alpha_plausibility_audit.json` 
 
 This audit is not ship-gate evidence. It routes spec revisions and provider sequencing only.
 
-This upgrade reverses the older next-step assumption that Phase 7 should first spend implementation attention on already-proven A-share EOD / benchmark surfaces. Those surfaces remain valuable as ready evidence, but provider and schema work should now be ordered by alpha leverage and data blockers:
+This upgrade reverses the older next-step assumption that Phase 7 should first spend implementation attention on already-proven A-share EOD / benchmark surfaces. Those surfaces remain valuable as ready evidence, but provider and schema work should now be ordered by alpha leverage and data blockers. The Phase 7a-3 owner contract is `docs/provider_priority_benchmark_contract.md`.
 
 1. US fundamentals, filing dates, corporate actions, and US benchmark/security-master readiness.
 2. A-share fundamentals, announcement dates, SW industry history, and A-long benchmark/industry attribution readiness.
 3. Burst event / flow / options / borrow fields, classified as structured, manual evidence, research-only, or deferred.
 4. Already-proven A-share EOD / CSI benchmark surfaces recorded as ready evidence, not the default next implementation sink.
+
+The same Phase 7a-3 contract defines provisional evidence benchmarks for A-short, A/US burst, US-short, A-long, and US-long. These benchmarks start evidence accumulation and sensitivity reporting only. They do not finalize ship-gate benchmarks or convert paper evidence into live-normalized evidence.
 
 ## 2. Short-Term Architecture
 
@@ -425,8 +427,8 @@ Write and then implement cross-system coordinator once the four systems have eno
 
 Phase 7a-1 is complete as a reviewed audit chain: schema contract, lightweight provider status snapshot, and first formal audit artifact. The current execution path is:
 
-1. Phase 7a-2: convert `docs/phase7a_alpha_plausibility_audit.json` into owner-spec routing for long, steady short, US-short, and burst lanes.
-2. Phase 7a-3: update provider priority and provisional benchmark contracts from the audit implications.
+1. Phase 7a-2: owner-spec routing for long, steady short, US-short, and burst lanes is complete.
+2. Phase 7a-3: provider priority and provisional benchmark contract is defined in `docs/provider_priority_benchmark_contract.md`.
 3. Phase 7a-4: define burst minimal-to-full promotion, concentration / liquidity / ADV sizing, slippage, and circuit-breaker playbooks.
 4. Phase 7a-5: define evidence report schemas, immutable decision packets, cost-adjusted returns, cash drag, overrides, reconciliation, thesis outcome logs, and research experiment logs.
 

@@ -8,6 +8,154 @@
 
 ---
 
+## 2026-05-28 — Claude re-review — Pass (Phase 7a-3 R1 repair)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8aabc1b`)
+
+**Verdict**: Pass.
+
+**Notes**: R1 repaired — `docs/CURRENT.md` §5 P1 改为 Phase 7a-5 evidence report schemas，3 bullet（immutable decision packet / cost-adjusted return + cash drag + manual override + minimal reconciliation / thesis outcome log + research experiment log）与 `AGENTS.md` 执行路线图 §7a-5 row 7 项 1:1 对齐；P0 = Phase 7a-4 唯一，`Select-String '^### P[0-9] — Phase 7a-4'` 单一匹配（line 85）；CURRENT.md 146 行；no trailing whitespace；`修复` 仅触 CURRENT.md + SESSION_LOG.md (scope minimal)；prior O1 accept 保留；Codex `修复` entry 显式记录 `批准修改 1` partial-approval syntax 误读纠正，无需 protocol 修订。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-28 — Codex (repair: Phase 7a-3 R1)
+
+**Commits**: none (`修复` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs Claude Required fix R1 from the 2026-05-28 "Pass with fixes" review.
+- Corrects the previous Codex repair-round interpretation: user / Claude clarification established that `批准修改 1` is valid single-item partial approval syntax and approves R1 when the review has only R1.
+- Supersedes the previous Codex repair entry's current-state statement that R1 remained pending user approval.
+
+**Worked on**:
+1. [tracked] `docs/CURRENT.md`: removed the duplicate Phase 7a-4 P0/P1 next-step structure by changing P1 to Phase 7a-5 evidence report schemas.
+2. [tracked] `docs/SESSION_LOG.md`: recorded this R1 repair and the approval-state correction for Claude re-review continuity.
+
+**Required fixes repaired**:
+- R1 repaired — `docs/CURRENT.md` §5 now has P0 = Phase 7a-4 evidence feasibility controls and P1 = Phase 7a-5 evidence report schemas; there is no duplicate Phase 7a-4 next-step block.
+
+**Optional disposition**:
+- O1 accept — already implemented in the prior repair round; no additional Optional change in this round.
+
+**Validation run/result**:
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- `rg -n "[ \t]+$" docs\CURRENT.md docs\SESSION_LOG.md` found no trailing whitespace.
+- `Select-String -Path docs\CURRENT.md -Encoding utf8 -Pattern '^### P[0-9] — Phase 7a-4'` found only `P0`, confirming the duplicate Phase 7a-4 next-step heading is gone.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reports `146`, below the 150-line snapshot target.
+
+**Current review state**:
+- Approved Required fixes repaired: 1.
+- Optional dispositions: 0 newly accepted, 0 newly accepted with modification, 0 newly rejected; prior O1 remains accepted.
+- Working tree uncommitted.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude re-reviews the repaired Phase 7a-3 change set.
+
+---
+
+## 2026-05-28 — Codex (repair: Phase 7a-3 Optional O1 only)
+
+**Commits**: none (`修复` round; Required fix R1 remains pending user approval)
+
+**Relationship to prior session(s)**:
+- Responds to the latest Claude review verdict: Pass with fixes, with 1 Required fix and 1 Optional suggestion.
+- No Required fixes were approved before this `修复` command, so R1 was not repaired.
+
+**Optional disposition**:
+- O1 accept — corrected the prior Codex SESSION_LOG `Worked on` list so `docs/long_alpha_spec.md` is described separately as adding Phase 7a-3 benchmark-routing pointers, while the next-work queue removal is attributed only to `docs/burst_lane_spec.md` and `docs/us_short_spec.md`.
+
+**Worked on**:
+1. [tracked] `docs/SESSION_LOG.md`: prepended this repair entry and corrected the previous Codex handoff wording for O1.
+
+**Validation run/result**:
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- `rg -n "[ \t]+$" docs\SESSION_LOG.md` found no trailing whitespace.
+
+**Current review state**:
+- Approved Required fixes repaired: 0.
+- Optional dispositions: 1 accepted, 0 accepted with modification, 0 rejected.
+- R1 remains pending user approval.
+- Ready for Claude re-review: No.
+
+**Open questions handed off**:
+- R1 can be repaired only after user approval via `批准修改` or an explicit partial approval.
+
+**Next natural step from my view**:
+1. User approves R1 with `批准修改`.
+2. Codex runs `修复` again to repair `docs/CURRENT.md` §5 duplicate P0/P1.
+
+---
+
+## 2026-05-28 — Claude review — Pass with fixes (Phase 7a-3 provider priority / provisional benchmark contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8aabc1b`)
+
+**Verdict**: Pass with fixes.
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes PENDING USER APPROVAL; Optional suggestions PENDING CODEX DISPOSITION.
+
+**Required fixes**:
+
+- **R1**: `docs/CURRENT.md` §5 "下一步" 有结构重复 — 新 P0 (line 85) 与未删的 P1 (line 91) 都标 "Phase 7a-4 evidence feasibility controls" 且内容 1:1 overlap（P0 用 numbered list 列出 burst minimal-to-full promotion / concentration-liquidity-ADV sizing-slippage-borrow / drawdown-circuit-breaker playbook 三件事；P1 用 sub-bullet 列出完全相同三件事）。Codex 在 diff 里把旧 P0 (Phase 7a-3) 替换成新 P0 (Phase 7a-4)，但旧 P1 (Phase 7a-4) 没动，导致 snapshot 出现 P0 = P1 重复。未来 LLM 读 §5 会误以为 P1 是 P0 之外的独立任务。修复方向：要么把 P1 改为 Phase 7a-5 evidence report schemas（对齐 `AGENTS.md` 执行路线图 7a-5 cell），要么删除 P1 并把现 P2 (A-short maintenance) / P3 (Later implementation) 上提为 P1 / P2。无论哪种，CURRENT.md 末尾 P0-P3 不可有同 Phase 重复。
+
+**Optional suggestions**:
+
+- **O1**: SESSION_LOG entry §Worked on item 3 写 "`docs/long_alpha_spec.md`: pointed lane-level provisional benchmark wording to the Phase 7a-3 owner contract and removed Phase 7a-3 from their next-work queues" — 但 `docs/long_alpha_spec.md` 文件以 §11.10 Deferred A-Long Decisions 结尾，没有 Next Work 章节。"removed Phase 7a-3 from next-work queues" 只对 `burst_lane_spec.md` §13 和 `us_short_spec.md` §12 准确。long_alpha 仅有 Status header 改动 + §10.6 / §11.7 区域追加 central contract reference。建议下一次 SESSION_LOG entry 把 long_alpha 拆开单独描述为 "added Phase 7a-3 benchmark routing pointer at §10.6 / §11.7"，避免后续 LLM 据 entry 字面去 long_alpha 找 next-work queue 改动。
+
+**Notes**: Codex `执行` round Phase 7a-3 — 1 untracked new (`docs/provider_priority_benchmark_contract.md` 124 行 docs-only contract) + 12 tracked routing/handoff/SESSION_LOG updates (`AGENTS.md` / `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` / `docs/CURRENT.md` / `docs/README.md` / `docs/SESSION_LOG.md` / `docs/alpha_plausibility_audit.md` / `docs/burst_lane_spec.md` / `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` / `docs/long_alpha_spec.md` / `docs/provider_data_requirements_audit.md` / `docs/strategy_design_synthesis.md` / `docs/us_short_spec.md`), total 138 insertions / 46 deletions。Scope 严守：0 schema 改 / 0 runner 改 / 0 provider 选择 / 0 数据抓取 / 0 adapter / 0 DataHub table / 0 strategy-rule 改 / 0 ship-gate relaxation / 0 broker / OS automation — `docs/provider_priority_benchmark_contract.md` §2 Scope Locks 明确表格化所有 8 类锁。Contract 内容自洽：§3 P1-P4 priority (US fundamentals/filings/security master → A-share fundamentals/announcements/SW history → burst event/flow/options/borrow → A-share EOD/CSI ready evidence) 与 `docs/phase7a_alpha_plausibility_audit.json` 6 lane verdict + `ALPHA_VALIDATION_ACTION_GUIDE.md §11` provider reorder rationale 一致；§5 Provisional Benchmarks 与既有 owner spec 完全对齐（A-short CSI1000/CSI300 既有 policy 保留 active、A/US-burst minimal-data 限定 paper/research、US-short Russell 1000 与 7a-2 us_short_spec §6.3.1 一致、US-long Russell 1000 与 long_alpha §10.6 一致、A-long CSI300 与 long_alpha §11.7 一致）；§4 Provider Evidence Packet Minimum 14 维度并明确 "Do not average these dimensions into a single provider score"，防 score reduction；§7 Benchmark Switch Rule 要求 Claude review + user final approval before full-size implications。Cross-doc consistency 完整：AGENTS.md 执行路线图 7a-1/7a-2 ✅ + 7a-3 ✅ docs-only baseline + 7a-4 ⬜ 下一刀；AGENTS.md §当前进度 加 ✅ Phase 7a-3 entry；AGENTS.md §文件参考 加 contract entry；docs/README.md routing table 加 Phase 7a-3 entry；ALPHA_VALIDATION_ACTION_GUIDE.md §2 "Current Execution Rule" 与 §13 "Current Next Step" 同步推进到 7a-4，且 generic 化为 "Phase 7a contract slices must not"（之前是 "Phase 7a-1 must not"）；provider_data_requirements_audit.md §11 第 3 条 + §12 Next Work + §11 deferred decisions 三处一致更新；alpha_plausibility_audit.md §recommended route 第 3 条改为 "locked in `docs/provider_priority_benchmark_contract.md`"；burst_lane_spec §6.1 A-share / §7.1 US / §13 Next Work 一致；us_short_spec status header + §8 / §12 Next Work 一致；handoff 追加 Phase 7a-3 section 且失效旧结论 explicit invalidate "下一条 `执行` 仍是 Phase 7a-3" 与 "Phase 7a-3 provider / benchmark routing 仍散落在 owner specs 中"。Validation accuracy: `[System.IO.File]::ReadAllLines` 给 CURRENT.md 146 行 = Codex 报告值 ✅；`git diff --check` clean；`git diff --cached` empty (无 staged changes)；untracked contract 文件 trailing whitespace scan clean；Codex stale wording scan 排除 handoff 文件是 intentional（历史追加 sections 按 convention 保留原 snapshot，新追加 §失效旧结论 已 explicit 标记 supersede）。除 R1 之外无其他 scope/contract/risk issue；无 open question；无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-28 — Codex (Phase 7a-3 provider priority / provisional benchmark contract)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `8aabc1b` (`Add Phase 7a owner spec routing`).
+- Converts Phase 7a-1 audit implications and Phase 7a-2 owner-spec routing into a single provider-priority and provisional-benchmark contract.
+
+**Worked on**:
+1. [untracked] `docs/provider_priority_benchmark_contract.md`: added the Phase 7a-3 docs-only owner contract for provider evidence priority, provisional evidence benchmarks, benchmark evidence packet minimum, and benchmark switch rules.
+2. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/provider_data_requirements_audit.md`, `docs/alpha_plausibility_audit.md`: routed the new contract, advanced current state to Phase 7a-4, and kept provider/data/benchmark wording inside the no-provider-selection boundary.
+3. [tracked] `docs/burst_lane_spec.md`, `docs/us_short_spec.md`: pointed lane-level provisional benchmark wording to the Phase 7a-3 owner contract and removed Phase 7a-3 from their next-work queues.
+4. [tracked] `docs/long_alpha_spec.md`: added Phase 7a-3 benchmark-routing pointers at the US-long and A-long provisional benchmark sections.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7a-3 handoff section.
+
+**Key decisions**:
+- Provider evidence priority is now P1 US fundamentals / filings / security master, P2 A-share fundamentals / announcements / SW history, P3 burst event / flow / options / borrow, and P4 already-proven A-share EOD / CSI helper surfaces.
+- Provisional evidence benchmarks are documented for A-short, A/US burst, US-short, A-long, and US-long, but only start evidence accumulation and sensitivity reporting. They do not finalize ship-gate benchmarks.
+- The existing A-short CSI1000 primary / CSI300 secondary evidence policy remains active, but it does not imply full-size eligibility without the full ship gate and live-normalized evidence.
+- No schema, runner, provider selection, data fetch, adapter, DataHub table, strategy-rule change, broker / OS automation, or ship-gate relaxation was introduced.
+
+**Alternatives considered and rejected**:
+- "Only update `docs/provider_data_requirements_audit.md`" — rejected. Phase 7a-3 needs a single owner contract so provider priority and provisional benchmark policy are not scattered across strategy and lane specs.
+- "Finalize lane ship-gate benchmarks now" — rejected. The audit only supports provisional evidence benchmarks; final ship-gate benchmark selection still needs reviewed sensitivity and style / universe evidence.
+- "Keep already-proven A-share EOD / CSI helpers as the first provider implementation sink" — rejected. They are ready evidence, but the alpha-audit route prioritizes higher-leverage provider blockers first.
+
+**Validation run/result**:
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- `rg -n "[ \t]+$" AGENTS.md docs\ALPHA_VALIDATION_ACTION_GUIDE.md docs\CURRENT.md docs\README.md docs\alpha_plausibility_audit.md docs\burst_lane_spec.md docs\long_alpha_spec.md docs\provider_data_requirements_audit.md docs\strategy_design_synthesis.md docs\us_short_spec.md docs\provider_priority_benchmark_contract.md docs\handoff\2026-05-27_phase7_kickoff_spec_handoff.md docs\SESSION_LOG.md` found no trailing whitespace.
+- Active stale next-step wording scan for Phase 7a-1 / Phase 7a-3 next-slice wording found no matches in touched active docs.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reports `146`, below the 150-line snapshot target.
+- No schema or runner tests were run because this slice is docs-only and does not change schemas, examples, runners, or tests.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7a-3 provider priority / provisional benchmark contract slice.
+2. If Pass and user commits, the next `执行` slice should start Phase 7a-4 evidence feasibility controls.
+
+---
+
 ## 2026-05-27 — Claude review — Pass (Phase 7a-2 owner-spec routing)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `d1cc258`)

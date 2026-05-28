@@ -1,6 +1,6 @@
 # Long Alpha Common Spec
 
-**Status**: Phase 6d docs-only baseline with Phase 7a-2 audit-routing update. This document defines the common long-alpha contract plus US-long and A-long annex skeletons. It does not implement schemas, runners, providers, DataHub, or order execution.
+**Status**: Phase 6d docs-only baseline with Phase 7a-3 benchmark-routing update. This document defines the common long-alpha contract plus US-long and A-long annex skeletons. It does not implement schemas, runners, providers, DataHub, or order execution.
 
 **Owner role**: detailed spec owner for A-long / US-long common long-alpha design. `docs/strategy_design_synthesis.md` remains the strategy architecture entry; `docs/datahub_design.md` remains the DataHub / provider guardrail owner.
 
@@ -275,7 +275,7 @@ Future US-long reports should expose:
 
 ### 10.6 Provisional US Benchmark Policy
 
-Before the final ship-gate benchmark is selected, US-long evidence may use Russell 1000 as the provisional primary benchmark, S&P 500 as secondary broad-market context, and sector ETF attribution where the candidate thesis is sector-sensitive.
+Before the final ship-gate benchmark is selected, US-long evidence may use Russell 1000 as the provisional primary benchmark, S&P 500 as secondary broad-market context, and sector ETF attribution where the candidate thesis is sector-sensitive. The central Phase 7a-3 benchmark contract is `docs/provider_priority_benchmark_contract.md`.
 
 This provisional benchmark policy starts evidence accumulation only. It does not finalize the full ship-gate benchmark.
 
@@ -378,6 +378,8 @@ Final ship-gate benchmark remains deferred. Provisional evidence benchmark set f
 A-long benchmark choice must be reported separately from A-short's CSI1000 primary / CSI300 secondary policy. Do not inherit the A-short benchmark contract by default.
 
 The difference is intentional: A-short uses CSI1000 primary because the short candidate pool has historically tilted toward small/mid-cap, theme, and elasticity exposure. A-long uses CSI300 as provisional primary because long alpha is expected to come more from quality compounding, fundamentals, and institutional opportunity cost. If the A-long universe later tilts materially toward mid/small-cap quality names, CSI500 / CSI1000 sensitivity must be reported.
+
+The central Phase 7a-3 benchmark contract is `docs/provider_priority_benchmark_contract.md`.
 
 ### 11.8 A-Share Data Requirements
 

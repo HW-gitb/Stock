@@ -18,6 +18,7 @@ Use this routing table instead of guessing which file to read.
 | Phase 7a-1 alpha plausibility audit artifact schema contract | `schemas/alpha_plausibility_audit.schema.json` |
 | Phase 7a-1 lightweight provider status snapshot for the first audit | `docs/phase7a_provider_status_snapshot.json` |
 | Phase 7a-1 first formal alpha plausibility audit artifact | `docs/phase7a_alpha_plausibility_audit.json` |
+| Phase 7a-3 provider evidence priority and provisional benchmark contract | `docs/provider_priority_benchmark_contract.md` |
 | Paper vs live-normalized evidence and capital-governance-safe ship-gate evidence policy | `docs/evidence_capital_policy.md` |
 | A/US short-term burst lane detailed baseline | `docs/burst_lane_spec.md` |
 | US-short normalized production-facing spec | `docs/us_short_spec.md` |

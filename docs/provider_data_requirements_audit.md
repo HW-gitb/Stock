@@ -186,7 +186,7 @@ Recommended Phase 7 / 7a slices:
 
 1. Create a provider capability / field catalog contract before broad provider adapters. This is now established as `schemas/provider_capability_catalog.schema.json` v1.0.0. It records data class, required systems, PIT status, frequency, lineage, authorization, cost, stability, and fallback without selecting a provider.
 2. Run the schema-first alpha plausibility audit defined in `docs/alpha_plausibility_audit.md` and `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` before spending major implementation capacity on any lane.
-3. Reorder provider capability evidence by alpha leverage and data blockers: US fundamentals / filings / corporate actions first; A-share fundamentals / announcement dates / SW industry history second; burst event / flow / options / borrow fields third.
+3. Reorder provider capability evidence by alpha leverage and data blockers. The Phase 7a-3 owner contract is now `docs/provider_priority_benchmark_contract.md`: US fundamentals / filings / corporate actions / security master first; A-share fundamentals / announcement dates / SW industry history second; burst event / flow / options / borrow fields third; already-proven A-share EOD / CSI helper surfaces recorded as ready evidence rather than the default implementation sink.
 4. Record already-proven A-share EOD / CSI benchmark surfaces as ready evidence, but do not let convenience of those surfaces consume the default next implementation slice.
 5. Define fundamentals and event-data contracts before long-system implementation.
 6. Define US security-master / price / benchmark contracts before US-short or US-long implementation.
@@ -207,7 +207,7 @@ These decisions remain open after this audit:
 - Final provider or provider set.
 - Paid / free data split and user-approved cost ceiling.
 - Exact schemas for security master, fundamentals, events, and benchmark series. The provider capability / field catalog contract now has v1.0.0, but a real provider registry artifact and provider selection remain deferred.
-- Primary benchmarks for A-long, US-long, US-short steady, A-share burst, and US burst.
+- Final ship-gate benchmarks for A-long, US-long, US-short steady, A-share burst, and US burst. Provisional evidence benchmarks are defined in `docs/provider_priority_benchmark_contract.md`.
 - Numeric field thresholds, factor weights, and production configs.
 - Whether options / dark-pool / off-exchange diagnostics become production inputs.
 - Whether pre-market / after-hours fields are production inputs or research-only.
@@ -226,4 +226,4 @@ Phase 6e docs-only baseline is complete when:
 
 ## 12. Next Work
 
-After this baseline, the first Phase 7 schema-first slice derived `schemas/provider_capability_catalog.schema.json` from this audit. The next route is Phase 7a alpha validation: add the schema-first alpha plausibility audit, then use it to order provider capability evidence by alpha leverage and data blockers. The old "A-share EOD / benchmark first" path is superseded as the default next implementation slice, though those proven surfaces should still be recorded as ready evidence. Follow-up work should still not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data until the relevant evidence contract is reviewed. Phase 7b provider capability evidence must also plan data quality / provider drift monitoring for coverage, freshness, schema drift, outliers, revision rate, provider incidents, and silent provider semantic changes.
+After this baseline, the first Phase 7 schema-first slice derived `schemas/provider_capability_catalog.schema.json` from this audit. Phase 7a then added the alpha plausibility audit chain and the Phase 7a-3 provider priority / provisional benchmark contract in `docs/provider_priority_benchmark_contract.md`. The old "A-share EOD / benchmark first" path is superseded as the default next implementation slice, though those proven surfaces should still be recorded as ready evidence. Follow-up work should still not rewrite `A-EGS/egs_main.py`, add a US provider adapter, or fetch new provider data until the relevant evidence contract is reviewed. Phase 7b provider capability evidence must also plan data quality / provider drift monitoring for coverage, freshness, schema drift, outliers, revision rate, provider incidents, and silent provider semantic changes.

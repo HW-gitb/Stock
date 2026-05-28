@@ -2,7 +2,7 @@
 
 **Status**: Phase 7a design route owner. This document defines the audit that must run before major implementation investment in any lane.
 
-**Owner role**: system-level alpha plausibility and lane-objective owner. It complements `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/long_alpha_spec.md`, `docs/burst_lane_spec.md`, and `schemas/provider_capability_catalog.schema.json`.
+**Owner role**: system-level alpha plausibility and lane-objective owner. It complements `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/provider_priority_benchmark_contract.md`, `docs/strategy_design_synthesis.md`, `docs/long_alpha_spec.md`, `docs/burst_lane_spec.md`, and `schemas/provider_capability_catalog.schema.json`.
 
 ## 1. Purpose
 
@@ -118,7 +118,7 @@ Recommended route:
 
 1. Phase 7a-1: add `alpha_plausibility_audit` schema, example, tests, lightweight provider status snapshot, and first audit using `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`.
 2. Phase 7a-2: use the audit to update `docs/strategy_design_synthesis.md`, `docs/long_alpha_spec.md`, `docs/burst_lane_spec.md`, and `docs/CURRENT.md`.
-3. Phase 7a-3: lock provider priority reorder and provisional evidence benchmarks.
+3. Phase 7a-3: provider priority reorder and provisional evidence benchmarks are locked in `docs/provider_priority_benchmark_contract.md`.
 4. Phase 7a-4: add burst minimal-to-full promotion criteria and evidence capital schema updates.
 5. Phase 7a-5: add burst / long / research evidence report schemas, immutable decision packet, cost-adjusted return details, minimal reconciliation, manual override records, and thesis outcome log.
 6. Phase 7b / 7c / 8 / 9: follow `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` for provider evidence, DataHub monitoring, lane implementation, and coordinator controls.

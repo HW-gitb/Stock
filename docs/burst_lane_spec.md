@@ -1,6 +1,6 @@
 # Burst Lane Spec
 
-**Status**: Phase 6c docs-only baseline with Phase 7a-2 audit-routing update. This document defines the A/US short-term `burst_lane` contract. It does not implement schemas, runners, providers, DataHub, or order execution.
+**Status**: Phase 6c docs-only baseline with Phase 7a-3 benchmark-routing update. This document defines the A/US short-term `burst_lane` contract. It does not implement schemas, runners, providers, DataHub, or order execution.
 
 **Owner role**: detailed spec owner for the short-term burst lane. `docs/strategy_design_synthesis.md` remains the strategy architecture entry; `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` remains the Phase 6 boundary / evidence-routing owner.
 
@@ -138,6 +138,8 @@ A-share `full_data_burst` evaluation may add:
 
 The A-share burst lane may reuse the existing A-short benchmark return materializer as an input source for benchmark-aware reporting, but it must keep independent burst-lane evidence and ship-gate evaluation. Reusing a data source does not mean inheriting the steady A-short gate.
 
+Phase 7a-3 provisional benchmark routing for A-share burst is owned by `docs/provider_priority_benchmark_contract.md`. It keeps CSI1000 as provisional primary reporting benchmark, CSI300 as mandatory secondary context, and SW industry attribution as a full-data sensitivity path where provider coverage supports it.
+
 ### 6.2 Market Constraints
 
 Future A-share burst implementation must handle:
@@ -173,7 +175,7 @@ US `full_data_burst` evaluation may add:
 - options, short interest, borrow, or dark-pool style fields only after provider reliability is reviewed,
 - manual evidence with source, observed date, and reviewer/process tag.
 
-Benchmark choice for US burst is deferred. Candidate benchmark set should be logged early because it affects alpha t-stat interpretation and Phase 6e provider requirements.
+Benchmark choice for US burst is deferred. Candidate benchmark set should be logged early because it affects alpha t-stat interpretation and Phase 6e provider requirements. Phase 7a-3 provisional benchmark routing is owned by `docs/provider_priority_benchmark_contract.md`: Russell 1000 is the provisional primary reporting benchmark, with S&P 500 / SPY, Nasdaq 100 / QQQ, sector ETF sensitivity, and event-specific peer attribution where available.
 
 ### 7.2 Market Constraints
 
@@ -297,8 +299,7 @@ Phase 6c docs-only baseline is complete when:
 
 ## 13. Next Work
 
-After this Phase 7a-2 routing update, the next burst-related docs-only slices are:
+After the Phase 7a-3 provider priority / provisional benchmark contract, the next burst-related docs-only slices are:
 
-1. Phase 7a-3 provider priority / provisional benchmark routing for burst data fields.
-2. Phase 7a-4 minimal-to-full promotion criteria, concentration / liquidity / ADV sizing, slippage constraints, and circuit-breaker playbook.
-3. Phase 7a-5 burst evidence report schema with immutable decision packet and cost-adjusted return fields.
+1. Phase 7a-4 minimal-to-full promotion criteria, concentration / liquidity / ADV sizing, slippage constraints, and circuit-breaker playbook.
+2. Phase 7a-5 burst evidence report schema with immutable decision packet and cost-adjusted return fields.

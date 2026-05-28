@@ -1,6 +1,6 @@
 # US Short Spec
 
-**Status**: Phase 6d docs-only baseline with Phase 7a-2 audit-routing update. This document normalizes the existing US-short screening and analysis reference materials into a production-facing spec shape. It does not implement schemas, runners, providers, DataHub, skills, prompts, or order execution.
+**Status**: Phase 6d docs-only baseline with Phase 7a-3 benchmark-routing update. This document normalizes the existing US-short screening and analysis reference materials into a production-facing spec shape. It does not implement schemas, runners, providers, DataHub, skills, prompts, or order execution.
 
 **Owner role**: detailed spec owner for US-short steady-lane normalization. `skills/us_short_analysis/reference/` remains the source-reference archive; `docs/burst_lane_spec.md` owns the independent US burst lane; `docs/strategy_design_synthesis.md` remains the architecture / route entry.
 
@@ -296,6 +296,8 @@ Rules:
 - Full-size use requires the project ship gate: monthly alpha t-stat >= 2.0, Sharpe >= 1.0, max drawdown <= 15%, and >=12 months forward live evidence.
 - Before final benchmark choice, reports should carry benchmark candidates and the rationale for any temporary reporting benchmark.
 
+Phase 7a-3 provisional benchmark routing is owned by `docs/provider_priority_benchmark_contract.md`. US-short steady evidence uses Russell 1000 as provisional primary reporting benchmark, with S&P 500 / SPY, Nasdaq 100 / QQQ, and sector ETF sensitivity until a reviewed final benchmark decision exists.
+
 Before US-short can produce live-normalized evidence, the implementation contract must also define a monitoring path for provider freshness, microstructure field coverage, borrow / short-interest staleness, event-file drift, stale benchmark data, manual override frequency, and lane pause / kill-switch triggers.
 
 ## 9. Phase 6e Data Requirements Input
@@ -337,8 +339,7 @@ US-short docs-only baseline is complete when:
 
 ## 12. Next Work
 
-After this Phase 7a-2 routing update, the next US-short docs-only slices are:
+After the Phase 7a-3 provider priority / provisional benchmark contract, the next US-short docs-only slices are:
 
-1. Phase 7a-3 provider priority and provisional benchmark routing for US-short steady and US-burst inputs.
-2. Phase 7a-4 concentration, liquidity / ADV, slippage, borrow, and circuit-breaker constraints.
-3. Phase 7a-5 evidence report schema fields for immutable decision packets, manual overrides, cost-adjusted return, and position reconciliation.
+1. Phase 7a-4 concentration, liquidity / ADV, slippage, borrow, and circuit-breaker constraints.
+2. Phase 7a-5 evidence report schema fields for immutable decision packets, manual overrides, cost-adjusted return, and position reconciliation.
