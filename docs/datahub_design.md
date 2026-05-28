@@ -23,8 +23,9 @@ The DataHub idea is accepted, but implementation is staged:
 - **Phase 3-6**: continue building the A-share short-term analyzer/state/Skill/closed-loop workflow. Do not split `A-EGS/egs_main.py` into a full DataHub during this period.
 - **Phase 6e**: establish `docs/provider_data_requirements_audit.md` so Phase 7 starts from four-system data requirements instead of A-short-only convenience.
 - **Phase 7a**: perform schema-first alpha-validation work before broad engine modularization. The current action guide is `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`; the next route is the alpha plausibility audit schema and first audit in `docs/alpha_plausibility_audit.md`.
-- **Phase 7b**: populate provider capability evidence and add data quality / provider drift monitoring.
-- **Phase 7c**: implement broad DataHub / engine modularization with reproducibility plumbing and data quality monitor.
+- **Phase 7b-1**: establish provider capability evidence and data quality / provider drift monitoring contract in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`; this does not populate real provider evidence.
+- **Phase 7b-2**: populate provider capability evidence in the P1-P4 order, recording provider docs, fields, PIT, coverage, cost, fallback, and stability evidence before DataHub can rely on it.
+- **Phase 7c**: define the DataHub shared layer, report contracts, reproducibility plumbing, and data quality monitor before broad implementation.
 - **Phase 7 implementation**: broad DataHub / engine modularization starts only after provider capability, alpha plausibility, evidence-capital, and early report contracts are reviewed.
 
 Reason: `A-EGS/egs_main.py` v7.10 and `runners/backtest_rank.py` have just passed a 24-period production rank-backtest engineering validation. Large structural rewrites now would add breakage risk before the A-share short-term loop is closed.
@@ -144,6 +145,7 @@ Phase 7 starts only after the A-share short-term sample loop is stable enough to
 Completion criteria:
 
 - Provider capability / field catalog contract exists for the data classes required by A-short, US-short, A-long, US-long, and burst lanes. Current baseline: `schemas/provider_capability_catalog.schema.json` v1.0.0.
+- Provider evidence / drift-monitor contract exists for P1-P4 provider evidence records, readiness rollup, and drift-monitor dimensions. Current Phase 7b-1 baseline: `schemas/provider_evidence_drift_monitor.schema.json` v1.0.0. Actual Phase 7b-2 provider evidence population remains pending.
 - Alpha plausibility audit contract exists and has reviewed lane-level verdicts before large implementation investments.
 - Evidence capital policy is reflected in aggregate/report schemas so paper evidence cannot be mistaken for live-normalized ship-gate evidence.
 - Data quality / provider drift monitoring exists before provider-backed evidence is treated as stable. It must cover coverage, freshness, schema drift, outliers, revision rate, provider incidents, and silently changed provider semantics.

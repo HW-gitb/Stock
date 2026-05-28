@@ -1,0 +1,908 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_evidence_drift_monitor/1.0.0/schema.json",
+  "title": "Provider Evidence And Drift Monitor",
+  "description": "Phase 7b schema-first contract for provider capability evidence population and data quality / provider drift monitoring. This contract consumes the Phase 7a provider-priority contract and provider capability catalog; it does not select providers, fetch data, create adapters, implement DataHub tables, change strategy rules, relax ship gates, or authorize order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "contract_refs",
+    "evidence_queue",
+    "provider_evidence_records",
+    "provider_readiness_rollup",
+    "drift_monitor",
+    "deferred_decisions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_evidence_drift_monitor"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "contract_refs": {
+      "$ref": "#/$defs/contractRefs"
+    },
+    "evidence_queue": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceQueueItem"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "const": "P1"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "const": "P2"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "const": "P3"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "const": "P4"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          }
+        }
+      ]
+    },
+    "provider_evidence_records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/providerEvidenceRecord"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "const": "P1"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "const": "P2"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "const": "P3"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "const": "P4"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          }
+        }
+      ]
+    },
+    "provider_readiness_rollup": {
+      "$ref": "#/$defs/providerReadinessRollup"
+    },
+    "drift_monitor": {
+      "$ref": "#/$defs/driftMonitor"
+    },
+    "deferred_decisions": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "provider_selection_allowed",
+        "data_fetch_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b"
+        },
+        "purpose": {
+          "const": "provider_evidence_drift_monitor_contract"
+        },
+        "contract_status": {
+          "const": "schema_first_contract_only"
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "contractRefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_priority_contract_ref",
+        "provider_capability_catalog_schema_ref",
+        "provider_capability_catalog_example_ref",
+        "evidence_report_schema_ref",
+        "datahub_guardrail_ref"
+      ],
+      "properties": {
+        "provider_priority_contract_ref": {
+          "const": "docs/provider_priority_benchmark_contract.md"
+        },
+        "provider_capability_catalog_schema_ref": {
+          "const": "schemas/provider_capability_catalog.schema.json"
+        },
+        "provider_capability_catalog_example_ref": {
+          "const": "schemas/examples/provider_capability_catalog.example.json"
+        },
+        "evidence_report_schema_ref": {
+          "const": "schemas/evidence_report.schema.json"
+        },
+        "datahub_guardrail_ref": {
+          "const": "docs/datahub_design.md"
+        }
+      }
+    },
+    "priority": {
+      "enum": [
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ]
+    },
+    "marketId": {
+      "enum": [
+        "A",
+        "US",
+        "global"
+      ]
+    },
+    "laneId": {
+      "enum": [
+        "a_short_steady",
+        "a_short_variants",
+        "a_share_burst_minimal_data",
+        "a_share_burst_full_data",
+        "us_short_steady",
+        "us_burst_minimal_data",
+        "us_burst_full_data",
+        "a_long_core_quality",
+        "a_long_re_rating_catalyst",
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "phase7_shared"
+      ]
+    },
+    "dataClass": {
+      "enum": [
+        "instrument_master_listing_state",
+        "trading_calendar_market_status",
+        "adjusted_eod_ohlcv_liquidity",
+        "limit_halt_suspension_mechanics",
+        "industry_taxonomy",
+        "benchmark_returns_membership",
+        "financial_statements_filings",
+        "cash_flow_quality_valuation",
+        "corporate_actions_capital_actions",
+        "analyst_guidance_consensus",
+        "sec_exchange_filings_events",
+        "ownership_borrow_short_options",
+        "news_legal_regulatory_short_reports",
+        "macro_regime"
+      ]
+    },
+    "evidenceFamily": {
+      "enum": [
+        "us_fundamentals_filings_security_master",
+        "a_share_fundamentals_announcements_sw_history",
+        "burst_event_flow_options_borrow",
+        "a_share_eod_csi_helper_surfaces"
+      ]
+    },
+    "queueStatus": {
+      "enum": [
+        "blocked_until_provider_review",
+        "evidence_populated_from_existing_docs",
+        "ready_evidence_recorded",
+        "manual_or_research_only",
+        "deferred"
+      ]
+    },
+    "implementationDependencyStatus": {
+      "enum": [
+        "blocked",
+        "not_implementation_ready",
+        "manual_or_research_only",
+        "ready_for_drift_tracking_only"
+      ]
+    },
+    "evidenceQueueItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "priority",
+        "evidence_family",
+        "primary_lane_ids",
+        "queue_source_ref",
+        "queue_status",
+        "implementation_dependency_status",
+        "provider_selection_made",
+        "data_fetch_performed",
+        "notes"
+      ],
+      "properties": {
+        "priority": {
+          "$ref": "#/$defs/priority"
+        },
+        "evidence_family": {
+          "$ref": "#/$defs/evidenceFamily"
+        },
+        "primary_lane_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/laneId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "queue_source_ref": {
+          "const": "docs/provider_priority_benchmark_contract.md"
+        },
+        "queue_status": {
+          "$ref": "#/$defs/queueStatus"
+        },
+        "implementation_dependency_status": {
+          "$ref": "#/$defs/implementationDependencyStatus"
+        },
+        "provider_selection_made": {
+          "const": false
+        },
+        "data_fetch_performed": {
+          "const": false
+        },
+        "notes": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "sourceBasis": {
+      "enum": [
+        "existing_repo_docs",
+        "reviewed_provider_evidence",
+        "manual_evidence_inventory",
+        "placeholder_pending_review"
+      ]
+    },
+    "capabilityStatus": {
+      "enum": [
+        "ready_evidence_recorded",
+        "partial",
+        "unknown",
+        "blocked",
+        "manual_evidence_only",
+        "research_only",
+        "deferred"
+      ]
+    },
+    "productionUseStatus": {
+      "enum": [
+        "allowed_after_provider_review",
+        "blocked_until_provider_review",
+        "manual_evidence_only",
+        "research_only",
+        "deferred"
+      ]
+    },
+    "pitStatus": {
+      "enum": [
+        "pit_safe",
+        "latest_only",
+        "manual_evidence",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "observedDateSupport": {
+      "enum": [
+        "supported",
+        "partial",
+        "manual",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "securityMasterStatus": {
+      "enum": [
+        "supported",
+        "partial",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "readinessEffect": {
+      "enum": [
+        "keeps_lane_blocked",
+        "allows_paper_or_research_only",
+        "records_ready_helper_surface",
+        "supports_future_review"
+      ]
+    },
+    "lineageEvidenceField": {
+      "enum": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "adjustment_mode",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "row_count",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "retry_stability_status",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ]
+    },
+    "providerEvidenceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "priority",
+        "market",
+        "lane_ids",
+        "data_class",
+        "field_family",
+        "provider_candidate_id",
+        "source_basis",
+        "capability_status",
+        "production_use_status",
+        "pit_status",
+        "observed_date_support",
+        "survivorship_security_master_status",
+        "silent_default_allowed",
+        "latest_only_historical_evidence_allowed",
+        "provider_selection_made",
+        "data_fetch_performed",
+        "missing_required_evidence",
+        "lineage_evidence_required",
+        "drift_monitoring_required",
+        "readiness_effect",
+        "limitations"
+      ],
+      "properties": {
+        "record_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+        },
+        "priority": {
+          "$ref": "#/$defs/priority"
+        },
+        "market": {
+          "$ref": "#/$defs/marketId"
+        },
+        "lane_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/laneId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "data_class": {
+          "$ref": "#/$defs/dataClass"
+        },
+        "field_family": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "provider_candidate_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+        },
+        "source_basis": {
+          "$ref": "#/$defs/sourceBasis"
+        },
+        "capability_status": {
+          "$ref": "#/$defs/capabilityStatus"
+        },
+        "production_use_status": {
+          "$ref": "#/$defs/productionUseStatus"
+        },
+        "pit_status": {
+          "$ref": "#/$defs/pitStatus"
+        },
+        "observed_date_support": {
+          "$ref": "#/$defs/observedDateSupport"
+        },
+        "survivorship_security_master_status": {
+          "$ref": "#/$defs/securityMasterStatus"
+        },
+        "silent_default_allowed": {
+          "const": false
+        },
+        "latest_only_historical_evidence_allowed": {
+          "const": false
+        },
+        "provider_selection_made": {
+          "const": false
+        },
+        "data_fetch_performed": {
+          "const": false
+        },
+        "missing_required_evidence": {
+          "$ref": "#/$defs/stringList"
+        },
+        "lineage_evidence_required": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lineageEvidenceField"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "drift_monitoring_required": {
+          "const": true
+        },
+        "readiness_effect": {
+          "$ref": "#/$defs/readinessEffect"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "providerReadinessRollup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "p1_status",
+        "p2_status",
+        "p3_status",
+        "p4_status",
+        "implementation_authorized_by_this_artifact",
+        "provider_selection_authorized_by_this_artifact",
+        "ship_gate_claim_authorized_by_this_artifact"
+      ],
+      "properties": {
+        "p1_status": {
+          "$ref": "#/$defs/capabilityStatus"
+        },
+        "p2_status": {
+          "$ref": "#/$defs/capabilityStatus"
+        },
+        "p3_status": {
+          "$ref": "#/$defs/capabilityStatus"
+        },
+        "p4_status": {
+          "$ref": "#/$defs/capabilityStatus"
+        },
+        "implementation_authorized_by_this_artifact": {
+          "const": false
+        },
+        "provider_selection_authorized_by_this_artifact": {
+          "const": false
+        },
+        "ship_gate_claim_authorized_by_this_artifact": {
+          "const": false
+        }
+      }
+    },
+    "driftDimension": {
+      "enum": [
+        "coverage_count",
+        "freshness_latency",
+        "schema_or_field_semantics",
+        "pit_as_of_integrity",
+        "survivorship_security_master",
+        "corporate_action_revision",
+        "calendar_timezone_alignment",
+        "authorization_cost_quota",
+        "provider_incident",
+        "outlier_revision_rate"
+      ]
+    },
+    "driftAction": {
+      "enum": [
+        "warn",
+        "block_production_use",
+        "manual_review",
+        "fallback_path_review",
+        "rerun_provider_evidence",
+        "record_incident",
+        "freeze_latest_only_claims"
+      ]
+    },
+    "driftDimensionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dimension",
+        "status",
+        "trigger",
+        "blocking_actions"
+      ],
+      "properties": {
+        "dimension": {
+          "$ref": "#/$defs/driftDimension"
+        },
+        "status": {
+          "enum": [
+            "contract_defined",
+            "needs_provider_evidence",
+            "not_applicable"
+          ]
+        },
+        "trigger": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blocking_actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/driftAction"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "driftMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "monitor_status",
+        "dimensions",
+        "action_set",
+        "incident_log_required",
+        "silent_semantic_change_monitor_required",
+        "no_zero_fill_for_benchmarks",
+        "latest_only_backfill_allowed"
+      ],
+      "properties": {
+        "monitor_status": {
+          "enum": [
+            "contract_defined_not_running",
+            "not_started",
+            "active"
+          ]
+        },
+        "dimensions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/driftDimensionRecord"
+          },
+          "minItems": 10,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "coverage_count"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "freshness_latency"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "schema_or_field_semantics"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "pit_as_of_integrity"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "survivorship_security_master"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "corporate_action_revision"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "calendar_timezone_alignment"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "authorization_cost_quota"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "provider_incident"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "const": "outlier_revision_rate"
+                  }
+                },
+                "required": [
+                  "dimension"
+                ]
+              }
+            }
+          ]
+        },
+        "action_set": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/driftAction"
+          },
+          "minItems": 7,
+          "uniqueItems": true,
+          "allOf": [
+            {
+              "contains": {
+                "const": "warn"
+              }
+            },
+            {
+              "contains": {
+                "const": "block_production_use"
+              }
+            },
+            {
+              "contains": {
+                "const": "manual_review"
+              }
+            },
+            {
+              "contains": {
+                "const": "fallback_path_review"
+              }
+            },
+            {
+              "contains": {
+                "const": "rerun_provider_evidence"
+              }
+            },
+            {
+              "contains": {
+                "const": "record_incident"
+              }
+            },
+            {
+              "contains": {
+                "const": "freeze_latest_only_claims"
+              }
+            }
+          ]
+        },
+        "incident_log_required": {
+          "const": true
+        },
+        "silent_semantic_change_monitor_required": {
+          "const": true
+        },
+        "no_zero_fill_for_benchmarks": {
+          "const": true
+        },
+        "latest_only_backfill_allowed": {
+          "const": false
+        }
+      }
+    }
+  }
+}

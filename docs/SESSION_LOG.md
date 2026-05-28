@@ -8,6 +8,149 @@
 
 ---
 
+## 2026-05-28 — Claude re-review — Pass (Phase 7b R1 repair: 7b-1 / 7b-2 split)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `f372bf6`)
+
+**Verdict**: Pass.
+
+**Notes**: R1 选了 split 路径（option (a) 拆 7b-1 ✅ + 7b-2 ⬜），系统化落到 5 个 owner doc + handoff："Phase 7b-1 schema-first contract"（本刀完成）与 "Phase 7b-2 provider capability evidence population"（未开始）显式区分。AGENTS.md §当前进度加 7b-1 entry 含"Phase 7b-2 真实 provider capability evidence population 尚未开始"明示、§执行路线图 split 7b row（7b-1 ✅ schema-first / 7b-2 ⬜ 下一刀，附"按 P1-P4 读取/核验 provider 文档"等可验证 deliverable）、§已固化决策 §14 + §文件参考同步。`ALPHA_VALIDATION_ACTION_GUIDE.md` §2 加 "Phase 7b-2 provider capability evidence population is still pending"、§2 next slice 改为 7b-2（不是 Phase 7c）、§11 table split、§13 修订成 "After 7b-1 → 7b-2 → P1 queue 起步"。CURRENT.md §0 Latest Delta 加 7b-1 done + 7b-2 not started 两条、§1 Phase + P0 目标 改为 Phase 7b-2 evidence population、§2 最近已完成 + §4 关键文件 + §5 下一步 P0 全 align。datahub_design.md staged roadmap split 成 7b-1 / 7b-2 + 完成判定加 "Phase 7b-2 provider evidence population remains pending"。Handoff 顶部加 "2026-05-28 修复追加：Phase 7b label repair" 显式 invalidate 上一轮 "Phase 7b schema-first baseline 已建立，下一条进入 Phase 7c" 过宽措辞。ACTION_GUIDE §13 顺带预防了我原 review note 提的 Phase 7c framing 风险：现在明文 "Phase 7c itself must start as a schema-first DataHub / report / reproducibility contract before any implementation slice" — 即下一刀 Phase 7b-2 是真填 provider 证据，Phase 7c 才是再下一份 schema-first，避免下一轮再次发生同类 label 错位。独立 grep `Phase 7b(?!-)` 无 unqualified "Phase 7b" 匹配，CURRENT.md 146 行，git diff --check clean。Scope: docs-only repair，schema / example / tests 未碰，scope 严守。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。下一刀 Phase 7b-2 = **真正开始抓 provider docs / fields / PIT / coverage / cost / fallback / stability evidence**（按 P1 US fundamentals 起步），这是用户问 "什么时候连真实数据" 的真正起点。
+
+---
+
+## 2026-05-28 — Codex (repair: Phase 7b Required R1)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Responds to the latest Claude review verdict: Pass with fixes, with Required R1 approved via user-provided Claude Code screenshot.
+- No Optional suggestions were pending.
+
+**Worked on**:
+1. [tracked] `AGENTS.md`: accepted R1 by splitting roadmap `7b` into `7b-1` schema-first contract complete and `7b-2` provider capability evidence population pending; aligned Phase 7 decision wording and file references.
+2. [tracked] `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: accepted R1 by splitting §11 into `Phase 7b-1` / `Phase 7b-2` and aligning §13 so the next `执行` is Phase 7b-2 evidence population, not Phase 7c.
+3. [tracked] `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/README.md`, `docs/datahub_design.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`, `docs/evidence_report_schema_contract.md`, `docs/evidence_feasibility_controls.md`: aligned routing so Phase 7b-1 contract completion is not confused with real provider evidence population.
+4. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: added a repair note clarifying the same `7b-1` / `7b-2` split for future handoff readers.
+5. [tracked] `docs/SESSION_LOG.md`: recorded this repair entry for Claude re-review continuity.
+
+**Required fix disposition**:
+- R1 repaired — chose the split approach: `7b-1` is the completed schema-first provider evidence / drift-monitor contract; `7b-2` is the still-pending provider capability evidence population. Phase 7c is now explicitly a later schema-first DataHub / report / reproducibility contract after reviewed 7b-2 evidence.
+
+**Optional disposition**:
+- None; Claude review had 0 Optional suggestions.
+
+**Validation run/result**:
+- Docs-only repair; schema files and tests were not changed.
+- `git diff --check`: passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- Changed-file trailing whitespace scan: no matches.
+- Active stale next-step scan: no matches in active routing docs.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: `146`, below the 150-line snapshot target.
+
+**Current review state**:
+- Approved Required fixes repaired: 1.
+- Optional dispositions: 0 accepted, 0 accepted with modification, 0 rejected.
+- Working tree uncommitted.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude re-reviews the repaired Phase 7b change set.
+
+---
+
+## 2026-05-28 — Claude review — Pass with fixes (Phase 7b provider evidence / drift monitor contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `f372bf6`)
+
+**Verdict**: Pass with fixes.
+
+**Status**: REVIEW VERDICT RECORDED. Required fixes (1) PENDING USER APPROVAL; Optional suggestions (0) — none.
+
+**Required fixes**:
+
+- **R1**: AGENTS.md §执行路线图 §7b row 和 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §11 table §7b row 的标签与实际交付不一致。Codex 把状态标成 **"✅ schema-first baseline"**，但 row 文本仍是 **"Provider capability evidence population + data quality / provider drift monitor"** — "population" 是把 provider evidence 填进 catalog 的动作（读 provider 文档、记录 PIT / coverage / cost / fallback / 实际 candidate API、决定 sandbox / 试 token 等），本刀**未做**这件事。本刀实际是为 population 与 drift monitor 写好 schema-first contract，不抓 provider data 也不选 provider（schema 顶层 `scope.provider_selection_allowed: const false`、`data_fetch_allowed: const false`、加新的 `production_ready_claim_allowed: const false`）。结果是 row 上的 ✅ 与"population"文字直接冲突，未来读 AGENTS.md 的 LLM / 用户会误以为 P1-P4 provider evidence 已经填好，而实际只有 contract shape。修复方向（择一）：(a) 把 §7b row 文本拆成两段并分别标状态，例如 "7b-1 evidence/drift schema-first contract ✅ + 7b-2 provider capability evidence population ⬜"；(b) 把 §7b row 改写为 "Provider evidence / drift monitor schema-first contract + later evidence population" 并把 ✅ 解释清楚只覆盖 contract，evidence population 仍未开始；(c) 撤回 ✅ 改成 "🟡 schema-first baseline only（evidence population pending）" 之类的部分状态标记。ALPHA_VALIDATION_ACTION_GUIDE §11 table 的 §7b 行同样需要 align（现行 "provider capability evidence population plus data quality / provider drift monitoring contract" 中 "contract" 后挂在最尾，语法歧义，读起来仍像两件事都完成）。**理由**：本次对话用户先问 "这个系统设计什么时候连真实数据?"，我（Claude）明确回答 "接新真实数据 = Phase 7b 才开始 ... Phase 7b 这一刀真正开始抓新真实数据"，用户基于这个理解才进入本轮 `审查`。如果让本刀以 "Phase 7b ✅ population" 入库，与用户 mental model 直接冲突，且会让接手 LLM 在下一刀（Phase 7c）继续 schema-first 时找不到 evidence 实际未开始的证据。schema 本身的 contract 价值（drift dimensions、P4 helper containment、no silent default lock、no latest-only backfill lock）是真实的，不需要 reject schema 工作；只需要把"完成"的定义讲清楚。
+
+**Optional suggestions**: none.
+
+**Notes**: Codex `执行` round Phase 7b — 4 untracked new (`docs/provider_evidence_drift_monitor.md` 103 行 / `schemas/provider_evidence_drift_monitor.schema.json` 908 行 v1.0.0 / `schemas/examples/provider_evidence_drift_monitor.example.json` 425 行 / `tests/schema/test_provider_evidence_drift_monitor_schema.py` 224 行 11 tests) + 14 tracked routing/handoff updates (`AGENTS.md` / `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` / `docs/CURRENT.md` / `docs/README.md` / `docs/SESSION_LOG.md` / `docs/burst_lane_spec.md` / `docs/datahub_design.md` 首次进入 Phase 7 routing / `docs/evidence_feasibility_controls.md` / `docs/evidence_report_schema_contract.md` / `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` / `docs/provider_data_requirements_audit.md` / `docs/provider_priority_benchmark_contract.md` / `docs/strategy_design_synthesis.md` / `docs/us_short_spec.md`)。Scope 实际严守（不冲突 R1 — R1 只是 label 不准）：0 provider 选择 / 0 数据抓取 / 0 adapter / 0 DataHub table / 0 runner 改 / 0 strategy 改 / 0 broker / OS automation / 0 ship-gate relaxation — 全部 schema `scope` 12 const 强制（比 Phase 7a-5 多 `production_ready_claim_allowed: false`，刻意防 "已经 ready" 的语义滑动）。Schema defensive design 充分：(1) `evidence_queue` 用 `minItems: 4 / maxItems: 4` + 4 个 `allOf.contains` 锁 P1-P4 priority；(2) `provider_evidence_records` 同样强制 4 priority 各至少 1 条；(3) 每条 record 含 `silent_default_allowed: const false`、`latest_only_historical_evidence_allowed: const false`、`provider_selection_made: const false`、`data_fetch_performed: const false`（owner doc §4 一致）；(4) drift monitor 强制覆盖 10 dimension（coverage / freshness / schema / PIT / survivorship / corporate action / calendar / authorization / incident / outlier）和 7 action（warn / block_production_use / manual_review / fallback_path_review / rerun_provider_evidence / record_incident / freeze_latest_only_claims）；(5) `production_ready_claim_allowed: const false` 是新加的语义防御，防止后续 LLM 把 schema 完成误读为 production-ready；(6) negative tests 覆盖 missing P1 / missing drift dimension / provider_selection_made=true / silent_default=true / latest_only=true / P4 helper authorizing implementation。Cross-doc routing 大量但一致：AGENTS.md §当前进度 + §文件参考 + §已固化决策 §14；docs/README.md routing；CURRENT.md Latest Delta + §1 Phase + §2 最近已完成 + §4 关键文件 + §5 下一步（P0 现在是 Phase 7c）；ALPHA_VALIDATION_ACTION_GUIDE §2 + §11 table + §13；datahub_design 接入 Phase 7 routing（首次）；provider_priority_benchmark_contract / provider_data_requirements_audit / strategy_design_synthesis / evidence_feasibility_controls / evidence_report_schema_contract / burst_lane_spec / us_short_spec 多处统一更新到"after Phase 7b ... next is Phase 7c"；handoff 追加 §失效旧结论 含 "下一条 `执行` 推荐 Phase 7b" 失效。独立 validation: `python -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v` 11 tests pass / `python -m unittest discover -s tests/schema` 85 tests pass（74 + 11 = 85）/ `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` 给 144 行 / `git diff --check` clean / `git diff --cached` empty / provider_evidence_drift_monitor 4 文件 trailing whitespace scan clean。Phase 7c 的下一刀按 Codex framing 仍是 schema-first DataHub / report / reproducibility contract — 即 schema-first 链将从当前 6 份扩到 7 份。这个延伸属于 Codex Designer 的判断范围（"DataHub implementation needs to consume a reviewed provider evidence / drift-monitor contract first"），但需要在 R1 修复时一并把 §13 "next 执行 should implement a Phase 7c **schema-first** DataHub..." 的措辞跟 §执行路线图 §7c row 对齐，否则 Phase 7c 又会重复同类标签错位。除 R1 外无 scope / contract / risk issue；无 open question；无 §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-28 — Codex (Phase 7b provider evidence / drift monitor contract)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `f372bf6` (`Add Phase 7a evidence report schema`).
+- Converts the Phase 7b next step from `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, and the Phase 7 handoff into a schema-first provider evidence / drift-monitor contract.
+- Prepended the required reconstructed SESSION_LOG entry for commit `f372bf6` below this entry, per `AGENTS.md §Session log discipline` fallback.
+
+**Worked on**:
+1. [untracked] `docs/provider_evidence_drift_monitor.md`: added the Phase 7b owner doc for P1-P4 provider evidence records, readiness rollup, and drift-monitor dimensions/actions.
+2. [untracked] `schemas/provider_evidence_drift_monitor.schema.json`, `schemas/examples/provider_evidence_drift_monitor.example.json`, `tests/schema/test_provider_evidence_drift_monitor_schema.py`: added schema v1.0.0, example, and regression tests.
+3. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/datahub_design.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`, `docs/evidence_report_schema_contract.md`, `docs/evidence_feasibility_controls.md`: routed Phase 7b and advanced current next work to Phase 7c.
+4. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7b handoff section.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this handoff plus the reconstructed commit entry for `f372bf6`.
+
+**Key decisions**:
+- Phase 7b is a schema-first provider evidence / drift-monitor contract slice, not provider selection, provider data fetch, adapter, DataHub table, runner, strategy-rule, broker, or OS automation work.
+- The schema keeps P1-P4 provider evidence records, queue status, readiness rollup, and drift-monitor dimensions separate; it does not average provider readiness into one score or imply production readiness.
+- P4 A-share EOD / CSI helper evidence is recorded as ready helper-surface evidence only. It does not authorize broad DataHub implementation, provider selection, ship-gate claims, or bypassing P1-P3 blockers.
+- Drift monitoring must cover coverage, freshness, schema / field semantics, PIT/as-of integrity, survivorship/security master, corporate-action revisions, calendar/timezone, authorization/cost/quota, provider incidents, and outlier/revision rate.
+
+**Alternatives considered and rejected**:
+- "Fetch or look up real provider capability now" — rejected. Phase 7b in this slice is contract population from existing repo evidence only; provider data fetch and final provider selection need a later reviewed implementation path.
+- "Only update `schemas/provider_capability_catalog.example.json`" — rejected. The existing catalog schema does not own drift-monitor dimensions, actions, incident logging, or the P4 helper-surface containment rule.
+- "Start Phase 7c DataHub tables immediately" — rejected. DataHub implementation needs to consume a reviewed provider evidence / drift-monitor contract first.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v`: 11 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 85 tests passed.
+- `git diff --check` passed; only existing LF/CRLF working-copy warnings were reported for touched docs.
+- Changed-file trailing whitespace scan found no matches.
+- Active stale next-step scan found no matches in active routing docs.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length` reported `144`, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7b provider evidence / drift-monitor schema slice.
+2. If Pass and user commits, the next `执行` slice should start Phase 7c DataHub shared-layer / report / reproducibility contract work.
+
+---
+
+## 2026-05-28 — Codex (reconstructed from commit messages: Phase 7a-5 commit)
+
+**Commits**: `f372bf6` (`Add Phase 7a evidence report schema`)
+
+**Relationship to prior session(s)**:
+- Reconstructed per `AGENTS.md §Session log discipline` fallback because the reviewed Phase 7a-5 commit existed after the latest SESSION_LOG review entry.
+- Finalizes the Claude-reviewed Phase 7a-5 evidence report schema change set.
+
+**Worked on**:
+1. [tracked] Committed the reviewed Phase 7a-5 evidence report schema scope: owner doc, schema, example, regression tests, routing docs, handoff, SESSION_LOG, and O1 test assertion repair.
+
+**Key decisions**:
+- No new design decision beyond the reviewed change set; commit `f372bf6` is the repository state that the Phase 7b work builds on.
+
+**Alternatives considered and rejected**:
+- None; reconstruction only.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Execute Phase 7b provider evidence / drift monitor.
+
+---
+
 ## 2026-05-28 — Claude re-review — Pass (Phase 7a-5 O1 repair)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `17ea135`)

@@ -339,7 +339,8 @@ US-short docs-only baseline is complete when:
 
 ## 12. Next Work
 
-After the Phase 7a-5 evidence report schema contract, the next US-short work is Phase 7b provider capability evidence and drift monitoring:
+Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`; Phase 7b-2 still needs actual provider evidence population:
 
-1. Follow `docs/provider_priority_benchmark_contract.md` for US fundamentals / filings / security master and US event / microstructure evidence priority.
-2. Future US-short reports should consume `schemas/evidence_report.schema.json` for immutable decision packets, manual overrides, cost-adjusted return, and position reconciliation.
+1. Follow the Phase 7b-1 contract for US fundamentals / filings / security master and US event / microstructure evidence priority.
+2. Populate provider evidence for US fields before US-short can rely on them for live-normalized evidence.
+3. Future US-short reports should consume `schemas/evidence_report.schema.json` for immutable decision packets, manual overrides, cost-adjusted return, and position reconciliation.

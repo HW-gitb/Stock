@@ -1,0 +1,224 @@
+from __future__ import annotations
+
+import copy
+import json
+import unittest
+from pathlib import Path
+
+
+SCHEMA_PATH = Path("schemas/provider_evidence_drift_monitor.schema.json")
+EXAMPLE_PATH = Path("schemas/examples/provider_evidence_drift_monitor.example.json")
+
+
+class ProviderEvidenceDriftMonitorSchemaTest(unittest.TestCase):
+    def test_schema_meta_validates_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+        Draft7Validator.check_schema(schema)
+        self.assertEqual(schema["properties"]["schema_name"]["const"], "provider_evidence_drift_monitor")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.0.0")
+        self.assertIn("Phase 7b", schema["description"])
+        self.assertIn("does not select providers", schema["description"])
+        self.assertFalse(schema["additionalProperties"])
+
+    def test_scope_locks_phase7b_boundaries(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        scope = schema["$defs"]["scope"]["properties"]
+
+        self.assertEqual(scope["phase"]["const"], "7b")
+        self.assertEqual(scope["purpose"]["const"], "provider_evidence_drift_monitor_contract")
+        self.assertEqual(scope["contract_status"]["const"], "schema_first_contract_only")
+        self.assertEqual(scope["provider_selection_allowed"]["const"], False)
+        self.assertEqual(scope["data_fetch_allowed"]["const"], False)
+        self.assertEqual(scope["provider_adapter_allowed"]["const"], False)
+        self.assertEqual(scope["datahub_table_implementation_allowed"]["const"], False)
+        self.assertEqual(scope["strategy_rule_change_allowed"]["const"], False)
+        self.assertEqual(scope["broker_or_order_automation_allowed"]["const"], False)
+        self.assertEqual(scope["manual_order_only"]["const"], True)
+        self.assertEqual(scope["ship_gate_relaxed"]["const"], False)
+        self.assertEqual(scope["production_ready_claim_allowed"]["const"], False)
+
+    def test_contract_refs_and_p1_to_p4_queue_are_locked(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        refs = schema["$defs"]["contractRefs"]["properties"]
+        queue_all_of = schema["properties"]["evidence_queue"]["allOf"]
+        queue_priorities = {
+            rule["contains"]["properties"]["priority"]["const"] for rule in queue_all_of
+        }
+        evidence_families = set(schema["$defs"]["evidenceFamily"]["enum"])
+
+        self.assertEqual(refs["provider_priority_contract_ref"]["const"], "docs/provider_priority_benchmark_contract.md")
+        self.assertEqual(
+            refs["provider_capability_catalog_schema_ref"]["const"],
+            "schemas/provider_capability_catalog.schema.json",
+        )
+        self.assertEqual(refs["evidence_report_schema_ref"]["const"], "schemas/evidence_report.schema.json")
+        self.assertEqual(queue_priorities, {"P1", "P2", "P3", "P4"})
+        self.assertEqual(
+            evidence_families,
+            {
+                "us_fundamentals_filings_security_master",
+                "a_share_fundamentals_announcements_sw_history",
+                "burst_event_flow_options_borrow",
+                "a_share_eod_csi_helper_surfaces",
+            },
+        )
+
+    def test_provider_evidence_prevents_defaults_selection_and_fetch(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        record = schema["$defs"]["providerEvidenceRecord"]["properties"]
+        queue = schema["$defs"]["evidenceQueueItem"]["properties"]
+        rollup = schema["$defs"]["providerReadinessRollup"]["properties"]
+
+        self.assertEqual(record["silent_default_allowed"]["const"], False)
+        self.assertEqual(record["latest_only_historical_evidence_allowed"]["const"], False)
+        self.assertEqual(record["provider_selection_made"]["const"], False)
+        self.assertEqual(record["data_fetch_performed"]["const"], False)
+        self.assertEqual(record["drift_monitoring_required"]["const"], True)
+        self.assertEqual(queue["provider_selection_made"]["const"], False)
+        self.assertEqual(queue["data_fetch_performed"]["const"], False)
+        self.assertEqual(rollup["implementation_authorized_by_this_artifact"]["const"], False)
+        self.assertEqual(rollup["provider_selection_authorized_by_this_artifact"]["const"], False)
+        self.assertEqual(rollup["ship_gate_claim_authorized_by_this_artifact"]["const"], False)
+
+    def test_drift_dimensions_and_actions_are_required(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        drift = schema["$defs"]["driftMonitor"]["properties"]
+        dimension_rules = drift["dimensions"]["allOf"]
+        action_rules = drift["action_set"]["allOf"]
+        dimensions = {rule["contains"]["properties"]["dimension"]["const"] for rule in dimension_rules}
+        actions = {rule["contains"]["const"] for rule in action_rules}
+
+        self.assertEqual(
+            dimensions,
+            {
+                "coverage_count",
+                "freshness_latency",
+                "schema_or_field_semantics",
+                "pit_as_of_integrity",
+                "survivorship_security_master",
+                "corporate_action_revision",
+                "calendar_timezone_alignment",
+                "authorization_cost_quota",
+                "provider_incident",
+                "outlier_revision_rate",
+            },
+        )
+        self.assertEqual(
+            actions,
+            {
+                "warn",
+                "block_production_use",
+                "manual_review",
+                "fallback_path_review",
+                "rerun_provider_evidence",
+                "record_incident",
+                "freeze_latest_only_claims",
+            },
+        )
+        self.assertEqual(drift["incident_log_required"]["const"], True)
+        self.assertEqual(drift["silent_semantic_change_monitor_required"]["const"], True)
+        self.assertEqual(drift["no_zero_fill_for_benchmarks"]["const"], True)
+        self.assertEqual(drift["latest_only_backfill_allowed"]["const"], False)
+
+    def test_example_validates_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        example = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
+        errors = list(Draft7Validator(schema).iter_errors(example))
+
+        self.assertEqual(errors, [])
+
+    def test_selected_provider_is_rejected_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        example = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
+        invalid = copy.deepcopy(example)
+        invalid["provider_evidence_records"][0]["provider_selection_made"] = True
+
+        errors = list(Draft7Validator(schema).iter_errors(invalid))
+
+        self.assertNotEqual(errors, [])
+
+    def test_latest_only_or_silent_default_is_rejected_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        example = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
+        invalid = copy.deepcopy(example)
+        invalid["provider_evidence_records"][1]["latest_only_historical_evidence_allowed"] = True
+        invalid["provider_evidence_records"][1]["silent_default_allowed"] = True
+
+        errors = list(Draft7Validator(schema).iter_errors(invalid))
+
+        self.assertNotEqual(errors, [])
+
+    def test_missing_p1_queue_item_is_rejected_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        example = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
+        invalid = copy.deepcopy(example)
+        invalid["evidence_queue"][0]["priority"] = "P2"
+
+        errors = list(Draft7Validator(schema).iter_errors(invalid))
+
+        self.assertNotEqual(errors, [])
+
+    def test_missing_drift_dimension_is_rejected_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        example = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
+        invalid = copy.deepcopy(example)
+        invalid["drift_monitor"]["dimensions"] = [
+            item
+            for item in invalid["drift_monitor"]["dimensions"]
+            if item["dimension"] != "provider_incident"
+        ]
+
+        errors = list(Draft7Validator(schema).iter_errors(invalid))
+
+        self.assertNotEqual(errors, [])
+
+    def test_p4_ready_helper_surface_does_not_authorize_implementation(self) -> None:
+        example = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
+
+        records = {record["priority"]: record for record in example["provider_evidence_records"]}
+        self.assertEqual(records["P4"]["capability_status"], "ready_evidence_recorded")
+        self.assertEqual(records["P4"]["readiness_effect"], "records_ready_helper_surface")
+        self.assertEqual(example["provider_readiness_rollup"]["p4_status"], "ready_evidence_recorded")
+        self.assertEqual(
+            example["provider_readiness_rollup"]["implementation_authorized_by_this_artifact"],
+            False,
+        )
+        self.assertEqual(
+            example["provider_readiness_rollup"]["provider_selection_authorized_by_this_artifact"],
+            False,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

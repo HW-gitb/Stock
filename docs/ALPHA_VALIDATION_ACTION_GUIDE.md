@@ -25,9 +25,9 @@ Fixed governance:
 
 ## 2. Current Execution Rule
 
-Stop broad design looping. Phase 7a-1 through Phase 7a-5 are complete. Phase 7a-3 adds the provider priority and provisional benchmark contract in `docs/provider_priority_benchmark_contract.md`; Phase 7a-4 adds evidence feasibility controls in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`; Phase 7a-5 adds evidence report schemas in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`.
+Stop broad design looping. Phase 7a-1 through Phase 7a-5 are complete. Phase 7a-3 adds the provider priority and provisional benchmark contract in `docs/provider_priority_benchmark_contract.md`; Phase 7a-4 adds evidence feasibility controls in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`; Phase 7a-5 adds evidence report schemas in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`. Phase 7b-1 adds provider evidence / drift-monitor contracts in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`; Phase 7b-2 provider capability evidence population is still pending.
 
-The next execution slice after Phase 7a-5 is Phase 7b: provider capability evidence population plus data quality / provider drift monitoring.
+The next execution slice after Phase 7b-1 is Phase 7b-2: populate provider capability evidence in the P1-P4 queue without selecting a final provider or building adapters / DataHub tables.
 
 Phase 7a contract slices must not:
 
@@ -232,8 +232,9 @@ Before Phase 8 implementation, each preset or lane contract must also define a `
 | Phase 7a-3 | provider priority reorder and provisional benchmark contract |
 | Phase 7a-4 | burst minimal-to-full promotion criteria; evidence capital schema; concentration limits; liquidity/ADV sizing; market-impact/slippage constraints; drawdown / circuit-breaker tiered action playbook |
 | Phase 7a-5 | evidence report schemas; immutable decision packet; cost-adjusted return details; cash drag/opportunity cost; manual override and minimal position reconciliation; long thesis outcome log; research experiment log |
-| Phase 7b | provider capability evidence population plus data quality / provider drift monitoring |
-| Phase 7c | DataHub implementation, reproducibility plumbing, data quality monitor |
+| Phase 7b-1 | provider evidence / drift monitor schema-first contract only; no real provider data fetched and no provider selected |
+| Phase 7b-2 | provider capability evidence population: P1-P4 provider docs / fields / PIT / coverage / cost / fallback / stability evidence; provider selection remains a separate reviewed decision |
+| Phase 7c | DataHub shared layer / report contracts / reproducibility plumbing schema-first contract first; implementation only after reviewed contract scope |
 | Phase 8 | lane implementation plus production monitoring, degradation detection, and kill switch |
 | Phase 9 | coordinator, unified daily/weekly report, cross-lane conflict resolution, alert priority, full position reconciliation workflow |
 
@@ -255,6 +256,6 @@ These controls are allowed to land later, but they are not optional:
 
 ## 13. Current Next Step
 
-After the Phase 7a-5 evidence report schema contract, the next `执行` should implement Phase 7b provider capability evidence population plus data quality / provider drift monitoring.
+After the Phase 7b-1 provider evidence / drift-monitor contract, the next `执行` should implement Phase 7b-2 provider capability evidence population, starting from the P1 queue in `docs/provider_priority_benchmark_contract.md`.
 
-Do not start Phase 7c, provider adapters, production provider data fetches, or runner changes before Phase 7b evidence and drift-monitor contracts are reviewed and accepted.
+Do not start Phase 7c, provider adapters, production provider data fetches, DataHub tables, or runner changes before Phase 7b-2 evidence population is reviewed and accepted. Phase 7c itself must start as a schema-first DataHub / report / reproducibility contract before any implementation slice.

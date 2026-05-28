@@ -91,10 +91,10 @@ The reviewed baseline is complete when:
 2. `schemas/examples/evidence_report.example.json` validates against the schema.
 3. Regression tests prove scope locks, required seven-section coverage, prior contract links, decision-packet immutability, cost-component coverage, circuit-breaker action coverage, paper ship-gate rejection, live-normalized reconciliation requirement, and no direct research-to-production feed.
 4. Routing docs point Phase 7a-5 work here.
-5. `docs/CURRENT.md` moves the next P0 to Phase 7b provider evidence / drift monitor.
+5. `docs/CURRENT.md` moves the next P0 to Phase 7b provider evidence / drift monitor work.
 
 ## 8. Next Use
 
-Phase 7b should populate provider capability evidence and data quality / provider drift monitoring according to `docs/provider_priority_benchmark_contract.md`.
+Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 provider capability evidence population remains pending.
 
 Later runner or DataHub output contracts may consume `schemas/evidence_report.schema.json`, but that must be a separate reviewed implementation slice. This Phase 7a-5 baseline does not modify runners or generate production reports.

@@ -44,6 +44,7 @@
 - ✅ Phase 7a-3 provider priority / provisional benchmark contract：`docs/provider_priority_benchmark_contract.md` 已把 provider evidence queue 与 provisional evidence benchmark 固化为 docs-only contract（不选 provider、不抓数据、不建 adapter / DataHub table、不锁最终 ship-gate benchmark）
 - ✅ Phase 7a-4 evidence feasibility controls：`docs/evidence_feasibility_controls.md` 与 `schemas/evidence_feasibility_controls.schema.json` 已固化 burst minimal-to-full promotion、evidence capital、concentration / liquidity / ADV、slippage / borrow / limit-risk、circuit-breaker playbook contract（不选 provider、不抓数据、不改 runner）
 - ✅ Phase 7a-5 evidence report schema contract：`docs/evidence_report_schema_contract.md` 与 `schemas/evidence_report.schema.json` 已固化 immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log contract（不选 provider、不抓数据、不改 runner）
+- ✅ Phase 7b-1 provider evidence / drift monitor schema-first contract：`docs/provider_evidence_drift_monitor.md` 与 `schemas/provider_evidence_drift_monitor.schema.json` 已把 P1-P4 provider evidence queue、provider readiness rollup 与 drift-monitor dimensions/action set 固化为 contract（不选 provider、不抓数据、不建 adapter / DataHub table）；Phase 7b-2 真实 provider capability evidence population 尚未开始
 - ✅ Phase 1a：`schemas/analysis_input.schema.json` 已完成，当前输出 schema 版本 `1.1.0`
 - ✅ Phase 1b：`egs_main.py` 已接入 `analysis_input.json`、`snapshot.json`、`candidates.csv` 导出器
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
@@ -184,8 +185,9 @@ Stock/
 | 7a-3 | Provider priority reorder + provisional benchmark contract | 1-2 天 | ✅ docs-only baseline |
 | 7a-4 | Burst minimal→full promotion criteria + evidence capital schema + concentration / liquidity / ADV sizing + slippage constraints + drawdown / circuit-breaker playbook | 2-4 天 | ✅ schema-first baseline |
 | 7a-5 | Evidence report schemas：immutable decision packet、cost-adjusted return、cash drag、manual override、minimal reconciliation、thesis outcome log、research experiment log | 2-4 天 | ✅ schema-first baseline |
-| 7b | Provider capability evidence population + data quality / provider drift monitor | 1-2 周 | ⬜ 下一刀 |
-| 7c | DataHub shared layer / report contracts / reproducibility plumbing | 1-2 周 | ⬜ |
+| 7b-1 | Provider evidence / drift monitor schema-first contract（P1-P4 queue、readiness rollup、drift dimensions/actions；不抓真实 provider data） | 1-2 天 | ✅ schema-first baseline |
+| 7b-2 | Provider capability evidence population：按 P1-P4 读取/核验 provider 文档、字段、PIT、coverage、cost、fallback、stability 证据；不默认选择 provider、不建 adapter / DataHub table | 1-2 周 | ⬜ 下一刀 |
+| 7c | DataHub shared layer / report contracts / reproducibility plumbing：先写 schema-first contract；implementation 另起 reviewed slice | 1-2 周 | ⬜ |
 | 8 | 四套子系统 implementation wave：按资金权重 × alpha leverage × data readiness 排序；每条 lane 配 production monitoring / kill switch | 2-4 周 | ⬜ |
 | 9 | Cross-system coordinator：unified daily / weekly report、cross-lane conflict resolution、full position reconciliation、alert priority | 2-4 周 | ⬜ |
 
@@ -204,7 +206,7 @@ Stock/
 11. 系统执行边界固化为分析筛选 + 回测复盘 + 报告输出；用户手动下单。不得接入券商、操作系统或自动化工具做自动下单；execution backtest 只是模拟规则，不是 live trading/order execution engine。
 12. 路线图采用 B 半重排的修订版：Phase 6 采用 **spec 层并行 + implementation 层串行受控**。A 股短线 Phase 6b 不停止，但降为 maintenance / evidence line（weekly forward capture、comparison-track accumulator、forward evidence accumulation）；同时前置 A/US `burst_lane` spec、long alpha common spec、A-long annex、US-long annex、US-short spec normalization、provider/data requirements audit。Phase 7 DataHub / engine 重构必须以 4 套 spec + provider/data requirements audit 为依据。Phase 8/9 implementation 不再按原固定顺序推进，而按 `资金权重 × alpha leverage × data readiness` 排序：默认倾向 US-long 优先；若 US provider / fundamentals readiness 不足，A-long 或 US-short burst 可前置。数据准备度只作触发条件，不写死门槛；不得因 spec 并行而启动 implementation 层并行、降低 ship gate、跳过 A-short forward evidence，或把 DataHub 工程误读为 alpha 本身。
 13. 策略设计综合版采用 `docs/strategy_design_synthesis.md`：短线 = 稳健通道 + 有限 variants + 独立 `burst_lane`；长线 = `core quality compounding` + `re-rating / catalyst long` 的 alpha 主系统；research 快迭代但不可直连 production；coordinator 只给手动建议。
-14. Phase 7 implementation 顺序采用 alpha-leverage-first，不再默认从已证明的 A-share EOD / benchmark surface 消耗下一刀资源；Phase 7a schema-first audit / routing / feasibility / report contracts 已建立，下一步按 reviewed audit 与 `docs/provider_priority_benchmark_contract.md` 排序 provider capability evidence。当前设计倾向优先审查 US fundamentals / filings / corporate actions，其次 A-share fundamentals / announcement dates / SW industry history，再审查 burst 所需 event / flow / options / borrow 字段。
+14. Phase 7 implementation 顺序采用 alpha-leverage-first，不再默认从已证明的 A-share EOD / benchmark surface 消耗下一刀资源；Phase 7a schema-first audit / routing / feasibility / report contracts 与 Phase 7b-1 provider evidence / drift monitor contract 已建立，但 Phase 7b-2 真实 provider capability evidence population 尚未开始。后续 Phase 7c DataHub / report / reproducibility work 必须消费 reviewed P1-P4 provider evidence 与 drift-monitor contract，不能把 P4 ready helper surface 当作 broad implementation 起点。
 15. Phase 7a+ 最高行动指南采用 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`：所有后续 schema / provider / DataHub / runner / report / live evidence 工作必须先证明 alpha 真实性边界，不得跳过 survivorship、multiple testing、statistical power、PIT/security master、fraud red flags、regime sensitivity、factor exposure、execution cost、decision reproducibility、position reconciliation 和 production monitoring 等护栏。
 
 ## AI 协作者在本项目中的工作守则
@@ -427,6 +429,8 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `schemas/evidence_feasibility_controls.schema.json` — Phase 7a-4 evidence feasibility controls 契约，当前 `1.0.0`
 - `docs/evidence_report_schema_contract.md` — Phase 7a-5 evidence report schema owner
 - `schemas/evidence_report.schema.json` — Phase 7a-5 evidence report 契约，当前 `1.0.0`
+- `docs/provider_evidence_drift_monitor.md` — Phase 7b-1 provider evidence / drift monitor contract owner；Phase 7b-2 evidence population 需消费它
+- `schemas/provider_evidence_drift_monitor.schema.json` — Phase 7b-1 provider evidence / drift monitor 契约，当前 `1.0.0`
 - `schemas/analysis_input.schema.json` — analysis_input 契约，当前 `1.1.0`，JSON Schema Draft 7
 - `schemas/deterministic_report.schema.json` — deterministic report 契约，当前 `1.0.0`，Phase 4 runner 输出 JSON 必须通过该 schema
 - `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.11.0`（含 date_warnings + data_lineage + analyzer veto replay）

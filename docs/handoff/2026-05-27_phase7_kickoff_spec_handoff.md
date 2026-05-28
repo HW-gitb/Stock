@@ -6,6 +6,14 @@
 
 ---
 
+## 2026-05-28 修复追加：Phase 7b label repair
+
+- 上一轮 Phase 7b handoff 中“Phase 7b schema-first baseline 已建立，下一条进入 Phase 7c”表述过宽；本轮修复后应读作：Phase 7b-1 provider evidence / drift monitor schema-first contract 已建立，Phase 7b-2 provider capability evidence population 仍未开始。
+- 当前下一条 `执行` 应推荐 Phase 7b-2：按 P1-P4 queue 填充 provider docs / fields / PIT / coverage / cost / fallback / stability evidence；不得把 Phase 7b-1 contract 当成真实 provider evidence population。
+- Phase 7c 仍应先做 DataHub shared-layer / report / reproducibility schema-first contract，但只有在 Phase 7b-2 evidence population reviewed 后才进入自然队列；不得先建 adapter / DataHub table / runner integration。
+
+---
+
 ## 2026-05-27 Repair: O1 status-axis clarification
 
 **Optional disposition**: O1 accepted with path (a), not merged fields.
@@ -490,3 +498,43 @@ git diff --check
 1. 下一条 `执行` 推荐 Phase 7b：按 `docs/provider_priority_benchmark_contract.md` 的 P1-P4 queue 填充 provider capability evidence，并建立 data quality / provider drift monitor。
 2. 不要在 Phase 7b silent default、latest-only 回填历史证据，或把 provider status guess 写成 production-ready evidence。
 3. 不要在下一刀改 runner、建 adapter / DataHub table、接 broker / OS automation，除非后续 reviewed slice 明确进入对应 implementation scope。
+## 2026-05-28 追加：Phase 7b provider evidence / drift monitor contract
+
+**改了什么**:
+
+- 新增 `docs/provider_evidence_drift_monitor.md`，作为 Phase 7b provider evidence / drift monitor owner。
+- 新增 `schemas/provider_evidence_drift_monitor.schema.json` v1.0.0、`schemas/examples/provider_evidence_drift_monitor.example.json` 和 `tests/schema/test_provider_evidence_drift_monitor_schema.py`。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/datahub_design.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/evidence_report_schema_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- Phase 7a-3 已经锁定 provider evidence P1-P4 queue；Phase 7a-5 已经锁定 evidence report shape。Phase 7b 需要把 P1-P4 provider evidence records、provider readiness rollup、data quality / provider drift dimensions 与 action set 写成可校验 contract，避免后续 Phase 7c DataHub / runner work 依赖 provider readiness guess。
+- P4 A-share EOD / CSI helper surface 已有 ready evidence，但只能作为 narrow helper evidence 记录；不能因为它方便就绕过 P1-P3 blocker 或成为 broad DataHub implementation 默认起点。
+- Drift monitor 必须显式覆盖 coverage、freshness、schema/field semantics、PIT/as-of、survivorship/security master、corporate actions/revisions、calendar/timezone、authorization/cost/quota、provider incidents、outlier/revision rate；否则后续 provider-backed evidence 会缺稳定性边界。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_evidence_drift_monitor_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` line count check。
+
+**验证结果**:
+
+- `tests.schema.test_provider_evidence_drift_monitor_schema`：11 tests passed。
+- Full `tests/schema` discovery、`git diff --check`、trailing whitespace scan、stale wording scan 和 `docs/CURRENT.md` line count 最终结果记录在同日 Codex SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “下一条 `执行` 推荐 Phase 7b”失效；Phase 7b schema-first baseline 已建立，下一条进入 Phase 7c DataHub shared layer / report contracts / reproducibility plumbing。
+- “Phase 7b 可以靠文字约定 provider readiness / drift monitor”失效；现在必须通过 `schemas/provider_evidence_drift_monitor.schema.json` 记录 P1-P4 queue、provider evidence records、readiness rollup 和 drift dimensions/action set。
+- “P4 ready A-share helper surface 可以作为 broad DataHub implementation 起点”继续失效；schema example 明确 P4 只记录 ready helper surface，不授权 implementation、provider selection 或 ship-gate claim。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 推荐 Phase 7c：设计 DataHub shared-layer / report / reproducibility contract，消费 Phase 7b provider evidence / drift monitor，不要重开 provider priority。
+2. 不要在 Phase 7c 第一刀抓 provider 数据、选 provider、建 adapter / DataHub table 或改 runner；先写 contract。
+3. 后续 implementation 若需要使用任何 provider-backed field，必须能引用 Phase 7b 的 evidence record 与 drift-monitor dimension/action。

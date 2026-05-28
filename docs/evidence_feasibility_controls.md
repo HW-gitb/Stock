@@ -144,4 +144,4 @@ The reviewed baseline is complete when:
 
 Phase 7a-5 evidence report schemas now live in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`. They consume this contract through `evidence_feasibility_context`.
 
-Phase 7b provider capability evidence must still follow `docs/provider_priority_benchmark_contract.md`. Phase 7a-4 does not reorder provider priority.
+Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`; Phase 7b-2 provider capability evidence population remains pending. Phase 7a-4 does not reorder provider priority.
