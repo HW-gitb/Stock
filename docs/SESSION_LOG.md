@@ -8,6 +8,97 @@
 
 ---
 
+## 2026-05-29 — Claude review — Pass (Phase 7b-2 P1 US readiness review matrix)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `382dfdb`)
+
+**Verdict**: Pass.
+
+**Notes**: Phase 7b-2 P1 evidence collection 的 closure artifact —— meta 任务从 "collect" 转 "synthesize"，正如上一份 Claude review 预判。Working tree = 14 M tracked + 3 ?? untracked（schema / matrix JSON / regression test），三个 untracked 文件全部读完，无 `??` 越界 / binary / scope 问题；`git status --short` / `git diff` / `git diff --cached`（empty） / 3 ?? bodies / 14 tracked diffs / 顶部 SESSION_LOG 全 fast-path 完成。Schema 设计 `schemas/provider_p1_readiness_review.schema.json` v1.0.0 是 stand-alone schema（不嵌入 drift_monitor v1.1.0），用 Draft-07 + `additionalProperties: false` + 双 enum 分层：`readinessStatus`（area 读，4 档：candidate_evidence_partial / candidate_evidence_strong_but_blocked / blocked_latest_only_or_unknown / not_ready_for_phase7c）+ `candidateEvidenceGrade`（provider 读，4 档：strong_candidate_but_blocked / partial_candidate / blocked_for_pit_or_license / unknown_pending_review）—— 两套词汇恰当分离 area 维度与 provider 维度，不互相污染。Scope locks 与 readiness_disposition 共 11 个 const false + 1 个 const true（manual_order_only）+ 2 个 const true（p1_snapshot_collection_status="six_snapshots_reviewed" / p1_collection_complete）+ 1 个 const "p1_access_decision_and_sample_validation_plan" recommended_next_step，全部 schema-enforced 不可绕过。`source_snapshot_refs` 用 6×`contains` allOf 锁 6 个 snapshot_id；`review_dimensions` 用 10×`contains` allOf 锁 10 个 area_id；test `test_source_refs_match_existing_snapshots_and_record_ids`（line 104-128）三重 invariant：snapshot path 存在 + p1_record_count 精确匹配 6 份 snapshot 中 priority="P1" 计数 + 所有 review_dimensions 引用的 record_ids 全部能在原 snapshot 中找到 —— 这是 cross-artifact reference integrity 的硬保证，未来若改 P1 record 名或数量 schema test 立刻 fail。Provider candidate grading 8 个 candidates 全部 coherent：Intrinio + Norgate 升 `strong_candidate_but_blocked`（Claude 2026-05-28 fundamentals 评 + Norgate survivorship 评分别已认可，理由可追溯），Massive/Polygon + SEC + FMP + S&P DJI/Nasdaq/LSEG + S&P Global/MSCI 全 `partial_candidate`（理由各自匹配 R1 disclaimer / parser-amendment-taxonomy-needed / latest-only / methodology-not-return-feed / taxonomy-not-PIT-membership），Nasdaq Data Link/Sharadar 单独 `unknown_pending_review`（datekey 语义未审）——全部 grading 与 6 份 snapshot 的 evidence_note 闭环一致。`prohibited_interpretations` 严格保留所有 6 份 snapshot 的 R1 / latest-only / methodology / status-page caveats：Massive WebFetched traces 不证 legal continuity、Norgate current fundamentals 不当历史 PIT、benchmark methodology 不当 historical return feed、GICS taxonomy 不当 PIT issuer membership、product listing / status / error-code 不当 datekey proof，五条全在 rollup `prohibited_interpretations` 重申。Area-level grading 10 项也 coherent：`candidate_evidence_strong_but_blocked` 仅 fundamentals_observed_date_pit（Intrinio accepted_date 支撑）、`blocked_latest_only_or_unknown` 仅 gics_pit_membership（issuer-level PIT 未证）、`not_ready_for_phase7c` 三项是 coverage_counts / authorization_license_cost / sample_row_validation_lineage（这三项一开始就需 vendor claim 之外的实际证据），其余六项 `candidate_evidence_partial`。Test 8 项全 pass（schema meta + matrix validate + scope locks + 10 area_ids 覆盖 + cross-snapshot record ref 闭环 + strong candidate 关键结论 + recommended next step + Phase 7c 授权篡改被 schema reject），独立 validation：`python -m unittest tests.schema.test_provider_p1_readiness_review_schema -v` 8 pass / `python -m unittest discover -s tests/schema` 101 pass / `git diff --check` clean / `git diff --cached` empty —— 全部数值与 Codex `执行` entry 一字不差。**Line-count method 这轮零 typo**：Codex entry §Validation `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length: 144`，我独立测得 144，与上一轮 §Notes 提到的 "孤立 106 typo" 形成对照，self-correct 已自然内化。Cross-doc routing 14 文件全 align：AGENTS.md §当前进度 P1 entry merge + §执行路线图 §7b-2 status + §已固化决策 §14 / docs/CURRENT.md §0 / §1 / §2 / §4 / §5 P0 next / docs/README.md routing / docs/ALPHA_VALIDATION_ACTION_GUIDE.md §2 + §11 table + §13 / drift_monitor.md status header + §1 引用 + 新增 §13 P1 Readiness Review Matrix + §14 Next Use 重排 / provider_priority_benchmark_contract.md P1 desc + next step / provider_data_requirements_audit.md §12 / datahub_design.md §2 + completion criteria / evidence_report_schema_contract.md §8 / evidence_feasibility_controls.md footer / strategy_design_synthesis.md Phase 7b/7c 段 + execution slice §6 / burst_lane_spec.md §13 / us_short_spec.md §12 —— "下一步 P1 readiness matrix" 全部转为 "下一步 P1 access-decision and sample-validation plan"，无 stale wording。Handoff append（44 行新 section in `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`）非琐碎但 closure-artifact 配 closure-handoff 合理。SESSION_LOG 双 entry 处理正确：本轮 `执行` entry 在顶 + reconstructed `382dfdb` entry 紧随其下（符合 AGENTS.md fallback：commit 后无 entry 必须 reconstruct）。Scope 严守：3 个 untracked 文件全是 schema / docs JSON / regression test，无业务代码 / runner / `egs_main.py` / DataHub table / adapter / provider data fetch / broker / OS automation / ship-gate 放松；schema 通过 const false 把 11 个 authorization-axis 全锁死。**Phase 7b-2 P1 evidence collection 正式 closure**：六份 evidence snapshot + 一份 readiness matrix 已构成 closed cycle，再加 evidence 是 no-op；下一刀 `执行` 性质再次变更 —— 从 "synthesize" 转 "decide access boundary"，需要用户在 cost ceiling / trial-or-paid path / license / local-storage / non-display / sample-row 范围作出具体决策（很可能需要 `AskUserQuestion` 类对话或 user-side specification），不再是纯 docs / schema-first 闭环。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。
+
+---
+
+## 2026-05-29 — Codex (Phase 7b-2 P1 readiness review matrix)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `382dfdb` (`Add Phase 7b P1 coverage fallback evidence`) and the top Claude Pass review for the sixth P1 coverage / fallback / incident candidate evidence snapshot.
+- Prepends the reconstructed `382dfdb` session entry below this entry because AGENTS.md fallback requires a SESSION_LOG entry when a non-trivial commit exists after the latest session log entries.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_readiness_review.schema.json`: added a schema-first contract for the Phase 7b-2 P1 readiness review matrix, including non-authorizing scope locks and required field-by-field review areas.
+2. [untracked] `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`: synthesized the six P1 snapshots across security master / survivorship, adjusted EOD / liquidity, corporate actions, fundamentals observed-date / PIT, benchmark returns, GICS PIT membership, coverage counts, authorization / license / cost, fallback / incident / stability, and sample-row validation / lineage.
+3. [untracked] `tests/schema/test_provider_p1_readiness_review_schema.py`: added regression coverage for schema validation, source snapshot / record references, non-authorizing locks, key provider blocker conclusions, and the next-step disposition.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/provider_evidence_drift_monitor.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/datahub_design.md`, `docs/evidence_report_schema_contract.md`, `docs/evidence_feasibility_controls.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/us_short_spec.md`: updated routing / current-state wording from "produce P1 readiness matrix" to "P1 matrix complete; next P1 access-decision / sample-validation plan".
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7b-2 P1 readiness review matrix handoff note.
+6. [tracked] `docs/SESSION_LOG.md`: recorded this execution handoff and the reconstructed commit handoff for Claude review continuity.
+
+**Key decisions**:
+- P1 docs evidence collection is complete enough to define blocker disposition, but P1 is still not ready for Phase 7c, provider selection, data fetch, DataHub tables, runner consumption, paid access, or sample-row collection.
+- `strong_candidate_but_blocked` is a review grade, not a provider ranking. Intrinio filing fundamentals and Norgate survivorship-aware EOD / membership are strong candidates only because they are worth later access / sample review; they remain blocked.
+- The matrix preserves the previous caveats: Massive / Polygon WebFetched traces do not prove legal continuity; Norgate current fundamentals are latest-only; methodology pages do not equal historical benchmark feeds or issuer-level PIT GICS membership; status pages do not prove data correctness.
+- The next smallest task is a P1 access-decision and sample-validation plan, not Phase 7c, provider implementation, or another docs-only evidence snapshot.
+
+**Alternatives considered and rejected**:
+- "Treat six snapshots as Phase 7c-ready evidence" — rejected. The matrix explicitly keeps `p1_ready_for_phase7c = false`.
+- "Select or rank providers from the matrix" — rejected. The matrix records blockers and next review needs only.
+- "Use vendor coverage pages as project coverage counts" — rejected. Coverage must be validated by universe, field family, listing state, and historical window.
+- "Design DataHub tables from documentation-only field names" — rejected. Sample rows and lineage proof are required first.
+
+**Validation run/result**:
+- New schema and matrix parsed successfully with PowerShell `ConvertFrom-Json`.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_readiness_review_schema -v`: 8 tests passed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v`: 101 tests passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings were reported for touched files.
+- Changed-file trailing whitespace scan: no matches.
+- Active stale next-step scan over active routing docs: no matches.
+- `docs/CURRENT.md` authoritative line count via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 144, below the 150-line snapshot target.
+- No new web research, provider API data, token, trial, paid access, adapter, DataHub table, runner change, broker integration, or ship-gate claim was introduced.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this Phase 7b-2 P1 readiness review matrix.
+2. If Pass and user commits, the next `执行` should prepare the P1 access-decision and sample-validation plan. It still must not fetch provider data, request a token / trial, select a provider, or start Phase 7c.
+
+---
+
+## 2026-05-29 — Codex reconstructed from commit `382dfdb` (Phase 7b-2 P1 US coverage / fallback / incident provider evidence)
+
+**Commits**: `382dfdb`
+
+**Relationship to prior session(s)**:
+- Reconstructs the commit created after the 2026-05-28 Claude Pass review for the sixth P1 coverage / fallback / incident evidence snapshot.
+- Builds on the prior Codex execution entry and Claude Pass entry already present below.
+
+**Worked on**:
+1. Committed `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json` as the sixth Phase 7b-2 P1 evidence-population artifact.
+2. Committed `tests/schema/test_provider_evidence_drift_monitor_schema.py` updates that validate six P1 artifacts and assert the coverage / fallback / incident snapshot remains partial / non-authorizing.
+3. Committed routing updates across AGENTS / CURRENT / README / Phase 7 docs / handoff / session log to mark P1 as public-source + market-data-candidate + authorization / cost / stability + benchmark / GICS + fundamentals observed-date + coverage / fallback / incident partial, still blocked.
+
+**Key decisions**:
+- Vendor coverage claims and public status pages are not project coverage counts, data-correctness evidence, or sample-row validation.
+- Massive source refs carried explicit WebFetched traces and non-proof disclaimers for Polygon-to-Massive continuity.
+- P1 evidence collection had reached the synthesis stage; the next task should be a readiness review matrix rather than another evidence snapshot.
+
+**Alternatives considered and rejected**:
+- "Treat coverage / status docs as implementation readiness" — rejected because exact coverage counts, license, sample rows, fallback, and incident playbook were still missing.
+- "Move directly to Phase 7c after six snapshots" — rejected because P1 still required field-by-field blocker disposition.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Build the P1 readiness review matrix before Phase 7c or provider implementation.
+
+---
+
 ## 2026-05-28 — Claude review — Pass (Phase 7b-2 P1 US coverage / fallback / incident candidate provider evidence snapshot)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `0780b75`)

@@ -1,0 +1,842 @@
+{
+  "schema_name": "provider_p1_readiness_review",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-29T01:00:00Z",
+  "scope": {
+    "phase": "7b",
+    "purpose": "provider_p1_readiness_review_matrix",
+    "review_status": "p1_synthesis_matrix",
+    "p1_snapshot_collection_status": "six_snapshots_reviewed",
+    "provider_selection_allowed": false,
+    "paid_access_approved": false,
+    "data_fetch_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "phase7c_authorized_by_this_artifact": false
+  },
+  "source_snapshot_refs": [
+    {
+      "snapshot_id": "p1_public_sources_20260528",
+      "path": "docs/provider_evidence_p1_us_public_sources_20260528.json",
+      "evidence_focus": "SEC EDGAR, SEC ticker files, Nasdaq Trader symbol directory, and GICS methodology public-source evidence.",
+      "p1_record_count": 5,
+      "schema_ref": "schemas/provider_evidence_drift_monitor.schema.json"
+    },
+    {
+      "snapshot_id": "p1_market_data_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_market_data_candidates_20260528.json",
+      "evidence_focus": "Massive / Polygon and Norgate market-data, security-master, adjusted EOD, corporate-action, calendar, survivorship, and index-membership candidate evidence.",
+      "p1_record_count": 6,
+      "schema_ref": "schemas/provider_evidence_drift_monitor.schema.json"
+    },
+    {
+      "snapshot_id": "p1_authorization_cost_stability_20260528",
+      "path": "docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json",
+      "evidence_focus": "Massive / Polygon and Norgate authorization, cost, trial, access, license, export, retention, stability, and Norgate latest-only fundamentals evidence.",
+      "p1_record_count": 4,
+      "schema_ref": "schemas/provider_evidence_drift_monitor.schema.json"
+    },
+    {
+      "snapshot_id": "p1_benchmark_gics_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json",
+      "evidence_focus": "S&P DJI, Nasdaq, FTSE Russell / LSEG benchmark-source candidate evidence and S&P Global / MSCI GICS candidate evidence.",
+      "p1_record_count": 5,
+      "schema_ref": "schemas/provider_evidence_drift_monitor.schema.json"
+    },
+    {
+      "snapshot_id": "p1_fundamentals_observed_date_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json",
+      "evidence_focus": "SEC public reconstruction, Intrinio filing fundamentals, FMP SEC filings / as-reported statements, and Nasdaq Data Link / Sharadar fundamentals candidate context.",
+      "p1_record_count": 5,
+      "schema_ref": "schemas/provider_evidence_drift_monitor.schema.json"
+    },
+    {
+      "snapshot_id": "p1_coverage_fallback_incident_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json",
+      "evidence_focus": "Intrinio, FMP, Massive, Norgate, and Nasdaq Data Link coverage, status, fallback, error-code, license, and sample-row validation evidence.",
+      "p1_record_count": 6,
+      "schema_ref": "schemas/provider_evidence_drift_monitor.schema.json"
+    }
+  ],
+  "review_dimensions": [
+    {
+      "area_id": "security_master_survivorship",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "provider_symbol_or_identifier",
+        "as_of_eligibility_rule",
+        "pit_status",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "authorization_license_class",
+        "fallback_path",
+        "incident_log_ref"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_public_sources_20260528",
+          "record_ids": [
+            "p1.us_sec_company_tickers_exchange",
+            "p1.us_nasdaq_symbol_directory"
+          ]
+        },
+        {
+          "snapshot_id": "p1_market_data_candidates_20260528",
+          "record_ids": [
+            "p1.us_massive_tickers_security_master",
+            "p1.us_norgate_survivorship_eod"
+          ]
+        },
+        {
+          "snapshot_id": "p1_coverage_fallback_incident_candidates_20260528",
+          "record_ids": [
+            "p1.us_massive_coverage_status_fallback_candidate",
+            "p1.us_norgate_coverage_fallback_limitations_candidate"
+          ]
+        }
+      ],
+      "current_status": "candidate_evidence_partial",
+      "readiness_summary": "Massive / Polygon and Norgate are the strongest documented candidates for historical ticker or survivorship surfaces, while SEC and Nasdaq public files are useful current-reference aids. None proves a complete point-in-time security master for the project.",
+      "blocking_gaps": [
+        "Exact active and inactive common-equity coverage counts over the intended backtest window.",
+        "Ticker-change, merger, bankruptcy, OTC transition, ADR, ETF, SPAC, preferred, and fund classification policy.",
+        "Durable identifier mapping across providers, including CIK, FIGI, exchange ticker, and any missing CUSIP constraints.",
+        "Sample rows proving delisting and listing-state behavior with as-of eligibility and local-storage permission."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "Define a sample-row validation plan for candidate security-master providers.",
+        "Resolve license and local-storage permission before any DataHub security-master schema consumes these fields."
+      ]
+    },
+    {
+      "area_id": "adjusted_eod_ohlcv_liquidity",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "provider_id",
+        "provider_product_or_tier",
+        "endpoint_or_table",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "adjustment_mode",
+        "row_count",
+        "coverage_count",
+        "retry_stability_status"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_market_data_candidates_20260528",
+          "record_ids": [
+            "p1.us_massive_adjusted_ohlcv",
+            "p1.us_norgate_survivorship_eod"
+          ]
+        },
+        {
+          "snapshot_id": "p1_authorization_cost_stability_20260528",
+          "record_ids": [
+            "p1.us_massive_authorization_cost_quota",
+            "p1.us_norgate_authorization_cost_access"
+          ]
+        },
+        {
+          "snapshot_id": "p1_coverage_fallback_incident_candidates_20260528",
+          "record_ids": [
+            "p1.us_massive_coverage_status_fallback_candidate",
+            "p1.us_norgate_coverage_fallback_limitations_candidate"
+          ]
+        }
+      ],
+      "current_status": "candidate_evidence_partial",
+      "readiness_summary": "Massive / Polygon has documented adjusted aggregate bars and Norgate has documented survivorship-aware EOD packages. Both remain candidate-only because actual coverage counts, adjustment reproducibility, subscription/license status, and endpoint/sample validation are missing.",
+      "blocking_gaps": [
+        "Dividend-adjusted total-return policy and reconciliation between corporate actions and adjusted bars.",
+        "Missing-bar, halt, holiday, zero-volume, and delisted-security behavior across the target history window.",
+        "Norgate is EOD-only and Windows / subscription constrained, so it cannot satisfy intraday or live needs alone.",
+        "Massive / Polygon plan tier, local-storage, professional-status, and non-display constraints are unresolved."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "Prepare cost/license/sample-row review for the shortlisted market-data candidates.",
+        "Keep any eventual DataHub EOD contract separate from this docs-only matrix."
+      ]
+    },
+    {
+      "area_id": "corporate_actions_capital_actions",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "endpoint_or_table",
+        "source_date_range",
+        "frequency",
+        "adjustment_mode",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "known_provider_limitations",
+        "drift_monitor_ref"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_market_data_candidates_20260528",
+          "record_ids": [
+            "p1.us_massive_corporate_actions"
+          ]
+        },
+        {
+          "snapshot_id": "p1_authorization_cost_stability_20260528",
+          "record_ids": [
+            "p1.us_massive_authorization_cost_quota",
+            "p1.us_norgate_authorization_cost_access"
+          ]
+        }
+      ],
+      "current_status": "candidate_evidence_partial",
+      "readiness_summary": "Massive / Polygon docs support dividends and splits as candidate surfaces. Broader capital actions and point-in-time revision behavior remain unresolved, and Norgate package access requires separate validation.",
+      "blocking_gaps": [
+        "Spin-off, merger, rights, name-change, share-class, and delisting event coverage.",
+        "Revision timing and whether corporate-action data can be reconstructed as-of the decision date.",
+        "Reconciliation between corporate-action records, adjusted OHLCV, and benchmark total-return calculations.",
+        "License approval for storing action history and derived adjustment artifacts."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "Require sample rows for splits, dividends, revisions, and at least one delisted issuer before implementation design.",
+        "Record explicit fallback behavior when corporate-action fields conflict with adjusted prices."
+      ]
+    },
+    {
+      "area_id": "fundamentals_observed_date_pit",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "fetch_timestamp",
+        "source_date_range",
+        "currency",
+        "unit",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_public_sources_20260528",
+          "record_ids": [
+            "p1.us_sec_edgar_submissions",
+            "p1.us_sec_xbrl_companyfacts"
+          ]
+        },
+        {
+          "snapshot_id": "p1_authorization_cost_stability_20260528",
+          "record_ids": [
+            "p1.us_norgate_current_fundamentals_latest_only"
+          ]
+        },
+        {
+          "snapshot_id": "p1_fundamentals_observed_date_candidates_20260528",
+          "record_ids": [
+            "p1.us_sec_edgar_xbrl_observed_date_reconstruction_candidate",
+            "p1.us_intrinio_filing_fundamentals_observed_date_candidate",
+            "p1.us_fmp_sec_filings_as_reported_candidate",
+            "p1.us_nasdaq_sharadar_fundamentals_candidate_pending_datekey_review"
+          ]
+        },
+        {
+          "snapshot_id": "p1_coverage_fallback_incident_candidates_20260528",
+          "record_ids": [
+            "p1.us_intrinio_coverage_license_incident_candidate",
+            "p1.us_fmp_coverage_status_fallback_candidate",
+            "p1.us_nasdaq_data_link_status_error_fallback_candidate"
+          ]
+        }
+      ],
+      "current_status": "candidate_evidence_strong_but_blocked",
+      "readiness_summary": "Intrinio is the strongest documented fundamentals observed-date candidate because the reviewed records expose filing accepted-date support. SEC EDGAR public reconstruction is useful but requires a parser and field policy; FMP and Nasdaq Data Link / Sharadar remain candidate-only; Norgate current fundamentals are latest-only and blocked for historical PIT use.",
+      "blocking_gaps": [
+        "Field-level PIT construction rules for each factor, including accepted date, filing date, update date, restatement, amendment, duplicate accession, fiscal-period alignment, unit, and currency handling.",
+        "License, plan tier, local-storage, and sample-row validation for Intrinio, FMP, and Nasdaq Data Link / Sharadar.",
+        "Coverage counts and missing-field rates for the US-long universe and target history.",
+        "Parser and fair-access policy if SEC public reconstruction is used."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "Prepare an access and sample-validation plan for the fundamentals candidates, with Intrinio treated as strong but still unselected.",
+        "Keep latest/current endpoints frozen out of historical PIT evidence until sample rows prove as-of semantics."
+      ]
+    },
+    {
+      "area_id": "benchmark_returns",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "provider_id",
+        "provider_product_or_tier",
+        "endpoint_or_table",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "coverage_count",
+        "authorization_license_class",
+        "fallback_path"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_market_data_candidates_20260528",
+          "record_ids": [
+            "p1.us_norgate_index_membership_listing"
+          ]
+        },
+        {
+          "snapshot_id": "p1_benchmark_gics_candidates_20260528",
+          "record_ids": [
+            "p1.us_spdj_sp500_benchmark_source_candidate",
+            "p1.us_nasdaq100_benchmark_source_candidate",
+            "p1.us_ftse_russell1000_benchmark_source_candidate"
+          ]
+        }
+      ],
+      "current_status": "candidate_evidence_partial",
+      "readiness_summary": "Official index and methodology pages identify direct benchmark-source candidates, and Norgate may help with historical membership context. None is yet a licensed project-ready historical return feed.",
+      "blocking_gaps": [
+        "Licensed historical total-return or price-return series source for S&P 500, Nasdaq-100, Russell 1000, and any sector fallback.",
+        "Local-storage and derived-report rights for benchmark series.",
+        "Return-type, currency, dividend reinvestment, calendar, and zero-fill policy.",
+        "ETF proxy fallback policy if direct index returns remain inaccessible."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "Separate benchmark methodology evidence from historical return-feed access.",
+        "Define benchmark fallback review before Phase 7c report or reproducibility contracts consume benchmark returns."
+      ]
+    },
+    {
+      "area_id": "gics_pit_membership",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "provider_id",
+        "provider_product_or_tier",
+        "endpoint_or_table",
+        "source_date_range",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "authorization_license_class"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_public_sources_20260528",
+          "record_ids": [
+            "p1.us_gics_methodology"
+          ]
+        },
+        {
+          "snapshot_id": "p1_benchmark_gics_candidates_20260528",
+          "record_ids": [
+            "p1.us_gics_taxonomy_and_pit_membership_candidate"
+          ]
+        }
+      ],
+      "current_status": "blocked_latest_only_or_unknown",
+      "readiness_summary": "MSCI / S&P methodology proves taxonomy context, and S&P Global GICS History is a candidate product surface. Issuer-level PIT GICS membership remains unproven.",
+      "blocking_gaps": [
+        "Issuer-level historical GICS membership sample rows with effective dates.",
+        "License and local-storage rights for membership history.",
+        "Identifier mapping from membership rows to the final security master and benchmark universe.",
+        "Coverage counts and fallback from industry to industry group when sample counts are small."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "Require sample rows and data dictionary before long-lane industry normalization can consume GICS history.",
+        "Do not treat taxonomy methodology as PIT membership evidence."
+      ]
+    },
+    {
+      "area_id": "coverage_counts",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "row_count",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "source_date_range",
+        "as_of_eligibility_rule"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_coverage_fallback_incident_candidates_20260528",
+          "record_ids": [
+            "p1.us_intrinio_coverage_license_incident_candidate",
+            "p1.us_fmp_coverage_status_fallback_candidate",
+            "p1.us_massive_coverage_status_fallback_candidate",
+            "p1.us_norgate_coverage_fallback_limitations_candidate"
+          ]
+        }
+      ],
+      "current_status": "not_ready_for_phase7c",
+      "readiness_summary": "Vendor-level coverage claims are useful for screening candidates but are not project coverage counts.",
+      "blocking_gaps": [
+        "Exact field-by-field counts for the intended US investable universe over the target backtest window.",
+        "Separate counts for active, inactive, delisted, ADR, ETF, SPAC, fund, preferred, and common-stock classes.",
+        "Missing-field and null-rate statistics for fundamentals, security master, prices, corporate actions, benchmark, and GICS fields.",
+        "Reproducible row-count lineage after sample or trial access is reviewed."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "Convert vendor coverage claims into a sample-validation checklist before any access or trial request.",
+        "Keep Phase 7c blocked from using coverage claims as implementation evidence."
+      ]
+    },
+    {
+      "area_id": "authorization_license_cost",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "provider_product_or_tier",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "known_provider_limitations",
+        "fallback_path",
+        "incident_log_ref"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_market_data_candidates_20260528",
+          "record_ids": [
+            "p1.us_massive_tickers_security_master",
+            "p1.us_massive_adjusted_ohlcv",
+            "p1.us_norgate_survivorship_eod"
+          ]
+        },
+        {
+          "snapshot_id": "p1_authorization_cost_stability_20260528",
+          "record_ids": [
+            "p1.us_massive_authorization_cost_quota",
+            "p1.us_norgate_authorization_cost_access"
+          ]
+        },
+        {
+          "snapshot_id": "p1_coverage_fallback_incident_candidates_20260528",
+          "record_ids": [
+            "p1.us_intrinio_coverage_license_incident_candidate"
+          ]
+        }
+      ],
+      "current_status": "not_ready_for_phase7c",
+      "readiness_summary": "Pricing, plan, EULA, business-use, and status documentation is enough to identify license questions, not to approve paid access or provider use.",
+      "blocking_gaps": [
+        "User-approved cost ceiling and trial or subscription path.",
+        "Professional / non-professional and business-use classification for Massive / Polygon and other market-data candidates.",
+        "Local storage, non-display, derived-report, redistribution, retention-after-lapse, and export rights.",
+        "Provider-specific plan tier needed for delisted coverage, history depth, fundamentals, benchmark, and GICS fields."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "Create a P1 access-decision packet before any token, trial, paid plan, or endpoint sample is requested.",
+        "Do not treat free/public docs as authorization for storage or production research use."
+      ]
+    },
+    {
+      "area_id": "fallback_incident_stability",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "retry_stability_status",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref",
+        "known_provider_limitations",
+        "cost_quota_risk_class"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_authorization_cost_stability_20260528",
+          "record_ids": [
+            "p1.us_massive_authorization_cost_quota",
+            "p1.us_norgate_authorization_cost_access"
+          ]
+        },
+        {
+          "snapshot_id": "p1_coverage_fallback_incident_candidates_20260528",
+          "record_ids": [
+            "p1.us_intrinio_coverage_license_incident_candidate",
+            "p1.us_fmp_coverage_status_fallback_candidate",
+            "p1.us_massive_coverage_status_fallback_candidate",
+            "p1.us_nasdaq_data_link_status_error_fallback_candidate"
+          ]
+        }
+      ],
+      "current_status": "candidate_evidence_partial",
+      "readiness_summary": "Public status pages, outage-help pages, error-code docs, and API-key docs can seed drift-monitor design, but they are not an operational incident playbook.",
+      "blocking_gaps": [
+        "Formal fallback hierarchy for each required P1 field when primary data is missing, license-blocked, stale, or incident-affected.",
+        "Retry, throttle, backoff, status-page polling, incident logging, and manual-review thresholds.",
+        "Evidence that provider status pages represent endpoint-level data correctness, not just site uptime.",
+        "Outlier, correction, revision, and silent semantics-change detection once sample rows exist."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "Write fallback and incident handling into the later provider-access or DataHub contract after a provider decision exists.",
+        "Keep status-page evidence classified as monitoring input only."
+      ]
+    },
+    {
+      "area_id": "sample_row_validation_lineage",
+      "required_for_lanes": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ],
+      "required_lineage_or_evidence_fields": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "adjustment_mode",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "row_count",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "source_record_refs": [
+        {
+          "snapshot_id": "p1_public_sources_20260528",
+          "record_ids": [
+            "p1.us_sec_edgar_submissions",
+            "p1.us_sec_xbrl_companyfacts"
+          ]
+        },
+        {
+          "snapshot_id": "p1_fundamentals_observed_date_candidates_20260528",
+          "record_ids": [
+            "p1.us_intrinio_filing_fundamentals_observed_date_candidate",
+            "p1.us_fmp_sec_filings_as_reported_candidate",
+            "p1.us_nasdaq_sharadar_fundamentals_candidate_pending_datekey_review"
+          ]
+        },
+        {
+          "snapshot_id": "p1_coverage_fallback_incident_candidates_20260528",
+          "record_ids": [
+            "p1.us_remaining_readiness_review_blocker"
+          ]
+        }
+      ],
+      "current_status": "not_ready_for_phase7c",
+      "readiness_summary": "Every P1 provider candidate still needs sample rows or data dictionaries before Phase 7c can design DataHub tables around the fields.",
+      "blocking_gaps": [
+        "Sample rows for each candidate field family, including symbol identifiers, timestamps, as-of eligibility, units, currency, adjustment mode, and missing-field behavior.",
+        "Data dictionaries or endpoint/table definitions for paid or subscription sources.",
+        "Coverage-count and row-count reproducibility from the same sample path.",
+        "Explicit proof that no latest-only endpoint is used for historical PIT evidence."
+      ],
+      "datahub_consumption_allowed": false,
+      "provider_selection_made": false,
+      "next_required_action": [
+        "After user-approved access boundaries, collect or request sample rows under a separate reviewed decision.",
+        "Do not design DataHub tables against documentation-only field names."
+      ]
+    }
+  ],
+  "provider_candidate_rollup": [
+    {
+      "provider_candidate_id": "sec_edgar_public_apis",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "fundamentals_observed_date_pit",
+        "security_master_survivorship",
+        "sample_row_validation_lineage"
+      ],
+      "positive_evidence": [
+        "Reviewed SEC docs support filings, XBRL facts, submissions metadata, and public reconstruction candidates.",
+        "No paid token is needed for public docs, but fair-access and parser policy still matter."
+      ],
+      "blocking_gaps": [
+        "Not a full security master, price source, benchmark source, GICS membership source, or normalized fundamentals vendor.",
+        "Needs parser, amendment/restatement, taxonomy, unit, currency, coverage, and as-of field rules."
+      ],
+      "prohibited_interpretations": [
+        "Do not treat SEC companyfacts as production PIT fundamentals by default.",
+        "Do not treat current SEC ticker files as survivorship-safe history."
+      ],
+      "next_review_needed": [
+        "Sample public filings and XBRL reconstruction plan, with fair-access limits and parser scope."
+      ],
+      "provider_selection_made": false
+    },
+    {
+      "provider_candidate_id": "intrinio_filing_fundamentals",
+      "candidate_evidence_grade": "strong_candidate_but_blocked",
+      "useful_for_area_ids": [
+        "fundamentals_observed_date_pit",
+        "coverage_counts",
+        "authorization_license_cost",
+        "fallback_incident_stability",
+        "sample_row_validation_lineage"
+      ],
+      "positive_evidence": [
+        "Reviewed records show filing-linked fundamentals and accepted-date support.",
+        "Coverage, business-use, status, outage, and ADR limitation docs provide reviewable blockers."
+      ],
+      "blocking_gaps": [
+        "Tier, license, local storage, coverage counts, sample rows, field-level PIT construction, and stability remain unresolved."
+      ],
+      "prohibited_interpretations": [
+        "Do not treat accepted-date documentation as provider selection.",
+        "Do not request token, trial, or paid access without user-approved access boundaries."
+      ],
+      "next_review_needed": [
+        "Access-decision and sample-row validation plan for filing fundamentals."
+      ],
+      "provider_selection_made": false
+    },
+    {
+      "provider_candidate_id": "financial_modeling_prep_sec_filings_financials",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "fundamentals_observed_date_pit",
+        "coverage_counts",
+        "fallback_incident_stability",
+        "sample_row_validation_lineage"
+      ],
+      "positive_evidence": [
+        "Reviewed docs expose SEC filings, as-reported statement candidates, broad coverage claims, cycle-time docs, and status shell."
+      ],
+      "blocking_gaps": [
+        "Latest/current endpoint limitations, field-level PIT semantics, local-storage/license, and sample rows remain unresolved."
+      ],
+      "prohibited_interpretations": [
+        "Do not use latest statements as historical PIT backfill.",
+        "Do not treat a status page shell as data-correctness evidence."
+      ],
+      "next_review_needed": [
+        "Table/endpoint sample rows and as-of timestamp proof before any production use."
+      ],
+      "provider_selection_made": false
+    },
+    {
+      "provider_candidate_id": "massive_polygon_stocks_api",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "security_master_survivorship",
+        "adjusted_eod_ohlcv_liquidity",
+        "corporate_actions_capital_actions",
+        "coverage_counts",
+        "authorization_license_cost",
+        "fallback_incident_stability"
+      ],
+      "positive_evidence": [
+        "Reviewed docs show tickers, aggregates, dividends, splits, market status, exchanges, pricing, API-key access, coverage, and status surfaces."
+      ],
+      "blocking_gaps": [
+        "Provider brand/legal continuity is not proven by Massive docs traces alone.",
+        "Local storage, non-display, professional status, plan tier, coverage counts, endpoint samples, and PIT/revision behavior remain unresolved."
+      ],
+      "prohibited_interpretations": [
+        "Do not treat Massive / Polygon docs as provider selection.",
+        "Do not treat WebFetched traces as legal continuity proof.",
+        "Do not treat aggregate bars alone as total-return or survivorship-safe evidence."
+      ],
+      "next_review_needed": [
+        "Access-decision and sample-validation plan if Massive / Polygon remains a shortlisted market-data candidate."
+      ],
+      "provider_selection_made": false
+    },
+    {
+      "provider_candidate_id": "norgate_us_stock_market_platinum",
+      "candidate_evidence_grade": "strong_candidate_but_blocked",
+      "useful_for_area_ids": [
+        "security_master_survivorship",
+        "adjusted_eod_ohlcv_liquidity",
+        "benchmark_returns",
+        "coverage_counts",
+        "authorization_license_cost"
+      ],
+      "positive_evidence": [
+        "Reviewed docs support survivorship-aware EOD, delisted securities at higher tiers, historical constituents, package pricing, trial limits, Windows/API access, and EULA review."
+      ],
+      "blocking_gaps": [
+        "Subscription, Windows/plugin access, export scope, personal-use license, retention-after-lapse, exact field coverage, and sample rows remain unresolved.",
+        "Norgate does not provide live, delayed, intraday, or tick data and its current fundamentals are latest-only."
+      ],
+      "prohibited_interpretations": [
+        "Do not treat Norgate current fundamentals as historical PIT fundamentals.",
+        "Do not treat Norgate membership evidence as final benchmark-return evidence."
+      ],
+      "next_review_needed": [
+        "Cost/license/access decision and sample-row validation for EOD, delisted, and membership fields."
+      ],
+      "provider_selection_made": false
+    },
+    {
+      "provider_candidate_id": "spdj_nasdaq_lseg_benchmark_sources",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "benchmark_returns"
+      ],
+      "positive_evidence": [
+        "Reviewed official index pages and methodology docs identify direct benchmark-source candidates and return-type context."
+      ],
+      "blocking_gaps": [
+        "Licensed historical return feed, local storage, endpoint/table access, sample rows, and ETF proxy fallback policy remain unresolved."
+      ],
+      "prohibited_interpretations": [
+        "Do not treat methodology pages as historical return data."
+      ],
+      "next_review_needed": [
+        "Benchmark access and fallback review before DataHub report contracts consume US benchmark returns."
+      ],
+      "provider_selection_made": false
+    },
+    {
+      "provider_candidate_id": "spglobal_msci_gics_history",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "gics_pit_membership"
+      ],
+      "positive_evidence": [
+        "Reviewed MSCI / S&P methodology and S&P Global GICS History product surfaces identify a candidate path for issuer-level history."
+      ],
+      "blocking_gaps": [
+        "Issuer-level sample rows, effective dates, license, data dictionary, coverage counts, and security-master mapping remain missing."
+      ],
+      "prohibited_interpretations": [
+        "Do not treat GICS taxonomy methodology as PIT issuer membership evidence."
+      ],
+      "next_review_needed": [
+        "GICS History license and sample-row review before US-long industry normalization can rely on it."
+      ],
+      "provider_selection_made": false
+    },
+    {
+      "provider_candidate_id": "nasdaq_data_link_sharadar_sf1",
+      "candidate_evidence_grade": "unknown_pending_review",
+      "useful_for_area_ids": [
+        "fundamentals_observed_date_pit",
+        "fallback_incident_stability",
+        "sample_row_validation_lineage"
+      ],
+      "positive_evidence": [
+        "Reviewed docs provide Sharadar / Nasdaq Data Link product context and status / error-code surfaces."
+      ],
+      "blocking_gaps": [
+        "Table-level date-key semantics, license, sample rows, coverage counts, and local-storage rights remain unresolved."
+      ],
+      "prohibited_interpretations": [
+        "Do not treat product listing or status/error-code docs as datekey proof."
+      ],
+      "next_review_needed": [
+        "Table-level data dictionary and sample-row review if this candidate remains in P1."
+      ],
+      "provider_selection_made": false
+    }
+  ],
+  "readiness_disposition": {
+    "p1_collection_complete": true,
+    "p1_ready_for_phase7c": false,
+    "p1_ready_for_provider_selection": false,
+    "p1_ready_for_data_fetch": false,
+    "recommended_next_step": "p1_access_decision_and_sample_validation_plan",
+    "unresolved_gate_items": [
+      "User-approved cost ceiling and access boundary before any trial, token, paid subscription, or provider sample request.",
+      "Sample rows and data dictionaries for shortlisted fundamentals, market-data, benchmark, and GICS candidates.",
+      "Exact project coverage counts by universe, field family, historical window, and listing state.",
+      "License / local-storage / non-display / derived-report / retention rights.",
+      "Field-level PIT and observed-date construction rules.",
+      "Fallback hierarchy and incident / drift-monitor playbook tied to actual providers."
+    ],
+    "summary": "The six P1 evidence snapshots are now synthesized. P1 evidence collection from reviewed docs is complete enough to define blocker disposition, but P1 is not ready for Phase 7c, provider selection, data fetch, DataHub implementation, or runner consumption. The next reviewed slice should be an access-decision and sample-validation plan, not implementation."
+  },
+  "limitations": [
+    "This matrix synthesizes existing local artifacts only; no new web research, provider data fetch, token, trial, paid access, adapter, DataHub table, runner change, broker integration, or ship-gate claim is introduced.",
+    "Candidate evidence grades are not provider rankings and must not be used as production provider selection.",
+    "Strong candidate evidence means the documentation is worth a later access or sample review; it does not mean the data is approved for research storage or production use.",
+    "Phase 7c remains blocked from consuming P1 fields until the unresolved gate items are separately reviewed and accepted."
+  ]
+}

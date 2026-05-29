@@ -833,3 +833,44 @@ git diff --check
 1. 下一条 `执行` 应做 P1 readiness review matrix，而不是进入 Phase 7c 或 provider implementation。
 2. Readiness review 应 field-by-field 对比 6 份 P1 snapshots，并明确哪些字段仍需 paid license、sample-row validation、coverage-count check 或 provider decision。
 3. 不要把任何 provider docs、status page 或 coverage claim 误读为 provider selection、paid-access approval、PIT-safe production factors、local-storage approval 或 DataHub implementation readiness。
+
+## 2026-05-29 追加：Phase 7b-2 P1 readiness review matrix
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_readiness_review.schema.json`，作为 P1 readiness review matrix 的 schema-first contract。
+- 新增 `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`，field-by-field 综合六份 P1 snapshots：security master / survivorship、adjusted EOD / liquidity、corporate actions、fundamentals observed-date / PIT、benchmark returns、GICS PIT membership、coverage counts、authorization / license / cost、fallback / incident / stability、sample-row validation / lineage。
+- 新增 `tests/schema/test_provider_p1_readiness_review_schema.py`，验证 matrix schema、artifact、source snapshot / record refs、non-authorizing scope locks、关键 provider blocker 结论和下一步建议。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/provider_evidence_drift_monitor.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/datahub_design.md`、`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/evidence_report_schema_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- Claude 上轮 review 明确 Phase 7b-2 P1 evidence collection 已事实结束，下一刀应从 collect 转向 synthesize / decide。
+- 六份 snapshots 已覆盖 P1 docs evidence，但仍不能被 Phase 7c 或 DataHub 当成 provider readiness；matrix 把 blocker disposition 机器化，避免后续把 candidate docs 误读为 selection / implementation。
+- 本刀仍严守 Phase 7b-2 边界：不抓 provider data、不选 provider、不建 adapter / DataHub table、不改 runner、不放松 ship gate。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_readiness_review_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+```
+
+以及 JSON parse、changed-file trailing whitespace scan、active stale next-step scan、`docs/CURRENT.md` authoritative line count check。
+
+**验证结果**:
+
+- 最终验证结果记录在同日 Codex SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “下一刀应做 P1 readiness review matrix”已完成；下一刀应做 P1 access-decision and sample-validation plan。
+- “六份 P1 snapshots 可直接进入 Phase 7c consumption”不成立；matrix 明确 `p1_ready_for_phase7c = false`。
+- “强 candidate evidence 可当 provider selection”不成立；Intrinio / Norgate / Massive / SEC / benchmark / GICS candidates 仍需 access、license、sample-row、coverage-count 和 fallback / incident review。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 应准备 P1 access-decision and sample-validation plan，而不是进入 Phase 7c 或 provider implementation。
+2. 任何 token、trial、paid subscription、provider data fetch、sample-row collection、provider selection 或 DataHub table 仍需单独 reviewed decision。
+3. Matrix 中的 `strong_candidate_but_blocked` 只表示值得后续 access/sample review，不表示 production provider readiness。

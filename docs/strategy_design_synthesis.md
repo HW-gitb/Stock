@@ -395,7 +395,7 @@ Split the post-audit work into small reviewed slices:
 
 ### Phase 7b / 7c - Provider Evidence And DataHub
 
-Phase 7b-1 provider evidence and drift-monitor contracts are defined in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 has six P1 snapshots through `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json`; P1 remains partial / blocked, so the next provider-evidence step is a readiness review matrix. Phase 7c designs the DataHub shared layer, report contracts, reproducibility plumbing, and data quality monitor before broad implementation.
+Phase 7b-1 provider evidence and drift-monitor contracts are defined in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 has six P1 snapshots through `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json` plus the readiness matrix in `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`; P1 remains partial / blocked, so the next provider-evidence step is an access-decision and sample-validation plan. Phase 7c designs the DataHub shared layer, report contracts, reproducibility plumbing, and data quality monitor before broad implementation.
 
 ### Phase 7 - DataHub / Engine Modularization
 
@@ -436,7 +436,7 @@ Phase 7a-1 is complete as a reviewed audit chain: schema contract, lightweight p
 3. Phase 7a-4: evidence feasibility controls are defined in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`.
 4. Phase 7a-5: evidence report schemas are defined in `docs/evidence_report_schema_contract.md` and `schemas/evidence_report.schema.json`.
 5. Phase 7b-1: provider evidence / drift-monitor schema-first contract is defined in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`.
-6. Phase 7b-2: continue provider capability evidence in the P1-P4 queue; do not treat the P1 public-source, market-data-candidate, authorization / cost / stability, benchmark / GICS, fundamentals observed-date, or coverage / fallback / incident snapshots as provider selection or implementation readiness.
+6. Phase 7b-2: continue provider capability evidence in the P1-P4 queue; do not treat the P1 public-source, market-data-candidate, authorization / cost / stability, benchmark / GICS, fundamentals observed-date, coverage / fallback / incident snapshots, or readiness review matrix as provider selection or implementation readiness.
 7. Phase 7c: design the DataHub shared-layer / report / reproducibility contract that consumes reviewed Phase 7b-2 provider evidence and drift-monitor dimensions.
 
 A-short continues as maintenance / evidence accumulation while Phase 7 contracts are written. Do not rewrite `A-EGS/egs_main.py`, add a US provider adapter, fetch provider data, or build DataHub tables before the relevant provider-evidence and DataHub implementation contracts are reviewed.

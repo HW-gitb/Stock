@@ -95,6 +95,6 @@ The reviewed baseline is complete when:
 
 ## 8. Next Use
 
-Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 has six P1 evidence snapshots through `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json`, but P1 remains partial / blocked and needs a readiness review matrix before DataHub or runner output contracts rely on it.
+Phase 7b-1 provider evidence / drift-monitor contracts now live in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 has six P1 evidence snapshots through `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json` plus `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`, but P1 remains partial / blocked and needs access-decision / sample-validation review before DataHub or runner output contracts rely on it.
 
 Later runner or DataHub output contracts may consume `schemas/evidence_report.schema.json`, but that must be a separate reviewed implementation slice. This Phase 7a-5 baseline does not modify runners or generate production reports.

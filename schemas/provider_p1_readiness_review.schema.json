@@ -1,0 +1,582 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_readiness_review/1.0.0/schema.json",
+  "title": "Provider P1 Readiness Review Matrix",
+  "description": "Phase 7b-2 schema-first synthesis matrix for the six P1 US provider evidence snapshots. This artifact reviews readiness blockers only; it does not select providers, fetch data, approve paid access, create adapters, implement DataHub tables, change runners, relax ship gates, or authorize order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_snapshot_refs",
+    "review_dimensions",
+    "provider_candidate_rollup",
+    "readiness_disposition",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_readiness_review"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_snapshot_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceSnapshotRef"
+      },
+      "minItems": 6,
+      "maxItems": 6,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "snapshot_id": {
+                "const": "p1_public_sources_20260528"
+              }
+            },
+            "required": [
+              "snapshot_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "snapshot_id": {
+                "const": "p1_market_data_candidates_20260528"
+              }
+            },
+            "required": [
+              "snapshot_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "snapshot_id": {
+                "const": "p1_authorization_cost_stability_20260528"
+              }
+            },
+            "required": [
+              "snapshot_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "snapshot_id": {
+                "const": "p1_benchmark_gics_candidates_20260528"
+              }
+            },
+            "required": [
+              "snapshot_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "snapshot_id": {
+                "const": "p1_fundamentals_observed_date_candidates_20260528"
+              }
+            },
+            "required": [
+              "snapshot_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "snapshot_id": {
+                "const": "p1_coverage_fallback_incident_candidates_20260528"
+              }
+            },
+            "required": [
+              "snapshot_id"
+            ]
+          }
+        }
+      ]
+    },
+    "review_dimensions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reviewDimension"
+      },
+      "minItems": 10,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "security_master_survivorship"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "adjusted_eod_ohlcv_liquidity"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "corporate_actions_capital_actions"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "fundamentals_observed_date_pit"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "benchmark_returns"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "gics_pit_membership"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "coverage_counts"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "authorization_license_cost"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "fallback_incident_stability"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "area_id": {
+                "const": "sample_row_validation_lineage"
+              }
+            },
+            "required": [
+              "area_id"
+            ]
+          }
+        }
+      ]
+    },
+    "provider_candidate_rollup": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/providerCandidateRollup"
+      },
+      "minItems": 6
+    },
+    "readiness_disposition": {
+      "$ref": "#/$defs/readinessDisposition"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "laneId": {
+      "enum": [
+        "us_long_core_quality",
+        "us_long_re_rating_catalyst",
+        "us_short_steady",
+        "us_burst_full_data",
+        "phase7_shared"
+      ]
+    },
+    "areaId": {
+      "enum": [
+        "security_master_survivorship",
+        "adjusted_eod_ohlcv_liquidity",
+        "corporate_actions_capital_actions",
+        "fundamentals_observed_date_pit",
+        "benchmark_returns",
+        "gics_pit_membership",
+        "coverage_counts",
+        "authorization_license_cost",
+        "fallback_incident_stability",
+        "sample_row_validation_lineage"
+      ]
+    },
+    "readinessStatus": {
+      "enum": [
+        "candidate_evidence_partial",
+        "candidate_evidence_strong_but_blocked",
+        "blocked_latest_only_or_unknown",
+        "not_ready_for_phase7c"
+      ]
+    },
+    "candidateEvidenceGrade": {
+      "enum": [
+        "strong_candidate_but_blocked",
+        "partial_candidate",
+        "blocked_for_pit_or_license",
+        "unknown_pending_review"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "review_status",
+        "p1_snapshot_collection_status",
+        "provider_selection_allowed",
+        "paid_access_approved",
+        "data_fetch_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "runner_change_allowed",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only",
+        "ship_gate_relaxed",
+        "phase7c_authorized_by_this_artifact"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b"
+        },
+        "purpose": {
+          "const": "provider_p1_readiness_review_matrix"
+        },
+        "review_status": {
+          "const": "p1_synthesis_matrix"
+        },
+        "p1_snapshot_collection_status": {
+          "const": "six_snapshots_reviewed"
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "paid_access_approved": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        }
+      }
+    },
+    "sourceSnapshotRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "path",
+        "evidence_focus",
+        "p1_record_count",
+        "schema_ref"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidence_focus": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "p1_record_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "schema_ref": {
+          "const": "schemas/provider_evidence_drift_monitor.schema.json"
+        }
+      }
+    },
+    "sourceRecordRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "record_ids"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "record_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "reviewDimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "area_id",
+        "required_for_lanes",
+        "required_lineage_or_evidence_fields",
+        "source_record_refs",
+        "current_status",
+        "readiness_summary",
+        "blocking_gaps",
+        "datahub_consumption_allowed",
+        "provider_selection_made",
+        "next_required_action"
+      ],
+      "properties": {
+        "area_id": {
+          "$ref": "#/$defs/areaId"
+        },
+        "required_for_lanes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/laneId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "required_lineage_or_evidence_fields": {
+          "$ref": "#/$defs/stringList"
+        },
+        "source_record_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceRecordRef"
+          },
+          "minItems": 1
+        },
+        "current_status": {
+          "$ref": "#/$defs/readinessStatus"
+        },
+        "readiness_summary": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blocking_gaps": {
+          "$ref": "#/$defs/stringList"
+        },
+        "datahub_consumption_allowed": {
+          "const": false
+        },
+        "provider_selection_made": {
+          "const": false
+        },
+        "next_required_action": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "providerCandidateRollup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_candidate_id",
+        "candidate_evidence_grade",
+        "useful_for_area_ids",
+        "positive_evidence",
+        "blocking_gaps",
+        "prohibited_interpretations",
+        "next_review_needed",
+        "provider_selection_made"
+      ],
+      "properties": {
+        "provider_candidate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "candidate_evidence_grade": {
+          "$ref": "#/$defs/candidateEvidenceGrade"
+        },
+        "useful_for_area_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/areaId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "positive_evidence": {
+          "$ref": "#/$defs/stringList"
+        },
+        "blocking_gaps": {
+          "$ref": "#/$defs/stringList"
+        },
+        "prohibited_interpretations": {
+          "$ref": "#/$defs/stringList"
+        },
+        "next_review_needed": {
+          "$ref": "#/$defs/stringList"
+        },
+        "provider_selection_made": {
+          "const": false
+        }
+      }
+    },
+    "readinessDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "p1_collection_complete",
+        "p1_ready_for_phase7c",
+        "p1_ready_for_provider_selection",
+        "p1_ready_for_data_fetch",
+        "recommended_next_step",
+        "unresolved_gate_items",
+        "summary"
+      ],
+      "properties": {
+        "p1_collection_complete": {
+          "const": true
+        },
+        "p1_ready_for_phase7c": {
+          "const": false
+        },
+        "p1_ready_for_provider_selection": {
+          "const": false
+        },
+        "p1_ready_for_data_fetch": {
+          "const": false
+        },
+        "recommended_next_step": {
+          "const": "p1_access_decision_and_sample_validation_plan"
+        },
+        "unresolved_gate_items": {
+          "$ref": "#/$defs/stringList"
+        },
+        "summary": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    }
+  }
+}
