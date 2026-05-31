@@ -27,14 +27,19 @@ Status:
 - `in_progress`: current reviewed change is addressing it.
 - `blocked`: needs user decision or external dependency.
 - `resolved`: fixed and verified.
+- `superseded`: replaced by more specific open / resolved entries; the underlying risk is not fixed merely because the parent summary was split.
 - `accepted_risk`: user explicitly accepted the residual risk.
 - `needs_revalidation`: audit claim is plausible enough to track, but line-level repo validation is still required before implementation.
 
 ## Hot Queue
 
-1. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
-2. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-3. `SR-EXEC-002` - Revalidate and queue execution-backtest risk-control limitations from audit #1.
+Current routing note: the corrected-basis 5d revalidation is not blocked by the entries below only if it consumes frozen historical generated cohorts and does not rerun `A-EGS/egs_main.py` / regenerate the cohort. If any new weekly official capture, forward-tracker official use, or direct historical cohort generation must run first, the path-specific items below take priority.
+
+1. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
+2. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-CAP-001` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
+3. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
+4. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
+5. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
 
 ## Entries
 
@@ -94,14 +99,122 @@ Status:
 - Accepted calibration: this is local automation exposure, not repository business-code behavior.
 - Required next action: narrow allow rules to concrete project scripts or remove them from local Claude settings; record the local change in `SESSION_LOG.md` if it affects review/execution behavior.
 
+### SR-DATA-001 - Suspend inference can silently drop tradable stocks on partial daily response
+
+- Severity: P1
+- Status: open
+- Owner phase: A-short weekly operation / Phase 6b maintenance
+- Evidence: `A-EGS/egs_main.py:get_suspend_info` computes `suspended = all_codes - traded_codes` from single-day `pro.daily` responses and later `filter_l0` removes that set from candidates. There is no row-count / completeness sanity check before treating missing `daily` rows as suspended stocks.
+- Accepted calibration: this is a real wrong-output path, but the trigger is a partial `pro.daily` bulk response. Frequency is not proven and is expected to be low; impact is silent and high when it fires. It does not block corrected 5d revalidation if that revalidation uses frozen historical generated cohorts and does not rerun `A-EGS/egs_main.py`.
+- Required next action: replace the inference with a proper suspend / trade-status source where available, or hard-fail / quarantine the run when daily row-count completeness is below a reviewed threshold. Fix before the next new weekly official capture or any cohort regeneration used as evidence.
+
+### SR-OPS-002 - Forward tracker writes are non-atomic
+
+- Severity: P1
+- Status: open
+- Owner phase: A-short forward evidence / Phase 6b maintenance
+- Evidence: `runners/forward_tracker.py:_write_tracker` sorts and writes the tracker with direct `to_csv(TRACKER_CSV, ...)`; an interruption can leave a partial file.
+- Accepted calibration: this is an operational integrity issue, not a strategy-alpha finding. It does not affect corrected 5d revalidation if that run does not consume or update the forward tracker.
+- Required next action: write to a temp file in the same directory, flush / close it, and atomically replace the tracker file. Add a test or focused review evidence for the write path.
+
+### SR-OPS-003 - Direct historical `egs_main.py --as-of` still defaults to live L3 concepts
+
+- Severity: P1
+- Status: open
+- Owner phase: A-short historical replay / Phase 6b maintenance
+- Evidence: `A-EGS/egs_main.py` argparse still defaults `--l3-mode` to `today`; `SR-EXEC-001` fixed the weekly wrapper but not direct engine invocation.
+- Accepted calibration: current `runners/weekly_screening.ps1` protects historical official-output runs, so this is now a direct-engine / ad hoc replay risk. It does not block corrected 5d revalidation if no cohort regeneration occurs.
+- Required next action: add an engine-level guard or explicit historical replay contract so direct historical `--as-of` runs cannot silently use `today` L3 mode unless the caller explicitly declares a non-evidence / live-concept run.
+
+### SR-DATA-002 - Severe daily-data insufficiency degrades to neutral stats that can pass filters
+
+- Severity: P2
+- Status: open
+- Owner phase: A-short data quality / screening maintenance
+- Evidence: `A-EGS/egs_main.py:precompute_stock_stats` returns `_neutral_stats_df` when `all_daily` is empty or too small; neutral rows include `has_crash_veto=False`, and `filter_l0` can skip amount filtering when liquidity fields are all NaN / zero.
+- Accepted calibration: this is not evidence that normal runs are contaminated; it is a severe-data-insufficiency path that should not emit normal-looking candidate output.
+- Required next action: hard-fail, quarantine, or mark the run non-evidence when daily payload completeness is below a reviewed threshold; do not silently produce neutral pass-through stats.
+
+### SR-EXEC-003 - Execution drawdown misses open-position mark-to-market
+
+- Severity: P1
+- Status: open
+- Owner phase: Phase 5 execution backtest / ship-gate readiness
+- Evidence: `runners/backtest_execution.py:simulate_execution` initializes `daily_equity` with `market_value = 0`, appends equity points only around realized exit events, and computes `max_drawdown` from realized cash-only equity. Open-position mark-to-market drawdown is not represented.
+- Accepted calibration: current ship-gate status remains default-deny / not-evaluable because other required metrics are missing; the risk is future execution or ship-gate evidence overreading a realized-only drawdown.
+- Required next action: implement daily mark-to-market equity for open positions, or mark drawdown as `not_evaluable` until MTM is implemented. Do not use execution drawdown for safety conclusions before this is fixed.
+
+### SR-EXEC-004 - Execution assumptions report cooldown / circuit breaker controls that are not simulated
+
+- Severity: P1
+- Status: open
+- Owner phase: Phase 5 execution backtest / Phase 8 monitoring
+- Evidence: `runners/backtest_execution.py:build_execution_assumptions` reports cooldown and portfolio circuit breaker controls as enabled, while the simulation loop does not enforce those controls.
+- Accepted calibration: this is primarily an evidence overclaim / report-contract defect. It does not currently authorize full-size use, but it must be fixed before execution evidence is cited as if these controls were tested.
+- Required next action: either implement the controls in the simulator with tests, or report them as `not_implemented` / `not_evaluable` and exclude them from any safety conclusion.
+
+### SR-EXEC-005 - Zero-trade execution reports are aggregated as 0.0% monthly returns
+
+- Severity: P1
+- Status: open
+- Owner phase: Phase 5 execution aggregation / ship-gate readiness
+- Evidence: `runners/aggregate_execution_reports.py:report_total_return_for_aggregation` returns `0.0` for zero-trade reports when total return is absent, causing those months to enter monthly return, t-stat, and Sharpe calculations as flat observations.
+- Accepted calibration: this does not currently pass the full ship gate because other metrics remain missing / not-evaluable; it can still inflate sample count or compress variance when execution evidence is later summarized.
+- Required next action: treat zero-trade no-return reports as missing / not-evaluable for return statistics, or explicitly model cash return with a documented rule and separate no-trade diagnostics.
+
+### SR-CAP-001 - Capital ceiling is not validated at state load / sizing boundary
+
+- Severity: P1
+- Status: open
+- Owner phase: capital policy / execution backtest / coordinator precondition
+- Evidence: `runners/backtest_execution.py:calculate_shares` caps by cash, bucket capital, max position percent, and max positions, but there is no hard validation that the loaded `bucket_capital` respects the market / bucket capital ceiling from policy.
+- Accepted calibration: this is a missing validation / clamp, not proof that current fixtures always over-allocate. If state already has `bucket_capital <= ceiling_pct * market_capital`, the current calculation may be fine; if state is hand-edited above ceiling, no code rejects it.
+- Required next action: validate and/or clamp capital context at state load and before sizing. Add a test that a bucket above its ceiling is rejected or reduced before share calculation.
+
+### SR-OPS-004 - Weekly xlsx overwrite guard checks a different default path than `egs_main.py`
+
+- Severity: P3
+- Status: open
+- Owner phase: A-short weekly operation
+- Evidence: `runners/weekly_screening.ps1` checks `A-EGS/Result/egs_tier1_<AsOf>.xlsx`, while `A-EGS/egs_main.py` defaults tier1 xlsx output to `A-EGS/egs_tier1_<AsOf>.xlsx` unless `CONF["xlsx_dir"]` is set.
+- Accepted calibration: CSV and official result-directory guards still cover the main evidence outputs; this is a low-risk xlsx overwrite guard gap.
+- Required next action: align the guard with the actual xlsx output path or route xlsx output under the guarded result directory.
+
+### SR-OPS-005 - Forward tracker cache coverage uses calendar-day approximation
+
+- Severity: P2
+- Status: open
+- Owner phase: A-short forward evidence / tracker reliability
+- Evidence: `runners/forward_tracker.py:_check_cache_coverage` uses calendar-day shifting to approximate the required trading window.
+- Accepted calibration: current producers over-pad enough for normal cases, so this is a weaker assertion rather than confirmed live contamination. Long holidays or unusual calendars can still break the assumption.
+- Required next action: use the trading calendar / cached trading dates for coverage checks, or document the approximation and hard-fail cases where the calendar-day buffer cannot prove coverage.
+
+### SR-OPS-006 - Relisted-stock lookback boundary needs revalidation
+
+- Severity: P3
+- Status: needs_revalidation
+- Owner phase: A-short screening maintenance
+- Evidence: `A-EGS/egs_main.py:get_relisted_stocks` uses `trade_dates[CONF["suspend_lookback"]]` as the cutoff when enough trade dates exist; this may be an off-by-one or short-calendar semantic issue depending on the intended "lookback" definition.
+- Accepted calibration: this is a plausible low-risk boundary defect, not confirmed active contamination.
+- Required next action: re-read the intended lookback semantics, add a small date-list test, and either fix the index / cutoff or close this entry with evidence.
+
+### SR-RANK-001 - Forward-return status can remain `ok` when conversion leaves NaN
+
+- Severity: P3
+- Status: open
+- Owner phase: rank backtest / forward-tracker compatibility
+- Evidence: `runners/backtest_rank.py:attach_forward_returns` catches conversion exceptions and later assigns status `"ok"` even when return values can remain NaN.
+- Accepted calibration: current rank statistics drop NaN values, so numeric contamination is low; a status-only consumer such as tracker / reporting code could still overread `"ok"`.
+- Required next action: set a non-ok status when any required forward return conversion fails or leaves NaN, and add a focused regression test if the field is consumed by status-only code.
+
 ### SR-EXEC-002 - Execution backtest risk-control limitations need a tracked fix path
 
 - Severity: P1
-- Status: needs_revalidation
+- Status: superseded
 - Owner phase: Phase 5 / Phase 8 monitoring and ship-gate readiness
 - Evidence: audit #1 reported execution-backtest drawdown underestimation, unimplemented cooldown / circuit-breaker / concurrency limits, and capital-ceiling enforcement gaps.
-- Accepted calibration: some limitations may already be documented in execution reports; before fixing, re-read `runners/backtest_execution.py`, related schemas, and tests to separate real defects from already-disclosed scope limits.
-- Required next action: create line-level findings and either fix or explicitly document each as a blocking limitation before any execution evidence is used for ship-gate-like conclusions.
+- Accepted calibration: line-level revalidation split the material execution findings into concrete entries rather than treating the summary as one vague blocker.
+- Supersession evidence: replaced by `SR-EXEC-003`, `SR-EXEC-004`, `SR-EXEC-005`, and `SR-CAP-001`. Those child entries remain open until fixed and verified.
 
 ### SR-GOV-001 - A-short screening thresholds are not governed by preset schema
 
@@ -151,8 +264,8 @@ Status:
 ### SR-OPS-001 - Audit #1 operational findings need line-level revalidation
 
 - Severity: P2
-- Status: needs_revalidation
+- Status: superseded
 - Owner phase: A-short operation / Phase 3-6 maintenance
 - Evidence: audit #1 reported L3 today default risk, silent degradation paths, forward tracker atomic-write concern, missing tests, and possible delisted-universe handling issues.
-- Accepted calibration: at least some items have partial counter-evidence in current code, so this entry tracks the need to revalidate rather than pre-judging every claim as a defect.
-- Required next action: re-run a focused repo review of each audit #1 item and split confirmed issues into separate entries or close them with evidence.
+- Accepted calibration: line-level review confirmed several operational defects and downgraded others to lower-priority or needs-revalidation entries.
+- Supersession evidence: replaced by `SR-DATA-001`, `SR-OPS-002`, `SR-OPS-003`, `SR-DATA-002`, `SR-OPS-004`, `SR-OPS-005`, `SR-OPS-006`, and `SR-RANK-001`. Those child entries remain open or `needs_revalidation` until fixed / closed individually.

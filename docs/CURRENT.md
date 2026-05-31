@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-31（SR-MEASURE-001 same-anchor benchmark）
+**最后更新**：2026-05-31（confirmed bug audit register split）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -8,20 +8,18 @@
 
 ## 0. Latest Delta
 
-- Original A-share `minimal_data_burst` preregistration remains blocked: `research/preregistrations/a_share_minimal_data_burst_20260531.json` is `BLOCKED_DO_NOT_RUN`.
-- Corrected-basis supersession now exists at `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`; after review + commit, only this artifact may be run for the next research-only falsification.
-- Same-anchor benchmark excess is implemented in the reviewed change set: stock T+1 open leg is compared with CSI1000 / CSI300 benchmark T+1 open to the same exit close.
-- The old 5d `excess_csi1000` clue is measurement-contaminated / uncorrected, not validated alpha, until same-anchor corrected revalidation proves otherwise.
-- `docs/system_risk_register.md` is now the durable queue for material data / PIT / schema / execution / security findings. `执行` / `审查` must read it; open P0 entries outrank normal roadmap work unless the user explicitly approves an override.
-- `SR-EXEC-001` weekly historical `-AsOf` PIT interlock is implemented in the reviewed change set: historical weekly runs must use `-L3Mode pit` or `-L3Mode neutralize`, and existing official outputs require `-AllowHistoricalOverwrite`.
-- If review + commit pass, no open P0 remains; next risk-register item is `SR-SEC-001` P1, while the next alpha-validation action is the corrected-basis burst falsification.
+- Original A-share `minimal_data_burst` preregistration remains blocked; corrected-basis supersession is the only allowed next research-only falsification artifact after review + commit.
+- Same-anchor benchmark excess is implemented; the old 5d `excess_csi1000` clue remains measurement-contaminated / uncorrected until corrected revalidation proves otherwise.
+- `docs/system_risk_register.md` now splits the confirmed post-measurement bug audit into concrete entries: B6 / B7a / B5 / B4 / B1 / B2 / B8 / B3 / N1 / N2 / N4 plus N3 needs-revalidation.
+- Corrected 5d revalidation is not blocked by those entries only if it consumes frozen historical generated cohorts and does not rerun `A-EGS/egs_main.py` / regenerate cohorts.
+- No code fixes are included in this docs-only slice; weekly official capture / forward-tracker official use and execution / ship-gate evidence have separate path-specific blockers in the register.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst corrected-basis preregistration exists but has not been run; provider access remains blocked pending explicit user approval.
-- **当前 P0 目标**：review / commit `SR-MEASURE-001` same-anchor benchmark change set；提交后仅可运行 corrected-basis burst prereg，不得进 production、不得改 provider / DataHub、不得声称 ship-gate evidence。
+- **当前 P0 目标**：review / commit confirmed bug audit register split；提交后仅可用冻结 historical generated cohorts 运行 corrected-basis burst prereg，不得重新跑 `A-EGS/egs_main.py` 生成 cohort，不得进 production、不得改 provider / DataHub、不得声称 ship-gate evidence。
 - **当前 P1 provider blocker**：任何 sample / trial / paid-access / token / provider contact / data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
 - **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 只改 benchmark / entry-anchor basis，阈值、universe、holding period、criteria、`test_budget` 均冻结；否则先建 singleton program-level ledger。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
@@ -33,7 +31,7 @@
 
 - **A-share burst measurement fix**（2026-05-31）：same-anchor benchmark excess 已在 `runners/backtest_rank.py` / benchmark materializer 中落地；`research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` 已建立，原 prereg 继续 blocked。
 - **Weekly historical PIT interlock**（2026-05-31）：`runners/weekly_screening.ps1` now blocks historical `-AsOf` official-output runs unless L3 mode is explicitly `pit` / `neutralize`, rejects historical `today` L3 mode, and guards existing official outputs from accidental overwrite.
-- **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，承接两轮系统审查的 open findings，并把 future LLM enforcement 接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
+- **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
 - **Phase 7b-2 P1 access/sample plan**（2026-05-31）：`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 已建立并由 `schemas/provider_p1_access_decision_plan.schema.json` 锁定；只定义访问边界和样本验证计划，不授权 provider 行动。
 - **Phase 7b-2 P1 readiness review matrix**（2026-05-29）：`docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` 已建立并由 `schemas/provider_p1_readiness_review.schema.json` 锁定；六份 docs evidence collection 完成，但 P1 不授权 Phase 7c / provider selection / data fetch。
 - **Phase 7b-2 P1 evidence snapshots**（2026-05-28）：public-source、market-data-candidate、authorization / cost / stability、benchmark / GICS、fundamentals observed-date、coverage / fallback / incident 六份 artifact 均已建立并各有 regression test；这些只证明 candidate evidence。
@@ -92,8 +90,9 @@
 ### P0 - Corrected-basis burst research after review/commit
 
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
-- If this `SR-MEASURE-001` change set passes review and commit, run only `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`.
+- If this docs-only register split passes review and commit, run only `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
+- Do not rerun `A-EGS/egs_main.py` or regenerate cohorts during corrected 5d revalidation; use frozen historical generated cohorts only.
 - The corrected run is one frozen primary test on corrected 5d CSI1000; 10d / 20d may be diagnostics only, with no threshold / variant / benchmark / holding-period search.
 
 ### P1 - P1 provider access boundary（仅用户明确要求时）

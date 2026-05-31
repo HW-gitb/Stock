@@ -8,6 +8,105 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (confirmed bug audit register split — O1 修复 re-review)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `9172449`)
+
+**Verdict**: Pass. 干净，无 Required / Optional / open question。整套 register-split + O1 修复 变更集可 `提交`。
+
+**Notes**: O1 修复复审。Codex disposition = **accept**，实现精确：register Status enum 新增 `superseded`（line 30，定义"replaced by more specific open/resolved entries; underlying risk not fixed merely because parent summary split"），`resolved` 仍只表示"fixed and verified"（line 29）。状态图全量核对（grep 每条目）：`superseded` = SR-EXEC-002(213) + SR-OPS-001(267)（两个 vague parent 桶）；`resolved` = SR-META-001 / SR-MEASURE-001 / SR-EXEC-001（均已提交修复，**正确地未被误改**）；12 个新条目状态全未动（11 open + SR-OPS-006 needs_revalidation）；其它 pre-existing 条目（PIT/CONTRACT/SEC/GOV/SKILL/LLM/CANARY/DET-001）未动。Scope 干净：仅 register（status enum + 2 个 parent 状态翻转）+ handoff 措辞 + SESSION_LOG；无代码、未碰任何 bug 条目内容。独立复核：`git diff --check` exit 0、CURRENT.md 147。O1 纯 accept 无 deviation → 无 §Optional Re-raise。register 现状态语义自洽：未修的 superseded parent 不会被 status 扫误读为已修。**整条 bug-audit→register 链闭合**：两轮审查全部确认 bug 已 durable 入册、severity/trigger/blocking-path 齐全、状态语义干净。提交后下一刀 = corrected 5d 重验（frozen cohorts only，不重跑 egs_main）。
+
+---
+
+## 2026-05-31 — Codex 修复 (confirmed bug audit register split Optional O1)
+
+**Commits**: none (`修复` round; commit waits for Claude clean Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Responds to latest Claude review: Pass with 1 Optional, no Required fixes.
+- **Accepts Optional O1**: parent summary entries should not use `resolved` when the underlying bugs are merely split into still-open child entries.
+
+**Worked on**:
+1. [tracked] `docs/system_risk_register.md`: added `superseded` status semantics and changed `SR-EXEC-002` / `SR-OPS-001` from `resolved` to `superseded`.
+2. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: updated the append note so it says the old summary entries are superseded, not fixed.
+
+**Key decisions**:
+- `resolved` remains reserved for fixed and verified risks.
+- `superseded` means a parent summary was replaced by more specific child entries; it does not close the underlying risk.
+
+**Alternatives considered and rejected**:
+- "Keep `resolved` with closure evidence" — rejected because it conflicts with the register's own status definition and can mislead future status scans.
+- "Reopen `SR-EXEC-002` / `SR-OPS-001`" — rejected because the actionable work now lives in the child entries; keeping the parent open would duplicate queue items.
+
+**Validation run/result**:
+- `git diff --check`: passed; only normal LF/CRLF working-copy warnings.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 147.
+- `rg -n "superseded|SR-EXEC-002|SR-OPS-001|Status: resolved|Status: superseded" docs\system_risk_register.md docs\handoff\2026-05-27_phase7_kickoff_spec_handoff.md docs\SESSION_LOG.md`: matched the new `superseded` status definition and both parent-summary entries; remaining `Status: resolved` hits are prior genuinely resolved entries.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review after validation.
+
+**Open questions handed off**:
+- None.
+
+---
+
+## 2026-05-31 — Claude review — Pass with 1 Optional (confirmed bug audit register split)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `9172449`)
+
+**Verdict**: Pass（含 1 条 minor Optional，PENDING CODEX DISPOSITION；无 Required）。可 `提交`。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes. Optional O1 PENDING CODEX DISPOSITION.
+
+**Notes**: Fast-path：`git status -uall` = 4 M tracked docs + 0 `??` + 0 staged；`9172449..HEAD` 无新 commit；`git diff --cached` empty；register diff（+130，substance）全文读毕；CURRENT/handoff 为 routing（SESSION_LOG 准确描述，docs-only）。**12 个新条目与本轮确认的 12 个 bug 精确一一映射**：SR-DATA-001=B6、SR-OPS-002=B7a、SR-OPS-003=B5、SR-DATA-002=B4、SR-EXEC-003=B1、SR-EXEC-004=B2、SR-EXEC-005=B8、SR-CAP-001=B3、SR-OPS-004=N1、SR-OPS-005=N2、SR-OPS-006=N3、SR-RANK-001=B7b/N4。**三处校准全部正确落地**：B6 标"real wrong-output / trigger=partial pro.daily (rare) / silent+high when fires"、B3 标"missing validation not confirmed over-allocation"、N3 标 P3 needs_revalidation。severity 合理（P1 = 影响 evidence/ship-gate 的；P2/P3 = 降级/低频/潜伏），SR-EXEC-003/005 正确注明"ship-gate 仍 default-deny、风险是未来 overread"，SR-RANK-001 正确注明"rank dropna 数值低危、status-only 消费者会 overread"。条目用函数名定位（比行号稳）。**hot queue 结构正确且贴合 paper 阶段**：路由说明"corrected 5d 重验用 frozen cohorts、不重跑 egs_main 即不被阻塞"（经我上轮证实重验不受这些 bug 污染）；Queue1（DATA-001/OPS-002/OPS-003）=下次 weekly 正式捕获/tracker 正式使用前；Queue2（EXEC-003/004/005/CAP-001）=execution/ship-gate evidence 使用前；Queue5=维护——与收敛排序一致。旧 vague 桶 SR-EXEC-002/SR-OPS-001 标 resolved + "superseded by [子条目]"，子条目全 open 可见，无风险丢失。scope 干净：docs-only、无代码；CURRENT 147、register 270、`git diff --check` exit 0。**Optional O1（minor，register status 语义）**：SR-EXEC-002/SR-OPS-001 标 `Status: resolved`，但 register 自身定义 `resolved = fixed and verified`，而这俩底层 bug 未修、仅 superseded 进仍 open 的子条目；按 status 扫"未修项"的未来 LLM 会误读成已修。建议加 `superseded` 状态或保留 open+指针，让 `resolved` 仅表示已修复验证。Codex 可 accept/reject（closure_evidence + open 子条目已部分缓解）。无 Required / open question / §Optional Re-raise。元问题正式闭合：两轮审查的全部确认 bug 现已 durable 入册、带 severity/trigger/blocking-path。提交后下一刀 = corrected 5d 重验（frozen cohorts only，不重跑 egs_main）。
+
+---
+
+## 2026-05-31 — Codex 执行 (confirmed bug audit register split)
+
+**Commits**: none (`执行`-style docs-only round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `9172449 Fix same-anchor benchmark excess` and the later user-approved bug-audit calibration.
+- **Refines**: corrected-basis 5d revalidation remains the next alpha action, but only when it consumes frozen historical generated cohorts and does not rerun `A-EGS/egs_main.py` / regenerate cohorts.
+- **Refines**: old summary register entries `SR-EXEC-002` and `SR-OPS-001` are no longer the actionable queue; they are split into concrete line-level items.
+
+**Worked on**:
+1. [tracked] `docs/system_risk_register.md`: added confirmed entries `SR-DATA-001`, `SR-OPS-002`, `SR-OPS-003`, `SR-DATA-002`, `SR-EXEC-003`, `SR-EXEC-004`, `SR-EXEC-005`, `SR-CAP-001`, `SR-OPS-004`, `SR-OPS-005`, `SR-OPS-006`, and `SR-RANK-001`.
+2. [tracked] `docs/system_risk_register.md`: updated the hot queue so weekly official capture / tracker official use / direct cohort regeneration blockers are separated from execution / ship-gate evidence blockers.
+3. [tracked] `docs/CURRENT.md`: recorded that this is a docs-only bug-register slice, and that corrected 5d revalidation must use frozen historical generated cohorts only.
+
+**Key decisions**:
+- B6 is registered as a real wrong-output path with low-frequency partial-`pro.daily` trigger, not as evidence that every weekly run is currently polluted.
+- B3 is registered as missing state-load / sizing-boundary ceiling validation, not as confirmed current over-allocation.
+- N3 is registered as low-priority `needs_revalidation`, not as confirmed active contamination.
+- No code was modified in this slice; the register now determines when each code fix must happen.
+
+**Alternatives considered and rejected**:
+- "Start fixing B7a/B6/B5 immediately" — rejected for this round because the user asked to land the bug audit in durable docs first, and corrected 5d can run safely without those fixes if it uses frozen cohorts.
+- "Mark the new operational findings as P0 globally" — rejected because that would incorrectly block corrected 5d revalidation; the entries are path-specific blockers for weekly official capture, tracker official use, and cohort regeneration.
+- "Leave `SR-EXEC-002` / `SR-OPS-001` as vague needs-revalidation buckets" — rejected because the line-level review has now split the confirmed items into concrete fix queues.
+
+**Validation run/result**:
+- `git diff --check`: passed; only normal LF/CRLF working-copy warnings.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 147.
+- `rg -n "SR-DATA-001|SR-OPS-002|SR-OPS-003|SR-DATA-002|SR-EXEC-003|SR-EXEC-004|SR-EXEC-005|SR-CAP-001|SR-OPS-004|SR-OPS-005|SR-OPS-006|SR-RANK-001|frozen historical generated cohorts|confirmed bug audit" docs\system_risk_register.md docs\CURRENT.md`: matched all intended routing and entries.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude `审查`, focusing on whether each accepted bug finding is represented with the right severity / trigger / blocking path.
+2. If Pass and user `提交`, next `执行` should run the corrected-basis 5d revalidation using frozen historical generated cohorts only; it must not regenerate cohorts through `A-EGS/egs_main.py`.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (SR-MEASURE-001 same-anchor benchmark excess)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `58562d9`)

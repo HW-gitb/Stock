@@ -1180,3 +1180,44 @@ git diff --check
 1. Claude 审查应重点确认 historical guard 是否在调用 `egs_main.py` 前触发，且没有引入 provider / DataHub / burst research scope。
 2. 如果审查 Pass 并提交，下一条 `执行` 默认进入 `SR-MEASURE-001`：same-anchor benchmark excess（CSI1000 / CSI300 benchmark T+1 open 到同一 exit close）。
 3. 旧 A-share burst prereg 仍然 `BLOCKED_DO_NOT_RUN`，不得因 weekly wrapper guard 关闭而运行。
+
+## 2026-05-31 追加：confirmed bug audit register split
+
+**改了什么**:
+
+- 更新 `docs/system_risk_register.md` hot queue：corrected-basis 5d revalidation 只有在使用冻结 historical generated cohorts 且不重新跑 `A-EGS/egs_main.py` 时，才不受本轮新增 bug 条目阻塞。
+- 将确认后的 bug audit 拆成具体条目：`SR-DATA-001`、`SR-OPS-002`、`SR-OPS-003`、`SR-DATA-002`、`SR-EXEC-003`、`SR-EXEC-004`、`SR-EXEC-005`、`SR-CAP-001`、`SR-OPS-004`、`SR-OPS-005`、`SR-OPS-006`、`SR-RANK-001`。
+- 将原汇总项 `SR-EXEC-002` 和 `SR-OPS-001` 标为 `superseded`，避免后续 LLM 误读为已修复，也避免继续面对 vague needs-revalidation bucket。
+- 更新 `docs/CURRENT.md`，明确本轮是 docs-only register split，不包含代码修复；corrected 5d 重验不得重新生成 cohort。
+
+**为什么改**:
+
+- 用户接受了对 bug 审查的收敛判断：大部分 finding 成立，但 B3 应写成 missing ceiling validation / clamp，N3 应写成 low / needs-revalidation，B6 应标注 partial daily fetch 低频触发而非持续污染。
+- 本项目要求 material audit finding 不能只留在 chat；先进入 durable risk register，后续再按路径和优先级改代码。
+- 这批 bug 不阻塞 corrected 5d 的唯一前提是使用已冻结 cohorts；若重新跑筛选器，B6 / B5 会重新进入污染路径。
+
+**验证命令**:
+
+```powershell
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+rg -n "SR-DATA-001|SR-OPS-002|SR-OPS-003|SR-DATA-002|SR-EXEC-003|SR-EXEC-004|SR-EXEC-005|SR-CAP-001|SR-OPS-004|SR-OPS-005|SR-OPS-006|SR-RANK-001|frozen historical generated cohorts|confirmed bug audit" docs\system_risk_register.md docs\CURRENT.md
+```
+
+**验证结果**:
+
+- `git diff --check`: passed；仅有正常 LF/CRLF working-copy warnings。
+- `docs/CURRENT.md` authoritative line count = 147，低于 150-line snapshot target。
+- `rg` matched all intended new risk IDs and corrected 5d frozen-cohort routing.
+
+**失效旧结论**:
+
+- “`SR-EXEC-002` / `SR-OPS-001` 仍只是待复核汇总项”失效；本轮已拆成具体风险条目，原汇总项仅为 `superseded`，不是已修复。
+- “新增 bug 会整体阻塞 corrected 5d 重验”失效；只有重新跑 `A-EGS/egs_main.py` / 生成新 cohort 时才会触发 B6 / B5 污染路径。
+- “B6 可写成正在每周污染”失效；登记口径为 real wrong-output path with partial `pro.daily` trigger，频率未证、预计低频。
+
+**下一步注意事项**:
+
+1. Claude 审查应重点核对新增 risk IDs、severity、trigger condition 和 blocking path 是否忠实反映 bug audit 收敛结论。
+2. 如果审查 Pass 并提交，下一条 alpha-validation `执行` 可运行 corrected-basis 5d revalidation，但必须使用冻结 historical generated cohorts，不得重新跑 `A-EGS/egs_main.py`。
+3. 如果在 corrected 5d 之前必须跑新的 weekly official capture / forward tracker official use，则需先修 `SR-DATA-001` / `SR-OPS-002` / `SR-OPS-003` 或显式暂停该路径。
