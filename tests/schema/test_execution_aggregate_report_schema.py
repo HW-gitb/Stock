@@ -19,8 +19,9 @@ class ExecutionAggregateReportSchemaTest(unittest.TestCase):
 
         Draft7Validator.check_schema(schema)
         self.assertEqual(schema["properties"]["schema_name"]["const"], "execution_aggregate_report")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.0.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.0")
         self.assertIn("multi-period aggregation", schema["description"])
+        self.assertIn("reviewed forward-live evidence", schema["description"])
         self.assertIn("zero-trade", schema["description"])
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(
@@ -50,6 +51,10 @@ class ExecutionAggregateReportSchemaTest(unittest.TestCase):
             ship_gate["properties"]["failure_mode"]["const"],
             "paper_or_minimal_size_or_risk_filter_only",
         )
+        self.assertIn(
+            "production-mode",
+            ship_gate["properties"]["full_size_allowed"]["description"],
+        )
         metric_results = schema["$defs"]["shipGateMetricResults"]
         self.assertEqual(
             metric_results["required"],
@@ -71,6 +76,11 @@ class ExecutionAggregateReportSchemaTest(unittest.TestCase):
         metrics = schema["$defs"]["aggregateMetrics"]
         self.assertIn("monthly_alpha_t_stat", metrics["required"])
         self.assertIn("benchmark_excess_return_source", settings["required"])
+        self.assertIn("forward_live_evidence_source", settings["required"])
+        self.assertEqual(
+            settings["properties"]["forward_live_evidence_source"]["type"],
+            ["string", "null"],
+        )
 
 
 if __name__ == "__main__":

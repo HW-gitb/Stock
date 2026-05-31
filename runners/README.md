@@ -38,8 +38,11 @@ Existing helpers:
   reads schema-valid `execution_backtest_report` v1.2.0 files, aggregates
   monthly return / Sharpe / worst drawdown evidence, optionally computes
   benchmark-aware monthly alpha t-stat from a `YYYYMM -> return` JSON, and writes
-  schema-valid `execution_aggregate_report` v1.0.0. It is ship-gate evidence
-  only and does not rebuild a full continuous portfolio equity curve.
+  schema-valid `execution_aggregate_report` v1.1.0. Full-size permission can
+  only pass for production-mode inputs with a reviewed forward-live evidence
+  ref; smoke aggregates and bare `--forward-live-months` values remain
+  diagnostic. It is ship-gate evidence only and does not rebuild a full
+  continuous portfolio equity curve.
 - `materialize_execution_price_data.py` - Phase 5 provider-boundary helper;
   converts a local OHLC CSV into a schema-valid `execution_price_data` JSON for
   `backtest_execution.py --price-data`. It does not fetch Tushare data or

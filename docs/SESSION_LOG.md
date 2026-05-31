@@ -8,6 +8,90 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (clean) (SR-EXEC-006 Optional O1 disposition → SR-CONTRACT-002)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `45cdc75`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。整个 SR-EXEC-006 轮次（代码修复 + O1 disposition）可 `提交`。
+
+**Status**: REVIEW VERDICT RECORDED. Clean Pass. O1 resolved via SR-CONTRACT-002. Change set ready for user `提交`.
+
+**Notes**: O1（forward-live evidence artifact 无 schema）disposition = **accept with modification**，判断完全对路。增量审查（代码/schema/tests 与上轮 Pass byte-identical，stat +84/+13/+150/+12 不变、full discover 242 OK 复跑一致，故只审 O1 增量）：新建 **SR-CONTRACT-002**（P2，open，Owner: Phase 6 forward evidence / Phase 5 aggregate ship-gate contract）。evidence 准确（aggregator v1.1.0 已要求 `--forward-live-evidence-ref`，但 referenced artifact 仅 inline 校验 review_status + 非负 int months、无 `schemas/forward_live_evidence.schema.json`）；calibration 正是我 Optional 的 defer 理由（无 12 个月 artifact 存在、SR-EXEC-006 inline 校验已堵当前 smoke/裸-CLI 洞、首个真实 Phase-6 artifact 生产/消费前才 material）；required action 比我表述更完整——建 schema（review_status / forward_live_months / provenance: reviewer / source-window / tracker ref / captured-month basis / lineage）+ **把校验 wire 回 `aggregate_execution_reports.py`**（闭环，不只是建 schema）。Hot Queue #4 入列（"执行证据被使用前"组）合理。handoff 同步记 v1.1.0 contract + O1 disposition（point 3 链到 SR-CONTRACT-002）。**disposition 优于我原 Optional 给的两个选项**：durable register 条目比 handoff-only 标注更强（可查、带 severity、进 Hot Queue），又避免 artifact 不存在时过早 schema-lock——精确踩中 schema-first 一致性与 [[protocol-overengineering]] 之间的线；SR-EXEC-006 保持 resolved 不重开（gating 洞已闭合，SR-CONTRACT-002 是解耦的独立未来 gate）。独立复核：`discover` 242 OK、`git diff --check` exit 0。**commit 粒度提醒**（非 blocker）：当前树捆了两个 scope——SR-EXEC-006 代码修复 + SR-CONTRACT-002 登记——但二者在 `system_risk_register.md`（Hot Queue 单行同时含 SR-EXEC-006 移除 + SR-CONTRACT-002 加入）与 `handoff` 里 hunk 交织，强行拆 commit 需 hunk surgery（[[commit-scope-discipline]] 正警告的反模式），故建议**作为一个 commit**（SR-EXEC-006 轮次含其 O1 disposition）提交，而非事后拆分。无 §Optional Re-raise。下一刀仍是 SR-EXEC-007 / 003 / 004 / 005 之一（已写死在 register Required-next-action + Hot Queue，无需我中转拟 command）。
+
+---
+
+## 2026-05-31 — Codex 修复 (SR-EXEC-006 Optional O1 disposition)
+
+**Commits**: none (`修复` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Responds to latest Claude review: Pass with 1 Optional, no Required fixes.
+- **Accepts Optional O1 with modification**: the future forward-live evidence artifact should be schema-first, but the schema is deferred until the artifact is first produced / consumed because no 12-month reviewed forward-live evidence artifact exists yet.
+
+**Worked on**:
+1. [tracked] `docs/system_risk_register.md`: added `SR-CONTRACT-002` as a durable gate requiring a `forward_live_evidence` schema and provenance validation before the first real Phase 6 forward-live evidence artifact is produced or consumed for aggregate full-size permission.
+2. [tracked] `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`: recorded the O1 disposition and linked it to `SR-CONTRACT-002`.
+
+**Optional disposition**:
+- O1 accept with modification — do not add the schema now because the artifact does not yet exist; do make the schema a required precondition before first real artifact production / consumption. This avoids premature schema-lock while preventing future LLMs from treating inline validation as the final contract.
+
+**Required fixes**:
+- None.
+
+**Validation run/result**:
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+- `rg -n "SR-CONTRACT-002|Optional O1 disposition|forward-live evidence artifact" docs\system_risk_register.md docs\handoff\2026-05-25_phase5_kickoff_spec_handoff.md docs\SESSION_LOG.md`: confirms register entry, handoff note, and disposition entry are present.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+
+## 2026-05-31 — Claude review — Pass with 1 Optional (SR-EXEC-006 aggregate ship-gate guard 代码修复)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `45cdc75`)
+
+**Verdict**: Pass（含 1 条 minor Optional，PENDING CODEX DISPOSITION；无 Required）。变更集可 `提交`。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes. Optional O1 PENDING CODEX DISPOSITION.
+
+**Notes**: SR-EXEC-006 的代码修复（business code），完整独立审查。**核心 gating 逻辑正确且防御性到位**：`build_ship_gate_evaluation` 里 forward_live_passed 三态（无 evidence_source 时 raw 达标→None / 不达标→False，有 evidence 才用真 True/False）；status 在 `mode != "production"` 时直接 not_evaluable（smoke 永远到不了 pass）；`full_size_allowed = status=="pass" and mode=="production" and forward_live_evidence_source is not None`（三重冗余防御，status==pass 已蕴含后两者）。`load_forward_live_evidence` 校验 `review_status=='reviewed'` + 非负 int months（正确用 `isinstance(bool)` 挡 bool）；main() 里 CLI `--forward-live-months` 与 evidence months 不一致（且非 0）则 raise，evidence 为权威源。裸 `--forward-live-months 12`（无 ref）→ forward_live_passed=None → not_evaluable → full_size_allowed False（正是被堵的洞）。**独立验证排除一个相邻疑点**：`build_metrics`(:295-302) 无 benchmark 时 `monthly_alpha_t_stat=None` → not_evaluable，故 gate 不会拿原始收益冒充 alpha 放行（benchmark excess 源实质必需）。**test 反转真实**（非删除）：旧 `test_aggregate_with_benchmark_and_forward_months_can_pass_gate` 改写为 `test_production_aggregate_requires_reviewed_forward_evidence_ref_for_full_size`（断言翻转 not_evaluable + full_size_allowed False）；新增矩阵：smoke+ref→not_evaluable（"smoke-mode" in limitations）、production+ref→pass（唯一真路径）、CLI/evidence month 不一致→raise "must match"。**schema v1.1.0**：$id + const version bump、settings.required 加 `forward_live_evidence_source`（`["string","null"]`）；**无任何程序消费者 pin 在 aggregate v1.0.0**（唯一 pin 在 test、已更新），const bump 不断下游；result/ 下两个旧 v1.0.0 smoke 产物不被重校验、无害（且本修复正是要让 smoke 不能当 ship 证据）。register SR-EXEC-006 → resolved（+Closure/Verification 段，准确）+ 移出 Hot Queue #4。scope 干净（aggregate + schema + tests + register + README + handoff，全 in-scope；未碰 SR-EXEC-005/007）。独立复核：`tests.execution.test_aggregate_execution_reports` 9 OK、`tests.schema.test_execution_aggregate_report_schema` 3 OK、`discover` 242 OK、`git diff --check` exit 0。**Optional O1（minor，schema-first 一致性 + 防 Phase-6 遗忘）**：reviewed forward-live evidence artifact 现在是 full_size_allowed 的命门，但仅 inline 校验（review_status=='reviewed' + 非负 int months）、**无 schema 文件**。建议在该 artifact 首次作为真实 Phase-6 ship 证据被生产/使用前，给它建一个 `forward_live_evidence` schema（review_status enum、forward_live_months、并加 provenance：reviewer / source-window / tracker artifact ref）。**Defer-OK**：该 artifact 现尚不存在（需 Phase 6 累积 12 个月 forward 数据），现在 inline 校验对当前状态足够；Codex 可 accept（现在加最小 schema）或 reject/defer（在 SR-EXEC-006 closure 或 handoff 标注为 Phase-6 前置即可，避免过早 schema-lock）。无 Required / open question / §Optional Re-raise。SR-EXEC-006 的 gating 洞已实质闭合，O1 是独立的小增强、不构成重开理由。下一刀建议：SR-EXEC-007（并发 cash-lock）或 SR-EXEC-003/004/005 之一，仍归"执行证据被使用前"组。
+
+---
+
+## 2026-05-31 — Codex 执行 (SR-EXEC-006 aggregate ship-gate guard)
+
+**Commits**: none
+
+**Relationship to prior session(s)**:
+- Builds on 2026-05-31 Claude review Pass (system audit findings register-only) and commit `45cdc75`.
+- Resolves `SR-EXEC-006`; leaves `SR-EXEC-005` and `SR-EXEC-007` open because they are separate execution-evidence risks.
+
+**Worked on**:
+1. [tracked] `runners/aggregate_execution_reports.py`: added reviewed `--forward-live-evidence-ref` loading / validation, bumped emitted aggregate schema to v1.1.0, and gated `full_size_allowed` behind production mode + reviewed forward-live evidence + all AND metrics passing.
+2. [tracked] `schemas/execution_aggregate_report.schema.json`: bumped to v1.1.0 and added required `settings.forward_live_evidence_source`.
+3. [tracked] `tests/execution/test_aggregate_execution_reports.py`: reversed the old smoke + bare-forward-month pass invariant; added production/no-ref, smoke/with-ref, production/with-ref, and CLI/evidence month mismatch coverage.
+4. [tracked] `docs/system_risk_register.md`: marked `SR-EXEC-006` resolved and removed it from the Hot Queue execution-evidence group.
+5. [tracked] `runners/README.md` and `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`: documented the v1.1.0 aggregate contract and gate semantics.
+
+**Key decisions**:
+- Diagnostic aggregation remains available for smoke reports, but ship-gate permission is now explicitly unavailable for smoke mode. This preserves useful diagnostics without turning them into full-size manual-use evidence.
+- `--forward-live-months` remains accepted for diagnostics and compatibility, but it is not evidence unless bound to a reviewed JSON artifact with `review_status = "reviewed"` and `forward_live_months`.
+- The aggregate schema moved to v1.1.0 because adding a required evidence-source field changes the output contract.
+
+**Alternatives considered and rejected**:
+- "Keep v1.0.0 and add `forward_live_evidence_source` opportunistically" — rejected. A required gate-integrity field is a contract change and should be visible in `schema_version`.
+- "Remove `--forward-live-months` entirely" — rejected. Existing diagnostics can still need an explicit month count; the unsafe part was treating the bare count as reviewed evidence.
+- "Fix `SR-EXEC-005` / `SR-EXEC-007` in the same slice" — rejected. Those touch return-sample semantics and simulator concurrency, respectively; batching them with the aggregate permission guard would make review less precise.
+
+**Validation**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v`: 9 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v`: 3 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v`: 242 tests passed.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Ready for Claude `审查`. No commit yet.
+
 ## 2026-05-31 — Claude review — Pass (clean) (system audit findings register-only: SR-EXEC-006 / SR-DATA-003 ext / SR-EXEC-007)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs vs `ec992d4`)

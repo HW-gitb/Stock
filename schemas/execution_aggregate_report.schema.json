@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/execution_aggregate_report/1.0.0/schema.json",
+  "$id": "https://stock.local/schemas/execution_aggregate_report/1.1.0/schema.json",
   "title": "Execution Aggregate Report",
-  "description": "Phase 5 multi-period aggregation contract for execution_backtest_report v1.2.0 outputs. It aggregates bucket-aware A-short execution reports for ship-gate evidence without changing the single-run execution report contract. Benchmark-aware alpha remains nullable until an explicit benchmark-excess series is supplied. A zero-trade input report with null total_return is counted as 0.0 return in the monthly aggregation.",
+  "description": "Phase 5 multi-period aggregation contract for execution_backtest_report v1.2.0 outputs. It aggregates bucket-aware A-short execution reports for ship-gate evidence without changing the single-run execution report contract. Benchmark-aware alpha remains nullable until an explicit benchmark-excess series is supplied. Full-size permission requires production-mode inputs plus a reviewed forward-live evidence source; smoke aggregates and bare forward-live month values remain diagnostic. A zero-trade input report with null total_return is counted as 0.0 return in the monthly aggregation.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -25,7 +25,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "generated_at": {
       "type": "string",
@@ -65,6 +65,7 @@
       "required": [
         "input_report_count",
         "forward_live_months",
+        "forward_live_evidence_source",
         "benchmark_excess_return_source",
         "monthly_return_method"
       ],
@@ -76,6 +77,10 @@
         "forward_live_months": {
           "type": "integer",
           "minimum": 0
+        },
+        "forward_live_evidence_source": {
+          "type": ["string", "null"],
+          "minLength": 1
         },
         "benchmark_excess_return_source": {
           "type": ["string", "null"],
@@ -329,7 +334,7 @@
         },
         "full_size_allowed": {
           "type": "boolean",
-          "description": "True only when every AND-gate metric is evaluable and passes. This is a manual-use gate, not broker automation permission."
+          "description": "True only for production-mode aggregate reports with reviewed forward-live evidence and every AND-gate metric evaluable and passing. This is a manual-use gate, not broker automation permission."
         },
         "failure_mode": {
           "type": "string",

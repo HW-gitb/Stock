@@ -1,5 +1,50 @@
 # Phase 5 kickoff spec handoff
 
+## 2026-05-31 addendum: SR-EXEC-006 aggregate ship-gate guard
+
+### What changed
+
+- `runners/aggregate_execution_reports.py` now emits `execution_aggregate_report` schema version `1.1.0`.
+- Added `--forward-live-evidence-ref`, a reviewed forward-tracking evidence JSON input. The runner validates `review_status = "reviewed"` and reads `forward_live_months` from that artifact; if a CLI `--forward-live-months` value is also supplied, it must match the artifact.
+- Bare `--forward-live-months` remains diagnostic only. It can no longer satisfy the forward-live ship-gate metric by itself.
+- `ship_gate_evaluation.full_size_allowed` can turn true only when all three conditions hold: aggregate mode is `production`, a reviewed forward-live evidence source is present, and all AND-gate metrics pass.
+- Smoke aggregate reports remain `not_evaluable` for ship-gate permission even when their numeric diagnostics pass.
+- `schemas/execution_aggregate_report.schema.json` v1.1.0 adds required `settings.forward_live_evidence_source`.
+- `tests/execution/test_aggregate_execution_reports.py` reverses the old wrong invariant that allowed two smoke reports plus a bare `--forward-live-months 12` to pass.
+- `docs/system_risk_register.md` closes `SR-EXEC-006` and removes it from the Hot Queue.
+
+### Why
+
+`SR-EXEC-006` showed that the aggregate runner could convert diagnostic smoke reports and an unbound CLI integer into `full_size_allowed = true`. That bypassed the project rule that full-size manual use requires at least 12 months of reviewed forward-live evidence. This change separates diagnostic aggregation from ship-gate permission.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+```
+
+### Validation result
+
+- `tests.execution.test_aggregate_execution_reports`: 9 tests passed.
+- `tests.schema.test_execution_aggregate_report_schema`: 3 tests passed.
+- Full unittest discover: 242 tests passed.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+
+### Invalidated old conclusions
+
+- "`execution_aggregate_report` is v1.0.0" is stale for newly emitted aggregate reports; the current contract is v1.1.0.
+- "Synthetic multi-period pass branch can use smoke reports plus `--forward-live-months 12`" is invalid. That path is now diagnostic / `not_evaluable`.
+- A forward-live month count is no longer evidence unless it is bound to a reviewed forward-live evidence artifact.
+
+### Next notes
+
+1. This slice intentionally does not fix `SR-EXEC-005` zero-trade monthly-return handling or `SR-EXEC-007` overlapping-position cash reuse.
+2. Future forward-live evidence artifacts should keep a reviewed JSON surface with `review_status = "reviewed"` and `forward_live_months` so the aggregate runner can bind the month count to a durable artifact.
+3. Optional O1 disposition on 2026-05-31: do not create the full forward-live evidence schema before the artifact exists; instead `SR-CONTRACT-002` gates the first real Phase 6 forward-live evidence artifact / aggregate consumption on adding a schema-first contract with provenance fields and validation tests.
+
 **日期**：2026-05-25
 **范围**：Phase 5 execution backtest 启动边界与 contract 规格
 **状态**：kickoff spec 已建立；Phase 5 schema / runner / simulator 代码尚未开始。

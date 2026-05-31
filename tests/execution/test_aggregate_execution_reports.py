@@ -31,10 +31,13 @@ class AggregateExecutionReportsTest(unittest.TestCase):
         total_return: float | None,
         max_drawdown: float,
         trade_count: int | None = None,
+        mode: str = "smoke",
     ) -> Path:
         out_dir = work_dir / end_date
         rc = execution_main(
             [
+                "--mode",
+                mode,
                 "--as-of",
                 "20260522",
                 "--input-path",
@@ -101,7 +104,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(report["schema_name"], "execution_aggregate_report")
-        self.assertEqual(report["schema_version"], "1.0.0")
+        self.assertEqual(report["schema_version"], "1.1.0")
         self.assertEqual(report["metrics"]["report_count"], 2)
         self.assertEqual(report["metrics"]["month_count"], 2)
         self.assertEqual(report["metrics"]["trade_count_total"], 2)
@@ -178,11 +181,17 @@ class AggregateExecutionReportsTest(unittest.TestCase):
         self.assertIsNone(report["ship_gate_evaluation"]["metric_results"]["sharpe"]["passed"])
         self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
 
-    def test_aggregate_with_benchmark_and_forward_months_can_pass_gate(self) -> None:
+    def test_production_aggregate_requires_reviewed_forward_evidence_ref_for_full_size(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             work_dir = Path(tmpdir)
-            report_a = self.write_execution_report(work_dir, "20260522", 0.06, -0.05)
-            report_b = self.write_execution_report(work_dir, "20260626", 0.07, -0.10)
+            report_a = self.write_execution_report(
+                work_dir, "20260522", 0.06, -0.05, mode="production"
+            )
+            report_b = self.write_execution_report(
+                work_dir, "20260626", 0.07, -0.10, mode="production"
+            )
             benchmark_path = work_dir / "benchmark.json"
             benchmark_path.write_text(
                 json.dumps({"202605": 0.01, "202606": 0.01}),
@@ -215,11 +224,144 @@ class AggregateExecutionReportsTest(unittest.TestCase):
         )
         self.assertTrue(report["ship_gate_evaluation"]["metric_results"]["sharpe"]["passed"])
         self.assertTrue(report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]["passed"])
+        self.assertIsNone(
+            report["ship_gate_evaluation"]["metric_results"]["forward_live_months"]["passed"]
+        )
+        self.assertIn(
+            "reviewed --forward-live-evidence-ref",
+            report["ship_gate_evaluation"]["metric_results"]["forward_live_months"]["reason"],
+        )
+        self.assertEqual(report["settings"]["forward_live_evidence_source"], None)
+        self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
+        self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
+
+    def test_smoke_aggregate_with_reviewed_forward_evidence_stays_not_evaluable(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            report_a = self.write_execution_report(work_dir, "20260522", 0.06, -0.05)
+            report_b = self.write_execution_report(work_dir, "20260626", 0.07, -0.10)
+            benchmark_path = work_dir / "benchmark.json"
+            benchmark_path.write_text(
+                json.dumps({"202605": 0.01, "202606": 0.01}),
+                encoding="utf-8",
+            )
+            evidence_path = work_dir / "forward_evidence.json"
+            evidence_path.write_text(
+                json.dumps({"review_status": "reviewed", "forward_live_months": 12}),
+                encoding="utf-8",
+            )
+            out_path = work_dir / "aggregate.json"
+
+            rc = aggregate_main(
+                [
+                    "--report",
+                    str(report_a),
+                    "--report",
+                    str(report_b),
+                    "--benchmark-monthly-returns",
+                    str(benchmark_path),
+                    "--forward-live-evidence-ref",
+                    str(evidence_path),
+                    "--out-path",
+                    str(out_path),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads(out_path.read_text(encoding="utf-8"))
+
         self.assertTrue(
             report["ship_gate_evaluation"]["metric_results"]["forward_live_months"]["passed"]
         )
+        self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
+        self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
+        self.assertIn("smoke-mode", " ".join(report["ship_gate_evaluation"]["limitations"]))
+
+    def test_production_aggregate_with_reviewed_forward_evidence_can_pass_gate(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            report_a = self.write_execution_report(
+                work_dir, "20260522", 0.06, -0.05, mode="production"
+            )
+            report_b = self.write_execution_report(
+                work_dir, "20260626", 0.07, -0.10, mode="production"
+            )
+            benchmark_path = work_dir / "benchmark.json"
+            benchmark_path.write_text(
+                json.dumps({"202605": 0.01, "202606": 0.01}),
+                encoding="utf-8",
+            )
+            evidence_path = work_dir / "forward_evidence.json"
+            evidence_path.write_text(
+                json.dumps({"review_status": "reviewed", "forward_live_months": 12}),
+                encoding="utf-8",
+            )
+            out_path = work_dir / "aggregate.json"
+
+            rc = aggregate_main(
+                [
+                    "--report",
+                    str(report_a),
+                    "--report",
+                    str(report_b),
+                    "--benchmark-monthly-returns",
+                    str(benchmark_path),
+                    "--forward-live-months",
+                    "12",
+                    "--forward-live-evidence-ref",
+                    str(evidence_path),
+                    "--out-path",
+                    str(out_path),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            report = json.loads(out_path.read_text(encoding="utf-8"))
+
+        self.assertTrue(
+            report["ship_gate_evaluation"]["metric_results"]["forward_live_months"]["passed"]
+        )
+        self.assertEqual(report["settings"]["forward_live_months"], 12)
+        self.assertTrue(
+            str(report["settings"]["forward_live_evidence_source"]).endswith(
+                "forward_evidence.json"
+            )
+        )
         self.assertEqual(report["ship_gate_evaluation"]["status"], "pass")
         self.assertTrue(report["ship_gate_evaluation"]["full_size_allowed"])
+
+    def test_forward_live_evidence_months_must_match_cli_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            report_a = self.write_execution_report(
+                work_dir, "20260522", 0.06, -0.05, mode="production"
+            )
+            report_b = self.write_execution_report(
+                work_dir, "20260626", 0.07, -0.10, mode="production"
+            )
+            evidence_path = work_dir / "forward_evidence.json"
+            evidence_path.write_text(
+                json.dumps({"review_status": "reviewed", "forward_live_months": 11}),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "must match"):
+                aggregate_main(
+                    [
+                        "--report",
+                        str(report_a),
+                        "--report",
+                        str(report_b),
+                        "--forward-live-months",
+                        "12",
+                        "--forward-live-evidence-ref",
+                        str(evidence_path),
+                    ]
+                )
 
     def test_v11_input_report_is_rejected_before_aggregation(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

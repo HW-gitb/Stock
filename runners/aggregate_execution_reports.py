@@ -26,6 +26,7 @@ DEFAULT_OUT_PATH = (
     ROOT / "result" / "a_short" / "backtest" / "execution" / "execution_aggregate_report.json"
 )
 SHIP_GATE_FAILURE_MODE = "paper_or_minimal_size_or_risk_filter_only"
+AGGREGATE_SCHEMA_VERSION = "1.1.0"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -60,7 +61,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--forward-live-months",
         type=int,
         default=0,
-        help="Forward live observation months from Phase 6 tracking. Backtest aggregation defaults to 0.",
+        help=(
+            "Forward live observation months from reviewed Phase 6 tracking evidence. "
+            "Without --forward-live-evidence-ref this value is diagnostic only."
+        ),
+    )
+    parser.add_argument(
+        "--forward-live-evidence-ref",
+        type=Path,
+        help=(
+            "Reviewed forward-tracking evidence JSON. It must contain "
+            "review_status='reviewed' and forward_live_months."
+        ),
     )
     parser.add_argument(
         "--out-path",
@@ -166,6 +178,25 @@ def load_benchmark_monthly_returns(path: Path | None) -> dict[str, float] | None
             raise ValueError(f"benchmark return for {month} must be numeric")
         parsed[month] = value
     return parsed
+
+
+def load_forward_live_evidence(path: Path | None) -> tuple[int | None, str | None]:
+    if path is None:
+        return None, None
+    payload = load_json(path)
+    if not isinstance(payload, dict):
+        raise ValueError("--forward-live-evidence-ref must be a JSON object")
+    review_status = str(payload.get("review_status") or "")
+    if review_status != "reviewed":
+        raise ValueError(
+            "--forward-live-evidence-ref must have review_status='reviewed'"
+        )
+    raw_months = payload.get("forward_live_months")
+    if isinstance(raw_months, bool) or not isinstance(raw_months, int) or raw_months < 0:
+        raise ValueError(
+            "--forward-live-evidence-ref must contain non-negative integer forward_live_months"
+        )
+    return raw_months, relative_ref(path)
 
 
 def month_from_report(report: dict[str, Any]) -> str:
@@ -304,6 +335,8 @@ def build_ship_gate_evaluation(
     aggregate_metrics: dict[str, Any],
     capital_context: dict[str, Any],
     benchmark_source: str | None,
+    mode: str,
+    forward_live_evidence_source: str | None,
 ) -> dict[str, Any]:
     policy = capital_context["ship_gate"]
     monthly_alpha_t_stat = numeric_or_none(aggregate_metrics["monthly_alpha_t_stat"])
@@ -343,7 +376,17 @@ def build_ship_gate_evaluation(
 
     forward_live_months = float(aggregate_metrics["forward_live_months"])
     forward_live_threshold = float(policy["forward_live_months_min"])
-    forward_live_passed = forward_live_months >= forward_live_threshold
+    forward_live_raw_passed = forward_live_months >= forward_live_threshold
+    if forward_live_evidence_source is None:
+        forward_live_passed = None if forward_live_raw_passed else False
+        forward_live_reason = (
+            "requires reviewed --forward-live-evidence-ref; --forward-live-months alone is diagnostic"
+            if forward_live_raw_passed
+            else "requires reviewed Phase 6 forward evidence with enough live months"
+        )
+    else:
+        forward_live_passed = forward_live_raw_passed
+        forward_live_reason = "uses reviewed Phase 6 forward evidence ref"
 
     metric_results = {
         "monthly_alpha_t_stat": ship_gate_metric_result(
@@ -368,11 +411,13 @@ def build_ship_gate_evaluation(
             forward_live_months,
             forward_live_threshold,
             forward_live_passed,
-            "must come from Phase 6 forward tracking; backtest aggregation defaults to 0",
+            forward_live_reason,
         ),
     }
     passed_values = [result["passed"] for result in metric_results.values()]
-    if any(value is None for value in passed_values):
+    if mode != "production":
+        status = "not_evaluable"
+    elif any(value is None for value in passed_values):
         status = "not_evaluable"
     elif all(bool(value) for value in passed_values):
         status = "pass"
@@ -382,14 +427,19 @@ def build_ship_gate_evaluation(
     return {
         "policy_logic": str(policy["policy_logic"]),
         "status": status,
-        "full_size_allowed": status == "pass",
+        "full_size_allowed": (
+            status == "pass"
+            and mode == "production"
+            and forward_live_evidence_source is not None
+        ),
         "failure_mode": str(policy.get("failure_mode") or SHIP_GATE_FAILURE_MODE),
         "manual_execution_only": bool(capital_context["manual_execution_only"]),
         "metric_results": metric_results,
         "limitations": [
-            "full_size_allowed only turns true when every AND-gate metric is evaluable and passes under the manual-order boundary.",
+            "full_size_allowed only turns true for production-mode reports with reviewed forward-live evidence and every AND-gate metric evaluable and passing.",
+            "smoke-mode aggregates are diagnostic and cannot permit full-size manual use.",
             "monthly_alpha_t_stat is benchmark-aware only when a benchmark monthly return JSON is supplied.",
-            "forward_live_months is not inferred from backtest history; Phase 6 forward tracking must supply it explicitly.",
+            "forward_live_months is not inferred from backtest history or a bare CLI value; reviewed Phase 6 forward tracking evidence must supply it.",
         ],
     }
 
@@ -399,6 +449,7 @@ def build_aggregate_report(
     benchmark_monthly_returns: dict[str, float] | None = None,
     benchmark_source: str | None = None,
     forward_live_months: int = 0,
+    forward_live_evidence_source: str | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     if forward_live_months < 0:
@@ -412,13 +463,14 @@ def build_aggregate_report(
     )
     return {
         "schema_name": "execution_aggregate_report",
-        "schema_version": "1.0.0",
+        "schema_version": AGGREGATE_SCHEMA_VERSION,
         "generated_at": generated_at or iso_now(),
         "preset": str(reports[0]["preset"]),
         "mode": str(reports[0]["mode"]),
         "settings": {
             "input_report_count": len(reports),
             "forward_live_months": forward_live_months,
+            "forward_live_evidence_source": forward_live_evidence_source,
             "benchmark_excess_return_source": benchmark_source,
             "monthly_return_method": "mean_report_total_return_by_month",
         },
@@ -431,6 +483,8 @@ def build_aggregate_report(
             aggregate_metrics,
             capital_context,
             benchmark_source=benchmark_source,
+            mode=str(reports[0]["mode"]),
+            forward_live_evidence_source=forward_live_evidence_source,
         ),
         "limitations": [
             "This report aggregates execution-report metrics; it does not rebuild a continuous multi-position portfolio equity curve.",
@@ -457,11 +511,23 @@ def main(argv: list[str] | None = None) -> int:
     benchmark_source = (
         relative_ref(args.benchmark_monthly_returns) if args.benchmark_monthly_returns else None
     )
+    evidence_months, evidence_source = load_forward_live_evidence(
+        args.forward_live_evidence_ref
+    )
+    forward_live_months = args.forward_live_months
+    if evidence_months is not None:
+        if forward_live_months not in {0, evidence_months}:
+            raise ValueError(
+                "--forward-live-months must match forward_live_months in "
+                "--forward-live-evidence-ref"
+            )
+        forward_live_months = evidence_months
     report = build_aggregate_report(
         reports_with_paths,
         benchmark_monthly_returns=benchmark,
         benchmark_source=benchmark_source,
-        forward_live_months=args.forward_live_months,
+        forward_live_months=forward_live_months,
+        forward_live_evidence_source=evidence_source,
     )
     write_report(report, args.out_path)
     print(f"[OK] wrote {args.out_path}")

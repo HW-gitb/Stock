@@ -38,7 +38,7 @@ Current routing note: the corrected-basis A-share burst preregistration has now 
 1. `SR-RESEARCH-001` - Current corrected-basis A-share burst preregistration is spent / failed by zero valid signal events; next burst test requires ledger-gated redesign.
 2. `SR-DATA-003` - Resolve benchmark-open input before any nonzero-event outcome / excess calculation, and fix the forward-tracker cache guard before official backfill use.
 3. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
-4. `SR-EXEC-006` + `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
+4. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
 5. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
 6. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
 7. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
@@ -91,6 +91,15 @@ Current routing note: the corrected-basis A-share burst preregistration has now 
 - Evidence: `A-EGS/egs_main.py` writes `analysis_input.json` without jsonschema validation; `runners/run_analysis_report.py` loads `analysis_input` and validates only its own output report.
 - Accepted calibration: `build_data_health` performs some bespoke checks, but it is not equivalent to schema validation at producer and consumer boundaries.
 - Required next action: add shared schema validation for `analysis_input` on write and read, with tests covering malformed payload rejection.
+
+### SR-CONTRACT-002 - Forward-live evidence artifact lacks a schema-first contract
+
+- Severity: P2
+- Status: open
+- Owner phase: Phase 6 forward evidence / Phase 5 aggregate ship-gate contract
+- Evidence: `runners/aggregate_execution_reports.py` v1.1.0 correctly requires `--forward-live-evidence-ref` before `full_size_allowed` can become true, but the referenced forward-live evidence artifact is currently validated only inline for `review_status == "reviewed"` and non-negative integer `forward_live_months`. No `schemas/forward_live_evidence.schema.json` contract yet defines provenance fields such as reviewer, source window, tracker artifact ref, captured-month basis, or review lineage.
+- Accepted calibration: this is not an active blocker because no 12-month forward-live artifact exists yet and SR-EXEC-006's inline validation closes the current smoke / bare-CLI gate bug. It becomes material before any real Phase 6 forward-live evidence artifact is produced or used for aggregate full-size permission.
+- Required next action: before the first reviewed forward-live evidence artifact is produced or consumed for ship-gate-like aggregation, add a schema-first contract covering `review_status`, `forward_live_months`, provenance / reviewer / source-window / tracker refs, and validation tests; then update `aggregate_execution_reports.py` to validate the evidence artifact against that schema.
 
 ### SR-SEC-001 - Broad local Claude Bash allow rules
 
@@ -186,11 +195,12 @@ Current routing note: the corrected-basis A-share burst preregistration has now 
 ### SR-EXEC-006 - Execution aggregate can turn smoke / unbound forward-month inputs into full-size permission
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: Phase 5 execution aggregation / ship-gate evidence integrity
 - Evidence: `runners/aggregate_execution_reports.py:validate_compatible_reports` only checks that reports share the same `capital_context` summary and `mode`; it does not require `mode == production` for ship-gate permission. `--forward-live-months` is a plain CLI integer with no reviewed forward-tracking evidence artifact / ref binding. `build_ship_gate_evaluation` sets `full_size_allowed = status == "pass"`, and current tests include `tests/execution/test_aggregate_execution_reports.py:test_aggregate_with_benchmark_and_forward_months_can_pass_gate`, which can assert `full_size_allowed == true` from two default smoke reports plus a bare `--forward-live-months 12`.
 - Accepted calibration: there is no broker or automatic order path, and current burst research is blocked before execution evidence is used. The risk is evidence / manual-sizing overclaim: the core `>= 12 months forward live` ship-gate requirement can be bypassed by an unbound CLI value, and smoke diagnostics can be presented as full-size manual-use permission.
-- Required next action: before any execution aggregate is used for ship-gate-like evidence or manual sizing conclusions, separate diagnostic aggregate status from ship-gate status; allow `full_size_allowed` to become true only for production-mode inputs with reviewed forward-tracking evidence artifact / ref validation; keep smoke aggregates false / not-evaluable for ship-gate permission; and reverse the current test that locks the wrong invariant.
+- Closure evidence: the reviewed change set updates `runners/aggregate_execution_reports.py` so `execution_aggregate_report` v1.1.0 reads a reviewed `--forward-live-evidence-ref` JSON, validates `review_status='reviewed'`, derives / checks `forward_live_months` from that artifact, and keeps bare `--forward-live-months` diagnostic. `ship_gate_evaluation.full_size_allowed` can become true only when the aggregate mode is `production`, a reviewed forward-live evidence source is present, and all AND-gate metrics pass. Smoke aggregates remain `not_evaluable` for ship-gate permission even if their numeric diagnostics pass.
+- Verification: `tests.execution.test_aggregate_execution_reports` now reverses the old smoke / bare-forward-month pass invariant, covers production reports without reviewed forward evidence staying `not_evaluable`, covers smoke reports with reviewed evidence staying `not_evaluable`, covers production + reviewed evidence pass, and rejects CLI / evidence month mismatches. `tests.schema.test_execution_aggregate_report_schema` validates the v1.1.0 schema and required `forward_live_evidence_source` field.
 
 ### SR-EXEC-007 - Execution simulator serializes overlapping candidates and reuses bucket cash
 
