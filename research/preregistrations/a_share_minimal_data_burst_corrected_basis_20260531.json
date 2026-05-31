@@ -52,7 +52,7 @@
     {
       "artifact_id": "current_snapshot",
       "path": "docs/CURRENT.md",
-      "consumption_role": "Routes the corrected-basis artifact as the only allowed next A-share burst research-only falsification after review and commit."
+      "consumption_role": "Routes this corrected-basis artifact as failed preflight with valid_signal_events = 0 and locks the next A-share burst alpha action to ledger-gated redesign."
     }
   ],
   "hypothesis_registration": {
@@ -287,17 +287,18 @@
     ]
   },
   "next_steps": [
-    "Run only this corrected-basis superseding frozen research-only falsification test after this change set has passed review and commit, or stop.",
+    "Do not run outcome / benchmark-excess calculation for this corrected-basis preregistration: the reviewed preflight result at research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json found valid_signal_events = 0 versus the required >= 30.",
     "Do not run research/preregistrations/a_share_minimal_data_burst_20260531.json; it remains superseded and blocked by the measurement-basis issue.",
-    "Write a research-only evidence report that points research_experiment_log.hypothesis_registration_ref to this corrected-basis superseding preregistration.",
-    "Report corrected 5d CSI1000 as the only promotion-relevant primary statistic; 10d / 20d may be reported only as diagnostics with no search or rescue role.",
-    "If this in-sample frozen test passes, register and run a separate confirmation path before any production promotion: at minimum 2026+ held-out / forward cohorts or 12 months live-normalized forward evidence under the unchanged trigger. This preregistration does not authorize promotion without that confirmation.",
-    "If the frozen test passes all thresholds, the only allowed outcome is research_continue_only with later schema review, Claude review, and user approval.",
-    "If any threshold fails, record falsified_or_redesign_required and do not tune thresholds without first creating a singleton program-level test-budget ledger."
+    "Treat this preregistration as spent_failed_preflight_zero_signal_events in the singleton ledger research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json.",
+    "Do not use Tier2 rows, relaxed entry flags, changed is_breakout logic, altered thresholds, a different universe, or diagnostic benchmarks to rescue this artifact.",
+    "Any redesigned A-share burst test must first append a planned test to the singleton program-level ledger and create a new reviewed preregistration.",
+    "If a later redesigned test passes, register and run a separate confirmation path before any production promotion: at minimum 2026+ held-out / forward cohorts or 12 months live-normalized forward evidence under the unchanged redesigned trigger. This preregistration does not authorize promotion without that confirmation."
   ],
   "limitations": [
     "This artifact supersedes research/preregistrations/a_share_minimal_data_burst_20260531.json only for benchmark / entry-anchor basis.",
     "Trigger thresholds, universe, holding period, cost model, criteria, and test_budget are unchanged; changing any of them requires a singleton program-level ledger first.",
+    "A preflight over the frozen 2024-2025 generated cohorts found zero valid rows satisfying the unchanged all-pass trigger in the unchanged steady Tier1 universe; therefore this artifact cannot produce a meaningful corrected 5d outcome statistic.",
+    "The failed preflight is not evidence that a future redesigned burst universe has no alpha; it is evidence that this preregistered steady-watchlist universe cannot test the burst trigger.",
     "This is minimal-data EOD research, not full-data burst evidence.",
     "It does not use dated catalysts, filings, capital-flow, options, borrow, or manual confirmation evidence.",
     "It is in-sample research over existing generated cohorts and cannot count as live-normalized or ship-gate evidence.",

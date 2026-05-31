@@ -661,7 +661,7 @@
   "next_steps": [
     "Claude reviews this plan as a non-authorizing Phase 7b-2 closure artifact.",
     "If reviewed and committed, do not request provider access until the user explicitly approves cost ceiling, access path, and license/storage boundaries.",
-    "After same-anchor benchmark excess and corrected-basis supersession are reviewed and committed, the next alpha-validation execution slice may run only research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json as an A-share minimal-data burst research-only falsification; the original preregistration remains blocked.",
+    "After same-anchor benchmark excess and corrected-basis supersession were reviewed and committed, the corrected-basis A-share minimal-data burst artifact failed a frozen-cohort preflight with valid_signal_events = 0. Do not run that artifact for outcome / excess calculation; the next A-share minimal-data burst alpha-validation slice is ledger-gated redesign under research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json.",
     "Keep US-long SEC observed-date / parser feasibility on the provider-evidence track; it can prove construction feasibility, not long-alpha existence."
   ],
   "limitations": [

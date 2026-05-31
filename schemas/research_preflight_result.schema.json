@@ -1,0 +1,293 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/research_preflight_result/1.0.0/schema.json",
+  "title": "Research Preflight Result",
+  "description": "Schema-first result contract for pre-outcome research preflights. It records whether a preregistered research test has enough valid events and safe inputs before any outcome return, benchmark excess, provider fetch, production runner consumption, ship-gate claim, or order automation can occur.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "hypothesis_registration_ref",
+    "preflight_status",
+    "decision",
+    "execution_boundary",
+    "input_dataset_refs",
+    "method",
+    "summary_counts",
+    "evaluation_result",
+    "diagnostic_notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "research_preflight_result"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "artifact_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "hypothesis_registration_ref": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "preflight_status": {
+      "enum": [
+        "failed_underpowered_zero_signal_events",
+        "failed_underpowered_insufficient_signal_events",
+        "failed_data_integrity_preflight",
+        "passed_event_count_preflight"
+      ]
+    },
+    "decision": {
+      "enum": [
+        "do_not_run_outcome_or_excess_for_this_preregistration",
+        "eligible_for_separate_outcome_run_after_review"
+      ]
+    },
+    "execution_boundary": {
+      "$ref": "#/$defs/executionBoundary"
+    },
+    "input_dataset_refs": {
+      "$ref": "#/$defs/stringList"
+    },
+    "method": {
+      "$ref": "#/$defs/method"
+    },
+    "summary_counts": {
+      "$ref": "#/$defs/summaryCounts"
+    },
+    "evaluation_result": {
+      "$ref": "#/$defs/evaluationResult"
+    },
+    "diagnostic_notes": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nonNegativeNumber": {
+      "type": "number",
+      "minimum": 0
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "executionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome_returns_computed",
+        "benchmark_excess_computed",
+        "provider_data_fetch_performed",
+        "egs_main_rerun_performed",
+        "cohort_regeneration_performed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed"
+      ],
+      "properties": {
+        "outcome_returns_computed": {
+          "const": false
+        },
+        "benchmark_excess_computed": {
+          "const": false
+        },
+        "provider_data_fetch_performed": {
+          "const": false
+        },
+        "egs_main_rerun_performed": {
+          "const": false
+        },
+        "cohort_regeneration_performed": {
+          "const": false
+        },
+        "production_use_allowed": {
+          "const": false
+        },
+        "ship_gate_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "description",
+        "entry_flag_value",
+        "hard_filters",
+        "all_pass_signal",
+        "validation_command"
+      ],
+      "properties": {
+        "description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "entry_flag_value": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "hard_filters": {
+          "$ref": "#/$defs/stringList"
+        },
+        "all_pass_signal": {
+          "$ref": "#/$defs/stringList"
+        },
+        "validation_command": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "summaryCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cohort_count",
+        "cohort_window_start",
+        "cohort_window_end",
+        "total_candidate_rows",
+        "tier1_rows",
+        "tier2_rows",
+        "hard_filter_rows",
+        "hard_pct_5d_ge_6_rows",
+        "hard_amount_ratio_ge_1_5_rows",
+        "hard_is_breakout_true_rows",
+        "hard_all_three_signal_rows",
+        "tier1_pct_5d_ge_6_rows",
+        "tier1_amount_ratio_ge_1_5_rows",
+        "tier1_is_breakout_true_rows",
+        "tier1_all_three_signal_rows",
+        "all_rows_all_three_signal_rows",
+        "tier2_all_three_signal_rows",
+        "max_pct_5d_all_rows",
+        "max_pct_5d_tier1",
+        "max_amount_ratio_all_rows",
+        "max_amount_ratio_tier1"
+      ],
+      "properties": {
+        "cohort_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "cohort_window_start": {
+          "$ref": "#/$defs/date8"
+        },
+        "cohort_window_end": {
+          "$ref": "#/$defs/date8"
+        },
+        "total_candidate_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "tier1_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "tier2_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "hard_filter_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "hard_pct_5d_ge_6_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "hard_amount_ratio_ge_1_5_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "hard_is_breakout_true_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "hard_all_three_signal_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "tier1_pct_5d_ge_6_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "tier1_amount_ratio_ge_1_5_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "tier1_is_breakout_true_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "tier1_all_three_signal_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "all_rows_all_three_signal_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "tier2_all_three_signal_rows": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "max_pct_5d_all_rows": {
+          "type": "number"
+        },
+        "max_pct_5d_tier1": {
+          "type": "number"
+        },
+        "max_amount_ratio_all_rows": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "max_amount_ratio_tier1": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        }
+      }
+    },
+    "evaluationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valid_signal_events",
+        "minimum_effective_sample_required",
+        "valid_signal_events_gate_passed",
+        "registered_decision_label",
+        "interpretation",
+        "alpha_claim_allowed",
+        "outcome_run_allowed_for_this_preregistration"
+      ],
+      "properties": {
+        "valid_signal_events": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "minimum_effective_sample_required": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "valid_signal_events_gate_passed": {
+          "type": "boolean"
+        },
+        "registered_decision_label": {
+          "enum": [
+            "falsified_or_redesign_required",
+            "preflight_passed_research_continue_only"
+          ]
+        },
+        "interpretation": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "alpha_claim_allowed": {
+          "const": false
+        },
+        "outcome_run_allowed_for_this_preregistration": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

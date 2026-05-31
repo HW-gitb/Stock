@@ -1,0 +1,57 @@
+{
+  "schema_name": "program_test_budget_ledger",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-31T00:00:00Z",
+  "artifact_id": "a_share_burst_program_test_budget_ledger_20260531",
+  "ledger_status": "active_no_new_test_authorized",
+  "family_id": "a_share_burst_minimal_data_alpha_validation_v1",
+  "lane_id": "a_share_burst_minimal_data",
+  "singleton_scope": {
+    "protected_decision": "Whether A-share minimal-data burst should continue as a research alpha lane before full-data provider readiness.",
+    "applies_to": [
+      "Any A-share minimal-data burst preregistration that can influence future production or research-continuation decisions.",
+      "Any change to universe, tier inclusion, entry-flag eligibility, trigger conjunction, pct_5d threshold, amount-expansion threshold, breakout definition, ranking cap, benchmark, holding period, or cost model after the corrected-basis preflight failure."
+    ],
+    "does_not_authorize": [
+      "Provider selection, trial, token, paid access, or sample-row collection.",
+      "New provider data fetch.",
+      "DataHub table implementation.",
+      "Production runner consumption.",
+      "Broker, OS, or order automation.",
+      "Ship-gate or live-trading evidence claims."
+    ]
+  },
+  "creation_reason": {
+    "triggering_preflight_ref": "research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json",
+    "triggering_preregistration_ref": "research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json",
+    "reason": "The corrected-basis frozen preregistration produced zero valid signal events on the frozen steady Tier1 universe. Any useful next A-share burst test requires a new universe or trigger degree of freedom, so the program-level ledger is required before redesign."
+  },
+  "budget_policy": {
+    "ledger_cardinality": "singleton_program_level",
+    "tests_spent_count": 1,
+    "tests_available_without_new_review": 0,
+    "next_test_requires_reviewed_preregistration": true,
+    "next_test_requires_user_approval": true,
+    "spend_rule": "A promotion-relevant test is spent when a preregistered hypothesis evaluates any registered pass/fail gate on frozen data, including an event-count / power preflight that prevents outcome-return calculation.",
+    "no_silent_rescue_rule": "Do not use CSI300 diagnostics, Tier2 rows, relaxed entry flags, alternative breakout logic, threshold changes, or a new universe to rescue the failed corrected-basis preregistration without appending a new planned test to this ledger and creating a reviewed preregistration."
+  },
+  "test_spend_log": [
+    {
+      "test_id": "a_share_minimal_data_burst_corrected_basis_20260531",
+      "preregistration_ref": "research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json",
+      "result_ref": "research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json",
+      "status": "spent_failed_preflight_zero_signal_events",
+      "tests_spent": 1,
+      "promotion_relevant": true,
+      "result_summary": "valid_signal_events = 0 versus required >= 30; outcome returns and benchmark excess were not computed because the registered trigger has no valid events.",
+      "allowed_followup": "Only ledger-gated redesign with a new reviewed preregistration."
+    }
+  ],
+  "planned_tests": [],
+  "next_required_actions": [
+    "Append any proposed redesigned A-share burst test to planned_tests before it runs.",
+    "Create a new reviewed preregistration for any changed universe / trigger / threshold / benchmark / holding-period design.",
+    "Resolve the benchmark-open input precondition before any nonzero-event outcome / excess calculation.",
+    "Keep all outputs research-only until later schema review, Claude review, user approval, and separate confirmation evidence."
+  ]
+}

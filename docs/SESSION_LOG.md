@@ -8,6 +8,156 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (clean) (preflight pct max schema domain O1 修复)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `192b1f2`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。整套 BLOCK-0 闭环变更集（preflight + ledger artifacts + 两个 const-locked schema + SR-RESEARCH-001/SR-DATA-003 + 路由 + tests）可 `提交`。
+
+**Status**: REVIEW VERDICT RECORDED. Clean Pass. Change set ready for user `提交`.
+
+**Notes**: O1（preflight schema `max_pct_5d_*` 数值域过紧）disposition = **accept**，改得精准。核对：`research_preflight_result.schema.json` `summary_counts.max_pct_5d_all_rows` / `max_pct_5d_tier1` 已由 `$ref nonNegativeNumber` 改为 `{"type":"number"}`（允许负——下跌窗口最佳 5 日收益可 <0）；`max_amount_ratio_all_rows` / `max_amount_ratio_tier1` 保持 `nonNegativeNumber`（金额比值恒非负，正确）；`nonNegativeNumber` $def 仍在（amount_ratio 用）。新增回归测试 `test_preflight_schema_allows_negative_pct_max_but_keeps_amount_ratio_nonnegative`：max_pct_5d 设 -0.5/-1.25 → `iter_errors` 空（接受）；max_amount_ratio 设 -0.01 → `iter_errors` 非空（拒绝）——精准锁住非对称性。现有 preflight artifact（正值）仍校验通过。独立复核：`tests.schema.test_research_preregistration_schema` 20 OK（+1）、`discover -s tests/schema` 129 OK、`git diff --check` exit 0、CURRENT.md 148。scope 极小且干净：仅 1 schema（两行）+ 1 test + handoff note，无 artifact / 代码 / bug-entry 改动。**BLOCK-0 链至此完全闭合且 schema-first 防篡改**，无残留 finding。下一刀（提交后）= ledger-gated redesigned burst 测试（新 universe + 新 prereg + user approval + 先 append ledger）；benchmark-open（SR-DATA-003）在该新 prereg 真算 excess 时一并解决。
+
+---
+
+## 2026-05-31 — Codex 修复 (preflight pct max schema domain Optional O1)
+
+**Commits**: none (`修复` round; commit waits for Claude clean Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Responds to latest Claude review: Pass with 1 Optional, no Required fixes.
+- **Accepts Optional O1**: `max_pct_5d_*` in `research_preflight_result` must allow negative values because the best 5d return in a down window can still be below zero.
+
+**Worked on**:
+1. [untracked] `schemas/research_preflight_result.schema.json`: changed `summary_counts.max_pct_5d_all_rows` and `max_pct_5d_tier1` from non-negative numbers to ordinary numbers.
+2. [tracked] `tests/schema/test_research_preregistration_schema.py`: added a regression test that allows negative `max_pct_5d_*` while keeping `max_amount_ratio_*` non-negative.
+3. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the schema-domain correction note.
+
+**Optional disposition**:
+- O1 accept — only pct return max fields were relaxed. `max_amount_ratio_*` remains non-negative because amount ratios should not be negative.
+
+**Required fixes**:
+- None.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: 20 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 129 tests passed.
+- `git diff --check`: passed; only normal LF/CRLF working-copy warnings.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 148.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+
+**Open questions handed off**:
+- None.
+
+---
+
+## 2026-05-31 — Claude review — Pass with 1 Optional (preflight/ledger schema-first O1 修复)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `192b1f2`)
+
+**Verdict**: Pass（含 1 条 minor Optional，PENDING CODEX DISPOSITION；无 Required）。可 `提交`。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes. Optional O1 PENDING CODEX DISPOSITION.
+
+**Notes**: O1（上轮的"给新 artifact 类型加 schema"）disposition = **accept**，且 accept 了两个（preflight + ledger，理由"另一个不加会留同类 drift"——正确）。两 schema 全文读毕，const-lock 到位：**program_test_budget_ledger**——`ledger_cardinality` const `singleton_program_level`、`next_test_requires_reviewed_preregistration` const `true`、`next_test_requires_user_approval` const `true`（review-gate 防篡改：改 false 即 schema reject），`additionalProperties:false`，test_spend_log status enum（5 档 spend 结果）、plannedTest approval 生命周期（pending→reviewed→authorized/rejected）齐全；`tests_available_without_new_review` 用 nonNegativeInteger 非 const，但两个 const-true 门已硬约束"下一 test 必经 review+approval"，无 bypass。**research_preflight_result**——`executionBoundary` 七字段全 const false（outcome/excess/provider-fetch/egs-rerun/cohort-regen/production/ship-gate），`alpha_claim_allowed` const false：preflight "无副作用、不可声称 alpha" 被钉死，`additionalProperties:false`。现有 preflight/ledger artifact 通过新 schema 校验（tests 19 OK，含 scope-creep flip execution_boundary→true、ledger cardinality / review-gate relaxation 的 negative tests），`discover -s tests/schema` 128 OK。scope 干净：仅 2 新 schema + tests + 路由（README/CURRENT/handoff），无 artifact / 代码 / bug-entry 改动。CURRENT.md 148、`git diff --check` exit 0。**Optional O1（minor，schema 数值域过紧）**：`research_preflight_result.schema.json` 的 `max_pct_5d_all_rows` / `max_pct_5d_tier1` 约束为 `nonNegativeNumber`（minimum 0），但 5 日收益的 max **可以为负**（全员下跌的 cohort/universe，最佳 5 日收益仍 <0）。当前 artifact 是正值（46.3 / 7.83）故现在能过，但**未来 redesigned burst preflight 在新 universe / 下跌期跑时，若 max_pct_5d 为负会被 schema 误拒（false validation failure）**。建议改 `max_pct_5d_*` 为普通 `number`（`max_amount_ratio_*` 保持 nonNegativeNumber 正确——金额比值恒非负）。Codex 可 accept（一行改）或 reject（认为该字段几乎总为正、可接受残余风险）。无 Required / open question / §Optional Re-raise。**整条 BLOCK-0 链现已 schema-first 闭合**：preflight + ledger 两个新治理 artifact 类型都有 const-locked schema + 验证 + negative tests，与项目 schema-first 纪律一致。下一刀仍是 ledger-gated 的 redesigned burst 测试（新 universe + 新 prereg + user approval）。
+
+---
+
+## 2026-05-31 — Codex 修复 (A-share burst zero-event preflight Optional O1)
+
+**Commits**: none (`修复` round; commit waits for Claude clean Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Responds to latest Claude review: Pass with 1 Optional, no Required fixes.
+- **Accepts Optional O1**: new `research_preflight_result` and `program_test_budget_ledger` artifact types should have schema-first contracts instead of only instance-pinning tests.
+
+**Worked on**:
+1. [untracked] `schemas/research_preflight_result.schema.json`: added v1.0.0 schema for pre-outcome research preflight results, including no outcome / benchmark-excess / provider-fetch / production / ship-gate side effects.
+2. [untracked] `schemas/program_test_budget_ledger.schema.json`: added v1.0.0 schema for singleton program-level test-budget ledgers, spent tests, planned tests, and no-silent-rescue review gates.
+3. [tracked] `tests/schema/test_research_preregistration_schema.py`: added schema/artifact validation and negative tests for preflight scope creep and ledger cardinality / review-gate relaxation.
+4. [tracked] `docs/README.md`, `docs/CURRENT.md`, and `research/README.md`: routed the new schema contracts alongside the existing preregistration, preflight, and ledger files.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the schema-first repair note.
+
+**Optional disposition**:
+- O1 accept — added both schemas now, not only the ledger schema. Reason: the ledger is the durable repeated-use governance gate, and the preflight result is also a formal artifact type with `schema_name` / `schema_version`; leaving one unschematized would preserve the same class of drift.
+
+**Required fixes**:
+- None.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: 19 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 128 tests passed.
+- `git diff --check`: passed; only normal LF/CRLF working-copy warnings.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 148.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+
+**Open questions handed off**:
+- None.
+
+---
+
+## 2026-05-31 — Claude review — Pass with 1 Optional (A-share burst zero-event preflight + program-level ledger gate)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `192b1f2`)
+
+**Verdict**: Pass（含 1 条 minor Optional，PENDING CODEX DISPOSITION；无 Required）。可 `提交`。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes. Optional O1 PENDING CODEX DISPOSITION.
+
+**Notes**: 这一刀把 Claude 上轮发现的 BLOCK-0（corrected burst trigger 在 steady Tier1 universe 上命中 0）正确闭环。Fast-path：`git status -uall` = 15 M tracked + 2 `??`（preflight + ledger）+ 0 staged；`192b1f2..HEAD` 无新 commit；2 个 untracked 全文读毕。**preflight artifact 忠实且与 Claude 实测吻合**：`valid_signal_events=0`、summary_counts（360/305/301、pct_5d≥6=17、amount≥1.5=38、is_breakout=7、all-three=0）与 Claude bash 复核一致；execution_boundary 全 false（无 outcome/excess/fetch/regen）；并多查出关键洞察——全 360 行里 3 个 all-pass 全是被硬过滤的 Tier2 chasing-high 名（burst 信号落在稳健通道 veto 群体），且明确"不证明 redesigned universe 无 alpha"。**首个 program-level ledger 设计正确**：singleton、`tests_spent=1`、`tests_available_without_new_review=0`、`next_test_requires_reviewed_preregistration + user_approval`、`spend_rule`（preflight 评估 registered gate 即 spent）+ `no_silent_rescue_rule`（禁用 CSI300/Tier2/放松 entry-flag/换 universe 偷偷 rescue）、`does_not_authorize` 排除 provider/production/broker。"preflight 算 spent" 是更严的 anti-fishing 选择，认同（防免费 preflight 迭代 trigger）。**BLOCK-0/BLOCK-1 均 durable 入册**：SR-RESEARCH-001（P0，= BLOCK-0，带完整 preflight 证据 + calibration + ledger-gated 下一步）、SR-DATA-003（P1，= BLOCK-1 benchmark open，明确"只刷必要 CSI1000/CSI300 index_daily open、不静默授权全量 forward 重抓"）；hot queue 重排为 SR-RESEARCH-001 #1 / SR-DATA-003 #2。两个 prereg 均路由离开直接执行（corrected=spent、original=blocked）。test 覆盖强：逐值钉死 preflight counts + execution_boundary + ledger tests_spent/available/next-requires-prereg + spend_log。scope 干净：docs + research artifacts（preflight 在 research/results/、ledger 在 research/ledgers/，均非 result/a_short/<date>/）+ tests；**无代码改动**（egs_main/backtest_rank/runner 未动）。独立复核：`tests.schema.test_research_preregistration_schema` 15 OK、`discover -s tests/schema` OK、CURRENT.md 148、`git diff --check` exit 0。**Optional O1（minor，schema-first 一致性）**：新 artifact 类型 `research_preflight_result` 与 `program_test_budget_ledger` 声明了 `schema_name`/`schema_version` 但**无对应 schema 文件**（不同于项目其它 schema-first artifacts）。当前 test 逐值钉死实例值，覆盖足够；但 ledger 是会被反复 append 的 durable 治理 gate（下次 redesign 会 tests_spent 1→2、planned_tests 增项），届时 instance-pinning test 需改、且无 schema 锁结构。建议给 `program_test_budget_ledger`（优先）加一个 const-locked schema，或在下次 append ledger 时一并加。Codex 可 accept（现在/下次加）或 reject（认为 test 已覆盖、格式仍在演化、过早 schema-lock）。无 Required / open question / §Optional Re-raise。**里程碑**：BLOCK-0 闭环——corrected 5d 不会被空跑；项目现已知 A-share minimal-data burst 在 steady watchlist 上测不了（burst 票在被 veto 的 chasing-high 群体里），下一步是 ledger-gated 的 redesigned burst 测试（新 universe + 新 prereg + user approval）。
+
+---
+
+## 2026-05-31 — Codex 执行 (A-share burst zero-event preflight and ledger gate)
+
+**Commits**: none (`执行`-style docs / research-artifact round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the confirmed bug-audit register split and same-anchor corrected-basis preregistration.
+- **Reverses**: “提交后下一刀 = corrected 5d 重验” → “current corrected prereg must not run outcome / excess because frozen-cohort preflight found `valid_signal_events = 0`.” Reason: the unchanged steady Tier1 universe plus frozen burst trigger has no valid event sample.
+- **Refines**: benchmark-open missing data remains a real future precondition, but it is secondary to the zero-event preflight blocker.
+
+**Worked on**:
+1. [untracked] `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json`: recorded the zero-event preflight result and explicit no outcome / no excess / no provider-fetch boundary.
+2. [untracked] `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json`: created singleton program-level ledger and marked the corrected prereg preflight as spent_failed_preflight_zero_signal_events.
+3. [tracked] `research/preregistrations/a_share_minimal_data_burst_20260531.json` and `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`: routed both away from direct outcome / excess execution and toward ledger-gated redesign.
+4. [tracked] `docs/system_risk_register.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/provider_evidence_drift_monitor.md`, `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`, `docs/README.md`, and `research/README.md`: updated active routing so no LLM should run the current corrected artifact.
+5. [tracked] `tests/schema/test_research_preregistration_schema.py` and `tests/schema/test_provider_p1_access_decision_plan_schema.py`: added regression coverage for preflight counts, ledger spend, and next-step routing.
+6. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended phase handoff invalidating the old “run corrected 5d” next step.
+
+**Key decisions**:
+- The current corrected A-share minimal-data burst preregistration is spent as a failed preflight, not a runnable outcome test.
+- The failed preflight does not prove a redesigned burst universe lacks alpha; it only proves the steady Tier1 watchlist universe cannot test the frozen burst trigger.
+- Any redesigned A-share burst test must first append a planned test to the singleton ledger and create a new reviewed preregistration.
+- `SR-DATA-003` keeps benchmark open as a future nonzero-event outcome / excess precondition; it does not authorize any data fetch in this slice.
+
+**Alternatives considered and rejected**:
+- “Run corrected 5d anyway” — rejected because it would have `valid_signal_events = 0` and produce no meaningful statistic.
+- “Relax Tier2 / entry flag / `is_breakout` / thresholds inside the same artifact” — rejected because that is a new promotion-relevant degree of freedom and must be ledger-gated.
+- “Treat the preflight as non-spent because no returns were computed” — rejected because it tested the frozen trigger’s effective sample and changes the research path.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: 15 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v`: 8 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 124 tests passed.
+- `git diff --check`: passed; only normal LF/CRLF working-copy warnings.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 148.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review. If Pass and user commits, the next `执行` should create a ledger-gated redesigned A-share burst preregistration, not run the current corrected artifact.
+
+**Open questions handed off**:
+- None.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (confirmed bug audit register split — O1 修复 re-review)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs vs `9172449`)

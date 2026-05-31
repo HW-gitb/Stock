@@ -7,8 +7,14 @@ from pathlib import Path
 
 
 SCHEMA_PATH = Path("schemas/research_preregistration.schema.json")
+PREFLIGHT_SCHEMA_PATH = Path("schemas/research_preflight_result.schema.json")
+LEDGER_SCHEMA_PATH = Path("schemas/program_test_budget_ledger.schema.json")
 BLOCKED_ARTIFACT_PATH = Path("research/preregistrations/a_share_minimal_data_burst_20260531.json")
 CORRECTED_ARTIFACT_PATH = Path("research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json")
+PREFLIGHT_ARTIFACT_PATH = Path(
+    "research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json"
+)
+LEDGER_ARTIFACT_PATH = Path("research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json")
 ALPHA_AUDIT_SCHEMA_PATH = Path("schemas/alpha_plausibility_audit.schema.json")
 EVIDENCE_REPORT_SCHEMA_PATH = Path("schemas/evidence_report.schema.json")
 
@@ -17,11 +23,23 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
     def _load_schema(self) -> dict:
         return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
+    def _load_preflight_schema(self) -> dict:
+        return json.loads(PREFLIGHT_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+    def _load_ledger_schema(self) -> dict:
+        return json.loads(LEDGER_SCHEMA_PATH.read_text(encoding="utf-8"))
+
     def _load_artifact(self, path: Path = BLOCKED_ARTIFACT_PATH) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
 
     def _load_corrected_artifact(self) -> dict:
         return self._load_artifact(CORRECTED_ARTIFACT_PATH)
+
+    def _load_preflight_artifact(self) -> dict:
+        return self._load_artifact(PREFLIGHT_ARTIFACT_PATH)
+
+    def _load_ledger_artifact(self) -> dict:
+        return self._load_artifact(LEDGER_ARTIFACT_PATH)
 
     def test_schema_meta_validates_when_jsonschema_available(self) -> None:
         try:
@@ -48,6 +66,38 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
             with self.subTest(artifact_path=str(artifact_path)):
                 errors = list(validator.iter_errors(self._load_artifact(artifact_path)))
                 self.assertEqual(errors, [])
+
+    def test_preflight_result_schema_and_artifact_validate_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = self._load_preflight_schema()
+
+        Draft7Validator.check_schema(schema)
+        self.assertEqual(schema["properties"]["schema_name"]["const"], "research_preflight_result")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.0.0")
+        self.assertFalse(schema["additionalProperties"])
+
+        errors = list(Draft7Validator(schema).iter_errors(self._load_preflight_artifact()))
+        self.assertEqual(errors, [])
+
+    def test_program_test_budget_ledger_schema_and_artifact_validate_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = self._load_ledger_schema()
+
+        Draft7Validator.check_schema(schema)
+        self.assertEqual(schema["properties"]["schema_name"]["const"], "program_test_budget_ledger")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.0.0")
+        self.assertFalse(schema["additionalProperties"])
+
+        errors = list(Draft7Validator(schema).iter_errors(self._load_ledger_artifact()))
+        self.assertEqual(errors, [])
 
     def test_hypothesis_registration_reuses_alpha_audit_shape(self) -> None:
         schema = self._load_schema()
@@ -158,7 +208,7 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertIn("corrected-basis superseding preregistration", joined_notes)
         self.assertIn("not executable as promotion-relevant research-continuation evidence", joined_notes)
 
-    def test_corrected_basis_preregistration_is_the_unblocked_supersession(self) -> None:
+    def test_corrected_basis_preregistration_records_zero_event_preflight(self) -> None:
         artifact = self._load_corrected_artifact()
         joined_notes = "\n".join(artifact["next_steps"] + artifact["limitations"])
         benchmark_rule = artifact["frozen_test_design"]["benchmark_rule"]["benchmark_return_rule"]
@@ -166,12 +216,119 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertNotIn("BLOCKED_DO_NOT_RUN", joined_notes)
         self.assertIn("T+1 entry date open", benchmark_rule)
         self.assertIn("T+5 exit date close", benchmark_rule)
-        self.assertIn("corrected 5d CSI1000", joined_notes)
-        self.assertIn("10d / 20d may be reported only as diagnostics", joined_notes)
+        self.assertIn("valid_signal_events = 0", joined_notes)
+        self.assertIn("preflight_zero_signal_events_20260531.json", joined_notes)
+        self.assertIn("a_share_burst_program_test_budget_ledger_20260531.json", joined_notes)
+        self.assertIn("Do not run outcome / benchmark-excess calculation", joined_notes)
         self.assertEqual(
             artifact["test_budget"]["evidence_report_linkage"]["future_ref_value"],
             str(CORRECTED_ARTIFACT_PATH).replace("\\", "/"),
         )
+
+    def test_corrected_basis_preflight_records_zero_valid_events(self) -> None:
+        preflight = self._load_preflight_artifact()
+
+        self.assertEqual(preflight["hypothesis_registration_ref"], str(CORRECTED_ARTIFACT_PATH).replace("\\", "/"))
+        self.assertEqual(preflight["preflight_status"], "failed_underpowered_zero_signal_events")
+        self.assertFalse(preflight["execution_boundary"]["outcome_returns_computed"])
+        self.assertFalse(preflight["execution_boundary"]["benchmark_excess_computed"])
+        self.assertFalse(preflight["execution_boundary"]["provider_data_fetch_performed"])
+        self.assertEqual(preflight["summary_counts"]["cohort_count"], 24)
+        self.assertEqual(preflight["summary_counts"]["total_candidate_rows"], 360)
+        self.assertEqual(preflight["summary_counts"]["tier1_rows"], 305)
+        self.assertEqual(preflight["summary_counts"]["hard_filter_rows"], 301)
+        self.assertEqual(preflight["summary_counts"]["hard_pct_5d_ge_6_rows"], 17)
+        self.assertEqual(preflight["summary_counts"]["hard_amount_ratio_ge_1_5_rows"], 38)
+        self.assertEqual(preflight["summary_counts"]["hard_is_breakout_true_rows"], 7)
+        self.assertEqual(preflight["summary_counts"]["hard_all_three_signal_rows"], 0)
+        self.assertEqual(preflight["evaluation_result"]["valid_signal_events"], 0)
+        self.assertEqual(preflight["evaluation_result"]["minimum_effective_sample_required"], 30)
+        self.assertFalse(preflight["evaluation_result"]["valid_signal_events_gate_passed"])
+        self.assertFalse(preflight["evaluation_result"]["outcome_run_allowed_for_this_preregistration"])
+
+    def test_preflight_schema_rejects_outcome_fetch_or_ship_gate_scope_creep_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        invalid = copy.deepcopy(self._load_preflight_artifact())
+        invalid["execution_boundary"]["outcome_returns_computed"] = True
+        invalid["execution_boundary"]["benchmark_excess_computed"] = True
+        invalid["execution_boundary"]["provider_data_fetch_performed"] = True
+        invalid["execution_boundary"]["ship_gate_claim_allowed"] = True
+        invalid["evaluation_result"]["alpha_claim_allowed"] = True
+
+        errors = list(Draft7Validator(self._load_preflight_schema()).iter_errors(invalid))
+
+        self.assertNotEqual(errors, [])
+
+    def test_preflight_schema_allows_negative_pct_max_but_keeps_amount_ratio_nonnegative(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        validator = Draft7Validator(self._load_preflight_schema())
+        negative_pct = copy.deepcopy(self._load_preflight_artifact())
+        negative_pct["summary_counts"]["max_pct_5d_all_rows"] = -0.5
+        negative_pct["summary_counts"]["max_pct_5d_tier1"] = -1.25
+
+        self.assertEqual(list(validator.iter_errors(negative_pct)), [])
+
+        negative_amount_ratio = copy.deepcopy(negative_pct)
+        negative_amount_ratio["summary_counts"]["max_amount_ratio_all_rows"] = -0.01
+
+        self.assertNotEqual(list(validator.iter_errors(negative_amount_ratio)), [])
+
+    def test_program_level_ledger_records_spent_preflight_and_requires_new_preregistration(self) -> None:
+        ledger = self._load_ledger_artifact()
+
+        self.assertEqual(ledger["schema_name"], "program_test_budget_ledger")
+        self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
+        self.assertEqual(ledger["creation_reason"]["triggering_preflight_ref"], str(PREFLIGHT_ARTIFACT_PATH).replace("\\", "/"))
+        self.assertEqual(ledger["creation_reason"]["triggering_preregistration_ref"], str(CORRECTED_ARTIFACT_PATH).replace("\\", "/"))
+        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
+        self.assertEqual(ledger["budget_policy"]["tests_available_without_new_review"], 0)
+        self.assertTrue(ledger["budget_policy"]["next_test_requires_reviewed_preregistration"])
+        self.assertEqual(len(ledger["test_spend_log"]), 1)
+        spent = ledger["test_spend_log"][0]
+        self.assertEqual(spent["preregistration_ref"], str(CORRECTED_ARTIFACT_PATH).replace("\\", "/"))
+        self.assertEqual(spent["result_ref"], str(PREFLIGHT_ARTIFACT_PATH).replace("\\", "/"))
+        self.assertEqual(spent["status"], "spent_failed_preflight_zero_signal_events")
+        self.assertEqual(spent["tests_spent"], 1)
+        self.assertEqual(ledger["planned_tests"], [])
+
+    def test_ledger_schema_rejects_cardinality_or_review_gate_relaxation_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        invalid = copy.deepcopy(self._load_ledger_artifact())
+        invalid["budget_policy"]["ledger_cardinality"] = "per_hypothesis"
+        invalid["budget_policy"]["next_test_requires_reviewed_preregistration"] = False
+        invalid["budget_policy"]["next_test_requires_user_approval"] = False
+        invalid["planned_tests"].append(
+            {
+                "test_id": "silent_rescue_without_review",
+                "planned_status": "reviewed_not_run",
+                "created_at": "2026-05-31T00:00:00Z",
+                "planned_preregistration_ref": "research/preregistrations/silent_rescue.json",
+                "planned_result_ref": "research/results/silent_rescue/result.json",
+                "promotion_relevant": False,
+                "expected_tests_spent": 1,
+                "approval_status": "reviewed_authorized",
+                "design_summary": "Invalid because promotion_relevant cannot be false for ledger-gated planned tests.",
+                "review_boundary": [
+                    "schema should reject this planned test"
+                ]
+            }
+        )
+
+        errors = list(Draft7Validator(self._load_ledger_schema()).iter_errors(invalid))
+
+        self.assertNotEqual(errors, [])
 
     def test_corrected_basis_supersession_only_changes_measurement_basis(self) -> None:
         blocked = self._load_artifact()

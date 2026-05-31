@@ -409,7 +409,7 @@ The first Phase 7 schema-first baseline is `schemas/provider_capability_catalog.
 
 ### Phase 7.5 - Research Infrastructure
 
-Create or expand `research/` structure, minimal experiment logging, and promotion policy after the Phase 7a scope is clear. Early research is allowed only through logged, isolated experiments with preregistration; it must not feed production runners directly. The original A-share `minimal_data_burst` preregistration in `research/preregistrations/a_share_minimal_data_burst_20260531.json` is `BLOCKED_DO_NOT_RUN`; the corrected-basis supersession in `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` is the only artifact eligible for the next frozen research-only falsification after review and commit unless a later reviewed reversal changes this route.
+Create or expand `research/` structure, minimal experiment logging, and promotion policy after the Phase 7a scope is clear. Early research is allowed only through logged, isolated experiments with preregistration; it must not feed production runners directly. The original A-share `minimal_data_burst` preregistration in `research/preregistrations/a_share_minimal_data_burst_20260531.json` is `BLOCKED_DO_NOT_RUN`; the corrected-basis supersession in `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` has a zero-event preflight result and must not be run for outcome / excess calculation. Any redesigned A-share burst test must route through `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and a new reviewed preregistration.
 
 ### Phase 8+
 

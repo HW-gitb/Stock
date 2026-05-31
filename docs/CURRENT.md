@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-31（confirmed bug audit register split）
+**最后更新**：2026-05-31（A-share burst zero-event preflight）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -8,18 +8,18 @@
 
 ## 0. Latest Delta
 
-- Original A-share `minimal_data_burst` preregistration remains blocked; corrected-basis supersession is the only allowed next research-only falsification artifact after review + commit.
-- Same-anchor benchmark excess is implemented; the old 5d `excess_csi1000` clue remains measurement-contaminated / uncorrected until corrected revalidation proves otherwise.
-- `docs/system_risk_register.md` now splits the confirmed post-measurement bug audit into concrete entries: B6 / B7a / B5 / B4 / B1 / B2 / B8 / B3 / N1 / N2 / N4 plus N3 needs-revalidation.
-- Corrected 5d revalidation is not blocked by those entries only if it consumes frozen historical generated cohorts and does not rerun `A-EGS/egs_main.py` / regenerate cohorts.
-- No code fixes are included in this docs-only slice; weekly official capture / forward-tracker official use and execution / ship-gate evidence have separate path-specific blockers in the register.
+- Original A-share `minimal_data_burst` preregistration remains blocked; corrected-basis supersession has now failed a frozen-cohort preflight with `valid_signal_events = 0`.
+- `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` records the preflight: 305 Tier1 rows, 301 hard-filter rows, 17 momentum rows, 38 volume-expansion rows, 7 breakout rows, 0 all-pass signal rows.
+- Do not run outcome / benchmark-excess calculation for the current corrected-basis preregistration; it is spent as `failed_preflight_zero_signal_events`.
+- `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` is now the singleton program-level ledger for any redesigned A-share burst test; preflight and ledger artifacts now have schema-first contracts.
+- Benchmark-open input remains a separate precondition before any future nonzero-event outcome / excess run.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst corrected-basis preregistration exists but has not been run; provider access remains blocked pending explicit user approval.
-- **当前 P0 目标**：review / commit confirmed bug audit register split；提交后仅可用冻结 historical generated cohorts 运行 corrected-basis burst prereg，不得重新跑 `A-EGS/egs_main.py` 生成 cohort，不得进 production、不得改 provider / DataHub、不得声称 ship-gate evidence。
+- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst corrected-basis preregistration has failed zero-event preflight; provider access remains blocked pending explicit user approval.
+- **当前 P0 目标**：review / commit A-share burst zero-event preflight + singleton ledger slice；提交后下一刀是 ledger-gated redesigned burst prereg，不是运行当前 corrected-basis artifact。
 - **当前 P1 provider blocker**：任何 sample / trial / paid-access / token / provider contact / data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
 - **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 只改 benchmark / entry-anchor basis，阈值、universe、holding period、criteria、`test_budget` 均冻结；否则先建 singleton program-level ledger。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
@@ -29,6 +29,7 @@
 
 ## 2. 最近已完成
 
+- **A-share burst preflight**（2026-05-31）：corrected-basis artifact 在冻结 steady Tier1 universe 上 `valid_signal_events=0`；preflight artifact 和 singleton ledger 已建立，下一步需 ledger-gated redesigned prereg。
 - **A-share burst measurement fix**（2026-05-31）：same-anchor benchmark excess 已在 `runners/backtest_rank.py` / benchmark materializer 中落地；`research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` 已建立，原 prereg 继续 blocked。
 - **Weekly historical PIT interlock**（2026-05-31）：`runners/weekly_screening.ps1` now blocks historical `-AsOf` official-output runs unless L3 mode is explicitly `pit` / `neutralize`, rejects historical `today` L3 mode, and guards existing official outputs from accidental overwrite.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
@@ -67,7 +68,7 @@
 - `docs/system_risk_register.md` - durable open-risk queue；`执行` / `审查` 必读。
 - `docs/SESSION_LOG.md` - 最新 cross-LLM reasoning / review verdict；只读顶部 1-3 条。
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` - Phase 7a+ 最高行动指南。
-- `research/README.md` / `schemas/research_preregistration.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` - research-only preregistration owner, blocked original artifact, and corrected-basis artifact。
+- `research/README.md` / `schemas/research_preregistration.schema.json` / `schemas/research_preflight_result.schema.json` / `schemas/program_test_budget_ledger.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` / `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` / `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` - research-only preregistration, preflight, and ledger owner files。
 - `docs/provider_priority_benchmark_contract.md` - Phase 7a-3 provider evidence priority / provisional benchmark contract。
 - `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` - Phase 7b provider evidence / drift monitor contract。
 - `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` - Phase 7b-2 P1 access-decision and sample-validation plan（plan-only；approved spend = 0；provider/sample/data/Phase 7c blocked）。
@@ -87,13 +88,13 @@
 
 ## 5. 下一步
 
-### P0 - Corrected-basis burst research after review/commit
+### P0 - Ledger-gated A-share burst redesign preregistration
 
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
-- If this docs-only register split passes review and commit, run only `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`.
+- If this preflight / ledger slice passes review and commit, do not run the current corrected-basis artifact for outcome / excess calculation.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
-- Do not rerun `A-EGS/egs_main.py` or regenerate cohorts during corrected 5d revalidation; use frozen historical generated cohorts only.
-- The corrected run is one frozen primary test on corrected 5d CSI1000; 10d / 20d may be diagnostics only, with no threshold / variant / benchmark / holding-period search.
+- Any redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
+- Resolve benchmark-open input (`SR-DATA-003`) before any future nonzero-event outcome / excess calculation.
 
 ### P1 - P1 provider access boundary（仅用户明确要求时）
 

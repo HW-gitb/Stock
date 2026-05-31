@@ -1,0 +1,81 @@
+{
+  "schema_name": "research_preflight_result",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-31T00:00:00Z",
+  "artifact_id": "a_share_minimal_data_burst_corrected_basis_preflight_zero_signal_events_20260531",
+  "hypothesis_registration_ref": "research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json",
+  "preflight_status": "failed_underpowered_zero_signal_events",
+  "decision": "do_not_run_outcome_or_excess_for_this_preregistration",
+  "execution_boundary": {
+    "outcome_returns_computed": false,
+    "benchmark_excess_computed": false,
+    "provider_data_fetch_performed": false,
+    "egs_main_rerun_performed": false,
+    "cohort_regeneration_performed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false
+  },
+  "input_dataset_refs": [
+    "result/a_short/backtest/generated/20240131/candidates.csv through result/a_short/backtest/generated/20251231/candidates.csv",
+    "research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json"
+  ],
+  "method": {
+    "description": "Read frozen monthly generated candidate cohorts only and evaluate the preregistered hard filters plus the all-pass burst trigger before any outcome / benchmark calculation.",
+    "entry_flag_value": "\u53ef\u76f4\u63a5\u89c2\u5bdf",
+    "hard_filters": [
+      "tier == Tier1",
+      "entry_flag == \u53ef\u76f4\u63a5\u89c2\u5bdf",
+      "chasing_high == false",
+      "overheat_flag == false",
+      "has_crash_veto == false",
+      "is_lock == false",
+      "avg_amount_20d >= 100000000",
+      "avg_amount_5d > 0"
+    ],
+    "all_pass_signal": [
+      "pct_5d >= 6.0",
+      "avg_amount_5d / avg_amount_20d >= 1.5",
+      "is_breakout == true"
+    ],
+    "validation_command": "PowerShell pipeline into bundled Python, reading result/a_short/backtest/generated/*/candidates.csv and applying the preregistered hard filters / signal conditions."
+  },
+  "summary_counts": {
+    "cohort_count": 24,
+    "cohort_window_start": "20240131",
+    "cohort_window_end": "20251231",
+    "total_candidate_rows": 360,
+    "tier1_rows": 305,
+    "tier2_rows": 55,
+    "hard_filter_rows": 301,
+    "hard_pct_5d_ge_6_rows": 17,
+    "hard_amount_ratio_ge_1_5_rows": 38,
+    "hard_is_breakout_true_rows": 7,
+    "hard_all_three_signal_rows": 0,
+    "tier1_pct_5d_ge_6_rows": 17,
+    "tier1_amount_ratio_ge_1_5_rows": 38,
+    "tier1_is_breakout_true_rows": 7,
+    "tier1_all_three_signal_rows": 0,
+    "all_rows_all_three_signal_rows": 3,
+    "tier2_all_three_signal_rows": 3,
+    "max_pct_5d_all_rows": 46.30541871921186,
+    "max_pct_5d_tier1": 7.829591249280354,
+    "max_amount_ratio_all_rows": 2.8673434340950608,
+    "max_amount_ratio_tier1": 2.7402599821739044
+  },
+  "evaluation_result": {
+    "valid_signal_events": 0,
+    "minimum_effective_sample_required": 30,
+    "valid_signal_events_gate_passed": false,
+    "registered_decision_label": "falsified_or_redesign_required",
+    "interpretation": "The corrected-basis preregistered trigger has zero valid signal events on the frozen steady Tier1 universe. It fails the preregistered power / event-count gate before any return, benchmark, drawdown, or concentration statistic can be informative.",
+    "alpha_claim_allowed": false,
+    "outcome_run_allowed_for_this_preregistration": false
+  },
+  "diagnostic_notes": [
+    "The individual signal conditions are not impossible: among Tier1 rows, pct_5d >= 6.0 appears 17 times, amount expansion >= 1.5 appears 38 times, and is_breakout == true appears 7 times.",
+    "The three signals never co-occur inside the preregistered Tier1 / safe-entry universe.",
+    "Across all 360 rows, the all-pass signal appears 3 times, but all 3 rows are Tier2 with chasing-high entry flags and are excluded by the preregistered hard filters.",
+    "This preflight does not prove that a redesigned A-share burst universe has alpha; it proves only that the current steady-watchlist universe cannot test the preregistered burst trigger.",
+    "Changing the universe, relaxing Tier1 / entry-flag exclusions, changing is_breakout, changing the signal conjunction, or changing thresholds is a new promotion-relevant degree of freedom and requires a singleton program-level test-budget ledger before a new preregistration runs."
+  ]
+}

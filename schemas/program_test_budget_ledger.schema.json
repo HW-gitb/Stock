@@ -1,0 +1,284 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/program_test_budget_ledger/1.0.0/schema.json",
+  "title": "Program Test Budget Ledger",
+  "description": "Schema-first singleton ledger for promotion-relevant research test budgets. It records spent tests, planned tests, and the no-silent-rescue boundary before redesigned research can influence future research-continuation or production decisions. This schema does not authorize provider access, data fetch, DataHub implementation, production runner consumption, ship-gate evidence, live trading, or order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "ledger_status",
+    "family_id",
+    "lane_id",
+    "singleton_scope",
+    "creation_reason",
+    "budget_policy",
+    "test_spend_log",
+    "planned_tests",
+    "next_required_actions"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "program_test_budget_ledger"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "artifact_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "ledger_status": {
+      "enum": [
+        "active_no_new_test_authorized",
+        "active_planned_test_pending_review",
+        "active_test_authorized_by_review",
+        "closed_superseded"
+      ]
+    },
+    "family_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "lane_id": {
+      "enum": [
+        "a_share_burst_minimal_data",
+        "us_burst_minimal_data",
+        "a_short_variant_research",
+        "a_long_research",
+        "us_long_research"
+      ]
+    },
+    "singleton_scope": {
+      "$ref": "#/$defs/singletonScope"
+    },
+    "creation_reason": {
+      "$ref": "#/$defs/creationReason"
+    },
+    "budget_policy": {
+      "$ref": "#/$defs/budgetPolicy"
+    },
+    "test_spend_log": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/testSpendLogItem"
+      },
+      "minItems": 1
+    },
+    "planned_tests": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/plannedTest"
+      }
+    },
+    "next_required_actions": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "singletonScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protected_decision",
+        "applies_to",
+        "does_not_authorize"
+      ],
+      "properties": {
+        "protected_decision": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "applies_to": {
+          "$ref": "#/$defs/stringList"
+        },
+        "does_not_authorize": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "creationReason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "triggering_preflight_ref",
+        "triggering_preregistration_ref",
+        "reason"
+      ],
+      "properties": {
+        "triggering_preflight_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "triggering_preregistration_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "budgetPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ledger_cardinality",
+        "tests_spent_count",
+        "tests_available_without_new_review",
+        "next_test_requires_reviewed_preregistration",
+        "next_test_requires_user_approval",
+        "spend_rule",
+        "no_silent_rescue_rule"
+      ],
+      "properties": {
+        "ledger_cardinality": {
+          "const": "singleton_program_level"
+        },
+        "tests_spent_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "tests_available_without_new_review": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "next_test_requires_reviewed_preregistration": {
+          "const": true
+        },
+        "next_test_requires_user_approval": {
+          "const": true
+        },
+        "spend_rule": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "no_silent_rescue_rule": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "testSpendLogItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_id",
+        "preregistration_ref",
+        "result_ref",
+        "status",
+        "tests_spent",
+        "promotion_relevant",
+        "result_summary",
+        "allowed_followup"
+      ],
+      "properties": {
+        "test_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "preregistration_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "result_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "spent_failed_preflight_zero_signal_events",
+            "spent_failed_preflight_insufficient_signal_events",
+            "spent_failed_outcome_threshold",
+            "spent_passed_research_continue_only",
+            "spent_voided_by_data_integrity_failure"
+          ]
+        },
+        "tests_spent": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "promotion_relevant": {
+          "type": "boolean"
+        },
+        "result_summary": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "allowed_followup": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "plannedTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_id",
+        "planned_status",
+        "created_at",
+        "planned_preregistration_ref",
+        "planned_result_ref",
+        "promotion_relevant",
+        "expected_tests_spent",
+        "approval_status",
+        "design_summary",
+        "review_boundary"
+      ],
+      "properties": {
+        "test_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "planned_status": {
+          "enum": [
+            "planned_not_reviewed",
+            "reviewed_not_run",
+            "cancelled_before_run"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "planned_preregistration_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "planned_result_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "promotion_relevant": {
+          "const": true
+        },
+        "expected_tests_spent": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "approval_status": {
+          "enum": [
+            "pending_user_approval",
+            "user_approved_pending_review",
+            "reviewed_authorized",
+            "rejected"
+          ]
+        },
+        "design_summary": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "review_boundary": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    }
+  }
+}

@@ -1221,3 +1221,126 @@ rg -n "SR-DATA-001|SR-OPS-002|SR-OPS-003|SR-DATA-002|SR-EXEC-003|SR-EXEC-004|SR-
 1. Claude 审查应重点核对新增 risk IDs、severity、trigger condition 和 blocking path 是否忠实反映 bug audit 收敛结论。
 2. 如果审查 Pass 并提交，下一条 alpha-validation `执行` 可运行 corrected-basis 5d revalidation，但必须使用冻结 historical generated cohorts，不得重新跑 `A-EGS/egs_main.py`。
 3. 如果在 corrected 5d 之前必须跑新的 weekly official capture / forward tracker official use，则需先修 `SR-DATA-001` / `SR-OPS-002` / `SR-OPS-003` 或显式暂停该路径。
+
+## 2026-05-31 追加：A-share burst zero-event preflight and ledger gate
+
+**改了什么**:
+
+- 新增 `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json`，记录 corrected-basis preregistration 在冻结 2024-2025 cohorts 上预检失败：`valid_signal_events = 0`。
+- 新增 `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json`，把该 preflight 计为第一条 spent test，并锁定后续 redesigned A-share burst 测试必须先进入 singleton ledger + 新 reviewed preregistration。
+- 更新 `docs/system_risk_register.md`：新增 `SR-RESEARCH-001`（当前 corrected prereg zero valid events）和 `SR-DATA-003`（未来非零事件 outcome / excess run 仍需要 benchmark open input）。
+- 更新 active 路由文档和 preregistration artifacts：不再允许跑当前 corrected outcome / benchmark-excess；下一条 A-share burst alpha action 改为 ledger-gated redesign。
+- 更新 schema tests，锁定 preflight counts、ledger spend、access-plan next-step routing 和 corrected prereg 的 zero-event 状态。
+
+**为什么改**:
+
+- 用户提供的二次阻塞审查成立：当前 corrected prereg 的 unchanged steady Tier1 universe + frozen trigger 在 24 个 cohort、305 个 Tier1 rows 中没有任何有效事件，直接运行 outcome / excess 只会得到 underpowered 空结果。
+- 这不是 same-anchor measurement basis 问题，而是 burst trigger 被套在 steady watchlist universe 上的结构性测试设计问题；因此不能用“只改 basis”的 supersession 继续推进。
+- 重新定义 burst universe / trigger 属于新的 promotion-relevant degree of freedom，必须消耗 program-level test-budget ledger，而不是静默改 prereg 后继续跑。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+```
+
+**验证结果**:
+
+- `tests.schema.test_research_preregistration_schema`: 15 tests passed.
+- `tests.schema.test_provider_p1_access_decision_plan_schema`: 8 tests passed.
+- `python -m unittest discover -s tests/schema -v`: 124 tests passed.
+- `git diff --check`: passed；仅有正常 LF/CRLF working-copy warnings。
+- `docs/CURRENT.md` authoritative line count = 148，低于 150-line snapshot target。
+
+**失效旧结论**:
+
+- “提交后下一刀可运行 corrected-basis 5d revalidation”失效；当前 corrected prereg 在 preflight 已经 `valid_signal_events = 0`，不得运行 outcome / excess。
+- “corrected 5d 的唯一阻塞是 benchmark open 缺失”失效；benchmark open 仍是未来非零事件 outcome run 的 P1 前置，但在 zero-event 阻塞解决前只是 secondary。
+- “现有 steady Tier1 frozen cohorts 可承载 minimal-data burst falsification”失效；它们 L3-clean，但不能检验 burst trigger。
+
+**下一步注意事项**:
+
+1. Claude 审查应重点核对 preflight counts 是否来自冻结 cohorts、是否没有 outcome / benchmark-excess / provider fetch，以及 ledger 是否正确把该 preflight 记为 spent test。
+2. 如果审查 Pass 并提交，下一条 alpha-validation `执行` 不是跑 corrected artifact，而是创建 ledger-gated redesigned A-share burst preregistration。
+3. 任何未来 redesigned test 必须先明确 universe / trigger / benchmark-open handling，并写入 ledger planned test；不得用 Tier2 rows、relaxed entry flags、changed `is_breakout` logic 或 diagnostic benchmark rescue 当前 artifact。
+
+## 2026-05-31 追加：preflight / ledger schema-first repair
+
+**改了什么**:
+
+- 新增 `schemas/research_preflight_result.schema.json`，锁定 preflight result 的 required fields、no outcome / benchmark-excess / provider-fetch / production / ship-gate 边界、summary counts 和 evaluation result 结构。
+- 新增 `schemas/program_test_budget_ledger.schema.json`，锁定 singleton program-level ledger、spent tests、future planned_tests 结构、review / user-approval gate 和 no-silent-rescue 边界。
+- 更新 `tests/schema/test_research_preregistration_schema.py`：验证两个新 schema 与现有 artifacts，并新增 scope-creep / cardinality / review-gate relaxation 的 reject 测试。
+- 更新 `docs/README.md`、`docs/CURRENT.md`、`research/README.md` 路由，把两个新 schema 纳入 research owner 文件。
+
+**为什么改**:
+
+- Claude O1 指出 `research_preflight_result` 与 `program_test_budget_ledger` 已声明 `schema_name` / `schema_version`，但没有 schema 文件；这与项目 schema-first 纪律不一致。
+- ledger 后续会被 append planned tests / spend log，不能只靠当前实例逐值测试，否则下一次 redesign 时结构约束会漂移。
+- 同时给 preflight result 建 schema，避免留下另一个正式 artifact 类型无 schema 的缺口。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+```
+
+**验证结果**:
+
+- `tests.schema.test_research_preregistration_schema`: 19 tests passed.
+- `python -m unittest discover -s tests/schema -v`: 128 tests passed.
+- `git diff --check`: passed；仅有正常 LF/CRLF working-copy warnings。
+- `docs/CURRENT.md` authoritative line count = 148，低于 150-line snapshot target。
+
+**失效旧结论**:
+
+- “preflight / ledger 只有实例级测试、没有 schema contract”失效；两个 artifact 类型现在均有 v1.0.0 schema。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对两个 schema 是否既锁住当前 no-silent-rescue / no-provider / no-production 边界，又允许未来 reviewed planned_tests append。
+2. 如果审查 Pass 并提交，下一条 alpha-validation `执行` 仍是 ledger-gated redesigned A-share burst preregistration，不是运行当前 corrected artifact。
+
+## 2026-05-31 追加：preflight pct max schema domain correction
+
+**改了什么**:
+
+- 更新 `schemas/research_preflight_result.schema.json`：`summary_counts.max_pct_5d_all_rows` 与 `max_pct_5d_tier1` 从 `nonNegativeNumber` 改为普通 `number`。
+- 更新 `tests/schema/test_research_preregistration_schema.py`：新增测试证明 negative `max_pct_5d_*` 可通过，同时 `max_amount_ratio_*` 仍保持非负约束。
+
+**为什么改**:
+
+- Claude O1 指出 5 日收益的最大值在全员下跌窗口中可能为负；把 `max_pct_5d_*` 设为非负会在未来 redesigned burst preflight 中产生 false validation failure。
+- 金额比值仍应保持非负，因此只放宽 pct return 字段，不放宽 amount ratio 字段。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+```
+
+**验证结果**:
+
+- `tests.schema.test_research_preregistration_schema`: 20 tests passed.
+- `python -m unittest discover -s tests/schema -v`: 129 tests passed.
+- `git diff --check`: passed；仅有正常 LF/CRLF working-copy warnings。
+- `docs/CURRENT.md` authoritative line count = 148，低于 150-line snapshot target。
+
+**失效旧结论**:
+
+- “`max_pct_5d_*` 可按非负数建模”失效；pct return 字段必须允许负值。
+
+**下一步注意事项**:
+
+1. Claude 复审应确认只放宽了 pct return max 字段，未放宽 amount ratio / execution boundary / ledger review gate。
+2. 如果审查 Pass 并提交，下一条 alpha-validation `执行` 仍是 ledger-gated redesigned A-share burst preregistration。
