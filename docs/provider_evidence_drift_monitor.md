@@ -176,6 +176,6 @@ Verdict: the plan is not an access approval. It locks approved spend to zero and
 
 ## 15. Next Use
 
-Phase 7c may consume reviewed Phase 7b evidence only after the access/sample blockers are separately resolved, and must be a separate reviewed implementation-design slice. The current alpha-validation slice has created `research/preregistrations/a_share_minimal_data_burst_20260531.json`, but it is `BLOCKED_DO_NOT_RUN` until corrected benchmark entry basis is preregistered. The next action is alpha measurement integrity, not running the blocked A-share `minimal_data_burst` falsification. US-long SEC parser feasibility remains provider-evidence feasibility, not alpha validation.
+Phase 7c may consume reviewed Phase 7b evidence only after the access/sample blockers are separately resolved, and must be a separate reviewed implementation-design slice. The original A-share alpha-validation artifact `research/preregistrations/a_share_minimal_data_burst_20260531.json` remains `BLOCKED_DO_NOT_RUN`; the corrected-basis supersession is `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`. After review and commit, the next alpha action is to run only that corrected research-only falsification. US-long SEC parser feasibility remains provider-evidence feasibility, not alpha validation.
 
 This Phase 7b baseline does not fetch provider data, implement adapters, create DataHub tables, or modify runners.

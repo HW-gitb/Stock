@@ -113,6 +113,7 @@ BENCHMARKS = {
     "csi300": "000300.SH",
     "csi1000": "000852.SH",
 }
+BENCHMARK_RETURN_BASIS = "benchmark_entry_open_to_exit_close"
 
 ELIGIBLE_BENCHMARK = "eligible"
 ESP_CAP_VALUE = 200.0
@@ -338,14 +339,39 @@ def _shift_yyyymmdd(date_str, days):
 # Forward daily / adj / benchmark fetch + cache
 # ============================================================
 
+def _benchmark_frame_has_same_anchor_fields(frame):
+    return isinstance(frame, pd.DataFrame) and {"trade_date", "open", "close"}.issubset(frame.columns)
+
+
+def _normalize_benchmark_daily_frame(frame, name, ts_code):
+    if frame is None or frame.empty:
+        print(f"[WARN] benchmark {name} ({ts_code}) returned no rows")
+        return pd.DataFrame(columns=["trade_date", "open", "close"])
+    required = {"trade_date", "open", "close"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        print(f"[WARN] benchmark {name} ({ts_code}) missing fields: {', '.join(missing)}")
+        return pd.DataFrame(columns=["trade_date", "open", "close"])
+    out = frame.copy()
+    out["trade_date"] = out["trade_date"].astype(str)
+    for col in ["open", "close"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+    out = out.dropna(subset=["trade_date", "open", "close"])
+    out = out[(out["open"] > 0) & (out["close"] > 0)]
+    if out.empty:
+        print(f"[WARN] benchmark {name} ({ts_code}) has no positive open/close rows")
+        return pd.DataFrame(columns=["trade_date", "open", "close"])
+    return out.sort_values("trade_date").drop_duplicates("trade_date", keep="last").reset_index(drop=True)
+
+
 def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
-    """Fetch raw+adj daily prices and benchmark closes covering the forward window.
+    """Fetch raw+adj daily prices and benchmark open/close covering the forward window.
 
     Returns:
         dict with keys:
             "stocks"     -> DataFrame[ts_code, trade_date, open, close, adj_factor]
             "limits"     -> DataFrame[ts_code, trade_date, up_limit, down_limit]
-            "benchmarks" -> dict[name -> DataFrame[trade_date, close]]
+            "benchmarks" -> dict[name -> DataFrame[trade_date, open, close]]
             "meta"       -> dict with date range / fetched_at / shape
     """
     if not asof_dates:
@@ -378,7 +404,8 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
                       and meta.get("adj") == cache_signature["adj"]
                       and set(benches.keys()) >= set(BENCHMARKS.keys())
                       and isinstance(stocks, pd.DataFrame) and not stocks.empty
-                      and isinstance(limits, pd.DataFrame) and not limits.empty)
+                      and isinstance(limits, pd.DataFrame) and not limits.empty
+                      and all(_benchmark_frame_has_same_anchor_fields(benches.get(name)) for name in BENCHMARKS))
             if sig_ok:
                 print(f"[CACHE] forward_daily reused: {meta.get('start_date')}..{meta.get('end_date')} "
                       f"rows={len(stocks)} benchmarks={list(benches.keys())}")
@@ -433,14 +460,8 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
     benches = {}
     for name, ts_code in BENCHMARKS.items():
         bdf = _ts_call(pro.index_daily, ts_code=ts_code, start_date=start, end_date=end,
-                       fields="trade_date,close")
-        if bdf is None or bdf.empty:
-            print(f"[WARN] benchmark {name} ({ts_code}) returned no rows")
-            benches[name] = pd.DataFrame(columns=["trade_date", "close"])
-            continue
-        bdf["trade_date"] = bdf["trade_date"].astype(str)
-        bdf = bdf.sort_values("trade_date").reset_index(drop=True)
-        benches[name] = bdf
+                       fields="trade_date,open,close")
+        benches[name] = _normalize_benchmark_daily_frame(bdf, name, ts_code)
 
     meta = {"start_date": start, "end_date": end,
             "adj": cache_signature["adj"],
@@ -461,15 +482,26 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
 # Forward return computation: qfq + T+1 open entry + costs + benchmark
 # ============================================================
 
-def _benchmark_returns(bench_df, base_date, future_date):
+def _benchmark_returns(bench_df, entry_date, exit_date):
     if bench_df is None or bench_df.empty:
         return None
-    cmap = dict(zip(bench_df["trade_date"], bench_df["close"]))
-    b = cmap.get(base_date)
-    f = cmap.get(future_date)
-    if b is None or f is None or pd.isna(b) or pd.isna(f) or float(b) == 0:
+    if not _benchmark_frame_has_same_anchor_fields(bench_df):
         return None
-    return (float(f) / float(b) - 1.0) * 100.0
+    indexed = bench_df.drop_duplicates("trade_date", keep="last").set_index("trade_date")
+    if entry_date not in indexed.index or exit_date not in indexed.index:
+        return None
+    entry_open = indexed.at[entry_date, "open"]
+    exit_close = indexed.at[exit_date, "close"]
+    if (
+        entry_open is None
+        or exit_close is None
+        or pd.isna(entry_open)
+        or pd.isna(exit_close)
+        or float(entry_open) <= 0
+        or float(exit_close) <= 0
+    ):
+        return None
+    return (float(exit_close) / float(entry_open) - 1.0) * 100.0
 
 
 def _fallback_limit_ratio(ts_code, name=None, board=None):
@@ -1974,8 +2006,8 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
             "close": "qfq close-to-close (no T+1, no cost). Reference only.",
             "t1": "qfq T+1 open entry to close of T+W. Gross of cost.",
             "t1_net": "qfq T+1 open entry minus round-trip cost (default 0.16%).",
-            "excess_csi300": "t1 minus CSI300 same-window return (entry_date to exit_date).",
-            "excess_csi1000": "t1 minus CSI1000 same-window return.",
+            "excess_csi300": "t1 minus CSI300 same-anchor return (benchmark entry_date open to exit_date close).",
+            "excess_csi1000": "t1 minus CSI1000 same-anchor return (benchmark entry_date open to exit_date close).",
             "excess_eligible": "t1 minus same-date eligible universe equal-weight t1 return. Eligible universe is Tier1+Tier2 rows from generated/_intermediate/egs_full_YYYYMMDD.csv.",
         },
         "limitations": [
@@ -1984,7 +2016,7 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
             "T+1 entry is marked pending_no_entry_limit_up when Tushare stk_limit says entry open is at/near up_limit; falls back to board-specific limit rules only when stk_limit is unavailable.",
             "Eligible benchmark uses the generated full-rank Tier1+Tier2 pool for the same as_of date; it is an internal opportunity-set benchmark, not a tradable market index.",
             "Strategy variants use post-hoc filters except esp_cap_200_rerank, which replays score_l5-style ranking from generated/_intermediate/egs_full_YYYYMMDD.csv; variants are for validation before promotion into official EGS rules.",
-            "Benchmark excess returns compare stock T+1 open-to-close returns against benchmark close-to-close returns over the same entry/exit dates; this can introduce a small intraday entry-basis difference.",
+            "Benchmark excess returns compare stock T+1 open-to-close returns against benchmark T+1 open-to-exit close returns over the same entry/exit dates.",
             "Backtest mode skips cninfo, web news, and DeepSeek Stage3 checks, so historical candidate pools do not include the same regulatory/policy veto layer as production screening.",
             "Adjacent as-of dates with overlapping forward windows correlate; variance is therefore not iid -- use monthly freq for max_window=20 or apply --dedup-mode.",
             "Stock universe includes delisted stocks per as_of (B2 fixed); industry membership is point-in-time via in_date/out_date (B3a fixed).",

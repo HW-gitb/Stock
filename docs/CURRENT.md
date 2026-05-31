@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-31（SR-EXEC-001 weekly PIT interlock）
+**最后更新**：2026-05-31（SR-MEASURE-001 same-anchor benchmark）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -8,21 +8,22 @@
 
 ## 0. Latest Delta
 
-- A-share `minimal_data_burst` preregistration is now paused: `research/preregistrations/a_share_minimal_data_burst_20260531.json` is `BLOCKED_DO_NOT_RUN` until corrected benchmark entry basis supersedes it.
-- Current issue: stock T+1 open leg and benchmark close basis may not be mixed for promotion-relevant alpha / research-continuation evidence.
+- Original A-share `minimal_data_burst` preregistration remains blocked: `research/preregistrations/a_share_minimal_data_burst_20260531.json` is `BLOCKED_DO_NOT_RUN`.
+- Corrected-basis supersession now exists at `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`; after review + commit, only this artifact may be run for the next research-only falsification.
+- Same-anchor benchmark excess is implemented in the reviewed change set: stock T+1 open leg is compared with CSI1000 / CSI300 benchmark T+1 open to the same exit close.
 - The old 5d `excess_csi1000` clue is measurement-contaminated / uncorrected, not validated alpha, until same-anchor corrected revalidation proves otherwise.
 - `docs/system_risk_register.md` is now the durable queue for material data / PIT / schema / execution / security findings. `执行` / `审查` must read it; open P0 entries outrank normal roadmap work unless the user explicitly approves an override.
 - `SR-EXEC-001` weekly historical `-AsOf` PIT interlock is implemented in the reviewed change set: historical weekly runs must use `-L3Mode pit` or `-L3Mode neutralize`, and existing official outputs require `-AllowHistoricalOverwrite`.
-- Current open P0 queue: `SR-MEASURE-001` same-anchor benchmark excess for corrected A-share burst revalidation.
+- If review + commit pass, no open P0 remains; next risk-register item is `SR-SEC-001` P1, while the next alpha-validation action is the corrected-basis burst falsification.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst preregistration exists but is blocked by measurement-basis review; provider access remains blocked pending explicit user approval.
-- **当前 P0 目标**：follow `docs/system_risk_register.md` hot queue；不得运行当前 burst prereg，不得进 production、不得改 provider / DataHub、不得声称 ship-gate evidence。
+- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst corrected-basis preregistration exists but has not been run; provider access remains blocked pending explicit user approval.
+- **当前 P0 目标**：review / commit `SR-MEASURE-001` same-anchor benchmark change set；提交后仅可运行 corrected-basis burst prereg，不得进 production、不得改 provider / DataHub、不得声称 ship-gate evidence。
 - **当前 P1 provider blocker**：任何 sample / trial / paid-access / token / provider contact / data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
-- **执行锁**：当前 prereg 为 `BLOCKED_DO_NOT_RUN`；superseding corrected-basis prereg 只能改 benchmark / entry-anchor basis，阈值、universe、holding period、criteria、`test_budget` 不得变；否则先建 singleton program-level ledger。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
+- **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 只改 benchmark / entry-anchor basis，阈值、universe、holding period、criteria、`test_budget` 均冻结；否则先建 singleton program-level ledger。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
@@ -30,7 +31,7 @@
 
 ## 2. 最近已完成
 
-- **A-share burst preregistration**（2026-05-31）：`research/preregistrations/a_share_minimal_data_burst_20260531.json` 已建立但因 benchmark entry-basis measurement issue 暂停执行；需 corrected-basis supersession 后才可重启。
+- **A-share burst measurement fix**（2026-05-31）：same-anchor benchmark excess 已在 `runners/backtest_rank.py` / benchmark materializer 中落地；`research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` 已建立，原 prereg 继续 blocked。
 - **Weekly historical PIT interlock**（2026-05-31）：`runners/weekly_screening.ps1` now blocks historical `-AsOf` official-output runs unless L3 mode is explicitly `pit` / `neutralize`, rejects historical `today` L3 mode, and guards existing official outputs from accidental overwrite.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，承接两轮系统审查的 open findings，并把 future LLM enforcement 接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
 - **Phase 7b-2 P1 access/sample plan**（2026-05-31）：`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 已建立并由 `schemas/provider_p1_access_decision_plan.schema.json` 锁定；只定义访问边界和样本验证计划，不授权 provider 行动。
@@ -68,7 +69,7 @@
 - `docs/system_risk_register.md` - durable open-risk queue；`执行` / `审查` 必读。
 - `docs/SESSION_LOG.md` - 最新 cross-LLM reasoning / review verdict；只读顶部 1-3 条。
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` - Phase 7a+ 最高行动指南。
-- `research/README.md` / `schemas/research_preregistration.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` - research-only preregistration owner and current A-share minimal-data burst frozen test artifact。
+- `research/README.md` / `schemas/research_preregistration.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` - research-only preregistration owner, blocked original artifact, and corrected-basis artifact。
 - `docs/provider_priority_benchmark_contract.md` - Phase 7a-3 provider evidence priority / provisional benchmark contract。
 - `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` - Phase 7b provider evidence / drift monitor contract。
 - `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` - Phase 7b-2 P1 access-decision and sample-validation plan（plan-only；approved spend = 0；provider/sample/data/Phase 7c blocked）。
@@ -88,12 +89,12 @@
 
 ## 5. 下一步
 
-### P0 - Risk register hot queue before burst falsification
+### P0 - Corrected-basis burst research after review/commit
 
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
-- First code slice: `SR-MEASURE-001` same-anchor benchmark excess for corrected A-share burst revalidation.
-- Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it is `BLOCKED_DO_NOT_RUN` until corrected-basis supersession.
-- Corrected revalidation is one frozen primary test on corrected 5d CSI1000; 10d / 20d may be diagnostics only, with no threshold / variant / benchmark / holding-period search.
+- If this `SR-MEASURE-001` change set passes review and commit, run only `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`.
+- Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
+- The corrected run is one frozen primary test on corrected 5d CSI1000; 10d / 20d may be diagnostics only, with no threshold / variant / benchmark / holding-period search.
 
 ### P1 - P1 provider access boundary（仅用户明确要求时）
 

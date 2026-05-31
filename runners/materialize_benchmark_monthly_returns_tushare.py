@@ -18,7 +18,7 @@ from runners.materialize_execution_price_data_tushare import ts_call, tushare_pr
 
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution" / "forward_aggregate"
 API_FAMILIES = ["index_daily", "tushare_provider"]
-MONTHLY_RETURN_METHOD = "first_trade_day_close_to_last_trade_day_close"
+MONTHLY_RETURN_METHOD = "first_trade_day_open_to_last_trade_day_close"
 BENCHMARKS = {
     "csi1000": {
         "ts_code": "000852.SH",
@@ -87,7 +87,7 @@ def fetch_index_daily(pro: Any, ts_code: str, start_date: str, end_date: str) ->
         ts_code=ts_code,
         start_date=start_date,
         end_date=end_date,
-        fields="ts_code,trade_date,close",
+        fields="ts_code,trade_date,open,close",
     )
     if frame is None:
         return pd.DataFrame()
@@ -95,7 +95,7 @@ def fetch_index_daily(pro: Any, ts_code: str, start_date: str, end_date: str) ->
 
 
 def normalized_index_rows(frame: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
-    required = {"trade_date", "close"}
+    required = {"trade_date", "open", "close"}
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ValueError(f"index_daily missing required columns: {', '.join(missing)}")
@@ -104,16 +104,17 @@ def normalized_index_rows(frame: pd.DataFrame, start_date: str, end_date: str) -
 
     normalized = frame.copy()
     normalized["trade_date"] = normalized["trade_date"].astype(str)
-    normalized["close"] = pd.to_numeric(normalized["close"], errors="coerce")
+    for col in ["open", "close"]:
+        normalized[col] = pd.to_numeric(normalized[col], errors="coerce")
     normalized = normalized[
         (normalized["trade_date"] >= start_date)
         & (normalized["trade_date"] <= end_date)
     ]
-    normalized = normalized.dropna(subset=["close"])
+    normalized = normalized.dropna(subset=["open", "close"])
     if normalized.empty:
-        raise ValueError(f"index_daily returned no numeric close rows for {start_date}..{end_date}")
-    if (normalized["close"] <= 0).any():
-        raise ValueError("index_daily close values must be positive")
+        raise ValueError(f"index_daily returned no numeric open/close rows for {start_date}..{end_date}")
+    if (normalized[["open", "close"]] <= 0).any().any():
+        raise ValueError("index_daily open/close values must be positive")
     normalized = normalized.sort_values("trade_date").drop_duplicates("trade_date", keep="last")
     return normalized
 
@@ -127,17 +128,19 @@ def monthly_returns_from_rows(rows: pd.DataFrame) -> tuple[dict[str, float], lis
             raise ValueError(f"benchmark month {month} requires at least two index_daily rows")
         first = ordered.iloc[0]
         last = ordered.iloc[-1]
+        first_open = float(first["open"])
         first_close = float(first["close"])
         last_close = float(last["close"])
-        if first_close <= 0:
-            raise ValueError(f"benchmark month {month} first close must be positive")
-        monthly_return = last_close / first_close - 1.0
+        if first_open <= 0:
+            raise ValueError(f"benchmark month {month} first open must be positive")
+        monthly_return = last_close / first_open - 1.0
         returns[str(month)] = round(monthly_return, 10)
         month_rows.append(
             {
                 "month": str(month),
                 "first_trade_date": str(first["trade_date"]),
                 "last_trade_date": str(last["trade_date"]),
+                "first_open": first_open,
                 "first_close": first_close,
                 "last_close": last_close,
                 "return": round(monthly_return, 10),
@@ -177,7 +180,8 @@ def build_benchmark_payload(
             "months": month_rows,
             "limitations": [
                 "Return JSON is a plain YYYYMM -> return object for aggregate_execution_reports.py compatibility.",
-                "Monthly return uses the first and last available index_daily close within each month in the requested date range.",
+                "Monthly return uses the first available index_daily open and last available index_daily close within each month in the requested date range.",
+                "Per-candidate corrected revalidation uses runners/backtest_rank.py same-anchor benchmark T+1 open to exit close; this monthly file is for execution aggregate compatibility.",
                 "CSI1000 is the Phase 6a primary A-short benchmark; CSI300 is mandatory secondary sensitivity.",
             ],
         },

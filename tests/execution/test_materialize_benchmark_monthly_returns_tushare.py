@@ -30,18 +30,18 @@ class FakeIndexDailyPro:
         self.frames = {
             "000852.SH": pd.DataFrame(
                 [
-                    {"ts_code": "000852.SH", "trade_date": "20260628", "close": 105.0},
-                    {"ts_code": "000852.SH", "trade_date": "20260603", "close": 100.0},
-                    {"ts_code": "000852.SH", "trade_date": "20260531", "close": 110.0},
-                    {"ts_code": "000852.SH", "trade_date": "20260506", "close": 100.0},
+                    {"ts_code": "000852.SH", "trade_date": "20260628", "open": 104.0, "close": 105.0},
+                    {"ts_code": "000852.SH", "trade_date": "20260603", "open": 98.0, "close": 100.0},
+                    {"ts_code": "000852.SH", "trade_date": "20260531", "open": 109.0, "close": 110.0},
+                    {"ts_code": "000852.SH", "trade_date": "20260506", "open": 95.0, "close": 100.0},
                 ]
             ),
             "000300.SH": pd.DataFrame(
                 [
-                    {"ts_code": "000300.SH", "trade_date": "20260506", "close": 4000.0},
-                    {"ts_code": "000300.SH", "trade_date": "20260531", "close": 3960.0},
-                    {"ts_code": "000300.SH", "trade_date": "20260603", "close": 3960.0},
-                    {"ts_code": "000300.SH", "trade_date": "20260628", "close": 4000.0},
+                    {"ts_code": "000300.SH", "trade_date": "20260506", "open": 4050.0, "close": 4000.0},
+                    {"ts_code": "000300.SH", "trade_date": "20260531", "open": 3970.0, "close": 3960.0},
+                    {"ts_code": "000300.SH", "trade_date": "20260603", "open": 3920.0, "close": 3960.0},
+                    {"ts_code": "000300.SH", "trade_date": "20260628", "open": 3990.0, "close": 4000.0},
                 ]
             ),
         }
@@ -52,16 +52,18 @@ class FakeIndexDailyPro:
 
 
 class BenchmarkMonthlyReturnsMaterializerTest(unittest.TestCase):
-    def test_build_benchmark_payload_uses_first_last_close_by_month(self) -> None:
+    def test_build_benchmark_payload_uses_first_open_last_close_by_month(self) -> None:
+        pro = FakeIndexDailyPro()
         payload = build_benchmark_payload(
-            FakeIndexDailyPro(),
+            pro,
             benchmark="csi1000",
             start_date="20260501",
             end_date="20260630",
             generated_at="2026-05-26T12:00:00+00:00",
         )
 
-        self.assertEqual(payload["returns"], {"202605": 0.1, "202606": 0.05})
+        self.assertEqual(payload["returns"], {"202605": 0.1578947368, "202606": 0.0714285714})
+        self.assertIn("open", pro.calls[0]["fields"])
         metadata = payload["metadata"]
         self.assertEqual(metadata["benchmark"], "csi1000")
         self.assertEqual(metadata["role"], "primary")
@@ -71,6 +73,7 @@ class BenchmarkMonthlyReturnsMaterializerTest(unittest.TestCase):
         self.assertEqual(metadata["date_range"], {"start_date": "20260501", "end_date": "20260630"})
         self.assertEqual(metadata["months"][0]["first_trade_date"], "20260506")
         self.assertEqual(metadata["months"][0]["last_trade_date"], "20260531")
+        self.assertEqual(metadata["months"][0]["first_open"], 95.0)
 
     def test_cli_writes_primary_and_secondary_return_jsons_with_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -98,8 +101,8 @@ class BenchmarkMonthlyReturnsMaterializerTest(unittest.TestCase):
             )
 
         self.assertEqual(rc, 0)
-        self.assertEqual(csi1000, {"202605": 0.1, "202606": 0.05})
-        self.assertEqual(csi300, {"202605": -0.01, "202606": 0.0101010101})
+        self.assertEqual(csi1000, {"202605": 0.1578947368, "202606": 0.0714285714})
+        self.assertEqual(csi300, {"202605": -0.0222222222, "202606": 0.0204081633})
         self.assertEqual(csi300_meta["role"], "secondary")
         self.assertEqual(csi300_meta["source"], "tushare:index_daily/000300.SH")
 
@@ -125,7 +128,7 @@ class BenchmarkMonthlyReturnsMaterializerTest(unittest.TestCase):
 
     def test_single_row_month_is_rejected(self) -> None:
         rows = normalized_index_rows(
-            pd.DataFrame([{"trade_date": "20260506", "close": 100.0}]),
+            pd.DataFrame([{"trade_date": "20260506", "open": 99.0, "close": 100.0}]),
             "20260501",
             "20260531",
         )
@@ -138,12 +141,12 @@ class BenchmarkMonthlyReturnsMaterializerTest(unittest.TestCase):
             normalized_index_rows(pd.DataFrame([{"trade_date": "20260506"}]), "20260501", "20260531")
 
     def test_non_positive_close_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "close values must be positive"):
+        with self.assertRaisesRegex(ValueError, "open/close values must be positive"):
             normalized_index_rows(
                 pd.DataFrame(
                     [
-                        {"trade_date": "20260506", "close": 100.0},
-                        {"trade_date": "20260531", "close": 0.0},
+                        {"trade_date": "20260506", "open": 100.0, "close": 100.0},
+                        {"trade_date": "20260531", "open": 0.0, "close": 99.0},
                     ]
                 ),
                 "20260501",

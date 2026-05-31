@@ -8,6 +8,67 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (SR-MEASURE-001 same-anchor benchmark excess)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `58562d9`)
+
+**Verdict**: Pass. 可 `提交`。这是整条审查链的 keystone code 修复——benchmark 入场锚点不对称 bug 已在 `backtest_rank.py` 真正消除，逐行核实正确。
+
+**Notes**: Fast-path 全跑：`git status -uall` = 18 M tracked + 1 `??`（corrected-basis prereg）+ 0 staged；`4e88b7c..HEAD` = `58562d9`（SR-EXEC-001 已提交）；`??` 全文读毕；`git diff` 读了 backtest_rank.py + materializer 全文 + corrected prereg 全文；`git diff --cached` empty。**Keystone 逐行核实**：旧 `_benchmark_returns` 用 `cmap[base_date]`=close→close（个股 T+1 open→close，不对称、未对冲 T+1 intraday 腿）；新代码 `entry_open=indexed.at[entry_date,"open"]` / `exit_close=...["close"]` / `exit_close/entry_open` → benchmark 改为 entry_date(T+1) **open** → exit close，与个股**同日同价点**起算，T+1 intraday 腿两边相消。日期一直对齐（均 T+1，audit#2 已证调用方传 T+1 entry/T+W exit；本 diff 仅改函数体 close→open、调用行未变），bug 纯 open-vs-close、现修为 open-vs-open——正确且无 1 日错位。支撑改动一致且正确：`fetch_forward_daily` 改取 `trade_date,open,close` + `_normalize_benchmark_daily_frame` 验正数；**cache 重用 sig 新增 `_benchmark_frame_has_same_anchor_fields` 全检 → 旧 close-only 缓存被拒 refetch**（且 `_benchmark_returns` 对无-open 帧也返 None，双重防护）；no-zero-fill 保留（缺行→None→该行 fail）；无新 look-ahead（T+1 open 在 T+1 可知；指数不 qfq，用 raw open/close 正确）；write_outputs metadata 诚实更新（删"small intraday entry-basis difference"改为 open-to-exit-close 表述）；materializer 同步 first-open→last-close + 验 open 正数 + limitations 更新。**corrected prereg 经逐字段对比仅改 basis**：freeze_controls / universe / data_window / trigger_rule（signal pct_5d>=6 / amount>=1.5 / is_breakout、portfolio top-10-by-final_score）/ entry_exit（T+1 open、T+5 close、holding=5、0.16% cost）/ **6 条 evaluation_threshold（t>=1.5 等阈值不变）** / test_budget=1 / disallowed list 全部逐字等于原 prereg；唯一改动是 `benchmark_return_rule`→"benchmark T+1 entry open 到同一 T+5 exit close，缺 open/close 该行 fail 不 zero-fill" + hypothesis "same-anchor" 措辞 + 输出目录。阈值冻结正确：corrected（更小）指标须过同一 t>=1.5，过不了即 falsified、不得降阈 rescue。in_sample 诚实标注、confirmation-path（2026+ held-out 或 12mo live-normalized、unchanged trigger）保留、原 prereg 仍 `BLOCKED_DO_NOT_RUN` 且路由指向 corrected 为唯一允许的下一刀。独立复核：`tests.test_backtest_rank_phase3 + materializer` 12 OK、`tests.schema.test_research_preregistration_schema` 13 OK（含 corrected-vs-original frozen-controls 等值测试 + 原 prereg 仍 blocked 测试）、`discover -s tests/schema` 122（Codex）、CURRENT.md 148（<150）、`git diff --check` exit 0。Scope 干净：backtest_rank + materializer + 2 prereg + tests + routing + register；**egs_main.py 正确未动**（bug 在 backtest_rank 的 benchmark 计算、非引擎）。register SR-MEASURE-001 resolved（同 Pattern-B：未提交即标 resolved，本刀 clean Pass 将原子提交，OK），hot queue 移至 SR-SEC-001。无 Required / Optional / open question / §Optional Re-raise。**里程碑**：始于"5d 线索疑似 benchmark-basis artifact"的审查链，现已产出实际 code 修复；提交后下一刀 alpha-validation `执行` 才**首次真正运行** corrected prereg（research-only），产出 corrected 5d CSI1000——这将首次回答"5d 线索在干净同锚点 in-sample restatement 下是否还在"。
+
+---
+
+## 2026-05-31 — Codex 执行 (SR-MEASURE-001 same-anchor benchmark excess)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on `58562d9 Guard historical weekly screening L3 mode`.
+- Executes `docs/system_risk_register.md` hot queue item `SR-MEASURE-001`.
+- **Refines**: old A-share 5d `excess_csi1000` clue remains contaminated / uncorrected, but the measurement basis needed for a corrected frozen revalidation is now implemented and preregistered.
+- **Reverses**: "SR-MEASURE-001 blocks the next alpha step" -> "if this change set passes review and commit, the next alpha step may run only the corrected-basis preregistration." Reason: benchmark same-anchor code path and corrected supersession now exist.
+
+**Worked on**:
+1. [tracked] `runners/backtest_rank.py`: benchmark fetch now requests `trade_date,open,close`; benchmark frames must have open/close to be reused; benchmark excess uses benchmark T+1 entry-date open to the same exit-date close.
+2. [tracked] `runners/materialize_benchmark_monthly_returns_tushare.py`: monthly benchmark materializer now requests / validates index open and computes compatibility monthly returns from first open to last close.
+3. [untracked] `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`: added corrected-basis superseding preregistration; tests verify only benchmark / entry-anchor basis changed, while universe, trigger, holding period, criteria, and test budget stayed frozen.
+4. [tracked] `research/preregistrations/a_share_minimal_data_burst_20260531.json` and `research/README.md`: kept the original prereg blocked and routed the corrected artifact as the only allowed next research-only falsification.
+5. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/burst_lane_spec.md`, `docs/provider_evidence_drift_monitor.md`, `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`, `docs/strategy_design_synthesis.md`, `docs/system_risk_register.md`, and this handoff: updated routing from "create supersession" to "run only corrected artifact after review + commit"; marked `SR-MEASURE-001` resolved by this reviewed change set.
+6. [tracked] tests: added same-anchor benchmark excess tests, materializer open-basis tests, corrected-supersession schema tests, and access-plan route tests.
+
+**Key decisions**:
+- Same-anchor means stock T+1 open-to-exit-close is compared with benchmark T+1 open-to-the-same-exit-close. Close-to-close fallback remains disallowed for the current A-share CSI1000 / CSI300 case.
+- Old close-only forward benchmark caches are ignored instead of silently reused.
+- The corrected preregistration does not authorize provider access, production consumption, runner promotion, live trading, or ship-gate evidence.
+- 10d / 20d remain diagnostic-only for the later corrected run; the single promotion-relevant test is corrected 5d CSI1000.
+
+**Alternatives considered and rejected**:
+- "Patch only docs/prereg and leave code unchanged" — rejected because `SR-MEASURE-001` is a measurement implementation bug, not just a routing problem.
+- "Use benchmark close-to-close as a fallback when open exists" — rejected by the measurement-basis lock; CSI1000 / CSI300 open is available via Tushare `index_daily`.
+- "Treat the corrected prereg as a new hypothesis" — rejected. This is a supersession that changes only measurement basis; tests compare frozen controls to prevent fishing.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_backtest_rank_phase3 tests.execution.test_materialize_benchmark_monthly_returns_tushare -v`: 12 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: 13 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v`: 8 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 122 tests passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings appeared.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 148.
+- `rg -n "a_share_minimal_data_burst_corrected_basis_20260531|BLOCKED_DO_NOT_RUN|same-anchor benchmark|benchmark T\+1 open|SR-MEASURE-001" AGENTS.md docs research runners tests`: matched corrected routing and the remaining blocked original artifact.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude `审查`, focusing on `backtest_rank.py` benchmark basis and close-only cache rejection.
+2. If Pass and user `提交`, next alpha-validation `执行` should run only `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` and produce research-only evidence; no production or ship-gate claim.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (SR-EXEC-001 weekly historical PIT interlock)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `4e88b7c`)

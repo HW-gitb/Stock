@@ -14,7 +14,7 @@ Use this routing table instead of guessing which file to read.
 | Latest cross-LLM reasoning, review verdicts, rejected alternatives, pending Optional disposition | `docs/SESSION_LOG.md` top 1-3 entries |
 | Review workflow and exact short-command expansions | `docs/AI_REVIEW_PROTOCOL.md` |
 | Current Phase 7a+ highest action guide: alpha reality guardrails, accepted business gaps, execution roadmap | `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` |
-| Research-only preregistration artifacts and single frozen test contracts | `research/README.md`, `schemas/research_preregistration.schema.json`, `research/preregistrations/a_share_minimal_data_burst_20260531.json` |
+| Research-only preregistration artifacts and single frozen test contracts | `research/README.md`, `schemas/research_preregistration.schema.json`, `research/preregistrations/a_share_minimal_data_burst_20260531.json`, `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` |
 | Strategy architecture: short-term lanes, burst lane, long-term alpha systems, research, coordinator | `docs/strategy_design_synthesis.md` |
 | Alpha plausibility, lane objective, portfolio-level continue / redesign / risk-filter decisions | `docs/alpha_plausibility_audit.md` |
 | Phase 7a-1 alpha plausibility audit artifact schema contract | `schemas/alpha_plausibility_audit.schema.json` |

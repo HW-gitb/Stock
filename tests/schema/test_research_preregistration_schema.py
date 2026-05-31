@@ -7,7 +7,8 @@ from pathlib import Path
 
 
 SCHEMA_PATH = Path("schemas/research_preregistration.schema.json")
-ARTIFACT_PATH = Path("research/preregistrations/a_share_minimal_data_burst_20260531.json")
+BLOCKED_ARTIFACT_PATH = Path("research/preregistrations/a_share_minimal_data_burst_20260531.json")
+CORRECTED_ARTIFACT_PATH = Path("research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json")
 ALPHA_AUDIT_SCHEMA_PATH = Path("schemas/alpha_plausibility_audit.schema.json")
 EVIDENCE_REPORT_SCHEMA_PATH = Path("schemas/evidence_report.schema.json")
 
@@ -16,8 +17,11 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
     def _load_schema(self) -> dict:
         return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
-    def _load_artifact(self) -> dict:
-        return json.loads(ARTIFACT_PATH.read_text(encoding="utf-8"))
+    def _load_artifact(self, path: Path = BLOCKED_ARTIFACT_PATH) -> dict:
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def _load_corrected_artifact(self) -> dict:
+        return self._load_artifact(CORRECTED_ARTIFACT_PATH)
 
     def test_schema_meta_validates_when_jsonschema_available(self) -> None:
         try:
@@ -39,9 +43,11 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         except ModuleNotFoundError as exc:
             raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
 
-        errors = list(Draft7Validator(self._load_schema()).iter_errors(self._load_artifact()))
-
-        self.assertEqual(errors, [])
+        validator = Draft7Validator(self._load_schema())
+        for artifact_path in [BLOCKED_ARTIFACT_PATH, CORRECTED_ARTIFACT_PATH]:
+            with self.subTest(artifact_path=str(artifact_path)):
+                errors = list(validator.iter_errors(self._load_artifact(artifact_path)))
+                self.assertEqual(errors, [])
 
     def test_hypothesis_registration_reuses_alpha_audit_shape(self) -> None:
         schema = self._load_schema()
@@ -51,10 +57,12 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
             schema["$defs"]["hypothesisRegistration"]["required"],
             alpha_schema["$defs"]["hypothesisRegistration"]["required"],
         )
-        self.assertEqual(
-            set(self._load_artifact()["hypothesis_registration"]),
-            set(alpha_schema["$defs"]["hypothesisRegistration"]["required"]),
-        )
+        for artifact_path in [BLOCKED_ARTIFACT_PATH, CORRECTED_ARTIFACT_PATH]:
+            with self.subTest(artifact_path=str(artifact_path)):
+                self.assertEqual(
+                    set(self._load_artifact(artifact_path)["hypothesis_registration"]),
+                    set(alpha_schema["$defs"]["hypothesisRegistration"]["required"]),
+                )
 
     def test_scope_locks_research_out_of_production_provider_and_phase7c(self) -> None:
         scope = self._load_artifact()["scope"]
@@ -149,6 +157,61 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertIn("measurement-basis issue", joined_notes)
         self.assertIn("corrected-basis superseding preregistration", joined_notes)
         self.assertIn("not executable as promotion-relevant research-continuation evidence", joined_notes)
+
+    def test_corrected_basis_preregistration_is_the_unblocked_supersession(self) -> None:
+        artifact = self._load_corrected_artifact()
+        joined_notes = "\n".join(artifact["next_steps"] + artifact["limitations"])
+        benchmark_rule = artifact["frozen_test_design"]["benchmark_rule"]["benchmark_return_rule"]
+
+        self.assertNotIn("BLOCKED_DO_NOT_RUN", joined_notes)
+        self.assertIn("T+1 entry date open", benchmark_rule)
+        self.assertIn("T+5 exit date close", benchmark_rule)
+        self.assertIn("corrected 5d CSI1000", joined_notes)
+        self.assertIn("10d / 20d may be reported only as diagnostics", joined_notes)
+        self.assertEqual(
+            artifact["test_budget"]["evidence_report_linkage"]["future_ref_value"],
+            str(CORRECTED_ARTIFACT_PATH).replace("\\", "/"),
+        )
+
+    def test_corrected_basis_supersession_only_changes_measurement_basis(self) -> None:
+        blocked = self._load_artifact()
+        corrected = self._load_corrected_artifact()
+
+        for path in [
+            ("scope",),
+            ("frozen_test_design", "freeze_controls"),
+            ("frozen_test_design", "universe"),
+            ("frozen_test_design", "data_window"),
+            ("frozen_test_design", "trigger_rule"),
+            ("frozen_test_design", "entry_exit_rule"),
+            ("frozen_test_design", "evaluation_threshold"),
+            ("promotion_boundary",),
+            ("ledger_trigger",),
+        ]:
+            with self.subTest(path=".".join(path)):
+                left = blocked
+                right = corrected
+                for key in path:
+                    left = left[key]
+                    right = right[key]
+                self.assertEqual(left, right)
+
+        blocked_benchmark = blocked["frozen_test_design"]["benchmark_rule"]
+        corrected_benchmark = corrected["frozen_test_design"]["benchmark_rule"]
+        for key in ["primary_benchmark_id", "primary_benchmark_role", "secondary_diagnostics"]:
+            self.assertEqual(blocked_benchmark[key], corrected_benchmark[key])
+        self.assertNotEqual(blocked_benchmark["benchmark_return_rule"], corrected_benchmark["benchmark_return_rule"])
+
+        blocked_budget = blocked["test_budget"]
+        corrected_budget = corrected["test_budget"]
+        for key in [
+            "test_budget_status",
+            "promotion_relevant_tests_allowed",
+            "program_level_ledger_required_before_run",
+            "program_level_ledger_ref",
+            "disallowed_without_ledger",
+        ]:
+            self.assertEqual(blocked_budget[key], corrected_budget[key])
 
     def test_ledger_trigger_is_singleton_program_level_not_per_hypothesis(self) -> None:
         trigger = self._load_artifact()["ledger_trigger"]

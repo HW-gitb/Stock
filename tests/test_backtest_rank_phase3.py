@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from runners.backtest_rank import _is_l2_unknown_value, build_analyzer_ablation_variants
+from runners.backtest_rank import _is_l2_unknown_value, attach_forward_returns, build_analyzer_ablation_variants
 
 
 class BacktestRankPhase3Tests(unittest.TestCase):
@@ -50,6 +50,86 @@ class BacktestRankPhase3Tests(unittest.TestCase):
         self.assertEqual(len(variants["tier1_analyzer_veto_all_rules"]), 1)
         self.assertEqual(len(variants["all_analyzer_veto_chase_overheat"]), 2)
         self.assertEqual(len(variants["tier1_analyzer_veto_chase_overheat"]), 2)
+
+    def test_benchmark_excess_uses_benchmark_entry_open_to_exit_close(self):
+        samples = pd.DataFrame([
+            {
+                "trade_date": "20260520",
+                "ts_code": "000001.SZ",
+                "close": 10.0,
+                "name": "Ping An Bank",
+                "board": "main",
+            }
+        ])
+        stocks = pd.DataFrame([
+            {"ts_code": "000001.SZ", "trade_date": "20260520", "open": 10.0, "close": 10.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260521", "open": 10.0, "close": 11.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260522", "open": 11.0, "close": 12.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260523", "open": 12.0, "close": 13.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260526", "open": 13.0, "close": 14.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260527", "open": 17.0, "close": 18.0, "adj_factor": 1.0},
+        ])
+        benchmarks = {
+            "csi1000": pd.DataFrame([
+                {"trade_date": "20260521", "open": 200.0, "close": 250.0},
+                {"trade_date": "20260527", "open": 210.0, "close": 220.0},
+            ]),
+            "csi300": pd.DataFrame([
+                {"trade_date": "20260521", "open": 4000.0, "close": 4100.0},
+                {"trade_date": "20260527", "open": 4050.0, "close": 4200.0},
+            ]),
+        }
+
+        out = attach_forward_returns(
+            samples,
+            [5],
+            {"stocks": stocks, "limits": pd.DataFrame(), "benchmarks": benchmarks},
+            cost_pct=0.16,
+        )
+
+        self.assertEqual(out.loc[0, "entry_date"], "20260521")
+        self.assertEqual(out.loc[0, "ret_5d_exit_date"], "20260527")
+        self.assertAlmostEqual(out.loc[0, "ret_5d_t1"], 80.0)
+        self.assertAlmostEqual(out.loc[0, "ret_5d_csi1000"], 10.0)
+        self.assertAlmostEqual(out.loc[0, "ret_5d_excess_csi1000"], 70.0)
+
+    def test_benchmark_excess_does_not_fallback_to_close_only_benchmark(self):
+        samples = pd.DataFrame([
+            {
+                "trade_date": "20260520",
+                "ts_code": "000001.SZ",
+                "close": 10.0,
+                "name": "Ping An Bank",
+                "board": "main",
+            }
+        ])
+        stocks = pd.DataFrame([
+            {"ts_code": "000001.SZ", "trade_date": "20260520", "open": 10.0, "close": 10.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260521", "open": 10.0, "close": 11.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260522", "open": 11.0, "close": 12.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260523", "open": 12.0, "close": 13.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260526", "open": 13.0, "close": 14.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260527", "open": 17.0, "close": 18.0, "adj_factor": 1.0},
+        ])
+        benchmarks = {
+            "csi1000": pd.DataFrame([
+                {"trade_date": "20260521", "close": 250.0},
+                {"trade_date": "20260527", "close": 220.0},
+            ]),
+            "csi300": pd.DataFrame(columns=["trade_date", "open", "close"]),
+        }
+
+        out = attach_forward_returns(
+            samples,
+            [5],
+            {"stocks": stocks, "limits": pd.DataFrame(), "benchmarks": benchmarks},
+            cost_pct=0.16,
+        )
+
+        self.assertEqual(out.loc[0, "ret_5d_status"], "ok")
+        self.assertAlmostEqual(out.loc[0, "ret_5d_t1"], 80.0)
+        self.assertTrue(pd.isna(out.loc[0, "ret_5d_csi1000"]))
+        self.assertTrue(pd.isna(out.loc[0, "ret_5d_excess_csi1000"]))
 
 
 if __name__ == "__main__":

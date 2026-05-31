@@ -32,10 +32,9 @@ Status:
 
 ## Hot Queue
 
-1. `SR-MEASURE-001` - Implement same-anchor benchmark excess with benchmark T+1 open for corrected A-share burst revalidation.
-2. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
-3. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-4. `SR-EXEC-002` - Revalidate and queue execution-backtest risk-control limitations from audit #1.
+1. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
+2. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
+3. `SR-EXEC-002` - Revalidate and queue execution-backtest risk-control limitations from audit #1.
 
 ## Entries
 
@@ -51,11 +50,12 @@ Status:
 ### SR-MEASURE-001 - Benchmark excess entry-anchor mismatch
 
 - Severity: P0
-- Status: open
+- Status: resolved
 - Owner phase: alpha measurement integrity / A-share burst research
 - Evidence: current A-share burst preregistration is `BLOCKED_DO_NOT_RUN`; `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` requires stock T+1 open and benchmark T+1 open to the same exit close.
 - Accepted calibration: old 5d `excess_csi1000` is measurement-contaminated / uncorrected, not proven false.
-- Required next action: extend benchmark materializer / forward-daily benchmark fetch to request, persist, validate, and use CSI1000 / CSI300 index open; corrected 5d CSI1000 is the only primary revalidation.
+- Closure evidence: the reviewed change set updates `runners/backtest_rank.py` so benchmark excess requires benchmark `open` and `close`, fetches CSI1000 / CSI300 `index_daily` with `trade_date,open,close`, ignores close-only cached benchmark frames, and computes benchmark return from benchmark T+1 entry-date open to the same exit-date close. It updates `runners/materialize_benchmark_monthly_returns_tushare.py` to request / validate index open and compute monthly compatibility returns from first open to last close.
+- Verification: `tests.test_backtest_rank_phase3` covers same-anchor benchmark excess and rejects close-only benchmark fallback; `tests.execution.test_materialize_benchmark_monthly_returns_tushare` covers `index_daily` open fields, first-open / last-close monthly returns, and open/close validation; `tests.schema.test_research_preregistration_schema` validates the corrected-basis superseding preregistration and proves it changed only the measurement basis, not thresholds / universe / holding period / criteria / test budget.
 
 ### SR-EXEC-001 - Historical weekly screening can contaminate official outputs
 

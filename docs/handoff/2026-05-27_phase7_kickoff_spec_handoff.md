@@ -1087,6 +1087,54 @@ rg -n "system_risk_register|SR-EXEC-001|SR-MEASURE-001" AGENTS.md docs\README.md
 2. 如果审查 Pass 并提交，下一条 `执行` 默认按 `docs/system_risk_register.md` hot queue 修 `SR-EXEC-001`：weekly screening historical `-AsOf` PIT interlock / official-output overwrite guard。
 3. `SR-MEASURE-001` same-anchor benchmark excess 仍然阻断 A-share burst prereg；旧 prereg 继续 `BLOCKED_DO_NOT_RUN`，不得因本 register slice 被解锁。
 
+## 2026-05-31 追加：SR-MEASURE-001 same-anchor benchmark excess
+
+**改了什么**:
+
+- 更新 `runners/backtest_rank.py`：forward-daily benchmark fetch 请求 / 缓存 / 校验 CSI1000 与 CSI300 的 `trade_date,open,close`；close-only benchmark cache 不再复用；benchmark excess 改为 benchmark T+1 entry-date open 到同一 exit-date close。
+- 更新 `runners/materialize_benchmark_monthly_returns_tushare.py`：`index_daily` 请求 `open,close`，月度兼容 benchmark return 改为 first open 到 last close，并在 metadata limitations 中说明 per-candidate corrected revalidation 使用 `backtest_rank.py` 的同锚点口径。
+- 新增 `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`，作为 blocked 原 prereg 的 corrected-basis supersession；只改 benchmark / entry-anchor basis，阈值、universe、holding period、criteria、`test_budget = 1` 均冻结。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/burst_lane_spec.md`、`docs/provider_evidence_drift_monitor.md`、`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`、`docs/strategy_design_synthesis.md`、`docs/system_risk_register.md`、`research/README.md` 的 routing / current-state wording。
+- 更新 tests：`tests/test_backtest_rank_phase3.py` 锁定同锚点 excess 与 close-only fallback reject；`tests/execution/test_materialize_benchmark_monthly_returns_tushare.py` 锁定 index open 字段与 first-open / last-close；`tests/schema/test_research_preregistration_schema.py` 锁定 corrected supersession 只改 measurement basis；`tests/schema/test_provider_p1_access_decision_plan_schema.py` 同步 next alpha route。
+
+**为什么改**:
+
+- 旧 5d `excess_csi1000` clue 与 blocked prereg 的 benchmark leg 使用 close basis，不能和 stock T+1 open entry 混合作为 promotion-relevant alpha / research-continuation evidence。
+- 当前 A-share CSI1000 / CSI300 open 可由 Tushare `index_daily` 获取；因此正确修法是同锚点 benchmark T+1 open 到同一 exit close，而不是 close-to-close fallback。
+- corrected supersession 必须只修测量 basis；任何顺手改阈值、宇宙、持有期、criteria 或 budget 都会变成 fishing 并触发 singleton program-level ledger。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_backtest_rank_phase3 tests.execution.test_materialize_benchmark_monthly_returns_tushare -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+```
+
+**验证结果**:
+
+- `tests.test_backtest_rank_phase3` + `tests.execution.test_materialize_benchmark_monthly_returns_tushare`: 12 tests passed.
+- `tests.schema.test_research_preregistration_schema`: 13 tests passed.
+- `tests.schema.test_provider_p1_access_decision_plan_schema`: 8 tests passed.
+- `python -m unittest discover -s tests/schema -v`: 122 tests passed.
+- `git diff --check`: passed; only normal LF/CRLF working-copy warnings.
+- `docs/CURRENT.md` authoritative line count = 148, still under the 150-line snapshot target.
+
+**失效旧结论**:
+
+- “SR-MEASURE-001 仍 open / hot queue 第一项”失效；本 reviewed change set 关闭后，risk register 下一项是 `SR-SEC-001` P1。
+- “必须先创建 corrected-basis supersession 才能运行 burst falsification”已完成；下一条 alpha-validation `执行` 可在 review + commit 后运行 corrected artifact。
+- “旧 prereg 可直接运行”仍失效；`research/preregistrations/a_share_minimal_data_burst_20260531.json` 继续 `BLOCKED_DO_NOT_RUN`。
+
+**下一步注意事项**:
+
+1. Claude 审查应重点核对 `backtest_rank.py` 是否真正用 benchmark entry open 到 exit close，且 close-only cached benchmark 不会被复用。
+2. 如果审查 Pass 并提交，下一条 alpha-validation `执行` 应只运行 `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`，并输出 research-only evidence report；不进 production、不声称 ship-gate evidence。
+3. 10d / 20d 只允许 diagnostic；不得做 threshold / variant / benchmark / holding-period / rank-cap / cost search。
+
 ## 2026-05-31 追加：SR-EXEC-001 weekly historical PIT interlock
 
 **改了什么**:
