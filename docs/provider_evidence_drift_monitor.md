@@ -1,6 +1,6 @@
 # Provider Evidence And Drift Monitor Contract
 
-**Status**: Phase 7b-1 schema-first baseline plus Phase 7b-2 P1 public-source, market-data-candidate, authorization / cost / stability, benchmark / GICS, fundamentals observed-date, coverage / fallback / incident candidate evidence snapshots, and P1 readiness review matrix. Broader provider capability evidence population is still in progress.
+**Status**: Phase 7b-1 schema-first baseline plus Phase 7b-2 P1 public-source, market-data-candidate, authorization / cost / stability, benchmark / GICS, fundamentals observed-date, coverage / fallback / incident candidate evidence snapshots, P1 readiness review matrix, and P1 access-decision / sample-validation plan. Broader provider access and implementation remain blocked.
 
 **Owner role**: provider capability evidence population and data quality / provider drift monitoring contract after the Phase 7a provider-priority, feasibility, and evidence-report contracts. This document defines the evidence shape and routes reviewed evidence snapshots.
 
@@ -10,7 +10,7 @@ This document does not select providers, fetch data, create adapters, implement 
 
 Phase 7a established the lane verdicts, provider evidence queue, provisional benchmarks, feasibility controls, and evidence report shape. Phase 7b-1 converts the provider evidence queue into a machine-checkable provider evidence and drift-monitor artifact so later provider population, DataHub, or runner work cannot rely on guessed provider readiness. Phase 7b-2 uses that contract to populate actual provider capability evidence from reviewed provider documentation, fields, PIT, coverage, cost, fallback, and stability evidence.
 
-The machine-checkable owner for provider evidence snapshots is `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`. The current evidence-population artifacts are `docs/provider_evidence_p1_us_public_sources_20260528.json`, `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`, `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`, `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`, `docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json`, and `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json`. The machine-checkable owner for the P1 synthesis matrix is `schemas/provider_p1_readiness_review.schema.json`; the current matrix artifact is `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`.
+The machine-checkable owner for provider evidence snapshots is `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. The example is `schemas/examples/provider_evidence_drift_monitor.example.json`. The current evidence-population artifacts are `docs/provider_evidence_p1_us_public_sources_20260528.json`, `docs/provider_evidence_p1_us_market_data_candidates_20260528.json`, `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`, `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`, `docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json`, and `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json`. The machine-checkable owner for the P1 synthesis matrix is `schemas/provider_p1_readiness_review.schema.json`; the current matrix artifact is `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`. The machine-checkable owner for the P1 access-decision and sample-validation plan is `schemas/provider_p1_access_decision_plan.schema.json`; the current plan artifact is `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`.
 
 ## 2. Scope Locks
 
@@ -168,8 +168,14 @@ Verdict: P1 remains `partial` and implementation-blocked. This slice narrows the
 
 Verdict: P1 documentation evidence collection is complete enough to define blockers, but P1 is not ready for Phase 7c, provider selection, data fetch, DataHub tables, or runner consumption. The strongest candidate evidence remains blocker-bound: Intrinio for filing fundamentals, Norgate for survivorship-aware EOD / membership, Massive / Polygon for market-data surfaces, SEC EDGAR for public reconstruction, and official benchmark / GICS sources for methodology / product context. None authorizes implementation.
 
-## 14. Next Use
+## 14. P1 Access Decision And Sample Validation Plan
 
-Phase 7b-2 should next produce a P1 access-decision and sample-validation plan. That plan should translate the readiness matrix blockers into explicit user decision boundaries for cost ceiling, trial / token / paid access, license / local-storage / non-display use, sample rows, coverage-count verification, and fallback / incident playbook. It must still keep provider selection, data fetches, adapters, DataHub tables, and runner changes out of scope unless a later reviewed decision explicitly authorizes them. Phase 7c may consume reviewed Phase 7b evidence only after the access/sample blockers are separately resolved, and must be a separate reviewed implementation-design slice.
+`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` translates the readiness matrix blockers into explicit user decision boundaries for cost ceiling, access path, trial / token / paid access, license / local-storage / non-display / retention use, sample rows, coverage-count verification, and fallback / incident playbook.
+
+Verdict: the plan is not an access approval. It locks approved spend to zero and forbids provider contact, token / trial / paid access, sample-row collection, data fetch, provider selection, adapters, DataHub tables, runner changes, Phase 7c authorization, and ship-gate claims. It defines the gates a later user-approved and reviewed access packet must resolve.
+
+## 15. Next Use
+
+Phase 7c may consume reviewed Phase 7b evidence only after the access/sample blockers are separately resolved, and must be a separate reviewed implementation-design slice. The next alpha-validation slice is A-share `minimal_data_burst` research-only falsification with preregistration; US-long SEC parser feasibility remains provider-evidence feasibility, not alpha validation.
 
 This Phase 7b baseline does not fetch provider data, implement adapters, create DataHub tables, or modify runners.

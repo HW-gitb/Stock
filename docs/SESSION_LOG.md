@@ -8,6 +8,113 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (Phase 7b-2 P1 access plan — O1 修复 re-review)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `1fb0b46`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 修复后的复审。Codex `修复` 轮 O1 disposition = **accept**，已在 `tests/schema/test_provider_p1_access_decision_plan_schema.py::test_candidate_queue_matches_readiness_matrix...`（L96-99）加 `set(item["useful_for_area_ids"]) == set(matrix_candidates[candidate_id]["useful_for_area_ids"])` 断言，紧跟既有 grade 检查、与 O1 意图精确对称一致。Fast-path 重跑：`git status` = 13 M tracked + 3 `??` untracked + 0 staged，`1fb0b46..HEAD` 无新 commit；测试文件（`??` 盲区）全文读毕——本轮唯一改动即这 4 行断言，其余 7 个 test method 与上轮 Pass 字节一致，无 scope creep；12 个其它 tracked doc 的 `git diff --stat` insertion 数与上轮 Pass 完全相同（仅 SESSION_LOG 增 修复 entry）。独立复核：`python -m unittest tests.schema.test_provider_p1_access_decision_plan_schema` = **8 OK**、`discover -s tests/schema` = **109 OK**（PATH `python`）——新断言通过即证明 8 个 candidate 的 `useful_for_area_ids` 与 matrix `provider_candidate_rollup` 全部相等、漂移现已被 enforce；`git diff --check` exit 0；CURRENT.md 本轮未改仍 144。Codex §修复 entry 含合规 `Optional disposition`（O1 accept）+ `Required: None`。O1 为纯 accept 无 deviation，无 §Optional Re-raise Constraint 触发；无新 Required / Optional / open question。整套 access-plan 变更集（新 schema + plan JSON + hardened test + 13 doc routing + SESSION_LOG）现内部一致且全部验证通过，可 `提交`。提交后下一刀 = A-share `minimal_data_burst` preregistration / research-only falsification。
+
+---
+
+## 2026-05-31 — Codex 修复 (Phase 7b-2 P1 access plan O1 test hardening)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest 2026-05-31 Claude review: Pass with 1 Optional and no Required fixes.
+- Builds on the Phase 7b-2 P1 access-decision and sample-validation plan change set.
+
+**Approved Required fixes repaired**:
+- None. Latest Claude review had no Required fixes.
+
+**Optional disposition**:
+- O1 accept — added a per-candidate `useful_for_area_ids` set equality assertion in `tests/schema/test_provider_p1_access_decision_plan_schema.py::test_candidate_queue_matches_readiness_matrix_without_ranking_or_selection`, matching the existing grade equality check against `provider_candidate_rollup`.
+
+**Worked on**:
+1. [tracked] `tests/schema/test_provider_p1_access_decision_plan_schema.py`: hardened the plan-to-readiness-matrix candidate alignment regression test.
+2. [tracked] `docs/SESSION_LOG.md`: recorded this `修复` handoff for Claude re-review continuity.
+3. [untracked] none introduced by this repair round.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v`: 8 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 109 tests passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings appeared for touched docs.
+- `docs/CURRENT.md` authoritative line count via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 144, unchanged and below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+---
+
+## 2026-05-31 — Claude review — Pass with 1 Optional (Phase 7b-2 P1 access-decision and sample-validation plan)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `1fb0b46`)
+
+**Verdict**: Pass（含 1 条 Optional，PENDING CODEX DISPOSITION；无 Required）。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes. Optional O1 PENDING CODEX DISPOSITION.
+
+**Optional suggestions**:
+- **O1（minor，测试硬化）**：`tests/schema/test_provider_p1_access_decision_plan_schema.py::test_candidate_queue_matches_readiness_matrix_without_ranking_or_selection` 已逐 candidate 断言 `candidate_evidence_grade` 与 matrix 相等，但**未**断言 plan 的 per-candidate `useful_for_area_ids` 与 matrix `provider_candidate_rollup` 的 `useful_for_area_ids` 一致。当前两者读下来确实一致（已人工核对），schema 的 `areaId` enum 也约束了取值范围，故非 correctness bug；但该测试套件的明确目的就是锁 plan↔matrix 交叉一致性（已锁 grade + area_id 集合），唯独漏了这一个 per-candidate 维度。建议补一条与 grade 检查对称的 `useful_for_area_ids` 集合相等断言，防未来编辑漂移。Codex 可 accept / accept-with-mod / reject。
+
+**Notes**: 状态自上次 Pass 已推进——用户已 `提交`（guardrail 落为 `1fb0b46`），Codex 串行跑了新一轮 `执行`：Phase 7b-2 P1 access-decision and sample-validation plan，正是锁定的下一刀。Fast-path 全程重跑（不复用上次结果）：`git status --short` = 13 M tracked + **3 `??` untracked**（新 schema / plan JSON / regression test）+ 0 staged；`ffc1637..HEAD` = `1fb0b46`（上次 Pass 已提交）；3 个 untracked **全文读毕**，无 binary / 越界；13 tracked `git diff` 全文读毕（486 行）；`git diff --cached` empty。Scope 严守：无业务码 / runner / `egs_main.py` / state / provider data fetch / adapter / DataHub table / broker / ship-gate 放松；新增 schema 是**独立新 contract 文件**（additive），**未改 `evidence_report.schema.json`**（延续上轮决定）。新 schema 质量高：Draft-07 + 全层 `additionalProperties:false`；20 个 scope 轴全 `const`（provider_selection / ranking / contact / token / trial / paid / sample / data_fetch / adapter / datahub / runner / strategy / broker / phase7c / production 全 false，`approved_spend_usd` const 0，manual_order_only const true）；`contains` 锁 8 candidate + 10 area + 4 gate + 3 source ref，全部与 readiness matrix 对应。plan JSON 与 schema / matrix 闭环：candidate 集合 + grade（intrinio/norgate strong_candidate_but_blocked、其余 partial、nasdaq_data_link unknown_pending_review）逐一吻合 matrix。测试 8 项设计良好：plan↔matrix candidate-set + grade、area_id 集合一致性、授权篡改（翻 trial/data_fetch/spend=100/access_request 后 schema 必须 reject）、next-step routing 断言。独立复核：`python -m unittest tests.schema.test_provider_p1_access_decision_plan_schema` = **8 OK**、`discover -s tests/schema` = **109 OK**（用 PATH `python`，与 Codex 标注 access-denied 的解释器不同，同样全过）；CURRENT.md `ReadAllLines` = **144**（<150，与 Codex 声明一致）；`git diff --check` exit 0（仅 LF/CRLF warning）。Cross-doc 13 文件一致：access plan 路由进 AGENTS §当前进度/§执行路线图/§14/文件参考、README routing、CURRENT §0/§1/§2/§4/§5、ALPHA_GUIDE §2/§11/§13、drift_monitor（§14 拆成 §14 plan 描述 + §15 Next Use）、priority_benchmark、data_requirements_audit、datahub_design、evidence_report_contract、evidence_feasibility_controls、strategy_design §7b/§7.5；「应产出 access plan」措辞全部退役为「plan 已存在、approved spend=0、provider access user-gated」。优先级正确演进：access plan 完成后 CURRENT §5 P0 推进为 A-share `minimal_data_burst` research-only falsification（AI 可执行的下一刀），provider access 降为 user-gated P1（必须用户先批 cost/license 才能动），A-short maintenance P2 仍在、未搁置——这正符合「不让 provider access 阻塞廉价 alpha 验证」的收敛主旨；§0 用 "after this reviewed slice is committed" commit-stable 措辞。handoff 走 append（非新建）含失效旧结论。无 §Optional Re-raise（无历史 reject 重提）。下一刀（提交后）= A-share `minimal_data_burst` preregistration / research-only falsification。
+
+---
+
+## 2026-05-31 — Codex (Phase 7b-2 P1 access-decision and sample-validation plan)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the 2026-05-31 Claude Pass for the access-plan / research-prereg execution-lock guardrail.
+- Completes the next P1 access-decision and sample-validation plan that the 2026-05-29 P1 readiness review matrix and 2026-05-31 guardrail both routed to.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_access_decision_plan.schema.json`: added a schema-first contract for the P1 access-decision and sample-validation plan, with const-locked non-authorization for provider selection, provider ranking, provider contact, token / trial, paid access, sample collection, data fetch, adapters, DataHub tables, runner changes, Phase 7c, production claims, and ship-gate relaxation.
+2. [untracked] `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`: converted the readiness matrix blockers into cost-ceiling, access-path, license/storage, candidate queue, 10 sample-validation workstreams, coverage-count, fallback/incident, and decision-gate plans.
+3. [untracked] `tests/schema/test_provider_p1_access_decision_plan_schema.py`: added regression coverage for schema/artifact validation, matrix candidate/area alignment, non-authorizing locks, decision gates, and post-plan A-share burst research routing.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/provider_evidence_drift_monitor.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/datahub_design.md`, `docs/strategy_design_synthesis.md`, `docs/evidence_report_schema_contract.md`, `docs/evidence_feasibility_controls.md`: updated routing/current-state wording from "next access plan" to "access plan exists; provider access remains blocked; next alpha-validation is A-share minimal-data burst prereg/research."
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7b-2 P1 access-plan handoff note.
+
+**Key decisions**:
+- Model the P1 access plan as a standalone schema/artifact rather than an edit to the readiness matrix. The readiness matrix says what is blocked; this artifact says what user decisions and sample validations are required before anything can move.
+- Keep approved spend at `0` and forbid provider contact / token / trial / paid access / sample collection inside the plan itself. User-approved cost and license boundaries still require a later reviewed decision.
+- Treat the candidate queue as a validation planning queue, not a provider ranking. The test suite compares it to the readiness matrix candidate set and asserts `provider_ranking_made = false`.
+- Route the next alpha-validation `执行` to A-share `minimal_data_burst` preregistration / research-only falsification. US-long SEC parser feasibility remains provider-evidence feasibility, not alpha validation.
+
+**Alternatives considered and rejected**:
+- "Put access-plan fields into `provider_p1_readiness_review.schema.json`" — rejected. The readiness matrix is already a closure artifact; access planning is a separate decision-boundary object.
+- "Let this plan authorize a small trial or sample fetch" — rejected. The user has not approved cost, account/contact path, license/storage rights, or sample scope.
+- "Use candidate evidence grades as a provider ranking" — rejected. Grades explain blockers; they do not choose or rank providers.
+- "Jump to Phase 7c after this plan" — rejected. Phase 7c still needs user-approved access/sample blockers resolved and then a separate schema-first implementation-design slice.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v`: 8 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 109 tests passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings appeared for touched docs.
+- `docs/CURRENT.md` authoritative line count via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 144, below the 150-line snapshot target.
+- Note: the older local Python path `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` returned access denied in this sandbox, so validation used the Codex bundled Python runtime.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews the schema / JSON / test / routing change set.
+2. If Pass and user commits, the next `执行` should create the A-share `minimal_data_burst` preregistration artifact and begin research-only falsification.
+3. Provider sample / trial / paid access should only proceed if the user explicitly approves cost ceiling, access path, and license / storage / retention boundaries, followed by a separate reviewed decision.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (P1 access-plan + research preregistration execution-lock guardrail)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `ffc1637`)

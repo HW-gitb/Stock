@@ -396,7 +396,7 @@ Split the post-audit work into small reviewed slices:
 
 ### Phase 7b / 7c - Provider Evidence And DataHub
 
-Phase 7b-1 provider evidence and drift-monitor contracts are defined in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 has six P1 snapshots through `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json` plus the readiness matrix in `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`; P1 remains partial / blocked, so the next provider-evidence step is an access-decision and sample-validation plan. Phase 7c designs the DataHub shared layer, report contracts, reproducibility plumbing, and data quality monitor before broad implementation.
+Phase 7b-1 provider evidence and drift-monitor contracts are defined in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`. Phase 7b-2 has six P1 snapshots through `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json`, the readiness matrix in `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`, and the access-decision / sample-validation plan in `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`; P1 remains partial / blocked until user-approved access boundaries and later sample validation are reviewed. Phase 7c designs the DataHub shared layer, report contracts, reproducibility plumbing, and data quality monitor before broad implementation.
 
 ### Phase 7 - DataHub / Engine Modularization
 
@@ -409,7 +409,7 @@ The first Phase 7 schema-first baseline is `schemas/provider_capability_catalog.
 
 ### Phase 7.5 - Research Infrastructure
 
-Create or expand `research/` structure, minimal experiment logging, and promotion policy after the Phase 7a scope is clear. Early research is allowed only through logged, isolated experiments with preregistration; it must not feed production runners directly. After the P1 access-decision and sample-validation plan is reviewed/committed, the next alpha-validation research slice is A-share `minimal_data_burst` falsification unless a later reviewed reversal changes this route.
+Create or expand `research/` structure, minimal experiment logging, and promotion policy after the Phase 7a scope is clear. Early research is allowed only through logged, isolated experiments with preregistration; it must not feed production runners directly. The next alpha-validation research slice is A-share `minimal_data_burst` falsification unless a later reviewed reversal changes this route.
 
 ### Phase 8+
 

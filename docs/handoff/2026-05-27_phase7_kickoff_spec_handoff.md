@@ -915,3 +915,46 @@ git diff --stat
 1. 下一条 `执行` 仍是 P1 access-decision and sample-validation plan；不要跳到 research、Phase 7c、provider selection 或 data fetch。
 2. P1 access plan reviewed/committed 后，下一条 alpha-validation `执行` 应先建立 A-share minimal-data burst preregistration artifact，再做 research-only falsification。
 3. 如果 burst research 引入第二个 promotion-relevant hypothesis、参数搜索、variant 搜索、benchmark sweep 或 holding-period sweep，必须先建 singleton program-level test-budget ledger。
+
+## 2026-05-31 追加：Phase 7b-2 P1 access-decision / sample-validation plan
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_access_decision_plan.schema.json`，作为 P1 access-decision / sample-validation plan 的 schema-first contract。
+- 新增 `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`，把 P1 readiness matrix blockers 转成 cost ceiling、access path、license / storage、sample rows、coverage counts、fallback / incident playbook 和 decision gates。
+- 新增 `tests/schema/test_provider_p1_access_decision_plan_schema.py`，验证 plan schema、artifact、candidate queue / matrix alignment、10 个 sample workstreams、non-authorizing scope locks、decision gates 和 post-plan alpha-validation route。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/provider_evidence_drift_monitor.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/datahub_design.md`、`docs/strategy_design_synthesis.md`、`docs/evidence_report_schema_contract.md`、`docs/evidence_feasibility_controls.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- 上一轮已锁定当前最小任务是 P1 access-decision and sample-validation plan；本轮把它变成机器校验 artifact，而不是继续停留在自然语言 next-step。
+- 需要防止后续 LLM 把 access plan 误读成 provider selection、trial / token request、paid access、sample fetch、data fetch 或 Phase 7c 授权。
+- 计划完成后，下一条 alpha-validation 刀按已批准方案转向 A-share `minimal_data_burst` research-only preregistration / falsification；US-long SEC parser feasibility 仍归 provider-evidence track。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+```
+
+**验证结果**:
+
+- `tests.schema.test_provider_p1_access_decision_plan_schema`: 8 tests passed.
+- `python -m unittest discover -s tests/schema -v`: 109 tests passed.
+- `git diff --check`: passed；只出现 tracked docs 的 LF/CRLF working-copy warning。
+- `docs/CURRENT.md` authoritative line count = 144，低于 150-line snapshot target。
+
+**失效旧结论**:
+
+- “下一条 `执行` 仍是 P1 access-decision and sample-validation plan”已完成；下一条 alpha-validation `执行` 应转向 A-share `minimal_data_burst` preregistration / research-only falsification。
+- “P1 access plan 可授权 token / trial / paid access / sample fetch”不成立；artifact 锁定 approved spend = 0，所有 provider access 均需用户显式批准和后续 reviewed decision。
+- “P1 access plan 可启动 Phase 7c / DataHub / runner work”不成立；Phase 7c 仍需单独 schema-first implementation-design slice。
+
+**下一步注意事项**:
+
+1. Claude 应审查本轮 uncommitted schema / JSON / test / routing 变更；重点看 scope locks 是否足以防 provider access 和 Phase 7c 误读。
+2. 如果审查 Pass 并提交，下一条 `执行` 应先建立 A-share `minimal_data_burst` preregistration artifact，再做 research-only falsification。
+3. 如用户想推进 provider sample / trial / paid access，必须先给出 cost ceiling、access path、license / storage / retention 边界，并仍走单独 reviewed decision。

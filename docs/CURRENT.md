@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-31（P1 access plan + research prereg guardrail）
+**最后更新**：2026-05-31（P1 access/sample plan + next burst prereg）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -8,18 +8,19 @@
 
 ## 0. Latest Delta
 
-- Phase 7b-2 P1 readiness review matrix now exists: `schemas/provider_p1_readiness_review.schema.json` and `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`.
-- The matrix synthesizes six P1 snapshots field-by-field and concludes: P1 documentation evidence collection is complete enough to define blockers, but P1 is not ready for Phase 7c, provider selection, data fetch, DataHub tables, or runner consumption.
-- Recommended next reviewed slice is a P1 access-decision and sample-validation plan; after that reviewed slice, the next alpha-validation slice is A-share minimal-data burst research-only falsification with preregistration.
+- Phase 7b-2 P1 access-decision and sample-validation plan now exists: `schemas/provider_p1_access_decision_plan.schema.json` and `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`.
+- The plan converts the P1 readiness matrix blockers into cost-ceiling, access-path, license/storage, sample-row, coverage-count, and fallback/incident gates.
+- It is plan-only: approved spend = 0; no provider contact, token/trial, paid access, sample collection, data fetch, provider selection, adapter, DataHub table, runner change, Phase 7c authorization, or ship-gate claim.
+- After this reviewed slice is committed, the next alpha-validation slice is A-share `minimal_data_burst` research-only falsification with preregistration.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7b-2 provider capability evidence population / P1 closure review is in progress.
-- **当前 P0 目标**：围绕 P1 matrix 准备 access-decision and sample-validation plan；不得 silent default、latest-only 回填，或把 provider guess 写成 production-ready evidence。
-- **当前 blocker**：P1 进入任何 sample / trial / paid-access / data-fetch 前，需要用户明确批准 cost ceiling、access boundary、license / local-storage / non-display 范围；Phase 7c 仍 blocked。
-- **P0 后执行锁**：下一条 alpha-validation 刀是 `a_share_burst_minimal_data` research-only falsification；启动前必须写 preregistration artifact，冻结 universe / benchmark / holding period / entry-exit rule / threshold / test budget。
+- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; provider access remains blocked pending explicit user approval.
+- **当前 P0 目标**：A-share `minimal_data_burst` research-only preregistration / falsification；不得进 production、不得改 runner、不得声称 ship-gate evidence。
+- **当前 P1 provider blocker**：任何 sample / trial / paid-access / token / provider contact / data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
+- **执行锁**：research 启动前必须写 preregistration artifact，冻结 universe / benchmark / holding period / entry-exit rule / threshold / `test_budget`；第二个 promotion-relevant hypothesis、参数 / variant / benchmark / holding-period search 前，先建 singleton program-level test-budget ledger。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
@@ -27,18 +28,15 @@
 
 ## 2. 最近已完成
 
-- **Phase 7b-2 P1 readiness review matrix**（2026-05-29）：`docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` 已建立并由 `schemas/provider_p1_readiness_review.schema.json` 锁定；结论是六份 docs evidence collection 完成，但 P1 仍不授权 Phase 7c / provider selection / data fetch。
-- **Phase 7b-2 P1 evidence snapshots**（2026-05-28）：public-source、market-data-candidate、authorization / cost / stability、benchmark / GICS、fundamentals observed-date、coverage / fallback / incident 六份 artifact 均已建立并各有 regression test；这些只证明 candidate evidence，不等于 provider selection、PIT-safe production factor 或 implementation readiness。
-- **Phase 7b-1 provider evidence / drift monitor contract**（2026-05-28）：`docs/provider_evidence_drift_monitor.md`、`schemas/provider_evidence_drift_monitor.schema.json`、example 和 schema tests 已建立；覆盖 P1-P4 queue、provider evidence records、readiness rollup、drift dimensions/action set。
+- **Phase 7b-2 P1 access/sample plan**（2026-05-31）：`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 已建立并由 `schemas/provider_p1_access_decision_plan.schema.json` 锁定；只定义访问边界和样本验证计划，不授权 provider 行动。
+- **Phase 7b-2 P1 readiness review matrix**（2026-05-29）：`docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` 已建立并由 `schemas/provider_p1_readiness_review.schema.json` 锁定；六份 docs evidence collection 完成，但 P1 不授权 Phase 7c / provider selection / data fetch。
+- **Phase 7b-2 P1 evidence snapshots**（2026-05-28）：public-source、market-data-candidate、authorization / cost / stability、benchmark / GICS、fundamentals observed-date、coverage / fallback / incident 六份 artifact 均已建立并各有 regression test；这些只证明 candidate evidence。
+- **Phase 7b-1 provider evidence / drift monitor contract**（2026-05-28）：`docs/provider_evidence_drift_monitor.md`、`schemas/provider_evidence_drift_monitor.schema.json`、example 和 schema tests 已建立。
 - **Phase 7a-5 evidence report schema contract**（2026-05-28）：`docs/evidence_report_schema_contract.md`、`schemas/evidence_report.schema.json`、example 和 schema tests 已建立。
 - **Phase 7a-4 evidence feasibility controls**（2026-05-28）：`docs/evidence_feasibility_controls.md`、`schemas/evidence_feasibility_controls.schema.json`、example 和 schema tests 已建立。
 - **Phase 7a-3 provider priority / provisional benchmark contract**（2026-05-28）：`docs/provider_priority_benchmark_contract.md` 已建立，锁定 provider evidence priority 与 provisional evidence benchmark table。
-- **Phase 7a-2 owner-spec routing**（2026-05-27）：`strategy_design_synthesis`、`burst_lane_spec`、`long_alpha_spec`、`us_short_spec` 已记录 audit verdict、minimal/full burst 边界、long defer blocker、US microstructure / calendar / monitoring 边界。
-- **Phase 7a-1 first formal alpha audit**（2026-05-27）：`docs/phase7a_alpha_plausibility_audit.json` 已建立并通过 schema validation；该 audit 不是 ship-gate evidence。
-- **Phase 7 provider capability / field catalog contract**（2026-05-27）：`schemas/provider_capability_catalog.schema.json` v1.0.0 已建立；不选 provider、不抓数据、不建 adapter / DataHub table。
-- **Phase 6 spec pack**（2026-05-27）：`docs/burst_lane_spec.md`、`docs/us_short_spec.md`、`docs/long_alpha_spec.md`、`docs/provider_data_requirements_audit.md` 完成 docs-only baseline。
-
-更早事项见 `docs/handoff/README.md`、`AGENTS.md §交接记录`、`docs/SESSION_LOG.md` 和 `git log --all`。
+- **Phase 7a-1/2 alpha audit and owner-spec routing**（2026-05-27）：formal audit、provider status snapshot、strategy / burst / long / US-short owner specs 已记录 audit verdict 与 blocker routing。
+- **Phase 6 spec pack and earlier engineering baseline**：A-short v7.10、Phase 1-5、Phase 6 spec pack 均保持有效；更早事项见 `docs/handoff/README.md`、`AGENTS.md §交接记录`、`docs/SESSION_LOG.md` 和 `git log --all`。
 
 ---
 
@@ -51,7 +49,7 @@
 - 5d `excess_csi1000 t=+2.88` 是当前唯一显著正 alpha 线索。
 - 强负信号仍是重点风控证据：`entry_flag=追高风险，周一确认`、`OVERHEAT`、`Tier2`。
 - 当前 A-short steady 更像“过滤坏票”而不是“挑出好票”，不得当作 full-size alpha lane。
-- 24p findings 尚未完成 multiple-testing / survivorship / regime sensitivity 重审；Phase 7a-1 audit 必须重新标注证据等级。
+- 24p findings 尚未完成 multiple-testing / survivorship / regime sensitivity 重审；Phase 7a-1 audit 已要求重新标注证据等级。
 
 失效旧结论：12 月 Top5 显著、12 期突破型反向信号、旧 `_cc.md` 整体结论、v7.9 前 completeness_score 分组结论均不可继续引用。
 
@@ -66,13 +64,9 @@
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` - Phase 7a+ 最高行动指南。
 - `docs/provider_priority_benchmark_contract.md` - Phase 7a-3 provider evidence priority / provisional benchmark contract。
 - `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` - Phase 7b provider evidence / drift monitor contract。
-- `docs/provider_evidence_p1_us_public_sources_20260528.json` - Phase 7b-2 P1 public-source evidence snapshot（partial / blocked）。
-- `docs/provider_evidence_p1_us_market_data_candidates_20260528.json` - Phase 7b-2 P1 market-data-candidate evidence snapshot（partial / blocked）。
-- `docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json` - Phase 7b-2 P1 authorization / cost / stability evidence snapshot（partial / blocked）。
-- `docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json` - Phase 7b-2 P1 benchmark / GICS candidate evidence snapshot（partial / blocked）。
-- `docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json` - Phase 7b-2 P1 fundamentals observed-date candidate evidence snapshot（partial / blocked）。
-- `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json` - Phase 7b-2 P1 coverage / fallback / incident candidate evidence snapshot（partial / blocked）。
+- `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` - Phase 7b-2 P1 access-decision and sample-validation plan（plan-only；approved spend = 0；provider/sample/data/Phase 7c blocked）。
 - `schemas/provider_p1_readiness_review.schema.json` / `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` - Phase 7b-2 P1 readiness review matrix（collection complete；Phase 7c / provider selection / data fetch blocked）。
+- `docs/provider_evidence_p1_us_public_sources_20260528.json`、`docs/provider_evidence_p1_us_market_data_candidates_20260528.json`、`docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`、`docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`、`docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json`、`docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json` - Phase 7b-2 P1 candidate evidence snapshots（partial / blocked）。
 - `docs/evidence_feasibility_controls.md` / `schemas/evidence_feasibility_controls.schema.json` - Phase 7a-4 burst promotion / evidence feasibility controls。
 - `docs/evidence_report_schema_contract.md` / `schemas/evidence_report.schema.json` - Phase 7a-5 evidence report schema contract。
 - `docs/alpha_plausibility_audit.md` / `schemas/alpha_plausibility_audit.schema.json` - Phase 7a-1 audit owner and contract。
@@ -89,16 +83,17 @@
 
 ## 5. 下一步
 
-### P0 - Phase 7b-2 P1 access-decision and sample-validation plan
+### P0 - A-share minimal-data burst research-only falsification
 
-- 基于 P1 readiness review matrix 准备 access-decision and sample-validation plan：cost ceiling、trial / token / paid access boundary、license / local-storage / non-display、sample rows、coverage-count verification、fallback / incident playbook。
+- 先建立小型 preregistration artifact；后续 evidence report 用现有 `hypothesis_registration_ref` 指回它。
+- 单一冻结测试可不建 program-level ledger；第二个 promotion-relevant hypothesis、参数 / variant / benchmark / holding-period search 前，必须先建 singleton test-budget ledger。
+- Research-only，不进 production、不改 runner、不喂 production decision、不声称 ship-gate evidence。
+
+### P1 - P1 provider access boundary（仅用户明确要求时）
+
+- 用户可另行批准 cost ceiling、access path、license / local-storage / non-display / retention 边界；之后仍需单独 reviewed decision 才能 request token / trial / paid access / sample rows。
 - 不得 silent default、latest-only 回填历史证据，或把 provider status guess 写成 production-ready evidence。
-- 不得建 adapter / DataHub table、改 runner、抓 provider data 或接 broker / OS automation；provider selection / paid access / sample fetch 都必须另走 reviewed decision。
-
-### P1 - A-share minimal-data burst research-only falsification
-
-- P0 reviewed/committed 后，优先做 A-share `minimal_data_burst` research-only falsification；不进 production、不改 runner、不声称 ship-gate evidence；US-long SEC observed-date / parser feasibility 属于 provider-evidence track。
-- Research 前新增小型 preregistration artifact；后续 evidence report 用现有 `hypothesis_registration_ref` 指回它。只有单一冻结测试可不建 program-level ledger；第二个 promotion-relevant hypothesis、参数 / variant / benchmark / holding-period search 前，必须先建 singleton test-budget ledger。
+- 不得建 adapter / DataHub table、改 runner、抓 provider data 或接 broker / OS automation。
 
 ### P2 - A-short maintenance line
 

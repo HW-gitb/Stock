@@ -1,0 +1,673 @@
+{
+  "schema_name": "provider_p1_access_decision_plan",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-31T00:00:00Z",
+  "scope": {
+    "phase": "7b",
+    "purpose": "p1_access_decision_and_sample_validation_plan",
+    "plan_status": "plan_only_no_access_requested",
+    "based_on_readiness_matrix_ref": "docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json",
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "provider_contact_or_account_creation_allowed": false,
+    "trial_or_token_request_allowed": false,
+    "paid_access_approved": false,
+    "sample_row_collection_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_readiness_matrix_20260529",
+      "path": "docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json",
+      "contract_or_schema_ref": "schemas/provider_p1_readiness_review.schema.json",
+      "consumption_role": "Defines the P1 unresolved gate items and field-by-field blocker disposition consumed by this plan."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Defines provider evidence records, drift dimensions, action set, and no-selection / no-fetch locks."
+    },
+    {
+      "artifact_id": "provider_priority_benchmark_contract",
+      "path": "docs/provider_priority_benchmark_contract.md",
+      "contract_or_schema_ref": "docs/provider_priority_benchmark_contract.md",
+      "consumption_role": "Defines the P1-P4 evidence priority order and provisional benchmark evidence packet minimums."
+    }
+  ],
+  "decision_boundary": {
+    "cost_ceiling_status": "pending_user_approval",
+    "approved_spend_usd": 0,
+    "access_path_status": "plan_only_no_access_requested",
+    "provider_contact_or_account_creation_allowed": false,
+    "token_trial_paid_request_allowed": false,
+    "sample_collection_allowed": false,
+    "user_decisions_required_before_any_access": [
+      "State the maximum total USD spend allowed for P1 sample validation and whether the ceiling covers one provider, multiple providers, or all P1 candidates.",
+      "State whether free public reconstruction only, free trial, token request, paid subscription, vendor sales contact, or no access is allowed.",
+      "State the acceptable user classification for market-data terms, including professional versus non-professional and business-use boundaries where relevant.",
+      "State whether local storage, non-display use, derived reports, exports, cache retention, and retention after subscription lapse are allowed for each candidate family.",
+      "State whether sample-row requests may include active, inactive, delisted, ADR, ETF, SPAC, preferred, fund, and historical membership examples."
+    ],
+    "decisions_deferred_to_later_review": [
+      "Provider selection and provider ranking remain separate reviewed decisions after sample validation, not part of this plan.",
+      "Any token, trial, paid subscription, sales contact, or endpoint sample request requires explicit user approval after this plan is reviewed.",
+      "Any DataHub schema, adapter, runner, or Phase 7c consumption decision requires a later reviewed implementation-design slice.",
+      "Any US-long SEC parser feasibility work remains provider-evidence feasibility, not long-alpha validation."
+    ]
+  },
+  "candidate_access_queue": [
+    {
+      "provider_candidate_id": "sec_edgar_public_apis",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "fundamentals_observed_date_pit",
+        "security_master_survivorship",
+        "sample_row_validation_lineage"
+      ],
+      "planned_review_status": "plan_only_pending_user_boundary",
+      "provider_selection_made": false,
+      "provider_ranking_made": false,
+      "access_request_allowed_by_this_plan": false,
+      "paid_access_approved_by_this_plan": false,
+      "sample_validation_required": true,
+      "required_user_boundary_decisions": [
+        "Confirm whether public SEC reconstruction may be used for research-only parser feasibility under fair-access limits.",
+        "Confirm that SEC current ticker files will not be treated as historical survivorship-safe security-master evidence."
+      ],
+      "sample_validation_focus": [
+        "Submissions and companyfacts rows with accession number, filing accepted timestamp, fiscal period, unit, currency, amendment, and restatement handling.",
+        "Parser lineage and fair-access policy for any later reconstruction test."
+      ]
+    },
+    {
+      "provider_candidate_id": "intrinio_filing_fundamentals",
+      "candidate_evidence_grade": "strong_candidate_but_blocked",
+      "useful_for_area_ids": [
+        "fundamentals_observed_date_pit",
+        "coverage_counts",
+        "authorization_license_cost",
+        "fallback_incident_stability",
+        "sample_row_validation_lineage"
+      ],
+      "planned_review_status": "plan_only_pending_user_boundary",
+      "provider_selection_made": false,
+      "provider_ranking_made": false,
+      "access_request_allowed_by_this_plan": false,
+      "paid_access_approved_by_this_plan": false,
+      "sample_validation_required": true,
+      "required_user_boundary_decisions": [
+        "Confirm whether trial, token, or paid filing-fundamentals access may be requested and under what cost ceiling.",
+        "Confirm local storage, derived-report, non-display, retention, and business-use rights before any sample request."
+      ],
+      "sample_validation_focus": [
+        "Accepted date, filing date, updated date, is_latest, accession, fiscal period, unit, currency, restatement, and duplicate-filing behavior.",
+        "Coverage counts and missing-field rates for the intended US-long universe and history window."
+      ]
+    },
+    {
+      "provider_candidate_id": "financial_modeling_prep_sec_filings_financials",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "fundamentals_observed_date_pit",
+        "coverage_counts",
+        "fallback_incident_stability",
+        "sample_row_validation_lineage"
+      ],
+      "planned_review_status": "plan_only_pending_user_boundary",
+      "provider_selection_made": false,
+      "provider_ranking_made": false,
+      "access_request_allowed_by_this_plan": false,
+      "paid_access_approved_by_this_plan": false,
+      "sample_validation_required": true,
+      "required_user_boundary_decisions": [
+        "Confirm whether any free, trial, or paid FMP endpoint access is allowed under the P1 cost ceiling.",
+        "Confirm whether latest/current endpoints are excluded from historical PIT evidence unless sample rows prove as-of semantics."
+      ],
+      "sample_validation_focus": [
+        "SEC filing rows and as-reported statements with filing timestamps, fiscal alignment, units, currency, revisions, and endpoint date semantics.",
+        "Cycle-time, outage/status, and missing-field behavior for the target universe."
+      ]
+    },
+    {
+      "provider_candidate_id": "massive_polygon_stocks_api",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "security_master_survivorship",
+        "adjusted_eod_ohlcv_liquidity",
+        "corporate_actions_capital_actions",
+        "coverage_counts",
+        "authorization_license_cost",
+        "fallback_incident_stability"
+      ],
+      "planned_review_status": "plan_only_pending_user_boundary",
+      "provider_selection_made": false,
+      "provider_ranking_made": false,
+      "access_request_allowed_by_this_plan": false,
+      "paid_access_approved_by_this_plan": false,
+      "sample_validation_required": true,
+      "required_user_boundary_decisions": [
+        "Confirm professional / non-professional classification and whether Massive / Polygon access is allowed under the cost ceiling.",
+        "Confirm local storage, non-display, derived-work, export, quota, and provider-brand/legal-continuity review requirements."
+      ],
+      "sample_validation_focus": [
+        "Ticker, listing-state, adjusted aggregate, dividend, split, market-status, halt, zero-volume, and delisted-security examples.",
+        "Reconciliation between corporate actions and adjusted OHLCV rows."
+      ]
+    },
+    {
+      "provider_candidate_id": "norgate_us_stock_market_platinum",
+      "candidate_evidence_grade": "strong_candidate_but_blocked",
+      "useful_for_area_ids": [
+        "security_master_survivorship",
+        "adjusted_eod_ohlcv_liquidity",
+        "benchmark_returns",
+        "coverage_counts",
+        "authorization_license_cost"
+      ],
+      "planned_review_status": "plan_only_pending_user_boundary",
+      "provider_selection_made": false,
+      "provider_ranking_made": false,
+      "access_request_allowed_by_this_plan": false,
+      "paid_access_approved_by_this_plan": false,
+      "sample_validation_required": true,
+      "required_user_boundary_decisions": [
+        "Confirm whether Windows/plugin installation, subscription, or trial review is allowed under the P1 cost ceiling.",
+        "Confirm whether export, local storage, personal-use, business-use, and retention-after-lapse rights are acceptable."
+      ],
+      "sample_validation_focus": [
+        "Survivorship-aware EOD, delisted securities, historical constituent membership, splits/dividends, and listing-state examples.",
+        "Proof that Norgate current fundamentals are not used as historical PIT fundamentals."
+      ]
+    },
+    {
+      "provider_candidate_id": "spdj_nasdaq_lseg_benchmark_sources",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "benchmark_returns"
+      ],
+      "planned_review_status": "plan_only_pending_user_boundary",
+      "provider_selection_made": false,
+      "provider_ranking_made": false,
+      "access_request_allowed_by_this_plan": false,
+      "paid_access_approved_by_this_plan": false,
+      "sample_validation_required": true,
+      "required_user_boundary_decisions": [
+        "Confirm whether direct licensed benchmark return feeds may be requested or whether ETF proxy fallback must be reviewed first.",
+        "Confirm local-storage and derived-report rights for benchmark series before any benchmark sample request."
+      ],
+      "sample_validation_focus": [
+        "Historical return-feed availability for S&P 500, Nasdaq-100, Russell 1000, and any sector fallback.",
+        "Return type, currency, calendar, dividend reinvestment, missing sessions, and no-zero-fill policy."
+      ]
+    },
+    {
+      "provider_candidate_id": "spglobal_msci_gics_history",
+      "candidate_evidence_grade": "partial_candidate",
+      "useful_for_area_ids": [
+        "gics_pit_membership"
+      ],
+      "planned_review_status": "plan_only_pending_user_boundary",
+      "provider_selection_made": false,
+      "provider_ranking_made": false,
+      "access_request_allowed_by_this_plan": false,
+      "paid_access_approved_by_this_plan": false,
+      "sample_validation_required": true,
+      "required_user_boundary_decisions": [
+        "Confirm whether issuer-level GICS history sample rows or data dictionary may be requested.",
+        "Confirm local storage, derived industry-normalization reports, and security-master mapping rights."
+      ],
+      "sample_validation_focus": [
+        "Issuer-level historical GICS membership rows with effective dates, identifier mapping, coverage counts, and fallback from industry to industry group.",
+        "Proof that taxonomy methodology pages are not treated as PIT issuer-membership evidence."
+      ]
+    },
+    {
+      "provider_candidate_id": "nasdaq_data_link_sharadar_sf1",
+      "candidate_evidence_grade": "unknown_pending_review",
+      "useful_for_area_ids": [
+        "fundamentals_observed_date_pit",
+        "fallback_incident_stability",
+        "sample_row_validation_lineage"
+      ],
+      "planned_review_status": "plan_only_pending_user_boundary",
+      "provider_selection_made": false,
+      "provider_ranking_made": false,
+      "access_request_allowed_by_this_plan": false,
+      "paid_access_approved_by_this_plan": false,
+      "sample_validation_required": true,
+      "required_user_boundary_decisions": [
+        "Confirm whether table-level data dictionary or sample-row review for Sharadar / Nasdaq Data Link may be requested.",
+        "Confirm license, local-storage, call-limit, and table date-key review requirements."
+      ],
+      "sample_validation_focus": [
+        "Table-level datekey semantics, filing-date fields, coverage counts, error handling, status behavior, and local-storage constraints.",
+        "Proof that product listing, status, or error-code docs are not treated as datekey evidence."
+      ]
+    }
+  ],
+  "sample_validation_workstreams": [
+    {
+      "area_id": "security_master_survivorship",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Active and inactive common-equity sample rows across ticker changes, mergers, bankruptcies, OTC transitions, ADRs, ETFs, SPACs, preferreds, and funds.",
+        "Identifier mapping rows for provider symbol, CIK, exchange ticker, FIGI when available, and known CUSIP constraints."
+      ],
+      "coverage_count_checks": [
+        "Active and inactive coverage counts over the intended US backtest window.",
+        "Counts by listing state and security class, including delisted securities."
+      ],
+      "lineage_fields_to_validate": [
+        "provider_symbol_or_identifier",
+        "as_of_eligibility_rule",
+        "pit_status",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "authorization_license_class",
+        "fallback_path",
+        "incident_log_ref"
+      ],
+      "pass_criteria_for_later_review": [
+        "Sample rows prove historical listing-state eligibility and delisting behavior.",
+        "License terms allow the intended local audit storage and derived reporting."
+      ],
+      "blocking_if_missing": true
+    },
+    {
+      "area_id": "adjusted_eod_ohlcv_liquidity",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Adjusted EOD rows for liquid, illiquid, halted, zero-volume, newly listed, and delisted securities.",
+        "Documentation for split/dividend adjustment mode and total-return limitations."
+      ],
+      "coverage_count_checks": [
+        "Date-range and row-count checks for the intended universe.",
+        "Missing-bar and holiday handling counts."
+      ],
+      "lineage_fields_to_validate": [
+        "provider_id",
+        "provider_product_or_tier",
+        "endpoint_or_table",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "adjustment_mode",
+        "row_count",
+        "coverage_count",
+        "retry_stability_status"
+      ],
+      "pass_criteria_for_later_review": [
+        "Adjusted bars reconcile to corporate-action records for sampled splits and dividends.",
+        "Provider terms permit storage of price history and derived return reports."
+      ],
+      "blocking_if_missing": true
+    },
+    {
+      "area_id": "corporate_actions_capital_actions",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Split, dividend, merger, spin-off, rights, name-change, share-class, and delisting event examples where available.",
+        "Revision timing or as-of reconstruction documentation for corporate actions."
+      ],
+      "coverage_count_checks": [
+        "Action-count coverage by event type and history window.",
+        "Conflict count between corporate-action records and adjusted OHLCV rows."
+      ],
+      "lineage_fields_to_validate": [
+        "endpoint_or_table",
+        "source_date_range",
+        "frequency",
+        "adjustment_mode",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "known_provider_limitations",
+        "drift_monitor_ref"
+      ],
+      "pass_criteria_for_later_review": [
+        "Corporate-action samples support reproducible adjustment and no latest-only backfill.",
+        "Fallback behavior is documented when corporate actions conflict with adjusted prices."
+      ],
+      "blocking_if_missing": true
+    },
+    {
+      "area_id": "fundamentals_observed_date_pit",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Filing-linked fundamentals with accepted date, filing date, update date, accession, fiscal period, unit, currency, and restatement/amendment behavior.",
+        "Data dictionary or endpoint/table definitions for each candidate fundamentals source."
+      ],
+      "coverage_count_checks": [
+        "Coverage counts and missing-field rates for the intended US-long universe and target history.",
+        "Separate counts for current, amended, restated, and missing filings where available."
+      ],
+      "lineage_fields_to_validate": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "fetch_timestamp",
+        "source_date_range",
+        "currency",
+        "unit",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields"
+      ],
+      "pass_criteria_for_later_review": [
+        "Each production candidate factor has a field-level observed-date construction rule.",
+        "Latest/current endpoints are excluded from historical PIT evidence unless sample rows prove as-of semantics."
+      ],
+      "blocking_if_missing": true
+    },
+    {
+      "area_id": "benchmark_returns",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Historical return-feed sample or data dictionary for S&P 500, Nasdaq-100, Russell 1000, and sector fallback where relevant.",
+        "Return-type documentation for price return versus total return and dividend reinvestment."
+      ],
+      "coverage_count_checks": [
+        "Date-range, missing-session, and missing-month checks for each benchmark.",
+        "Calendar alignment checks against the US trading calendar."
+      ],
+      "lineage_fields_to_validate": [
+        "provider_id",
+        "provider_product_or_tier",
+        "endpoint_or_table",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "coverage_count",
+        "authorization_license_class",
+        "fallback_path"
+      ],
+      "pass_criteria_for_later_review": [
+        "Benchmark returns follow the no-zero-fill rule and carry explicit price-return or total-return semantics.",
+        "ETF proxy fallback is reviewed separately if direct index returns remain inaccessible."
+      ],
+      "blocking_if_missing": true
+    },
+    {
+      "area_id": "gics_pit_membership",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Issuer-level historical GICS membership rows with effective dates and provider identifiers.",
+        "Data dictionary or license terms for GICS History or equivalent issuer-membership source."
+      ],
+      "coverage_count_checks": [
+        "Issuer coverage counts by GICS industry and industry group over the intended history.",
+        "Counts supporting fallback from industry to industry group when sample size is below threshold."
+      ],
+      "lineage_fields_to_validate": [
+        "provider_id",
+        "provider_product_or_tier",
+        "endpoint_or_table",
+        "source_date_range",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "coverage_count",
+        "missing_required_fields",
+        "authorization_license_class"
+      ],
+      "pass_criteria_for_later_review": [
+        "Issuer-level PIT membership history is proven with effective dates.",
+        "Taxonomy methodology pages are not used as membership evidence."
+      ],
+      "blocking_if_missing": true
+    },
+    {
+      "area_id": "coverage_counts",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Provider-generated or sample-derived field-by-field coverage counts for the intended US investable universe.",
+        "Missing-field and null-rate report for fundamentals, security master, prices, corporate actions, benchmark, and GICS fields."
+      ],
+      "coverage_count_checks": [
+        "Counts by universe, field family, historical window, listing state, security class, and provider product tier.",
+        "Reproducible row-count lineage from the same path used for sample validation."
+      ],
+      "lineage_fields_to_validate": [
+        "row_count",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "source_date_range",
+        "as_of_eligibility_rule"
+      ],
+      "pass_criteria_for_later_review": [
+        "Vendor marketing coverage claims are converted into project-specific reproducible counts.",
+        "Counts distinguish active, inactive, delisted, ADR, ETF, SPAC, fund, preferred, and common-stock classes."
+      ],
+      "blocking_if_missing": true
+    },
+    {
+      "area_id": "authorization_license_cost",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Plan tier, cost, quota, trial terms, EULA, export, storage, retention, derived-report, and non-display terms for each candidate.",
+        "User classification evidence for professional versus non-professional and business use where relevant."
+      ],
+      "coverage_count_checks": [
+        "Plan-tier coverage confirmation for delisted coverage, history depth, fundamentals, benchmark, and GICS fields.",
+        "Quota and rate-limit sufficiency check for sample validation and later reproducible refresh."
+      ],
+      "lineage_fields_to_validate": [
+        "provider_product_or_tier",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "known_provider_limitations",
+        "fallback_path",
+        "incident_log_ref"
+      ],
+      "pass_criteria_for_later_review": [
+        "User-approved cost ceiling and access path are recorded before any provider contact, token, trial, or paid request.",
+        "Local-storage, non-display, derived-report, redistribution, export, and retention rights are explicitly classified."
+      ],
+      "blocking_if_missing": true
+    },
+    {
+      "area_id": "fallback_incident_stability",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Provider status, outage, error-code, rate-limit, retry, support, and incident surfaces for each candidate.",
+        "Field-family fallback hierarchy for missing, stale, license-blocked, incident-affected, or drifted data."
+      ],
+      "coverage_count_checks": [
+        "Endpoint-level freshness and error-rate checks once sample access is separately approved.",
+        "Outlier, correction, revision, and silent semantic-change checks tied to sample rows."
+      ],
+      "lineage_fields_to_validate": [
+        "retry_stability_status",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref",
+        "known_provider_limitations",
+        "cost_quota_risk_class"
+      ],
+      "pass_criteria_for_later_review": [
+        "Status-page evidence is treated as monitoring input only, not endpoint data-correctness proof.",
+        "Fallback hierarchy blocks production use rather than silently substituting latest-only or zero-filled data."
+      ],
+      "blocking_if_missing": true
+    },
+    {
+      "area_id": "sample_row_validation_lineage",
+      "validation_status": "planned_not_executed",
+      "collection_allowed_by_this_plan": false,
+      "provider_selection_made": false,
+      "required_sample_or_doc_items": [
+        "Sample rows or data dictionaries for every candidate field family before DataHub table design consumes field names.",
+        "Request parameters, provider endpoint/table, timestamps, units, currency, adjustment mode, PIT status, missing fields, and known limitations for each sample."
+      ],
+      "coverage_count_checks": [
+        "Row-count reproducibility from the same sample path.",
+        "Coverage-count reproducibility by provider, product/tier, source date range, and field family."
+      ],
+      "lineage_fields_to_validate": [
+        "provider_id",
+        "provider_product_or_tier",
+        "api_family",
+        "endpoint_or_table",
+        "provider_symbol_or_identifier",
+        "request_parameters",
+        "fetch_timestamp",
+        "source_date_range",
+        "frequency",
+        "currency",
+        "unit",
+        "adjustment_mode",
+        "pit_status",
+        "as_of_eligibility_rule",
+        "row_count",
+        "coverage_count",
+        "missing_required_fields",
+        "known_provider_limitations",
+        "authorization_license_class",
+        "cost_quota_risk_class",
+        "fallback_path",
+        "incident_log_ref",
+        "drift_monitor_ref"
+      ],
+      "pass_criteria_for_later_review": [
+        "No latest-only endpoint is used for historical PIT evidence.",
+        "Every sample has enough lineage to reproduce row counts and identify provider drift later."
+      ],
+      "blocking_if_missing": true
+    }
+  ],
+  "license_storage_review": {
+    "review_status": "planned_not_approved",
+    "approved_by_this_plan": false,
+    "required_questions": [
+      "Does the provider allow local storage of raw rows, normalized rows, lineage metadata, and derived factor outputs for research and audit?",
+      "Does the provider allow non-display use by a local analysis system that outputs reports for manual trading decisions?",
+      "Does the provider allow derived reports, screenshots, CSV exports, evidence packets, and cached validation artifacts?",
+      "What data may be retained after trial expiration, subscription lapse, provider termination, or license downgrade?",
+      "What restrictions apply to redistribution, public sharing, professional use, business use, and automated endpoint polling?",
+      "Do benchmark and GICS sources allow historical series / membership storage and derived attribution reporting?"
+    ]
+  },
+  "coverage_count_verification_plan": {
+    "verification_status": "planned_not_executed",
+    "collection_allowed_by_this_plan": false,
+    "required_dimensions": [
+      "universe membership",
+      "field family",
+      "historical window",
+      "listing state",
+      "security class",
+      "provider product or tier",
+      "date range",
+      "as-of eligibility rule"
+    ],
+    "required_counts": [
+      "active common stock coverage count",
+      "inactive and delisted security coverage count",
+      "ADR, ETF, SPAC, fund, preferred, and excluded class counts",
+      "fundamentals field availability and null-rate counts",
+      "price, corporate-action, benchmark, and GICS row counts",
+      "missing session, missing month, and missing field counts",
+      "coverage decay and history-depth counts by provider"
+    ],
+    "pass_criteria_for_later_review": [
+      "Counts are reproducible from sample or trial access that was separately approved.",
+      "Counts are not vendor marketing claims and can be traced to provider, tier, endpoint/table, request parameters, and fetch timestamp.",
+      "Coverage gaps are tied to blocking, fallback, or lane-defer decisions instead of silent fill."
+    ]
+  },
+  "fallback_incident_playbook_plan": {
+    "playbook_status": "planned_not_implemented",
+    "implementation_allowed_by_this_plan": false,
+    "drift_monitor_contract_ref": "docs/provider_evidence_drift_monitor.md",
+    "required_components": [
+      "Field-family primary and fallback hierarchy for fundamentals, security master, prices, corporate actions, benchmark returns, and GICS membership.",
+      "Manual-review triggers for stale data, missing rows, coverage-count drops, status-page incidents, schema drift, quota exhaustion, and outlier revision rates.",
+      "Retry, throttle, backoff, status-page polling, incident logging, and freeze-latest-only-claims rules.",
+      "Block-production-use action when no PIT-safe or license-safe fallback exists.",
+      "Explicit rule that status pages are not data-correctness proof and zero-fill is forbidden for missing benchmark returns."
+    ]
+  },
+  "decision_gates": [
+    {
+      "gate_id": "user_cost_access_boundary",
+      "status": "pending_user_approval",
+      "blocks_until_resolved": true,
+      "required_resolution": "User explicitly approves a cost ceiling and allowed access path before any provider contact, account creation, token, trial, paid subscription, or sample request.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "license_storage_rights",
+      "status": "pending_later_review",
+      "blocks_until_resolved": true,
+      "required_resolution": "A later reviewed packet records local-storage, non-display, derived-report, export, retention, redistribution, professional-use, and business-use rights for each candidate.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "sample_validation_packet",
+      "status": "pending_later_review",
+      "blocks_until_resolved": true,
+      "required_resolution": "After user-approved access boundaries, a separate reviewed packet validates sample rows, coverage counts, field-level PIT semantics, lineage, and fallback behavior.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_authorization",
+      "status": "blocked",
+      "blocks_until_resolved": true,
+      "required_resolution": "Phase 7c remains blocked until reviewed Phase 7b evidence and sample-validation blockers are accepted; Phase 7c must start as a schema-first DataHub / report / reproducibility contract.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "next_steps": [
+    "Claude reviews this plan as a non-authorizing Phase 7b-2 closure artifact.",
+    "If reviewed and committed, do not request provider access until the user explicitly approves cost ceiling, access path, and license/storage boundaries.",
+    "After this reviewed plan is committed, the next alpha-validation execution slice should be A-share minimal-data burst research-only preregistration and falsification.",
+    "Keep US-long SEC observed-date / parser feasibility on the provider-evidence track; it can prove construction feasibility, not long-alpha existence."
+  ],
+  "limitations": [
+    "This plan synthesizes existing local artifacts only; it does not perform new web research, provider contact, token request, trial start, paid subscription, endpoint call, sample-row collection, provider selection, adapter work, DataHub table work, runner change, broker integration, or ship-gate claim.",
+    "Candidate access queue ordering is a validation planning queue, not a provider ranking or selection.",
+    "Strong candidate evidence remains blocked until user-approved access boundaries, license/storage rights, sample rows, coverage counts, PIT semantics, and fallback/incident playbooks are reviewed.",
+    "Phase 7c remains blocked from consuming P1 fields until the decision gates are separately resolved."
+  ]
+}
