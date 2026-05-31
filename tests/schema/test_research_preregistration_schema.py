@@ -141,6 +141,15 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertIn("12 months live-normalized forward evidence", next_steps)
         self.assertIn("does not authorize promotion without that confirmation", next_steps)
 
+    def test_current_preregistration_is_blocked_until_corrected_basis_supersession(self) -> None:
+        artifact = self._load_artifact()
+        joined_notes = "\n".join(artifact["next_steps"] + artifact["limitations"])
+
+        self.assertIn("BLOCKED_DO_NOT_RUN", joined_notes)
+        self.assertIn("measurement-basis issue", joined_notes)
+        self.assertIn("corrected-basis superseding preregistration", joined_notes)
+        self.assertIn("not executable as promotion-relevant research-continuation evidence", joined_notes)
+
     def test_ledger_trigger_is_singleton_program_level_not_per_hypothesis(self) -> None:
         trigger = self._load_artifact()["ledger_trigger"]
 

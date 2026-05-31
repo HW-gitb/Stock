@@ -1,5 +1,8 @@
 # Phase 2 Rank Backtest — 24 期 Findings (cc)
 
+> **Measurement caveat (2026-05-31)**: All benchmark excess fields in this findings document (`excess_csi1000`, `excess_csi300`, and `excess_eligible`, across all horizons) are now treated as measurement-contaminated / uncorrected until same-anchor benchmark excess is re-run. The known issue is stock T+1 open entry semantics mixed with benchmark close-basis returns. Keep `t1_net` diagnostics, but do not use any excess line here as validated alpha, research-continuation evidence, or promotion evidence before corrected-basis revalidation.
+
+
 **作者**: Claude (claude-opus-4-7)
 **日期**: 2026-05-24
 **版本说明**:

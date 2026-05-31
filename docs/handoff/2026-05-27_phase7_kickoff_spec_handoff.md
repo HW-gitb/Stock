@@ -998,3 +998,52 @@ git diff --check
 1. Claude 应审查本轮 uncommitted schema / artifact / test / routing 变更；重点看 frozen test 是否过窄或仍留 fishing 自由度。
 2. 如果审查 Pass 并提交，下一条 `执行` 应只运行 `research/preregistrations/a_share_minimal_data_burst_20260531.json` 中的 frozen falsification，不得调参。
 3. 如运行中发现需要改阈值、rank cap、universe、benchmark、holding period、cost model 或 pass/fail criterion，先停下并创建 singleton program-level test-budget ledger。
+
+## 2026-05-31 追加：alpha measurement-basis lock and burst prereg pause
+
+**改了什么**:
+
+- 更新 `docs/CURRENT.md` 和 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`，把下一刀从“运行 A-share minimal-data burst frozen falsification”反转为“先做 alpha measurement integrity / same-anchor benchmark excess correction”。
+- 将 `research/preregistrations/a_share_minimal_data_burst_20260531.json` 标记为 `BLOCKED_DO_NOT_RUN`，并在 `research/README.md`、`docs/burst_lane_spec.md`、`docs/provider_evidence_drift_monitor.md`、`docs/strategy_design_synthesis.md`、`AGENTS.md` 和 P1 access plan next_steps 中同步路由。
+- 增加 schema regression：当前 prereg 必须含 `BLOCKED_DO_NOT_RUN`、`measurement-basis issue`、`corrected-basis supersession`；P1 access plan 必须把 next alpha slice 指向 measurement integrity，而不是直接运行旧 prereg。
+- 修复轮接受 O1：给 4 份 `result/a_short/backtest/Phase2_rank_backtest_findings_*.md` 加 caveat 头，明确所有 benchmark excess surface 在 corrected-basis revalidation 前均为 contaminated / uncorrected。
+- 修复轮 O2 accept with modification：不在本轮 bump schema，但在行动指南中锁定未来 runner / automated research command 不能只依赖人读文字 marker，必须显式 reject `BLOCKED_DO_NOT_RUN` 或采用结构化 execution-status schema bump。
+- 修复轮 R1：明确当前 A-share CSI1000 / CSI300 benchmark open 可经 Tushare `index_daily` 取得；下一刀必须扩展 benchmark materializer / forward-daily benchmark fetch 取 open，close-to-close 对当前 A-share corrected revalidation 不是可接受 fallback。
+
+**为什么改**:
+
+- 全系统漏洞审查指出旧 5d `excess_csi1000` 线索和当前 burst prereg 存在入场锚点不对称风险：个股使用 T+1 open 语义，而 benchmark 使用 close basis。该混合口径不得支持 promotion-relevant alpha / research-continuation / ship-gate evidence。
+- 旧 5d clue 不能直接判定为假，但必须按 measurement-contaminated / uncorrected 处理，直到 same-anchor corrected revalidation 证明不是 artifact。
+- 修正只允许改变 benchmark / entry-anchor basis；阈值、universe、holding period、ranking cap、cost model、criteria、`test_budget=1` 不得借机变化，否则必须先建 singleton program-level ledger。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+```
+
+**验证结果**:
+
+- `tests.schema.test_research_preregistration_schema`: 11 tests passed.
+- `tests.schema.test_provider_p1_access_decision_plan_schema`: 8 tests passed.
+- `python -m unittest discover -s tests/schema -v`: 120 tests passed.
+- `git diff --check`: passed; only normal LF/CRLF working-copy warnings.
+- `docs/CURRENT.md` authoritative line count = 146, still under the 150-line snapshot target.
+- `rg -n "Measurement caveat \(2026-05-31\)" result\a_short\backtest`: 4 findings files matched.
+
+**失效旧结论**:
+
+- “提交后下一刀 = 运行 `research/preregistrations/a_share_minimal_data_burst_20260531.json`”失效；该 artifact 现在是 `BLOCKED_DO_NOT_RUN`。
+- “5d `excess_csi1000 t=+2.88` 是当前唯一显著正 alpha 线索”降级为未校正、疑似 measurement-basis artifact 的线索；corrected basis 重跑前不得当作 validated alpha。
+- “benchmark close basis 可与 stock T+1 open entry 混用来支持 research continuation”失效；promotion-relevant evidence 必须同 entry anchor。
+- “旧 Phase2 findings 文档中的任一 benchmark excess 表格可继续独立引用”失效；全部 excess surface 需等 corrected basis 重跑后再恢复引用。
+
+**下一步注意事项**:
+
+1. Claude 审查应重点核对所有 current route 是否禁止运行旧 prereg，并确认没有趁 measurement fix 改阈值、universe、holding period、criteria 或 `test_budget`。
+2. 如果审查 Pass 并提交，下一条 `执行` 应修复 / 引入 same-anchor benchmark excess：stock T+1 open 与 benchmark T+1 open 到同一 exit close；当前 A-share CSI1000 / CSI300 应扩展 Tushare `index_daily` benchmark materializer / forward-daily benchmark fetch 取 open，不能用 close-to-close fallback。
+3. corrected revalidation 只能是 corrected 5d CSI1000 primary；10d / 20d 只能 diagnostic，不得做参数、variant、benchmark、holding-period search。

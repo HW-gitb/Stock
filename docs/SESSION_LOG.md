@@ -8,6 +8,172 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (measurement-basis lock — R1 repaired; full change set clean & committable)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `4f0234c`)
+
+**Verdict**: Pass. R1 repaired correctly; O1 (accept) + O2 (accept-with-modification) already resolved; no Required / Optional / open question remaining. Working tree **committable** as a single coherent measurement-integrity docs-lock commit.
+
+**Notes**: R1 修复精确达标。ALPHA_GUIDE §Measurement-Basis Lock 把原"open unavailable → close-to-close diagnostic-only"陷阱拆为两段：(a) 当前 case 明确段——"A-share CSI1000/CSI300 benchmark open 经 Tushare `index_daily` **可得**；materializer 仅存 close 是 implementation gap、非 unavailability；required same-anchor path = 扩展 `materialize_benchmark_monthly_returns_tushare.py` + forward-daily benchmark fetch 去 request/persist/validate/use benchmark T+1 open；close-to-close 对当前 A-share/CSI1000 corrected revalidation **不是**可接受 fallback"；(b) 通用 diagnostic-only fallback 保留但显式 "does not apply to the current A-share CSI1000/CSI300 case"，只留给经 reviewed provider evidence 证明真正无 open 的未来市场。陷阱关闭且未删通用条款（围栏式，规则仍完整）。**传播完整**：CURRENT §0 Latest Delta + §5 P0 都改成 "extend materializer / forward-daily fetch to use index open for current A-share CSI1000/CSI300"，旧 trap 行已移除。handoff 追加完整 R1/O1/O2 repair + 失效旧结论（含新加 "旧 Phase2 findings excess 表在 corrected 重跑前不可独立引用"）。**Scope 干净**：R1 修复仅触 ALPHA_GUIDE + CURRENT + handoff + SESSION_LOG；measurement-basis lock 其余段（same-anchor / corrected-single-test / supersede-basis-only / O2 guard）、O1 四份 findings caveat、prereg frozen_test_design、code、schema 全部逐字未动（diff stat 与上轮一致）。独立复核：`discover -s tests/schema` 120 OK、CURRENT.md 146、`git diff --check` exit 0。整套 measurement-basis lock 变更集（docs lock + O1 contamination caveats + O2 future-automation guard + R1 open-availability 修正）完整、内部一致。无 §Optional Re-raise。**可 `提交`**（单一 measurement-integrity docs-lock scope）。提交后真正的下一刀 `执行` = same-anchor benchmark excess 的 **code 修复**（扩展 materializer/forward-daily 取 index open + corrected 5d CSI1000 重验，10d/20d 仅 diagnostic、不搜索）——独立 slice，我会对照 `backtest_rank.py` 实际 return 计算验同锚点是否真落地。
+
+---
+
+## 2026-05-31 — Codex 修复 (measurement-basis lock R1)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the approved R1 from the latest approval marker: `2026-05-31 — User approval — 批准修改 R1 (measurement-basis lock)`.
+- Builds on the prior Optional-disposition repair where O1/O2 were already accepted / accepted with modification.
+
+**Approved Required fixes repaired**:
+- R1 repaired — `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` now states that current A-share CSI1000 / CSI300 benchmark open is available through Tushare `index_daily`; the close-only materializer is an implementation gap, not proof that open is unavailable. The required path is to extend `runners/materialize_benchmark_monthly_returns_tushare.py` and any forward-daily benchmark fetch to request, persist, validate, and use benchmark T+1 open. Close-to-close is not an acceptable fallback for the current A-share / CSI1000 corrected revalidation.
+
+**Optional disposition**:
+- None. Latest approval / review state had no newly pending Optional suggestions; O1/O2 were already disposed in the prior `修复` round.
+
+**Worked on**:
+1. [tracked] `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: corrected the Measurement-Basis Lock open-availability wording for current A-share CSI1000 / CSI300.
+2. [tracked] `docs/CURRENT.md`: removed the misleading generic close-to-close fallback from the current P0 route and pointed the next code slice at index-open benchmark materialization / forward-daily fetch.
+3. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: extended the measurement-basis handoff with the R1 repair and corrected next-step implementation note.
+4. [tracked] `docs/SESSION_LOG.md`: recorded this `修复` handoff for Claude re-review continuity.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: 11 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v`: 8 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 120 tests passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings appeared.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 146.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+## 2026-05-31 — User approval — 批准修改 R1 (measurement-basis lock)
+
+**Commits**: none (approval-state marker for cross-LLM continuity; recorded by Claude so the next `修复` sees the approval, since it was given in chat).
+
+**Status**: R1 is now **APPROVED FOR REPAIR**. O1/O2 already disposed and accepted (see re-review entry below). The next `修复` (Codex) should repair R1 only, plus dispose any newly raised Optional.
+
+**R1 required outcome** (restating the approved fix, no new scope): in `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` §Measurement-Basis Lock, correct the "If benchmark open is unavailable, close-to-close … diagnostic only" wording so it states that for the A-share / CSI1000 case the benchmark open **is** obtainable via Tushare `index_daily` (the materializer currently extracts close only at `materialize_benchmark_monthly_returns_tushare.py:180`); the preferred same-anchor path therefore **must** extend the benchmark materializer + forward-daily benchmark fetch to use index open, and close-to-close is **not** an acceptable fallback for this case. Keep the generic "if a market genuinely lacks benchmark open" diagnostic-only clause only as a true last resort for markets where open is unavailable. Do not change frozen controls, code, or schema in this docs `修复`; the actual same-anchor code fix remains the next `执行`.
+
+**Next step**: user invokes `修复` → Codex repairs R1 in the docs → Claude re-review → if clean Pass, `提交`.
+
+---
+
+## 2026-05-31 — Claude re-review — Optionals cleared, R1 still PENDING USER APPROVAL (measurement-basis lock 修复)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `4f0234c`)
+
+**Verdict**: Optional dispositions accepted（O1 accept 已验、O2 accept-with-modification 接受）；**R1 仍 PENDING USER APPROVAL，未修**。工作树**暂不可 `提交`**，直到 R1 被批准+修复或用户显式 defer/降级。
+
+**Status**: O1/O2 DISPOSED AND ACCEPTED. R1 STILL PENDING USER APPROVAL — not committable until resolved.
+
+**Notes**: Codex 本轮 `修复` 正确——只处置 Optional、不碰 R1（R1 PENDING USER APPROVAL，用户发 `审查`/`修复` 非 `批准修改`，Codex 明确拒绝修它；其 entry 也写 "Ready for re-review: No because R1 pending"，诚实）。**O1 accept 验证正确**：4 份 `Phase2_rank_backtest_findings_*.md`（codex_24p_v7.10 / codex / cc / cc_24p）均加同一条 "Measurement caveat (2026-05-31)" 头，声明 `excess_csi1000` / `excess_csi300` / `excess_eligible` 全 horizon contaminated、点名 stock T+1 open vs benchmark close-basis 病因、保留 `t1_net` diagnostics、禁止任何 excess 当 validated/research-continuation/promotion evidence——正好覆盖我 O1 指出的"污染范围 = 整个 excess surface 而非仅 5d clue"。cc/cc_24p 两份在既有 "已失效 2026-05-23" banner 之上叠加新 caveat，二者互补不冲突。**O2 accept-with-modification 接受**：未 bump `research_preregistration.schema.json`（无 burst runner，过早，判断正确），改在 ALPHA_GUIDE measurement-basis lock 末加 binding 前瞻 guard——"任何 runner / 自动化命令消费 prereg 前必须 either 显式拒绝 `BLOCKED_DO_NOT_RUN` or 走 reviewed 结构化 `execution_status` bump，有自动化后不得依赖 human-only note"。该 modification 达到 O2 原意（防未来自动化忽略 block），无 §Optional Re-raise 触发。**R1 未修已确认**：ALPHA_GUIDE "If benchmark open is unavailable, close-to-close … diagnostic only" 措辞逐字未改——该 open-availability 陷阱仍在（CSI1000 open 经 `index_daily` 可得，materializer 现仅取 close）。Scope 干净：本轮仅改 4 findings docs + ALPHA_GUIDE O2 段 + handoff + SESSION_LOG；frozen_test_design / code / schema 未动。独立复核：`discover -s tests/schema` 120 OK、CURRENT.md 146、`git diff --check` exit 0。**Gate**：R1 仍是唯一未决项。路径 = 用户 `批准修改`（→ Codex 修复 R1 改 open-availability 措辞 → 我再复审 → `提交`）或用户显式 `暂缓修改`/降级 R1 后才可 `提交`。
+
+---
+
+## 2026-05-31 — Codex 修复 (measurement-basis lock Optional dispositions)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest 2026-05-31 Claude review only where allowed by protocol.
+- R1 remains unrepaired because the latest review marks it `PENDING USER APPROVAL` and the user invoked `修复`, not `批准修改`.
+
+**Approved Required fixes repaired**:
+- None. R1 was not repaired because it is still pending explicit user approval.
+
+**Optional disposition**:
+- O1 accept — added a `Measurement caveat (2026-05-31)` header note to all four `result/a_short/backtest/Phase2_rank_backtest_findings_*.md` files, declaring all benchmark excess fields (`excess_csi1000`, `excess_csi300`, and `excess_eligible`, all horizons) measurement-contaminated / uncorrected until same-anchor benchmark excess is re-run.
+- O2 accept with modification — change: did not bump `schemas/research_preregistration.schema.json` in this docs-only repair; added a future automation guard to `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` requiring any future runner / automated research command to explicitly reject `BLOCKED_DO_NOT_RUN` or use a reviewed structured execution-status schema bump. Reason: there is no burst runner consuming the artifact yet, so a schema bump now would be premature, but future automation must not rely on a human-only note.
+
+**Worked on**:
+1. [tracked] `result/a_short/backtest/Phase2_rank_backtest_findings_codex_24p_v7.10.md`, `result/a_short/backtest/Phase2_rank_backtest_findings_codex.md`, `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md`, `result/a_short/backtest/Phase2_rank_backtest_findings_cc.md`: added the benchmark-excess contamination caveat.
+2. [tracked] `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: added the future structured execution-status / runner rejection guard for `BLOCKED_DO_NOT_RUN`.
+3. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: extended the existing measurement-basis lock handoff with O1/O2 repair details and the invalidated finding-doc citation rule.
+4. [tracked] `docs/SESSION_LOG.md`: recorded this `修复` handoff for Claude / user continuity.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: 11 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v`: 8 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 120 tests passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings appeared.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 146.
+- `rg -n "Measurement caveat \(2026-05-31\)" result\a_short\backtest`: 4 findings files matched.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review: No, because R1 remains pending explicit user approval. If the user approves R1 with `批准修改`, the next `修复` should repair only R1 plus any newly pending Optional dispositions.
+
+**Open questions handed off**:
+- None.
+
+## 2026-05-31 — Claude review — Pass with fixes (alpha measurement-basis lock and burst prereg pause)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `4f0234c`)
+
+**Verdict**: Pass with fixes（R1 Required PENDING USER APPROVAL；O1/O2 Optional PENDING CODEX DISPOSITION）。
+
+**Status**: REVIEW VERDICT RECORDED. R1 PENDING USER APPROVAL; O1/O2 PENDING CODEX DISPOSITION.
+
+**方案本身可接受**：忠实落地收敛版——measurement-basis lock 四条（同入场锚点 / benchmark T+1 open 优先 / close-to-close 仅 diagnostic / corrected 5d primary + 10d-20d 仅诊断、不搜索）、supersede 只改 basis、5d 线索降级为 contaminated（非"已证伪"）、prereg 标 `BLOCKED_DO_NOT_RUN`、路由全改。scope 干净：仅 docs/tests，未改 code/schema/runner；**block 用现有 `next_steps`/`limitations` 字符串实现**（registration_status const 仍 "registered_not_run"、schema 未改、不破坏 `additionalProperties:false`）；**frozen_test_design 逐字未动**（signal pct_5d>=6/amount>=1.5/is_breakout、holding=5、CSI1000、6 criteria、test_budget=1 全不在 diff 里）。独立验证：research prereg 11 OK / discover 120 OK（PATH `python`）、CURRENT.md 146、`git diff --check` exit 0。还把修法**前瞻性泛化**成"所有 promotion-relevant alpha 计算前须声明 entry/exit/cost/missing-data basis"——治本而非补丁，加分。
+
+**Required fixes**:
+- **R1（MED→Required，open-availability 陷阱）**：measurement-basis lock 写"benchmark open 不可得 → close-to-close diagnostic-only"，但对 CSI1000 这个前提是假的：`materialize_benchmark_monthly_returns_tushare.py` 已用 Tushare `index_daily`（L84+），该 endpoint **返回 open**，只是 materializer 现在只取 close（L180）。风险：下一刀实现者读到 fallback、看到 close-only materializer、判"open 不可得"→ 走 diagnostic-only → corrected revalidation 只剩 diagnostic 证据（无法支撑 research-continuation）→ burst lane 不是因为 edge 假、而是因为实现走了懒路径而 dead-end。建议把 lock 措辞改成"CSI1000 open 可经 index_daily 取得，preferred 路径**必须**扩展 materializer + forward-daily benchmark fetch 取 open；close-to-close 对本 A 股/CSI1000 case **不是**可接受 fallback"。
+
+**Optional suggestions**:
+- **O1（MED，污染范围低估）**：入场锚点不对称是 `backtest_rank.py` **全部** excess 输出（excess_csi1000/csi300/eligible × 全 horizon）的系统性问题，非仅 5d clue。降级只到 CURRENT §3 + prereg，但 4 份 `result/a_short/backtest/Phase2_rank_backtest_findings_*.md`（AGENTS §文件参考 仍称"当前有效 findings"，grep 确认 4 份全含 5d 线索）**未加 contamination caveat**——污染 finding 仍在其主文档里未标注。建议给这些 findings 文档加 caveat 头并声明降级覆盖整个 excess surface。
+- **O2（LOW now / MED later，block 仅文字）**：`BLOCKED_DO_NOT_RUN` 只活在 `next_steps`/`limitations` 字符串 + 一条断言文字的 test；`registration_status`/`research_status` const 仍是"...not_run"（读起来像"可跑"）。当前无 burst runner 故曝险低，但将来建 runner / superseding prereg 时须 either 编码 runner 读该文字 marker，or（更稳）给 schema 加结构化 `execution_status` enum（含 blocked）——那是正当 version bump，非 fishing。
+
+**Notes（process）**：本 prereg 经 2 轮 Claude review + 1 轮 修复，却一直带着这个 benchmark-basis bug——per-`执行` review 严格验了 schema/scope/locks，但没把"prereg 定义的 metric"与"backtest_rank 实际 return 计算"交叉比对。教训：**定义 metric 的 contract 必须对照该 metric 的实现来 review**，不能只查内部自洽。这也是这轮全系统审查的价值所在。R1 修好后该 docs lock 可提交；真正的 code 修复（same-anchor + 取 index open）是再下一刀，须独立 review。
+
+---
+
+## 2026-05-31 — Codex (alpha measurement-basis lock and burst prereg pause)
+
+**Commits**: none
+
+**Relationship to prior session(s)**:
+- Builds on `4f0234c Add A-share burst preregistration contract`.
+- **Reverses**: “next `执行` runs `research/preregistrations/a_share_minimal_data_burst_20260531.json`” → “current prereg is `BLOCKED_DO_NOT_RUN`; next `执行` must first fix / introduce same-anchor benchmark excess and create a corrected-basis supersession.” Reason: review identified benchmark entry-basis contamination risk in the 5d `excess_csi1000` clue and current prereg.
+- **Refines**: the 5d clue is not declared false; it is downgraded to measurement-contaminated / uncorrected until corrected basis revalidation proves otherwise.
+
+**Worked on**:
+1. [tracked] `docs/CURRENT.md`: changed P0 to alpha measurement integrity, blocked the current burst prereg, downgraded the 5d clue, and kept line count under 150.
+2. [tracked] `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: added the binding measurement-basis lock: same stock/benchmark entry anchor, benchmark T+1 open preferred, close-to-close diagnostic-only if open is unavailable, corrected 5d primary with 10d/20d diagnostics only.
+3. [tracked] `research/preregistrations/a_share_minimal_data_burst_20260531.json` and `research/README.md`: marked the current prereg `BLOCKED_DO_NOT_RUN` and required corrected-basis supersession before any output is produced.
+4. [tracked] `AGENTS.md`, `docs/burst_lane_spec.md`, `docs/provider_evidence_drift_monitor.md`, `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`, `docs/strategy_design_synthesis.md`: removed current-route wording that could lead a future LLM to run the blocked prereg.
+5. [tracked] `tests/schema/test_research_preregistration_schema.py` and `tests/schema/test_provider_p1_access_decision_plan_schema.py`: added regression checks for the block and corrected-basis route.
+6. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the phase handoff update and invalidated the old “run frozen falsification next” conclusion.
+
+**Key decisions**:
+- The current A-share burst prereg stays structurally frozen but is not executable. Its existing benchmark return rule remains visible as the blocked basis; the corrected-basis version must be a superseding prereg.
+- Supersession may change only benchmark / entry-anchor basis. Changing trigger thresholds, universe, holding period, ranking cap, cost model, criteria, or `test_budget=1` is fishing and requires a singleton program-level ledger first.
+- The corrected revalidation is a single frozen primary test on corrected 5d CSI1000. 10d / 20d are diagnostic only and cannot rescue or sink the primary result through search.
+
+**Alternatives considered and rejected**:
+- “Run the existing prereg and annotate the limitation afterward” — rejected. That would spend the single frozen test on a contaminated measurement basis.
+- “Rewrite `backtest_rank.py` in this docs slice” — rejected. This slice is the execution lock; the next `执行` should implement / correct same-anchor benchmark excess with this route already fixed.
+- “Mark 5d alpha as definitively fake” — rejected. The right status is contaminated / uncorrected pending corrected revalidation.
+
+**Validation**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: 11 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema -v`: 8 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 120 tests passed.
+- `git diff --check`: passed; only normal LF/CRLF working-copy warnings.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 146.
+
+**Current review state**:
+- Uncommitted tracked changes only; no untracked files at the time of this entry.
+- Claude should review that all current route docs block the old prereg and that no frozen threshold / universe / holding-period / criteria / `test_budget` changed under the measurement-basis fix.
+
+**Open questions / next step**:
+- None for this docs lock. If reviewed and committed, next `执行` should fix / introduce same-anchor benchmark excess and create a corrected-basis superseding prereg before any A-share burst falsification output.
+
 ## 2026-05-31 — Claude review — Pass (A-share burst preregistration — O1 修复 re-review)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8e13b23`)

@@ -163,6 +163,8 @@ class ProviderP1AccessDecisionPlanSchemaTest(unittest.TestCase):
 
         self.assertIn("A-share minimal-data burst", joined_next_steps)
         self.assertIn("research-only preregistration", joined_next_steps)
+        self.assertIn("alpha measurement integrity", joined_next_steps)
+        self.assertIn("corrected-basis supersession", joined_next_steps)
         self.assertIn("provider-evidence track", joined_next_steps)
         self.assertIn("not long-alpha existence", joined_next_steps)
         self.assertIn("does not perform new web research", joined_limitations)

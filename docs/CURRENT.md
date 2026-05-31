@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-31（A-share burst preregistration artifact）
+**最后更新**：2026-05-31（alpha measurement integrity lock）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -8,19 +8,19 @@
 
 ## 0. Latest Delta
 
-- A-share `minimal_data_burst` preregistration now exists: `schemas/research_preregistration.schema.json` and `research/preregistrations/a_share_minimal_data_burst_20260531.json`.
-- It freezes one research-only test: 20240131-20251231 monthly A-short generated cohorts, CSI1000 primary benchmark, 5-trading-day T+1-open to T+5-close return, fixed EOD trigger thresholds, fixed pass/fail criteria, and `test_budget = 1`.
-- The artifact is not a research result: no runner change, no data fetch, no provider access, no production feed, no live eligibility, no ship-gate evidence claim.
-- Next alpha-validation slice is to run only that frozen falsification test; any parameter / variant / benchmark / holding-period search requires a singleton program-level ledger first.
+- A-share `minimal_data_burst` preregistration is now paused: `research/preregistrations/a_share_minimal_data_burst_20260531.json` is `BLOCKED_DO_NOT_RUN` until corrected benchmark entry basis supersedes it.
+- Current issue: stock T+1 open leg and benchmark close basis may not be mixed for promotion-relevant alpha / research-continuation evidence.
+- The old 5d `excess_csi1000` clue is measurement-contaminated / uncorrected, not validated alpha, until same-anchor corrected revalidation proves otherwise.
+- Next P0 is alpha measurement integrity: same-entry-anchor benchmark excess; for current A-share CSI1000 / CSI300, Tushare `index_daily` can provide benchmark open, so close-to-close is not an acceptable fallback.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst preregistration is established; provider access remains blocked pending explicit user approval.
-- **当前 P0 目标**：A-share `minimal_data_burst` single frozen research-only falsification；不得改 frozen thresholds / universe / benchmark / holding period，不得进 production、不得改 runner、不得声称 ship-gate evidence。
+- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst preregistration exists but is blocked by measurement-basis review; provider access remains blocked pending explicit user approval.
+- **当前 P0 目标**：alpha measurement integrity correction / revalidation；不得运行当前 burst prereg，不得进 production、不得改 provider / DataHub、不得声称 ship-gate evidence。
 - **当前 P1 provider blocker**：任何 sample / trial / paid-access / token / provider contact / data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
-- **执行锁**：本轮 preregistration 已冻结 universe / benchmark / holding period / entry-exit rule / threshold / `test_budget = 1`；第二个 promotion-relevant hypothesis、参数 / variant / benchmark / holding-period search 前，先建 singleton program-level test-budget ledger。
+- **执行锁**：当前 prereg 为 `BLOCKED_DO_NOT_RUN`；superseding corrected-basis prereg 只能改 benchmark / entry-anchor basis，阈值、universe、holding period、criteria、`test_budget` 不得变；否则先建 singleton program-level ledger。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
@@ -28,7 +28,7 @@
 
 ## 2. 最近已完成
 
-- **A-share burst preregistration**（2026-05-31）：`research/preregistrations/a_share_minimal_data_burst_20260531.json` 已建立并由 `schemas/research_preregistration.schema.json` 锁定；只允许一个 frozen research-only test。
+- **A-share burst preregistration**（2026-05-31）：`research/preregistrations/a_share_minimal_data_burst_20260531.json` 已建立但因 benchmark entry-basis measurement issue 暂停执行；需 corrected-basis supersession 后才可重启。
 - **Phase 7b-2 P1 access/sample plan**（2026-05-31）：`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 已建立并由 `schemas/provider_p1_access_decision_plan.schema.json` 锁定；只定义访问边界和样本验证计划，不授权 provider 行动。
 - **Phase 7b-2 P1 readiness review matrix**（2026-05-29）：`docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` 已建立并由 `schemas/provider_p1_readiness_review.schema.json` 锁定；六份 docs evidence collection 完成，但 P1 不授权 Phase 7c / provider selection / data fetch。
 - **Phase 7b-2 P1 evidence snapshots**（2026-05-28）：public-source、market-data-candidate、authorization / cost / stability、benchmark / GICS、fundamentals observed-date、coverage / fallback / incident 六份 artifact 均已建立并各有 regression test；这些只证明 candidate evidence。
@@ -47,7 +47,7 @@
 
 - 工程链路健康；Phase 2 工程签收。
 - 20d benchmark excess 仍不显著：`t1_net t=1.60`、`excess_csi300 t=0.57`、`excess_csi1000 t=0.17`。
-- 5d `excess_csi1000 t=+2.88` 是当前唯一显著正 alpha 线索。
+- 5d `excess_csi1000 t=+2.88` 已降级为未校正、疑似 measurement-basis artifact 的线索；same-anchor corrected re-run 前不得当作 validated alpha。
 - 强负信号仍是重点风控证据：`entry_flag=追高风险，周一确认`、`OVERHEAT`、`Tier2`。
 - 当前 A-short steady 更像“过滤坏票”而不是“挑出好票”，不得当作 full-size alpha lane。
 - 24p findings 尚未完成 multiple-testing / survivorship / regime sensitivity 重审；Phase 7a-1 audit 已要求重新标注证据等级。
@@ -85,11 +85,11 @@
 
 ## 5. 下一步
 
-### P0 - A-share minimal-data burst frozen falsification
+### P0 - Alpha measurement integrity before burst falsification
 
-- 只运行 `research/preregistrations/a_share_minimal_data_burst_20260531.json` 中登记的 single frozen test；后续 evidence report 用现有 `hypothesis_registration_ref` 指回它。
-- 不得改阈值 / universe / benchmark / holding period / entry-exit rule；如要改，先建 singleton test-budget ledger。
-- Research-only，不进 production、不改 runner、不喂 production decision、不声称 ship-gate evidence。
+- Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it is `BLOCKED_DO_NOT_RUN` until corrected-basis supersession.
+- Fix / introduce same-anchor benchmark excess first: stock T+1 open and benchmark T+1 open to the same exit close; extend the benchmark materializer / forward-daily benchmark fetch to use index open for current A-share CSI1000 / CSI300.
+- Corrected revalidation is one frozen primary test on corrected 5d CSI1000; 10d / 20d may be diagnostics only, with no threshold / variant / benchmark / holding-period search.
 
 ### P1 - P1 provider access boundary（仅用户明确要求时）
 

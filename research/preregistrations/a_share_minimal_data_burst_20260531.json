@@ -52,7 +52,7 @@
     {
       "artifact_id": "current_snapshot",
       "path": "docs/CURRENT.md",
-      "consumption_role": "Routes the current P0 task to A-share minimal-data burst research-only preregistration and falsification."
+      "consumption_role": "Routes the current P0 task to alpha measurement integrity and blocks this preregistration until corrected-basis supersession."
     }
   ],
   "hypothesis_registration": {
@@ -60,7 +60,7 @@
     "hypothesis_text": "A single frozen A-share minimal-data burst trigger using existing A-short candidate context, EOD momentum / breakout / amount expansion, liquidity and limit-state filters will show positive 5-trading-day cost-adjusted excess return versus CSI1000 over the frozen 2024-2025 monthly cohort window. The result can only decide whether to continue research; it cannot promote production use or ship-gate evidence.",
     "registered_by_session_id": "codex_2026-05-31_a_share_minimal_data_burst_prereg",
     "data_window_at_registration": "Frozen historical monthly candidate cohorts from 20240131 through 20251231 under result/a_short/backtest/generated/*/candidates.csv. Current 202605 live-style outputs may be inspected for input compatibility only, not included in the promotion-relevant statistic.",
-    "evidence_available_at_registration": "Known A-short v7.10 24-period production results include a 5d excess_csi1000 positive clue and non-significant 20d evidence. No burst-specific parameter search has been run under this preregistration.",
+    "evidence_available_at_registration": "Known A-short v7.10 24-period production results include an uncorrected 5d excess_csi1000 positive clue and non-significant 20d evidence. The 5d clue is now treated as measurement-contaminated until same-anchor corrected revalidation proves otherwise. No burst-specific parameter search has been run under this preregistration.",
     "source_doc_refs": [
       "docs/CURRENT.md",
       "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
@@ -286,13 +286,16 @@
     ]
   },
   "next_steps": [
-    "Run only this frozen research-only falsification test, or stop.",
-    "Write a research-only evidence report that points research_experiment_log.hypothesis_registration_ref to this artifact.",
+    "BLOCKED_DO_NOT_RUN: this preregistration must not be run until a corrected-basis superseding preregistration replaces the benchmark entry-basis rule; the current benchmark rule is blocked by a measurement-basis issue.",
+    "After corrected-basis supersession exists, run only the superseding frozen research-only falsification test, or stop.",
+    "Write a research-only evidence report that points research_experiment_log.hypothesis_registration_ref to the corrected-basis superseding preregistration.",
     "If this in-sample frozen test passes, register and run a separate confirmation path before any production promotion: at minimum 2026+ held-out / forward cohorts or 12 months live-normalized forward evidence under the unchanged trigger. This preregistration does not authorize promotion without that confirmation.",
     "If the frozen test passes all thresholds, the only allowed outcome is research_continue_only with later schema review, Claude review, and user approval.",
     "If any threshold fails, record falsified_or_redesign_required and do not tune thresholds without first creating a singleton program-level test-budget ledger."
   ],
   "limitations": [
+    "BLOCKED_DO_NOT_RUN: the current benchmark_return_rule uses benchmark close basis against stock T+1 open entry semantics and is not executable as promotion-relevant research-continuation evidence.",
+    "A corrected-basis supersession may change only benchmark / entry-anchor basis; changing trigger thresholds, universe, holding period, cost model, criteria, or test_budget requires a singleton program-level ledger first.",
     "This is minimal-data EOD research, not full-data burst evidence.",
     "It does not use dated catalysts, filings, capital-flow, options, borrow, or manual confirmation evidence.",
     "It is in-sample research over existing generated cohorts and cannot count as live-normalized or ship-gate evidence.",
