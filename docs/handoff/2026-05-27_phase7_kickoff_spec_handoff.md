@@ -958,3 +958,43 @@ git diff --check
 1. Claude 应审查本轮 uncommitted schema / JSON / test / routing 变更；重点看 scope locks 是否足以防 provider access 和 Phase 7c 误读。
 2. 如果审查 Pass 并提交，下一条 `执行` 应先建立 A-share `minimal_data_burst` preregistration artifact，再做 research-only falsification。
 3. 如用户想推进 provider sample / trial / paid access，必须先给出 cost ceiling、access path、license / storage / retention 边界，并仍走单独 reviewed decision。
+
+## 2026-05-31 追加：A-share minimal-data burst preregistration artifact
+
+**改了什么**:
+
+- 新增 `schemas/research_preregistration.schema.json`，作为 single frozen research test preregistration contract。
+- 新增 `research/README.md` 与 `research/preregistrations/a_share_minimal_data_burst_20260531.json`，把 A-share `minimal_data_burst` 的首刀 alpha-validation 固定为一个 research-only test：20240131-20251231 月度 A-short generated cohorts、CSI1000 primary benchmark、5 trading days、T+1 open 到 T+5 close、固定 EOD trigger、固定 pass/fail criteria、`test_budget = 1`。
+- 新增 `tests/schema/test_research_preregistration_schema.py`，验证 schema / artifact、alpha audit hypothesisRegistration 形状复用、production / provider / Phase 7c scope locks、single frozen test budget、evidence_report ref linkage、singleton ledger trigger 和 fishing mutation reject。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/strategy_design_synthesis.md`、`docs/burst_lane_spec.md`、`docs/provider_evidence_drift_monitor.md` 的 routing / current-state wording。
+
+**为什么改**:
+
+- 上一轮已确认 P1 access-decision / sample-validation plan 收口后，下一条 alpha-validation 刀应转向 A-share `minimal_data_burst`，且必须先 preregister。
+- 该 artifact 是执行锁，不是研究结果：它防止后续 LLM 在第一次 burst research 中扫参数、扫 benchmark、扫 holding period 或把 CSI300 diagnostic 当成 rescue。
+- 本轮保持边界：不跑 research、不改 runner、不抓 provider data、不进 production、不声称 ship-gate evidence。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+```
+
+**验证结果**:
+
+- 最终验证结果记录在同日 Codex SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “下一条 `执行` 应先建立 A-share `minimal_data_burst` preregistration artifact”已完成；下一条 `执行` 才能运行该 frozen research-only falsification。
+- “单一 research experiment 可以在首刀内扫 threshold / rank cap / benchmark / holding period 而不建 ledger”不成立；当前 schema / artifact 锁定 `test_budget = 1`。
+- “Preregistration 需要修改 `evidence_report.schema.json` 才能被引用”不成立；后续 evidence report 使用现有 `research_experiment_log.hypothesis_registration_ref` 指回该 artifact。
+
+**下一步注意事项**:
+
+1. Claude 应审查本轮 uncommitted schema / artifact / test / routing 变更；重点看 frozen test 是否过窄或仍留 fishing 自由度。
+2. 如果审查 Pass 并提交，下一条 `执行` 应只运行 `research/preregistrations/a_share_minimal_data_burst_20260531.json` 中的 frozen falsification，不得调参。
+3. 如运行中发现需要改阈值、rank cap、universe、benchmark、holding period、cost model 或 pass/fail criterion，先停下并创建 singleton program-level test-budget ledger。

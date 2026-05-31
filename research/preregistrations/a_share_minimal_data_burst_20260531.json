@@ -1,0 +1,301 @@
+{
+  "schema_name": "research_preregistration",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-31T00:00:00Z",
+  "artifact_id": "a_share_minimal_data_burst_prereg_20260531",
+  "scope": {
+    "phase": "7b",
+    "purpose": "single_frozen_test_research_preregistration",
+    "lane_id": "a_share_burst_minimal_data",
+    "registration_status": "registered_not_run",
+    "research_status": "research_only_not_run",
+    "production_use_allowed": false,
+    "direct_production_feed_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_contact_or_account_creation_allowed": false,
+    "trial_or_token_request_allowed": false,
+    "paid_access_approved": false,
+    "sample_row_collection_allowed": false,
+    "provider_data_fetch_allowed": false,
+    "new_data_fetch_allowed_by_this_artifact": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false,
+    "production_strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_claim_allowed": false,
+    "live_trading_or_minimal_live_allowed": false,
+    "phase7c_authorized_by_this_artifact": false
+  },
+  "source_doc_refs": [
+    {
+      "artifact_id": "alpha_validation_action_guide",
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "consumption_role": "Defines mandatory research preregistration, single frozen test, evidence integrity, and ledger-trigger rules."
+    },
+    {
+      "artifact_id": "burst_lane_spec",
+      "path": "docs/burst_lane_spec.md",
+      "consumption_role": "Defines minimal_data_burst as research / paper only and limits A-share burst inputs to OHLCV, turnover, benchmark, liquidity, limit / halt, and existing candidate context."
+    },
+    {
+      "artifact_id": "provider_priority_benchmark_contract",
+      "path": "docs/provider_priority_benchmark_contract.md",
+      "consumption_role": "Defines CSI1000 as the provisional primary benchmark and CSI300 as mandatory secondary context for A-share minimal-data burst reporting."
+    },
+    {
+      "artifact_id": "p1_access_decision_sample_validation_plan",
+      "path": "docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json",
+      "consumption_role": "Separates this A-share alpha-validation preregistration from US provider access, sample validation, and SEC parser feasibility."
+    },
+    {
+      "artifact_id": "current_snapshot",
+      "path": "docs/CURRENT.md",
+      "consumption_role": "Routes the current P0 task to A-share minimal-data burst research-only preregistration and falsification."
+    }
+  ],
+  "hypothesis_registration": {
+    "timestamp": "2026-05-31T00:00:00Z",
+    "hypothesis_text": "A single frozen A-share minimal-data burst trigger using existing A-short candidate context, EOD momentum / breakout / amount expansion, liquidity and limit-state filters will show positive 5-trading-day cost-adjusted excess return versus CSI1000 over the frozen 2024-2025 monthly cohort window. The result can only decide whether to continue research; it cannot promote production use or ship-gate evidence.",
+    "registered_by_session_id": "codex_2026-05-31_a_share_minimal_data_burst_prereg",
+    "data_window_at_registration": "Frozen historical monthly candidate cohorts from 20240131 through 20251231 under result/a_short/backtest/generated/*/candidates.csv. Current 202605 live-style outputs may be inspected for input compatibility only, not included in the promotion-relevant statistic.",
+    "evidence_available_at_registration": "Known A-short v7.10 24-period production results include a 5d excess_csi1000 positive clue and non-significant 20d evidence. No burst-specific parameter search has been run under this preregistration.",
+    "source_doc_refs": [
+      "docs/CURRENT.md",
+      "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "docs/burst_lane_spec.md",
+      "docs/provider_priority_benchmark_contract.md",
+      "result/a_short/backtest/README.md"
+    ]
+  },
+  "frozen_test_design": {
+    "freeze_controls": {
+      "hypothesis_frozen": true,
+      "parameters_frozen": true,
+      "universe_frozen": true,
+      "benchmark_frozen": true,
+      "holding_period_frozen": true,
+      "entry_exit_rule_frozen": true,
+      "threshold_frozen": true,
+      "parameter_search_allowed": false,
+      "variant_search_allowed": false,
+      "benchmark_sweep_allowed": false,
+      "holding_period_sweep_allowed": false
+    },
+    "universe": {
+      "market": "A-share",
+      "source_universe_ref": "result/a_short/backtest/generated/{YYYYMMDD}/candidates.csv for monthly cohorts 20240131 through 20251231",
+      "eligibility_rule": [
+        "Use only rows already present in the frozen A-short generated candidate files; do not regenerate candidate universes inside this test.",
+        "Require list_status == L where present.",
+        "Require tier == Tier1.",
+        "Require avg_amount_20d >= 100000000 and avg_amount_5d > 0.",
+        "Require entry_flag == 可直接观察.",
+        "Require chasing_high == false, overheat_flag == false, has_crash_veto == false, and is_lock == false where columns are present."
+      ],
+      "exclusion_rule": [
+        "Exclude rows with missing ts_code, trade date, close, pct_5d, avg_amount_5d, avg_amount_20d, is_breakout, or tier.",
+        "Exclude rows whose T+1 entry is unbuyable due to limit-up; record the unbuyable count and rate.",
+        "Do not add sector, theme, manual catalyst, capital-flow, or full-data burst fields in this test."
+      ]
+    },
+    "data_window": {
+      "research_window_start": "20240131",
+      "research_window_end": "20251231",
+      "cohort_frequency": "monthly generated A-short candidate cohorts only",
+      "candidate_file_glob": "result/a_short/backtest/generated/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/candidates.csv",
+      "outcome_data_ref": "existing A-share EOD forward-return surface used by runners/backtest_rank.py; no new provider fetch is authorized by this artifact",
+      "lookahead_prevention_notes": [
+        "Use each cohort's existing as_of candidate file as the decision snapshot.",
+        "Use T+1 entry and T+5 exit prices after the as_of date only for outcome calculation.",
+        "Do not let later 2026 live-style outputs affect the 2024-2025 promotion-relevant statistic."
+      ]
+    },
+    "trigger_rule": {
+      "trigger_id": "a_share_minimal_data_burst_eod_v1_single_frozen",
+      "positive_signal_families": [
+        "relative_strength",
+        "volume_expansion",
+        "breakout_quality"
+      ],
+      "fixed_input_columns": [
+        "tier",
+        "entry_flag",
+        "chasing_high",
+        "overheat_flag",
+        "has_crash_veto",
+        "is_lock",
+        "avg_amount_20d",
+        "avg_amount_5d",
+        "pct_5d",
+        "is_breakout",
+        "final_score"
+      ],
+      "hard_filters": [
+        "tier must equal Tier1.",
+        "entry_flag must equal 可直接观察.",
+        "chasing_high, overheat_flag, has_crash_veto, and is_lock must be false where present.",
+        "avg_amount_20d must be at least 100000000."
+      ],
+      "signal_definition": [
+        "relative_strength: pct_5d >= 6.0.",
+        "volume_expansion: avg_amount_5d / avg_amount_20d >= 1.5.",
+        "breakout_quality: is_breakout == true.",
+        "All three positive signal families must pass; no alternate thresholds or fallback families are allowed in this test."
+      ],
+      "portfolio_construction_rule": "Equal-weight all passing rows in each monthly cohort; if more than 10 rows pass, take the top 10 by final_score with ts_code as the deterministic tie-breaker. Empty cohorts are recorded as zero-signal cohorts and are not backfilled."
+    },
+    "entry_exit_rule": {
+      "entry_rule": "Enter at T+1 open using qfq-adjusted open, matching runners/backtest_rank.py T+1 semantics.",
+      "exit_rule": "Exit at T+5 close using qfq-adjusted close; no stop, profit-take, re-entry, or holding-period alternative is allowed in this test.",
+      "holding_period_trading_days": 5,
+      "cost_model": "Subtract 0.16 percentage points round-trip cost from stock return before CSI1000 excess calculation.",
+      "unbuyable_entry_handling": "If T+1 open is at or near up-limit under existing stk_limit or board fallback logic, skip that row and record pending_no_entry_limit_up; do not replace it with another row."
+    },
+    "benchmark_rule": {
+      "primary_benchmark_id": "CSI1000",
+      "primary_benchmark_role": "promotion_relevant_single_test",
+      "secondary_diagnostics": [
+        {
+          "benchmark_id": "CSI300",
+          "role": "diagnostic_only_mandatory_context",
+          "promotion_relevant": false
+        }
+      ],
+      "benchmark_return_rule": "Compute CSI1000 close-to-close return over the same T+1 entry date through T+5 exit date; missing benchmark windows fail the affected row instead of zero-filling."
+    },
+    "evaluation_threshold": {
+      "decision_label_if_all_pass": "research_continue_only",
+      "decision_label_if_any_fail": "falsified_or_redesign_required",
+      "criteria": [
+        {
+          "metric": "valid_signal_events",
+          "operator": ">=",
+          "threshold_value": 30,
+          "threshold_unit": "rows",
+          "failure_action": "Treat the result as underpowered and do not continue this trigger without a new preregistration."
+        },
+        {
+          "metric": "mean_net_excess_csi1000_5d_pct",
+          "operator": ">",
+          "threshold_value": 0,
+          "threshold_unit": "percentage_points",
+          "failure_action": "Falsify this frozen burst trigger."
+        },
+        {
+          "metric": "monthly_clustered_t_stat_net_excess_csi1000_5d",
+          "operator": ">=",
+          "threshold_value": 1.5,
+          "threshold_unit": "t_stat",
+          "failure_action": "Do not continue this trigger as an alpha candidate; at most record it as exploratory."
+        },
+        {
+          "metric": "max_drawdown_monthly_signal_excess_pct",
+          "operator": "<=",
+          "threshold_value": 15,
+          "threshold_unit": "percentage_points",
+          "failure_action": "Treat drawdown behavior as failing the burst research continuation gate."
+        },
+        {
+          "metric": "entry_unbuyable_rate",
+          "operator": "<=",
+          "threshold_value": 0.25,
+          "threshold_unit": "ratio",
+          "failure_action": "Treat A-share limit-risk feasibility as failing the burst research continuation gate."
+        },
+        {
+          "metric": "best_month_positive_excess_contribution_share",
+          "operator": "<=",
+          "threshold_value": 0.4,
+          "threshold_unit": "ratio",
+          "failure_action": "Treat the result as month-clustered and non-robust."
+        }
+      ]
+    },
+    "reproducibility_plan": {
+      "random_seed": null,
+      "planned_artifact_outputs": [
+        "research/results/a_share_minimal_data_burst_20260531/evidence_report.json",
+        "research/results/a_share_minimal_data_burst_20260531/signal_events.csv",
+        "research/results/a_share_minimal_data_burst_20260531/monthly_stats.csv"
+      ],
+      "parameter_hash_required": true,
+      "code_commit_required": true,
+      "result_log_required": true
+    }
+  },
+  "test_budget": {
+    "budget_id": "a_share_minimal_data_burst_20260531_single_test_budget",
+    "test_budget_status": "single_frozen_test",
+    "promotion_relevant_tests_allowed": 1,
+    "program_level_ledger_required_before_run": false,
+    "program_level_ledger_ref": null,
+    "test_budget_consumption_rule": "Running the frozen trigger against the frozen 2024-2025 monthly cohorts consumes the single promotion-relevant test. Changing any threshold, universe, benchmark, holding period, ranking cap, entry / exit rule, cost model, or pass/fail criterion requires a singleton program-level ledger first.",
+    "disallowed_without_ledger": [
+      "Second promotion-relevant hypothesis.",
+      "Parameter threshold search.",
+      "Variant family search.",
+      "Benchmark sweep or benchmark switch.",
+      "Holding-period sweep.",
+      "Changing from all-pass conjunction to a score or weighted rank.",
+      "Using CSI300 diagnostics to rescue a failing CSI1000 result.",
+      "Adding catalyst, capital-flow, sector, concept, manual evidence, or full-data burst fields."
+    ],
+    "evidence_report_linkage": {
+      "future_evidence_report_field": "research_experiment_log.hypothesis_registration_ref",
+      "future_ref_value": "research/preregistrations/a_share_minimal_data_burst_20260531.json",
+      "evidence_report_schema_ref": "schemas/evidence_report.schema.json",
+      "add_fields_to_evidence_report_schema_allowed": false
+    }
+  },
+  "evidence_integrity_plan": {
+    "evidence_window_type": "in_sample",
+    "planned_tests_performed_count": 1,
+    "adjustment_method": "not_applicable",
+    "multiple_testing_notes": "This artifact allows one frozen test only. Multiple-testing adjustment is not applicable unless a second promotion-relevant degree of freedom is introduced, in which case the program-level ledger trigger fires before the work runs.",
+    "minimum_effective_sample_required": 30,
+    "current_effective_sample_at_registration": 0,
+    "power_status_at_registration": "insufficient"
+  },
+  "promotion_boundary": {
+    "direct_promotion_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "requires_schema_review_before_promotion": true,
+    "requires_claude_review_before_promotion": true,
+    "requires_user_approval_before_promotion": true,
+    "requires_evidence_report_before_promotion": true,
+    "ship_gate_evidence_claim_allowed": false,
+    "full_size_manual_use_authorized": false,
+    "eligible_next_status_if_pass": "research_continue_only",
+    "status_if_fail": "falsified_or_redesign_required"
+  },
+  "ledger_trigger": {
+    "program_level_ledger_required_now": false,
+    "ledger_cardinality_if_triggered": "singleton_program_level",
+    "ledger_allowed_locations_if_triggered": [
+      "audit portfolioSynthesis family-wise budget block",
+      "independent singleton research test-budget ledger artifact"
+    ],
+    "trigger_events": [
+      "Any second promotion-relevant hypothesis.",
+      "Any search over pct_5d, amount-expansion, liquidity, breakout, rank-cap, cost, benchmark, or holding-period thresholds.",
+      "Any attempt to treat CSI300 diagnostics as a pass/fail benchmark.",
+      "Any full-data burst field addition before the frozen test is reported.",
+      "Any production promotion or evidence report that would depend on more than this one frozen result."
+    ]
+  },
+  "next_steps": [
+    "Run only this frozen research-only falsification test, or stop.",
+    "Write a research-only evidence report that points research_experiment_log.hypothesis_registration_ref to this artifact.",
+    "If this in-sample frozen test passes, register and run a separate confirmation path before any production promotion: at minimum 2026+ held-out / forward cohorts or 12 months live-normalized forward evidence under the unchanged trigger. This preregistration does not authorize promotion without that confirmation.",
+    "If the frozen test passes all thresholds, the only allowed outcome is research_continue_only with later schema review, Claude review, and user approval.",
+    "If any threshold fails, record falsified_or_redesign_required and do not tune thresholds without first creating a singleton program-level test-budget ledger."
+  ],
+  "limitations": [
+    "This is minimal-data EOD research, not full-data burst evidence.",
+    "It does not use dated catalysts, filings, capital-flow, options, borrow, or manual confirmation evidence.",
+    "It is in-sample research over existing generated cohorts and cannot count as live-normalized or ship-gate evidence.",
+    "It does not authorize provider access, data fetch, runner changes, production strategy changes, minimal live observation, or full-size manual use."
+  ]
+}

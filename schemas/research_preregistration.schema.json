@@ -1,0 +1,828 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/research_preregistration/1.0.0/schema.json",
+  "title": "Research Preregistration",
+  "description": "Schema-first preregistration contract for one frozen research-only test. It freezes the hypothesis, universe, benchmark, holding period, entry / exit rule, falsification threshold, and test_budget before any research result can influence future production decisions. This schema does not run research, select providers, fetch provider data, create adapters, implement DataHub tables, change production runners, relax ship gates, or authorize order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "source_doc_refs",
+    "hypothesis_registration",
+    "frozen_test_design",
+    "test_budget",
+    "evidence_integrity_plan",
+    "promotion_boundary",
+    "ledger_trigger",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "research_preregistration"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "artifact_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_doc_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceDocRef"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "docs/burst_lane_spec.md"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "docs/provider_priority_benchmark_contract.md"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ]
+    },
+    "hypothesis_registration": {
+      "$ref": "#/$defs/hypothesisRegistration"
+    },
+    "frozen_test_design": {
+      "$ref": "#/$defs/frozenTestDesign"
+    },
+    "test_budget": {
+      "$ref": "#/$defs/testBudget"
+    },
+    "evidence_integrity_plan": {
+      "$ref": "#/$defs/evidenceIntegrityPlan"
+    },
+    "promotion_boundary": {
+      "$ref": "#/$defs/promotionBoundary"
+    },
+    "ledger_trigger": {
+      "$ref": "#/$defs/ledgerTrigger"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "registration_status",
+        "research_status",
+        "production_use_allowed",
+        "direct_production_feed_allowed",
+        "provider_selection_allowed",
+        "provider_contact_or_account_creation_allowed",
+        "trial_or_token_request_allowed",
+        "paid_access_approved",
+        "sample_row_collection_allowed",
+        "provider_data_fetch_allowed",
+        "new_data_fetch_allowed_by_this_artifact",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "runner_change_allowed",
+        "production_strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only",
+        "ship_gate_claim_allowed",
+        "live_trading_or_minimal_live_allowed",
+        "phase7c_authorized_by_this_artifact"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b"
+        },
+        "purpose": {
+          "const": "single_frozen_test_research_preregistration"
+        },
+        "lane_id": {
+          "enum": [
+            "a_share_burst_minimal_data",
+            "us_burst_minimal_data",
+            "a_short_variant_research",
+            "a_long_research",
+            "us_long_research"
+          ]
+        },
+        "registration_status": {
+          "const": "registered_not_run"
+        },
+        "research_status": {
+          "const": "research_only_not_run"
+        },
+        "production_use_allowed": {
+          "const": false
+        },
+        "direct_production_feed_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_contact_or_account_creation_allowed": {
+          "const": false
+        },
+        "trial_or_token_request_allowed": {
+          "const": false
+        },
+        "paid_access_approved": {
+          "const": false
+        },
+        "sample_row_collection_allowed": {
+          "const": false
+        },
+        "provider_data_fetch_allowed": {
+          "const": false
+        },
+        "new_data_fetch_allowed_by_this_artifact": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "production_strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_claim_allowed": {
+          "const": false
+        },
+        "live_trading_or_minimal_live_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        }
+      }
+    },
+    "sourceDocRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "hypothesisRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timestamp",
+        "hypothesis_text",
+        "registered_by_session_id",
+        "data_window_at_registration",
+        "evidence_available_at_registration",
+        "source_doc_refs"
+      ],
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "hypothesis_text": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "registered_by_session_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "data_window_at_registration": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidence_available_at_registration": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_doc_refs": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "frozenTestDesign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "freeze_controls",
+        "universe",
+        "data_window",
+        "trigger_rule",
+        "entry_exit_rule",
+        "benchmark_rule",
+        "evaluation_threshold",
+        "reproducibility_plan"
+      ],
+      "properties": {
+        "freeze_controls": {
+          "$ref": "#/$defs/freezeControls"
+        },
+        "universe": {
+          "$ref": "#/$defs/universe"
+        },
+        "data_window": {
+          "$ref": "#/$defs/dataWindow"
+        },
+        "trigger_rule": {
+          "$ref": "#/$defs/triggerRule"
+        },
+        "entry_exit_rule": {
+          "$ref": "#/$defs/entryExitRule"
+        },
+        "benchmark_rule": {
+          "$ref": "#/$defs/benchmarkRule"
+        },
+        "evaluation_threshold": {
+          "$ref": "#/$defs/evaluationThreshold"
+        },
+        "reproducibility_plan": {
+          "$ref": "#/$defs/reproducibilityPlan"
+        }
+      }
+    },
+    "freezeControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hypothesis_frozen",
+        "parameters_frozen",
+        "universe_frozen",
+        "benchmark_frozen",
+        "holding_period_frozen",
+        "entry_exit_rule_frozen",
+        "threshold_frozen",
+        "parameter_search_allowed",
+        "variant_search_allowed",
+        "benchmark_sweep_allowed",
+        "holding_period_sweep_allowed"
+      ],
+      "properties": {
+        "hypothesis_frozen": {
+          "const": true
+        },
+        "parameters_frozen": {
+          "const": true
+        },
+        "universe_frozen": {
+          "const": true
+        },
+        "benchmark_frozen": {
+          "const": true
+        },
+        "holding_period_frozen": {
+          "const": true
+        },
+        "entry_exit_rule_frozen": {
+          "const": true
+        },
+        "threshold_frozen": {
+          "const": true
+        },
+        "parameter_search_allowed": {
+          "const": false
+        },
+        "variant_search_allowed": {
+          "const": false
+        },
+        "benchmark_sweep_allowed": {
+          "const": false
+        },
+        "holding_period_sweep_allowed": {
+          "const": false
+        }
+      }
+    },
+    "universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "source_universe_ref",
+        "eligibility_rule",
+        "exclusion_rule"
+      ],
+      "properties": {
+        "market": {
+          "const": "A-share"
+        },
+        "source_universe_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "eligibility_rule": {
+          "$ref": "#/$defs/stringList"
+        },
+        "exclusion_rule": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "dataWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "research_window_start",
+        "research_window_end",
+        "cohort_frequency",
+        "candidate_file_glob",
+        "outcome_data_ref",
+        "lookahead_prevention_notes"
+      ],
+      "properties": {
+        "research_window_start": {
+          "$ref": "#/$defs/date8"
+        },
+        "research_window_end": {
+          "$ref": "#/$defs/date8"
+        },
+        "cohort_frequency": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "candidate_file_glob": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "outcome_data_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "lookahead_prevention_notes": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "triggerRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trigger_id",
+        "positive_signal_families",
+        "fixed_input_columns",
+        "hard_filters",
+        "signal_definition",
+        "portfolio_construction_rule"
+      ],
+      "properties": {
+        "trigger_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "positive_signal_families": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "fixed_input_columns": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "hard_filters": {
+          "$ref": "#/$defs/stringList"
+        },
+        "signal_definition": {
+          "$ref": "#/$defs/stringList"
+        },
+        "portfolio_construction_rule": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "entryExitRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_rule",
+        "exit_rule",
+        "holding_period_trading_days",
+        "cost_model",
+        "unbuyable_entry_handling"
+      ],
+      "properties": {
+        "entry_rule": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "exit_rule": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "holding_period_trading_days": {
+          "const": 5
+        },
+        "cost_model": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "unbuyable_entry_handling": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "benchmarkRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_benchmark_id",
+        "primary_benchmark_role",
+        "secondary_diagnostics",
+        "benchmark_return_rule"
+      ],
+      "properties": {
+        "primary_benchmark_id": {
+          "const": "CSI1000"
+        },
+        "primary_benchmark_role": {
+          "const": "promotion_relevant_single_test"
+        },
+        "secondary_diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnosticBenchmark"
+          },
+          "minItems": 1
+        },
+        "benchmark_return_rule": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "diagnosticBenchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benchmark_id",
+        "role",
+        "promotion_relevant"
+      ],
+      "properties": {
+        "benchmark_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "promotion_relevant": {
+          "const": false
+        }
+      }
+    },
+    "evaluationThreshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_label_if_all_pass",
+        "decision_label_if_any_fail",
+        "criteria"
+      ],
+      "properties": {
+        "decision_label_if_all_pass": {
+          "const": "research_continue_only"
+        },
+        "decision_label_if_any_fail": {
+          "const": "falsified_or_redesign_required"
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/thresholdCriterion"
+          },
+          "minItems": 4
+        }
+      }
+    },
+    "thresholdCriterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric",
+        "operator",
+        "threshold_value",
+        "threshold_unit",
+        "failure_action"
+      ],
+      "properties": {
+        "metric": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "operator": {
+          "enum": [
+            ">",
+            ">=",
+            "<",
+            "<=",
+            "=="
+          ]
+        },
+        "threshold_value": {
+          "type": "number"
+        },
+        "threshold_unit": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "failure_action": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "reproducibilityPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "random_seed",
+        "planned_artifact_outputs",
+        "parameter_hash_required",
+        "code_commit_required",
+        "result_log_required"
+      ],
+      "properties": {
+        "random_seed": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "planned_artifact_outputs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "parameter_hash_required": {
+          "const": true
+        },
+        "code_commit_required": {
+          "const": true
+        },
+        "result_log_required": {
+          "const": true
+        }
+      }
+    },
+    "testBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "budget_id",
+        "test_budget_status",
+        "promotion_relevant_tests_allowed",
+        "program_level_ledger_required_before_run",
+        "program_level_ledger_ref",
+        "test_budget_consumption_rule",
+        "disallowed_without_ledger",
+        "evidence_report_linkage"
+      ],
+      "properties": {
+        "budget_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "test_budget_status": {
+          "const": "single_frozen_test"
+        },
+        "promotion_relevant_tests_allowed": {
+          "const": 1
+        },
+        "program_level_ledger_required_before_run": {
+          "const": false
+        },
+        "program_level_ledger_ref": {
+          "const": null
+        },
+        "test_budget_consumption_rule": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "disallowed_without_ledger": {
+          "$ref": "#/$defs/stringList"
+        },
+        "evidence_report_linkage": {
+          "$ref": "#/$defs/evidenceReportLinkage"
+        }
+      }
+    },
+    "evidenceReportLinkage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "future_evidence_report_field",
+        "future_ref_value",
+        "evidence_report_schema_ref",
+        "add_fields_to_evidence_report_schema_allowed"
+      ],
+      "properties": {
+        "future_evidence_report_field": {
+          "const": "research_experiment_log.hypothesis_registration_ref"
+        },
+        "future_ref_value": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidence_report_schema_ref": {
+          "const": "schemas/evidence_report.schema.json"
+        },
+        "add_fields_to_evidence_report_schema_allowed": {
+          "const": false
+        }
+      }
+    },
+    "evidenceIntegrityPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_window_type",
+        "planned_tests_performed_count",
+        "adjustment_method",
+        "multiple_testing_notes",
+        "minimum_effective_sample_required",
+        "current_effective_sample_at_registration",
+        "power_status_at_registration"
+      ],
+      "properties": {
+        "evidence_window_type": {
+          "enum": [
+            "in_sample",
+            "out_of_sample",
+            "forward",
+            "live_normalized"
+          ]
+        },
+        "planned_tests_performed_count": {
+          "const": 1
+        },
+        "adjustment_method": {
+          "const": "not_applicable"
+        },
+        "multiple_testing_notes": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "minimum_effective_sample_required": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "current_effective_sample_at_registration": {
+          "const": 0
+        },
+        "power_status_at_registration": {
+          "const": "insufficient"
+        }
+      }
+    },
+    "promotionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "direct_promotion_allowed",
+        "production_runner_consumption_allowed",
+        "requires_schema_review_before_promotion",
+        "requires_claude_review_before_promotion",
+        "requires_user_approval_before_promotion",
+        "requires_evidence_report_before_promotion",
+        "ship_gate_evidence_claim_allowed",
+        "full_size_manual_use_authorized",
+        "eligible_next_status_if_pass",
+        "status_if_fail"
+      ],
+      "properties": {
+        "direct_promotion_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "requires_schema_review_before_promotion": {
+          "const": true
+        },
+        "requires_claude_review_before_promotion": {
+          "const": true
+        },
+        "requires_user_approval_before_promotion": {
+          "const": true
+        },
+        "requires_evidence_report_before_promotion": {
+          "const": true
+        },
+        "ship_gate_evidence_claim_allowed": {
+          "const": false
+        },
+        "full_size_manual_use_authorized": {
+          "const": false
+        },
+        "eligible_next_status_if_pass": {
+          "const": "research_continue_only"
+        },
+        "status_if_fail": {
+          "const": "falsified_or_redesign_required"
+        }
+      }
+    },
+    "ledgerTrigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "program_level_ledger_required_now",
+        "ledger_cardinality_if_triggered",
+        "ledger_allowed_locations_if_triggered",
+        "trigger_events"
+      ],
+      "properties": {
+        "program_level_ledger_required_now": {
+          "const": false
+        },
+        "ledger_cardinality_if_triggered": {
+          "const": "singleton_program_level"
+        },
+        "ledger_allowed_locations_if_triggered": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "trigger_events": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    }
+  }
+}

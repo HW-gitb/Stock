@@ -140,6 +140,8 @@ The A-share burst lane may reuse the existing A-short benchmark return materiali
 
 Phase 7a-3 provisional benchmark routing for A-share burst is owned by `docs/provider_priority_benchmark_contract.md`. It keeps CSI1000 as provisional primary reporting benchmark, CSI300 as mandatory secondary context, and SW industry attribution as a full-data sensitivity path where provider coverage supports it.
 
+The current A-share `minimal_data_burst` research preregistration is `research/preregistrations/a_share_minimal_data_burst_20260531.json` under `schemas/research_preregistration.schema.json`. It freezes one EOD-only CSI1000 5-trading-day falsification test and does not create production readiness or live eligibility.
+
 ### 6.2 Market Constraints
 
 Future A-share burst implementation must handle:

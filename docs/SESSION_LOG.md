@@ -8,6 +8,105 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (A-share burst preregistration — O1 修复 re-review)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8e13b23`)
+
+**Verdict**: Pass.
+
+**Notes**: O1 修复复审。Codex `修复` 轮 O1 disposition = **accept**，实现正确：prereg `next_steps` 新增 item 3 confirmation-path 登记（in-sample 通过后、promotion 前需另注册并运行 separate confirmation path——至少 2026+ held-out / forward cohorts 或 12 months live-normalized forward evidence，**under the unchanged trigger**，且明写「does not authorize promotion without that confirmation」），并加 `test_in_sample_research_registers_confirmation_path`（断言 evidence_window_type=in_sample + next_steps 含上述四段关键串，非空 guard）。满足 §5「label exploratory **AND** register a confirmation path」后半。「unchanged trigger」措辞额外防止把确认阶段当再调参机会，是加固。**Surgical scope 已验**：重读 prereg `frozen_test_design` 核心（signal pct_5d>=6.0 / amount_5d÷20d>=1.5 / is_breakout、hard_filters、portfolio rule、entry/exit T+1open→T+5close holding=5 cost0.16pct、benchmark CSI1000+CSI300-non-promotion+no-zero-fill、6 条 evaluation criteria）与上轮 Pass **逐字一致**，`修复` 未顺手改任何阈值 / universe / benchmark / holding / budget；test_budget / evidence_integrity / promotion_boundary / ledger_trigger / limitations 亦逐字未变。本轮仅 2 个 untracked（prereg JSON next_steps + test）+ SESSION_LOG 变化，8 个其它 tracked doc 与上轮 Pass 一致。Fast-path 重跑：`git status -uall` = 9 M tracked + 4 `??` untracked + 0 staged，`8e13b23..HEAD` 无新 commit，`git diff --cached` empty。独立复核：`python -m unittest tests.schema.test_research_preregistration_schema` = **10 OK**（+1 新 test）、`discover -s tests/schema` = **119 OK**（PATH `python`）；`git diff --check` exit 0；CURRENT.md 本轮未改仍 146。Codex §修复 entry 含合规 `Optional disposition`（O1 accept）+ `Required: None`。O1 为纯 accept 无 deviation，无 §Optional Re-raise Constraint 触发；无新 Required / Optional / open question。整套 A-share burst preregistration 变更集（research_preregistration schema + prereg artifact + research/README + hardened test + 9 doc routing + SESSION_LOG）现内部一致且全部验证通过，可 `提交`。提交后下一刀 = 运行该 single frozen research-only falsification（`registration_status=registered_not_run`，本轮只登记未跑）；任何 threshold / variant / benchmark / holding-period 改动前先建 singleton program-level test-budget ledger。
+
+---
+
+## 2026-05-31 — Codex 修复 (A-share burst preregistration O1 confirmation path)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest 2026-05-31 Claude review: Pass with 1 Optional and no Required fixes.
+- Builds on the A-share `minimal_data_burst` preregistration artifact change set.
+
+**Approved Required fixes repaired**:
+- None. Latest Claude review had no Required fixes.
+
+**Optional disposition**:
+- O1 accept — added an explicit confirmation-path note to the preregistration artifact's `next_steps`, requiring a separate 2026+ held-out / forward cohort or 12-month live-normalized confirmation path before any production promotion; added a regression assertion that this in-sample artifact registers that confirmation path.
+
+**Worked on**:
+1. [untracked] `research/preregistrations/a_share_minimal_data_burst_20260531.json`: added the confirmation-path next step without changing schema, frozen thresholds, universe, benchmark, holding period, entry / exit rule, or test budget.
+2. [untracked] `tests/schema/test_research_preregistration_schema.py`: added `test_in_sample_research_registers_confirmation_path`.
+3. [tracked] `docs/SESSION_LOG.md`: recorded this `修复` handoff for Claude re-review continuity.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: 10 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 119 tests passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings appeared for touched docs.
+- `docs/CURRENT.md` authoritative line count via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 146, unchanged and below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review: Yes.
+
+**Open questions handed off**:
+- None.
+
+---
+
+## 2026-05-31 — Claude review — Pass with 1 Optional (A-share minimal-data burst preregistration artifact)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8e13b23`)
+
+**Verdict**: Pass（含 1 条 Optional，PENDING CODEX DISPOSITION；无 Required）。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes. Optional O1 PENDING CODEX DISPOSITION.
+
+**Optional suggestions**:
+- **O1（minor，alpha-reality 完整性）**：本 prereg 围绕一个 historical best slice（已知 `5d excess_csi1000 t=+2.88` 线索，artifact 在 `evidence_available_at_registration` 已坦承）构建。`ALPHA_VALIDATION_ACTION_GUIDE.md §5` 要求此类假设「label exploratory **AND** register a confirmation path」。前半已满足（`evidence_window_type=in_sample` + `power_status=insufficient` + `decision_label_if_all_pass=research_continue_only` + limitations 明写不可作 ship-gate/live-normalized）；后半「显式注册 confirmation path」缺位——artifact 实际已把 2026+ 数据排除出 promotion 统计（等于预留了 held-out），却没把它登记成「in-sample 通过后、promotion 前必须先过的 forward/OOS 确认窗口」。建议在 `next_steps` 或 hypothesis_registration 加一条显式 confirmation-path 登记。Codex 可 accept（补一条 note，因 schema `additionalProperties:false`，放 `next_steps` 字符串即可，无需改 schema），或 reject（主张 `promotion_boundary` + 项目 ship-gate（forward live ≥12mo）已构成绑定的 confirmation path）。两种处置都合理。
+
+**Notes**: 状态推进——用户已 `提交`（access plan = `8e13b23`），Codex 串行跑新 `执行`：A-share `minimal_data_burst` preregistration（锁定的下一刀，**首个 alpha-validation / research 产物**，护栏最关键）。Fast-path 全程重跑：`git status -uall` = 9 M tracked + **4 `??` untracked**（`research/README.md`、`research/preregistrations/a_share_minimal_data_burst_20260531.json`、`schemas/research_preregistration.schema.json`、`tests/schema/test_research_preregistration_schema.py`）+ 0 staged；`git ls-files --others research/` 确认 `research/` 仅 2 文件、无隐藏、无 `research/results/`（test 未跑，正确）；4 个 untracked **全文读毕**；9 tracked `git diff` 全文读毕；`git diff --cached` empty；`1fb0b46..HEAD`=`8e13b23`（上轮 access plan 已提交）。**诚实性核验（本轮最关键）**：artifact 未把围绕已知 5d 线索的 in-sample restatement 伪装成 confirmation —— `evidence_window_type="in_sample"`、`research_continue_only` 上限、`ship_gate_claim_allowed=false`、limitations 明写 in-sample 不可作 ship-gate；这是对的。**单一冻结测试为真**：三个信号单一固定阈值（pct_5d>=6 / amount_5d/20d>=1.5 / is_breakout）、`freeze_controls` 7 frozen + 4 sweep=false（schema const 锁，连 sweep 都无法表达）、`promotion_relevant_tests_allowed=1`、`disallowed_without_ledger` 明列所有 fishing 动作（含「CSI300 救 CSI1000」「conjunction 改 score」）。look-ahead notes / benchmark no-zero-fill / 0.16pct cost-adjusted / 正确的 `result/a_short/backtest/generated/` 读取路径 / `research/results/` 输出路径，均合规（未碰 `result/a_short/<date>/`、未改 runner）。schema 质量高且高保真四轮收敛：23 scope 轴全 const-lock、hypothesisRegistration 复用 alpha-audit 形状、evidence_report linkage 用现有 `research_experiment_log.hypothesis_registration_ref` 且 `add_fields...allowed=false`、ledger `singleton_program_level` 非 per-hypothesis。test 9 项强测：hypothesisRegistration.required == alpha-audit、existing-ref 且 evidence_report 仍无 `program_test_budget`/`tests_spent`、anti-fishing mutation（翻 production/provider/parameter_search/tests=2/ship_gate 后必 reject）。独立复核：module **9 OK**、discover **118 OK**（PATH `python`）、CURRENT.md **146**（<150）、`git diff --check` exit 0。Cross-doc 9 文件一致：AGENTS §当前进度/文件参考、README routing 新增 research 行、CURRENT §0/§1/§2/§4/§5、ALPHA_GUIDE §2/§5/§11/§13、burst_lane_spec §6.1、drift_monitor §15、strategy_design §7.5、handoff append（含失效旧结论）；「build preregistration」措辞全部退役为「prereg 已存在、下一步只能跑该 frozen test」。`registration_status=registered_not_run`——本轮只登记不运行，运行是下一刀（正确）。无 §Optional Re-raise（O1 是本 artifact 新发现，非历史 reject 重提）。
+
+---
+
+## 2026-05-31 — Codex (A-share minimal-data burst preregistration artifact)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on commit `8e13b23` (Phase 7b-2 P1 access-decision and sample-validation plan).
+- Refines the post-access-plan alpha-validation route: the next step is no longer "create preregistration"; that preregistration now exists, and the next executable alpha-validation slice is the frozen falsification test.
+
+**Worked on**:
+1. [untracked] `schemas/research_preregistration.schema.json`: added a schema-first contract for one frozen research-only test, reusing the alpha-audit hypothesis registration shape and const-locking no provider access, no production feed, no runner change, no Phase 7c, no live eligibility, and no ship-gate claim.
+2. [untracked] `research/README.md` and `research/preregistrations/a_share_minimal_data_burst_20260531.json`: added the A-share `minimal_data_burst` preregistration artifact, freezing the 20240131-20251231 monthly A-short generated cohorts, CSI1000 primary benchmark, 5-trading-day T+1-open to T+5-close rule, EOD trigger thresholds, pass/fail criteria, and `test_budget = 1`.
+3. [untracked] `tests/schema/test_research_preregistration_schema.py`: added regression coverage for schema/artifact validation, hypothesisRegistration shape reuse, production/provider/Phase 7c locks, single frozen test budget, evidence_report `hypothesis_registration_ref` linkage, singleton ledger trigger, and fishing mutation rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/burst_lane_spec.md`, `docs/provider_evidence_drift_monitor.md`: updated routing/current-state wording from "build preregistration" to "preregistration exists; next may run only the frozen test."
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7 handoff note for this preregistration slice.
+
+**Key decisions**:
+- Keep `schemas/research_preregistration.schema.json` v1.0.0 scoped to a single frozen test. If the work needs a second promotion-relevant hypothesis, threshold/rank-cap search, benchmark sweep, or holding-period sweep, the next artifact must be a singleton program-level test-budget ledger before the research runs.
+- Use the existing `research_experiment_log.hypothesis_registration_ref` in `schemas/evidence_report.schema.json` for future result linkage instead of modifying `evidence_report.schema.json`.
+- Freeze the first A-share burst test around the known 5d clue, but make it stricter than a naked return check: cost-adjusted CSI1000 excess, minimum sample count, monthly clustered t-stat, drawdown, limit-up unbuyable rate, and month-concentration all gate continuation.
+
+**Alternatives considered and rejected**:
+- "Run the falsification in the same slice" — rejected. CURRENT explicitly said first establish the preregistration artifact; running the research is the next reviewed slice.
+- "Allow a small threshold or rank-cap sweep inside the first artifact" — rejected. That would consume multiple promotion-relevant degrees of freedom and needs a program-level ledger first.
+- "Patch `evidence_report.schema.json` with test-budget fields" — rejected. The existing nullable `hypothesis_registration_ref` is the intended linkage, and the evidence-report schema has `additionalProperties: false`.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: 9 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: 118 tests passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings appeared for touched docs.
+- `docs/CURRENT.md` authoritative line count via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 146, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None. The next `执行` after review/pass/commit should run only `research/preregistrations/a_share_minimal_data_burst_20260531.json` as a frozen research-only falsification; any parameter / variant / benchmark / holding-period change requires a singleton program-level ledger first.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (Phase 7b-2 P1 access plan — O1 修复 re-review)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `1fb0b46`)
