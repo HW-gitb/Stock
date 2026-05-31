@@ -6,7 +6,7 @@
 - Extended `schemas/research_preregistration.schema.json` to v1.1.0 so a preregistration can be explicitly gated by the singleton program-level test-budget ledger while preserving the original research-only scope locks.
 - Appended one planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` for `a_share_minimal_data_burst_full_universe_redesign_20260531`.
 - Added `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json`, a research-only preregistration that moves the A-share minimal-data burst test from the steady Tier1 watchlist to frozen full EGS intermediate candidate surfaces.
-- Updated research routing docs and schema tests so the new artifact is visible to future LLMs and remains non-authorizing until review passes.
+- Updated research routing docs and schema tests so the new artifact is visible to future LLMs. After review / commit and the follow-up ledger status sync, only pre-outcome event-count / input-integrity preflight is authorized.
 
 **Why**:
 - The corrected-basis A-share burst preregistration spent its single test on a pre-outcome preflight and found `valid_signal_events = 0`. That made direct outcome / benchmark-excess calculation uninformative.
@@ -29,7 +29,7 @@ git diff --check
 
 **Invalidated / blocked old conclusion**:
 - Do not treat the corrected-basis 5d rerun as the next executable alpha test. That preregistration is spent by zero signal events.
-- Do not run the redesigned preregistration yet. It is pending Claude review; after review, the first executable step is only pre-outcome event-count / input-integrity preflight. Outcome / excess still requires `SR-DATA-003` benchmark-open resolution if the preflight has enough events.
+- Do not run outcome / excess for the redesigned preregistration yet. After review / commit and the follow-up ledger status sync, the first executable step is only pre-outcome event-count / input-integrity preflight. Outcome / excess still requires `SR-DATA-003` benchmark-open resolution if the preflight has enough events.
 
 ---
 

@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "generated_at": "2026-05-31T00:00:00Z",
   "artifact_id": "a_share_burst_program_test_budget_ledger_20260531",
-  "ledger_status": "active_planned_test_pending_review",
+  "ledger_status": "active_test_authorized_by_review",
   "family_id": "a_share_burst_minimal_data_alpha_validation_v1",
   "lane_id": "a_share_burst_minimal_data",
   "singleton_scope": {
@@ -50,24 +50,25 @@
   "planned_tests": [
     {
       "test_id": "a_share_minimal_data_burst_full_universe_redesign_20260531",
-      "planned_status": "planned_not_reviewed",
+      "planned_status": "reviewed_not_run",
       "created_at": "2026-05-31T00:00:00Z",
       "planned_preregistration_ref": "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
       "planned_result_ref": "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
       "promotion_relevant": true,
       "expected_tests_spent": 1,
-      "approval_status": "user_approved_pending_review",
+      "approval_status": "reviewed_authorized",
       "design_summary": "Ledger-gated redesign of A-share minimal-data burst from the steady Tier1 watchlist to the frozen full EGS candidate surface, with a frozen EOD momentum + volume expansion + breakout trigger and same-anchor CSI1000 benchmark basis.",
       "review_boundary": [
-        "The user invoked execution for the next registered P0 task, but this planned test is not reviewed or authorized to run until Claude review passes.",
+        "Claude review passed for the preregistration slice and commit 1a3e71e recorded it; this planned test is authorized only for pre-outcome event-count / input-integrity preflight.",
         "No outcome return, benchmark excess, provider fetch, EGS rerun, cohort regeneration, production runner change, ship-gate claim, live trade, or order automation is authorized by this ledger append.",
-        "The planned preregistration must remain research-only and must first run only a pre-outcome event-count / input-integrity preflight.",
+        "The planned preregistration remains research-only and the first executable step is only a pre-outcome event-count / input-integrity preflight.",
         "If the preflight has nonzero sufficient events, benchmark-open input under SR-DATA-003 must be resolved before any outcome / excess calculation."
       ]
     }
   ],
   "next_required_actions": [
-    "Append any proposed redesigned A-share burst test to planned_tests before it runs.",
+    "Run only the reviewed full-universe redesign pre-outcome event-count / input-integrity preflight as the next executable A-share burst step.",
+    "Append any additional proposed redesigned A-share burst test to planned_tests before it runs.",
     "Create a new reviewed preregistration for any changed universe / trigger / threshold / benchmark / holding-period design.",
     "Resolve the benchmark-open input precondition before any nonzero-event outcome / excess calculation.",
     "Keep all outputs research-only until later schema review, Claude review, user approval, and separate confirmation evidence."

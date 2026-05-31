@@ -8,6 +8,49 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (clean) (post-commit A-share burst preflight authorization sync)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `1a3e71e`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。authorization-sync 轮次可 `提交`。
+
+**Notes**: Post-commit authorization-sync slice（7 tracked，无 untracked/staged；无业务代码 / 无 schema 文件 / 无 state）。独立核实：(1) ledger 三态 `active_test_authorized_by_review` / `reviewed_not_run` / `reviewed_authorized` 均在 `schemas/program_test_budget_ledger.schema.json` enum 内（lines 41/247/271）；(2) 独立跑 `tests.schema.test_research_preregistration_schema` 22 pass，含 anti-relaxation guard `test_ledger_schema_rejects_cardinality_or_review_gate_relaxation`；(3) frozen prereg 未被改动，其 `next_steps`(300-304) 内部已锁 preflight-first → `valid_signal_events>=30` → SR-DATA-003 前置，故 Codex 把可变授权态放 ledger、不动冻结件的决定正确；(4) SR-RESEARCH-001 保持 `open`（未过早 resolved），Hot Queue 同步；(5) stale-wording 扫描无误导项（命中均为 protocol 元描述 / 无关 provider evidence grade / schema enum 定义 / 历史 SESSION_LOG entry），`tests/` 中无其他断言旧 ledger 状态串（无隐藏回归）；(6) CURRENT.md 149 行（<150）；SESSION_LOG entry `[tracked]` 标签 + validation + review state 齐全，`Commits: 1a3e71e` 为 double-duty（重建该 commit 记录 + 本轮 handoff），已在 Relationship 说明。本轮未跑任何 outcome / excess / benchmark / provider fetch / EGS / runner。下一刀仍唯一授权 pre-outcome event-count / input-integrity preflight；outcome / excess 仍需 preflight 达 `>=30` events 且先解 SR-DATA-003。
+
+---
+
+## 2026-05-31 — Codex 执行 (post-commit A-share burst preflight authorization sync)
+
+**Commits**: 1a3e71e5cf50f977466ed9b2f1069217e229e453
+
+**Relationship to prior session(s)**:
+- Reconstructs the local commit created after the latest Claude clean Pass for the SR-RESEARCH-001 ledger-gated redesign preregistration.
+- **Refines** the current route: the redesign preregistration is no longer pending review; it is reviewed / committed, but only the pre-outcome event-count / input-integrity preflight is authorized.
+
+**Worked on**:
+1. [tracked] `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json`: moved the planned full-universe redesign from pending review to reviewed / authorized-for-preflight-only.
+2. [tracked] `docs/CURRENT.md`, `docs/system_risk_register.md`, `research/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: updated current routing so the next executable A-share burst step is only the reviewed pre-outcome preflight, not outcome / excess or provider fetch.
+3. [tracked] `tests/schema/test_research_preregistration_schema.py`: updated ledger assertions to lock the reviewed / authorized-for-preflight-only state.
+4. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- This round deliberately does not run research, compute returns, compute benchmark excess, refresh benchmark open, fetch provider data, rerun EGS, change runners, or make production / ship-gate / live-use claims.
+- `SR-RESEARCH-001` remains open until the reviewed preflight is actually run and recorded. `SR-DATA-003` remains a separate precondition before any future nonzero-event outcome / excess calculation.
+
+**Alternatives considered and rejected**:
+- "Run the preflight immediately" — rejected because the repo-visible ledger / snapshot still said pending review; the trust record needed to be corrected first.
+- "Edit the frozen preregistration to remove review-precondition wording" — rejected because the preregistration is a frozen reviewed artifact; the mutable authorization state belongs in the ledger and current routing docs.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: passed, 22 tests.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` length check via `ReadAllLines`: 149 lines.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (clean) (SR-RESEARCH-001 O1 + transparency note disposition)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `fd0d721`)

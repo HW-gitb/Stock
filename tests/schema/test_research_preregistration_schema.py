@@ -289,7 +289,7 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         ledger = self._load_ledger_artifact()
 
         self.assertEqual(ledger["schema_name"], "program_test_budget_ledger")
-        self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
+        self.assertEqual(ledger["ledger_status"], "active_test_authorized_by_review")
         self.assertEqual(ledger["creation_reason"]["triggering_preflight_ref"], str(PREFLIGHT_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(ledger["creation_reason"]["triggering_preregistration_ref"], str(CORRECTED_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
@@ -308,7 +308,7 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         planned = ledger["planned_tests"][0]
 
         self.assertEqual(planned["test_id"], "a_share_minimal_data_burst_full_universe_redesign_20260531")
-        self.assertEqual(planned["planned_status"], "planned_not_reviewed")
+        self.assertEqual(planned["planned_status"], "reviewed_not_run")
         self.assertEqual(
             planned["planned_preregistration_ref"],
             str(REDESIGNED_ARTIFACT_PATH).replace("\\", "/"),
@@ -319,8 +319,9 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         )
         self.assertTrue(planned["promotion_relevant"])
         self.assertEqual(planned["expected_tests_spent"], 1)
-        self.assertEqual(planned["approval_status"], "user_approved_pending_review")
-        self.assertTrue(any("not reviewed or authorized to run" in item for item in planned["review_boundary"]))
+        self.assertEqual(planned["approval_status"], "reviewed_authorized")
+        self.assertTrue(any("pre-outcome event-count" in item for item in planned["review_boundary"]))
+        self.assertTrue(any("No outcome return" in item for item in planned["review_boundary"]))
 
     def test_redesigned_preregistration_is_ledger_gated_full_universe_research_only(self) -> None:
         artifact = self._load_artifact(REDESIGNED_ARTIFACT_PATH)
