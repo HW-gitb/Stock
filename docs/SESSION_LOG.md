@@ -8,6 +8,65 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (SR-EXEC-001 weekly historical PIT interlock)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `4e88b7c`)
+
+**Verdict**: Pass. 可 `提交`。第一刀真业务代码修复（risk register hot queue SR-EXEC-001），逻辑正确、flag 兼容性已独立核实。
+
+**Notes**: Fast-path 全跑：`git status -uall` = 6 M tracked + 1 `??`（`tests/phase6/test_weekly_screening_guardrails.py`）+ 0 staged；`37e497d..HEAD` = `4e88b7c`（register 已提交）；`??` test 全文读毕；`git diff` 全读；`git diff --cached` empty。**关键风险已排除**：weekly_screening 给 egs_main 传 `--l3-mode` + 条件 `--l3-pit-strict`，而所有行为测试都在 guard 处 exit 1、从不真正 invoke egs_main（`19000101` 非交易日，连 set_asof 都过不了），故 flag 兼容性零测试覆盖；我独立查 `A-EGS/egs_main.py` argparse 确认两 flag 均存在（`--l3-mode` :3274 choices pit/today/neutralize；`--l3-pit-strict` :3279；pit-strict 无 snapshot→FATAL 逻辑 :2227-2236）——wiring 合法，历史 pit 回放不会报错。**interlock 逻辑正确**：(a) 历史 `-AsOf` 且 L3Mode 空→FATAL 要求显式 pit/neutralize；(b) 历史 + 显式 today→FATAL；(c) pit→自动 `--l3-pit-strict`（杜绝 quiet fallback）；(d) overwrite 守卫收集 `result/a_short/<AsOf>/` + `A-EGS/Result/egs_{tier1,full}_<AsOf>.{csv,xlsx}`，历史 + 存在 + 无 `-AllowHistoricalOverwrite`→FATAL 列出路径。因 egs_main set_asof 校验 AsOf 为 SSE 交易日 → `export_analysis_input` 的 `<latest_td>==<AsOf>`，守卫检查路径与 egs_main 实际写入路径一致，无 off-by-one；same-day（live）路径不触发守卫、默认 today，正确保留实盘工作流。**egs_main 正确地未改**（Codex 判断缺陷在 wrapper 默认历史调用、非引擎，核实成立）。Scope 干净：仅 weekly_screening.ps1（fix）+ 新 test + register status + CURRENT/README/handoff routing，无 schema/其它 runner/state 改动。测试：3 个行为测试真 invoke powershell 跑 .ps1 验 missing-L3 / 拒 today / 拒覆盖 official output（建临时 dir 后清理）；第 4 个 text 测试验 `$EgsArgs += '--l3-pit-strict'` 接线。独立复核：`discover -s tests/phase6` OK（17 tests）、CURRENT.md 147（<150）、`git diff --check` exit 0。register 正确推进：SR-META-001 resolved（closure evidence = committed `4e88b7c`）、SR-EXEC-001 resolved（closure evidence = 本 change set + verification 引用 test）、hot queue 移除两者、现首项 SR-MEASURE-001。**非阻断观察**（不构成 Required/Optional）：(1) SR-EXEC-001 在未提交工作树即标 `resolved`，register 自身规则要求"closure 需 reviewed commit"——但本刀是 clean Pass、将与 fix 原子提交（Pattern B：工作树写成 post-commit-true），故 OK；仅提醒：若未来某轮 review 非 clean Pass，对应 SR 条目应留 `in_progress` 而非预标 resolved。(2) historical pit/neutralize 实际跑通 egs_main 的路径无行为测试（需真 Tushare，不现实）——但 flag 合法性已由我查 argparse 覆盖。无 Required / Optional / open question / §Optional Re-raise。下一刀 = SR-MEASURE-001 same-anchor benchmark（真正动 backtest_rank.py 的那刀，会最细审）；burst prereg 仍 `BLOCKED_DO_NOT_RUN`。
+
+---
+
+## 2026-05-31 — Codex 执行 (SR-EXEC-001 weekly historical PIT interlock)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on `4e88b7c Add system risk register enforcement`.
+- Executes `docs/system_risk_register.md` hot queue item `SR-EXEC-001`.
+- **Refines**: weekly historical replay remains allowed, but only with explicit L3 basis and overwrite intent; it can no longer silently use live `today` concepts or overwrite existing official outputs.
+
+**Worked on**:
+1. [tracked] `runners/weekly_screening.ps1`: added `-L3Mode pit|today|neutralize`, historical `today` rejection, automatic `--l3-pit-strict` for PIT mode, and official-output overwrite guard with `-AllowHistoricalOverwrite`.
+2. [untracked] `tests/phase6/test_weekly_screening_guardrails.py`: added behavioral guardrail tests for missing historical L3 mode, rejected historical `today`, existing output overwrite refusal, and PIT strict argument wiring.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-META-001` resolved via commit `4e88b7c`; marked `SR-EXEC-001` resolved by this reviewed change set; moved the hot queue to `SR-MEASURE-001`.
+4. [tracked] `docs/CURRENT.md`: recorded the weekly PIT interlock and updated the next P0 to `SR-MEASURE-001`.
+5. [tracked] `runners/README.md`: updated the weekly wrapper description with the new historical guards.
+6. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the SR-EXEC-001 implementation handoff.
+
+**Key decisions**:
+- Fix stayed in `weekly_screening.ps1`; `A-EGS/egs_main.py` logic is unchanged because the defect was the wrapper's default historical invocation.
+- Historical `-AsOf` must choose `pit` or `neutralize`; explicit `today` is rejected because it is the contaminated basis.
+- PIT mode is strict from the wrapper. If no L3 snapshot exists, the caller should intentionally choose `neutralize` rather than receive a quiet fallback.
+- Existing official outputs include both `result/a_short/<AsOf>/` and `A-EGS/Result/egs_*_<AsOf>` artifacts.
+
+**Alternatives considered and rejected**:
+- "Change `egs_main.py` default `--l3-mode` globally" — rejected because current live runs intentionally default to fresh today-mode; only historical weekly official-output runs need this interlock.
+- "Block all historical weekly runs" — rejected because reviewed replay / repair runs are still useful when they declare L3 basis and overwrite intent.
+- "Use `--output-root` for historical weekly runs automatically" — rejected because this would silently change the official-output workflow rather than guarding it.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_weekly_screening_guardrails -v`: 4 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/phase6 -v`: 17 tests passed.
+- `$script = Get-Content -Raw runners\weekly_screening.ps1; $null = [scriptblock]::Create($script); Write-Output 'weekly_screening scriptblock ok'`: passed.
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings appeared.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 147.
+- `rg -n "SR-EXEC-001|SR-MEASURE-001|Status: resolved|Historical -AsOf|AllowHistoricalOverwrite|L3Mode" docs\system_risk_register.md docs\CURRENT.md runners\weekly_screening.ps1 runners\README.md tests\phase6\test_weekly_screening_guardrails.py`: matched the intended guardrails and routing.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude `审查`.
+2. If Pass and user `提交`, next `执行` should address `SR-MEASURE-001` same-anchor benchmark excess; the A-share burst prereg remains `BLOCKED_DO_NOT_RUN`.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (system risk register enforcement lock)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `37e497d`)

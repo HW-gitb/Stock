@@ -17,13 +17,17 @@
 #   .\runners\weekly_screening.ps1 -PythonExe C:\Path\To\python.exe   # python 不在 PATH 时
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
 #   .\runners\weekly_screening.ps1 -SkipTracker                       # 不跑 forward tracker capture
+#   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard
 
 param(
     [ValidatePattern('^\d{8}$')]
     [string]$AsOf = (Get-Date -Format 'yyyyMMdd'),
     [ValidateSet('sina', 'em')]
     [string]$CanarySource = 'sina',
+    [ValidateSet('pit', 'today', 'neutralize')]
+    [string]$L3Mode = $null,
     [string]$PythonExe = 'python',
+    [switch]$AllowHistoricalOverwrite,
     [switch]$SkipCanary,
     [switch]$SkipTracker
 )
@@ -46,18 +50,76 @@ if (-not (Get-Command $PythonExe -ErrorAction SilentlyContinue)) {
     Write-Host "        Pass -PythonExe C:\Path\To\python.exe or add python to PATH." -ForegroundColor Red
     exit 1
 }
+
+$RunDate = Get-Date -Format 'yyyyMMdd'
+$IsHistoricalAsOf = $AsOf -ne $RunDate
+$EffectiveL3Mode = $L3Mode
+
+if ([string]::IsNullOrWhiteSpace($EffectiveL3Mode)) {
+    if ($IsHistoricalAsOf) {
+        Write-Host "[FATAL] Historical -AsOf $AsOf is not the current run date $RunDate." -ForegroundColor Red
+        Write-Host "        Pass -L3Mode pit or -L3Mode neutralize explicitly; default --l3-mode=today is blocked for historical official-output runs." -ForegroundColor Red
+        exit 1
+    }
+    $EffectiveL3Mode = 'today'
+}
+
+if ($IsHistoricalAsOf -and $EffectiveL3Mode -eq 'today') {
+    Write-Host "[FATAL] Historical -AsOf $AsOf cannot run with -L3Mode today." -ForegroundColor Red
+    Write-Host "        Use -L3Mode pit for a strict PIT snapshot, or -L3Mode neutralize for an L3-neutral replay." -ForegroundColor Red
+    exit 1
+}
+
+$ExistingOfficialOutputs = @()
+$OfficialResultDir = Join-Path $ProjectRoot "result\a_short\$AsOf"
+if (Test-Path $OfficialResultDir) {
+    $ExistingOfficialOutputs += $OfficialResultDir
+}
+$EgsResultDir = Join-Path $ProjectRoot 'A-EGS\Result'
+@(
+    "egs_tier1_$AsOf.csv",
+    "egs_full_$AsOf.csv",
+    "egs_tier1_$AsOf.xlsx"
+) | ForEach-Object {
+    $Path = Join-Path $EgsResultDir $_
+    if (Test-Path $Path) {
+        $ExistingOfficialOutputs += $Path
+    }
+}
+
+if ($IsHistoricalAsOf -and $ExistingOfficialOutputs.Count -gt 0 -and -not $AllowHistoricalOverwrite) {
+    Write-Host "[FATAL] Historical -AsOf $AsOf would overwrite existing official output(s):" -ForegroundColor Red
+    foreach ($Path in $ExistingOfficialOutputs) {
+        Write-Host "        $Path" -ForegroundColor Red
+    }
+    Write-Host "        Re-run only after reviewing those outputs, and pass -AllowHistoricalOverwrite if the overwrite is intentional." -ForegroundColor Red
+    exit 1
+}
+
+if ($IsHistoricalAsOf -and $AllowHistoricalOverwrite) {
+    Write-Host "[WARN] Historical official-output overwrite explicitly allowed for $AsOf." -ForegroundColor Yellow
+}
+
 Set-Location $ProjectRoot
 
 Write-Host "=== Weekly screening pipeline ===" -ForegroundColor Cyan
 Write-Host "as-of:         $AsOf"
+Write-Host "run date:      $RunDate"
+Write-Host "historical:    $IsHistoricalAsOf"
+Write-Host "l3 mode:       $EffectiveL3Mode"
 Write-Host "canary source: $CanarySource"
 Write-Host "skip canary:   $SkipCanary"
 Write-Host "skip tracker:  $SkipTracker"
 Write-Host ""
 
 # --- Stage 1: egs_main ---
-Write-Host "[1/3] Running A-EGS\egs_main.py --as-of $AsOf ..." -ForegroundColor Yellow
-& $PythonExe A-EGS\egs_main.py --as-of $AsOf
+$EgsArgs = @('A-EGS\egs_main.py', '--as-of', $AsOf, '--l3-mode', $EffectiveL3Mode)
+if ($EffectiveL3Mode -eq 'pit') {
+    $EgsArgs += '--l3-pit-strict'
+}
+
+Write-Host "[1/3] Running $PythonExe $($EgsArgs -join ' ') ..." -ForegroundColor Yellow
+& $PythonExe @EgsArgs
 $EgsExitCode = $LASTEXITCODE
 if ($null -eq $EgsExitCode) { $EgsExitCode = 1 }
 

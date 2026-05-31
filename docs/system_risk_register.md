@@ -32,22 +32,21 @@ Status:
 
 ## Hot Queue
 
-1. `SR-EXEC-001` - Add a weekly screening PIT interlock before any historical `-AsOf` official-output run.
-2. `SR-MEASURE-001` - Implement same-anchor benchmark excess with benchmark T+1 open for corrected A-share burst revalidation.
-3. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
-4. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-5. `SR-EXEC-002` - Revalidate and queue execution-backtest risk-control limitations from audit #1.
+1. `SR-MEASURE-001` - Implement same-anchor benchmark excess with benchmark T+1 open for corrected A-share burst revalidation.
+2. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
+3. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
+4. `SR-EXEC-002` - Revalidate and queue execution-backtest risk-control limitations from audit #1.
 
 ## Entries
 
 ### SR-META-001 - Audit findings were not durably tracked
 
 - Severity: P0
-- Status: in_progress
+- Status: resolved
 - Owner phase: process / cross-LLM workflow
 - Evidence: before this register, repo routing had `CURRENT.md` and `SESSION_LOG.md` entries for measurement-basis only; no tracked vulnerability / risk ledger existed.
 - Accepted calibration: measurement-basis lock was necessary but did not capture the wider audit backlog.
-- Required next action: keep this file routed from `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, and `docs/AI_REVIEW_PROTOCOL.md`; close only after Claude Pass and commit for the register-introduction change.
+- Closure evidence: commit `4e88b7c Add system risk register enforcement` added this register and routed it from `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, and `docs/AI_REVIEW_PROTOCOL.md`.
 
 ### SR-MEASURE-001 - Benchmark excess entry-anchor mismatch
 
@@ -61,11 +60,12 @@ Status:
 ### SR-EXEC-001 - Historical weekly screening can contaminate official outputs
 
 - Severity: P0
-- Status: open
+- Status: resolved
 - Owner phase: A-short operation / Phase 6b maintenance
 - Evidence: `runners/weekly_screening.ps1` calls `A-EGS/egs_main.py --as-of $AsOf` without `--l3-mode`; `A-EGS/egs_main.py` defaults `--l3-mode` to `today` and writes official `result/a_short/<trade_date>/` outputs by default.
 - Accepted calibration: `pit` lookup itself uses the effective as-of date after `set_asof`; the risk is the weekly script defaulting to `today` for historical `-AsOf` and allowing official-output overwrite.
-- Required next action: for `-AsOf` not equal to the current run date, require explicit PIT / neutralize mode and refuse to overwrite an existing official result directory unless the user explicitly approves a reviewed override.
+- Closure evidence: the reviewed change set updates `runners/weekly_screening.ps1` so historical `-AsOf` runs must pass `-L3Mode pit` or `-L3Mode neutralize`, reject `-L3Mode today`, pass `--l3-pit-strict` for PIT mode, and refuse to overwrite existing `result/a_short/<AsOf>/` or `A-EGS/Result/egs_*_<AsOf>` official outputs without `-AllowHistoricalOverwrite`.
+- Verification: `tests.phase6.test_weekly_screening_guardrails` covers missing historical L3 mode, rejected historical `today` mode, existing official-output overwrite refusal, and strict PIT argument wiring.
 
 ### SR-PIT-001 - PIT invariants are not enforceable in the root input contract
 

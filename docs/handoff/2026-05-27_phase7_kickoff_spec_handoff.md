@@ -1086,3 +1086,49 @@ rg -n "system_risk_register|SR-EXEC-001|SR-MEASURE-001" AGENTS.md docs\README.md
 1. Claude 审查本轮时必须确认 risk register 是否覆盖已接受的 audit#1 / audit#2 open findings，并检查 protocol 是否足以让未来 `执行` / `审查` 强制读取该 register。
 2. 如果审查 Pass 并提交，下一条 `执行` 默认按 `docs/system_risk_register.md` hot queue 修 `SR-EXEC-001`：weekly screening historical `-AsOf` PIT interlock / official-output overwrite guard。
 3. `SR-MEASURE-001` same-anchor benchmark excess 仍然阻断 A-share burst prereg；旧 prereg 继续 `BLOCKED_DO_NOT_RUN`，不得因本 register slice 被解锁。
+
+## 2026-05-31 追加：SR-EXEC-001 weekly historical PIT interlock
+
+**改了什么**:
+
+- 更新 `runners/weekly_screening.ps1`：新增 `-L3Mode pit|today|neutralize` 和 `-AllowHistoricalOverwrite`；当 `-AsOf` 不等于当前运行日期时，必须显式选择 `pit` 或 `neutralize`，禁止 `today`。
+- `-L3Mode pit` 由 wrapper 自动传 `--l3-pit-strict` 给 `A-EGS/egs_main.py`，避免 PIT 缺快照时静默 fallback。
+- 历史 `-AsOf` 若会覆盖 `result/a_short/<AsOf>/` 或 `A-EGS/Result/egs_{tier1,full}_<AsOf>` / xlsx 既有官方输出，默认拒绝；只有显式 `-AllowHistoricalOverwrite` 才继续。
+- 新增 `tests/phase6/test_weekly_screening_guardrails.py`，覆盖缺失 L3 mode、历史 `today` 模式拒绝、既有官方输出 overwrite guard 和 PIT strict 参数。
+- 更新 `docs/system_risk_register.md` / `docs/CURRENT.md` / `runners/README.md` 路由：`SR-EXEC-001` 关闭，下一 open P0 转为 `SR-MEASURE-001`。
+
+**为什么改**:
+
+- `SR-EXEC-001` 的风险不是 `egs_main.py` 的 PIT lookup 本身，而是 weekly wrapper 在 historical `-AsOf` 官方输出路径上默认使用 `--l3-mode=today`，并可能覆盖正式结果目录。
+- 修在 wrapper 层最小：不动 `A-EGS/egs_main.py` 筛选逻辑、不改 provider / DataHub、不运行旧 burst prereg，也不改变 canary / tracker 的旁路退出码语义。
+- 对 historical replay，用户必须在“严格 PIT 快照”与“L3 neutralize”之间显式选择，不能再由默认 today mode 混入当前概念数据。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_weekly_screening_guardrails -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/phase6 -v
+$script = Get-Content -Raw runners\weekly_screening.ps1; $null = [scriptblock]::Create($script); Write-Output 'weekly_screening scriptblock ok'
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+```
+
+**验证结果**:
+
+- `tests.phase6.test_weekly_screening_guardrails`: 4 tests passed.
+- `python -m unittest discover -s tests/phase6 -v`: 17 tests passed.
+- PowerShell scriptblock parse: `weekly_screening scriptblock ok`.
+- `git diff --check`: passed；仅出现 touched files 的 LF/CRLF working-copy warning。
+- `docs/CURRENT.md` authoritative line count = 147，低于 150-line snapshot target。
+
+**失效旧结论**:
+
+- “`weekly_screening.ps1 -AsOf <historical>` 可不指定 L3 mode”失效；historical official-output run 必须显式 `-L3Mode pit` 或 `-L3Mode neutralize`。
+- “historical weekly run 可以默认覆盖 `result/a_short/<AsOf>/` 或 `A-EGS/Result/egs_*_<AsOf>`”失效；既有官方输出默认拒绝 overwrite。
+- “risk register hot queue 第一项仍是 `SR-EXEC-001`”失效；本 reviewed change set 关闭后，下一 open P0 是 `SR-MEASURE-001` same-anchor benchmark excess。
+
+**下一步注意事项**:
+
+1. Claude 审查应重点确认 historical guard 是否在调用 `egs_main.py` 前触发，且没有引入 provider / DataHub / burst research scope。
+2. 如果审查 Pass 并提交，下一条 `执行` 默认进入 `SR-MEASURE-001`：same-anchor benchmark excess（CSI1000 / CSI300 benchmark T+1 open 到同一 exit close）。
+3. 旧 A-share burst prereg 仍然 `BLOCKED_DO_NOT_RUN`，不得因 weekly wrapper guard 关闭而运行。

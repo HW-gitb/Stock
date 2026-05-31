@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-31（system risk register lock）
+**最后更新**：2026-05-31（SR-EXEC-001 weekly PIT interlock）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,7 +12,8 @@
 - Current issue: stock T+1 open leg and benchmark close basis may not be mixed for promotion-relevant alpha / research-continuation evidence.
 - The old 5d `excess_csi1000` clue is measurement-contaminated / uncorrected, not validated alpha, until same-anchor corrected revalidation proves otherwise.
 - `docs/system_risk_register.md` is now the durable queue for material data / PIT / schema / execution / security findings. `执行` / `审查` must read it; open P0 entries outrank normal roadmap work unless the user explicitly approves an override.
-- Current open P0 queue: `SR-EXEC-001` weekly historical `-AsOf` PIT interlock, then `SR-MEASURE-001` same-anchor benchmark excess for corrected A-share burst revalidation.
+- `SR-EXEC-001` weekly historical `-AsOf` PIT interlock is implemented in the reviewed change set: historical weekly runs must use `-L3Mode pit` or `-L3Mode neutralize`, and existing official outputs require `-AllowHistoricalOverwrite`.
+- Current open P0 queue: `SR-MEASURE-001` same-anchor benchmark excess for corrected A-share burst revalidation.
 
 ---
 
@@ -30,6 +31,7 @@
 ## 2. 最近已完成
 
 - **A-share burst preregistration**（2026-05-31）：`research/preregistrations/a_share_minimal_data_burst_20260531.json` 已建立但因 benchmark entry-basis measurement issue 暂停执行；需 corrected-basis supersession 后才可重启。
+- **Weekly historical PIT interlock**（2026-05-31）：`runners/weekly_screening.ps1` now blocks historical `-AsOf` official-output runs unless L3 mode is explicitly `pit` / `neutralize`, rejects historical `today` L3 mode, and guards existing official outputs from accidental overwrite.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，承接两轮系统审查的 open findings，并把 future LLM enforcement 接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
 - **Phase 7b-2 P1 access/sample plan**（2026-05-31）：`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 已建立并由 `schemas/provider_p1_access_decision_plan.schema.json` 锁定；只定义访问边界和样本验证计划，不授权 provider 行动。
 - **Phase 7b-2 P1 readiness review matrix**（2026-05-29）：`docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` 已建立并由 `schemas/provider_p1_readiness_review.schema.json` 锁定；六份 docs evidence collection 完成，但 P1 不授权 Phase 7c / provider selection / data fetch。
@@ -89,8 +91,7 @@
 ### P0 - Risk register hot queue before burst falsification
 
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
-- First code slice: `SR-EXEC-001` weekly screening PIT interlock for historical `-AsOf` official-output runs.
-- Second code slice: `SR-MEASURE-001` same-anchor benchmark excess for corrected A-share burst revalidation.
+- First code slice: `SR-MEASURE-001` same-anchor benchmark excess for corrected A-share burst revalidation.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it is `BLOCKED_DO_NOT_RUN` until corrected-basis supersession.
 - Corrected revalidation is one frozen primary test on corrected 5d CSI1000; 10d / 20d may be diagnostics only, with no threshold / variant / benchmark / holding-period search.
 
@@ -120,7 +121,7 @@ python runners\backtest_rank.py --stats-only --mode production --periods 24 --fr
 python A-EGS\egs_main.py --as-of <YYYYMMDD>
 
 # 周五一键
-.\runners\weekly_screening.ps1 -AsOf 20260530
+.\runners\weekly_screening.ps1 -AsOf 20260530 -L3Mode neutralize
 .\runners\weekly_screening.ps1 -SkipCanary
 ```
 
