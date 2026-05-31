@@ -1047,3 +1047,42 @@ git diff --check
 1. Claude 审查应重点核对所有 current route 是否禁止运行旧 prereg，并确认没有趁 measurement fix 改阈值、universe、holding period、criteria 或 `test_budget`。
 2. 如果审查 Pass 并提交，下一条 `执行` 应修复 / 引入 same-anchor benchmark excess：stock T+1 open 与 benchmark T+1 open 到同一 exit close；当前 A-share CSI1000 / CSI300 应扩展 Tushare `index_daily` benchmark materializer / forward-daily benchmark fetch 取 open，不能用 close-to-close fallback。
 3. corrected revalidation 只能是 corrected 5d CSI1000 primary；10d / 20d 只能 diagnostic，不得做参数、variant、benchmark、holding-period search。
+
+## 2026-05-31 追加：system risk register and enforcement lock
+
+**改了什么**:
+
+- 新增 `docs/system_risk_register.md`，作为 data / PIT / schema / execution / security / cross-LLM process risks 的 durable queue。
+- 更新 `AGENTS.md` 启动必读和 AI 协作守则，要求 material audit finding 必须同轮修复或进入 risk register，open P0 不得被普通 roadmap work 绕过。
+- 更新 `docs/AI_REVIEW_PROTOCOL.md`，把 risk register 加入 Codex / Claude required reading、`执行` / `审查` / `修复` steps、review clean-Pass 条件和 documentation rules。
+- 更新 `docs/README.md` routing table 与 `docs/CURRENT.md` 当前 P0，把下一步从单一 measurement-basis code fix 调整为 risk-register hot queue：先 `SR-EXEC-001` weekly historical `-AsOf` PIT interlock，再 `SR-MEASURE-001` same-anchor benchmark excess。
+- 将两轮系统审查的 open items 进入 register：measurement basis、weekly PIT interlock、PIT contract、schema validation、Claude local permissions、execution-backtest risk-control limitations、threshold governance、US-short reference prompt hygiene、web-news prompt injection、data canary overread、deterministic report wall-clock state、audit#1 revalidation queue。
+
+**为什么改**:
+
+- 用户接受了“先建 tracked vulnerability / risk ledger”的判断。此前审查发现只存在于 chat 或 SESSION_LOG 过程文本里，后续 LLM 读取 CURRENT / README 无法看到完整 open-risk queue。
+- Measurement-basis lock 只捕获了 benchmark-entry-basis 问题，不足以约束后续 LLM 对 PIT、schema、weekly operation、security 和 execution evidence 风险的执行优先级。
+- 本轮不直接修业务代码，是为了先建立强制路由和 review gate，防止后续继续发现蒸发或绕开 open P0。
+
+**验证命令**:
+
+```powershell
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+rg -n "system_risk_register|SR-EXEC-001|SR-MEASURE-001" AGENTS.md docs\README.md docs\CURRENT.md docs\AI_REVIEW_PROTOCOL.md docs\system_risk_register.md
+```
+
+**验证结果**:
+
+- 待本轮 Codex SESSION_LOG entry 记录最终验证结果。
+
+**失效旧结论**:
+
+- “下一条 `执行` 只需直接做 same-anchor benchmark excess code fix”被收紧：same-anchor 仍是 P0，但在 risk register hot queue 中排在 `SR-EXEC-001` weekly historical `-AsOf` PIT interlock 之后，除非用户显式 override。
+- “全系统审查发现可只放在 chat / review prose / SESSION_LOG”失效；material finding 必须修复或进入 `docs/system_risk_register.md`。
+
+**下一步注意事项**:
+
+1. Claude 审查本轮时必须确认 risk register 是否覆盖已接受的 audit#1 / audit#2 open findings，并检查 protocol 是否足以让未来 `执行` / `审查` 强制读取该 register。
+2. 如果审查 Pass 并提交，下一条 `执行` 默认按 `docs/system_risk_register.md` hot queue 修 `SR-EXEC-001`：weekly screening historical `-AsOf` PIT interlock / official-output overwrite guard。
+3. `SR-MEASURE-001` same-anchor benchmark excess 仍然阻断 A-share burst prereg；旧 prereg 继续 `BLOCKED_DO_NOT_RUN`，不得因本 register slice 被解锁。

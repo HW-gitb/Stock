@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-31（alpha measurement integrity lock）
+**最后更新**：2026-05-31（system risk register lock）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -11,16 +11,17 @@
 - A-share `minimal_data_burst` preregistration is now paused: `research/preregistrations/a_share_minimal_data_burst_20260531.json` is `BLOCKED_DO_NOT_RUN` until corrected benchmark entry basis supersedes it.
 - Current issue: stock T+1 open leg and benchmark close basis may not be mixed for promotion-relevant alpha / research-continuation evidence.
 - The old 5d `excess_csi1000` clue is measurement-contaminated / uncorrected, not validated alpha, until same-anchor corrected revalidation proves otherwise.
-- Next P0 is alpha measurement integrity: same-entry-anchor benchmark excess; for current A-share CSI1000 / CSI300, Tushare `index_daily` can provide benchmark open, so close-to-close is not an acceptable fallback.
+- `docs/system_risk_register.md` is now the durable queue for material data / PIT / schema / execution / security findings. `执行` / `审查` must read it; open P0 entries outrank normal roadmap work unless the user explicitly approves an override.
+- Current open P0 queue: `SR-EXEC-001` weekly historical `-AsOf` PIT interlock, then `SR-MEASURE-001` same-anchor benchmark excess for corrected A-share burst revalidation.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst preregistration exists but is blocked by measurement-basis review; provider access remains blocked pending explicit user approval.
-- **当前 P0 目标**：alpha measurement integrity correction / revalidation；不得运行当前 burst prereg，不得进 production、不得改 provider / DataHub、不得声称 ship-gate evidence。
+- **当前 P0 目标**：follow `docs/system_risk_register.md` hot queue；不得运行当前 burst prereg，不得进 production、不得改 provider / DataHub、不得声称 ship-gate evidence。
 - **当前 P1 provider blocker**：任何 sample / trial / paid-access / token / provider contact / data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
-- **执行锁**：当前 prereg 为 `BLOCKED_DO_NOT_RUN`；superseding corrected-basis prereg 只能改 benchmark / entry-anchor basis，阈值、universe、holding period、criteria、`test_budget` 不得变；否则先建 singleton program-level ledger。
+- **执行锁**：当前 prereg 为 `BLOCKED_DO_NOT_RUN`；superseding corrected-basis prereg 只能改 benchmark / entry-anchor basis，阈值、universe、holding period、criteria、`test_budget` 不得变；否则先建 singleton program-level ledger。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
@@ -29,6 +30,7 @@
 ## 2. 最近已完成
 
 - **A-share burst preregistration**（2026-05-31）：`research/preregistrations/a_share_minimal_data_burst_20260531.json` 已建立但因 benchmark entry-basis measurement issue 暂停执行；需 corrected-basis supersession 后才可重启。
+- **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，承接两轮系统审查的 open findings，并把 future LLM enforcement 接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
 - **Phase 7b-2 P1 access/sample plan**（2026-05-31）：`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 已建立并由 `schemas/provider_p1_access_decision_plan.schema.json` 锁定；只定义访问边界和样本验证计划，不授权 provider 行动。
 - **Phase 7b-2 P1 readiness review matrix**（2026-05-29）：`docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` 已建立并由 `schemas/provider_p1_readiness_review.schema.json` 锁定；六份 docs evidence collection 完成，但 P1 不授权 Phase 7c / provider selection / data fetch。
 - **Phase 7b-2 P1 evidence snapshots**（2026-05-28）：public-source、market-data-candidate、authorization / cost / stability、benchmark / GICS、fundamentals observed-date、coverage / fallback / incident 六份 artifact 均已建立并各有 regression test；这些只证明 candidate evidence。
@@ -61,6 +63,7 @@
 - `AGENTS.md` - 最高项目规则、固化决策、命令别名、启动顺序。
 - `docs/README.md` - 完整 routing table 和文档维护规则。
 - `docs/AI_REVIEW_PROTOCOL.md` - Codex / Claude / 用户三方 review / 修复 / 提交流程。
+- `docs/system_risk_register.md` - durable open-risk queue；`执行` / `审查` 必读。
 - `docs/SESSION_LOG.md` - 最新 cross-LLM reasoning / review verdict；只读顶部 1-3 条。
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` - Phase 7a+ 最高行动指南。
 - `research/README.md` / `schemas/research_preregistration.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` - research-only preregistration owner and current A-share minimal-data burst frozen test artifact。
@@ -68,11 +71,9 @@
 - `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` - Phase 7b provider evidence / drift monitor contract。
 - `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` - Phase 7b-2 P1 access-decision and sample-validation plan（plan-only；approved spend = 0；provider/sample/data/Phase 7c blocked）。
 - `schemas/provider_p1_readiness_review.schema.json` / `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` - Phase 7b-2 P1 readiness review matrix（collection complete；Phase 7c / provider selection / data fetch blocked）。
-- `docs/provider_evidence_p1_us_public_sources_20260528.json`、`docs/provider_evidence_p1_us_market_data_candidates_20260528.json`、`docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json`、`docs/provider_evidence_p1_us_benchmark_gics_candidates_20260528.json`、`docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json`、`docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json` - Phase 7b-2 P1 candidate evidence snapshots（partial / blocked）。
 - `docs/evidence_feasibility_controls.md` / `schemas/evidence_feasibility_controls.schema.json` - Phase 7a-4 burst promotion / evidence feasibility controls。
 - `docs/evidence_report_schema_contract.md` / `schemas/evidence_report.schema.json` - Phase 7a-5 evidence report schema contract。
 - `docs/alpha_plausibility_audit.md` / `schemas/alpha_plausibility_audit.schema.json` - Phase 7a-1 audit owner and contract。
-- `docs/phase7a_provider_status_snapshot.json` / `docs/phase7a_alpha_plausibility_audit.json` - Phase 7a-1 audit inputs and artifact。
 - `docs/evidence_capital_policy.md` - paper vs live-normalized evidence owner。
 - `docs/strategy_design_synthesis.md` - 总体策略架构 owner。
 - `docs/burst_lane_spec.md` / `docs/us_short_spec.md` / `docs/long_alpha_spec.md` - lane owner specs。
@@ -85,10 +86,12 @@
 
 ## 5. 下一步
 
-### P0 - Alpha measurement integrity before burst falsification
+### P0 - Risk register hot queue before burst falsification
 
+- Read `docs/system_risk_register.md` before choosing the next `执行`.
+- First code slice: `SR-EXEC-001` weekly screening PIT interlock for historical `-AsOf` official-output runs.
+- Second code slice: `SR-MEASURE-001` same-anchor benchmark excess for corrected A-share burst revalidation.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it is `BLOCKED_DO_NOT_RUN` until corrected-basis supersession.
-- Fix / introduce same-anchor benchmark excess first: stock T+1 open and benchmark T+1 open to the same exit close; extend the benchmark materializer / forward-daily benchmark fetch to use index open for current A-share CSI1000 / CSI300.
 - Corrected revalidation is one frozen primary test on corrected 5d CSI1000; 10d / 20d may be diagnostics only, with no threshold / variant / benchmark / holding-period search.
 
 ### P1 - P1 provider access boundary（仅用户明确要求时）
@@ -101,10 +104,6 @@
 
 - 继续 weekly forward capture、comparison-track accumulator、forward evidence accumulation。
 - 12 期新增 forward 样本后再重新审查 score / ESP / veto overlap。
-
-### P3 - Later implementation / cleanup
-
-- Phase 8 lane implementation with monitoring / circuit breaker / execution feasibility controls；Phase 9 coordinator with conflict resolution、unified report、position reconciliation、alert priority。
 
 ---
 
@@ -144,3 +143,4 @@ python A-EGS\egs_main.py --as-of <YYYYMMDD>
 - 最新状态放 `CURRENT.md`；过程、争议、review verdict 和 rejected alternatives 放 `SESSION_LOG.md`。
 - 新 handoff 高门槛；默认追加到当前 phase 主 handoff。旧 handoff 不重组。
 - 新增文档必须先在 `docs/README.md` routing table 中说明 owner role。
+- Material audit findings must be fixed in-round or entered in `docs/system_risk_register.md`.

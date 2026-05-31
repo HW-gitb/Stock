@@ -8,6 +8,61 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (system risk register enforcement lock)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `37e497d`)
+
+**Verdict**: Pass. Committable. 这一刀正是审查 #2 首要建议的元修复（建 durable risk register 收两轮发现），执行得忠实且克制。
+
+**Notes**: Fast-path 全跑：`git status -uall` = 6 M tracked + 1 `??`（`docs/system_risk_register.md`）+ 0 staged；`37e497d..HEAD` 无新 commit；`??` register 全文读毕；6 tracked `git diff` 全文读毕（45.8KB）；`git diff --cached` empty。**Register 忠实且完整**：逐条对照两轮审查，13 个 SR 条目覆盖全部 material findings——SR-META-001(P0)/SR-MEASURE-001(P0,benchmark 锚点)/SR-EXEC-001(P0,weekly 回放污染)/SR-PIT-001+SR-CONTRACT-001(P1,PIT 契约不可强制+producer/consumer 不校验)/SR-SEC-001(P1,通配 Bash)/SR-EXEC-002(P1)/SR-GOV/SKILL/LLM/CANARY/DET-001(P2)/SR-OPS-001(P2)。severity 校准准确，calibration 诚实（"5d 未证伪非已证伪"、"egs_main 确实过滤 ann_date、风险是契约层不可强制+未来回归"、"execution backtest 部分可能是已披露 scope limit、先 revalidate"），且对未逐行确认的 audit 声称用 `needs_revalidation` 状态——不预判为缺陷，正确。**`AI_REVIEW_PROTOCOL.md` +114/−63 经核非 over-engineering**：绝大部分是三套编号列表（required-reading / 执行 16→18 / 审查 21→23 / 修复 15→17）插入 register 第 4 项后的机械重编号；真正新增 ~10 条 enforcement hook（读/更新/审查验证 register），其中 审查 step 18"发现 material risk 未修又未入 register 则不得 clean Pass"是防发现蒸发的关键闸。重编号内部一致、**无原有 protocol 内容丢失**（执行/审查/修复 所有原 clause 均保留并 +1）。AGENTS +7（一条必读 + 一节 discipline）克制。CURRENT P0 改为 register hot queue、保留 burst-prereg BLOCKED 锁；§4 顺手删了 P1 snapshot 列表 + phase7a audit inputs 两行以守 150 行预算——安全（两者仍由 AGENTS §文件参考 / README / drift_monitor 路由），属可接受的 line-budget 维护。独立复核：CURRENT.md 146、register 158、`git diff --check` exit 0、`discover -s tests/schema` OK（本刀未碰 code/schema/test）。Scope 干净：docs-only，无业务码/schema/runner/state。**非阻断观察（不构成 Required/Optional）**：(1) SR-OPS-001 把 forward_tracker.csv 无 atomic write（audit#1 已逐行确认）与真正待 revalidate 的项打包成一个 needs_revalidation——register 已自述 revalidate 时会 split，届时该项可直接以 confirmed 拆出；(2) multiple-testing 方法学缺口未设独立条目，但通过 single-frozen-test 纪律 + findings caveat 已实质覆盖。无 Required / Optional / open question / §Optional Re-raise。**可 `提交`**（单一 risk-register-enforcement scope）。hot queue 把 SR-EXEC-001（weekly interlock）排在 SR-MEASURE-001（same-anchor）前——两者皆 P0，孰先是用户可控的优先级判断，非 review 问题。
+
+---
+
+## 2026-05-31 — Codex (system risk register enforcement lock)
+
+**Commits**: none (`执行`/user-approved docs change; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on `37e497d Lock A-share burst measurement basis`.
+- **Refines**: measurement-basis lock remains valid but is no longer the only tracked system risk; broader audit findings now route through `docs/system_risk_register.md`.
+- **Reverses**: "system audit findings can live in chat / transient review prose" → "material findings must be fixed in-round or entered in the register." Reason: otherwise future LLMs reading startup docs cannot see open risk.
+
+**Worked on**:
+1. [untracked] `docs/system_risk_register.md`: added the durable open-risk queue with enforcement rules, severity / status definitions, hot queue, and accepted audit#1 / audit#2 findings.
+2. [tracked] `AGENTS.md`: added risk-register required reading and top-level discipline for all LLM collaborators.
+3. [tracked] `docs/AI_REVIEW_PROTOCOL.md`: added risk-register reading / update / review gates to Codex and Claude responsibilities, required reading order, `执行`, `审查`, `修复`, review fast path, and documentation rules.
+4. [tracked] `docs/README.md`: routed durable open-risk queue ownership to `docs/system_risk_register.md`.
+5. [tracked] `docs/CURRENT.md`: changed current P0 from a single measurement-basis code slice to the risk-register hot queue; kept the blocked burst preregistration lock.
+6. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7 handoff section for this enforcement lock.
+
+**Key decisions**:
+- The register is a queue, not a batch-fix authorization. Each risk fix still needs its own reviewed slice.
+- Open P0 risks in `docs/system_risk_register.md` outrank ordinary roadmap work unless the user explicitly approves a narrower override.
+- Next default code slice after this docs lock is `SR-EXEC-001` weekly historical `-AsOf` PIT interlock; `SR-MEASURE-001` same-anchor benchmark excess remains P0 and continues to block the A-share burst prereg.
+
+**Alternatives considered and rejected**:
+- "Only add another SESSION_LOG entry" — rejected because SESSION_LOG is process history, not a durable owner queue.
+- "Put the whole backlog into CURRENT.md" — rejected because CURRENT is a short snapshot and must stay under the line target.
+- "Fix weekly, schema, permissions, and benchmark code in the same slice" — rejected because that would mix multiple independent scopes and bypass review clarity.
+
+**Validation run/result**:
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings appeared.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 146.
+- `rg -n "system_risk_register|SR-EXEC-001|SR-MEASURE-001|SR-PIT-001|material audit finding|open P0" AGENTS.md docs\README.md docs\CURRENT.md docs\AI_REVIEW_PROTOCOL.md docs\system_risk_register.md docs\handoff\2026-05-27_phase7_kickoff_spec_handoff.md`: matched all routed enforcement points.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None. Claude should review whether the register covers the accepted audit findings and whether protocol / AGENTS routing is strong enough to make future LLMs read and update it.
+
+**Next natural step from my view**:
+1. Claude `审查`.
+2. If Pass and user `提交`, next `执行` should address `SR-EXEC-001` weekly historical `-AsOf` PIT interlock unless the user explicitly overrides to `SR-MEASURE-001`.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (measurement-basis lock — R1 repaired; full change set clean & committable)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs vs `4f0234c`)

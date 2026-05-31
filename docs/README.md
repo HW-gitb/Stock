@@ -10,6 +10,7 @@ Use this routing table instead of guessing which file to read.
 |---|---|
 | Highest-level project rules, fixed decisions, command aliases, required reading order | `AGENTS.md` |
 | Current state and next implementation step | `docs/CURRENT.md` |
+| Durable open-risk queue for data / PIT / schema / execution / security findings | `docs/system_risk_register.md` |
 | Latest cross-LLM reasoning, review verdicts, rejected alternatives, pending Optional disposition | `docs/SESSION_LOG.md` top 1-3 entries |
 | Review workflow and exact short-command expansions | `docs/AI_REVIEW_PROTOCOL.md` |
 | Current Phase 7a+ highest action guide: alpha reality guardrails, accepted business gaps, execution roadmap | `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` |

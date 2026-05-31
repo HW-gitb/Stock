@@ -11,6 +11,7 @@
 
 - `docs/README.md`：完整文档路由。
 - `docs/CURRENT.md`：当前状态 / 下一步。
+- `docs/system_risk_register.md`：未修复的数据 / PIT / schema / execution / security 风险队列；`执行` / `审查` 不得绕过 open P0。
 - `docs/SESSION_LOG.md` 顶部 1-3 条：最新跨 LLM 交接、review verdict、pending Optional。
 - `docs/AI_REVIEW_PROTOCOL.md`：review 流程和短命令。
 
@@ -211,6 +212,12 @@ Stock/
 15. Phase 7a+ 最高行动指南采用 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`：所有后续 schema / provider / DataHub / runner / report / live evidence 工作必须先证明 alpha 真实性边界，不得跳过 survivorship、multiple testing、statistical power、PIT/security master、fraud red flags、regime sensitivity、factor exposure、execution cost、decision reproducibility、position reconciliation 和 production monitoring 等护栏。
 
 ## AI 协作者在本项目中的工作守则
+
+## System risk register discipline
+
+`docs/system_risk_register.md` 是所有未修复系统风险的 durable queue。任何 LLM 发现影响 data integrity、PIT safety、schema contract、execution simulation、security、ship-gate evidence 或 cross-LLM continuity 的实质问题时，必须在同一轮内二选一：修复并验证，或写入该 register。不得只把发现留在 chat / SESSION_LOG / 临时审查文字里。
+
+`执行` 前必须检查 register；open P0 风险默认优先于普通 roadmap work，除非用户明确批准更窄的 override。`审查` 必须确认新发现已被修复或入 register；若漏记 material finding，审查不能给 clean Pass。
 
 ## Multi-LLM Review Protocol
 
