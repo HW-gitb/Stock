@@ -36,9 +36,9 @@ Status:
 Current routing note: the corrected-basis A-share burst preregistration has now failed a frozen-cohort preflight with `valid_signal_events = 0`. Do not run outcome / benchmark-excess calculation for that preregistration. The next A-share burst alpha-validation work is ledger-gated redesign, not a direct corrected 5d run.
 
 1. `SR-RESEARCH-001` - Current corrected-basis A-share burst preregistration is spent / failed by zero valid signal events; next burst test requires ledger-gated redesign.
-2. `SR-DATA-003` - Resolve benchmark-open input before any nonzero-event outcome / excess calculation.
+2. `SR-DATA-003` - Resolve benchmark-open input before any nonzero-event outcome / excess calculation, and fix the forward-tracker cache guard before official backfill use.
 3. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
-4. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-CAP-001` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
+4. `SR-EXEC-006` + `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
 5. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
 6. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
 7. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
@@ -114,10 +114,11 @@ Current routing note: the corrected-basis A-share burst preregistration has now 
 
 - Severity: P1
 - Status: open
-- Owner phase: A-share burst research input / benchmark measurement
+- Owner phase: A-share burst research input / benchmark measurement / forward-tracker cache guard
 - Evidence: `result/a_short/backtest/cache/forward_daily.pkl` predates the same-anchor fix and stores `benchmarks.csi300` / `benchmarks.csi1000` with only `trade_date,close`. `runners/backtest_rank.py` now requires benchmark `trade_date,open,close`; missing benchmark open makes `_benchmark_returns` return `None`, while naïve cache refresh would refetch the full stock / limit / benchmark forward surface.
+- Additional forward-tracker evidence: `runners/forward_tracker.py:_check_cache_coverage` reads only `forward_daily.pkl` metadata date range and is blind to benchmark `open` / `close` fields. It can return `ok`, then `forward_tracker.py:backfill` calls `fetch_forward_daily(..., refresh=False)`, which rejects close-only benchmark frames through `runners/backtest_rank.py:_benchmark_frame_has_same_anchor_fields` and refetches the shared forward surface. That bypasses the tracker comment that backfill must not trigger a universe-wide Tushare refetch on its own, and the user does not see the intended `[SKIP]` / hint path.
 - Accepted calibration: this is currently secondary to `SR-RESEARCH-001`, because the failed preflight has zero valid events and does not reach benchmark outcome calculation. It remains a hard precondition for any future nonzero-event corrected-basis outcome / excess run.
-- Required next action: before any redesigned burst preregistration computes outcome / excess returns, create a reviewed benchmark-open input slice that refreshes only the necessary CSI1000 / CSI300 `index_daily` open/close lineage or otherwise provides reviewed benchmark open data without silently authorizing a full forward-daily provider refetch.
+- Required next action: before any redesigned burst preregistration computes outcome / excess returns, create a reviewed benchmark-open input slice that refreshes only the necessary CSI1000 / CSI300 `index_daily` open/close lineage or otherwise provides reviewed benchmark open data without silently authorizing a full forward-daily provider refetch. Before official `forward_tracker.py backfill` use, mirror the same benchmark-open / same-anchor cache check in `_check_cache_coverage` so close-only benchmark caches produce `[SKIP]` + remediation hint instead of falling into `fetch_forward_daily` refetch.
 
 ### SR-DATA-001 - Suspend inference can silently drop tradable stocks on partial daily response
 
@@ -181,6 +182,24 @@ Current routing note: the corrected-basis A-share burst preregistration has now 
 - Evidence: `runners/aggregate_execution_reports.py:report_total_return_for_aggregation` returns `0.0` for zero-trade reports when total return is absent, causing those months to enter monthly return, t-stat, and Sharpe calculations as flat observations.
 - Accepted calibration: this does not currently pass the full ship gate because other metrics remain missing / not-evaluable; it can still inflate sample count or compress variance when execution evidence is later summarized.
 - Required next action: treat zero-trade no-return reports as missing / not-evaluable for return statistics, or explicitly model cash return with a documented rule and separate no-trade diagnostics.
+
+### SR-EXEC-006 - Execution aggregate can turn smoke / unbound forward-month inputs into full-size permission
+
+- Severity: P1
+- Status: open
+- Owner phase: Phase 5 execution aggregation / ship-gate evidence integrity
+- Evidence: `runners/aggregate_execution_reports.py:validate_compatible_reports` only checks that reports share the same `capital_context` summary and `mode`; it does not require `mode == production` for ship-gate permission. `--forward-live-months` is a plain CLI integer with no reviewed forward-tracking evidence artifact / ref binding. `build_ship_gate_evaluation` sets `full_size_allowed = status == "pass"`, and current tests include `tests/execution/test_aggregate_execution_reports.py:test_aggregate_with_benchmark_and_forward_months_can_pass_gate`, which can assert `full_size_allowed == true` from two default smoke reports plus a bare `--forward-live-months 12`.
+- Accepted calibration: there is no broker or automatic order path, and current burst research is blocked before execution evidence is used. The risk is evidence / manual-sizing overclaim: the core `>= 12 months forward live` ship-gate requirement can be bypassed by an unbound CLI value, and smoke diagnostics can be presented as full-size manual-use permission.
+- Required next action: before any execution aggregate is used for ship-gate-like evidence or manual sizing conclusions, separate diagnostic aggregate status from ship-gate status; allow `full_size_allowed` to become true only for production-mode inputs with reviewed forward-tracking evidence artifact / ref validation; keep smoke aggregates false / not-evaluable for ship-gate permission; and reverse the current test that locks the wrong invariant.
+
+### SR-EXEC-007 - Execution simulator serializes overlapping candidates and reuses bucket cash
+
+- Severity: P2
+- Status: open
+- Owner phase: Phase 5 execution simulator / capacity and concurrency modeling
+- Evidence: `runners/backtest_execution.py:simulate_execution` loops candidates sequentially. For each candidate it enters, subtracts cash, computes the full exit inside the same iteration, and adds cash back before the next candidate is sized. `calculate_shares` therefore sees cash after the prior candidate has already been closed, even when real holding windows would overlap. The code discloses "does not yet model concurrent open positions" in `limitations`, but there is no durable register gate for the resulting capacity / return distortion.
+- Accepted calibration: this is distinct from `SR-CAP-001` bucket-ceiling validation. The risk is concurrency and cash-lock modeling: overlapping trades can reuse the same bucket capital serially, overstating capacity-adjusted returns if execution results are later used as ship-gate-like evidence.
+- Required next action: before execution returns are used for ship-gate-like conclusions, either model concurrent holdings and lock bucket cash through each holding window, or mark capacity / concurrency-adjusted return as not-evaluable and keep the aggregate out of full-size permission decisions.
 
 ### SR-CAP-001 - Capital ceiling is not validated at state load / sizing boundary
 

@@ -8,6 +8,54 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (clean) (system audit findings register-only: SR-EXEC-006 / SR-DATA-003 ext / SR-EXEC-007)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs vs `ec992d4`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。三条 register 变更可 `提交`。
+
+**Status**: REVIEW VERDICT RECORDED. Clean Pass. Register change set ready for user `提交`.
+
+**Notes**: 本轮把用户批准接受的三条全系统审计发现（我上轮 code-verified）落成 durable register gate，scope = register-only（仅 `docs/system_risk_register.md` + 本文，**无业务代码改动**，与约定一致）。逐条核验：**SR-EXEC-006**（P1，新）evidence 准确——`aggregate_execution_reports.py:validate_compatible_reports`(:212) 只校验同 capital_context + 同 mode、不强制 production；`--forward-live-months` 裸 CLI int 无 evidence 绑定；`build_ship_gate_evaluation`(:303) 设 `full_size_allowed=status=="pass"`(:385)；`tests/execution/test_aggregate_execution_reports.py:test_aggregate_with_benchmark_and_forward_months_can_pass_gate`(:181-222) 用 2 个默认 smoke 月报 + 裸 `--forward-live-months 12` 断言 full_size_allowed=true。required action 含我提的全三点：production-gate + reviewed forward-tracking evidence ref + **反转锁错不变量的 test**。calibration 正确（paper 非 active、风险是误导人工 sizing / 旁路"≥12 月 forward live"准则）。**SR-DATA-003 扩展**（非新建，根因同 benchmark-open）：加 forward-tracker evidence（`_check_cache_coverage`(:314) 只读 meta 日期、对 benchmark open/close 盲 → 返回 ok → `backfill`(:239) 调 `fetch_forward_daily(refresh=False)` → 撞 `backtest_rank.py:_benchmark_frame_has_same_anchor_fields`(:408) 拒 close-only → 静默 refetch、绕过 no-refetch 注释、用户看不到 [SKIP]/hint），required action = 把 same-anchor open 检查**镜像进 `_check_cache_coverage`**（正式 backfill 前）。**SR-EXEC-007**（P2，新）：`simulate_execution`(:814) 顺序遍历、每候选同迭代内 entry 扣 cash→exit 补 cash，calculate_shares 见上一笔平仓后 cash，真实重叠被串行化复用同一桶资金；calibration 正确区分于 SR-CAP-001（并发 cash-lock vs bucket ceiling 是不同 failure mode，故独立条目而非并入）。Hot Queue：SR-EXEC-006 领衔执行证据组、SR-EXEC-007 入列、SR-DATA-003 标注门控 forward-tracker backfill。独立复核：四个 evidence 引用符号（build_ship_gate_evaluation:303 / simulate_execution:814 / _check_cache_coverage:314 / backfill:239）全部真实存在；`git diff --check` exit 0。三条均非此刻 active blocker（无自动下单、burst 已 BLOCK-0、执行证据未用于 ship 决策、tracker 未在跑），但均 material、durable 登记、各自证据路径被使用前必修——与现有 register "fix before X is used" 框架一致。**自我标注**：其中 SR-EXEC-006 / SR-EXEC-007 落在我之前全系统审过的文件里（我当时抓了 B8/B3 但漏了 aggregator 的 smoke+裸-forward-months gate 洞、把 :1055 串行披露当已知限制未要求登记）；SR-DATA-003 的 forward-tracker 分支是我 keystone fix（9172449）的二阶效应。这些是我真实的 miss，Codex 本轮审计质量高于我之前的全系统审查。下一刀（提交后）建议优先 SR-EXEC-006 的代码修复 slice（aggregator production-gate + forward-evidence-ref + test 反转）。
+
+---
+
+## 2026-05-31 — Codex 修复 (system audit findings register-only)
+
+**Commits**: none (`修复` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the user-approved cross-LLM judgment of Codex's whole-system audit findings.
+- **Refines** the prior execution-risk queue: three material findings are now durable register gates instead of chat-only observations.
+
+**Worked on**:
+1. [tracked] `docs/system_risk_register.md`: added `SR-EXEC-006` for aggregate ship-gate integrity, expanded `SR-DATA-003` with the forward-tracker benchmark-open cache-guard blast radius, and added `SR-EXEC-007` for serialized overlapping-candidate execution simulation.
+2. [tracked] `docs/system_risk_register.md`: updated Hot Queue so `SR-EXEC-006` leads the execution-evidence risk group and `SR-DATA-003` explicitly gates official forward-tracker backfill use.
+
+**Key decisions**:
+- `SR-EXEC-006` is a separate P1 because the issue is not a numeric backtest artifact; it is ship-gate permission integrity. `full_size_allowed` must not be reachable from smoke reports plus an unbound `--forward-live-months` CLI value.
+- `SR-DATA-003` is expanded rather than split because the tracker blast radius is the same benchmark-open / same-anchor cache precondition.
+- `SR-EXEC-007` is separate from `SR-CAP-001`: bucket ceiling validation and concurrent cash-lock modeling are different failure modes.
+
+**Alternatives considered and rejected**:
+- "Fix aggregate / tracker / simulator code in the same round" — rejected. The user-approved action is durable registration first; business-code fixes should be reviewed slices with focused tests.
+- "Merge serialized execution into `SR-CAP-001`" — rejected because capital ceiling over-allocation and overlapping-position cash reuse need different fixes and tests.
+- "Create a new data risk for tracker refetch" — rejected because `SR-DATA-003` already owns benchmark-open lineage and same-anchor cache readiness.
+
+**Validation run/result**:
+- `git diff --check`: passed; only normal LF/CRLF working-copy warnings for touched Markdown files.
+- `rg -n "SR-EXEC-006|SR-EXEC-007|forward-tracker cache guard|full_size_allowed|unbound forward-month" docs\system_risk_register.md docs\SESSION_LOG.md`: confirms Hot Queue, new entries, and handoff notes are present.
+- `git status --short`: only `docs/SESSION_LOG.md` and `docs/system_risk_register.md` modified.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+
+**Open questions handed off**:
+- None.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (clean) (preflight pct max schema domain O1 修复)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `192b1f2`)
