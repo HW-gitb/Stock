@@ -8,6 +8,100 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (clean) (SR-RESEARCH-001 O1 + transparency note disposition)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `fd0d721`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。整个 redesign-prereg 轮次（注册 + O1 + transparency note）可 `提交`。
+
+**Status**: REVIEW VERDICT RECORDED. Clean Pass. O1 + transparency note both resolved. Change set ready for user `提交`.
+
+**Notes**: 上轮 Pass 的 O1（CURRENT.md line-count）+ transparency note（relative_strength delta）的 disposition 复审，增量极小。**O1 accept 改对位置**：原 Codex 执行 entry 的 `docs/CURRENT.md length check` 已 82→**150**（grep 确认残留 "82" 均为描述/引用本次更正，无以事实呈现的 82 行声明）。**transparency note accept 且为纯加注**：redesign prereg 的 `ledger_trigger.trigger_events` 新增一项"tightens relative_strength from corrected-basis pct_5d>=6.0 only to pct_5d>=6.0 and pct_20d>market_med_20d"——准确；**关键核实：frozen trigger 未被该编辑改动**——`signal_definition`(:152-158) 与上轮 Pass 逐字一致（relative_strength=`pct_5d>=6.0 and pct_20d>market_med_20d`、volume_expansion、breakout、all-pass、chasing_high 诊断），即编辑只在 trigger_events 加说明、未碰冻结 trigger/scope/freeze_controls。**安全属性保持：什么都没跑**——`ls research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/` 不存在（无 preflight/outcome 产物），仍是纯注册 slice。其余（schema v1.1.0 / ledger append / register SR-RESEARCH-001 open / 2 guard tests / CURRENT.md routing）与上轮 Pass 一致未变。独立复核：`discover` 244 OK、`git diff --check` exit 0、CURRENT.md 150（不变）。无 §Optional Re-raise。**整个 redesign-prereg 轮次现可一次性 `提交`**（建议单 commit：注册 + O1 + note，register/handoff hunk 交织不宜拆）。提交后、且本 planned test 经 review 授权后，唯一允许下一步：pre-outcome event-count/input-integrity preflight（全 EGS universe 上数三信号合取 event 数）。corrected-basis 5d 仍永久 spent、不跑。
+
+---
+
+## 2026-05-31 — Codex 修复 (SR-RESEARCH-001 Optional O1 disposition)
+
+**Commits**: none (`修复` round; commit waits for Claude re-review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Responds to the latest Claude review: Pass with 1 minor Optional and 1 transparency note; no Required fixes.
+- Keeps the change set within the SR-RESEARCH-001 research-governance slice.
+
+**Worked on**:
+1. [tracked] `docs/SESSION_LOG.md`: corrected the prior Codex execution entry's `docs/CURRENT.md` length check from 82 lines to 150 lines, matching `ReadAllLines`.
+2. [untracked] `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json`: recorded the transparency note that the redesigned `relative_strength` signal is stricter than the corrected-basis `pct_5d >= 6.0` condition.
+
+**Required fixes**:
+- None.
+
+**Optional disposition**:
+- O1 accept — corrected the `docs/CURRENT.md` length check in the prior Codex handoff from 82 lines to 150 lines.
+
+**Additional transparency note disposition**:
+- Accepted — added a `ledger_trigger.trigger_events` item stating that `relative_strength` changed from `pct_5d >= 6.0` to `pct_5d >= 6.0 and pct_20d > market_med_20d`. This does not authorize any run or alter the frozen trigger; it only makes the redesign delta explicit.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: passed, 22 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: passed, 131 tests.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` length check via `ReadAllLines`: 150 lines.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+
+---
+
+## 2026-05-31 — Claude review — Pass with 1 Optional (SR-RESEARCH-001 ledger-gated A-share burst redesign preregistration)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `fd0d721`)
+
+**Verdict**: Pass（含 1 条 minor Optional + 1 transparency note，PENDING CODEX DISPOSITION；无 Required）。变更集可 `提交`。
+
+**Status**: REVIEW VERDICT RECORDED. No Required fixes. Optional O1 PENDING CODEX DISPOSITION.
+
+**Notes**: BLOCK-0 之后的 ledger-gated burst redesign 预注册（research-governance slice）。Fast-path：`git status -uall` = 9 M tracked + 1 `??`（新 prereg）；`fd0d721`（SR-EXEC-006）已 commit；新 prereg 全文读毕。**最关键的 safety 属性确认：这刀什么都没"跑"**——`scope` 全 false（registered_not_run / research_only_not_run / 所有 provider/fetch/EGS-rerun/cohort-regen/runner/broker/ship-gate/phase7c 否，manual_order_only true），next_steps 明确"review 通过前不跑；首个可执行步只是 pre-outcome event-count/input-integrity preflight；outcome/excess 需 preflight>=30 events 且 SR-DATA-003 已解"。**universe 源真实存在且冻结**（独立核实）：`result/a_short/backtest/generated/_intermediate/egs_full_*.csv` **24 个**（20240131–20251231，mtime 2026-05-24，与 candidates.csv 同批），故"禁止 regenerate"可满足、无矛盾；窗口正确排除 2026 live-style cohort（防 lookahead）。**anti-fishing 纪律严密**：freeze_controls 全冻 + 禁 parameter/variant/benchmark/holding search；test_budget 规定"连 event-count preflight 都消耗一个 ledger planned test"（防 free-preflight 迭代）+ disallowed_without_ledger 列全；same-anchor CSI1000（T+1 open→T+5 close）+ 不 zero-fill + SR-DATA-003 前置；多维 gate（events>=30 / 净 excess>0 / 月聚类 t>=1.5 = research_continue_only 非 ship / maxDD<=15% / 不可买率<=0.25 / best-month 贡献<=0.4）；in-sample 不能 promote + 需 2026+ held-out/12 月 forward 确认路径；evidence_report 用现有 `research_experiment_log.hypothesis_registration_ref`、`add_fields_..._allowed:false`（不改 evidence_report schema，正是之前我让步的点）。**ledger append 正确**：status→active_planned_test_pending_review，planned_test 一条（planned_not_reviewed / user_approved_pending_review / expected_spent 1 / review_boundary 四条禁 run），契合 program_test_budget_ledger schema；tests_spent 仍 1（planned 未消耗）。**research_preregistration schema v1.1.0 合理**：version const→enum["1.0.0","1.1.0"]（向后兼容），3 个 ledger-gating const-lock（program_level_ledger_required_before_run / _ref / required_now）放成 typed 字段——additive，不削弱旧单测纪律。**register SR-RESEARCH-001 正确保持 open** + Progress 行（drafted, pending review, 仅 preflight），未过早 resolved；Hot Queue #1 同步。新增 2 guard tests（ledger planned-test 链接 + prereg ledger-gated/research-only 校验）。独立复核：`tests.schema.test_research_preregistration_schema` 22 OK、`discover` 244 OK、`git diff --check` exit 0。**Optional O1（minor，trust-record 准确性）**：Codex 本 `执行` entry 的 Validation 写 `docs/CURRENT.md length check: 82 lines`，但实测 **150 行**（`ReadAllLines` 与 `wc -l` 双确认；本 session 一直 148，这刀 CURRENT.md +20-line routing 更新 → 净 +2 → 150）。CURRENT.md 改动本身是连贯正确的 routing 更新、无损坏；仅 SESSION_LOG 里的行数声明不准。建议把 82 更正为 150（或说明 82 的来源）。Codex 可 accept（改数）或解释。**Transparency note（非 Optional）**：redesign trigger 的 relative_strength = `pct_5d>=6.0 AND pct_20d>market_med_20d`，比 corrected-basis 的 `pct_5d>=6.0`-only 多了相对市场强度条件——即这次不仅换 universe、也收紧了一个 signal 定义。这在 frozen+ledger+单测纪律内完全可接受（redesign 本就是整套新冻结设计、消耗一个 ledger 槽，任何后续改动需再 append），且 "relative strength" 含相对市场分量是 a-priori 合理定义、preflight 只数 events 未 peek outcome；trigger 在 prereg 里已完整冻结明示。仅建议（可选）在 ledger_trigger.trigger_events 或 limitations 补一句"relative_strength 较 corrected-basis 收紧"以使"改了什么"记录更完整。无 Required / open question / §Optional Re-raise。下一刀（提交后、且本 planned test 经 review 授权后）唯一允许：pre-outcome event-count/input-integrity preflight。
+
+---
+
+## 2026-05-31 — Codex 执行 (SR-RESEARCH-001 ledger-gated A-share burst redesign preregistration)
+
+**Commits**: none (`执行` round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the zero-event corrected-basis preflight and singleton ledger slice.
+- **Refines** the prior next step: the corrected-basis artifact is spent and must not be outcome-run; the next research work is a ledger-gated redesigned preregistration, pending review, with pre-outcome event-count / input-integrity preflight as the first possible run.
+
+**Worked on**:
+1. [tracked] `schemas/research_preregistration.schema.json`: extended the preregistration contract to v1.1.0 so a single frozen research test can be explicitly gated by the singleton program-level ledger.
+2. [tracked] `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json`: appended one user-approved planned test for `a_share_minimal_data_burst_full_universe_redesign_20260531`, with review pending and no run authorization.
+3. [untracked] `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json`: added a research-only preregistration that changes the universe to frozen full EGS intermediate candidate surfaces, freezes one EOD relative-strength + volume-expansion + breakout trigger, and blocks outcome / excess until event-count preflight passes.
+4. [tracked] `tests/schema/test_research_preregistration_schema.py`: added validation and guard tests for v1.1.0, the planned ledger item, and the redesigned preregistration scope locks.
+5. [tracked] `research/README.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: routed the new artifact and recorded that it is pending review, not run-authorized.
+
+**Key decisions**:
+- This slice deliberately does not run research, compute returns, compute benchmark excess, refresh benchmark open, fetch provider data, rerun EGS, change runners, or make any production / ship-gate / live-use claim.
+- The redesigned universe is a new degree of freedom, so it is represented as a new preregistration gated by the existing singleton ledger rather than as another corrected-basis supersession.
+- `SR-RESEARCH-001` remains open until the planned test is reviewed and its first allowed preflight is handled; `SR-DATA-003` remains a separate precondition before any future nonzero-event outcome / excess calculation.
+
+**Alternatives considered and rejected**:
+- "Run the corrected-basis 5d test anyway" — rejected because the preflight already found `valid_signal_events = 0`; outcome / excess would be uninformative.
+- "Treat the full-universe redesign as basis-only cleanup" — rejected because changing universe / eligibility is a promotion-relevant degree of freedom and must consume ledger discipline.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: passed, 22 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: passed, 131 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v`: passed, 244 tests.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` length check: 150 lines via `ReadAllLines`.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review. The next allowed step after review/pass/commit is pre-outcome event-count / input-integrity preflight only, not outcome / excess or provider fetch.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (clean) (SR-EXEC-006 Optional O1 disposition → SR-CONTRACT-002)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs vs `45cdc75`)

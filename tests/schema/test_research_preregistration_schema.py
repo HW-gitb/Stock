@@ -11,6 +11,9 @@ PREFLIGHT_SCHEMA_PATH = Path("schemas/research_preflight_result.schema.json")
 LEDGER_SCHEMA_PATH = Path("schemas/program_test_budget_ledger.schema.json")
 BLOCKED_ARTIFACT_PATH = Path("research/preregistrations/a_share_minimal_data_burst_20260531.json")
 CORRECTED_ARTIFACT_PATH = Path("research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json")
+REDESIGNED_ARTIFACT_PATH = Path(
+    "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json"
+)
 PREFLIGHT_ARTIFACT_PATH = Path(
     "research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json"
 )
@@ -51,8 +54,9 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
 
         Draft7Validator.check_schema(schema)
         self.assertEqual(schema["properties"]["schema_name"]["const"], "research_preregistration")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.0.0")
+        self.assertEqual(schema["properties"]["schema_version"]["enum"], ["1.0.0", "1.1.0"])
         self.assertIn("one frozen research-only test", schema["description"])
+        self.assertIn("gated by an existing singleton program-level test-budget ledger", schema["description"])
         self.assertFalse(schema["additionalProperties"])
 
     def test_artifact_validates_when_jsonschema_available(self) -> None:
@@ -62,7 +66,7 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
             raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
 
         validator = Draft7Validator(self._load_schema())
-        for artifact_path in [BLOCKED_ARTIFACT_PATH, CORRECTED_ARTIFACT_PATH]:
+        for artifact_path in [BLOCKED_ARTIFACT_PATH, CORRECTED_ARTIFACT_PATH, REDESIGNED_ARTIFACT_PATH]:
             with self.subTest(artifact_path=str(artifact_path)):
                 errors = list(validator.iter_errors(self._load_artifact(artifact_path)))
                 self.assertEqual(errors, [])
@@ -107,7 +111,7 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
             schema["$defs"]["hypothesisRegistration"]["required"],
             alpha_schema["$defs"]["hypothesisRegistration"]["required"],
         )
-        for artifact_path in [BLOCKED_ARTIFACT_PATH, CORRECTED_ARTIFACT_PATH]:
+        for artifact_path in [BLOCKED_ARTIFACT_PATH, CORRECTED_ARTIFACT_PATH, REDESIGNED_ARTIFACT_PATH]:
             with self.subTest(artifact_path=str(artifact_path)):
                 self.assertEqual(
                     set(self._load_artifact(artifact_path)["hypothesis_registration"]),
@@ -285,7 +289,7 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         ledger = self._load_ledger_artifact()
 
         self.assertEqual(ledger["schema_name"], "program_test_budget_ledger")
-        self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
+        self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
         self.assertEqual(ledger["creation_reason"]["triggering_preflight_ref"], str(PREFLIGHT_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(ledger["creation_reason"]["triggering_preregistration_ref"], str(CORRECTED_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
@@ -297,7 +301,57 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertEqual(spent["result_ref"], str(PREFLIGHT_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(spent["status"], "spent_failed_preflight_zero_signal_events")
         self.assertEqual(spent["tests_spent"], 1)
-        self.assertEqual(ledger["planned_tests"], [])
+        self.assertEqual(len(ledger["planned_tests"]), 1)
+
+    def test_ledger_planned_test_points_to_redesigned_preregistration(self) -> None:
+        ledger = self._load_ledger_artifact()
+        planned = ledger["planned_tests"][0]
+
+        self.assertEqual(planned["test_id"], "a_share_minimal_data_burst_full_universe_redesign_20260531")
+        self.assertEqual(planned["planned_status"], "planned_not_reviewed")
+        self.assertEqual(
+            planned["planned_preregistration_ref"],
+            str(REDESIGNED_ARTIFACT_PATH).replace("\\", "/"),
+        )
+        self.assertEqual(
+            planned["planned_result_ref"],
+            "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
+        )
+        self.assertTrue(planned["promotion_relevant"])
+        self.assertEqual(planned["expected_tests_spent"], 1)
+        self.assertEqual(planned["approval_status"], "user_approved_pending_review")
+        self.assertTrue(any("not reviewed or authorized to run" in item for item in planned["review_boundary"]))
+
+    def test_redesigned_preregistration_is_ledger_gated_full_universe_research_only(self) -> None:
+        artifact = self._load_artifact(REDESIGNED_ARTIFACT_PATH)
+        scope = artifact["scope"]
+        universe = artifact["frozen_test_design"]["universe"]
+        trigger = artifact["frozen_test_design"]["trigger_rule"]
+        benchmark = artifact["frozen_test_design"]["benchmark_rule"]
+        next_steps = "\n".join(artifact["next_steps"])
+
+        self.assertEqual(artifact["schema_version"], "1.1.0")
+        self.assertFalse(scope["production_use_allowed"])
+        self.assertFalse(scope["provider_data_fetch_allowed"])
+        self.assertFalse(scope["runner_change_allowed"])
+        self.assertFalse(scope["ship_gate_claim_allowed"])
+        self.assertFalse(scope["live_trading_or_minimal_live_allowed"])
+        self.assertIn("_intermediate/egs_full_{YYYYMMDD}.csv", universe["source_universe_ref"])
+        joined_filters = "\n".join(universe["eligibility_rule"] + universe["exclusion_rule"] + trigger["hard_filters"])
+        self.assertIn("Use both Tier1 and Tier2", joined_filters)
+        self.assertIn("Do not filter by steady-lane Tier1", joined_filters)
+        self.assertNotIn("entry_flag must equal", joined_filters)
+        self.assertIn("relative_strength", trigger["positive_signal_families"])
+        self.assertIn("volume_expansion", trigger["positive_signal_families"])
+        self.assertIn("breakout_quality", trigger["positive_signal_families"])
+        self.assertIn("SR-DATA-003", benchmark["benchmark_return_rule"])
+        self.assertIn("pre-outcome event-count", next_steps)
+
+        budget = artifact["test_budget"]
+        self.assertEqual(budget["promotion_relevant_tests_allowed"], 1)
+        self.assertTrue(budget["program_level_ledger_required_before_run"])
+        self.assertEqual(budget["program_level_ledger_ref"], str(LEDGER_ARTIFACT_PATH).replace("\\", "/"))
+        self.assertTrue(artifact["ledger_trigger"]["program_level_ledger_required_now"])
 
     def test_ledger_schema_rejects_cardinality_or_review_gate_relaxation_when_jsonschema_available(self) -> None:
         try:

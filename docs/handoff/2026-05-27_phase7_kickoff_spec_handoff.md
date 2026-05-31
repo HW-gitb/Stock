@@ -1,5 +1,38 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-05-31 append: A-share burst ledger-gated redesign preregistration
+
+**Changed**:
+- Extended `schemas/research_preregistration.schema.json` to v1.1.0 so a preregistration can be explicitly gated by the singleton program-level test-budget ledger while preserving the original research-only scope locks.
+- Appended one planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` for `a_share_minimal_data_burst_full_universe_redesign_20260531`.
+- Added `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json`, a research-only preregistration that moves the A-share minimal-data burst test from the steady Tier1 watchlist to frozen full EGS intermediate candidate surfaces.
+- Updated research routing docs and schema tests so the new artifact is visible to future LLMs and remains non-authorizing until review passes.
+
+**Why**:
+- The corrected-basis A-share burst preregistration spent its single test on a pre-outcome preflight and found `valid_signal_events = 0`. That made direct outcome / benchmark-excess calculation uninformative.
+- A useful next burst test changes universe / eligibility and therefore is not a basis-only supersession. It must consume the singleton ledger discipline before it can run.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+git diff --check
+```
+
+**Validation result**:
+- `tests.schema.test_research_preregistration_schema`: 22 tests passed.
+- `tests/schema` discovery: 131 tests passed.
+- Full unittest discovery: 244 tests passed.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+
+**Invalidated / blocked old conclusion**:
+- Do not treat the corrected-basis 5d rerun as the next executable alpha test. That preregistration is spent by zero signal events.
+- Do not run the redesigned preregistration yet. It is pending Claude review; after review, the first executable step is only pre-outcome event-count / input-integrity preflight. Outcome / excess still requires `SR-DATA-003` benchmark-open resolution if the preflight has enough events.
+
+---
+
 **Status**: provider capability / field catalog contract baseline established.
 
 **Scope**: Phase 7 schema-first kickoff. This handoff starts the DataHub / provider capability phase without selecting providers, fetching data, adding provider adapters, creating DataHub tables, rewriting `A-EGS/egs_main.py`, changing strategy logic, or relaxing ship gates.

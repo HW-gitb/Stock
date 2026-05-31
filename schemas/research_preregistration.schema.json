@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/research_preregistration/1.0.0/schema.json",
+  "$id": "https://stock.local/schemas/research_preregistration/1.1.0/schema.json",
   "title": "Research Preregistration",
-  "description": "Schema-first preregistration contract for one frozen research-only test. It freezes the hypothesis, universe, benchmark, holding period, entry / exit rule, falsification threshold, and test_budget before any research result can influence future production decisions. This schema does not run research, select providers, fetch provider data, create adapters, implement DataHub tables, change production runners, relax ship gates, or authorize order automation.",
+  "description": "Schema-first preregistration contract for one frozen research-only test. It freezes the hypothesis, universe, benchmark, holding period, entry / exit rule, falsification threshold, and test_budget before any research result can influence future production decisions. Version 1.1.0 also supports preregistrations that are gated by an existing singleton program-level test-budget ledger. This schema does not run research, select providers, fetch provider data, create adapters, implement DataHub tables, change production runners, relax ship gates, or authorize order automation.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -26,7 +26,10 @@
       "const": "research_preregistration"
     },
     "schema_version": {
-      "const": "1.0.0"
+      "enum": [
+        "1.0.0",
+        "1.1.0"
+      ]
     },
     "generated_at": {
       "type": "string",
@@ -670,10 +673,10 @@
           "const": 1
         },
         "program_level_ledger_required_before_run": {
-          "const": false
+          "type": "boolean"
         },
         "program_level_ledger_ref": {
-          "const": null
+          "$ref": "#/$defs/nullableString"
         },
         "test_budget_consumption_rule": {
           "$ref": "#/$defs/nonEmptyString"
@@ -811,7 +814,7 @@
       ],
       "properties": {
         "program_level_ledger_required_now": {
-          "const": false
+          "type": "boolean"
         },
         "ledger_cardinality_if_triggered": {
           "const": "singleton_program_level"

@@ -1,0 +1,314 @@
+{
+  "schema_name": "research_preregistration",
+  "schema_version": "1.1.0",
+  "generated_at": "2026-05-31T00:00:00Z",
+  "artifact_id": "a_share_minimal_data_burst_full_universe_redesign_prereg_20260531",
+  "scope": {
+    "phase": "7b",
+    "purpose": "single_frozen_test_research_preregistration",
+    "lane_id": "a_share_burst_minimal_data",
+    "registration_status": "registered_not_run",
+    "research_status": "research_only_not_run",
+    "production_use_allowed": false,
+    "direct_production_feed_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_contact_or_account_creation_allowed": false,
+    "trial_or_token_request_allowed": false,
+    "paid_access_approved": false,
+    "sample_row_collection_allowed": false,
+    "provider_data_fetch_allowed": false,
+    "new_data_fetch_allowed_by_this_artifact": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false,
+    "production_strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_claim_allowed": false,
+    "live_trading_or_minimal_live_allowed": false,
+    "phase7c_authorized_by_this_artifact": false
+  },
+  "source_doc_refs": [
+    {
+      "artifact_id": "alpha_validation_action_guide",
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "consumption_role": "Defines mandatory ledger-gated redesigned preregistration after the zero-event corrected-basis preflight."
+    },
+    {
+      "artifact_id": "burst_lane_spec",
+      "path": "docs/burst_lane_spec.md",
+      "consumption_role": "Defines A-share minimal_data_burst as research / paper only and requires independent burst-lane evidence."
+    },
+    {
+      "artifact_id": "provider_priority_benchmark_contract",
+      "path": "docs/provider_priority_benchmark_contract.md",
+      "consumption_role": "Defines CSI1000 as provisional primary benchmark and CSI300 as mandatory diagnostic context for A-share burst evidence."
+    },
+    {
+      "artifact_id": "program_test_budget_ledger",
+      "path": "research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json",
+      "consumption_role": "Singleton ledger that records the spent corrected-basis preflight and gates this redesigned planned test."
+    },
+    {
+      "artifact_id": "zero_event_preflight",
+      "path": "research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json",
+      "consumption_role": "Evidence that the steady Tier1 universe has zero valid all-pass burst events and must not be outcome-run."
+    },
+    {
+      "artifact_id": "current_snapshot",
+      "path": "docs/CURRENT.md",
+      "consumption_role": "Routes the next A-share burst alpha-validation step to a ledger-gated redesign rather than a corrected 5d rerun."
+    }
+  ],
+  "hypothesis_registration": {
+    "timestamp": "2026-05-31T00:00:00Z",
+    "hypothesis_text": "A redesigned A-share minimal-data burst test should evaluate the frozen full EGS candidate surface, not the steady Tier1 watchlist. A frozen EOD trigger requiring relative strength, volume expansion, and breakout quality may produce enough valid events and positive 5-day cost-adjusted excess return versus same-anchor CSI1000 to justify continuing research. The result can only decide whether to continue research; it cannot promote production, live observation, or ship-gate evidence.",
+    "registered_by_session_id": "codex_2026-05-31_a_share_minimal_data_burst_full_universe_redesign_prereg",
+    "data_window_at_registration": "Frozen historical monthly full EGS intermediate candidate surfaces from 20240131 through 20251231 under result/a_short/backtest/generated/_intermediate/egs_full_{YYYYMMDD}.csv. The generated top-15 candidates.csv files are not the source universe for this redesigned test.",
+    "evidence_available_at_registration": "The corrected-basis steady Tier1 preregistration failed a pre-outcome event-count preflight with valid_signal_events = 0. The same preflight found a few all-pass burst rows outside the steady Tier1 hard-filter universe, which is sufficient to justify a ledger-gated redesigned preregistration but not sufficient to claim alpha.",
+    "source_doc_refs": [
+      "docs/CURRENT.md",
+      "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "docs/burst_lane_spec.md",
+      "docs/provider_priority_benchmark_contract.md",
+      "research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json",
+      "research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json"
+    ]
+  },
+  "frozen_test_design": {
+    "freeze_controls": {
+      "hypothesis_frozen": true,
+      "parameters_frozen": true,
+      "universe_frozen": true,
+      "benchmark_frozen": true,
+      "holding_period_frozen": true,
+      "entry_exit_rule_frozen": true,
+      "threshold_frozen": true,
+      "parameter_search_allowed": false,
+      "variant_search_allowed": false,
+      "benchmark_sweep_allowed": false,
+      "holding_period_sweep_allowed": false
+    },
+    "universe": {
+      "market": "A-share",
+      "source_universe_ref": "result/a_short/backtest/generated/_intermediate/egs_full_{YYYYMMDD}.csv for monthly cohorts 20240131 through 20251231",
+      "eligibility_rule": [
+        "Use only rows already present in the frozen full EGS intermediate files; do not regenerate candidate universes inside this test.",
+        "Use both Tier1 and Tier2 rows; do not require the steady-lane Tier1 watchlist, entry_flag, chasing_high veto, or overheat veto as eligibility filters.",
+        "Require list_status == L where present.",
+        "Require avg_amount_20d >= 100000000 and avg_amount_5d > 0.",
+        "Require pct_5d, pct_20d, market_med_20d, is_breakout, close, high_20d, avg_amount_5d, and avg_amount_20d to be present."
+      ],
+      "exclusion_rule": [
+        "Exclude rows with missing ts_code, trade date, close, pct_5d, pct_20d, market_med_20d, avg_amount_5d, avg_amount_20d, is_breakout, or tier.",
+        "Exclude rows with has_crash_veto == true or is_lock == true where columns are present.",
+        "Exclude rows whose T+1 entry is unbuyable due to limit-up; record the unbuyable count and rate.",
+        "Do not add sector, theme, manual catalyst, capital-flow, or full-data burst fields in this minimal-data test."
+      ]
+    },
+    "data_window": {
+      "research_window_start": "20240131",
+      "research_window_end": "20251231",
+      "cohort_frequency": "monthly frozen full EGS intermediate candidate surfaces only",
+      "candidate_file_glob": "result/a_short/backtest/generated/_intermediate/egs_full_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].csv",
+      "outcome_data_ref": "existing A-share EOD forward-return surface used by runners/backtest_rank.py; no new provider fetch is authorized by this artifact",
+      "lookahead_prevention_notes": [
+        "Use each cohort's frozen full EGS intermediate file as the decision snapshot.",
+        "Do not rerun A-EGS/egs_main.py or regenerate cohorts inside this test.",
+        "Use T+1 entry and T+5 exit prices after the as_of date only after a reviewed preflight confirms sufficient events.",
+        "Do not let later 2026 live-style outputs affect the 2024-2025 promotion-relevant statistic."
+      ]
+    },
+    "trigger_rule": {
+      "trigger_id": "a_share_minimal_data_burst_full_universe_eod_v1_single_frozen",
+      "positive_signal_families": [
+        "relative_strength",
+        "volume_expansion",
+        "breakout_quality"
+      ],
+      "fixed_input_columns": [
+        "list_status",
+        "tier",
+        "avg_amount_20d",
+        "avg_amount_5d",
+        "pct_5d",
+        "pct_20d",
+        "market_med_20d",
+        "is_breakout",
+        "close",
+        "high_20d",
+        "has_crash_veto",
+        "is_lock",
+        "chasing_high",
+        "overheat_flag",
+        "final_score"
+      ],
+      "hard_filters": [
+        "list_status must equal L where present.",
+        "has_crash_veto and is_lock must be false where present.",
+        "avg_amount_20d must be at least 100000000.",
+        "Do not filter by steady-lane Tier1, entry_flag, chasing_high, or overheat_flag before the trigger is evaluated."
+      ],
+      "signal_definition": [
+        "relative_strength: pct_5d >= 6.0 and pct_20d > market_med_20d.",
+        "volume_expansion: avg_amount_5d / avg_amount_20d >= 1.5.",
+        "breakout_quality: is_breakout == true.",
+        "All three positive signal families must pass; no alternate thresholds or fallback families are allowed in this test.",
+        "chasing_high and overheat_flag are recorded as risk diagnostics, not eligibility filters, because the failed steady-watchlist preflight showed burst candidates can sit in the steady-vetoed area."
+      ],
+      "portfolio_construction_rule": "Equal-weight all passing rows in each monthly cohort; if more than 20 rows pass, take the top 20 by pct_5d descending, then amount expansion ratio descending, then final_score descending, with ts_code as deterministic tie-breaker. Empty cohorts are recorded as zero-signal cohorts and are not backfilled."
+    },
+    "entry_exit_rule": {
+      "entry_rule": "Enter at T+1 open using qfq-adjusted open, matching runners/backtest_rank.py T+1 semantics.",
+      "exit_rule": "Exit at T+5 close using qfq-adjusted close; no stop, profit-take, re-entry, or holding-period alternative is allowed in this test.",
+      "holding_period_trading_days": 5,
+      "cost_model": "Subtract 0.16 percentage points round-trip cost from stock return before CSI1000 excess calculation.",
+      "unbuyable_entry_handling": "If T+1 open is at or near up-limit under existing stk_limit or board fallback logic, skip that row and record pending_no_entry_limit_up; do not replace it with another row."
+    },
+    "benchmark_rule": {
+      "primary_benchmark_id": "CSI1000",
+      "primary_benchmark_role": "promotion_relevant_single_test",
+      "secondary_diagnostics": [
+        {
+          "benchmark_id": "CSI300",
+          "role": "diagnostic_only_mandatory_context",
+          "promotion_relevant": false
+        }
+      ],
+      "benchmark_return_rule": "Compute CSI1000 return from the benchmark T+1 entry date open to the same T+5 exit date close; missing benchmark open/close windows fail the affected row instead of zero-filling. SR-DATA-003 must be resolved before any nonzero-event outcome / excess calculation."
+    },
+    "evaluation_threshold": {
+      "decision_label_if_all_pass": "research_continue_only",
+      "decision_label_if_any_fail": "falsified_or_redesign_required",
+      "criteria": [
+        {
+          "metric": "valid_signal_events",
+          "operator": ">=",
+          "threshold_value": 30,
+          "threshold_unit": "rows",
+          "failure_action": "Treat the result as underpowered and do not compute outcome / benchmark excess for this preregistration."
+        },
+        {
+          "metric": "mean_net_excess_csi1000_5d_pct",
+          "operator": ">",
+          "threshold_value": 0,
+          "threshold_unit": "percentage_points",
+          "failure_action": "Falsify this redesigned minimal-data burst trigger."
+        },
+        {
+          "metric": "monthly_clustered_t_stat_net_excess_csi1000_5d",
+          "operator": ">=",
+          "threshold_value": 1.5,
+          "threshold_unit": "t_stat",
+          "failure_action": "Do not continue this trigger as an alpha candidate; at most record it as exploratory."
+        },
+        {
+          "metric": "max_drawdown_monthly_signal_excess_pct",
+          "operator": "<=",
+          "threshold_value": 15,
+          "threshold_unit": "percentage_points",
+          "failure_action": "Treat drawdown behavior as failing the burst research continuation gate."
+        },
+        {
+          "metric": "entry_unbuyable_rate",
+          "operator": "<=",
+          "threshold_value": 0.25,
+          "threshold_unit": "ratio",
+          "failure_action": "Treat A-share limit-risk feasibility as failing the burst research continuation gate."
+        },
+        {
+          "metric": "best_month_positive_excess_contribution_share",
+          "operator": "<=",
+          "threshold_value": 0.4,
+          "threshold_unit": "ratio",
+          "failure_action": "Treat the result as month-clustered and non-robust."
+        }
+      ]
+    },
+    "reproducibility_plan": {
+      "random_seed": null,
+      "planned_artifact_outputs": [
+        "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
+        "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json",
+        "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv",
+        "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/monthly_stats.csv"
+      ],
+      "parameter_hash_required": true,
+      "code_commit_required": true,
+      "result_log_required": true
+    }
+  },
+  "test_budget": {
+    "budget_id": "a_share_minimal_data_burst_full_universe_redesign_20260531_single_test_budget",
+    "test_budget_status": "single_frozen_test",
+    "promotion_relevant_tests_allowed": 1,
+    "program_level_ledger_required_before_run": true,
+    "program_level_ledger_ref": "research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json",
+    "test_budget_consumption_rule": "Running even the pre-outcome event-count preflight for this redesigned full-universe trigger consumes one promotion-relevant planned test under the singleton ledger. Changing thresholds, universe, benchmark, holding period, ranking cap, cost model, or pass/fail criteria requires another ledger append and reviewed preregistration.",
+    "disallowed_without_ledger": [
+      "Running this redesigned test before Claude review authorizes the planned ledger item.",
+      "Any second promotion-relevant redesigned hypothesis.",
+      "Parameter threshold search.",
+      "Variant family search.",
+      "Benchmark sweep or benchmark switch.",
+      "Holding-period sweep.",
+      "Changing from all-pass conjunction to a score or weighted rank.",
+      "Adding catalyst, capital-flow, sector, concept, manual evidence, or full-data burst fields."
+    ],
+    "evidence_report_linkage": {
+      "future_evidence_report_field": "research_experiment_log.hypothesis_registration_ref",
+      "future_ref_value": "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
+      "evidence_report_schema_ref": "schemas/evidence_report.schema.json",
+      "add_fields_to_evidence_report_schema_allowed": false
+    }
+  },
+  "evidence_integrity_plan": {
+    "evidence_window_type": "in_sample",
+    "planned_tests_performed_count": 1,
+    "adjustment_method": "not_applicable",
+    "multiple_testing_notes": "This artifact is the first ledger-gated redesigned A-share minimal-data burst test after the zero-event corrected-basis preflight. It allows one frozen full-universe trigger only. Any further universe, threshold, ranking, benchmark, holding-period, or trigger-family change must be appended to the singleton program ledger before it runs.",
+    "minimum_effective_sample_required": 30,
+    "current_effective_sample_at_registration": 0,
+    "power_status_at_registration": "insufficient"
+  },
+  "promotion_boundary": {
+    "direct_promotion_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "requires_schema_review_before_promotion": true,
+    "requires_claude_review_before_promotion": true,
+    "requires_user_approval_before_promotion": true,
+    "requires_evidence_report_before_promotion": true,
+    "ship_gate_evidence_claim_allowed": false,
+    "full_size_manual_use_authorized": false,
+    "eligible_next_status_if_pass": "research_continue_only",
+    "status_if_fail": "falsified_or_redesign_required"
+  },
+  "ledger_trigger": {
+    "program_level_ledger_required_now": true,
+    "ledger_cardinality_if_triggered": "singleton_program_level",
+    "ledger_allowed_locations_if_triggered": [
+      "independent singleton research test-budget ledger artifact"
+    ],
+    "trigger_events": [
+      "This artifact changes the universe from steady Tier1 candidates.csv to the frozen full EGS intermediate surface.",
+      "This artifact changes the eligibility rule by no longer requiring steady-lane Tier1, entry_flag, chasing_high veto, or overheat veto.",
+      "This artifact also tightens the relative_strength signal from the corrected-basis pct_5d >= 6.0 only condition to pct_5d >= 6.0 and pct_20d > market_med_20d.",
+      "Any additional change to relative-strength, volume-expansion, breakout, rank-cap, cost, benchmark, or holding-period settings after this preregistration."
+    ]
+  },
+  "next_steps": [
+    "Do not run this redesigned preregistration until Claude review passes and the ledger planned test is reviewed.",
+    "The first executable step, after review, is a pre-outcome event-count / input-integrity preflight only.",
+    "Do not compute outcome returns or benchmark excess unless the preflight reaches valid_signal_events >= 30.",
+    "Resolve SR-DATA-003 benchmark-open input before any nonzero-event outcome / excess calculation.",
+    "If this redesigned test passes, register and run a separate confirmation path before any production promotion: at minimum 2026+ held-out / forward cohorts or 12 months live-normalized forward evidence under the unchanged redesigned trigger."
+  ],
+  "limitations": [
+    "This is a ledger-gated redesign because it changes the universe and eligibility controls after the corrected-basis zero-event preflight.",
+    "It is minimal-data EOD research, not full-data burst evidence.",
+    "It does not use dated catalysts, filings, capital-flow, options, borrow, or manual confirmation evidence.",
+    "It is in-sample research over existing generated cohorts and cannot count as live-normalized or ship-gate evidence.",
+    "It does not authorize provider access, data fetch, runner changes, production strategy changes, minimal live observation, or full-size manual use.",
+    "It does not prove that burst alpha exists; it only registers one frozen redesigned test so that a later reviewed preflight / outcome run cannot silently fish."
+  ]
+}
