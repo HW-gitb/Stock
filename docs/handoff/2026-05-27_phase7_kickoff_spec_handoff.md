@@ -874,3 +874,44 @@ git diff --check
 1. 下一条 `执行` 应准备 P1 access-decision and sample-validation plan，而不是进入 Phase 7c 或 provider implementation。
 2. 任何 token、trial、paid subscription、provider data fetch、sample-row collection、provider selection 或 DataHub table 仍需单独 reviewed decision。
 3. Matrix 中的 `strong_candidate_but_blocked` 只表示值得后续 access/sample review，不表示 production provider readiness。
+
+## 2026-05-31 追加：P1 access-plan 后 research prereg execution lock
+
+**改了什么**:
+
+- 更新 `docs/CURRENT.md`，把 P0 保持为 Phase 7b-2 P1 access-decision and sample-validation plan，并锁定 P0 reviewed/committed 后的下一条 alpha-validation 刀为 A-share `minimal_data_burst` research-only falsification。
+- 更新 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`，新增 research preregistration、single frozen test、program-level test-budget ledger 触发规则，并明确 US-long SEC observed-date / parser feasibility 属于 provider-evidence track，不是 alpha-validation track。
+- 更新 `docs/strategy_design_synthesis.md`，只保留短路由说明，把 research preregistration / test-budget 细则交给 `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`。
+- 未新建大设计文档，未改 schema / runner / provider / DataHub / order execution。
+
+**为什么改**:
+
+- 用户确认采用收敛后的执行方案：先收口 P1 access-decision / sample-validation plan，再启动 A-share minimal-data burst research-only falsification。
+- 需要把该方案写进启动必读链路，防止后续 LLM 把 access-decision 继续滚成 provider docs 循环，或把 burst research 做成未预注册的参数 / variant fishing。
+- 该修改保持 Phase 7b-2 串行执行边界：P1 access plan 仍是下一刀；research 只在该 reviewed slice 之后启动，且不进入 production、不改 runner、不声称 ship-gate evidence。
+
+**验证命令**:
+
+```powershell
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+git diff --stat
+```
+
+**验证结果**:
+
+- `git diff --check` 通过；仅出现 touched docs 的 LF/CRLF working-copy warning。
+- `docs/CURRENT.md` authoritative line count = 149，低于 150-line snapshot target。
+- 最终 diff / status 记录在同日 Codex SESSION_LOG entry。
+
+**失效旧结论**:
+
+- “P1 access-decision plan 之后下一步未锁定”失效；现在明确锁定为 A-share `minimal_data_burst` research-only falsification。
+- “US-long SEC observed-date / parser feasibility 可以作为 alpha-validation 首刀”不成立；该方向归 provider-evidence track。
+- “单个 research experiment 可自由扫参数 / benchmark / holding period 而不触发 program-level ledger”不成立；只有 preregistered single frozen test 可豁免 ledger。
+
+**下一步注意事项**:
+
+1. 下一条 `执行` 仍是 P1 access-decision and sample-validation plan；不要跳到 research、Phase 7c、provider selection 或 data fetch。
+2. P1 access plan reviewed/committed 后，下一条 alpha-validation `执行` 应先建立 A-share minimal-data burst preregistration artifact，再做 research-only falsification。
+3. 如果 burst research 引入第二个 promotion-relevant hypothesis、参数搜索、variant 搜索、benchmark sweep 或 holding-period sweep，必须先建 singleton program-level test-budget ledger。

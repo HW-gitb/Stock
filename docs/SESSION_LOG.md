@@ -8,6 +8,61 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (P1 access-plan + research preregistration execution-lock guardrail)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `ffc1637`)
+
+**Verdict**: Pass.
+
+**Notes**: docs-only guardrail，落地四轮收敛的执行方案。Fast-path 完成：`git status --short` = 5 M tracked（`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/CURRENT.md`、`docs/SESSION_LOG.md`、`docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`、`docs/strategy_design_synthesis.md`），0 `??` untracked、0 staged（无盲区）；`git diff` 全文读毕、`git diff --cached` empty、`ffc1637..HEAD` 无新 commit；顶部 Codex `执行` entry 已读且 `Worked on` 正确标 [tracked]/[untracked]、含 validation 与 review state。Scope 严守：仅 docs，无 schema / runner / `egs_main.py` / state / provider data / adapter / DataHub table / broker / ship-gate 放松；**明确未改 `schemas/evidence_report.schema.json`**，遵守「不挂字段、用现有 `research_experiment_log.hypothesis_registration_ref` 指回 preregistration artifact」的收敛决定。对收敛方案高保真：(1) P0 仍是 P1 access-decision and sample-validation plan，未被插队；(2) post-access alpha-validation 刀锁定为 A-share `a_share_burst_minimal_data` research-only falsification，escape valve「later reviewed reversal」保留；(3) ALPHA_VALIDATION_ACTION_GUIDE §5 新增 preregistration mandatory（复用 §5 `hypothesis_registration` 形状 + freeze universe/benchmark/holding-period/entry-exit/threshold/`test_budget`）；(4) single-frozen-test（`test_budget=1`）方可豁免 ledger，出现第二个 promotion-relevant hypothesis / 参数 / variant / benchmark / holding-period sweep 即触发 singleton program-level test-budget ledger —— Codex tightening 1+2 准确捕获；(5) ledger 形态为 singleton audit/portfolio-level，非 per-hypothesis；(6) US-long SEC observed-date / parser feasibility 明确归 provider-evidence track，不充当 alpha validation。Cross-doc 一致：hard rule owner 在 ALPHA_VALIDATION_ACTION_GUIDE（§2 + §5 + §11 表新增 row + §13），strategy_design_synthesis 仅 §4 一行路由 + §7.5 短注（不复制 policy 正文），CURRENT §0/§1/§5 操作锁，handoff 走 append（非新建，符合 phase 级 append 门槛）并带「失效旧结论」三条。CURRENT 优先级重排自洽：P1 burst research / P2 A-short maintenance（仍在 §1 后台线 + §5 列出，未搁置，且 burst 本身即 A-short 工作）/ P3 later。独立复核：CURRENT.md `[System.IO.File]::ReadAllLines(...).Length` = 149（<150，与 Codex 声明一字不差）；`git diff --check` exit 0（仅 LF/CRLF warning）；diff --stat 5 文件 110+/7− 吻合。无 stale「pending/uncommitted」措辞（用 "after that reviewed slice is committed" 等 commit-stable 表述）。无 Required / Optional / open question / §Optional Re-raise Constraint 触发。下一刀仍是 P1 access-decision and sample-validation plan。
+
+---
+
+## 2026-05-31 — Codex (P1 access-plan and research prereg execution lock)
+
+**Commits**: none (`执行`-style docs guardrail round; commit waits for Claude review Pass and user `提交`)
+
+**Relationship to prior session(s)**:
+- Builds on the 2026-05-29 Phase 7b-2 P1 readiness review matrix Pass and the current repo state that keeps Phase 7c / provider selection / data fetch blocked.
+- Refines the post-P1-access execution path: after the P1 access-decision and sample-validation plan is reviewed/committed, the next alpha-validation slice is A-share `minimal_data_burst` research-only falsification with preregistration.
+
+**Worked on**:
+1. [tracked] `docs/CURRENT.md`: locked P0 as the P1 access-decision and sample-validation plan, then locked the next alpha-validation slice as A-share `minimal_data_burst` research-only falsification; preserved P1 provider/data/Phase 7c blockers and kept the snapshot under its 150-line target.
+2. [tracked] `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: added binding preregistration / frozen-test / program-level test-budget rules, clarified that US-long SEC observed-date / parser feasibility belongs to provider evidence rather than alpha validation, and routed the post-access-plan alpha-validation next slice.
+3. [tracked] `docs/strategy_design_synthesis.md`: added only a short route note pointing research preregistration and test-budget governance to `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`; no new design document was created.
+4. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7 execution-lock note so phase-level handoff readers see the same P1-access then A-share-burst-research route.
+5. [untracked] none.
+
+**Key decisions**:
+- Enforce the improved plan through startup docs rather than a new broad design document: `CURRENT.md` controls the hot queue, `ALPHA_VALIDATION_ACTION_GUIDE.md` owns the hard research rules, and `strategy_design_synthesis.md` only routes to the owner rule.
+- Preregistration is a per-experiment execution lock, not a program-level ledger. A single frozen test can proceed from a preregistration artifact; any second promotion-relevant hypothesis or parameter / variant / benchmark / holding-period search requires a singleton program-level test-budget ledger first.
+- Do not modify `schemas/evidence_report.schema.json` for this guardrail. Future research-only reports should use the existing `research_experiment_log.hypothesis_registration_ref` to point back to the preregistration artifact.
+- US-long SEC observed-date / parser feasibility remains provider-evidence work; it can prove data construction feasibility, not long-alpha existence.
+
+**Alternatives considered and rejected**:
+- "Create a new large research governance document now" — rejected. The binding rule belongs in the existing Phase 7a+ action guide and current snapshot to avoid documentation sprawl.
+- "Modify evidence_report schema now to add program-level budget fields" — rejected. No research artifact exists yet, and the current need is an execution guardrail, not a schema expansion.
+- "Let access-decision work flow directly into more provider docs" — rejected. The post-access alpha-validation slice is explicitly locked to A-share minimal-data burst research-only falsification unless a later reviewed reversal changes the route.
+
+**Validation run/result**:
+- `git diff --check`: passed; only expected LF/CRLF working-copy warnings were reported for touched files.
+- `docs/CURRENT.md` authoritative line count via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149, below the 150-line snapshot target.
+- `git diff --stat`: final working diff is 5 files changed, 110 insertions, 7 deletions.
+- No schema, runner, provider data, adapter, DataHub table, broker integration, or ship-gate claim was introduced.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review: Yes.
+
+**Open questions handed off**:
+- None.
+
+**Next natural step from my view**:
+1. Claude reviews this docs-only guardrail change.
+2. If Pass and user commits, the next `执行` remains the P1 access-decision and sample-validation plan; after that reviewed slice lands, the following alpha-validation `执行` should start A-share `minimal_data_burst` preregistration / research-only falsification.
+
+---
+
 ## 2026-05-29 — Claude review — Pass (Phase 7b-2 P1 US readiness review matrix)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `382dfdb`)

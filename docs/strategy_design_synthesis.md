@@ -277,6 +277,7 @@ Research rules:
 
 - Experiments may iterate faster and do not require full multi-LLM review for every scratch change.
 - Every experiment that may influence production must record data lineage, date range, parameters, random seed when applicable, and output path.
+- Any experiment that may influence production must follow the preregistration and test-budget rules in `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`: a single frozen test may proceed from a preregistration artifact, but any promotion-relevant parameter / variant / benchmark / holding-period search requires a singleton program-level test-budget ledger first.
 - Research outputs must not directly feed production runners.
 - Promotion into production requires schema-first contract, tests, review, and documented evidence.
 
@@ -408,7 +409,7 @@ The first Phase 7 schema-first baseline is `schemas/provider_capability_catalog.
 
 ### Phase 7.5 - Research Infrastructure
 
-Create or expand `research/` structure, minimal experiment logging, and promotion policy after the Phase 7a scope is clear. Early research is allowed only through logged, isolated experiments; it must not feed production runners directly.
+Create or expand `research/` structure, minimal experiment logging, and promotion policy after the Phase 7a scope is clear. Early research is allowed only through logged, isolated experiments with preregistration; it must not feed production runners directly. After the P1 access-decision and sample-validation plan is reviewed/committed, the next alpha-validation research slice is A-share `minimal_data_burst` falsification unless a later reviewed reversal changes this route.
 
 ### Phase 8+
 

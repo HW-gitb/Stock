@@ -29,6 +29,8 @@ Stop broad design looping. Phase 7a-1 through Phase 7a-5 are complete. Phase 7a-
 
 The next execution slice should produce a Phase 7b-2 P1 access-decision and sample-validation plan based on the readiness matrix. Do this without selecting a final provider, fetching data, requesting tokens / trials, or building adapters / DataHub tables.
 
+After that reviewed slice is committed, the next alpha-validation slice is A-share `minimal_data_burst` research-only falsification. US-long SEC observed-date / parser feasibility remains provider-evidence work; it proves data construction feasibility, not long-alpha existence.
+
 Phase 7a contract slices must not:
 
 - select a final provider,
@@ -112,6 +114,12 @@ Required evidence-integrity fields:
 - `power_status`: `insufficient`, `preliminary`, or `adequate`.
 
 Do not derive expected alpha from a historical best slice without labeling it exploratory and registering a confirmation path.
+
+Research preregistration is mandatory before any research experiment can influence future production decisions. The preregistration artifact should reuse the `hypothesis_registration` shape above and add freeze controls for universe, benchmark, holding period, entry / exit rule, success or falsification threshold, and `test_budget`.
+
+A research experiment may skip a program-level test-budget ledger only when it is a single frozen test: one preregistered hypothesis, frozen parameters, frozen universe, frozen benchmark, frozen holding period, frozen entry / exit rule, and `test_budget = 1`. If the work introduces a second promotion-relevant hypothesis, parameter search, variant search, benchmark sweep, holding-period sweep, or other promotion-relevant degree of freedom, create a singleton program-level test-budget ledger before running that work.
+
+Do not add ad hoc fields to `schemas/evidence_report.schema.json` to carry this budget. A later research-only evidence report should use the existing `research_experiment_log.hypothesis_registration_ref` to point back to the preregistration artifact. If a program-level ledger becomes necessary, keep it as a singleton audit / portfolio-level artifact or reference it from the audit synthesis; do not model it as one ledger per hypothesis.
 
 ## 6. PIT, Survivorship, And Security Master
 
@@ -234,6 +242,7 @@ Before Phase 8 implementation, each preset or lane contract must also define a `
 | Phase 7a-5 | evidence report schemas; immutable decision packet; cost-adjusted return details; cash drag/opportunity cost; manual override and minimal position reconciliation; long thesis outcome log; research experiment log |
 | Phase 7b-1 | provider evidence / drift monitor schema-first contract only; no real provider data fetched and no provider selected |
 | Phase 7b-2 | provider capability evidence population: P1 six snapshots and readiness matrix complete; next produce P1 access-decision / sample-validation plan; provider selection remains a separate reviewed decision |
+| Phase 7b-2 follow-up | after the P1 access plan is reviewed/committed, start A-share minimal-data burst research-only falsification with preregistration; do not route US-long SEC parser feasibility as alpha validation |
 | Phase 7c | DataHub shared layer / report contracts / reproducibility plumbing schema-first contract first; implementation only after reviewed contract scope |
 | Phase 8 | lane implementation plus production monitoring, degradation detection, and kill switch |
 | Phase 9 | coordinator, unified daily/weekly report, cross-lane conflict resolution, alert priority, full position reconciliation workflow |
@@ -259,3 +268,5 @@ These controls are allowed to land later, but they are not optional:
 After the Phase 7b-2 P1 public-source, market-data-candidate, authorization / cost / stability, benchmark / GICS, fundamentals observed-date, coverage / fallback / incident snapshots, and readiness review matrix, the next `执行` should produce the P1 access-decision and sample-validation plan from `docs/provider_priority_benchmark_contract.md`, `docs/provider_evidence_drift_monitor.md`, and `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`.
 
 Do not start Phase 7c, provider adapters, production provider data fetches, DataHub tables, or runner changes before Phase 7b-2 evidence population is reviewed and accepted. Phase 7c itself must start as a schema-first DataHub / report / reproducibility contract before any implementation slice.
+
+After the P1 access-decision and sample-validation plan is reviewed and committed, the next alpha-validation `执行` should be A-share `minimal_data_burst` research-only falsification. It must first create a preregistration artifact and must not change production runners, feed production decisions directly, or claim ship-gate evidence.

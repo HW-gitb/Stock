@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-29（Phase 7b-2 P1 readiness review matrix）
+**最后更新**：2026-05-31（P1 access plan + research prereg guardrail）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -10,7 +10,7 @@
 
 - Phase 7b-2 P1 readiness review matrix now exists: `schemas/provider_p1_readiness_review.schema.json` and `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`.
 - The matrix synthesizes six P1 snapshots field-by-field and concludes: P1 documentation evidence collection is complete enough to define blockers, but P1 is not ready for Phase 7c, provider selection, data fetch, DataHub tables, or runner consumption.
-- Recommended next reviewed slice is a P1 access-decision and sample-validation plan; no token, trial, paid subscription, provider data, adapter, or DataHub implementation is approved by this matrix.
+- Recommended next reviewed slice is a P1 access-decision and sample-validation plan; after that reviewed slice, the next alpha-validation slice is A-share minimal-data burst research-only falsification with preregistration.
 
 ---
 
@@ -19,6 +19,7 @@
 - **当前 Phase**：Phase 7b-2 provider capability evidence population / P1 closure review is in progress.
 - **当前 P0 目标**：围绕 P1 matrix 准备 access-decision and sample-validation plan；不得 silent default、latest-only 回填，或把 provider guess 写成 production-ready evidence。
 - **当前 blocker**：P1 进入任何 sample / trial / paid-access / data-fetch 前，需要用户明确批准 cost ceiling、access boundary、license / local-storage / non-display 范围；Phase 7c 仍 blocked。
+- **P0 后执行锁**：下一条 alpha-validation 刀是 `a_share_burst_minimal_data` research-only falsification；启动前必须写 preregistration artifact，冻结 universe / benchmark / holding period / entry-exit rule / threshold / test budget。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
@@ -94,15 +95,19 @@
 - 不得 silent default、latest-only 回填历史证据，或把 provider status guess 写成 production-ready evidence。
 - 不得建 adapter / DataHub table、改 runner、抓 provider data 或接 broker / OS automation；provider selection / paid access / sample fetch 都必须另走 reviewed decision。
 
-### P1 - A-short maintenance line
+### P1 - A-share minimal-data burst research-only falsification
+
+- P0 reviewed/committed 后，优先做 A-share `minimal_data_burst` research-only falsification；不进 production、不改 runner、不声称 ship-gate evidence；US-long SEC observed-date / parser feasibility 属于 provider-evidence track。
+- Research 前新增小型 preregistration artifact；后续 evidence report 用现有 `hypothesis_registration_ref` 指回它。只有单一冻结测试可不建 program-level ledger；第二个 promotion-relevant hypothesis、参数 / variant / benchmark / holding-period search 前，必须先建 singleton test-budget ledger。
+
+### P2 - A-short maintenance line
 
 - 继续 weekly forward capture、comparison-track accumulator、forward evidence accumulation。
 - 12 期新增 forward 样本后再重新审查 score / ESP / veto overlap。
 
-### P2 - Later implementation / cleanup
+### P3 - Later implementation / cleanup
 
-- Phase 8 lane implementation with production monitoring / circuit breaker / execution feasibility controls。
-- Phase 9 coordinator: cross-lane conflict resolution、unified report、position reconciliation、alert priority。
+- Phase 8 lane implementation with monitoring / circuit breaker / execution feasibility controls；Phase 9 coordinator with conflict resolution、unified report、position reconciliation、alert priority。
 
 ---
 
