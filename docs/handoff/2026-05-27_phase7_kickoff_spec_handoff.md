@@ -1,5 +1,38 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-05-31 append: A-share burst full-universe preflight pass
+
+**Changed**:
+- Added `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json`, a research-only pre-outcome preflight over 24 frozen full EGS intermediate cohorts.
+- Updated `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json`: the reviewed planned test is now spent by preflight, `valid_signal_events = 134`, and no new test is authorized.
+- Updated research routing docs, risk register, and schema tests so the next A-share burst blocker is `SR-DATA-003` benchmark-open input before any outcome / excess calculation.
+- Extended `schemas/program_test_budget_ledger.schema.json` with `spent_passed_preflight_outcome_pending` to represent a spent event-count pass with outcome still blocked.
+
+**Why**:
+- The reviewed full-universe redesign's only authorized executable step was event-count / input-integrity preflight.
+- The frozen Tier1+Tier2 full EGS surface produced enough preregistered events to pass the power gate, but this does not authorize outcome returns, benchmark excess, production use, or ship-gate claims.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v
+git diff --check
+[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length
+```
+
+**Validation result**:
+- `tests.schema.test_research_preregistration_schema`: 23 tests passed.
+- `tests/schema` discovery: 132 tests passed.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` line count: 149.
+
+**Invalidated / blocked old conclusion**:
+- “The next A-share burst action is only the full-universe preflight” is now spent; the next action is `SR-DATA-003` benchmark-open input plus a separate reviewed outcome / excess slice.
+- The preflight pass is not alpha evidence. It records only event-count / input integrity and does not compute outcome, excess, drawdown, concentration, or ship-gate evidence.
+
+---
+
 ## 2026-05-31 append: A-share burst ledger-gated redesign preregistration
 
 **Changed**:

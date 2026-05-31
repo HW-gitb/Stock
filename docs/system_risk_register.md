@@ -33,15 +33,14 @@ Status:
 
 ## Hot Queue
 
-Current routing note: the corrected-basis A-share burst preregistration has now failed a frozen-cohort preflight with `valid_signal_events = 0`. Do not run outcome / benchmark-excess calculation for that preregistration. A ledger-gated full-universe redesigned preregistration has passed review and was committed as `1a3e71e`; the only currently authorized executable step is pre-outcome event-count / input-integrity preflight.
+Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned preflight has now passed event-count with `valid_signal_events = 134`, but it computed no outcome / benchmark excess. `SR-DATA-003` must be resolved before any outcome / excess slice.
 
-1. `SR-RESEARCH-001` - Current corrected-basis A-share burst preregistration is spent / failed by zero valid signal events; full-universe redesigned preregistration is reviewed, then pre-outcome preflight only.
-2. `SR-DATA-003` - Resolve benchmark-open input before any nonzero-event outcome / excess calculation, and fix the forward-tracker cache guard before official backfill use.
-3. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
-4. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
-5. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
-6. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-7. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+1. `SR-DATA-003` - Resolve benchmark-open input before any redesigned A-share burst outcome / excess calculation, and fix the forward-tracker cache guard before official backfill use.
+2. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
+3. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
+4. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
+5. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
+6. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
 
 ## Entries
 
@@ -113,12 +112,12 @@ Current routing note: the corrected-basis A-share burst preregistration has now 
 ### SR-RESEARCH-001 - Corrected A-share burst preregistration has zero valid signal events
 
 - Severity: P0
-- Status: open
+- Status: resolved
 - Owner phase: A-share burst research / alpha-validation preflight
 - Evidence: `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` evaluated the frozen 20240131-20251231 generated cohorts against `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`. It found 360 total rows, 305 Tier1 rows, 301 rows after hard filters, 17 `pct_5d >= 6.0` rows, 38 amount-expansion rows, 7 breakout rows, and 0 rows satisfying all three preregistered burst signals. The preregistered `valid_signal_events >= 30` gate fails before any return / benchmark outcome can be informative.
 - Accepted calibration: this is not proof that a future redesigned A-share burst universe has no alpha. It proves only that the current steady Tier1 watchlist universe cannot test the frozen all-pass burst trigger. The current corrected-basis preregistration is spent as `failed_preflight_zero_signal_events`; changing universe, entry flags, Tier2 inclusion, breakout definition, thresholds, or signal conjunction is a new promotion-relevant degree of freedom.
-- Required next action: do not run outcome / benchmark-excess calculation for the current corrected-basis preregistration. Use `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` for any follow-up; append a new planned test and create a new reviewed preregistration before any redesigned burst test runs.
-- Progress: `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` and a corresponding planned ledger test have been reviewed and committed for the full EGS candidate-surface redesign. They authorize only pre-outcome event-count / input-integrity preflight; outcome / benchmark-excess calculation remains blocked unless that preflight passes the event-count gate and `SR-DATA-003` is resolved.
+- Required next action: resolved for event-count routing. Do not run outcome / benchmark-excess calculation for the current corrected-basis preregistration. Any new redesigned hypothesis still requires a ledger append and reviewed preregistration before it runs.
+- Closure evidence: `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` and its ledger planned test were reviewed / committed, and `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` records a pre-outcome preflight pass with `valid_signal_events = 134` and no outcome / benchmark-excess computation. The current blocker for any later outcome / excess run is `SR-DATA-003`.
 
 ### SR-DATA-003 - Corrected same-anchor burst test needs benchmark open input
 
@@ -127,8 +126,8 @@ Current routing note: the corrected-basis A-share burst preregistration has now 
 - Owner phase: A-share burst research input / benchmark measurement / forward-tracker cache guard
 - Evidence: `result/a_short/backtest/cache/forward_daily.pkl` predates the same-anchor fix and stores `benchmarks.csi300` / `benchmarks.csi1000` with only `trade_date,close`. `runners/backtest_rank.py` now requires benchmark `trade_date,open,close`; missing benchmark open makes `_benchmark_returns` return `None`, while naïve cache refresh would refetch the full stock / limit / benchmark forward surface.
 - Additional forward-tracker evidence: `runners/forward_tracker.py:_check_cache_coverage` reads only `forward_daily.pkl` metadata date range and is blind to benchmark `open` / `close` fields. It can return `ok`, then `forward_tracker.py:backfill` calls `fetch_forward_daily(..., refresh=False)`, which rejects close-only benchmark frames through `runners/backtest_rank.py:_benchmark_frame_has_same_anchor_fields` and refetches the shared forward surface. That bypasses the tracker comment that backfill must not trigger a universe-wide Tushare refetch on its own, and the user does not see the intended `[SKIP]` / hint path.
-- Accepted calibration: this is currently secondary to `SR-RESEARCH-001`, because the failed preflight has zero valid events and does not reach benchmark outcome calculation. It remains a hard precondition for any future nonzero-event corrected-basis outcome / excess run.
-- Required next action: before any redesigned burst preregistration computes outcome / excess returns, create a reviewed benchmark-open input slice that refreshes only the necessary CSI1000 / CSI300 `index_daily` open/close lineage or otherwise provides reviewed benchmark open data without silently authorizing a full forward-daily provider refetch. Before official `forward_tracker.py backfill` use, mirror the same benchmark-open / same-anchor cache check in `_check_cache_coverage` so close-only benchmark caches produce `[SKIP]` + remediation hint instead of falling into `fetch_forward_daily` refetch.
+- Accepted calibration: this is now the active blocker before the full-universe redesigned A-share burst preregistration can compute outcome / excess returns. The redesigned preflight passed event-count with `valid_signal_events = 134`, but no return or benchmark-excess calculation is authorized until benchmark-open input is reviewed.
+- Required next action: before the redesigned burst preregistration computes outcome / excess returns, create a reviewed benchmark-open input slice that refreshes only the necessary CSI1000 / CSI300 `index_daily` open/close lineage or otherwise provides reviewed benchmark open data without silently authorizing a full forward-daily provider refetch. Before official `forward_tracker.py backfill` use, mirror the same benchmark-open / same-anchor cache check in `_check_cache_coverage` so close-only benchmark caches produce `[SKIP]` + remediation hint instead of falling into `fetch_forward_daily` refetch.
 
 ### SR-DATA-001 - Suspend inference can silently drop tradable stocks on partial daily response
 

@@ -17,6 +17,9 @@ REDESIGNED_ARTIFACT_PATH = Path(
 PREFLIGHT_ARTIFACT_PATH = Path(
     "research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json"
 )
+REDESIGNED_PREFLIGHT_ARTIFACT_PATH = Path(
+    "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json"
+)
 LEDGER_ARTIFACT_PATH = Path("research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json")
 ALPHA_AUDIT_SCHEMA_PATH = Path("schemas/alpha_plausibility_audit.schema.json")
 EVIDENCE_REPORT_SCHEMA_PATH = Path("schemas/evidence_report.schema.json")
@@ -40,6 +43,9 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
 
     def _load_preflight_artifact(self) -> dict:
         return self._load_artifact(PREFLIGHT_ARTIFACT_PATH)
+
+    def _load_redesigned_preflight_artifact(self) -> dict:
+        return self._load_artifact(REDESIGNED_PREFLIGHT_ARTIFACT_PATH)
 
     def _load_ledger_artifact(self) -> dict:
         return self._load_artifact(LEDGER_ARTIFACT_PATH)
@@ -84,8 +90,11 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertEqual(schema["properties"]["schema_version"]["const"], "1.0.0")
         self.assertFalse(schema["additionalProperties"])
 
-        errors = list(Draft7Validator(schema).iter_errors(self._load_preflight_artifact()))
-        self.assertEqual(errors, [])
+        validator = Draft7Validator(schema)
+        for artifact in [self._load_preflight_artifact(), self._load_redesigned_preflight_artifact()]:
+            with self.subTest(artifact_id=artifact["artifact_id"]):
+                errors = list(validator.iter_errors(artifact))
+                self.assertEqual(errors, [])
 
     def test_program_test_budget_ledger_schema_and_artifact_validate_when_jsonschema_available(self) -> None:
         try:
@@ -250,6 +259,33 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertFalse(preflight["evaluation_result"]["valid_signal_events_gate_passed"])
         self.assertFalse(preflight["evaluation_result"]["outcome_run_allowed_for_this_preregistration"])
 
+    def test_redesigned_preflight_records_event_count_pass_without_outcome(self) -> None:
+        preflight = self._load_redesigned_preflight_artifact()
+
+        self.assertEqual(preflight["hypothesis_registration_ref"], str(REDESIGNED_ARTIFACT_PATH).replace("\\", "/"))
+        self.assertEqual(preflight["preflight_status"], "passed_event_count_preflight")
+        self.assertEqual(preflight["decision"], "eligible_for_separate_outcome_run_after_review")
+        self.assertFalse(preflight["execution_boundary"]["outcome_returns_computed"])
+        self.assertFalse(preflight["execution_boundary"]["benchmark_excess_computed"])
+        self.assertFalse(preflight["execution_boundary"]["provider_data_fetch_performed"])
+        self.assertFalse(preflight["execution_boundary"]["egs_main_rerun_performed"])
+        self.assertFalse(preflight["execution_boundary"]["cohort_regeneration_performed"])
+        self.assertEqual(preflight["summary_counts"]["cohort_count"], 24)
+        self.assertEqual(preflight["summary_counts"]["total_candidate_rows"], 19000)
+        self.assertEqual(preflight["summary_counts"]["tier1_rows"], 967)
+        self.assertEqual(preflight["summary_counts"]["tier2_rows"], 5326)
+        self.assertEqual(preflight["summary_counts"]["hard_filter_rows"], 6159)
+        self.assertEqual(preflight["summary_counts"]["hard_pct_5d_ge_6_rows"], 1635)
+        self.assertEqual(preflight["summary_counts"]["hard_amount_ratio_ge_1_5_rows"], 1291)
+        self.assertEqual(preflight["summary_counts"]["hard_is_breakout_true_rows"], 511)
+        self.assertEqual(preflight["summary_counts"]["hard_all_three_signal_rows"], 134)
+        self.assertEqual(preflight["evaluation_result"]["valid_signal_events"], 134)
+        self.assertEqual(preflight["evaluation_result"]["minimum_effective_sample_required"], 30)
+        self.assertTrue(preflight["evaluation_result"]["valid_signal_events_gate_passed"])
+        self.assertFalse(preflight["evaluation_result"]["alpha_claim_allowed"])
+        self.assertFalse(preflight["evaluation_result"]["outcome_run_allowed_for_this_preregistration"])
+        self.assertIn("SR-DATA-003", "\n".join(preflight["diagnostic_notes"]))
+
     def test_preflight_schema_rejects_outcome_fetch_or_ship_gate_scope_creep_when_jsonschema_available(self) -> None:
         try:
             from jsonschema import Draft7Validator
@@ -289,39 +325,38 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         ledger = self._load_ledger_artifact()
 
         self.assertEqual(ledger["schema_name"], "program_test_budget_ledger")
-        self.assertEqual(ledger["ledger_status"], "active_test_authorized_by_review")
+        self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
         self.assertEqual(ledger["creation_reason"]["triggering_preflight_ref"], str(PREFLIGHT_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(ledger["creation_reason"]["triggering_preregistration_ref"], str(CORRECTED_ARTIFACT_PATH).replace("\\", "/"))
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
+        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 2)
         self.assertEqual(ledger["budget_policy"]["tests_available_without_new_review"], 0)
         self.assertTrue(ledger["budget_policy"]["next_test_requires_reviewed_preregistration"])
-        self.assertEqual(len(ledger["test_spend_log"]), 1)
+        self.assertEqual(len(ledger["test_spend_log"]), 2)
         spent = ledger["test_spend_log"][0]
         self.assertEqual(spent["preregistration_ref"], str(CORRECTED_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(spent["result_ref"], str(PREFLIGHT_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(spent["status"], "spent_failed_preflight_zero_signal_events")
         self.assertEqual(spent["tests_spent"], 1)
-        self.assertEqual(len(ledger["planned_tests"]), 1)
+        self.assertEqual(ledger["planned_tests"], [])
 
-    def test_ledger_planned_test_points_to_redesigned_preregistration(self) -> None:
+    def test_ledger_spend_log_points_to_redesigned_preflight(self) -> None:
         ledger = self._load_ledger_artifact()
-        planned = ledger["planned_tests"][0]
+        spent = ledger["test_spend_log"][1]
 
-        self.assertEqual(planned["test_id"], "a_share_minimal_data_burst_full_universe_redesign_20260531")
-        self.assertEqual(planned["planned_status"], "reviewed_not_run")
+        self.assertEqual(spent["test_id"], "a_share_minimal_data_burst_full_universe_redesign_20260531")
         self.assertEqual(
-            planned["planned_preregistration_ref"],
+            spent["preregistration_ref"],
             str(REDESIGNED_ARTIFACT_PATH).replace("\\", "/"),
         )
         self.assertEqual(
-            planned["planned_result_ref"],
+            spent["result_ref"],
             "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
         )
-        self.assertTrue(planned["promotion_relevant"])
-        self.assertEqual(planned["expected_tests_spent"], 1)
-        self.assertEqual(planned["approval_status"], "reviewed_authorized")
-        self.assertTrue(any("pre-outcome event-count" in item for item in planned["review_boundary"]))
-        self.assertTrue(any("No outcome return" in item for item in planned["review_boundary"]))
+        self.assertEqual(spent["status"], "spent_passed_preflight_outcome_pending")
+        self.assertTrue(spent["promotion_relevant"])
+        self.assertEqual(spent["tests_spent"], 1)
+        self.assertIn("valid_signal_events = 134", spent["result_summary"])
+        self.assertIn("SR-DATA-003", spent["allowed_followup"])
 
     def test_redesigned_preregistration_is_ledger_gated_full_universe_research_only(self) -> None:
         artifact = self._load_artifact(REDESIGNED_ARTIFACT_PATH)

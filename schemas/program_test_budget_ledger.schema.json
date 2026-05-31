@@ -203,6 +203,7 @@
           "enum": [
             "spent_failed_preflight_zero_signal_events",
             "spent_failed_preflight_insufficient_signal_events",
+            "spent_passed_preflight_outcome_pending",
             "spent_failed_outcome_threshold",
             "spent_passed_research_continue_only",
             "spent_voided_by_data_integrity_failure"

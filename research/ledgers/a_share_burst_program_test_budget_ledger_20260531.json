@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "generated_at": "2026-05-31T00:00:00Z",
   "artifact_id": "a_share_burst_program_test_budget_ledger_20260531",
-  "ledger_status": "active_test_authorized_by_review",
+  "ledger_status": "active_no_new_test_authorized",
   "family_id": "a_share_burst_minimal_data_alpha_validation_v1",
   "lane_id": "a_share_burst_minimal_data",
   "singleton_scope": {
@@ -28,7 +28,7 @@
   },
   "budget_policy": {
     "ledger_cardinality": "singleton_program_level",
-    "tests_spent_count": 1,
+    "tests_spent_count": 2,
     "tests_available_without_new_review": 0,
     "next_test_requires_reviewed_preregistration": true,
     "next_test_requires_user_approval": true,
@@ -45,32 +45,24 @@
       "promotion_relevant": true,
       "result_summary": "valid_signal_events = 0 versus required >= 30; outcome returns and benchmark excess were not computed because the registered trigger has no valid events.",
       "allowed_followup": "Only ledger-gated redesign with a new reviewed preregistration."
-    }
-  ],
-  "planned_tests": [
+    },
     {
       "test_id": "a_share_minimal_data_burst_full_universe_redesign_20260531",
-      "planned_status": "reviewed_not_run",
-      "created_at": "2026-05-31T00:00:00Z",
-      "planned_preregistration_ref": "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
-      "planned_result_ref": "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
+      "preregistration_ref": "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
+      "result_ref": "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
+      "status": "spent_passed_preflight_outcome_pending",
+      "tests_spent": 1,
       "promotion_relevant": true,
-      "expected_tests_spent": 1,
-      "approval_status": "reviewed_authorized",
-      "design_summary": "Ledger-gated redesign of A-share minimal-data burst from the steady Tier1 watchlist to the frozen full EGS candidate surface, with a frozen EOD momentum + volume expansion + breakout trigger and same-anchor CSI1000 benchmark basis.",
-      "review_boundary": [
-        "Claude review passed for the preregistration slice and commit 1a3e71e recorded it; this planned test is authorized only for pre-outcome event-count / input-integrity preflight.",
-        "No outcome return, benchmark excess, provider fetch, EGS rerun, cohort regeneration, production runner change, ship-gate claim, live trade, or order automation is authorized by this ledger append.",
-        "The planned preregistration remains research-only and the first executable step is only a pre-outcome event-count / input-integrity preflight.",
-        "If the preflight has nonzero sufficient events, benchmark-open input under SR-DATA-003 must be resolved before any outcome / excess calculation."
-      ]
+      "result_summary": "Pre-outcome event-count / input-integrity preflight found valid_signal_events = 134 versus required >= 30 on frozen full EGS Tier1+Tier2 intermediate cohorts. Outcome returns and benchmark excess were not computed.",
+      "allowed_followup": "Resolve SR-DATA-003 benchmark-open input and create a separate reviewed outcome / excess slice for this unchanged preregistration; any changed redesigned hypothesis requires another ledger append and reviewed preregistration."
     }
   ],
+  "planned_tests": [],
   "next_required_actions": [
-    "Run only the reviewed full-universe redesign pre-outcome event-count / input-integrity preflight as the next executable A-share burst step.",
+    "Resolve SR-DATA-003 benchmark-open input before any outcome / excess calculation for the unchanged full-universe redesign preregistration.",
+    "Create a separate reviewed outcome / benchmark-excess slice before computing returns for the unchanged full-universe redesign preregistration.",
     "Append any additional proposed redesigned A-share burst test to planned_tests before it runs.",
     "Create a new reviewed preregistration for any changed universe / trigger / threshold / benchmark / holding-period design.",
-    "Resolve the benchmark-open input precondition before any nonzero-event outcome / excess calculation.",
     "Keep all outputs research-only until later schema review, Claude review, user approval, and separate confirmation evidence."
   ]
 }

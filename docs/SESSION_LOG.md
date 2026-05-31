@@ -8,6 +8,55 @@
 
 ---
 
+## 2026-05-31 — Claude review — Pass (clean) (A-share burst full-universe preflight pass)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `81854fb`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。preflight-execution 轮次可 `提交`。
+
+**Notes**: 这是 burst research 首次真正"执行"的一轮（10 tracked + 1 untracked preflight artifact），改了最高规则 AGENTS.md 与 schema 文件，故全量细审。**Scope**：仅执行授权内唯一一刀（pre-outcome event-count / input-integrity preflight on frozen full EGS universe）；未跑 outcome / excess、未 fetch provider、未 rerun EGS、未 regen cohort、未改 runner / 业务代码——`execution_boundary` 全 false + diagnostic notes + diff 无 runner 改动三方印证。**独立验证**：(1) 必读 untracked preflight artifact body 已读全；(2) 数值内部自洽——287(all)⊃197(Tier1+Tier2)⊃134(再过 amount≥1e8/list_status=L/非 crash/lock)逐层收紧，Tier1 三信号=0、134 全来自 Tier2；跨 preflight 自洽——full EGS 967 Tier1 vs corrected steady 305（因未过 steady veto）；(3) 独立跑 `tests.schema.test_research_preregistration_schema` 23 OK + `tests/schema` discovery 132 OK（schema enum 加值无横向回归）+ CURRENT.md 149 行；(4) schema 加 `spent_passed_preflight_outcome_pending` 为 additive，且比复用 `spent_passed_research_continue_only` 更保守（避免把"仅过 preflight"overclaim 成可 promote）；(5) ledger 记账 `tests_spent 1→2` / planned→spend-log / `active_no_new_test_authorized` 自洽，`test_ledger_schema_rejects_cardinality_or_review_gate_relaxation` guard 仍 pass。**治理判定**：`SR-RESEARCH-001` P0 `open→resolved` 经独立核验为正确且安全——其两项保护（不跑 corrected-basis outcome、不无纪律 fish）已由 frozen artifacts + ledger spend-log[0] + 路由文档独立守住，不依赖该条保持 open；前向风险（不过早跑 134-event redesign 的 outcome）由仍 `open` 的 `SR-DATA-003`（已升 Hot Queue #1 + 强制单独 reviewed outcome slice）承接；closure 有 file evidence，将由本轮 reviewed commit 背书。resolve 后 register 无 open P0，如实反映 burst P0 路径已闭、下一 gating 为 P1。AGENTS.md（最高规则）仅 §当前进度 / §文件参考 状态+路由更新，无规则 / ship-gate / 固化决策改动。**两条非阻塞观察（非 Optional、不需 disposition）**：(a) 134 event-count 未被独立 re-derive（bundled-Python 一次性 read-only 跑、未存脚本）——但它 gate 不了任何 unsafe 动作（outcome 仍需单独 reviewed slice + SR-DATA-003），且 artifact 的 method / input_dataset_refs 已记录可复现 recipe，可接受；(b) SR-DATA-003 维持 P1 为 defensible（`backtest_rank.py` 对缺 benchmark-open 返 `None`、无 silent 污染 + outcome 强制单独 review），且功能上已是 Hot Queue #1。**下一刀**：非 outcome/excess——先解 `SR-DATA-003` benchmark-open（单独 reviewed slice，只刷必要 CSI1000/CSI300 `index_daily` open/close lineage，不 silent 触发 full forward-daily refetch），之后 redesign 的 outcome/excess 仍需单独 review。
+
+---
+
+## 2026-05-31 — Codex 执行 (A-share burst full-universe preflight pass)
+
+**Commits**: 81854fbb05b8a8531497ddc6269f4fd1471da6e9
+
+**Relationship to prior session(s)**:
+- Builds on the reviewed / committed full-universe redesigned preregistration and authorization-sync commit.
+- **Refines** the current route: the full-universe redesigned preflight has now run and passed event-count, but outcome / excess remains blocked by `SR-DATA-003` and a separate reviewed outcome slice.
+
+**Worked on**:
+1. [untracked] `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json`: added the research-only event-count / input-integrity preflight artifact.
+2. [tracked] `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json`, `schemas/program_test_budget_ledger.schema.json`: recorded the reviewed planned test as spent by preflight and added the ledger status `spent_passed_preflight_outcome_pending`.
+3. [tracked] `tests/schema/test_research_preregistration_schema.py`: added validation / guard coverage for the redesigned preflight artifact and spent-ledger state.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `research/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: updated active routing from preflight authorization to `SR-DATA-003` benchmark-open blocker before any outcome / excess run.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- The preflight used frozen `_intermediate/egs_full_*.csv` cohorts only, no `A-EGS` rerun, no provider fetch, no cohort regeneration, no outcome return, and no benchmark excess.
+- The eligible hard-filter universe is Tier1 + Tier2 only; `Other` tier rows were not counted as valid hard-filter events.
+- Result: 24 cohorts, 19,000 total rows, 6,159 Tier1+Tier2 hard-filter rows, and `valid_signal_events = 134` versus the preregistered `>=30` gate.
+- `SR-RESEARCH-001` is now resolved for event-count routing; `SR-DATA-003` is the active blocker before any outcome / excess calculation.
+
+**Alternatives considered and rejected**:
+- "Count `Other` tier rows in hard-filter events" — rejected because the preregistered universe says use Tier1 and Tier2 rows.
+- "Compute outcome / benchmark excess immediately after event-count pass" — rejected because `SR-DATA-003` benchmark-open input is unresolved and no separate outcome slice has been reviewed.
+- "Leave the ledger planned test as reviewed-not-run" — rejected because the preregistration explicitly says even event-count preflight consumes the singleton ledger planned test.
+
+**Validation run/result**:
+- Read-only bundled-Python preflight over `result/a_short/backtest/generated/_intermediate/egs_full_*.csv`: 24 files, no missing required columns, no unparseable required rows, `valid_signal_events = 134`.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema -v`: passed, 23 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests/schema -v`: passed, 132 tests.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` length check via `ReadAllLines`: 149 lines.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review. Reviewer should inspect the untracked preflight artifact body in addition to tracked diffs.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (clean) (post-commit A-share burst preflight authorization sync)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `1a3e71e`)

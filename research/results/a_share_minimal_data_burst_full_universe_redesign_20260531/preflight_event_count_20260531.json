@@ -1,0 +1,82 @@
+{
+  "schema_name": "research_preflight_result",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-31T00:00:00Z",
+  "artifact_id": "a_share_minimal_data_burst_full_universe_redesign_preflight_event_count_20260531",
+  "hypothesis_registration_ref": "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
+  "preflight_status": "passed_event_count_preflight",
+  "decision": "eligible_for_separate_outcome_run_after_review",
+  "execution_boundary": {
+    "outcome_returns_computed": false,
+    "benchmark_excess_computed": false,
+    "provider_data_fetch_performed": false,
+    "egs_main_rerun_performed": false,
+    "cohort_regeneration_performed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false
+  },
+  "input_dataset_refs": [
+    "result/a_short/backtest/generated/_intermediate/egs_full_20240131.csv through result/a_short/backtest/generated/_intermediate/egs_full_20251231.csv",
+    "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
+    "research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json"
+  ],
+  "method": {
+    "description": "Read frozen monthly full EGS intermediate candidate surfaces only and evaluate the preregistered redesigned Tier1+Tier2 hard filters plus relative-strength, volume-expansion, and breakout all-pass trigger before any outcome / benchmark calculation.",
+    "entry_flag_value": "not_used_in_redesigned_preflight",
+    "hard_filters": [
+      "tier must be Tier1 or Tier2.",
+      "list_status must equal L where present.",
+      "has_crash_veto and is_lock must be false where present.",
+      "avg_amount_20d >= 100000000.",
+      "avg_amount_5d > 0.",
+      "Do not filter by steady-lane Tier1-only, entry_flag, chasing_high, or overheat_flag before trigger evaluation."
+    ],
+    "all_pass_signal": [
+      "relative_strength: pct_5d >= 6.0 and pct_20d > market_med_20d.",
+      "volume_expansion: avg_amount_5d / avg_amount_20d >= 1.5.",
+      "breakout_quality: is_breakout == true."
+    ],
+    "validation_command": "Bundled Python read-only preflight over result/a_short/backtest/generated/_intermediate/egs_full_*.csv, applying the preregistered hard filters / signal conditions without outcome returns, benchmark excess, provider fetch, EGS rerun, or cohort regeneration."
+  },
+  "summary_counts": {
+    "cohort_count": 24,
+    "cohort_window_start": "20240131",
+    "cohort_window_end": "20251231",
+    "total_candidate_rows": 19000,
+    "tier1_rows": 967,
+    "tier2_rows": 5326,
+    "hard_filter_rows": 6159,
+    "hard_pct_5d_ge_6_rows": 1635,
+    "hard_amount_ratio_ge_1_5_rows": 1291,
+    "hard_is_breakout_true_rows": 511,
+    "hard_all_three_signal_rows": 134,
+    "tier1_pct_5d_ge_6_rows": 48,
+    "tier1_amount_ratio_ge_1_5_rows": 106,
+    "tier1_is_breakout_true_rows": 22,
+    "tier1_all_three_signal_rows": 0,
+    "all_rows_all_three_signal_rows": 287,
+    "tier2_all_three_signal_rows": 197,
+    "max_pct_5d_all_rows": 46.89119170984457,
+    "max_pct_5d_tier1": 7.961624719661109,
+    "max_amount_ratio_all_rows": 3.4434850985075327,
+    "max_amount_ratio_tier1": 2.7402599821739044
+  },
+  "evaluation_result": {
+    "valid_signal_events": 134,
+    "minimum_effective_sample_required": 30,
+    "valid_signal_events_gate_passed": true,
+    "registered_decision_label": "preflight_passed_research_continue_only",
+    "interpretation": "The redesigned full-universe preflight passes the preregistered event-count gate with 134 valid signal events across frozen Tier1+Tier2 full EGS intermediate cohorts. This is only an input-integrity / event-count pass; it does not compute outcome returns, benchmark excess, drawdown, concentration, alpha, or ship-gate evidence.",
+    "alpha_claim_allowed": false,
+    "outcome_run_allowed_for_this_preregistration": false
+  },
+  "diagnostic_notes": [
+    "All 24 frozen full EGS intermediate cohort files from 20240131 through 20251231 were present.",
+    "No required input columns were missing and no rows were dropped for unparseable required preregistered input fields.",
+    "The eligible hard-filter universe is Tier1 plus Tier2 only; Other-tier rows were not counted as valid hard-filter events.",
+    "Within hard-filter rows, 1589 rows passed the full relative_strength family, 1291 rows passed volume_expansion, 511 rows passed breakout_quality, and 134 rows passed all three families.",
+    "The 134 valid signal events are sufficient only to justify a separate reviewed outcome / benchmark-excess slice under the unchanged preregistration.",
+    "SR-DATA-003 benchmark-open input remains unresolved, so no outcome return or benchmark excess run is authorized by this preflight artifact.",
+    "This artifact did not run A-EGS, regenerate cohorts, fetch provider data, produce signal_events.csv / monthly_stats.csv, or modify any runner."
+  ]
+}
