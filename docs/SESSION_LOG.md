@@ -8,6 +8,57 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-EXEC-004 risk-control assumption guard)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `054e1cf`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。hot queue #1 余 `SR-EXEC-005/007` + `SR-CAP-001` + `SR-CONTRACT-002`。
+
+**Notes**: SR-EXEC-004（execution assumptions 把未模拟的 cooldown/circuit-breaker 报成 enabled）的 register 批准窄修，同 SR-EXEC-003 取向。已审 `runners/backtest_execution.py:build_execution_assumptions`。**逻辑正确**：`portfolio_circuit_breaker` enabled `True→False`、new_entries_blocked `True→False`、existing_positions_action `hold_until_exit_rule→not_implemented`；`cooldown.enabled True→False`；event_log.event_codes 删 `circuit_breaker`/`cooldown_block`；`empty_simulation_result` 与 `simulate_execution` 两处 limitations 各加 "Portfolio circuit breaker and cooldown controls are not simulated and are not safety evidence in this report."。控件本就从未被 simulator 强制执行，故标 disabled **只让 report 诚实、不改 simulation 行为**。**独立核实**：(1) **schema enum 确认 `not_implemented` 合法**——`execution_backtest_report.schema.json:343` `existing_positions_action` enum = `[hold_until_exit_rule, force_exit_next_open, not_implemented]`，且 circuit_breaker required 三字段类型不变、event_codes 可缩减；报告改值后仍过 schema（test_execution_backtest_report_schema 5 通过证实）；(2) **test 正确锁定**——smoke 测试新增 circuit enabled=False / new_entries_blocked=False / existing_positions_action=not_implemented / cooldown enabled=False / event_codes 不含 circuit_breaker|cooldown_block / limitations 含 "not safety evidence"，会捕捉回归到 enabled=true；(3) 独立跑 execution+schema+aggregate **34 OK**（20+5+9，无回归）；CURRENT 149；scope 确认仅 6 文件、无其他代码。**治理**：register SR-EXEC-004 open→resolved（closure+verification 准确，含"日后实现须先加 simulator 行为+event-log tests 再报 enabled"）、Hot Queue 移出。**一条非阻塞观察**（非 fix）：`cooldown` dict 仍保留 `event_code:"cooldown_block"` 名（虽 enabled=false 且已移出 event_codes 覆盖）——冗余但不误导（enabled=false 为权威信号）。**本轮可一次性 `提交`**；下一刀进 SR-EXEC-005（零交易月当 0%）/ 007（并发资金重用）/ CAP-001 / CONTRACT-002。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-EXEC-004 risk-control assumption guard)
+
+**Commits**: 054e1cf
+
+**Relationship to prior session(s)**:
+- Builds on the committed `SR-EXEC-003` drawdown not-evaluable guard and the current risk-register hot queue.
+- Executes only `SR-EXEC-004`; the remaining execution-evidence group stays open for later slices.
+- Does not run EGS, regenerate cohorts, run research, fetch provider data, contact providers, change US data-source access, or commit.
+
+**Worked on**:
+1. [tracked] `runners/backtest_execution.py`: stopped reporting portfolio circuit breaker and cooldown controls as enabled; generated assumptions now mark circuit breaker as `not_implemented`, cooldown as disabled, and omit `circuit_breaker` / `cooldown_block` from declared event-code coverage.
+2. [tracked] `tests/execution/test_backtest_execution.py`: added regression assertions that unimplemented circuit breaker / cooldown controls are not enabled and are labeled as not safety evidence.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-EXEC-004` resolved and removed it from Hot Queue item #1.
+4. [tracked] `docs/CURRENT.md`: updated the active P0/P1 routing and kept the snapshot at 149 lines.
+5. [tracked] `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`: prepended the Phase 5 handoff addendum for this assumption-reporting guard.
+6. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Chose the register-approved narrow fix, not full circuit-breaker / cooldown simulation, because simulator behavior and event-log semantics need their own reviewed implementation slice.
+- Removed unimplemented control event codes from current report coverage instead of keeping dormant labels that could be overread.
+- Did not fold in `SR-EXEC-005`, `SR-EXEC-007`, `SR-CAP-001`, or `SR-CONTRACT-002` to keep this slice narrow.
+
+**Alternatives considered and rejected**:
+- "Implement portfolio circuit breaker and cooldown now" — rejected because this would require broader state replay, entry blocking, reactivation, and event-log tests beyond the assumption overclaim fix.
+- "Leave the controls enabled and add only a limitation" — rejected because future evidence consumers can still treat `enabled = true` as tested behavior.
+- "Change the execution report schema in this slice" — rejected because the existing v1.2.0 contract already supports `enabled = false` and circuit `existing_positions_action = not_implemented`.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v`: passed, 20 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v`: passed, 5 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v`: passed, 9 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line-count check via Python `splitlines()`: 149 lines, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- If review passes and the user commits, the next default `执行` is the remaining risk-register execution-evidence group (`SR-EXEC-005/007` + `SR-CAP-001` + `SR-CONTRACT-002`), unless the user explicitly approves a narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-EXEC-003 drawdown not-evaluable guard)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `230e100`)

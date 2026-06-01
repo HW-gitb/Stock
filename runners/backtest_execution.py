@@ -621,12 +621,12 @@ def build_execution_assumptions(
             "cash_constrained": True,
         },
         "portfolio_circuit_breaker": {
-            "enabled": True,
-            "new_entries_blocked": True,
-            "existing_positions_action": "hold_until_exit_rule",
+            "enabled": False,
+            "new_entries_blocked": False,
+            "existing_positions_action": "not_implemented",
         },
         "cooldown": {
-            "enabled": True,
+            "enabled": False,
             "event_code": "cooldown_block",
         },
         "event_log": {
@@ -641,8 +641,6 @@ def build_execution_assumptions(
                 "take_profit",
                 "time_stop",
                 "cash_constrained",
-                "circuit_breaker",
-                "cooldown_block",
                 "exit",
             ],
         },
@@ -772,6 +770,7 @@ def empty_simulation_result(
             "Phase 5 skeleton validates the execution report contract and writes CSV shells only.",
             "Candidates that pass analyzer replay are skipped as missing_stop until deterministic stop rules are wired.",
             "No execution price fetch, limit-up matching, order fill, portfolio accounting, or exit simulation is implemented yet.",
+            "Portfolio circuit breaker and cooldown controls are not simulated and are not safety evidence in this report.",
         ],
     }
 
@@ -1054,6 +1053,7 @@ def simulate_execution(
             "The first fill increment processes candidates sequentially and does not yet model concurrent open positions.",
             "Daily equity currently records starting equity and realized exit dates; open-position mark-to-market is not yet modeled.",
             "max_drawdown is null because realized exit-date cash drawdowns are not ship-gate drawdown evidence until mark-to-market equity is implemented.",
+            "Portfolio circuit breaker and cooldown controls are not simulated and are not safety evidence in this report.",
             "total_return is realized total_pnl divided by initial bucket_capital; no alternate ending-equity-normalized return is emitted yet.",
             "All generated actions are backtest events only; manual-order-only boundary remains in force.",
         ],

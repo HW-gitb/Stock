@@ -1,5 +1,47 @@
 # Phase 5 kickoff spec handoff
 
+## 2026-06-01 addendum: SR-EXEC-004 risk-control assumption guard
+
+### What changed
+
+- `runners/backtest_execution.py` no longer reports portfolio circuit breaker or cooldown controls as enabled in generated execution assumptions.
+- `portfolio_circuit_breaker` is now emitted with `enabled = false`, `new_entries_blocked = false`, and `existing_positions_action = not_implemented`.
+- `cooldown` is now emitted with `enabled = false`.
+- `execution_assumptions.event_log.event_codes` no longer declares `circuit_breaker` or `cooldown_block` coverage while those controls are not simulated.
+- `tests/execution/test_backtest_execution.py` locks the not-enabled assumptions and the "not safety evidence" limitation text.
+- `docs/system_risk_register.md` closes `SR-EXEC-004` and removes it from the Hot Queue.
+
+### Why
+
+`SR-EXEC-004` showed that the report contract overclaimed safety controls: the assumptions said portfolio circuit breaker and cooldown were enabled, but the simulator did not enforce either control. This slice chooses the narrow register-approved fix: mark those controls as not implemented / not simulated until reviewed simulator behavior and event-log tests exist.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v
+git diff --check
+```
+
+### Validation result
+
+- `tests.execution.test_backtest_execution`: 20 tests passed.
+- `tests.schema.test_execution_backtest_report_schema`: 5 tests passed.
+- `tests.execution.test_aggregate_execution_reports`: 9 tests passed.
+- `git diff --check`: passed; only expected Windows LF-to-CRLF working-copy warnings.
+
+### Invalidated old conclusions
+
+- Newly emitted Phase 5 execution reports must not be read as having tested portfolio circuit breaker or cooldown behavior.
+- `circuit_breaker` and `cooldown_block` are no longer declared as current event-log coverage in execution reports until simulator behavior exists.
+
+### Next notes
+
+1. This slice intentionally does not implement circuit-breaker / cooldown simulation behavior.
+2. This slice intentionally does not fix `SR-EXEC-005`, `SR-EXEC-007`, `SR-CAP-001`, or `SR-CONTRACT-002`.
+3. If these controls are later implemented, add reviewed event-log tests before reporting them as enabled.
+
 ## 2026-06-01 addendum: SR-EXEC-003 drawdown not-evaluable guard
 
 ### What changed

@@ -82,6 +82,15 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 report["execution_assumptions"]["position_sizing"]["bucket_ceiling_pct"],
                 0.333333,
             )
+            circuit = report["execution_assumptions"]["portfolio_circuit_breaker"]
+            self.assertFalse(circuit["enabled"])
+            self.assertFalse(circuit["new_entries_blocked"])
+            self.assertEqual(circuit["existing_positions_action"], "not_implemented")
+            self.assertFalse(report["execution_assumptions"]["cooldown"]["enabled"])
+            declared_event_codes = report["execution_assumptions"]["event_log"]["event_codes"]
+            self.assertNotIn("circuit_breaker", declared_event_codes)
+            self.assertNotIn("cooldown_block", declared_event_codes)
+            self.assertIn("not safety evidence", " ".join(report["limitations"]))
             self.assertEqual(report["metrics"]["candidate_count"], 2)
             self.assertEqual(report["metrics"]["trade_count"], 0)
             self.assertEqual(report["metrics"]["skipped_count"], 2)
@@ -95,8 +104,8 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 report["ship_gate_evaluation"]["metric_results"]["forward_live_months"]["passed"]
             )
             self.assertEqual(report["inputs"]["deterministic_reports"], [])
-            self.assertIn("entry", report["execution_assumptions"]["event_log"]["event_codes"])
-            self.assertIn("exit", report["execution_assumptions"]["event_log"]["event_codes"])
+            self.assertIn("entry", declared_event_codes)
+            self.assertIn("exit", declared_event_codes)
 
             for name in [
                 "trades.csv",
@@ -230,6 +239,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 "max_drawdown is null",
                 " ".join(report["limitations"]),
             )
+            self.assertIn("not safety evidence", " ".join(report["limitations"]))
             self.assertIsNone(
                 report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["passed"]
             )

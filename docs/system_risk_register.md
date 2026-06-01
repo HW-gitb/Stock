@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
+1. `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
 2. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
 3. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
 4. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
@@ -194,11 +194,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-EXEC-004 - Execution assumptions report cooldown / circuit breaker controls that are not simulated
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: Phase 5 execution backtest / Phase 8 monitoring
 - Evidence: `runners/backtest_execution.py:build_execution_assumptions` reports cooldown and portfolio circuit breaker controls as enabled, while the simulation loop does not enforce those controls.
 - Accepted calibration: this is primarily an evidence overclaim / report-contract defect. It does not currently authorize full-size use, but it must be fixed before execution evidence is cited as if these controls were tested.
-- Required next action: either implement the controls in the simulator with tests, or report them as `not_implemented` / `not_evaluable` and exclude them from any safety conclusion.
+- Closure: current execution reports set `portfolio_circuit_breaker.enabled = false`, `new_entries_blocked = false`, `existing_positions_action = not_implemented`, and `cooldown.enabled = false`. The declared event-code coverage no longer includes `circuit_breaker` or `cooldown_block`, and report limitations state these controls are not simulated or safety evidence.
+- Verification: `tests.execution.test_backtest_execution` covers the generated assumptions and limitations for unimplemented circuit breaker / cooldown controls while preserving schema-valid report output.
+- Required next action: no active SR-EXEC-004 action. If these controls are later implemented, add reviewed simulator behavior and event-log tests before reporting them as enabled.
 
 ### SR-EXEC-005 - Zero-trade execution reports are aggregated as 0.0% monthly returns
 
