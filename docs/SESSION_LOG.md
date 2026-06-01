@@ -8,6 +8,54 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-003 benchmark-open cache patch run)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files + ignored local cache vs `0f0beae`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。
+
+**Notes**: 本轮质变——Codex **首次真实运行 helper**（对 Tushare provider fetch + patch 本地 `forward_daily.pkl`），并把 `SR-DATA-003` 标 `resolved`。tracked 改动纯 docs（AGENTS.md / CURRENT / register / handoff / SESSION_LOG），主数据变更是 gitignored 本地 cache。**provider-fetch 边界判定（关键）**：在界内——只取 CSI300/CSI1000 两条 `index_daily`（A 股已证明的 P4 Tushare/CSI 面，**非** blocked 的 P1 US provider），由 SR-DATA-003 自身 required-action 明确 sanction，helper 上轮已 review+commit（`0f0beae`），用户经 `提交`→`执行` 驱动；Codex 明确未 contact P1 US、未 pip install（bundled Python 缺 tushare 故改用本地 Python313，未装依赖）、未 full-refresh、未 rerun EGS、未改 prereg 参数、未跑 outcome/excess。**独立 cache 核验**（只读载入 pickle，无网络——handoff 明示 reviewer 可验）：逐项对上闭合证据——`meta` 窗口 `20240131..20260228`、`benchmark_open_patch.update_method=benchmark_only_index_daily_open_close_patch`、`stock_daily_refetch_allowed=false`/`limit_refetch_allowed=false`；**stocks (2681523,5) / limits (3513895,4) 精确保留**（full-refetch 会改行数 → 精确保留证明只 patch benchmark）；csi300/csi1000 均 `[trade_date,open,close]`、shape (498,3)、**open/close nulls=0**。`_benchmark_frame_has_same_anchor_fields` 对这些帧返 True（列齐）→ `fetch_forward_daily(refresh=false)` 复用而非 refetch，逻辑确证。tracked 纯 docs 无代码变更（helper 上轮已验），无需重跑 18 测试。**治理判定**：`SR-DATA-003` P1 `open→resolved` 经核验**正确且安全**——其两部分（tracker guard 已于 `459377f` 修+测；benchmark-open input 本轮 patch+验）均完成；前向 outcome-discipline 风险（不 rerun EGS / 不改参 / 不 full-refresh / 必须单独 reviewed slice）由 frozen prereg `next_steps` + ledger allowed_followup + register closure note + CURRENT P0/P1 多处承接，未掉地；closure 含 file evidence（committed helper+guard+tests）+ 本地 cache 实测，将由本轮 reviewed commit 背书。resolve 后 Hot Queue 重排（`SR-DATA-001+OPS-002+OPS-003` 升 #1），register 无 open P0/无遗漏。**一条非阻塞观察**（非 Optional）：ledger spent-test `allowed_followup`/`next_required_actions` 仍含"Resolve SR-DATA-003"字样（本轮未改 ledger）——属"已满足的前置"而非有害 stale（register 是权威状态源、已 resolved；ledger 指向的"单独 reviewed outcome slice"仍 directionally 正确），若日后动 ledger 可顺手更新，当前不构成 blocker。**下一刀**：为 unchanged redesign prereg 建**单独 reviewed outcome/excess slice**（用 patched cache + frozen prereg，same-anchor CSI1000 T+1 open→T+5 close；禁 rerun EGS / 改参 / full-refresh），computed 结果仍须经 `审查` 才能采信。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-DATA-003 benchmark-open cache patch run)
+
+**Commits**: 0f0beae74f4e8d2e631b20f2c8256bbbfa4082d0
+
+**Relationship to prior session(s)**:
+- Builds on the reviewed / committed benchmark-only cache refresh helper.
+- **Completes** the `SR-DATA-003` benchmark-open input slice for the local workspace; it does not compute redesigned outcome / excess and does not authorize production / ship-gate claims.
+
+**Worked on**:
+1. [ignored/local] `result/a_short/backtest/cache/forward_daily.pkl`: patched only the `benchmarks` payload so CSI300 / CSI1000 frames now contain `trade_date/open/close` for the existing cache window `20240131..20260228`; stock rows and limit rows were preserved.
+2. [tracked] `AGENTS.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: updated routing so `SR-DATA-003` is closed for benchmark-open input while redesigned outcome / excess remains a separate reviewed slice.
+3. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Ran the helper first as `--dry-run`, then without `--dry-run`.
+- Used local Python 3.13 because the bundled Python environment failed before network access with `ModuleNotFoundError: No module named 'tushare'`; no dependency install was performed.
+- Did not run outcome / benchmark-excess, did not rerun EGS, did not change preregistration parameters, did not full-refresh `forward_daily.pkl`, and did not contact any P1 US provider.
+
+**Alternatives considered and rejected**:
+- "Use `backtest_rank.py --refresh-forward-daily`" — rejected because it would refetch stock / limit data and exceed the benchmark-open input slice.
+- "Proceed directly to redesigned outcome / excess after patching cache" — rejected because outcome / excess remains its own reviewed slice.
+- "Treat this as provider selection / broad data access" — rejected because this run used the existing A-share Tushare helper path for two benchmark index_daily series only.
+
+**Validation run/result**:
+- Bundled Python dry-run attempt: failed early with `ModuleNotFoundError: No module named 'tushare'`; no network or cache write occurred.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\refresh_forward_daily_benchmark_open_tushare.py --dry-run`: passed; reported two benchmark frames of 498 rows each, stock rows `2681523`, limit rows `3513895`, `dry_run=true`.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\refresh_forward_daily_benchmark_open_tushare.py`: passed; wrote the ignored local cache with `dry_run=false`, `update_method=benchmark_only_index_daily_open_close_patch`.
+- Cache readback: both `csi300` and `csi1000` frames have columns `trade_date/open/close`, shape `(498, 3)`, zero open/close nulls, and `meta.benchmark_open_patch` provenance; stock / limit shapes remain `(2681523, 5)` and `(3513895, 4)`.
+- Mocked-provider verification: `backtest_rank.fetch_forward_daily(['20240131'], 5, refresh=False)` reused the patched cache and did not call provider refetch.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_refresh_forward_daily_benchmark_open_tushare tests.phase6.test_forward_tracker_cache_guard tests.test_backtest_rank_phase3 tests.execution.test_materialize_benchmark_monthly_returns_tushare -v`: passed, 18 tests.
+
+**Current review state**:
+- Working tree uncommitted.
+- The main data mutation is ignored/local; reviewer should inspect tracked docs plus verify `result/a_short/backtest/cache/forward_daily.pkl` if needed.
+- Ready for Claude review. The next implementation slice, after review / commit, is redesigned outcome / excess for the unchanged preregistration, still as a separate `执行`.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-003 benchmark-only cache refresh helper)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `459377f`)

@@ -33,14 +33,13 @@ Status:
 
 ## Hot Queue
 
-Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned preflight has now passed event-count with `valid_signal_events = 134`, but it computed no outcome / benchmark excess. `SR-DATA-003` must be resolved before any outcome / excess slice.
+Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned preflight has passed event-count with `valid_signal_events = 134`, and `SR-DATA-003` benchmark-open input has been patched in the ignored local forward cache. The redesigned outcome / excess calculation still requires a separate reviewed slice.
 
-1. `SR-DATA-003` - Resolve benchmark-open input before any redesigned A-share burst outcome / excess calculation; benchmark-only cache-refresh tooling exists, but the local cache still needs a reviewed CSI300 / CSI1000 open/close patch before outcome.
-2. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
-3. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
-4. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
-5. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-6. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+1. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
+2. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
+3. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
+4. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
+5. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
 
 ## Entries
 
@@ -122,13 +121,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-DATA-003 - Corrected same-anchor burst test needs benchmark open input
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: A-share burst research input / benchmark measurement / forward-tracker cache guard
 - Evidence: `result/a_short/backtest/cache/forward_daily.pkl` predates the same-anchor fix and stores `benchmarks.csi300` / `benchmarks.csi1000` with only `trade_date,close`. `runners/backtest_rank.py` now requires benchmark `trade_date,open,close`; missing benchmark open makes `_benchmark_returns` return `None`, while naïve cache refresh would refetch the full stock / limit / benchmark forward surface.
 - Additional forward-tracker evidence: before this slice, `runners/forward_tracker.py:_check_cache_coverage` read only `forward_daily.pkl` metadata date range and was blind to benchmark `open` / `close` fields. It could return `ok`, then `forward_tracker.py:backfill` called `fetch_forward_daily(..., refresh=False)`, which rejected close-only benchmark frames through `runners/backtest_rank.py:_benchmark_frame_has_same_anchor_fields` and refetched the shared forward surface. That bypassed the tracker comment that backfill must not trigger a universe-wide Tushare refetch on its own, and the user did not see the intended `[SKIP]` / hint path.
-- Accepted calibration: this is now the active blocker before the full-universe redesigned A-share burst preregistration can compute outcome / excess returns. The redesigned preflight passed event-count with `valid_signal_events = 134`, but no return or benchmark-excess calculation is authorized until benchmark-open input is reviewed.
-- Required next action: before the redesigned burst preregistration computes outcome / excess returns, run a reviewed benchmark-only cache patch that fetches only CSI300 / CSI1000 `index_daily` `trade_date/open/close` for the existing `forward_daily.pkl` date range, or otherwise provide reviewed benchmark open data without silently authorizing a full forward-daily provider refetch. After that, outcome / excess still requires a separate reviewed slice.
-- Progress evidence: `runners/forward_tracker.py:_check_cache_coverage` rejects cached benchmark frames lacking same-anchor `trade_date/open/close`; `runners/refresh_forward_daily_benchmark_open_tushare.py` adds a benchmark-only cache patch path; `tests/phase6/test_forward_tracker_cache_guard.py` and `tests/phase6/test_refresh_forward_daily_benchmark_open_tushare.py` cover close-only rejection, benchmark-only patching, dry-run non-mutation, and post-patch cache reuse without refetch.
+- Accepted calibration: this was the active input blocker before the full-universe redesigned A-share burst preregistration could compute outcome / excess returns. The benchmark-open input is now patched locally, but no outcome / benchmark-excess calculation is authorized by this closure; outcome / excess remains a separate reviewed slice.
+- Required next action: resolved for benchmark-open input. The next redesigned burst outcome / excess slice must use the unchanged reviewed preregistration and patched cache input, and must not rerun EGS, change preregistered parameters, or full-refresh `forward_daily.pkl` unless separately reviewed.
+- Closure evidence: `runners/forward_tracker.py:_check_cache_coverage` rejects cached benchmark frames lacking same-anchor `trade_date/open/close`; `runners/refresh_forward_daily_benchmark_open_tushare.py` provides the benchmark-only cache patch path; `tests/phase6/test_forward_tracker_cache_guard.py` and `tests/phase6/test_refresh_forward_daily_benchmark_open_tushare.py` cover close-only rejection, benchmark-only patching, dry-run non-mutation, and post-patch cache reuse without refetch. On 2026-06-01, `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\refresh_forward_daily_benchmark_open_tushare.py --dry-run` and then the same command without `--dry-run` fetched only CSI300 / CSI1000 `index_daily` `trade_date/open/close` for `20240131..20260228`. Readback of ignored local `result/a_short/backtest/cache/forward_daily.pkl` shows stock rows `2681523`, limit rows `3513895`, both benchmark frames as 498 rows with columns `trade_date/open/close`, and `meta.benchmark_open_patch.update_method = benchmark_only_index_daily_open_close_patch`; a mocked-provider check proved `fetch_forward_daily(['20240131'], 5, refresh=False)` reuses the cache without provider refetch.
 
 ### SR-DATA-001 - Suspend inference can silently drop tradable stocks on partial daily response
 

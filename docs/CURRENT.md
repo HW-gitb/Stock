@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-05-31（A-share burst redesigned preflight pass）
+**最后更新**：2026-06-01（SR-DATA-003 benchmark-open cache input patched）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,16 +12,16 @@
 - `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` records the preflight: 305 Tier1 rows, 301 hard-filter rows, 17 momentum rows, 38 volume-expansion rows, 7 breakout rows, 0 all-pass signal rows.
 - Do not run outcome / benchmark-excess calculation for the current corrected-basis preregistration; it is spent as `failed_preflight_zero_signal_events`.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` records the reviewed redesigned preflight: 24 frozen full EGS cohorts, 19,000 rows, 6,159 Tier1+Tier2 hard-filter rows, `valid_signal_events = 134`.
-- The redesigned preflight passes the `>=30` event-count gate but computes no outcome / benchmark excess. A benchmark-only cache refresh helper now exists, but no provider fetch / cache patch / outcome has run; `SR-DATA-003` input and a separate reviewed outcome / excess slice remain required.
+- The redesigned preflight passes the `>=30` event-count gate but computes no outcome / benchmark excess. The benchmark-only cache patch has populated ignored local `forward_daily.pkl` CSI300 / CSI1000 frames with `trade_date/open/close`; the separate reviewed outcome / excess slice remains required.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst has a reviewed full-universe redesigned preflight pass; provider access remains blocked pending explicit user approval.
-- **当前 P0 / P1 目标**：resolve `SR-DATA-003` benchmark-open input before any redesigned burst outcome / excess calculation；不是运行 outcome / excess 或 provider fetch。
+- **当前 P0 / P1 目标**：create the separate reviewed outcome / excess slice for the unchanged redesigned preregistration；不是 rerun EGS、改参数、full forward-daily refetch 或 production claim。
 - **当前 P1 provider blocker**：任何 sample / trial / paid-access / token / provider contact / data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
-- **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned preflight 已消耗 ledger planned test，后续 outcome / excess 仍需先解 `SR-DATA-003` 并单独 review。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
+- **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned preflight 已消耗 ledger planned test，后续 outcome / excess 必须作为单独 reviewed slice。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
@@ -29,7 +29,7 @@
 
 ## 2. 最近已完成
 
-- **A-share burst redesigned preflight**（2026-05-31）：`research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` 已记录 `valid_signal_events=134`；未计算 outcome / excess，下一步先解 `SR-DATA-003`。
+- **SR-DATA-003 benchmark-open input**（2026-06-01）：ignored local `result/a_short/backtest/cache/forward_daily.pkl` 已由 benchmark-only helper patch；CSI300 / CSI1000 均为 498 行 `trade_date/open/close`，`fetch_forward_daily(refresh=False)` 验证可复用 cache 且不触发 provider refetch；未计算 outcome / excess。
 - **A-share burst redesign preregistration**（2026-05-31）：`research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` 已 review + commit；ledger planned test 已由 preflight 消耗。
 - **A-share burst measurement fix**（2026-05-31）：same-anchor benchmark excess 已在 `runners/backtest_rank.py` / benchmark materializer 中落地；`research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` 已建立，原 prereg 继续 blocked。
 - **Weekly historical PIT interlock**（2026-05-31）：`runners/weekly_screening.ps1` now blocks historical `-AsOf` official-output runs unless L3 mode is explicitly `pit` / `neutralize`, rejects historical `today` L3 mode, and guards existing official outputs from accidental overwrite.
@@ -95,7 +95,7 @@
 - The preregistration / ledger-planned-test slice passed review and was committed as `1a3e71e`; do not run the current corrected-basis artifact for outcome / excess calculation.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
 - The redesigned preflight passed event-count with `valid_signal_events=134`, but no outcome / excess was computed.
-- The benchmark-only helper for `SR-DATA-003` is added; remaining work is to run a reviewed CSI300 / CSI1000 index_daily open/close cache patch, then create a separate reviewed outcome / excess slice for the unchanged redesigned preregistration.
+- `SR-DATA-003` benchmark-open input has been patched and verified. Remaining work is a separate reviewed outcome / excess slice for the unchanged redesigned preregistration; do not rerun EGS, change preregistered parameters, or full-refresh forward_daily in that slice unless separately reviewed.
 - Any further redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
 
 ### P1 - P1 provider access boundary（仅用户明确要求时）

@@ -1,5 +1,36 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-01 append: SR-DATA-003 benchmark-only cache patch run
+
+**Changed**:
+- Ran the reviewed benchmark-only helper against the ignored local shared cache: `runners/refresh_forward_daily_benchmark_open_tushare.py --dry-run`, then the same command without `--dry-run`.
+- Patched `result/a_short/backtest/cache/forward_daily.pkl` so `benchmarks.csi300` and `benchmarks.csi1000` now contain `trade_date/open/close` frames for the existing `20240131..20260228` cache window.
+- Updated active routing docs so `SR-DATA-003` is closed for benchmark-open input while the redesigned outcome / excess calculation remains a separate reviewed slice.
+
+**Why**:
+- The redesigned A-share burst preflight had enough signal events, but outcome / benchmark-excess calculation needed same-anchor benchmark entry-open input.
+- A full forward-daily refresh would refetch stock / limit data unnecessarily; this run consumed only CSI300 / CSI1000 `index_daily` open/close for the existing cache range.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\refresh_forward_daily_benchmark_open_tushare.py --dry-run
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\refresh_forward_daily_benchmark_open_tushare.py
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_refresh_forward_daily_benchmark_open_tushare tests.phase6.test_forward_tracker_cache_guard tests.test_backtest_rank_phase3 tests.execution.test_materialize_benchmark_monthly_returns_tushare -v
+```
+
+**Validation result**:
+- Dry-run and actual patch both reported `dry_run` as expected, `update_method = benchmark_only_index_daily_open_close_patch`, stock rows preserved at `2681523`, limit rows preserved at `3513895`, and two benchmark frames of 498 rows each.
+- Readback of `forward_daily.pkl` shows both benchmarks have columns `trade_date/open/close`, zero open/close nulls, and `meta.benchmark_open_patch` provenance.
+- Mocked-provider verification proved `backtest_rank.fetch_forward_daily(['20240131'], 5, refresh=False)` reuses the patched cache without calling the provider.
+- Focused regression suite: 18 tests passed.
+
+**Invalidated / blocked old conclusion**:
+- "`SR-DATA-003` still needs the benchmark-only cache patch before any outcome / excess" is now invalid for this local workspace; the benchmark-open input is patched and verified.
+- This run does not compute redesigned outcome returns, benchmark excess, drawdown, concentration, or ship-gate evidence. The next outcome / excess calculation still requires a separate reviewed slice using the unchanged reviewed preregistration and patched cache input.
+
+---
+
 ## 2026-06-01 append: SR-DATA-003 benchmark-only cache refresh helper
 
 **Changed**:
