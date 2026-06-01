@@ -1221,6 +1221,18 @@ def set_asof(date_str):
     CONF["cache_ttl"] = BACKTEST_CACHE_TTL
     log.info(f"[ASOF] running EGS as of {TODAY}; cache_ttl={CONF['cache_ttl']}s")
 
+def _guard_historical_asof_l3_mode(as_of, l3_mode, allow_historical_live_l3=False, run_date=None):
+    if not as_of:
+        return
+    effective_run_date = run_date or datetime.now().strftime("%Y%m%d")
+    if as_of != effective_run_date and l3_mode == "today" and not allow_historical_live_l3:
+        raise SystemExit(
+            f"[FATAL] Historical --as-of {as_of} is not the current run date {effective_run_date} "
+            "and cannot run with --l3-mode=today by default. Use --l3-mode=pit --l3-pit-strict "
+            "for PIT snapshots, --l3-mode=neutralize for an L3-neutral replay, or add "
+            "--allow-historical-live-l3 only for an explicitly non-evidence live-concept smoke run."
+        )
+
 def dstr(days_ago=0):
     return (TODAY_DT - timedelta(days=days_ago)).strftime("%Y%m%d")
 
@@ -3278,10 +3290,19 @@ if __name__ == "__main__":
                              "(no API calls). neutralize: cat_score=50.0, skip L3 entirely.")
     parser.add_argument("--l3-pit-strict", action="store_true",
                         help="With --l3-mode=pit, raise SystemExit if no snapshot <= as_of (default: warn + fallback to cat_score=50).")
+    parser.add_argument("--allow-historical-live-l3", action="store_true",
+                        help="Non-evidence/testing only: allow historical --as-of with --l3-mode=today. "
+                             "Default blocks this because today-mode L3 uses live concept data.")
     parser.add_argument("--output-root", dest="output_root", default=None,
                         help="Override base output directory for analysis_input/snapshot/candidates "
                              "(default: <project_root>/result/a_short). Used by backtest to isolate generated artifacts.")
     args = parser.parse_args()
+
+    _guard_historical_asof_l3_mode(
+        args.as_of,
+        args.l3_mode,
+        allow_historical_live_l3=args.allow_historical_live_l3,
+    )
 
     if args.reuse_l3_cache:
         CONF["l3_cache_mode"] = "reuse"

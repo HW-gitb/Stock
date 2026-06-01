@@ -1831,7 +1831,8 @@ def validate_freq_vs_window(freq, max_window):
 # ============================================================
 
 def generate_candidates(dates, python_cmd, output_root, skip_existing=True,
-                        reuse_l3_cache=False, l3_mode="today", l3_pit_strict=False):
+                        reuse_l3_cache=False, l3_mode="today", l3_pit_strict=False,
+                        allow_historical_live_l3=False):
     output_root.mkdir(parents=True, exist_ok=True)
     rel_output = output_root.relative_to(ROOT).as_posix()
     current_egs_version = _current_egs_version()
@@ -1880,6 +1881,8 @@ def generate_candidates(dates, python_cmd, output_root, skip_existing=True,
             cmd.append("--reuse-l3-cache")
         if l3_pit_strict:
             cmd.append("--l3-pit-strict")
+        if allow_historical_live_l3 and l3_mode == "today":
+            cmd.append("--allow-historical-live-l3")
         print(f"[RUN] {' '.join(cmd)}")
         subprocess.run(cmd, cwd=str(ROOT), check=True)
 
@@ -2189,6 +2192,7 @@ def main():
             reuse_l3_cache=args.reuse_l3_cache,
             l3_mode=args.l3_mode,
             l3_pit_strict=args.l3_pit_strict,
+            allow_historical_live_l3=(args.mode == "smoke" and args.l3_mode == "today"),
         )
     elif args.stats_only:
         selected_dates, stats_source, last_report = select_stats_only_dates(args)

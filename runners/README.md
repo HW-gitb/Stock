@@ -9,7 +9,9 @@ Planned scripts:
 - `backtest_rank.py`
 - `backtest_execution.py` (Phase 5 skeleton exists; full simulator pending)
 
-Current Phase 1/2 entry remains `A-EGS/egs_main.py`.
+Current Phase 1/2 entry remains `A-EGS/egs_main.py`. Direct historical
+`--as-of` runs must use `--l3-mode pit` / `neutralize`, or explicitly declare
+`--allow-historical-live-l3` for non-evidence live-concept smoke runs.
 
 Validation environment:
 
@@ -24,7 +26,7 @@ Validation environment:
 
 Existing helpers:
 
-- `backtest_rank.py` — Phase 2 rank 回测入口
+- `backtest_rank.py` — Phase 2 rank 回测入口；smoke-mode historical `today` L3 generation explicitly passes `--allow-historical-live-l3`, while production defaults to L3 neutralization.
 - `backtest_execution.py` - Phase 5 execution backtest runner; reads
   `analysis_input.json`, can validate/reference an existing `execution_price_data`
   JSON via `--price-data`, requires explicit `--portfolio-allocation` and

@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-DATA-001` + `SR-OPS-003` - Fix before the next new weekly official capture or direct historical `egs_main.py` cohort regeneration.
+1. `SR-DATA-001` - Fix before the next new weekly official capture or direct historical `egs_main.py` cohort regeneration.
 2. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
 3. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
 4. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
@@ -162,11 +162,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-OPS-003 - Direct historical `egs_main.py --as-of` still defaults to live L3 concepts
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: A-short historical replay / Phase 6b maintenance
 - Evidence: `A-EGS/egs_main.py` argparse still defaults `--l3-mode` to `today`; `SR-EXEC-001` fixed the weekly wrapper but not direct engine invocation.
 - Accepted calibration: current `runners/weekly_screening.ps1` protects historical official-output runs, so this is now a direct-engine / ad hoc replay risk. It does not block corrected 5d revalidation if no cohort regeneration occurs.
-- Required next action: add an engine-level guard or explicit historical replay contract so direct historical `--as-of` runs cannot silently use `today` L3 mode unless the caller explicitly declares a non-evidence / live-concept run.
+- Required next action: resolved for direct engine invocation. No further action is required for `SR-OPS-003` unless the L3 CLI contract is redesigned.
+- Closure evidence: the reviewed change set adds `A-EGS/egs_main.py --allow-historical-live-l3` and rejects non-current `--as-of` + `--l3-mode=today` unless that explicit non-evidence / live-concept declaration is present. `runners/backtest_rank.py` now passes the declaration only for smoke-mode historical `today` L3 generation; production/default evidence paths stay on `neutralize` / `pit`.
+- Verification: `tests.phase6.test_egs_main_l3_guard` covers historical default rejection, `pit` / `neutralize` acceptance, explicit live-L3 declaration, and current-date `today` acceptance. `tests.test_backtest_rank_phase3` covers the smoke command adding `--allow-historical-live-l3` only when requested.
 
 ### SR-DATA-002 - Severe daily-data insufficiency degrades to neutral stats that can pass filters
 

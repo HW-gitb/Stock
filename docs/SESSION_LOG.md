@@ -8,6 +8,58 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-003 historical L3 engine guard)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `0fc3e50`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。hot queue #1 现仅剩 `SR-DATA-001`。
+
+**Notes**: 触及核心引擎 `A-EGS/egs_main.py` 的 SR-OPS-003 修复，已全审。**Guard 逻辑正确**：`_guard_historical_asof_l3_mode` 仅在 `as_of != 真实今天（datetime.now()）AND l3_mode==today AND 无 --allow-historical-live-l3` 时 `raise SystemExit`；无 as_of / 当天 as_of / pit / neutralize 全放行；置于 `parse_args()` 后 fail-fast、不改任何 screening 输出（无需 EGS version bump）。**关键独立核实**：(1) `datetime` import 为 `from datetime import datetime`（line 76，与既有 178/179/2337 一致），故 `datetime.now()` 形式正确；(2) **4 个单测都注入 `run_date=`、从不走 `datetime.now()` 默认分支**——我**独立跑了该真实分支**（不传 run_date）：当天+today 不 raise、历史(20240101)+today raise SystemExit，确认真实 CLI 路径正确，测试盲区已补验；(3) **production 回测不被破坏**——`backtest_rank.py:2148` 未指定 `--l3-mode` 时 production→`neutralize`、smoke→`today`，故文档那条 24 期 production 命令默认走 neutralize、guard 不 fire；smoke 路径经 `allow_historical_live_l3=(mode==smoke and l3==today)` 显式附 `--allow-historical-live-l3` 放行；只有"production + 显式 today"或"直接 egs_main 历史+today 无 flag"这种真污染情形被正确 block（egs_main 由 backtest 以 subprocess 调用，guard 对子进程生效）。**测试**：guard+backtest 10 OK、phase6 discovery 29 OK（独立复跑，无回归）；test 覆盖 4 guard 场景 + 2 backtest command-contract（smoke→附 flag / 非 smoke→不附）。**治理**：register SR-OPS-003 open→resolved（closure evidence + verification 准确）、Hot Queue #1 由 `SR-DATA-001 + SR-OPS-003` → 仅 `SR-DATA-001`；runners/README 记录新 CLI contract；CURRENT 149、"Historical L3 interlocks" 合并 weekly wrapper + direct-engine guard 表述。**Scope 干净**：只 SR-OPS-003，明确未碰 SR-DATA-001、未跑 EGS/regen/research/fetch。**一条非阻塞观察**（非 Optional）：单测用 `run_date` 注入 seam（标准做法，便于 deterministic），未直接覆盖 `datetime.now()` 默认分支——我已独立验证该分支，故仅记录、不构成 fix。**本轮可一次性 `提交`**；提交后下一刀是 hot queue 仅剩的 `SR-DATA-001`（suspend 推断在 partial daily 响应下静默丢可交易股）。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-OPS-003 historical L3 engine guard)
+
+**Commits**: 0fc3e50
+
+**Relationship to prior session(s)**:
+- Builds on the committed Durable Approval Propagation protocol change and the current risk-register hot queue.
+- Executes only `SR-OPS-003`; `SR-DATA-001` remains the hot-queue blocker before new weekly official capture / direct cohort regeneration.
+- Does not run EGS, regenerate cohorts, run research, fetch provider data, contact providers, change US data-source access, or commit.
+
+**Worked on**:
+1. [tracked] `A-EGS/egs_main.py`: added `--allow-historical-live-l3` and an early guard that rejects non-current `--as-of` + `--l3-mode=today` unless that explicit non-evidence live-concept smoke declaration is present.
+2. [tracked] `runners/backtest_rank.py`: passes `--allow-historical-live-l3` only for smoke-mode historical `today` L3 candidate generation, preserving the existing smoke path while making the look-ahead declaration explicit.
+3. [tracked] `tests/test_backtest_rank_phase3.py`: added command-contract tests for the backtest smoke declaration.
+4. [untracked] `tests/phase6/test_egs_main_l3_guard.py`: added focused tests for the direct engine guard.
+5. [tracked] `docs/system_risk_register.md`: marked `SR-OPS-003` resolved and removed it from hot queue item #1.
+6. [tracked] `docs/CURRENT.md`, `runners/README.md`, and `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: updated active routing and the Phase 7 handoff append for this maintenance slice.
+7. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Kept direct historical `today` L3 blocked by default because it uses live concept data and can contaminate historical evidence.
+- Added a named opt-in flag instead of silently allowing backtest smoke mode to keep using the live-L3 path.
+- Left `pit` and `neutralize` behavior unchanged.
+
+**Alternatives considered and rejected**:
+- "Reject historical `today` L3 unconditionally" — rejected because existing smoke diagnostics may intentionally exercise live-concept behavior; the new flag makes that non-evidence status explicit.
+- "Only update `backtest_rank.py` defaults" — rejected because `SR-OPS-003` is specifically a direct `egs_main.py` invocation risk.
+- "Fold `SR-DATA-001` into the same execution" — rejected to keep this reviewed slice narrow and auditable.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_l3_guard -v`: passed, 4 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_backtest_rank_phase3 -v`: passed, 6 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: passed, 29 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line-count check via Python `splitlines()`: 149 lines, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review. Reviewer should inspect the untracked `tests/phase6/test_egs_main_l3_guard.py` body in addition to tracked diffs.
+- If review passes and the user commits, the next default `执行` is `SR-DATA-001`, unless the user explicitly approves a narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (Durable Approval Propagation R1 re-review)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `b920861`)

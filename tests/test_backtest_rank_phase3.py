@@ -1,7 +1,12 @@
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 import unittest
 
 import pandas as pd
 
+from runners import backtest_rank
 from runners.backtest_rank import _is_l2_unknown_value, attach_forward_returns, build_analyzer_ablation_variants
 
 
@@ -130,6 +135,38 @@ class BacktestRankPhase3Tests(unittest.TestCase):
         self.assertAlmostEqual(out.loc[0, "ret_5d_t1"], 80.0)
         self.assertTrue(pd.isna(out.loc[0, "ret_5d_csi1000"]))
         self.assertTrue(pd.isna(out.loc[0, "ret_5d_excess_csi1000"]))
+
+    def test_smoke_today_l3_generation_declares_live_l3_non_evidence_path(self):
+        with TemporaryDirectory(dir=backtest_rank.ROOT) as tmp:
+            with patch("runners.backtest_rank.subprocess.run") as run:
+                backtest_rank.generate_candidates(
+                    ["20260522"],
+                    sys.executable,
+                    output_root=Path(tmp),
+                    skip_existing=False,
+                    l3_mode="today",
+                    allow_historical_live_l3=True,
+                )
+
+        cmd = run.call_args.args[0]
+        self.assertIn("--l3-mode", cmd)
+        self.assertIn("today", cmd)
+        self.assertIn("--allow-historical-live-l3", cmd)
+
+    def test_generation_does_not_declare_live_l3_when_not_requested(self):
+        with TemporaryDirectory(dir=backtest_rank.ROOT) as tmp:
+            with patch("runners.backtest_rank.subprocess.run") as run:
+                backtest_rank.generate_candidates(
+                    ["20260522"],
+                    sys.executable,
+                    output_root=Path(tmp),
+                    skip_existing=False,
+                    l3_mode="today",
+                    allow_historical_live_l3=False,
+                )
+
+        cmd = run.call_args.args[0]
+        self.assertNotIn("--allow-historical-live-l3", cmd)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,37 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-01 append: SR-OPS-003 historical L3 engine guard
+
+**Changed**:
+- Added an engine-level guard in `A-EGS/egs_main.py`: non-current `--as-of` runs cannot use default `--l3-mode=today` unless the caller explicitly passes `--allow-historical-live-l3`.
+- Added the explicit `--allow-historical-live-l3` declaration to `runners/backtest_rank.py` only for smoke-mode historical `today` L3 candidate generation.
+- Added focused tests for the direct engine guard and the backtest command contract.
+- Marked `SR-OPS-003` resolved in `docs/system_risk_register.md`; hot queue item #1 now leaves `SR-DATA-001` as the remaining blocker before new weekly official capture / direct cohort regeneration.
+
+**Why**:
+- `SR-EXEC-001` had already fixed the weekly wrapper, but direct `egs_main.py --as-of <historical>` still defaulted to live concept data through `--l3-mode=today`.
+- The fix keeps the default safe while preserving an explicit non-evidence smoke path for local diagnostics.
+- This does not run EGS, fetch provider data, regenerate cohorts, change research artifacts, or alter L3 scoring semantics for allowed `pit` / `neutralize` runs.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_l3_guard -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_backtest_rank_phase3 -v
+```
+
+**Validation result**:
+- `tests.phase6.test_egs_main_l3_guard`: 4 tests passed.
+- `tests.test_backtest_rank_phase3`: 6 tests passed.
+
+**Invalidated / blocked old conclusion**:
+- "`SR-OPS-003` still leaves direct historical `egs_main.py --as-of` silently defaulting to live L3 concepts" is invalid after this reviewed slice.
+- "All hot queue #1 blockers are done" is still false: `SR-DATA-001` remains open and must be fixed before new weekly official capture or cohort regeneration used as evidence.
+
+**Next-step notes**:
+- If this slice passes review and is committed, the default next `执行` is `SR-DATA-001`.
+- Do not use this guard as authorization to run weekly capture, rerun EGS, fetch provider data, or start any new A-share burst research test.
+
 ## 2026-06-01 append: SR-OPS-002 forward tracker atomic write
 
 **Changed**:
