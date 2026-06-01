@@ -38,7 +38,7 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 1. `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
 2. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
 3. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-4. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+4. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
 5. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
@@ -148,6 +148,15 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 - Required next action: resolved for the suspend-inference path. No further action is required for `SR-DATA-001` unless the suspend source / daily completeness policy is redesigned.
 - Closure evidence: the reviewed change set updates `A-EGS/egs_main.py:get_suspend_info` to validate non-empty `pro.daily` payloads against `suspend_daily_min_coverage = 0.95` before inferring `suspended = all_codes - traded_codes`; below-threshold partial responses now raise instead of silently filtering candidates. The suspend cache key is bumped to `suspend_<date>_v2` so old unvalidated suspend-inference caches are not reused.
 - Verification: `tests.phase6.test_egs_main_suspend_guard` covers partial daily rejection, valid high-coverage daily inference, cache-key v2 save behavior, and the existing all-empty daily fallback that skips suspend filtering rather than marking the whole market suspended.
+
+### SR-DATA-004 - Suspend daily completeness threshold may false-fail on large-scale suspension days
+
+- Severity: P3
+- Status: open
+- Owner phase: A-short weekly operation / Phase 6b maintenance
+- Evidence: `SR-DATA-001` resolved the partial-`daily` silent drop path by requiring non-empty `pro.daily` payload coverage to meet `suspend_daily_min_coverage = 0.95`. Claude review accepted the fail-safe behavior but noted the threshold assumes normal-day suspensions stay below 5%; rare market-stress days with unusually broad suspensions could push true traded-code coverage below 95% and abort the run even when the provider response is complete.
+- Accepted calibration: this is a low-risk operational watch item, not evidence that normal weekly runs are broken. A clear abort is safer than silently inferring missing rows as suspended stocks, and `suspend_daily_min_coverage` is already a configurable threshold.
+- Required next action: monitor the first real weekly runs' suspend coverage logs; if legitimate market-wide suspension conditions trip the threshold, tune the threshold or add a reviewed calendar / incident override with a focused regression test.
 
 ### SR-OPS-002 - Forward tracker writes are non-atomic
 

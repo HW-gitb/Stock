@@ -8,6 +8,58 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-004 R1 re-review)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `965817d`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。R1 已修复，整个 SR-DATA-004 轮次可 `提交`。
+
+**Notes**: Codex 补上缺失的执行 handoff entry（`[tracked]` / validation / review-state 齐全）；`docs/system_risk_register.md` 的 SR-DATA-004 内容未被本次 修复 改动（仍是上轮已 Pass 的版本：P3/open + Hot Queue #4）；上方 review entry 的 `USER-APPROVED 2026-06-01` 标记完好；scope 仅 `SESSION_LOG.md` + `system_risk_register.md`。提交后下一刀回 hot queue `SR-EXEC-007` / `SR-CAP-001` / `SR-CONTRACT-002`。
+
+---
+
+## 2026-06-01 — Codex 修复 (SR-DATA-004 register handoff R1)
+
+**Commits**: none (repair-only entry; fixes Claude R1 from the latest review; working tree remains uncommitted)
+
+**Relationship to prior review**:
+- Repairs Claude R1, marked `USER-APPROVED 2026-06-01` in the immediately preceding review entry.
+- No Optional suggestions were present.
+- Does not change SR-DATA-004 register content, business code, schemas, `docs/CURRENT.md`, or handoff files.
+
+**Worked on**:
+1. [tracked] `docs/SESSION_LOG.md`: prepended this missing Codex handoff for the prior SR-DATA-004 register-only execution slice, including tracked-file scope, validation, and current review state.
+2. [tracked] `docs/system_risk_register.md`: remains the reviewed register-only change that adds `SR-DATA-004` after `SR-DATA-001` and routes `SR-DATA-004` into Hot Queue item #4 maintenance.
+
+**Required fixes repaired**:
+- R1: added the missing Codex execution handoff entry required for the SR-DATA-004 register-only slice.
+
+**Validation run/result**:
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `rg -n -C 4 "SR-DATA-004|Hot Queue|suspend_daily_min_coverage" docs/system_risk_register.md`: confirmed the register entry and Hot Queue routing.
+- `git status --short --untracked-files=all`: only `docs/SESSION_LOG.md` and `docs/system_risk_register.md` are modified.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+
+---
+
+## 2026-06-01 — Claude review — Pass with fixes (SR-DATA-004 register watch-item)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `965817d`)
+
+**Status**: REVIEW VERDICT RECORDED. Required fix R1 USER-APPROVED 2026-06-01; no Optional suggestions. （Approval recorded per §批准修改 Durable Approval Propagation rule.）
+
+**Verdict**: Pass with fixes —— SR-DATA-004 条目内容 / 放置 / hot-queue 正确，但本轮缺 Codex SESSION_LOG 执行 entry（R1）。
+
+**Required fixes (USER-APPROVED 2026-06-01)**:
+- **R1**：本轮 working tree 仅 `docs/system_risk_register.md`（新增 SR-DATA-004 + Hot Queue maintenance 行），`git diff --name-only` 无 `docs/SESSION_LOG.md`——缺 Codex 执行 handoff entry。按 §执行 step 16，对 tracked register 的非平凡新增需 prepend 一条执行 entry（含 `[tracked]` 标签、validation、review state）。修法：Codex 补一条本轮执行 entry（"按 Claude review 把 0.95 阈值 watch-item 落为 SR-DATA-004 + hot-queue maintenance；register-only；validation=git diff --check"）。
+
+**Notes**: 实质 clean —— SR-DATA-004（P3/open）忠实落地 0.95 阈值 watch-item：evidence 引 SR-DATA-001 + 阈值假设正常日停牌<5%、大面积停牌日可能 false-fail；calibration fail-safe + 阈值可调；next action 监测首个真实周频覆盖率日志、必要时调阈值或加 reviewed calendar/incident override + 回归测试。放在 SR-DATA-001 之后、加入 Hot Queue #4 maintenance 组；Codex 措辞较我草稿更聚焦 failure mode，无失真。scope 仅 register。R1 补完即可 `提交`。
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-EXEC-005 zero-trade aggregate return guard)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `398e58b`)
