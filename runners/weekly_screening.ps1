@@ -75,13 +75,16 @@ $OfficialResultDir = Join-Path $ProjectRoot "result\a_short\$AsOf"
 if (Test-Path $OfficialResultDir) {
     $ExistingOfficialOutputs += $OfficialResultDir
 }
-$EgsResultDir = Join-Path $ProjectRoot 'A-EGS\Result'
+$EgsRootDir = Join-Path $ProjectRoot 'A-EGS'
+$EgsResultDir = Join-Path $EgsRootDir 'Result'
 @(
-    "egs_tier1_$AsOf.csv",
-    "egs_full_$AsOf.csv",
-    "egs_tier1_$AsOf.xlsx"
+    (Join-Path $EgsResultDir "egs_tier1_$AsOf.csv"),
+    (Join-Path $EgsResultDir "egs_full_$AsOf.csv"),
+    # egs_main.py defaults xlsx output to A-EGS\ unless CONF["xlsx_dir"] is set.
+    (Join-Path $EgsRootDir "egs_tier1_$AsOf.xlsx"),
+    (Join-Path $EgsResultDir "egs_tier1_$AsOf.xlsx")
 ) | ForEach-Object {
-    $Path = Join-Path $EgsResultDir $_
+    $Path = $_
     if (Test-Path $Path) {
         $ExistingOfficialOutputs += $Path
     }

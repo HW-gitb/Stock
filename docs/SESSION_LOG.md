@@ -8,6 +8,50 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-004 weekly xlsx overwrite guard)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `daa1a59`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。本轮可 `提交`。
+
+**Notes**: SR-OPS-004 修复正确——`runners/weekly_screening.ps1` 历史 overwrite guard 现同时检查 root-level `A-EGS\egs_tier1_<AsOf>.xlsx`（即 `egs_main.py` 在 `CONF["xlsx_dir"]` 未设时的默认 xlsx 输出路径，本次补上）+ 保留 legacy `A-EGS\Result\` xlsx + CSV / official-result-dir guards；重构为 inline `Join-Path`（CSV 仍在 Result、xlsx 查两处），strictly 更全覆盖、无回归。新 test `test_historical_asof_refuses_existing_default_xlsx_output` 是真跑 ps1 的集成用例：root-level xlsx 存在时历史运行 returncode=1 + "would overwrite existing official output"，guard 在跑 egs_main 前拦。5 tests OK；register SR-OPS-004 open→resolved（closure/verification 准确）+ Hot Queue maintenance 组移除 SR-OPS-004；CURRENT 149；scope 仅 ps1 + test + register + CURRENT + SESSION_LOG。Codex 选"对齐 guard 而非移动 egs_main 输出"——maintenance slice 最小改动、合理。**本轮可 `提交`**；maintenance 组余 `SR-DATA-002` / `SR-DATA-004` / `SR-OPS-005` / `SR-RANK-001` / `SR-OPS-006`。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-OPS-004 weekly xlsx overwrite guard)
+
+**Commits**: daa1a59
+
+**Relationship to prior session(s)**:
+- Builds on committed `SR-PIT-001` / `SR-CONTRACT-001`.
+- Executes one risk-register maintenance item: `SR-OPS-004`.
+- Does not run EGS, research, provider access, data fetch, or commit.
+
+**Worked on**:
+1. [tracked] `runners/weekly_screening.ps1`: historical overwrite guard now checks `A-EGS\egs_tier1_<AsOf>.xlsx`, the default xlsx output path used by `A-EGS/egs_main.py` when `CONF["xlsx_dir"]` is unset, while keeping the existing guarded `A-EGS\Result` CSV / xlsx paths.
+2. [tracked] `tests/phase6/test_weekly_screening_guardrails.py`: added a regression test proving historical runs refuse to proceed when the root-level default xlsx output already exists.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-OPS-004` resolved and removed it from the Hot Queue maintenance group.
+4. [tracked] `docs/CURRENT.md`: updated latest delta, current target, and recent completion text; snapshot remains 149 lines.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude review handoff.
+
+**Key decisions**:
+- Chose guard alignment rather than moving xlsx output because this is the smaller operational fix and avoids changing `egs_main.py` output behavior in a maintenance slice.
+- Kept the legacy `A-EGS\Result\egs_tier1_<AsOf>.xlsx` guard as a defensive check in case a future run sets `CONF["xlsx_dir"]` to the result directory.
+- Did not update a phase handoff: this is a narrow risk-register closure, not a phase or major milestone change.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_weekly_screening_guardrails -v`: 5 tests OK.
+- `rg -n "SR-OPS-004|egs_tier1_\$AsOf\.xlsx|A-EGS\\egs_tier1" docs\CURRENT.md docs\system_risk_register.md runners\weekly_screening.ps1 tests\phase6\test_weekly_screening_guardrails.py`: confirms Hot Queue no longer lists `SR-OPS-004` and docs/code reference the resolved root-level xlsx guard.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer should inspect the four tracked modified files listed above.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-PIT-001 / SR-CONTRACT-001 R1 re-review)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs + untracked files vs `5457820`)

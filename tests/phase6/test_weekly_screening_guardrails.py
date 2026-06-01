@@ -71,6 +71,22 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("would overwrite existing official output", output)
         self.assertIn(str(target), output)
 
+    def test_historical_asof_refuses_existing_default_xlsx_output(self) -> None:
+        as_of = "19000104"
+        target = ROOT / "A-EGS" / f"egs_tier1_{as_of}.xlsx"
+        if target.exists():
+            self.skipTest(f"guardrail fixture path already exists: {target}")
+        target.write_text("guardrail fixture", encoding="utf-8")
+        try:
+            result = self.run_script("-AsOf", as_of, "-L3Mode", "neutralize")
+        finally:
+            target.unlink()
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        output = result.stdout + result.stderr
+        self.assertIn("would overwrite existing official output", output)
+        self.assertIn(str(target), output)
+
     def test_pit_mode_uses_strict_snapshot_guard(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
 

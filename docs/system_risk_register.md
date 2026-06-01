@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+1. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
 2. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
@@ -262,11 +262,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-OPS-004 - Weekly xlsx overwrite guard checks a different default path than `egs_main.py`
 
 - Severity: P3
-- Status: open
+- Status: resolved
 - Owner phase: A-short weekly operation
 - Evidence: `runners/weekly_screening.ps1` checks `A-EGS/Result/egs_tier1_<AsOf>.xlsx`, while `A-EGS/egs_main.py` defaults tier1 xlsx output to `A-EGS/egs_tier1_<AsOf>.xlsx` unless `CONF["xlsx_dir"]` is set.
 - Accepted calibration: CSV and official result-directory guards still cover the main evidence outputs; this is a low-risk xlsx overwrite guard gap.
-- Required next action: align the guard with the actual xlsx output path or route xlsx output under the guarded result directory.
+- Required next action: no active `SR-OPS-004` action. If `egs_main.py` later moves xlsx output again, update the weekly guard and regression test together.
+- Closure evidence: `runners/weekly_screening.ps1` now checks the actual default xlsx path `A-EGS\egs_tier1_<AsOf>.xlsx` in addition to the legacy guarded `A-EGS\Result` xlsx path and existing CSV / official result-directory outputs.
+- Verification: `tests.phase6.test_weekly_screening_guardrails` covers historical refusal when the default root-level xlsx output already exists.
 
 ### SR-OPS-005 - Forward tracker cache coverage uses calendar-day approximation
 
