@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-005 forward tracker trading-date cache coverage)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `47b2252`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。本轮可 `提交`。
+
+**Notes**: SR-OPS-005 修复正确且设计好——`runners/forward_tracker.py:_check_cache_coverage` 把日历日近似（旧：`asof_max + max_window + 5` 天 + `_shift_yyyymmdd_safe`）换成从 cache 的 `stocks.trade_date` 取**真实交易日序列**，逐 pending as_of 检查 (a) 该 as_of 在交易日序列中、(b) `pos(as_of)+max_window` 仍在序列内，才判覆盖足够。**关键决策对**：用 `stocks.trade_date` 而非 metadata `start/end_date`，因为 `attach_forward_returns` 正是据 `stocks.trade_date` 算 entry/exit——coverage proof 与实际 backfill 消费的日期源对齐。off-by-one 核对：要求 exit 位置 `pos+max_window` 存在，与项目 "T+1 open→T+max_window close" 同锚测量一致；即便有 ±1 nuance 也仅影响边界 as_of 完整性（非污染）。`_cached_stock_trade_dates` 健壮（缺 stocks/列/空 → 返 []，coverage 判 False）。test 新增 3 例（cached 交易日不足 / 缺 as_of 交易日 / sparse long-calendar 因所需交易日在内而 passes），8 OK + phase6 discovery 42 OK 无回归。register SR-OPS-005 open→resolved（closure 准确）+ Hot Queue maintenance 组移除；CURRENT 149；scope 仅 forward_tracker + test + register + CURRENT + SESSION_LOG。**本轮可 `提交`**；maintenance 组余 `SR-DATA-004`（P3，需真实周频 suspend-coverage 日志）/ `SR-RANK-001`（P3）/ `SR-OPS-006`（P3 needs_revalidation）。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-OPS-005 forward tracker trading-date cache coverage)
+
+**Commits**: 47b2252
+
+**Relationship to prior session(s)**:
+- Builds on committed `SR-DATA-002` daily stats insufficiency guard.
+- Executes one risk-register maintenance item: `SR-OPS-005`.
+- Leaves `SR-DATA-004` open because its next action requires real weekly suspend-coverage logs; this round does not run weekly capture or fetch data.
+- Does not run EGS, research, provider access, data fetch, or commit.
+
+**Worked on**:
+1. [tracked] `runners/forward_tracker.py`: `_check_cache_coverage` now reads `stocks.trade_date` from the shared `forward_daily.pkl` payload, requires each pending tracker `as_of` to exist in that cached trading-date sequence, and requires `base_idx + max_window` to exist before backfill can reuse the cache.
+2. [tracked] `tests/phase6/test_forward_tracker_cache_guard.py`: added regression coverage for insufficient cached trading-date rows, missing `as_of` trading date, and a sparse long-calendar case that passes because the required cached trading dates exist.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-OPS-005` resolved and removed it from the Hot Queue maintenance group.
+4. [tracked] `docs/CURRENT.md`: updated latest delta, current hot queue, and recent completion text; snapshot remains 149 lines.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude review handoff.
+
+**Key decisions**:
+- Used cached stock trading dates rather than metadata `start_date` / `end_date` because `attach_forward_returns` derives entry / exit positions from `stocks.trade_date`; this closes the calendar-day approximation without fetching a trading calendar.
+- Kept benchmark validation scoped to the existing same-anchor field guard; this slice only changes the stock-date coverage proof.
+- Did not update a phase handoff: this is a narrow risk-register closure, not a phase or major milestone change.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_forward_tracker_cache_guard -v`: 8 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: 42 tests OK.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer should inspect tracked diffs only; no untracked files are expected.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-002 daily stats insufficiency guard)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `4f32c23`)

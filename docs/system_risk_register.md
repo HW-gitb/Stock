@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-DATA-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+1. `SR-DATA-004` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
 2. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
@@ -275,11 +275,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-OPS-005 - Forward tracker cache coverage uses calendar-day approximation
 
 - Severity: P2
-- Status: open
+- Status: resolved
 - Owner phase: A-short forward evidence / tracker reliability
 - Evidence: `runners/forward_tracker.py:_check_cache_coverage` uses calendar-day shifting to approximate the required trading window.
 - Accepted calibration: current producers over-pad enough for normal cases, so this is a weaker assertion rather than confirmed live contamination. Long holidays or unusual calendars can still break the assumption.
-- Required next action: use the trading calendar / cached trading dates for coverage checks, or document the approximation and hard-fail cases where the calendar-day buffer cannot prove coverage.
+- Required next action: no active `SR-OPS-005` action. Future tracker cache coverage changes must keep coverage tied to cached trading-date rows, not only metadata calendar dates.
+- Closure evidence: the reviewed change set updates `runners/forward_tracker.py:_check_cache_coverage` to read `stocks.trade_date` from the shared `forward_daily.pkl` payload, require every pending tracker `as_of` to exist in that cached trading-date sequence, and require `base_idx + max_window` to be present before backfill can reuse the cache. It no longer uses `as_of + calendar days` or metadata end-date alone to decide coverage.
+- Verification: `tests.phase6.test_forward_tracker_cache_guard` covers close-only benchmark rejection, same-anchor acceptance, insufficient cached trading-date rejection, missing `as_of` rejection, and a sparse long-calendar case that passes because the required cached trading dates exist.
 
 ### SR-OPS-006 - Relisted-stock lookback boundary needs revalidation
 

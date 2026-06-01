@@ -380,20 +380,46 @@ def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str
         if close_only_benches:
             problems.append(f"missing same-anchor trade_date/open/close fields: {', '.join(close_only_benches)}")
         return False, "forward_daily cache benchmark input is not same-anchor ready (" + "; ".join(problems) + ")"
-    asof_min = min(as_ofs)
-    # We need cache to extend to at least asof_max + max_window calendar days.
-    asof_max = max(as_ofs)
-    required_end = _shift_yyyymmdd_safe(asof_max, max_window + 5)
-    if cache_start > asof_min or cache_end < required_end:
-        return False, (f"cache range {cache_start}..{cache_end} does not cover "
-                       f"tracker as_of {asof_min}..{asof_max} +{max_window}d window "
-                       f"(need end >= {required_end})")
+
+    requested_asofs = sorted({str(as_of) for as_of in as_ofs if str(as_of).strip()})
+    if not requested_asofs:
+        return False, "forward_daily cache coverage check has no as_of dates"
+
+    trade_dates = _cached_stock_trade_dates(cached)
+    if not trade_dates:
+        return False, "forward_daily cache missing stock trade_date coverage"
+
+    date_pos = {date: pos for pos, date in enumerate(trade_dates)}
+    missing_asofs = [as_of for as_of in requested_asofs if as_of not in date_pos]
+    if missing_asofs:
+        return False, (
+            f"forward_daily cache missing as_of trading dates: {', '.join(missing_asofs)} "
+            f"(cache stock trade_date range {trade_dates[0]}..{trade_dates[-1]})"
+        )
+
+    insufficient = []
+    for as_of in requested_asofs:
+        required_idx = date_pos[as_of] + max_window
+        if required_idx >= len(trade_dates):
+            insufficient.append(
+                f"{as_of} needs +{max_window} trading days but cache ends at {trade_dates[-1]}"
+            )
+    if insufficient:
+        return False, (
+            "forward_daily cache trading-date coverage insufficient ("
+            + "; ".join(insufficient)
+            + f"; meta range {cache_start}..{cache_end})"
+        )
     return True, "ok"
 
 
-def _shift_yyyymmdd_safe(d: str, days: int) -> str:
-    """Calendar-day shift; tracker uses this for the cache coverage check only."""
-    return (pd.to_datetime(d, format="%Y%m%d") + pd.Timedelta(days=days)).strftime("%Y%m%d")
+def _cached_stock_trade_dates(cached: dict) -> list[str]:
+    stocks = cached.get("stocks")
+    if not isinstance(stocks, pd.DataFrame) or stocks.empty or "trade_date" not in stocks.columns:
+        return []
+    dates = stocks["trade_date"].dropna().astype(str)
+    dates = dates[dates.str.fullmatch(r"\d{8}")]
+    return sorted(dates.unique().tolist())
 
 
 def _board_from_code(ts_code):
