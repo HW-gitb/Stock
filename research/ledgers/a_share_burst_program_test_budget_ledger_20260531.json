@@ -49,18 +49,17 @@
     {
       "test_id": "a_share_minimal_data_burst_full_universe_redesign_20260531",
       "preregistration_ref": "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
-      "result_ref": "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
-      "status": "spent_passed_preflight_outcome_pending",
+      "result_ref": "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json",
+      "status": "spent_failed_outcome_threshold",
       "tests_spent": 1,
       "promotion_relevant": true,
-      "result_summary": "Pre-outcome event-count / input-integrity preflight found valid_signal_events = 134 versus required >= 30 on frozen full EGS Tier1+Tier2 intermediate cohorts. Outcome returns and benchmark excess were not computed.",
-      "allowed_followup": "Resolve SR-DATA-003 benchmark-open input and create a separate reviewed outcome / excess slice for this unchanged preregistration; any changed redesigned hypothesis requires another ledger append and reviewed preregistration."
+      "result_summary": "Outcome / benchmark-excess slice found valid_signal_events = 134, selected_signal_events = 123, available_return_events = 116, mean_net_excess_csi1000_5d_pct = -2.8696001309, monthly_clustered_t_stat_net_excess_csi1000_5d = -0.6312965283, max_drawdown_monthly_signal_excess_pct = 26.5735343137, entry_unbuyable_rate = 0.0487804878, best_month_positive_excess_contribution_share = 0.2565691260; decision = falsified_or_redesign_required.",
+      "allowed_followup": "No production use, no research_continue verdict, and no silent parameter rescue. Any further redesigned A-share burst test requires another ledger append, user approval, and reviewed preregistration before it runs."
     }
   ],
   "planned_tests": [],
   "next_required_actions": [
-    "Resolve SR-DATA-003 benchmark-open input before any outcome / excess calculation for the unchanged full-universe redesign preregistration.",
-    "Create a separate reviewed outcome / benchmark-excess slice before computing returns for the unchanged full-universe redesign preregistration.",
+    "Treat the full-universe redesigned A-share burst test as spent and failed under its registered outcome thresholds; do not rerun or rescue it by changing parameters.",
     "Append any additional proposed redesigned A-share burst test to planned_tests before it runs.",
     "Create a new reviewed preregistration for any changed universe / trigger / threshold / benchmark / holding-period design.",
     "Keep all outputs research-only until later schema review, Claude review, user approval, and separate confirmation evidence."

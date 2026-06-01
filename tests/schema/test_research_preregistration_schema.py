@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import csv
 import json
 import unittest
 from pathlib import Path
@@ -20,6 +21,15 @@ PREFLIGHT_ARTIFACT_PATH = Path(
 REDESIGNED_PREFLIGHT_ARTIFACT_PATH = Path(
     "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json"
 )
+REDESIGNED_EVIDENCE_REPORT_PATH = Path(
+    "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json"
+)
+REDESIGNED_SIGNAL_EVENTS_PATH = Path(
+    "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv"
+)
+REDESIGNED_MONTHLY_STATS_PATH = Path(
+    "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/monthly_stats.csv"
+)
 LEDGER_ARTIFACT_PATH = Path("research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json")
 ALPHA_AUDIT_SCHEMA_PATH = Path("schemas/alpha_plausibility_audit.schema.json")
 EVIDENCE_REPORT_SCHEMA_PATH = Path("schemas/evidence_report.schema.json")
@@ -35,6 +45,9 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
     def _load_ledger_schema(self) -> dict:
         return json.loads(LEDGER_SCHEMA_PATH.read_text(encoding="utf-8"))
 
+    def _load_evidence_report_schema(self) -> dict:
+        return json.loads(EVIDENCE_REPORT_SCHEMA_PATH.read_text(encoding="utf-8"))
+
     def _load_artifact(self, path: Path = BLOCKED_ARTIFACT_PATH) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
 
@@ -49,6 +62,9 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
 
     def _load_ledger_artifact(self) -> dict:
         return self._load_artifact(LEDGER_ARTIFACT_PATH)
+
+    def _load_redesigned_evidence_report(self) -> dict:
+        return self._load_artifact(REDESIGNED_EVIDENCE_REPORT_PATH)
 
     def test_schema_meta_validates_when_jsonschema_available(self) -> None:
         try:
@@ -286,6 +302,56 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertFalse(preflight["evaluation_result"]["outcome_run_allowed_for_this_preregistration"])
         self.assertIn("SR-DATA-003", "\n".join(preflight["diagnostic_notes"]))
 
+    def test_redesigned_evidence_report_records_failed_outcome_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        report = self._load_redesigned_evidence_report()
+        errors = list(Draft7Validator(self._load_evidence_report_schema()).iter_errors(report))
+
+        self.assertEqual(errors, [])
+        self.assertEqual(report["report_id"], "a_share_minimal_data_burst_full_universe_redesign_evidence_20260601")
+        self.assertEqual(report["lane_id"], "a_share_burst_minimal_data")
+        self.assertEqual(report["evidence_level"], "research_only")
+        self.assertFalse(report["scope"]["data_fetch_allowed"])
+        self.assertFalse(report["scope"]["strategy_rule_change_allowed"])
+        self.assertEqual(
+            report["research_experiment_log"]["hypothesis_registration_ref"],
+            str(REDESIGNED_ARTIFACT_PATH).replace("\\", "/"),
+        )
+        self.assertEqual(
+            report["research_experiment_log"]["production_promotion"]["promotion_status"],
+            "blocked",
+        )
+        self.assertEqual(report["ship_gate_claim"]["claim_status"], "not_eligible")
+        self.assertIn("falsified_or_redesign_required", report["research_experiment_log"]["result_summary"])
+        self.assertAlmostEqual(report["cost_adjusted_return"]["net_excess_return_pct"], -2.8696001309, places=10)
+        self.assertIn(
+            "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv",
+            report["research_experiment_log"]["reproducibility_artifacts"],
+        )
+
+    def test_redesigned_outcome_csvs_match_registered_evidence_report_counts(self) -> None:
+        with REDESIGNED_SIGNAL_EVENTS_PATH.open(encoding="utf-8", newline="") as fh:
+            signal_rows = list(csv.DictReader(fh))
+        with REDESIGNED_MONTHLY_STATS_PATH.open(encoding="utf-8", newline="") as fh:
+            monthly_rows = list(csv.DictReader(fh))
+        selected_rows = [row for row in signal_rows if row["portfolio_selected"] == "True"]
+
+        self.assertEqual(len(signal_rows), 134)
+        self.assertEqual(len(monthly_rows), 24)
+        self.assertIn("pending_count", monthly_rows[0])
+        self.assertNotIn("other_pending_count", monthly_rows[0])
+        self.assertEqual(len(selected_rows), 123)
+        self.assertEqual(sum(row["ret_5d_status"] == "ok" for row in selected_rows), 116)
+        self.assertEqual(sum(row["ret_5d_status"] == "pending_no_entry_limit_up" for row in selected_rows), 6)
+        self.assertEqual(sum(row["ret_5d_status"] == "pending_missing_future_close" for row in selected_rows), 1)
+        self.assertEqual(sum(int(row["raw_signal_events"]) for row in monthly_rows), 134)
+        self.assertEqual(sum(int(row["selected_signal_events"]) for row in monthly_rows), 123)
+        self.assertEqual(sum(int(row["available_count"]) for row in monthly_rows), 116)
+
     def test_preflight_schema_rejects_outcome_fetch_or_ship_gate_scope_creep_when_jsonschema_available(self) -> None:
         try:
             from jsonschema import Draft7Validator
@@ -339,7 +405,7 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertEqual(spent["tests_spent"], 1)
         self.assertEqual(ledger["planned_tests"], [])
 
-    def test_ledger_spend_log_points_to_redesigned_preflight(self) -> None:
+    def test_ledger_spend_log_points_to_redesigned_failed_outcome(self) -> None:
         ledger = self._load_ledger_artifact()
         spent = ledger["test_spend_log"][1]
 
@@ -350,13 +416,19 @@ class ResearchPreregistrationSchemaTest(unittest.TestCase):
         )
         self.assertEqual(
             spent["result_ref"],
-            "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
+            "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json",
         )
-        self.assertEqual(spent["status"], "spent_passed_preflight_outcome_pending")
+        self.assertEqual(spent["status"], "spent_failed_outcome_threshold")
         self.assertTrue(spent["promotion_relevant"])
         self.assertEqual(spent["tests_spent"], 1)
         self.assertIn("valid_signal_events = 134", spent["result_summary"])
-        self.assertIn("SR-DATA-003", spent["allowed_followup"])
+        self.assertIn("mean_net_excess_csi1000_5d_pct = -2.8696001309", spent["result_summary"])
+        self.assertIn("decision = falsified_or_redesign_required", spent["result_summary"])
+        self.assertIn("No production use", spent["allowed_followup"])
+        self.assertNotIn("SR-DATA-003", spent["allowed_followup"])
+        self.assertTrue(
+            any("spent and failed" in action for action in ledger["next_required_actions"])
+        )
 
     def test_redesigned_preregistration_is_ledger_gated_full_universe_research_only(self) -> None:
         artifact = self._load_artifact(REDESIGNED_ARTIFACT_PATH)

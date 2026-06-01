@@ -1,0 +1,246 @@
+{
+  "schema_name": "evidence_report",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-01T04:22:08Z",
+  "scope": {
+    "phase": "7a-5",
+    "purpose": "evidence_report_schema_contract",
+    "contract_status": "schema_first_contract_only",
+    "provider_selection_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false
+  },
+  "report_id": "a_share_minimal_data_burst_full_universe_redesign_evidence_20260601",
+  "report_date": "20260601",
+  "report_family": "research_experiment",
+  "lane_id": "a_share_burst_minimal_data",
+  "parent_lane_id": "a_burst",
+  "market": "A",
+  "horizon": "short",
+  "evidence_level": "research_only",
+  "evidence_policy": {
+    "fixed_allocation_policy_unchanged": true,
+    "global_aum_pool_allowed": false,
+    "cross_market_pooling_allowed": false,
+    "liquidity_bucket_auto_borrowing_allowed": false,
+    "paper_ship_gate_claim_allowed": false,
+    "live_normalized_required_for_ship_gate": true,
+    "actual_position_reconciliation_required_for_live_normalized": true,
+    "manual_execution_only": true
+  },
+  "provider_benchmark_context": {
+    "provider_priority_contract_ref": "docs/provider_priority_benchmark_contract.md",
+    "benchmark_set_source": "docs/provider_priority_benchmark_contract.md",
+    "provider_capability_catalog_ref": "schemas/provider_capability_catalog.schema.json",
+    "provider_selection_made_by_this_report": false,
+    "primary_benchmark_id": "CSI1000",
+    "secondary_benchmark_ids": [
+      "CSI300"
+    ],
+    "benchmark_switch_packet_required": true,
+    "benchmark_limitations": [
+      "CSI1000 is the preregistered promotion-relevant benchmark for this research-only A-share burst test.",
+      "CSI300 is diagnostic context only and cannot rescue a failed CSI1000 outcome.",
+      "Benchmark input came from the reviewed local benchmark-open cache patch, not from a broad forward-daily refresh."
+    ]
+  },
+  "evidence_feasibility_context": {
+    "feasibility_controls_doc_ref": "docs/evidence_feasibility_controls.md",
+    "feasibility_controls_schema_ref": "schemas/evidence_feasibility_controls.schema.json",
+    "feasibility_control_required": true,
+    "circuit_breaker_action_set": [
+      "warn",
+      "size_down",
+      "pause_new_entries",
+      "manual_review",
+      "reactivation_cooldown"
+    ],
+    "control_limitations": [
+      "This artifact measures historical research outcomes only; it does not implement live feasibility controls.",
+      "A-share entry limit-up feasibility is represented by entry_unbuyable_rate, not by live order-book simulation."
+    ]
+  },
+  "immutable_decision_packet": {
+    "packet_id": "a_share_minimal_data_burst_full_universe_redesign_packet_20260601",
+    "created_at": "2026-06-01T04:22:08Z",
+    "decision_timestamp": "2026-05-31T00:00:00Z",
+    "lane_id": "a_share_burst_minimal_data",
+    "candidate_universe_ref": "result/a_short/backtest/generated/_intermediate/egs_full_{YYYYMMDD}.csv",
+    "input_artifact_refs": [
+      "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
+      "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
+      "research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json",
+      "result/a_short/backtest/cache/forward_daily.pkl",
+      "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv",
+      "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/monthly_stats.csv"
+    ],
+    "source_schema_refs": [
+      "schemas/research_preregistration.schema.json",
+      "schemas/research_preflight_result.schema.json",
+      "schemas/program_test_budget_ledger.schema.json",
+      "schemas/evidence_report.schema.json"
+    ],
+    "parameter_set_ref": "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
+    "parameter_hash": "065980bb5bb3351fba9b737d1d13b74fd1f0e93bd4b11965f3e908a2584d54bc",
+    "code_version_ref": "c0f8f3c",
+    "benchmark_set_ref": "docs/provider_priority_benchmark_contract.md",
+    "provider_status_ref": "result/a_short/backtest/cache/forward_daily.pkl#meta.benchmark_open_patch",
+    "hypothesis_ref": "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
+    "decision_outputs": [
+      "decision=falsified_or_redesign_required; valid_signal_events=134; selected_signal_events=123; available_return_events=116; mean_net_excess_csi1000_5d_pct=-2.869600; monthly_clustered_t=-0.631297; max_drawdown_monthly_signal_excess_pct=26.573534; entry_unbuyable_rate=0.048780; best_month_positive_excess_contribution_share=0.256569; criteria_pass={'valid_signal_events': True, 'mean_net_excess_csi1000_5d_pct': False, 'monthly_clustered_t_stat_net_excess_csi1000_5d': False, 'max_drawdown_monthly_signal_excess_pct': False, 'entry_unbuyable_rate': True, 'best_month_positive_excess_contribution_share': True}",
+      "Failed continuation gate: mean net CSI1000 excess is <= 0, monthly clustered t-stat is < 1.5, and monthly signal-excess drawdown is > 15 percentage points.",
+      "No production promotion, live observation, ship-gate evidence, or manual sizing conclusion is authorized."
+    ],
+    "immutability": {
+      "mutation_after_issue_allowed": false,
+      "append_only_corrections_required": true,
+      "decision_timestamp_before_outcome_required": true,
+      "parameter_hash_required": true
+    }
+  },
+  "cost_adjusted_return": {
+    "return_window_start": "20240131",
+    "return_window_end": "20251231",
+    "gross_return_pct": -1.7588322804,
+    "net_return_pct": -1.9188322804,
+    "benchmark_return_pct": 0.9507678505,
+    "net_excess_return_pct": -2.8696001309,
+    "cost_basis_status": "estimated",
+    "cost_components": {
+      "commissions_pct": 0.05,
+      "taxes_pct": 0.0,
+      "stamp_duty_pct": 0.05,
+      "slippage_pct": 0.06,
+      "spread_pct": 0.0,
+      "borrow_fee_pct": 0.0,
+      "fx_conversion_pct": 0.0,
+      "dividends_pct": 0.0,
+      "withholding_tax_pct": 0.0,
+      "adr_fee_pct": 0.0,
+      "market_impact_pct": 0.0,
+      "cash_drag_pct": 0.0,
+      "missed_trade_opportunity_cost_pct": 0.0,
+      "other_costs_pct": 0.0
+    },
+    "cost_disclosure": {
+      "missing_cost_components": [],
+      "estimation_method": "Existing A-short rank backtest default: subtract 0.16 percentage points round-trip cost from stock T+1 open to T+5 close return before benchmark excess.",
+      "limitations": [
+        "Cost component split is a reporting allocation of the existing aggregate 0.16 percentage point model, not a tick-level execution-cost estimate.",
+        "No intraday liquidity, queue, or partial-fill simulation is included."
+      ]
+    }
+  },
+  "cash_drag": {
+    "applicability": "not_applicable",
+    "observed_capital_used": null,
+    "normalization_basis": "Research-only equal-weight signal test; no portfolio cash deployment was simulated.",
+    "bucket_ceiling_context_ref": "docs/portfolio_allocation_policy.md",
+    "available_cash": null,
+    "deployed_capital": null,
+    "idle_cash_pct": null,
+    "cash_drag_return_pct": null,
+    "missed_trade_opportunity_cost_pct": null,
+    "calculation_basis": "Not applicable to this in-sample signal-outcome artifact.",
+    "limitations": [
+      "Cash drag must be modeled separately before any portfolio or ship-gate-like conclusion."
+    ]
+  },
+  "manual_override_log": {
+    "override_status": "not_applicable",
+    "manual_execution_only": true,
+    "entries": [],
+    "limitations": [
+      "No live recommendations or manual orders were generated by this research artifact."
+    ]
+  },
+  "minimal_reconciliation": {
+    "reconciliation_status": "paper_no_actual_position",
+    "actual_position_reconciliation_available": false,
+    "recommended_positions_ref": null,
+    "actual_positions_ref": null,
+    "difference_summary": [
+      "No actual positions exist for this research-only in-sample test."
+    ],
+    "unmatched_items": [],
+    "limitations": [
+      "Position reconciliation is required before live-normalized evidence but is not applicable here."
+    ]
+  },
+  "thesis_outcome_log": {
+    "applicability": "not_applicable",
+    "thesis_id": null,
+    "review_stage": "not_applicable",
+    "thesis_status": "not_applicable",
+    "thesis_start_date": null,
+    "review_date": "20260601",
+    "expected_outcome": "Not a long thesis report.",
+    "observed_outcome": "Not applicable.",
+    "outcome_assessment": "not_applicable",
+    "thesis_broken_conditions": [
+      "Not applicable to A-share short burst research outcome."
+    ],
+    "next_review_date": null,
+    "limitations": [
+      "Use research_experiment_log for this artifact rather than thesis_outcome_log."
+    ]
+  },
+  "research_experiment_log": {
+    "applicability": "applicable",
+    "experiment_id": "a_share_minimal_data_burst_full_universe_redesign_20260531",
+    "hypothesis_registration_ref": "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json",
+    "dataset_refs": [
+      "result/a_short/backtest/generated/_intermediate/egs_full_20240131.csv through egs_full_20251231.csv",
+      "result/a_short/backtest/cache/forward_daily.pkl"
+    ],
+    "parameter_refs": [
+      "research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json"
+    ],
+    "random_seed": null,
+    "reproducibility_artifacts": [
+      "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv",
+      "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/monthly_stats.csv",
+      "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json",
+      "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json"
+    ],
+    "result_summary": "decision=falsified_or_redesign_required; valid_signal_events=134; selected_signal_events=123; available_return_events=116; mean_net_excess_csi1000_5d_pct=-2.869600; monthly_clustered_t=-0.631297; max_drawdown_monthly_signal_excess_pct=26.573534; entry_unbuyable_rate=0.048780; best_month_positive_excess_contribution_share=0.256569; criteria_pass={'valid_signal_events': True, 'mean_net_excess_csi1000_5d_pct': False, 'monthly_clustered_t_stat_net_excess_csi1000_5d': False, 'max_drawdown_monthly_signal_excess_pct': False, 'entry_unbuyable_rate': True, 'best_month_positive_excess_contribution_share': True}",
+    "production_promotion": {
+      "no_direct_production_feed": true,
+      "requires_schema_review": true,
+      "requires_claude_review": true,
+      "requires_user_approval": true,
+      "promotion_status": "blocked",
+      "promotion_limitations": [
+        "Frozen redesigned minimal-data trigger failed the research-continuation gate.",
+        "Any further redesigned A-share burst test requires a new ledger append and reviewed preregistration.",
+        "No production, live, or full-size manual use is authorized."
+      ]
+    }
+  },
+  "ship_gate_claim": {
+    "claim_status": "not_eligible",
+    "evidence_level_used": "research_only",
+    "paper_evidence_used_for_ship_gate": false,
+    "full_size_manual_use_authorized_by_this_report": false,
+    "existing_ship_gate_policy_ref": "AGENTS.md#项目背景",
+    "claim_limitations": [
+      "Research-only in-sample evidence cannot be used for ship gate.",
+      "The trigger failed the research continuation gate before any live-normalized evidence path."
+    ]
+  },
+  "deferred_decisions": [
+    "Whether to spend another A-share minimal-data burst research test is deferred and requires a new ledger append plus reviewed preregistration.",
+    "Whether to pursue full-data burst evidence is deferred to provider/data readiness and separate review."
+  ],
+  "limitations": [
+    "This is an in-sample research-only outcome over frozen 2024-2025 full EGS intermediate cohorts.",
+    "No EGS rerun, provider data fetch, new data source, runner change, broker integration, or OS automation was performed.",
+    "The event-count preflight passed, but outcome thresholds failed; this artifact cannot support alpha, production, live observation, or ship-gate claims.",
+    "Monthly drawdown is computed on additive cumulative monthly mean CSI1000 net excess percentage points over signal months with available returns."
+  ]
+}

@@ -8,6 +8,63 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (A-share burst full-universe redesigned outcome failed)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `c0f8f3c`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。整条 A-share minimal-data burst research arc 至此以诚实负面结论收束。
+
+**Notes**: 全链最关键一刀——首次真正算 outcome/excess，3 个 untracked 结果件（evidence_report.json / signal_events.csv / monthly_stats.csv）+ ledger + test(+80) + 治理文档。**结果是诚实负面**：`decision=falsified_or_redesign_required`，mean_net_excess_csi1000_5d=**-2.87pp**、monthly_clustered_t=**-0.63**、max_dd=**26.6pp**（6 criteria 中 3 fail）；正确标 `research_only` / `ship_gate_claim=not_eligible` / `promotion=blocked`，无任何 overclaim。**独立验证（gold-standard）**：(1) **从 signal_events.csv 对 116 个 ok 事件独立重算 headline，10 位小数精确吻合**——mean net_excess=-2.8696001309、mean net=-1.9188322804、mean bench=0.9507678505（= net-bench，cost 0.16=0.05+0.05+0.06）——headline alpha 非编造，就是逐事件净超额均值；(2) 计数链 134 raw（=preflight）→123 selected（20241031 rank-cap 31→20，−11）→116 available（−6 entry_unbuyable −1 missing_close），entry_unbuyable_rate=6/123=0.0488，max_dd 26.57=20250930 行 drawdown_from_peak，cumulative 为月度均值累加（逐行验）——全部自洽且被新 test `test_redesigned_outcome_csvs_match_registered_evidence_report_counts` **逐项 test-lock**；(3) spot-check signal_events 行1（中粮资本 Tier2）三信号齐、T+1 锚、net_excess 对 monthly_stats 行1 逐字一致；(4) 跑 38 tests OK（含 evidence_report schema 校验）+ tests/schema discovery 134 OK（无回归）+ CURRENT.md 149。**反钓鱼记账（关键）**：ledger test#2 `status spent_passed_preflight_outcome_pending→spent_failed_outcome_threshold`、`result_ref→evidence_report.json`、**`tests_spent` 仍 1 / `tests_spent_count` 仍 2——outcome 是同一 frozen prereg 的完成，未消耗新 budget**；`allowed_followup` 明禁 silent rescue；further test 须新 ledger append+user approval+reviewed prereg。SESSION_LOG rejected-alternatives 正是 anti-fishing 教科书（拒 rerun EGS/改 trigger、拒 CSI300 救场、拒当 live/ship-gate）。**Scope/safety**：用 frozen `egs_full_*.csv` + patched local cache only，未 rerun EGS、未改参、未 full-refresh、未 fetch provider、未 contact provider、未碰 US 数据。**治理**：SR-RESEARCH-001 / SR-DATA-003（均已 resolved）closure 追记最终 outcome；CURRENT 下一步正确改为回 hot-queue（SR-DATA-001+OPS-002+OPS-003），除非用户批新 prereg。**一条非阻塞观察**（非 Optional）：CURRENT.md 删了"Phase 6 spec pack and earlier engineering baseline"一条 bullet 以保 149 行——历史指针仍在 handoff/README + AGENTS §交接记录 + git log，属 snapshot 修剪、可接受。**结论意义**：preregistration + ledger budget + preflight gate + same-anchor 测量 + anti-fishing 全套纪律跑完一轮，干净地**证伪**了 minimal-data A-share burst（in-sample 2024-2025 无 alpha、反而负超额）——框架按设计杀掉了不工作的策略，未自欺。**下一刀**：默认回 risk-register hot queue（`SR-DATA-001`+`SR-OPS-002`+`SR-OPS-003`，weekly official capture / 直接 EGS 再生前必修），除非用户显式批准新的 research preregistration（须新 ledger planned test）。
+
+---
+
+## 2026-06-01 — Codex 执行 (A-share burst full-universe redesigned outcome failed)
+
+**Commits**: c0f8f3c
+
+**Relationship to prior session(s)**:
+- Builds on the reviewed / committed `SR-DATA-003` benchmark-open cache patch run.
+- Completes the separate reviewed outcome / benchmark-excess slice for the unchanged full-universe redesigned A-share burst preregistration.
+- Does not use or fetch US data. The user has no US data source enabled, and any future US data requirement must be raised explicitly before action.
+
+**Worked on**:
+1. [untracked] `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json`: added the research-only evidence report for the frozen redesigned test.
+2. [untracked] `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv` and `monthly_stats.csv`: added reproducibility tables for the full signal set and monthly outcome summary.
+3. [tracked] `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json`: updated the redesigned test from outcome-pending to `spent_failed_outcome_threshold`.
+4. [tracked] `research/README.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `AGENTS.md`, and `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: rerouted current state to the failed outcome result and the new-test gate.
+5. [tracked] `tests/schema/test_research_preregistration_schema.py`: added schema / artifact assertions for the evidence report, CSV counts, and ledger status.
+6. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Computed the outcome against frozen local `egs_full_*.csv` cohorts and the patched local `forward_daily.pkl` cache only.
+- Did not rerun EGS, change preregistered parameters, full-refresh forward_daily, change runners, fetch provider data, contact providers, or make production / ship-gate / live-use claims.
+- Treated the redesigned A-share burst test as spent and failed: any further redesigned A-share burst research test requires a new ledger planned test, user approval, and reviewed preregistration.
+
+**Outcome summary**:
+- Raw signal events: `134`; selected after per-cohort cap: `123`; available return events: `116`.
+- Mean net CSI1000 5d excess: `-2.8696001309` percentage points.
+- Monthly clustered t-stat: `-0.6312965283`.
+- Max monthly signal-excess drawdown: `26.5735343137` percentage points.
+- Entry-unbuyable rate: `0.0487804878`; best positive month contribution share: `0.2565691260`.
+- Registered decision: `falsified_or_redesign_required`.
+
+**Alternatives considered and rejected**:
+- "Rerun EGS or change the trigger after seeing the result" — rejected because that would rescue a spent preregistered test without ledger / prereg review.
+- "Use CSI300 diagnostics to rescue the result" — rejected because CSI1000 is the preregistered promotion-relevant benchmark.
+- "Interpret the research artifact as live or ship-gate evidence" — rejected because the evidence level is research-only and the thresholds failed.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema tests.schema.test_evidence_report_schema -v`: passed, 38 tests.
+- `git diff --check`: passed with no whitespace errors; Git only printed expected LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` length check: 149 lines.
+
+**Current review state**:
+- Working tree uncommitted.
+- Reviewer must inspect tracked diffs and the three untracked research result artifacts.
+- Ready for Claude review. The default next implementation work, after review / commit, is the risk-register hot queue before any new weekly official capture / direct EGS regeneration unless the user explicitly approves a new research preregistration.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-003 benchmark-open cache patch run)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files + ignored local cache vs `0f0beae`)

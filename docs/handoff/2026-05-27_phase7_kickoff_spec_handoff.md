@@ -1,5 +1,36 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-01 append: A-share burst full-universe redesigned outcome failed
+
+**Changed**:
+- Added the reviewed research-only outcome artifacts for the full-universe redesigned A-share burst test: `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json`, `signal_events.csv`, and `monthly_stats.csv`.
+- Updated `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` so the redesigned test now points to the evidence report and is spent as `spent_failed_outcome_threshold`.
+- Updated active routing docs and schema tests so the result is no longer treated as outcome-pending.
+
+**Why**:
+- The reviewed preflight had passed event-count with `valid_signal_events = 134`, and `SR-DATA-003` benchmark-open input was patched, so the next authorized smallest slice was the unchanged preregistered outcome / benchmark-excess calculation.
+- The calculation used frozen local A-share cohorts and the patched local cache only. It did not rerun EGS, change preregistered parameters, full-refresh `forward_daily.pkl`, fetch provider data, or make any production / ship-gate claim.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_research_preregistration_schema tests.schema.test_evidence_report_schema -v
+git diff --check
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+```
+
+**Validation result**:
+- Outcome metrics: raw signal events `134`, selected signal events `123`, available return events `116`, mean net CSI1000 5d excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp, entry-unbuyable rate `0.0487804878`, decision `falsified_or_redesign_required`.
+- Focused schema / artifact tests: 38 tests passed. `CURRENT.md` remains at 149 lines.
+- `git diff --check` reported no whitespace errors; Git only printed expected CRLF normalization warnings on this Windows checkout.
+
+**Invalidated / blocked old conclusion**:
+- “The full-universe redesign outcome / excess is pending” is invalid. The registered redesigned test is now spent and failed under its own outcome thresholds.
+- This does not prove every future A-share burst design has no alpha, but no further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration.
+- No production use, live observation, minimal-live sizing, full-size sizing, ship-gate evidence, or research-continue verdict is authorized by these artifacts.
+
+---
+
 ## 2026-06-01 append: SR-DATA-003 benchmark-only cache patch run
 
 **Changed**:

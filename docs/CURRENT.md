@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（SR-DATA-003 benchmark-open cache input patched）
+**最后更新**：2026-06-01（A-share burst redesigned outcome failed）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -8,20 +8,20 @@
 
 ## 0. Latest Delta
 
-- Original A-share `minimal_data_burst` preregistration remains blocked; corrected-basis supersession has failed a frozen-cohort preflight with `valid_signal_events = 0`.
-- `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` records the preflight: 305 Tier1 rows, 301 hard-filter rows, 17 momentum rows, 38 volume-expansion rows, 7 breakout rows, 0 all-pass signal rows.
+- Original A-share `minimal_data_burst` remains blocked; corrected-basis supersession failed preflight with `valid_signal_events = 0` and no informative outcome path.
 - Do not run outcome / benchmark-excess calculation for the current corrected-basis preregistration; it is spent as `failed_preflight_zero_signal_events`.
-- `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` records the reviewed redesigned preflight: 24 frozen full EGS cohorts, 19,000 rows, 6,159 Tier1+Tier2 hard-filter rows, `valid_signal_events = 134`.
-- The redesigned preflight passes the `>=30` event-count gate but computes no outcome / benchmark excess. The benchmark-only cache patch has populated ignored local `forward_daily.pkl` CSI300 / CSI1000 frames with `trade_date/open/close`; the separate reviewed outcome / excess slice remains required.
+- The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
+- `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
+- The redesigned test is spent / failed; no production, live, ship-gate, or research-continue conclusion is authorized. Any further redesigned A-share burst test needs a new ledger planned test and reviewed preregistration.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst has a reviewed full-universe redesigned preflight pass; provider access remains blocked pending explicit user approval.
-- **当前 P0 / P1 目标**：create the separate reviewed outcome / excess slice for the unchanged redesigned preregistration；不是 rerun EGS、改参数、full forward-daily refetch 或 production claim。
+- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst full-universe redesigned outcome is complete and failed; provider access remains blocked pending explicit user approval.
+- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；默认下一刀回到 risk register hot queue（`SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003`）before weekly official capture / direct EGS regeneration，除非用户先批准新的 research preregistration。
 - **当前 P1 provider blocker**：任何 sample / trial / paid-access / token / provider contact / data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
-- **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned preflight 已消耗 ledger planned test，后续 outcome / excess 必须作为单独 reviewed slice。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
+- **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned test 已消耗 ledger planned test 且 outcome 失败。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
@@ -29,7 +29,8 @@
 
 ## 2. 最近已完成
 
-- **SR-DATA-003 benchmark-open input**（2026-06-01）：ignored local `result/a_short/backtest/cache/forward_daily.pkl` 已由 benchmark-only helper patch；CSI300 / CSI1000 均为 498 行 `trade_date/open/close`，`fetch_forward_daily(refresh=False)` 验证可复用 cache 且不触发 provider refetch；未计算 outcome / excess。
+- **A-share burst redesigned outcome**（2026-06-01）：`evidence_report.json` / `signal_events.csv` / `monthly_stats.csv` 已生成；同一 frozen prereg + patched benchmark-open cache 计算后失败 research-continuation thresholds，decision 为 `falsified_or_redesign_required`。
+- **SR-DATA-003 benchmark-open input**（2026-06-01）：ignored local `result/a_short/backtest/cache/forward_daily.pkl` 已由 benchmark-only helper patch；CSI300 / CSI1000 均为 498 行 `trade_date/open/close`，`fetch_forward_daily(refresh=False)` 验证可复用 cache 且不触发 provider refetch；随后 redesigned outcome slice 使用该 input。
 - **A-share burst redesign preregistration**（2026-05-31）：`research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` 已 review + commit；ledger planned test 已由 preflight 消耗。
 - **A-share burst measurement fix**（2026-05-31）：same-anchor benchmark excess 已在 `runners/backtest_rank.py` / benchmark materializer 中落地；`research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` 已建立，原 prereg 继续 blocked。
 - **Weekly historical PIT interlock**（2026-05-31）：`runners/weekly_screening.ps1` now blocks historical `-AsOf` official-output runs unless L3 mode is explicitly `pit` / `neutralize`, rejects historical `today` L3 mode, and guards existing official outputs from accidental overwrite.
@@ -42,7 +43,6 @@
 - **Phase 7a-4 evidence feasibility controls**（2026-05-28）：`docs/evidence_feasibility_controls.md`、`schemas/evidence_feasibility_controls.schema.json`、example 和 schema tests 已建立。
 - **Phase 7a-3 provider priority / provisional benchmark contract**（2026-05-28）：`docs/provider_priority_benchmark_contract.md` 已建立，锁定 provider evidence priority 与 provisional evidence benchmark table。
 - **Phase 7a-1/2 alpha audit and owner-spec routing**（2026-05-27）：formal audit、provider status snapshot、strategy / burst / long / US-short owner specs 已记录 audit verdict 与 blocker routing。
-- **Phase 6 spec pack and earlier engineering baseline**：A-short v7.10、Phase 1-5、Phase 6 spec pack 均保持有效；更早事项见 `docs/handoff/README.md`、`AGENTS.md §交接记录`、`docs/SESSION_LOG.md` 和 `git log --all`。
 
 ---
 
@@ -69,7 +69,7 @@
 - `docs/system_risk_register.md` - durable open-risk queue；`执行` / `审查` 必读。
 - `docs/SESSION_LOG.md` - 最新 cross-LLM reasoning / review verdict；只读顶部 1-3 条。
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` - Phase 7a+ 最高行动指南。
-- `research/README.md` / `schemas/research_preregistration.schema.json` / `schemas/research_preflight_result.schema.json` / `schemas/program_test_budget_ledger.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` / `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` / `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` - research-only preregistration, preflight, and ledger owner files。
+- `research/README.md` / `schemas/research_preregistration.schema.json` / `schemas/research_preflight_result.schema.json` / `schemas/program_test_budget_ledger.schema.json` / `schemas/evidence_report.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` / `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/monthly_stats.csv` / `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` - research-only preregistration, preflight, evidence, and ledger owner files。
 - `docs/provider_priority_benchmark_contract.md` - Phase 7a-3 provider evidence priority / provisional benchmark contract。
 - `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` - Phase 7b provider evidence / drift monitor contract。
 - `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` - Phase 7b-2 P1 access-decision and sample-validation plan（plan-only；approved spend = 0；provider/sample/data/Phase 7c blocked）。
@@ -89,14 +89,14 @@
 
 ## 5. 下一步
 
-### P0 / P1 - A-share burst redesigned outcome precondition
+### P0 / P1 - Post redesigned outcome boundary
 
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
 - The preregistration / ledger-planned-test slice passed review and was committed as `1a3e71e`; do not run the current corrected-basis artifact for outcome / excess calculation.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
-- The redesigned preflight passed event-count with `valid_signal_events=134`, but no outcome / excess was computed.
-- `SR-DATA-003` benchmark-open input has been patched and verified. Remaining work is a separate reviewed outcome / excess slice for the unchanged redesigned preregistration; do not rerun EGS, change preregistered parameters, or full-refresh forward_daily in that slice unless separately reviewed.
+- The full-universe redesigned outcome / excess slice has failed its registered thresholds; do not rerun EGS, change preregistered parameters, full-refresh forward_daily, or reinterpret it as production evidence.
 - Any further redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
+- If no new research test is user-approved, the next default work is the open hot-queue operational fix before new weekly official capture / direct EGS regeneration.
 
 ### P1 - P1 provider access boundary（仅用户明确要求时）
 
