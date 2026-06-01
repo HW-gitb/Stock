@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（A-share burst audit/spec downgraded）
+**最后更新**：2026-06-01（US EGS data-source direction documented）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -18,9 +18,9 @@
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; A-share minimal-data burst full-universe redesigned outcome is complete and failed; provider access remains blocked pending explicit user approval.
+- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; US EGS data-source direction is FMP primary candidate + SEC EDGAR fundamentals audit; A-share minimal-data burst full-universe redesigned outcome is complete and failed.
 - **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；默认下一刀回到 risk register hot queue（`SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003`）before weekly official capture / direct EGS regeneration，除非用户先批准新的 research preregistration。
-- **当前 P1 provider blocker**：任何 sample / trial / paid-access / token / provider contact / data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
+- **当前 P1 provider blocker**：任何 FMP token / trial / paid access、SEC parser sample、`yfinance` price smoke check、provider contact、sample 或 data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
 - **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned test 已消耗 ledger planned test 且 outcome 失败。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
@@ -35,7 +35,7 @@
 - **A-share burst measurement fix**（2026-05-31）：same-anchor benchmark excess 已在 `runners/backtest_rank.py` / benchmark materializer 中落地；`research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` 已建立，原 prereg 继续 blocked。
 - **Weekly historical PIT interlock**（2026-05-31）：`runners/weekly_screening.ps1` now blocks historical `-AsOf` official-output runs unless L3 mode is explicitly `pit` / `neutralize`, rejects historical `today` L3 mode, and guards existing official outputs from accidental overwrite.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
-- **Phase 7b-2 P1 access/sample plan**（2026-05-31）：`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 已建立并由 `schemas/provider_p1_access_decision_plan.schema.json` 锁定；只定义访问边界和样本验证计划，不授权 provider 行动。
+- **US EGS data-source direction / Phase 7b-2 access boundary**（2026-06-01）：FMP 为主源候选，SEC EDGAR 为基本面审计源；`yfinance` 仅可显式批准后作低信任价格 smoke check。`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 仍只定义访问边界和样本验证计划，不授权 provider 行动。
 - **Phase 7b-2 P1 readiness review matrix**（2026-05-29）：`docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` 已建立并由 `schemas/provider_p1_readiness_review.schema.json` 锁定；六份 docs evidence collection 完成，但 P1 不授权 Phase 7c / provider selection / data fetch。
 - **Phase 7b-2 P1 evidence snapshots**（2026-05-28）：public-source、market-data-candidate、authorization / cost / stability、benchmark / GICS、fundamentals observed-date、coverage / fallback / incident 六份 artifact 均已建立并各有 regression test；这些只证明 candidate evidence。
 - **Phase 7b-1 provider evidence / drift monitor contract**（2026-05-28）：`docs/provider_evidence_drift_monitor.md`、`schemas/provider_evidence_drift_monitor.schema.json`、example 和 schema tests 已建立。

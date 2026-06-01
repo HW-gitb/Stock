@@ -174,7 +174,20 @@ Verdict: P1 documentation evidence collection is complete enough to define block
 
 Verdict: the plan is not an access approval. It locks approved spend to zero and forbids provider contact, token / trial / paid access, sample-row collection, data fetch, provider selection, adapters, DataHub tables, runner changes, Phase 7c authorization, and ship-gate claims. It defines the gates a later user-approved and reviewed access packet must resolve.
 
-## 15. Next Use
+## 15. US EGS Data-Source Direction
+
+As of 2026-06-01, the user accepted the following US EGS data-source direction for future reviewed provider work:
+
+- FMP is the preferred primary US EGS data-source candidate for fundamentals, valuation / ratio inputs, EOD price / volume, and liquidity fields.
+- SEC EDGAR `submissions` / `companyfacts` is the fundamentals authority / audit source. It is used to check filing-grounded financial statement fields and obvious anomalies in FMP-derived inputs.
+- SEC EDGAR is not a price source and must not be treated as a reliable strict source for free float. Free float can receive sanity checks from filing-derived share fields, but not exact EDGAR reconciliation.
+- EDGAR XBRL is as-reported source data. Full field-by-field PIT normalization remains a separate data-engineering task; the default audit should target EGS-sensitive fields and anomaly-triggered samples rather than recreating an entire normalized fundamentals vendor.
+- `yfinance` is not a formal audit source and must not replace EDGAR for fundamentals validation. It may be used only as an optional, low-trust, ad hoc price smoke check after explicit approval for that check; it is not part of the official provider chain.
+- Polygon / Massive is deferred for now because the current EGS requirement is daily / fundamental / valuation data, not low-latency or minute / tick data.
+
+This direction narrows the candidate roles for the next access packet, but it is not by itself an access approval, sample-validation packet, provider-selection artifact, DataHub implementation authorization, or data-fetch authorization. FMP token / trial / paid access, SEC fair-access parser work, any `yfinance` check, or any US data fetch still requires explicit user approval and a later reviewed decision.
+
+## 16. Next Use
 
 Phase 7c may consume reviewed Phase 7b evidence only after the access/sample blockers are separately resolved, and must be a separate reviewed implementation-design slice. The original A-share alpha-validation artifact `research/preregistrations/a_share_minimal_data_burst_20260531.json` remains `BLOCKED_DO_NOT_RUN`; the corrected-basis supersession is `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`, but its frozen-cohort preflight found zero valid signal events. The next alpha action is ledger-gated A-share burst redesign, not running that corrected artifact for outcome / excess calculation. US-long SEC parser feasibility remains provider-evidence feasibility, not alpha validation.
 

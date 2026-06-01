@@ -1,5 +1,36 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-01 append: US EGS data-source direction
+
+**Changed**:
+- Recorded the user-approved US EGS data-source direction in `docs/provider_evidence_drift_monitor.md`: FMP as preferred primary US EGS data-source candidate, SEC EDGAR as fundamentals authority / audit source, and `yfinance` only as an optional low-trust price smoke check after explicit approval.
+- Updated active routing in `AGENTS.md`, `docs/README.md`, and `docs/CURRENT.md`.
+- Added `SR-PROVIDER-001` in `docs/system_risk_register.md` to make the access / fetch boundary durable.
+
+**Why**:
+- The source-role decision affects future provider access, license, storage, sample validation, and data quality gates. Keeping it only in chat would let a later LLM reopen the same provider debate or misread `yfinance` as a fundamentals audit source.
+- The decision narrows future candidate roles, but the user has not approved any US data source access, token, trial, paid plan, sample fetch, adapter, DataHub table, or Phase 7c work.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema tests.schema.test_provider_evidence_drift_monitor_schema -v
+git diff --check
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+```
+
+**Validation result**:
+- Provider access-plan and provider evidence / drift-monitor schema tests passed: 27 tests.
+- `git diff --check` passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` remains at 149 lines.
+
+**Invalidated / blocked old conclusion**:
+- "P1 US provider evidence has no preferred EGS source direction" is invalid; future reviewed access packets should start from FMP primary candidate + SEC EDGAR fundamentals audit.
+- "Use `yfinance` as a fundamentals audit source" is blocked; it may only be a separately approved, low-trust price smoke check.
+- This append does not authorize provider selection, FMP token / trial / paid access, SEC parser sample work, `yfinance` scraping, US data fetch, adapter / DataHub implementation, runner changes, production use, or ship-gate claims.
+
+---
+
 ## 2026-06-01 append: A-share minimal-data burst audit/spec downgrade
 
 **Changed**:

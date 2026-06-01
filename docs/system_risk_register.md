@@ -33,13 +33,14 @@ Status:
 
 ## Hot Queue
 
-Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration.
+Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
 1. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
 2. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
 3. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
 4. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
 5. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+6. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
 
@@ -128,6 +129,15 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 - Accepted calibration: this was the active input blocker before the full-universe redesigned A-share burst preregistration could compute outcome / excess returns. The benchmark-open input is now patched locally, and the subsequent outcome / benchmark-excess slice used the patched cache and failed its registered thresholds.
 - Required next action: resolved for benchmark-open input. No further action is required for `SR-DATA-003` unless the local benchmark-open cache is invalidated or a new reviewed research test explicitly requires a different benchmark input.
 - Closure evidence: `runners/forward_tracker.py:_check_cache_coverage` rejects cached benchmark frames lacking same-anchor `trade_date/open/close`; `runners/refresh_forward_daily_benchmark_open_tushare.py` provides the benchmark-only cache patch path; `tests/phase6/test_forward_tracker_cache_guard.py` and `tests/phase6/test_refresh_forward_daily_benchmark_open_tushare.py` cover close-only rejection, benchmark-only patching, dry-run non-mutation, and post-patch cache reuse without refetch. On 2026-06-01, `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\refresh_forward_daily_benchmark_open_tushare.py --dry-run` and then the same command without `--dry-run` fetched only CSI300 / CSI1000 `index_daily` `trade_date/open/close` for `20240131..20260228`. Readback of ignored local `result/a_short/backtest/cache/forward_daily.pkl` shows stock rows `2681523`, limit rows `3513895`, both benchmark frames as 498 rows with columns `trade_date/open/close`, and `meta.benchmark_open_patch.update_method = benchmark_only_index_daily_open_close_patch`; a mocked-provider check proved `fetch_forward_daily(['20240131'], 5, refresh=False)` reuses the cache without provider refetch.
+
+### SR-PROVIDER-001 - US EGS data-source direction is not access authorization
+
+- Severity: P1
+- Status: blocked
+- Owner phase: Phase 7b / US provider access and Phase 7c precondition
+- Evidence: the user has stated no US data source is currently enabled and accepted the US EGS source direction of FMP as primary candidate plus SEC EDGAR as fundamentals audit source. `docs/provider_evidence_drift_monitor.md` §15 records that `yfinance` is only an optional low-trust price smoke check and cannot replace EDGAR for fundamentals validation. Existing P1 access artifacts still have approved spend `0` and forbid token / trial / paid access, sample collection, and data fetch.
+- Accepted calibration: the source direction narrows future candidate roles, but it does not prove FMP coverage, license, PIT semantics, local-storage rights, SEC parser feasibility, free-float reconciliation, fallback behavior, or provider stability. It also does not authorize `yfinance` scraping or any price cross-check.
+- Required next action: before any US data work, ask the user for explicit approval of cost ceiling, access path, license / local-storage / non-display / retention boundary, and the exact allowed action. A later reviewed packet must separately authorize FMP access, SEC fair-access parser/sample work, any `yfinance` price smoke check, sample-row validation, adapter work, DataHub tables, or Phase 7c consumption.
 
 ### SR-DATA-001 - Suspend inference can silently drop tradable stocks on partial daily response
 

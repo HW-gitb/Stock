@@ -8,6 +8,55 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (US EGS data-source direction documentation)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `f4f1f04`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。
+
+**Notes**: docs-only（无 untracked、无 code/schema/JSON）。把用户接受的 US EGS 数据源方向固化进仓库 + 新增 `SR-PROVIDER-001` 访问门禁。**最关键审查点——只记"方向"、未越界成授权**：AGENTS §当前进度 + §15 固化决策 + `docs/provider_evidence_drift_monitor.md` §15 + CURRENT P1 blocker + SR-PROVIDER-001 **一致保持 `approved spend = 0`、不授权 provider selection/contact/token/trial/paid/sample/fetch/Phase 7c**；§15 明写 "this direction is not by itself an access approval / provider-selection artifact / data-fetch authorization"。**FMP-PIT 陷阱（我上轮强调的）被准确捕获**：§15 "SEC EDGAR 为 fundamentals authority/audit、XBRL 是 as-reported、full field-by-field PIT normalization 是单独 data-engineering task"，且 EDGAR 不负责价格、不能严格 reconcile free float；SR-PROVIDER-001 calibration 明列 "does not prove FMP coverage, license, **PIT semantics**, ... provider stability"，并把 yfinance 限死为"显式批准后的低信任 price smoke check、不得替代 EDGAR"。**边界处置正确**：Codex reject "改 JSON access-plan 装作已选 provider"（schema 锁死 selection→方向放 prose+gate）、reject "加 yfinance 进 P1 matrix"、reject "现在开 FMP/EDGAR sample"。**独立验证**：`test_provider_p1_access_decision_plan_schema`+`test_provider_evidence_drift_monitor_schema` 27 OK；**`git diff --name-only` 确认 scope-locked access-plan JSON 未在本 diff（grep=0）**、approved spend 仍 0；CURRENT.md 149；长线 lane verdict 未被改动（仍 `defer_until_provider_ready`，符合"记数据源方向≠改 lane readiness"）。SR-PROVIDER-001 well-formed（P1/blocked，Hot Queue #6，required action 走既有 access-decision 框架）。**一条非阻塞观察（非 Optional）**：用户最终选 **FMP 主源（Polygon/Massive 暂缓）**，与我上轮 Polygon-primary 建议不同——属用户 Final-Approver 决定，且"只需日线+基本面、FMP 单源覆盖"理由自洽，无需更改。**但因 FMP 现在同时是价格与基本面的主源**，FMP 数据质量(PIT/coverage/价格准确性)成为更 load-bearing 的单点——SR-PROVIDER-001 + §15 已把"FMP 验证 + EDGAR 部分审计"列为未决前置，故无 gap；这点是日后建 access packet 时最该先钉死的验证项。**下一刀**：默认仍回 risk-register hot queue（`SR-DATA-001`+`SR-OPS-002`+`SR-OPS-003`），除非用户显式批准 US provider access packet（须先定 cost ceiling/access path/license/retention 边界，再 reviewed decision，方可 token/trial/sample/fetch）。
+
+---
+
+## 2026-06-01 — Codex 执行 (US EGS data-source direction documentation)
+
+**Commits**: f4f1f04
+
+**Relationship to prior session(s)**:
+- Builds on the committed A-share minimal-data burst audit/spec downgrade.
+- Implements the user's explicit acceptance of the US EGS data-source direction: FMP primary candidate + SEC EDGAR fundamentals audit; `yfinance` only as an explicitly approved low-trust price smoke check.
+- Does not request provider access, fetch US data, create adapters, change schemas, change runners, run research, or authorize Phase 7c / production / ship-gate claims.
+
+**Worked on**:
+1. [tracked] `docs/provider_evidence_drift_monitor.md`: added §15 with the US EGS data-source direction, EDGAR/free-float/price limits, `yfinance` limits, and the no-access/no-fetch boundary.
+2. [tracked] `AGENTS.md`, `docs/README.md`, and `docs/CURRENT.md`: routed the decision into highest rules, docs routing, and current-state snapshot while keeping provider access blocked.
+3. [tracked] `docs/system_risk_register.md`: added `SR-PROVIDER-001` so future US provider access / fetch work cannot proceed without explicit user approval and later review.
+4. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7 handoff note with rationale and validation.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Treated the user's source agreement as a durable source-role direction, not as provider access approval or provider readiness proof.
+- Kept FMP as the preferred primary candidate for US EGS fundamentals / valuation / EOD / liquidity, but left sample validation, license, PIT semantics, local storage, and coverage counts blocked.
+- Kept SEC EDGAR as the fundamentals authority / audit source only. It does not provide prices and cannot strictly reconcile free float.
+- Kept `yfinance` outside the official provider chain; it cannot replace EDGAR for fundamentals audit and needs explicit approval even for an ad hoc price smoke check.
+
+**Alternatives considered and rejected**:
+- "Update the JSON access-plan artifact as if provider selection was made" — rejected because the existing schema intentionally forbids provider selection and access authorization; the right place for the role direction is the provider owner doc and risk gate.
+- "Add a `yfinance` candidate to the P1 matrix" — rejected because it is not a trusted audit source and would broaden the reviewed matrix without a new provider evidence slice.
+- "Start FMP / EDGAR sample work now" — rejected because the user has not approved access path, cost ceiling, license / storage boundary, or data fetch.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema tests.schema.test_provider_evidence_drift_monitor_schema -v`: passed, 27 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` length check: 149 lines.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review. Reviewer should inspect tracked diffs only; there are no intended untracked files.
+- After review / commit, the default implementation work remains the risk-register hot queue (`SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003`) unless the user explicitly approves a US provider access packet or another narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (A-share minimal-data burst audit/spec downgrade)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `3753e6e`)
