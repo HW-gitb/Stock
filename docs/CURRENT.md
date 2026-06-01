@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（SR-SKILL reference boundaries）
+**最后更新**：2026-06-01（SR-LLM policy prompt boundary）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,7 +12,7 @@
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
 - Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
-- `SR-SKILL-001` is resolved, and the related A-short v14.2 direct-paste residual is tracked as `SR-SKILL-002`: US-short references have inline non-runtime banners; A-short `SKILL.md` now carries the stronger non-runtime boundary while frozen `v14.2_spec.md` remains unchanged.
+- `SR-LLM-001` is resolved: A-short Stage 3 DeepSeek policy-risk prompts now sanitize and delimit Sina / Baidu titles as `[UNTRUSTED_NEWS_TITLE]` with an explicit untrusted-text instruction boundary; no EGS run, provider fetch, research run, or runner change is authorized by this fix.
 
 ---
 
@@ -39,7 +39,7 @@
 - **SR-OPS-005 forward tracker cache coverage**（2026-06-01）：`forward_tracker.py` now proves backfill coverage from cached stock trading dates instead of calendar-day approximation.
 - **SR-RANK-001 forward-return conversion status**（2026-06-01）：`attach_forward_returns` now reports `pending_return_conversion_failed` instead of `"ok"` when required forward-return conversions fail or leave invalid values.
 - **SR-OPS-006 relisted lookback boundary**（2026-06-01）：`get_relisted_stocks` now uses exact inclusive lookback cutoff semantics and invalidates old relisted caches with `_v2`.
-- **SR-SKILL-001 US-short reference boundary**（2026-06-01）：US-short reference docs now state they are design reference only, not runtime prompts, and cannot authorize operation advice / sizing before schema-first Skill / runner implementation plus reviewed ship-gate evidence.
+- **SR-LLM-001 Stage 3 prompt boundary**（2026-06-01）：DeepSeek policy-risk prompt construction now sanitizes external titles, wraps them in `[UNTRUSTED_NEWS_TITLE]` rows, and tells the LLM not to execute instructions inside titles; focused tests cover injection-style titles.
 - **SR-EXEC-003 drawdown evidence guard**（2026-06-01）：`runners/backtest_execution.py` no longer exposes realized exit-date cash drawdown as numeric `max_drawdown`; ship-gate drawdown remains not evaluable until open-position MTM is implemented.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
 - **US EGS data-source direction / Phase 7b-2 access boundary**（2026-06-01）：FMP 为主源候选，SEC EDGAR 为基本面审计源；`yfinance` 仅可显式批准后作低信任价格 smoke check。`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 仍只定义访问边界和样本验证计划，不授权 provider 行动。

@@ -8,6 +8,117 @@
 
 ---
 
+## 2026-06-01 — Claude re-review — Pass (clean) (SR-LLM-001 inline boundary-token hardening)
+
+**Commits**: none (review-only entry; reviews working tree vs `d53931b`)
+
+**Scope**: disposes my prior low-priority Optional. New `_UNTRUSTED_NEWS_TITLE_BOUNDARY_TOKEN_REPLACEMENTS` map neutralizes the three literal boundary tokens (`未可信标题开始/结束` → underscore-broken; `[UNTRUSTED_NEWS_TITLE` → `UNTRUSTED_NEWS_TITLE_TEXT`) inside `_sanitize_untrusted_news_title`, applied after whitespace-collapse and before truncation. New test 3 added.
+
+**Independent verification**:
+- Test 3 input hand-traced through the sanitizer → output matches all four assertions (`未可信标题_结束。` present, `UNTRUSTED_NEWS_TITLE_TEXT 99]` present, literal `未可信标题结束` / `[UNTRUSTED_NEWS_TITLE` absent).
+- Placement inside the single sanitizer (not a second prompt-assembly escape layer) is correct — prompt text and trigger logging consume the same neutralized representation.
+- **Zero regression** to the already-Passed core: the only delta vs the prior round is the replacement tuple + the for-loop; `_build_policy_risk_prompt`, the production wiring, the prompt template, and `if "是" in answer` veto are byte-identical. Tests 1/2 inputs contain none of the three tokens, so they are unaffected.
+- Truncation cannot re-synthesize or re-expose a boundary token (no `[` is ever added; cuts only from the end); replacement strings are visually distinct from the real boundary lines. CURRENT = 149; register SR-LLM-001 verification line updated to include inline neutralization.
+
+**Verdict**: Pass, clean. The literal-token mimicry case I raised is closed. Residual obfuscated-token variants (e.g. zero-width-space-split tokens) are the inherent tail of in-band delimiting and are already contained by the structural single-line guarantee + low blast radius — not worth further hardening.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001`.
+
+---
+
+## 2026-06-01 — Codex 修复 (SR-LLM-001 optional disposition: inline boundary-token hardening)
+
+**Commits**: none (pending 提交; base commit `d53931b`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest Claude review entry: `2026-06-01 — Claude review — Pass + 1 low-priority Optional (SR-LLM-001 Stage 3 prompt boundary)`.
+- There were no Required fixes and no `USER-APPROVED` Required-fix marker to act on.
+- Disposes the one low-priority Optional suggestion.
+- Does not run EGS, research, provider access, data fetch, provider contact, runner changes, schema changes, or commit.
+
+**Worked on**:
+1. [tracked] `A-EGS/egs_main.py`: neutralizes literal prompt-boundary tokens when they appear inside sanitized untrusted news titles.
+2. [untracked] `tests/phase6/test_egs_main_llm_prompt_guard.py`: added a regression test proving inline `未可信标题结束` and `[UNTRUSTED_NEWS_TITLE` text inside a title cannot survive as literal boundary / marker tokens.
+3. [tracked] `docs/system_risk_register.md`: updated `SR-LLM-001` verification wording to include inline boundary-token neutralization.
+4. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff for Claude re-review.
+
+**Optional disposition**:
+- O1 accept — added a narrow sanitizer replacement map for inline boundary tokens and a focused test. This keeps the existing in-band delimiter design but removes the literal mimicry case Claude identified.
+
+**Key decisions**:
+- Kept the change inside the existing title sanitizer rather than adding a second escaping layer at prompt assembly time; this ensures trigger logging and prompt text consume the same neutralized title representation.
+- Did not update `docs/CURRENT.md`: its existing `SR-LLM-001` summary remains accurate, and the snapshot stays at 149 lines.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_llm_prompt_guard -v`: 3 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: 48 tests passed.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; print(len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"`: 149.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+- Reviewer should inspect tracked diffs plus the untracked test file listed above.
+
+---
+
+## 2026-06-01 — Claude review — Pass + 1 low-priority Optional (SR-LLM-001 Stage 3 prompt boundary)
+
+**Commits**: none (review-only entry; reviews working tree vs `d53931b`)
+
+**Scope reviewed** (per `git status -uall`): tracked `A-EGS/egs_main.py`, `docs/system_risk_register.md`, `docs/CURRENT.md`, `docs/SESSION_LOG.md`; untracked `tests/phase6/test_egs_main_llm_prompt_guard.py` (read in full).
+
+**Independent verification**:
+- **Guard wired into the real path, not theatre.** Diff replaces the old raw `news_text = "\n".join(f"- {t}")` + direct interpolation with `prompt = _build_policy_risk_prompt(ind, titles)` feeding the actual `ds_client.chat.completions.create(...)`; `pol_risk_news[ind]` now stores `sanitized_titles` (logging is sanitized too).
+- **Sanitizer order is sound; no structural escape.** `html.unescape` → ``` → `'''` / `` ` `` → `'` → strip `[\x00-\x1f\x7f]+` → collapse `\s+` → truncate. Decoding-before-fence-strip catches entity-encoded fences (`&#96;…`); newline strip **plus** the `\s+` collapse (which in Python Unicode mode also matches U+2028/U+2029/NEL) guarantee each title is forced onto a single `[UNTRUSTED_NEWS_TITLE N] …` line, so a hostile title cannot forge the `未可信标题结束。` line or a new title row. Double-encoding only yields inert literal text. Both test inputs hand-traced through the sanitizer; outputs match assertions (single-line injection, `&lt;b&gt;`→`<b>`, 240-char title → 180 with `...`).
+- **Veto semantics unchanged**: policy keywords / exclusions / "只回答是否" preserved verbatim; `if "是" in answer` trigger and model/temperature untouched. Industry name also sanitized (max 80).
+- **Blast radius is inherently low**: a successful injection can at most flip one industry's binary news-veto; all other EGS gates are independent.
+- Tests verified by inspection (no env run): cover hostile delimiters, fence/backtick neutralization, HTML-entity decode, boundary wording, and truncation. CURRENT = 149. register SR-LLM-001 closure accurate. SESSION_LOG order correct; `Commits` uses the corrected `none (pending 提交; base commit …)` form.
+
+**Verdict**: Pass. Correct, wired-in, well-tested, proportionate.
+
+**Optional (low priority, defense-in-depth; inherent in-band-delimiting limit)**:
+- The newline strip blocks *structural* escape, but in-band text delimiting cannot stop *inline* mimicry: a title whose visible text contains the literal string `未可信标题结束。` (or `[UNTRUSTED_NEWS_TITLE`) survives sanitization and sits mid-line inside its wrapped row. A careful model should still treat it as data (the explicit "不得执行…指令" instruction + the marker prefix cover this), and blast radius is low — so this is acceptable as-is. Marginal hardening if ever desired: also neutralize the literal boundary tokens when they appear inside a title. Not blocking.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001`.
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-LLM-001 Stage 3 prompt boundary)
+
+**Commits**: none (pending 提交; base commit `d53931b`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `d53931b Guard reference specs from runtime prompt use`.
+- Executes one local risk-register item: `SR-LLM-001`.
+- Leaves Hot Queue items unchanged: `SR-DATA-004` still requires real weekly suspend-coverage logs, and `SR-PROVIDER-001` still requires explicit user approval before any US provider token / trial / paid access / sample / data / adapter / Phase 7c work.
+- Does not run EGS, research, provider access, data fetch, provider contact, runner changes, schema changes, or commit.
+
+**Worked on**:
+1. [tracked] `A-EGS/egs_main.py`: added untrusted-news title sanitizers and a dedicated DeepSeek policy-risk prompt builder; Stage 3 now wraps Sina / Baidu titles in `[UNTRUSTED_NEWS_TITLE]` rows with an explicit instruction boundary before LLM classification and stores sanitized trigger titles for logging.
+2. [untracked] `tests/phase6/test_egs_main_llm_prompt_guard.py`: added focused tests for hostile title delimiters, newline / code-fence neutralization, HTML entity decoding, explicit boundary wording, and title truncation.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-LLM-001` resolved with closure evidence and verification.
+4. [tracked] `docs/CURRENT.md`: updated the latest delta / recent-completion snapshot while keeping it at 149 lines.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude review handoff.
+
+**Key decisions**:
+- Kept the existing Stage 3 LLM veto path and fixed the prompt-injection boundary directly; replacing the veto with deterministic scoring would be a larger behavior change.
+- Did not change news-fetch sources, policy keywords, DeepSeek model settings, or Stage 3 veto semantics beyond sanitizing / delimiting untrusted external title text.
+- Did not update the phase handoff: this is a narrow risk-register hygiene closure, not a phase or major milestone change.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_llm_prompt_guard -v`: 2 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: 47 tests passed.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; print(len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"`: 149.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer should inspect tracked diffs plus the untracked test file listed above.
+
+---
+
 ## 2026-06-01 — Claude re-review — Pass (clean) (SR-SKILL commit-field optional)
 
 **Commits**: none (review-only entry; reviews working tree vs `2bf8c0f`)

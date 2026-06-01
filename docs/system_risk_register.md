@@ -348,11 +348,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-LLM-001 - Web-news policy-risk prompt injection surface
 
 - Severity: P2
-- Status: open
+- Status: resolved
 - Owner phase: A-short Stage 3 LLM policy-risk check
 - Evidence: `A-EGS/egs_main.py` builds a DeepSeek prompt by embedding raw Sina / Baidu news titles into user content.
 - Accepted calibration: bounded impact; it can flip a policy-risk veto but does not directly create broker action or automatic buying.
-- Required next action: sanitize / delimit external titles and add an instruction boundary test, or replace the LLM call with deterministic keyword / source scoring for this veto.
+- Required next action: no active `SR-LLM-001` action. Future Stage 3 LLM prompts that embed external text must preserve an explicit untrusted-text boundary and targeted tests.
+- Closure evidence: the reviewed change set adds `_sanitize_untrusted_news_title`, `_sanitize_untrusted_news_titles`, and `_build_policy_risk_prompt` in `A-EGS/egs_main.py`; DeepSeek policy-risk checks now pass Sina / Baidu titles through a sanitized `[UNTRUSTED_NEWS_TITLE]` block with an explicit instruction boundary before LLM classification, and logs policy-risk trigger titles from the sanitized list.
+- Verification: `tests.phase6.test_egs_main_llm_prompt_guard` covers hostile title delimiters, newline / code-fence neutralization, HTML entity decoding, explicit "do not execute title instructions" boundary text, inline boundary-token neutralization, and max-length truncation.
 
 ### SR-CANARY-001 - Data canary status is advisory but can be overread
 
