@@ -37,7 +37,8 @@ Existing helpers:
   `execution_report.json`, and writes CSV outputs under
   `result/a_short/backtest/execution/`. With `--price-data`, it runs the minimal
   daily-OHLC fill simulation; without `--price-data`, it keeps the skeleton skip
-  behavior.
+  behavior. It rejects cash-state bucket capital above the policy ceiling
+  (`market_capital * bucket_ceiling_pct`) before sizing can use it.
 - `aggregate_execution_reports.py` - Phase 5 multi-period aggregation helper;
   reads schema-valid `execution_backtest_report` v1.2.0 files, aggregates
   monthly return / Sharpe / worst drawdown evidence, optionally computes

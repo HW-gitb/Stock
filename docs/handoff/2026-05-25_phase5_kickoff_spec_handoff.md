@@ -1,5 +1,47 @@
 # Phase 5 kickoff spec handoff
 
+## 2026-06-01 addendum: SR-CAP-001 capital ceiling guard
+
+### What changed
+
+- `runners/backtest_execution.py` now validates that the selected execution bucket capital does not exceed `market_capital * bucket_ceiling_pct`.
+- The guard runs when building `capital_context` from `portfolio_allocation` / `cash_buffer_state` and again before empty or simulated execution paths use `bucket_capital`.
+- Above-ceiling cash-state inputs now raise a clear `bucket_capital exceeds bucket ceiling` error before share calculation.
+- `tests/execution/test_backtest_execution.py` adds a regression using a hand-edited A-short cash state with `short_bucket_capital = 200000.0` against the existing `350000.0 * 0.333333` ceiling.
+- `docs/system_risk_register.md` closes `SR-CAP-001` and removes it from Hot Queue item #1.
+
+### Why
+
+`SR-CAP-001` showed that the execution runner used whatever `cash_buffer_state` reported as `bucket_capital`. Existing share calculation capped by cash and per-position limits, but it did not reject a hand-edited bucket capital that exceeded the user's fixed market / bucket allocation ceiling. This slice hard-fails the invalid state instead of silently clamping it, because automatic clamping would mutate or reinterpret user capital state without a reviewed transition.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_capital_context_schemas -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v
+git diff --check
+```
+
+### Validation result
+
+- `tests.execution.test_backtest_execution`: 21 tests passed.
+- `tests.schema.test_execution_backtest_report_schema`: 5 tests passed.
+- `tests.schema.test_capital_context_schemas`: 2 tests passed.
+- `tests.execution.test_aggregate_execution_reports`: 9 tests passed.
+- `git diff --check`: passed; only expected Windows LF-to-CRLF working-copy warnings.
+
+### Invalidated old conclusions
+
+- "A hand-edited cash state above the bucket ceiling can still reach sizing if `--initial-capital` is omitted" is invalid. Current execution reports reject that state before sizing.
+- `SR-CAP-001` is no longer part of Hot Queue item #1; the remaining execution-evidence blockers there are `SR-EXEC-007` and `SR-CONTRACT-002`.
+
+### Next notes
+
+1. This slice intentionally does not fix `SR-EXEC-007` concurrent cash-lock modeling or `SR-CONTRACT-002` forward-live evidence schema.
+2. If a later coordinator supports manual liquidity transfers or ceiling overrides, it needs a reviewed state transition and tests before above-ceiling capital can enter sizing.
+
 ## 2026-06-01 addendum: SR-EXEC-005 zero-trade aggregate return guard
 
 ### What changed

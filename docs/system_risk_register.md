@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
+1. `SR-EXEC-007` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
 2. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
 3. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
 4. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
@@ -244,11 +244,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-CAP-001 - Capital ceiling is not validated at state load / sizing boundary
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: capital policy / execution backtest / coordinator precondition
 - Evidence: `runners/backtest_execution.py:calculate_shares` caps by cash, bucket capital, max position percent, and max positions, but there is no hard validation that the loaded `bucket_capital` respects the market / bucket capital ceiling from policy.
 - Accepted calibration: this is a missing validation / clamp, not proof that current fixtures always over-allocate. If state already has `bucket_capital <= ceiling_pct * market_capital`, the current calculation may be fine; if state is hand-edited above ceiling, no code rejects it.
-- Required next action: validate and/or clamp capital context at state load and before sizing. Add a test that a bucket above its ceiling is rejected or reduced before share calculation.
+- Closure evidence: the reviewed change set updates `runners/backtest_execution.py` to validate `capital_context.bucket_capital <= capital_context.market_capital * capital_context.bucket_ceiling_pct` when building the capital context and again before empty / simulated execution uses the bucket capital. Above-ceiling cash-state inputs now raise instead of entering share calculation.
+- Verification: `tests.execution.test_backtest_execution` covers a hand-edited A-short cash state with `short_bucket_capital = 200000.0` against market capital `350000.0` and ceiling `0.333333`, expecting a `bucket_capital exceeds bucket ceiling` rejection. `tests.schema.test_execution_backtest_report_schema` and `tests.schema.test_capital_context_schemas` still pass.
+- Required next action: no active `SR-CAP-001` action. If a later coordinator intentionally supports manual liquidity transfers or ceiling overrides, add a reviewed state transition and tests before allowing above-ceiling bucket capital into sizing.
 
 ### SR-OPS-004 - Weekly xlsx overwrite guard checks a different default path than `egs_main.py`
 
@@ -293,7 +295,7 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 - Owner phase: Phase 5 / Phase 8 monitoring and ship-gate readiness
 - Evidence: audit #1 reported execution-backtest drawdown underestimation, unimplemented cooldown / circuit-breaker / concurrency limits, and capital-ceiling enforcement gaps.
 - Accepted calibration: line-level revalidation split the material execution findings into concrete entries rather than treating the summary as one vague blocker.
-- Supersession evidence: replaced by `SR-EXEC-003`, `SR-EXEC-004`, `SR-EXEC-005`, and `SR-CAP-001`. Each child entry owns its current status; still-open child entries remain blockers until fixed and verified.
+- Supersession evidence: replaced by `SR-EXEC-003`, `SR-EXEC-004`, `SR-EXEC-005`, `SR-EXEC-007`, and `SR-CAP-001`. Each child entry owns its current status; still-open child entries remain blockers until fixed and verified.
 
 ### SR-GOV-001 - A-short screening thresholds are not governed by preset schema
 

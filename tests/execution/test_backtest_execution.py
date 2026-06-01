@@ -720,6 +720,39 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     ]
                 )
 
+    def test_bucket_capital_above_policy_ceiling_is_rejected(self) -> None:
+        cash_state = json.loads(
+            (ROOT / "tests" / "fixtures" / "cash_buffer_state_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        a_market = cash_state["markets"][0]
+        a_market["capital"]["short_bucket_capital"] = 200000.0
+        for bucket in a_market["buckets"]:
+            if bucket["bucket"] == "short":
+                bucket["capital"] = 200000.0
+                bucket["available"] = 200000.0
+                break
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cash_path = Path(tmpdir) / "cash_state.json"
+            cash_path.write_text(json.dumps(cash_state), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "bucket_capital exceeds bucket ceiling"):
+                main(
+                    [
+                        "--as-of",
+                        "20260522",
+                        "--input-path",
+                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        "--portfolio-allocation",
+                        str(ROOT / "tests" / "fixtures" / "portfolio_allocation_minimal.json"),
+                        "--cash-buffer-state",
+                        str(cash_path),
+                        "--out-dir",
+                        tmpdir,
+                    ]
+                )
+
     def test_preset_yaml_drives_capital_profile(self) -> None:
         preset_text = (ROOT / "presets" / "a_short.yaml").read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as tmpdir:

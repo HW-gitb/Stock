@@ -376,6 +376,35 @@ def _find_one(items: list[dict[str, Any]], key: str, value: str, label: str) -> 
     return matches[0]
 
 
+def validate_bucket_capital_ceiling(
+    market: str,
+    bucket: str,
+    market_capital: float,
+    bucket_ceiling_pct: float,
+    bucket_capital: float,
+    label: str = "capital_context",
+) -> None:
+    ceiling_capital = market_capital * bucket_ceiling_pct
+    if bucket_capital - ceiling_capital > 0.01:
+        raise ValueError(
+            f"{label}.bucket_capital exceeds bucket ceiling for {market}/{bucket}: "
+            f"{bucket_capital:.2f} > {ceiling_capital:.2f} "
+            f"(market_capital {market_capital:.2f} * bucket_ceiling_pct {bucket_ceiling_pct:.6f})"
+        )
+
+
+def validated_bucket_capital_from_context(capital_context: dict[str, Any]) -> float:
+    bucket_capital = float(capital_context["bucket_capital"])
+    validate_bucket_capital_ceiling(
+        str(capital_context["market"]),
+        str(capital_context["bucket"]),
+        float(capital_context["market_capital"]),
+        float(capital_context["bucket_ceiling_pct"]),
+        bucket_capital,
+    )
+    return bucket_capital
+
+
 def build_capital_context(
     portfolio_allocation: dict[str, Any],
     portfolio_allocation_path: Path,
@@ -429,7 +458,7 @@ def build_capital_context(
         raise ValueError(f"cash_buffer_state bucket {market}/{bucket} must reference preset {preset}")
 
     ship_gate_policy = portfolio_allocation["ship_gate_policy"]
-    return {
+    capital_context = {
         "portfolio_allocation_ref": {
             "path": relative_ref(portfolio_allocation_path),
             "schema_version": str(portfolio_allocation["schema_version"]),
@@ -469,6 +498,8 @@ def build_capital_context(
             "reason": "Phase 5 skeleton has not evaluated forward-live ship-gate metrics.",
         },
     }
+    validated_bucket_capital_from_context(capital_context)
+    return capital_context
 
 
 def validate_initial_capital_guard(args: argparse.Namespace, capital_context: dict[str, Any]) -> None:
@@ -722,7 +753,7 @@ def empty_simulation_result(
     skipped_rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     as_of = str(payload.get("trade_date"))
-    bucket_capital = float(capital_context["bucket_capital"])
+    bucket_capital = validated_bucket_capital_from_context(capital_context)
     missing_stop_count = sum(1 for row in skipped_rows if row["reason"] == "missing_stop")
     analyzer_veto_count = sum(
         1 for row in skipped_rows if row["reason"] == "analyzer_hard_veto"
@@ -817,7 +848,7 @@ def simulate_execution(
     capital_context: dict[str, Any],
 ) -> dict[str, Any]:
     as_of = str(payload.get("trade_date") or args.as_of)
-    bucket_capital = float(capital_context["bucket_capital"])
+    bucket_capital = validated_bucket_capital_from_context(capital_context)
     cash = bucket_capital
     peak_equity = bucket_capital
     by_symbol = price_rows_by_symbol(price_data)

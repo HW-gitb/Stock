@@ -8,6 +8,58 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-CAP-001 capital ceiling guard)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `9c4c464`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。本轮可 `提交`。hot queue #1 余 `SR-EXEC-007` + `SR-CONTRACT-002`。
+
+**Notes**: SR-CAP-001 修复正确。`validate_bucket_capital_ceiling` 在 `build_capital_context` + `empty_simulation_result` + `simulate_execution` 两条 sizing 入口前校验 `bucket_capital <= market_capital * bucket_ceiling_pct`（0.01 float 容差，避免 rounding 误判），超限 `raise ValueError`——**hard-reject 而非 silent clamp，正确**（不静默重解 hand-edited cash state）。context 的 `market_capital` / `bucket_ceiling_pct` 为 top-level key（build line 481/483），故 guard 在真实路径而非仅 test fixture 生效；无未校验的 sizing 旁路（calculate_shares 拿到的是已校验 bucket_capital）。test 覆盖超限 cash-state（short_bucket 200000 vs ceiling 116666）raise；37 tests OK；CURRENT 149。register SR-CAP-001 open→resolved（closure+verification 准确），并**顺手修正 SR-EXEC-002 supersession 列表补入原漏的 SR-EXEC-007**。scope 仅 SR-CAP-001（+ 该父条 child-list 校正）。提交后下一刀 `SR-EXEC-007` / `SR-CONTRACT-002`。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-CAP-001 capital ceiling guard)
+
+**Commits**: 9c4c464
+
+**Relationship to prior session(s)**:
+- Builds on the committed `SR-DATA-004` suspend-threshold watch item and the current risk-register hot queue.
+- Executes only `SR-CAP-001`; `SR-EXEC-007` and `SR-CONTRACT-002` remain open in Hot Queue item #1.
+- Does not run EGS, regenerate cohorts, run research, fetch provider data, contact providers, change US data-source access, or commit.
+
+**Worked on**:
+1. [tracked] `runners/backtest_execution.py`: added a bucket-capital ceiling guard that rejects `capital_context.bucket_capital > capital_context.market_capital * capital_context.bucket_ceiling_pct`; the guard runs at capital-context build time and again before empty / simulated execution uses the bucket capital for sizing.
+2. [tracked] `tests/execution/test_backtest_execution.py`: added a regression for an above-ceiling A-short cash state (`short_bucket_capital = 200000.0`) that must raise before share calculation.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-CAP-001` resolved, removed it from Hot Queue item #1, and corrected `SR-EXEC-002` supersession to include `SR-EXEC-007`.
+4. [tracked] `docs/CURRENT.md`: updated the latest delta and next default hot-queue routing to `SR-EXEC-007` + `SR-CONTRACT-002`, keeping the snapshot at 149 lines.
+5. [tracked] `runners/README.md`: documented that `backtest_execution.py` rejects above-ceiling bucket capital before sizing.
+6. [tracked] `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`: prepended the Phase 5 addendum for this capital-ceiling guard.
+
+**Key decisions**:
+- Chose hard rejection instead of silent clamp because clamping would reinterpret a hand-edited cash state without a reviewed state transition.
+- Kept the change local to execution capital context and sizing input validation; no schema shape changes were needed.
+- Did not fold in `SR-EXEC-007` concurrent cash-lock modeling or `SR-CONTRACT-002` forward-live evidence schema.
+
+**Alternatives considered and rejected**:
+- "Clamp bucket capital down to the ceiling" — rejected because the runner should not silently mutate or reinterpret the cash state.
+- "Only rely on `--initial-capital` as a guard" — rejected because that CLI argument is optional and does not protect default execution runs.
+- "Implement concurrent holdings in the same slice" — rejected because that is the separate `SR-EXEC-007` capacity / cash-lock modeling risk.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v`: passed, 21 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v`: passed, 5 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_capital_context_schemas -v`: passed, 2 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v`: passed, 9 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line-count check via PowerShell `Get-Content`: 149 lines, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- If review passes and the user commits, the next default `执行` is the remaining execution-evidence group (`SR-EXEC-007` + `SR-CONTRACT-002`), unless the user explicitly approves a narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-004 R1 re-review)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `965817d`)
