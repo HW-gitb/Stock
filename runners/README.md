@@ -14,6 +14,10 @@ Current Phase 1/2 entry remains `A-EGS/egs_main.py`. Direct historical
 `--allow-historical-live-l3` for non-evidence live-concept smoke runs. The
 engine also rejects non-empty daily payloads that are too incomplete to support
 safe suspend inference instead of treating missing rows as suspended stocks.
+Suspend coverage observations are written to
+`logs/suspend_daily_coverage_<as_of>.json` and mirrored into schema-validated
+`data_health` v1.2.0 `metrics.suspend_daily_coverage`; cached observations are
+explicitly marked as cache hits, not fresh provider coverage.
 
 Validation environment:
 

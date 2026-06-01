@@ -587,3 +587,46 @@ Results:
 
 - The regenerated `result/a_short/backtest/backtest_report.json` only changes `generated_at` and the candidate-generation API family list; rank stats and sample count are unchanged.
 - This does not rerun live Stage3 cninfo/news/DeepSeek. It covers the deterministic script paths involved in Phase 2 / 2.5 / 2.6: EGS metadata, data health lineage, rank report lineage, data canary unit behavior, and weekly wrapper process/error handling.
+
+---
+
+## 2026-06-01 append: data_health v1.2.0 suspend coverage metric
+
+### Changed
+
+- `schemas/data_health.schema.json` now uses schema version `1.2.0`.
+- `metrics.suspend_daily_coverage` is required and describes the latest suspend daily coverage observation mirrored from `A-EGS/egs_main.py`.
+- `A-EGS/egs_main.py:export_data_health` validates the constructed `data_health` payload against `schemas/data_health.schema.json` before writing `data_health.json`.
+- `tests/phase6/test_egs_main_suspend_guard.py` validates the new metric against the schema and proves extra metrics are rejected before write.
+
+### Why
+
+`SR-DATA-004` observability added `data_health.metrics.suspend_daily_coverage`, but the existing data_health schema used `additionalProperties: false` and still described v1.1.0 metrics. Without the v1.2.0 schema bump and write-time validation, every new `data_health.json` would violate its own contract while tests still passed.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_suspend_guard -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/data_health.schema.json',encoding='utf-8')); Draft7Validator.check_schema(s); print('data_health schema', s['properties']['schema_version']['const'])"
+git diff --check
+```
+
+### Validation result
+
+- `tests.phase6.test_egs_main_suspend_guard` + `tests.phase6.test_weekly_screening_guardrails`: 11 tests passed.
+- `python -m unittest discover -s tests\phase6 -v`: 53 tests passed.
+- `python -m unittest discover -v`: 304 tests passed.
+- `schemas/data_health.schema.json` meta-validation: passed (`data_health schema ok 1.2.0`).
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+### Invalidated old conclusion
+
+- "`data_health` current schema is v1.1.0" is invalid for new outputs after this change set; current `data_health` contract is v1.2.0.
+- "`data_health` has no suspend daily coverage metric" is invalid after this change set.
+
+### Next-step notes
+
+- `SR-DATA-004` still requires real weekly `logs/suspend_daily_coverage_<asof>.json` / `data_health.metrics.suspend_daily_coverage` evidence before it can close.
+- The sidecar `suspend_daily_coverage_log` remains a self-versioned observability log rather than a formal `schemas/` contract; the formal contract surface is the `data_health` metric.

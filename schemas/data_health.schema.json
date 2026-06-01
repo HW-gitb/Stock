@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.1.0"
+      "const": "1.2.0"
     },
     "generated_at": {
       "type": "string"
@@ -103,6 +103,7 @@
         "watch_l1_unknown_count",
         "watch_l2_unknown_count",
         "full_l2_unknown_count",
+        "suspend_daily_coverage",
         "completeness_score_min",
         "completeness_score_below_95_count",
         "completeness_score_below_75_count"
@@ -148,6 +149,82 @@
         "full_l2_unknown_count": {
           "type": ["integer", "null"],
           "minimum": 0
+        },
+        "suspend_daily_coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_name",
+            "schema_version",
+            "status"
+          ],
+          "properties": {
+            "schema_name": {
+              "const": "suspend_daily_coverage_log"
+            },
+            "schema_version": {
+              "const": "1.0.0"
+            },
+            "generated_at": {
+              "type": "string"
+            },
+            "as_of": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9]{8}$"
+            },
+            "trade_date": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9]{8}$"
+            },
+            "status": {
+              "enum": [
+                "pass",
+                "fail_low_coverage",
+                "cache_hit_coverage_not_observed",
+                "no_daily_payload_skip_filter",
+                "not_observed"
+              ]
+            },
+            "source": {
+              "type": "string"
+            },
+            "stock_universe_count": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "daily_payload_row_count": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "traded_in_universe_count": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "suspended_count": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "coverage_ratio": {
+              "type": ["number", "null"],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "min_coverage": {
+              "type": ["number", "null"],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "attempted_trade_dates": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9]{8}$"
+              }
+            },
+            "message": {
+              "type": ["string", "null"]
+            }
+          }
         },
         "completeness_score_min": {
           "type": ["number", "null"],

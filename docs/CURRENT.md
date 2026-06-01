@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（SR-DET state replay determinism）
+**最后更新**：2026-06-01（SR-DATA-004 suspend coverage observability）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,14 +12,14 @@
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
 - Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
-- `SR-DET-001` is resolved: deterministic reports now evaluate circuit-breaker state at the as-of A-share close by default, expose explicit `--state-now` replay override, and record `data_lineage.state_evaluation_time` under deterministic_report v1.2.0.
+- `SR-DATA-004` remains open pending real weekly evidence, but the current change set writes `logs/suspend_daily_coverage_<asof>.json` and mirrors the latest observation into schema-validated `data_health` v1.2.0 `metrics.suspend_daily_coverage`.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 7b-2 P1 closure plan is documented; US EGS data-source direction is FMP primary candidate + SEC EDGAR fundamentals audit; A-share minimal-data burst full-universe redesigned outcome is complete and failed.
-- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；risk register hot queue maintenance 组仅余 `SR-DATA-004`（需真实 weekly suspend-coverage 日志），除非用户先批准新的 research preregistration、provider-access work 或更窄 override。
+- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；risk register hot queue maintenance 组仅余 `SR-DATA-004`（仍需真实 weekly suspend-coverage 日志），除非用户先批准新的 research preregistration、provider-access work 或更窄 override。
 - **当前 P1 provider blocker**：任何 FMP token / trial / paid access、SEC parser sample、`yfinance` price smoke check、provider contact、sample 或 data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
 - **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned test 已消耗 ledger planned test 且 outcome 失败。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。

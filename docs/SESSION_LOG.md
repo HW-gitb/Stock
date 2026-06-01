@@ -8,6 +8,125 @@
 
 ---
 
+## 2026-06-01 — Claude re-review — Pass (clean) (SR-DATA-004 data_health schema sync — Required R1 resolved)
+
+**Commits**: none (review-only entry; reviews working tree vs `fae4e2c`)
+
+**Required R1 (USER-APPROVED 2026-06-01) — resolved, verified:**
+- `data_health.schema.json` bumped 1.1.0→1.2.0; `metrics.required` adds `suspend_daily_coverage`; nested object defined with `additionalProperties:false`, `required=[schema_name,schema_version,status]` (the only fields common to all statuses) and all 12 optional fields typed (status enum covers all 5 producer statuses; YYYYMMDD patterns; coverage 0–1).
+- **Producer↔schema exact alignment checked field-by-field**: the 15 keys of `_record_suspend_daily_coverage_observation`'s payload == the 15 nested schema properties; the 4-key `not_observed` stub satisfies required+optional. Top-level data_health (13/13 keys), `source` (6/6), and `metrics` (existing keys + new one) all match their `additionalProperties:false` objects exactly.
+- **Root-cause blind spot closed (stronger than required)**: Codex also wired `export_data_health` to `validate_json_schema(health, DATA_HEALTH_SCHEMA_PATH)` (the shared ValueError-raising helper) **before** writing — so data_health is now enforced at runtime, not just schema-synced. Test `test_export_data_health_validates_schema_before_write` proves invalid (`unexpected_metric`) → raises + no file written; `test_data_health_includes_latest_suspend_coverage_observation` validates a real `build_data_health` output clean against the schema.
+- **Adversarial check — does the new hard-validation risk breaking real weekly runs?** No. I read `build_data_health`'s full return dict and confirmed every top-level key, `source`, and `metrics` field is covered by the strict schema; errors/warnings (`#/definitions/issue`), outputs_checked (flexible), and limitations are pre-existing/unchanged and already matched at 1.1.0. The only structural delta this round is the now-aligned `suspend_daily_coverage`.
+
+**Instrumentation logic unchanged** from the prior round (verified: signature + get_suspend_info diffs identical), so no regression to the already-verified fail-fast / best-effort-write / cache-hit behavior.
+
+**Optional O1 (no standalone schema for the log file): reject — accepted.** Codex's reasoning is sound: the log shape is now formally pinned where it's consumed (the data_health nested object) and validated; a separate sidecar schema would be redundant and out of the approved scope.
+
+**Process note**: Codex's handoff cites "repairs USER-APPROVED Required fix" — confirms the approval-status flip propagated to the separate Codex session as intended.
+
+**Verdict**: Pass, clean. R1 fully resolved; CURRENT = 149; data_lineage handoff append-only (43/0).
+
+**Hot Queue**: unchanged — `SR-DATA-004` (open, now instrumented + schema-enforced) + `SR-PROVIDER-001`.
+
+---
+
+## 2026-06-01 — Codex 修复 (SR-DATA-004 data_health schema sync)
+
+**Commits**: none (pending Claude re-review / submit; repairs USER-APPROVED Required fix from latest review)
+
+**Status**: Required fix repaired; working tree remains uncommitted per Commit Timing Rule.
+
+**Approved Required fix repaired (1):**
+- R1 data_health schema drift: `schemas/data_health.schema.json` is bumped from v1.1.0 to v1.2.0, requires `metrics.suspend_daily_coverage`, and defines the nested status-bearing observation shape for `pass`, `fail_low_coverage`, `cache_hit_coverage_not_observed`, `no_daily_payload_skip_filter`, and `not_observed`.
+- `A-EGS/egs_main.py:export_data_health` now validates the built `data_health` payload against `schemas/data_health.schema.json` before writing `data_health.json`.
+- `tests/phase6/test_egs_main_suspend_guard.py` validates the mirrored suspend coverage metric against schema and proves invalid extra metrics fail before write.
+
+**Optional disposition:**
+- O1 reject — reason: `suspend_daily_coverage_log` remains a self-versioned best-effort observability sidecar; the formal consumed contract is now enforced at schema-validated `data_health` v1.2.0, and adding a separate sidecar schema would expand beyond the approved Required fix.
+
+**Worked on**:
+1. [tracked] `A-EGS/egs_main.py`: adds data_health schema path/version sync and producer-side validation before write.
+2. [tracked] `schemas/data_health.schema.json`: v1.2.0 plus required `metrics.suspend_daily_coverage`.
+3. [tracked] `tests/phase6/test_egs_main_suspend_guard.py`: schema-valid mirror test and pre-write validation failure test.
+4. [tracked] `docs/CURRENT.md`, `docs/system_risk_register.md`, `runners/README.md`, `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md`: sync the v1.2.0 contract, validation evidence, and SR-DATA-004 remains-open boundary.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_suspend_guard tests.phase6.test_weekly_screening_guardrails -v`: 11 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "import json; from jsonschema import Draft7Validator; s=json.load(open('schemas/data_health.schema.json', encoding='utf-8')); Draft7Validator.check_schema(s); print('data_health schema ok', s['properties']['schema_version']['const'])"`: `data_health schema ok 1.2.0`.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: 53 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v`: 304 tests passed.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['docs/CURRENT.md','docs/system_risk_register.md','runners/README.md','docs/handoff/2026-05-24_phase2_data_lineage_handoff.md','docs/SESSION_LOG.md','schemas/data_health.schema.json']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok'); print('CURRENT lines', len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"`: `utf8 ok`; `CURRENT lines 149`.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+- Reviewer should inspect all tracked diffs; there are no untracked files expected.
+
+---
+
+## 2026-06-01 — Claude review — Required fix x1 (SR-DATA-004 suspend coverage observability)
+
+**Commits**: none (review-only entry; reviews working tree vs `fae4e2c`)
+
+**Status**: USER-APPROVED 2026-06-01 — 1 Required fix approved for repair via `修复`. Do not commit until fixed + re-reviewed.
+
+**Scope reviewed** (per `git status -uall`, all tracked): `A-EGS/egs_main.py`, `tests/phase6/test_egs_main_suspend_guard.py`, register/CURRENT/README.
+
+**Required fix (1) — data_health output violates its own schema (contract drift; tests don't catch it):**
+- `build_data_health` now unconditionally adds `"suspend_daily_coverage": _current_suspend_daily_coverage_observation()` to the `metrics` object. But `schemas/data_health.schema.json` defines `metrics` with **`additionalProperties: false`** (line 94) plus a fixed `required` list, and the schema is **not** in this changeset / not bumped. So every data_health.json now emits a `metrics` key its own contract forbids.
+- Why tests pass anyway: data_health output is **validated nowhere** — no `Draft7Validator`/`jsonschema` call references it (only the literal `schema_name` string at egs_main.py:1083), `export_data_health` writes without validating, the new test only asserts the field is present, and there is no `data_health` example fixture. So the drift is real but unenforced — a blind spot, not a green light. This is exactly the schema-versioning discipline the **SR-DET-001** round (just committed) applied; this slice breaks it.
+- Fix: add `suspend_daily_coverage` to `data_health.schema.json` `metrics.properties` (and to `metrics.required`, since it is always emitted), with a nested-object shape that accommodates all statuses (`pass` / `fail_low_coverage` / `cache_hit_coverage_not_observed` / `no_daily_payload_skip_filter` / `not_observed` carry different field subsets — only `schema_name`/`schema_version`/`status` are universal). Bump `data_health` schema version per project convention and sync any version refs.
+
+**Verified OK (the instrumentation logic itself is sound — only the schema sync is missing):**
+- Fail-fast preserved: the `_record_...` call in `_validated_suspend_traded_codes` runs **before** the unchanged `raise RuntimeError` on below-threshold non-empty payloads.
+- Best-effort write: `_record_...` sets the in-memory global first, then wraps `write_json_atomic` in try/except → `log.warning` on failure, so a log-write error never aborts screening.
+- Cache-hit honesty: cache path records `cache_hit_coverage_not_observed` so a cached suspend set is not mistaken for fresh coverage.
+- 4 tests hand-traced (low-coverage→fail log + raise; valid→pass log + mirror; all-empty→skip log; data_health mirror) — math/fields correct; tmp LOG_DIR + global reset in setUp/tearDown is clean.
+- Register correctly keeps `SR-DATA-004` **open** (instrumentation ≠ evidence); CURRENT = 149.
+
+**Optional (minor, low priority):** the log payload declares `schema_name="suspend_daily_coverage_log"` / `schema_version="1.0.0"` but no `schemas/` file exists for it. Acceptable as a self-versioned observability log (canary-log precedent), but consider either adding the schema or dropping the version claim.
+
+**Hot Queue**: unchanged — `SR-DATA-004` (still open, now instrumented) + `SR-PROVIDER-001`.
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-DATA-004 suspend coverage observability)
+
+**Commits**: none (pending 审查 / 提交; base commit `fae4e2c`)
+
+**Relationship to prior session(s)**:
+- Executes the next local slice from the risk-register hot queue after `SR-DET-001` was committed.
+- `SR-PROVIDER-001` remains blocked because no US provider access / token / trial / sample / data fetch has been explicitly approved.
+- `SR-DATA-004` cannot be closed from static code because it still needs real weekly suspend-coverage observations; this slice adds durable instrumentation so the first real weekly run can be reviewed from repo-local logs.
+- This slice does not run EGS, weekly screening, research outcome / preflight, provider access, external data fetch, or commit.
+
+**Worked on**:
+1. [tracked] `A-EGS/egs_main.py`: writes `logs/suspend_daily_coverage_<asof>.json` for suspend daily pass, low-coverage fail, cache-hit, and no-daily skip paths; mirrors the latest observation into `data_health.metrics.suspend_daily_coverage`.
+2. [tracked] `tests/phase6/test_egs_main_suspend_guard.py`: covers low-coverage sidecar logging before raise, valid coverage logging, all-empty skip logging, and data-health mirroring.
+3. [tracked] `docs/system_risk_register.md`: keeps `SR-DATA-004` open but records the observability mitigation and the still-required real weekly evidence.
+4. [tracked] `docs/CURRENT.md`: updates the current delta and target wording while keeping the snapshot at 149 lines.
+5. [tracked] `runners/README.md`: documents the new suspend coverage sidecar and cache-hit semantics.
+
+**Key decisions**:
+- Kept `SR-DATA-004` open because no real weekly run has been observed; instrumentation is a prerequisite for evidence, not the evidence itself.
+- Cache-hit observations are explicitly marked `cache_hit_coverage_not_observed` so a cached suspend set cannot be mistaken for fresh provider coverage.
+- The sidecar write is best-effort and logs a warning on write failure; it must not weaken the existing fail-fast guard on below-threshold non-empty daily payloads.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_suspend_guard tests.phase6.test_weekly_screening_guardrails -v`: 10 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: 52 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v`: 303 tests passed.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['docs/CURRENT.md','docs/system_risk_register.md','runners/README.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok'); print('CURRENT lines', len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"`: `utf8 ok`; `CURRENT lines 149`.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer should inspect tracked diffs; there are no untracked files in this slice.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-DET-001 state replay determinism)
 
 **Commits**: none (review-only entry; reviews working tree vs `3c04756`)

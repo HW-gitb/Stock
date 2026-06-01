@@ -101,11 +101,12 @@ warnings.filterwarnings("ignore")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 RESULT_DIR = os.path.join(SCRIPT_DIR, "Result")
+LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
 L3_SNAPSHOT_DIR = os.path.join(PROJECT_ROOT, "state", "l3_snapshots")
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from engine.data.analysis_input_contract import validate_analysis_input_contract
+from engine.data.analysis_input_contract import validate_analysis_input_contract, validate_json_schema
 
 TOKEN = os.environ.get("TUSHARE_TOKEN")
 if not TOKEN and not any(arg in ("-h", "--help") for arg in sys.argv[1:]):
@@ -168,6 +169,8 @@ logging.basicConfig(
 log = logging.getLogger("EGS")
 
 EGS_VERSION = "v7.10"
+SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
+_LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = None
 # Canonical list of Tushare API endpoints egs_main consumes during a
 # screening run. Sourced here so downstream consumers (data_health,
 # backtest_rank's data_lineage) read one truth via _current_egs_api_families()
@@ -236,6 +239,65 @@ def write_json_atomic(path, data):
     with open(tmp, "w", encoding="utf-8") as f:
         _json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, path)
+
+def _suspend_daily_coverage_log_path(as_of):
+    return os.path.join(LOG_DIR, f"suspend_daily_coverage_{as_of}.json")
+
+def _record_suspend_daily_coverage_observation(
+    *,
+    as_of,
+    trade_date,
+    status,
+    stock_universe_count=None,
+    daily_payload_row_count=None,
+    traded_in_universe_count=None,
+    suspended_count=None,
+    coverage_ratio=None,
+    min_coverage=None,
+    attempted_trade_dates=None,
+    source="tushare.pro.daily",
+    message=None,
+):
+    global _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION
+    payload = {
+        "schema_name": "suspend_daily_coverage_log",
+        "schema_version": SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION,
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "as_of": str(as_of),
+        "trade_date": str(trade_date) if trade_date is not None else None,
+        "status": status,
+        "source": source,
+        "stock_universe_count": (
+            int(stock_universe_count) if stock_universe_count is not None else None
+        ),
+        "daily_payload_row_count": (
+            int(daily_payload_row_count) if daily_payload_row_count is not None else None
+        ),
+        "traded_in_universe_count": (
+            int(traded_in_universe_count) if traded_in_universe_count is not None else None
+        ),
+        "suspended_count": int(suspended_count) if suspended_count is not None else None,
+        "coverage_ratio": float(coverage_ratio) if coverage_ratio is not None else None,
+        "min_coverage": float(min_coverage) if min_coverage is not None else None,
+        "attempted_trade_dates": list(attempted_trade_dates or []),
+        "message": message,
+    }
+    _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = payload
+    try:
+        write_json_atomic(_suspend_daily_coverage_log_path(as_of), payload)
+    except Exception as exc:
+        log.warning(f"suspend daily coverage log write failed: {type(exc).__name__}: {exc}")
+    return payload
+
+def _current_suspend_daily_coverage_observation():
+    if _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION is None:
+        return {
+            "schema_name": "suspend_daily_coverage_log",
+            "schema_version": SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION,
+            "status": "not_observed",
+            "message": "get_suspend_info has not produced a coverage observation in this process",
+        }
+    return dict(_LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION)
 
 def save_ranked_xlsx(df, path, group_size=5):
     """
@@ -839,7 +901,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     return analysis_path, snapshot_path, candidates_path, analysis_input
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.1.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.2.0"
+DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 
 
 def _health_issue(check, message, **metrics):
@@ -1046,6 +1109,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             "watch_l1_unknown_count": l1_unknown_count,
             "watch_l2_unknown_count": l2_unknown_count,
             "full_l2_unknown_count": full_l2_unknown_count,
+            "suspend_daily_coverage": _current_suspend_daily_coverage_observation(),
             "completeness_score_min": min(quality_scores) if quality_scores else None,
             "completeness_score_below_95_count": low_quality_count,
             "completeness_score_below_75_count": severe_quality_count,
@@ -1075,6 +1139,7 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
         tier1_csv_path=tier1_csv_path,
         full_csv_path=full_csv_path,
     )
+    validate_json_schema(health, schema_path=DATA_HEALTH_SCHEMA_PATH, label=f"data_health export {latest_td}")
     health_path = os.path.join(os.path.dirname(analysis_path), "data_health.json")
     write_json_atomic(health_path, health)
     return health_path, health
@@ -1581,7 +1646,7 @@ def get_daily_basic(trade_date, fallback_dates=None):
     return df
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _validated_suspend_traded_codes(daily_td, all_codes, trade_date):
+def _validated_suspend_traded_codes(daily_td, all_codes, trade_date, as_of=None, attempted_trade_dates=None):
     if daily_td is None or daily_td.empty:
         return None
     if "ts_code" not in daily_td.columns:
@@ -1597,6 +1662,24 @@ def _validated_suspend_traded_codes(daily_td, all_codes, trade_date):
     in_universe_traded = traded_codes & universe
     coverage = len(in_universe_traded) / len(universe)
     min_coverage = float(CONF.get("suspend_daily_min_coverage", 0.95))
+    suspended_count = len(universe - in_universe_traded)
+    _record_suspend_daily_coverage_observation(
+        as_of=as_of or trade_date,
+        trade_date=trade_date,
+        status="pass" if coverage >= min_coverage else "fail_low_coverage",
+        stock_universe_count=len(universe),
+        daily_payload_row_count=len(daily_td),
+        traded_in_universe_count=len(in_universe_traded),
+        suspended_count=suspended_count,
+        coverage_ratio=coverage,
+        min_coverage=min_coverage,
+        attempted_trade_dates=attempted_trade_dates,
+        message=(
+            "daily payload coverage is sufficient for suspend inference"
+            if coverage >= min_coverage
+            else "daily payload coverage is below suspend_daily_min_coverage"
+        ),
+    )
     if coverage < min_coverage:
         raise RuntimeError(
             f"suspend daily completeness too low for {trade_date}: "
@@ -1615,12 +1698,30 @@ def get_suspend_info(trade_dates):
     避免把全市场错误标记为停牌导致 L0 输出为空。
     """
     key = f"suspend_{trade_dates[0]}_v2"
-    if (cached := load_cache(key)) is not None: return cached
+    global _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION
+    _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = None
+    if (cached := load_cache(key)) is not None:
+        _record_suspend_daily_coverage_observation(
+            as_of=trade_dates[0],
+            trade_date=None,
+            status="cache_hit_coverage_not_observed",
+            suspended_count=len(cached),
+            attempted_trade_dates=trade_dates[:3],
+            source="local suspend cache",
+            message="suspend set loaded from cache; no fresh daily coverage measurement in this run",
+        )
+        return cached
     all_codes = set(get_stock_list()["ts_code"].dropna().astype(str))
 
     for td in trade_dates[:3]:
         daily_td = safe_api(pro.daily, trade_date=td, fields="ts_code")
-        traded_codes = _validated_suspend_traded_codes(daily_td, all_codes, td)
+        traded_codes = _validated_suspend_traded_codes(
+            daily_td,
+            all_codes,
+            td,
+            as_of=trade_dates[0],
+            attempted_trade_dates=trade_dates[:3],
+        )
         if traded_codes is not None:
             suspended    = all_codes - traded_codes
             log.info(
@@ -1630,6 +1731,15 @@ def get_suspend_info(trade_dates):
             save_cache(key, suspended)
             return suspended
 
+    _record_suspend_daily_coverage_observation(
+        as_of=trade_dates[0],
+        trade_date=None,
+        status="no_daily_payload_skip_filter",
+        stock_universe_count=len(all_codes),
+        min_coverage=float(CONF.get("suspend_daily_min_coverage", 0.95)),
+        attempted_trade_dates=trade_dates[:3],
+        message="all candidate pro.daily payloads were empty; suspend filtering is skipped",
+    )
     log.warning("停牌数据无法获取，跳过停牌过滤")
     save_cache(key, set())
     return set()

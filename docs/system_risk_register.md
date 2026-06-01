@@ -161,7 +161,8 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 - Owner phase: A-short weekly operation / Phase 6b maintenance
 - Evidence: `SR-DATA-001` resolved the partial-`daily` silent drop path by requiring non-empty `pro.daily` payload coverage to meet `suspend_daily_min_coverage = 0.95`. Claude review accepted the fail-safe behavior but noted the threshold assumes normal-day suspensions stay below 5%; rare market-stress days with unusually broad suspensions could push true traded-code coverage below 95% and abort the run even when the provider response is complete.
 - Accepted calibration: this is a low-risk operational watch item, not evidence that normal weekly runs are broken. A clear abort is safer than silently inferring missing rows as suspended stocks, and `suspend_daily_min_coverage` is already a configurable threshold.
-- Required next action: monitor the first real weekly runs' suspend coverage logs; if legitimate market-wide suspension conditions trip the threshold, tune the threshold or add a reviewed calendar / incident override with a focused regression test.
+- Mitigation evidence: the current observability slice makes `A-EGS/egs_main.py:get_suspend_info` write `logs/suspend_daily_coverage_<asof>.json` on pass, low-coverage fail, cache-hit, and no-daily skip paths; schema-validated `data_health` v1.2.0 `metrics.suspend_daily_coverage` mirrors the same latest observation. This does not close the watch item because no real weekly run has been reviewed yet.
+- Required next action: monitor the first real weekly runs' `logs/suspend_daily_coverage_<asof>.json` and `data_health.metrics.suspend_daily_coverage`; if legitimate market-wide suspension conditions trip the threshold, tune the threshold or add a reviewed calendar / incident override with a focused regression test.
 
 ### SR-OPS-002 - Forward tracker writes are non-atomic
 
