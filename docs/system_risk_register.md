@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+1. `SR-DATA-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
 2. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
@@ -188,11 +188,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-DATA-002 - Severe daily-data insufficiency degrades to neutral stats that can pass filters
 
 - Severity: P2
-- Status: open
+- Status: resolved
 - Owner phase: A-short data quality / screening maintenance
 - Evidence: `A-EGS/egs_main.py:precompute_stock_stats` returns `_neutral_stats_df` when `all_daily` is empty or too small; neutral rows include `has_crash_veto=False`, and `filter_l0` can skip amount filtering when liquidity fields are all NaN / zero.
 - Accepted calibration: this is not evidence that normal runs are contaminated; it is a severe-data-insufficiency path that should not emit normal-looking candidate output.
-- Required next action: hard-fail, quarantine, or mark the run non-evidence when daily payload completeness is below a reviewed threshold; do not silently produce neutral pass-through stats.
+- Required next action: no active `SR-DATA-002` action. Future daily-stat fallback redesigns must preserve a reviewed non-evidence / hard-fail boundary and must not reintroduce normal-looking neutral pass-through stats.
+- Closure evidence: the reviewed change set updates `A-EGS/egs_main.py:precompute_stock_stats` so empty `all_daily`, fewer than `daily_stats_min_rows`, insufficient rows after matching the stock universe, or no valid close rows now raise `RuntimeError` before L0 can treat neutral liquidity / crash-veto defaults as normal evidence. The former get-daily-all log that promised neutral defaults now states that downstream stat computation will abort.
+- Verification: `tests.phase6.test_egs_main_daily_stats_guard` covers empty daily payload rejection, tiny payload rejection, no stock-universe match rejection, and a sufficient payload still computing stats.
 
 ### SR-EXEC-003 - Execution drawdown misses open-position mark-to-market
 

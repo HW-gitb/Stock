@@ -127,6 +127,7 @@ CONF = {
     "final_n":          5,     # 最终推荐数量
     "suspend_lookback":         5,
     "suspend_daily_min_coverage": 0.95,
+    "daily_stats_min_rows":     1000,
     "momentum_std_threshold":   8.0,
     "max_concepts_per_stock":   5,
     "overheat_5d":      8.0,   # 5日涨幅超过此值触发过热标记
@@ -1539,7 +1540,7 @@ def get_daily_all(trade_dates):
                       fields="ts_code,trade_date,open,high,low,close,pre_close,pct_chg,vol,amount")
         if df is not None and len(df) > 0: frames.append(df)
     if not frames:
-        log.error("日线行情全部拉取失败，all_daily 为空，成交额/动量将使用默认中性值")
+        log.error("日线行情全部拉取失败，all_daily 为空；后续统计量计算将中止")
         return pd.DataFrame()
     result = pd.concat(frames, ignore_index=True)
     for col in ["open","high","low","close","pre_close","pct_chg","vol","amount"]:
@@ -1892,11 +1893,24 @@ def _neutral_stats_df(codes):
 
 
 def precompute_stock_stats(codes, all_daily):
-    if all_daily.empty or len(all_daily) < 1000:
-        log.warning("日线数据严重不足，使用默认中性统计量")
-        return _neutral_stats_df(codes)
+    min_rows = int(CONF.get("daily_stats_min_rows", 1000))
+    if all_daily.empty:
+        raise RuntimeError(
+            "daily stats coverage too low: all_daily is empty; "
+            "abort to avoid neutral pass-through stats"
+        )
+    if len(all_daily) < min_rows:
+        raise RuntimeError(
+            f"daily stats coverage too low: {len(all_daily)} rows below "
+            f"daily_stats_min_rows={min_rows}; abort to avoid neutral pass-through stats"
+        )
 
     ad = all_daily[all_daily["ts_code"].isin(codes)].copy()
+    if len(ad) < min_rows:
+        raise RuntimeError(
+            f"daily stats coverage too low after stock-universe match: {len(ad)} rows below "
+            f"daily_stats_min_rows={min_rows}; abort to avoid neutral pass-through stats"
+        )
     ad = ad.sort_values(["ts_code","trade_date"], ascending=[True, False])
 
     rows = []
@@ -1967,8 +1981,10 @@ def precompute_stock_stats(codes, all_daily):
             "has_crash_veto": has_crash_veto,
         })
     if not rows:
-        log.warning("日线数据与股票池无匹配代码，使用默认中性统计量")
-        return _neutral_stats_df(codes)
+        raise RuntimeError(
+            "daily stats coverage too low: no valid close rows for stock universe; "
+            "abort to avoid neutral pass-through stats"
+        )
     return pd.DataFrame(rows)
 
 

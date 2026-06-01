@@ -8,6 +8,50 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-002 daily stats insufficiency guard)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `4f32c23`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。本轮可 `提交`。
+
+**Notes**: SR-DATA-002 修复正确——`A-EGS/egs_main.py:precompute_stock_stats` 四条原返回 `_neutral_stats_df` 的路径（empty `all_daily` / `len(all_daily)<daily_stats_min_rows` / 股票池匹配后 `len(ad)<min_rows` / 无 valid close 行）现全 `raise RuntimeError`，杜绝 neutral pass-through 绕过 L0 流动性 / crash-veto 过滤；`get_daily_all` 空数据 log 也由"用默认中性值"改为"将中止"。**关键独立核实——新增的 `len(ad)<min_rows` 检查对正常运行安全**：调用点 `precompute_stock_stats(all_codes, all_daily)`，`all_codes = set(df_stocks["ts_code"])` 是全 universe（line 3110，非过滤子集），故 `ad ≈ all_daily`、正常周频远 >1000；新检查只拦"daily 有数据但几乎不匹配 universe"的真异常，不会误中止正常运行。`1000` 阈值是 pre-existing（现 `daily_stats_min_rows` 可配、默认不变），无新增 false-positive 风险。test 覆盖 4 路径（empty/tiny/no-match→raise；sufficient→computes 且 `has_crash_veto=False`），4 OK + phase6 discovery 39 OK 无回归。register SR-DATA-002 open→resolved（closure/verification 准确）+ Hot Queue maintenance 组移除；CURRENT 149；scope 仅 egs_main + test + register + CURRENT + SESSION_LOG。Codex 选 hard-fail（而非 quarantine/tag）——该路径直接喂官方筛选,abort-before-L0 是最小防 pass-through 改动,合理。**本轮可 `提交`**；maintenance 组余 `SR-DATA-004` / `SR-OPS-005` / `SR-RANK-001` / `SR-OPS-006`。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-DATA-002 daily stats insufficiency guard)
+
+**Commits**: 4f32c23
+
+**Relationship to prior session(s)**:
+- Builds on committed `SR-OPS-004` weekly xlsx overwrite guard.
+- Executes one risk-register maintenance item: `SR-DATA-002`.
+- Does not run EGS, research, provider access, data fetch, or commit.
+
+**Worked on**:
+1. [tracked] `A-EGS/egs_main.py`: `precompute_stock_stats` now raises on empty / too-small daily payloads, too few stock-universe-matched daily rows, or no valid close rows instead of returning neutral stats that can bypass L0 liquidity / crash-veto filters; added `CONF["daily_stats_min_rows"]`.
+2. [untracked] `tests/phase6/test_egs_main_daily_stats_guard.py`: added focused regression coverage for empty, tiny, and non-matching daily payload rejection plus a sufficient-payload success path.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-DATA-002` resolved with closure / verification evidence and removed it from the Hot Queue maintenance group.
+4. [tracked] `docs/CURRENT.md`: updated latest delta, current hot queue, and recent completion text; snapshot remains 149 lines.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude review handoff.
+
+**Key decisions**:
+- Chose hard-fail over quarantine / non-evidence tagging because the affected path feeds official screening filters directly; aborting before L0 is the smallest way to prevent normal-looking neutral pass-through output.
+- Kept the reviewed threshold configurable as `daily_stats_min_rows`, defaulting to the previous hard-coded `1000` row threshold.
+- Did not update a phase handoff: this is a narrow risk-register closure, not a phase or major milestone change.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_daily_stats_guard tests.phase6.test_egs_main_suspend_guard tests.phase6.test_egs_main_l3_guard tests.phase6.test_weekly_screening_guardrails -v`: 16 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: 39 tests OK.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer must inspect the untracked test file in addition to tracked diffs.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-004 weekly xlsx overwrite guard)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `daa1a59`)
