@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（SR-OPS-005 forward tracker trading-date cache coverage）
+**最后更新**：2026-06-01（SR-RANK-001 forward-return conversion status）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,14 +12,14 @@
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
 - Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
-- `SR-OPS-005` is resolved: forward tracker cache coverage now uses cached stock trading dates instead of calendar-day approximation or metadata end-date alone.
+- `SR-RANK-001` is resolved: `attach_forward_returns` no longer marks a window `"ok"` when required forward-return conversion fails or leaves NaN / non-finite values.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 7b-2 P1 closure plan is documented; US EGS data-source direction is FMP primary candidate + SEC EDGAR fundamentals audit; A-share minimal-data burst full-universe redesigned outcome is complete and failed.
-- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；默认下一刀回到 risk register hot queue maintenance 组（`SR-DATA-004` + `SR-RANK-001` + `SR-OPS-006`），除非用户先批准新的 research preregistration、provider-access work 或更窄 override。
+- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；默认下一刀回到 risk register hot queue maintenance 组（`SR-DATA-004` + `SR-OPS-006`），除非用户先批准新的 research preregistration、provider-access work 或更窄 override。
 - **当前 P1 provider blocker**：任何 FMP token / trial / paid access、SEC parser sample、`yfinance` price smoke check、provider contact、sample 或 data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
 - **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned test 已消耗 ledger planned test 且 outcome 失败。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
@@ -38,7 +38,7 @@
 - **SR-OPS-004 weekly xlsx overwrite guard**（2026-06-01）：`weekly_screening.ps1` now detects existing default root-level `A-EGS\egs_tier1_<AsOf>.xlsx` before historical official-output reruns.
 - **SR-DATA-002 daily stats insufficiency guard**（2026-06-01）：`precompute_stock_stats` now hard-fails severe daily payload insufficiency instead of returning neutral stats that could bypass liquidity / crash-veto filters.
 - **SR-OPS-005 forward tracker cache coverage**（2026-06-01）：`forward_tracker.py` now proves backfill coverage from cached stock trading dates instead of calendar-day approximation.
-- **SR-SEC-001 local Claude allow-rule narrowing**（2026-06-01）：ignored local `.claude/settings.local.json` / `A-EGS/.claude/settings.local.json` no longer allow arbitrary `python *`, `python -c`, or `pip install *`; concrete project-script rules remain.
+- **SR-RANK-001 forward-return conversion status**（2026-06-01）：`attach_forward_returns` now reports `pending_return_conversion_failed` instead of `"ok"` when required forward-return conversions fail or leave invalid values.
 - **SR-EXEC-004 risk-control assumption guard**（2026-06-01）：`runners/backtest_execution.py` now marks portfolio circuit breaker / cooldown as not simulated instead of enabled, and stops declaring their event codes as covered.
 - **SR-EXEC-003 drawdown evidence guard**（2026-06-01）：`runners/backtest_execution.py` no longer exposes realized exit-date cash drawdown as numeric `max_drawdown`; ship-gate drawdown remains not evaluable until open-position MTM is implemented.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。

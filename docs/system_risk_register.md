@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-DATA-004` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+1. `SR-DATA-004` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
 2. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
@@ -295,11 +295,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-RANK-001 - Forward-return status can remain `ok` when conversion leaves NaN
 
 - Severity: P3
-- Status: open
+- Status: resolved
 - Owner phase: rank backtest / forward-tracker compatibility
 - Evidence: `runners/backtest_rank.py:attach_forward_returns` catches conversion exceptions and later assigns status `"ok"` even when return values can remain NaN.
 - Accepted calibration: current rank statistics drop NaN values, so numeric contamination is low; a status-only consumer such as tracker / reporting code could still overread `"ok"`.
-- Required next action: set a non-ok status when any required forward return conversion fails or leaves NaN, and add a focused regression test if the field is consumed by status-only code.
+- Required next action: no active `SR-RANK-001` action. Future forward-return status changes must keep `"ok"` reserved for rows whose required return fields converted to finite numeric values.
+- Closure evidence: `runners/backtest_rank.py:attach_forward_returns` now sets `pending_return_conversion_failed` and skips the `"ok"` status whenever required close-to-close or T+1 open-to-exit-close return conversion fails, produces NaN, or produces a non-finite value. `ret_*d_status = "ok"` is assigned only after both required return paths have converted successfully.
+- Verification: `tests.test_backtest_rank_phase3` adds `test_forward_return_conversion_failure_is_not_ok_status`, proving a non-numeric exit close leaves return fields NaN and marks `ret_5d_status = pending_return_conversion_failed` instead of `"ok"`. `tests.phase6.test_forward_tracker_cache_guard` still passes, covering the status-consuming forward-tracker path.
 
 ### SR-EXEC-002 - Execution backtest risk-control limitations need a tracked fix path
 
@@ -362,4 +364,4 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 - Owner phase: A-short operation / Phase 3-6 maintenance
 - Evidence: audit #1 reported L3 today default risk, silent degradation paths, forward tracker atomic-write concern, missing tests, and possible delisted-universe handling issues.
 - Accepted calibration: line-level review confirmed several operational defects and downgraded others to lower-priority or needs-revalidation entries.
-- Supersession evidence: replaced by `SR-DATA-001`, `SR-OPS-002`, `SR-OPS-003`, `SR-DATA-002`, `SR-OPS-004`, `SR-OPS-005`, `SR-OPS-006`, and `SR-RANK-001`. Those child entries remain open or `needs_revalidation` until fixed / closed individually.
+- Supersession evidence: replaced by `SR-DATA-001`, `SR-OPS-002`, `SR-OPS-003`, `SR-DATA-002`, `SR-OPS-004`, `SR-OPS-005`, `SR-OPS-006`, and `SR-RANK-001`. Each child entry owns its current status; open / `needs_revalidation` child entries remain blockers until fixed or closed individually.

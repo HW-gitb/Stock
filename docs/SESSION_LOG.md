@@ -8,6 +8,52 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-RANK-001 forward-return conversion status)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8254805`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。本轮可 `提交`。
+
+**Notes**: SR-RANK-001 修复正确——`runners/backtest_rank.py:attach_forward_returns` 现仅在 close-to-close 与 T+1（含净）收益都转成有限数后才设 `ret_*d_status="ok"`；转换异常 / NaN / 非有限（`pd.isna` + `np.isfinite` 双检，净收益先算再检）→ `required_return_failed` → status `pending_return_conversion_failed` + `continue`（跳过 "ok" 与 benchmark loop）。benchmark 缺失保持独立（有效股票收益 + 缺 same-anchor benchmark 仍 `ok`、benchmark/excess 字段空）。正常行不受影响，只修旧"ok-with-NaN"。**独立核实**：`grep schemas/` 确认无 `ret_*_status` enum 约束——新状态值 `pending_return_conversion_failed`（与既有 `pending_no_entry_limit_up` / `pending_missing_future_close` 等 `pending_*` 族一致）不会破坏 schema 校验；forward tracker 把任何非 `ok` 视为待 backfill（正确）。test 新增 bad exit close → `pending_return_conversion_failed` + `ret_5d_close`/`t1_net` NaN，7 OK。register SR-RANK-001 open→resolved（closure 准确）+ Hot Queue maintenance 组移除 + SR-OPS-001 父条 supersession 措辞修正（"子条各自状态"）；CURRENT 149；scope 仅 backtest_rank + test + register + CURRENT + SESSION_LOG。**本轮可 `提交`**；maintenance 组仅余 `SR-DATA-004`（P3，需真实周频 suspend-coverage 日志才能调阈值）/ `SR-OPS-006`（P3 needs_revalidation，relisted lookback 边界）——register 最后两项。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-RANK-001 forward-return conversion status)
+
+**Commits**: 8254805
+
+**Relationship to prior session(s)**:
+- Builds on committed `SR-OPS-005` forward tracker trading-date cache coverage.
+- Executes one risk-register maintenance item: `SR-RANK-001`.
+- Leaves `SR-DATA-004` open because its next action requires real weekly suspend-coverage logs; this round does not run weekly capture or fetch data.
+- Leaves `SR-OPS-006` as the remaining local maintenance revalidation item.
+- Does not run EGS, research, provider access, data fetch, or commit.
+
+**Worked on**:
+1. [tracked] `runners/backtest_rank.py`: `attach_forward_returns` now assigns `"ok"` only after required close-to-close and T+1 open-to-exit-close returns convert to finite numeric values; conversion failure / NaN / non-finite output now sets `pending_return_conversion_failed`.
+2. [tracked] `tests/test_backtest_rank_phase3.py`: added a regression test proving a bad exit close leaves return fields NaN and produces `pending_return_conversion_failed` instead of `"ok"`.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-RANK-001` resolved, removed it from the Hot Queue maintenance group, and clarified the superseded parent wording so child entries own their current statuses.
+4. [tracked] `docs/CURRENT.md`: updated latest delta, current hot queue, and recent completion text; snapshot remains 149 lines.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude review handoff.
+
+**Key decisions**:
+- Treated both close-to-close and T+1 net return as required for an `"ok"` status because downstream statistics and the forward tracker use status as an availability signal.
+- Kept benchmark absence independent from row status: missing same-anchor benchmark input can still leave benchmark / excess fields empty while stock return status remains `"ok"` when required stock returns converted successfully.
+- Did not update a phase handoff: this is a narrow risk-register closure, not a phase or major milestone change.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_backtest_rank_phase3 -v`: 7 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_forward_tracker_cache_guard -v`: 8 tests OK.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer should inspect tracked diffs only; no untracked files are expected.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-005 forward tracker trading-date cache coverage)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `47b2252`)

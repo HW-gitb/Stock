@@ -620,20 +620,30 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
                 continue
             _exit_open, exit_close, exit_adj = exit_row
 
+            required_return_failed = False
             # qfq-adjusted close-to-close
             try:
                 cc = (float(exit_close) * float(exit_adj)) / (float(base_close) * float(base_adj)) - 1.0
-                samples.at[idx, f"ret_{window}d_close"] = cc * 100.0
+                cc_pct = cc * 100.0
+                if pd.isna(cc_pct) or not np.isfinite(cc_pct):
+                    raise ValueError("non-finite close-to-close return")
+                samples.at[idx, f"ret_{window}d_close"] = cc_pct
             except Exception:
-                pass
+                required_return_failed = True
             # qfq-adjusted T+1 open -> exit close
             try:
                 t1 = (float(exit_close) * float(exit_adj)) / (float(entry_open) * float(entry_adj)) - 1.0
                 t1_pct = t1 * 100.0
+                t1_net_pct = t1_pct - float(cost_pct)
+                if pd.isna(t1_pct) or pd.isna(t1_net_pct) or not np.isfinite(t1_pct) or not np.isfinite(t1_net_pct):
+                    raise ValueError("non-finite t1 return")
                 samples.at[idx, f"ret_{window}d_t1"] = t1_pct
-                samples.at[idx, f"ret_{window}d_t1_net"] = t1_pct - cost_pct
+                samples.at[idx, f"ret_{window}d_t1_net"] = t1_net_pct
             except Exception:
-                pass
+                required_return_failed = True
+            if required_return_failed:
+                samples.at[idx, f"ret_{window}d_status"] = "pending_return_conversion_failed"
+                continue
             samples.at[idx, f"ret_{window}d_status"] = "ok"
 
             for bname in BENCHMARKS:
