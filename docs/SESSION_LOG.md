@@ -8,6 +8,60 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-EXEC-007 concurrency evidence gate)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `d6e9060`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。本轮可 `提交`。hot queue #1 余 `SR-CONTRACT-002`（P2，非当前 active，仅在首个真实 forward-live artifact 产出/消费前需 schema-first 合同）。
+
+**Notes**: SR-EXEC-007（serialized simulator 重用 bucket cash → 高估 capacity-adjusted returns）的 register 批准窄修——不建并发引擎，而是把 capacity/concurrency-adjusted returns 标 not-evaluable，使 serialized 结果不能解锁 full-size。`build_ship_gate_evaluation` 新增 `concurrency_adjusted_capacity_evaluable=False` 并加进 (a) status not_evaluable 分支 + (b) `full_size_allowed` AND 条件。**关键独立核实：grep 确认该 flag 无任何 True 赋值路径**（line 420 False / 424 用于 not_evaluable / 440 用于 full_size），故 full-size 现被永久 gate 死直到将来真建并发模型（register 已写死"先实现并发持仓+cash lock+连续 equity 测试再撤 gate"）。test 正确反转：原 `..._can_pass_gate` → `..._stays_not_evaluable_without_concurrency_model`,断言 alpha/sharpe/drawdown 数值 diagnostics 可 pass，但 `status=not_evaluable`、`full_size_allowed=false`、limitations 含 concurrency-not-evaluable——锁住新 gate。schema patch 1.1.2（字段 shape 不变）。38 tests OK；CURRENT 149。**治理**：register SR-EXEC-007 resolved + Hot Queue 收窄至 SR-CONTRACT-002 + 顺手更新 SR-EXEC-006 closure 文案（"can pass"路径现被 concurrency gate 接管，不再暗示可放行）+ SR-CONTRACT-002 evidence 同步 v1.1.2。scope 仅 SR-EXEC-007。**里程碑**：execution-backtest evidence-overclaim 加固组（EXEC-003/004/005/007 + CAP-001）全部 resolved；ship gate 现多重 not-evaluable 锁（drawdown + concurrency），full_size 牢牢 default-deny。提交后 hot queue 进 SR-CONTRACT-002（仅在真 forward-live evidence 出现前需做）。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-EXEC-007 concurrency evidence gate)
+
+**Commits**: d6e9060
+
+**Relationship to prior session(s)**:
+- Builds on the committed `SR-CAP-001` capital-ceiling guard and the current risk-register hot queue.
+- Executes only `SR-EXEC-007`; `SR-CONTRACT-002` remains open in Hot Queue item #1.
+- Does not implement concurrent holdings, lock cash across holding windows, rerun EGS, run research, fetch provider data, contact providers, change US data-source access, or commit.
+
+**Worked on**:
+1. [tracked] `runners/aggregate_execution_reports.py`: bumped aggregate output to v1.1.2 and added a concurrency / capacity not-evaluable gate so serialized execution returns cannot unlock `full_size_allowed`.
+2. [tracked] `schemas/execution_aggregate_report.schema.json`: bumped to v1.1.2 and documented that full-size permission also requires capacity / concurrency-adjusted returns, not only production mode, reviewed forward-live evidence, and passing numeric diagnostics.
+3. [tracked] `tests/execution/test_aggregate_execution_reports.py`: reversed the prior production + reviewed-forward-evidence pass branch; diagnostics can pass, but the aggregate stays `not_evaluable` with `full_size_allowed = false` while the simulator is serialized.
+4. [tracked] `tests/schema/test_execution_aggregate_report_schema.py`: validates the v1.1.2 const / `$id` and the concurrency-adjusted full-size permission wording.
+5. [tracked] `docs/system_risk_register.md`: marked `SR-EXEC-007` resolved and narrowed Hot Queue item #1 to `SR-CONTRACT-002`; also clarified `SR-EXEC-006` closure text so it does not imply the current full-size path can pass without the later concurrency gate.
+6. [tracked] `docs/CURRENT.md`: updated the latest delta and next default routing to `SR-CONTRACT-002`, keeping the snapshot below the 150-line target.
+7. [tracked] `runners/README.md`: updated aggregate helper semantics to v1.1.2 and clarified that serialized returns are diagnostic until capacity / concurrency-adjusted evidence exists.
+8. [tracked] `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`: prepended the Phase 5 addendum for this concurrency evidence gate.
+
+**Key decisions**:
+- Chose the register-approved conservative path: mark capacity / concurrency-adjusted returns as not evaluable for ship-gate permission instead of building a full concurrent portfolio engine in this slice.
+- Preserved serialized execution return diagnostics because they are still useful for plumbing and rough comparison, but made them insufficient for full-size permission.
+- Kept `SR-CONTRACT-002` separate; the forward-live evidence artifact still needs a schema-first contract before the first real reviewed artifact is produced or consumed.
+
+**Alternatives considered and rejected**:
+- "Implement overlapping positions and cash locks now" — rejected as a larger simulator redesign beyond the smallest approved `SR-EXEC-007` evidence-overclaim fix.
+- "Delete aggregate return diagnostics entirely" — rejected because the current diagnostics remain useful when clearly excluded from capacity / concurrency-adjusted ship-gate evidence.
+- "Fix `SR-CONTRACT-002` in the same slice" — rejected because forward-live evidence schema is a separate contract task.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v`: passed, 9 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v`: passed, 3 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v`: passed, 21 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v`: passed, 5 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line-count check via PowerShell `Get-Content`: 149 lines, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- If review passes and the user commits, the next default `执行` is `SR-CONTRACT-002` (forward-live evidence schema-first contract), unless the user explicitly approves a narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-CAP-001 capital ceiling guard)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `9c4c464`)

@@ -1,5 +1,48 @@
 # Phase 5 kickoff spec handoff
 
+## 2026-06-01 addendum: SR-EXEC-007 concurrency evidence gate
+
+### What changed
+
+- `runners/aggregate_execution_reports.py` now treats serialized execution returns as diagnostic rather than capacity / concurrency-adjusted ship-gate evidence.
+- `execution_aggregate_report` is bumped to v1.1.2. `ship_gate_evaluation.full_size_allowed` stays false and status stays `not_evaluable` until a future reviewed simulator models overlapping holdings and locked cash through holding windows.
+- The prior production + reviewed-forward-evidence synthetic pass regression is reversed: numeric monthly alpha, Sharpe, drawdown, and forward-live diagnostics can all pass, but full-size permission remains blocked by the concurrency gate.
+- `docs/system_risk_register.md` closes `SR-EXEC-007` and leaves Hot Queue item #1 as `SR-CONTRACT-002` only.
+
+### Why
+
+`SR-EXEC-007` showed that the Phase 5 simulator enters and exits each candidate inside one loop iteration, so cash from an earlier trade is returned before the next candidate is sized even when real holding windows would overlap. Instead of implementing a full concurrent portfolio engine in this slice, this change takes the conservative evidence route: keep the existing serialized return diagnostics, but prevent them from satisfying ship-gate-like full-size permission.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v
+git diff --check
+```
+
+### Validation result
+
+- `tests.execution.test_aggregate_execution_reports`: 9 tests passed.
+- `tests.schema.test_execution_aggregate_report_schema`: 3 tests passed.
+- `tests.execution.test_backtest_execution`: 21 tests passed.
+- `tests.schema.test_execution_backtest_report_schema`: 5 tests passed.
+- `git diff --check`: passed; only expected Windows LF-to-CRLF working-copy warnings.
+
+### Invalidated old conclusions
+
+- "`execution_aggregate_report` current output is v1.1.1" is stale; current output is v1.1.2.
+- "Production aggregate + reviewed forward-live evidence can pass `full_size_allowed` when numeric diagnostics pass" is invalid until capacity / concurrency-adjusted returns are implemented.
+- Serialized Phase 5 execution returns remain useful diagnostics, but they are not full-size ship-gate evidence.
+
+### Next notes
+
+1. This slice intentionally does not implement concurrent holdings, cash locks, or continuous portfolio equity.
+2. This slice intentionally does not fix `SR-CONTRACT-002`; the next default hot-queue item is the forward-live evidence schema-first contract.
+3. If future work wants true capacity-adjusted execution evidence, add reviewed simulator behavior and regression tests before removing the not-evaluable gate.
+
 ## 2026-06-01 addendum: SR-CAP-001 capital ceiling guard
 
 ### What changed

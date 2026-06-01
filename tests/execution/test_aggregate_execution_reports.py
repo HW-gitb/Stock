@@ -104,7 +104,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(report["schema_name"], "execution_aggregate_report")
-        self.assertEqual(report["schema_version"], "1.1.1")
+        self.assertEqual(report["schema_version"], "1.1.2")
         self.assertEqual(report["metrics"]["report_count"], 2)
         self.assertEqual(report["metrics"]["month_count"], 2)
         self.assertEqual(report["metrics"]["trade_count_total"], 2)
@@ -281,7 +281,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
         self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
         self.assertIn("smoke-mode", " ".join(report["ship_gate_evaluation"]["limitations"]))
 
-    def test_production_aggregate_with_reviewed_forward_evidence_can_pass_gate(
+    def test_production_aggregate_with_reviewed_forward_evidence_stays_not_evaluable_without_concurrency_model(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -333,8 +333,21 @@ class AggregateExecutionReportsTest(unittest.TestCase):
                 "forward_evidence.json"
             )
         )
-        self.assertEqual(report["ship_gate_evaluation"]["status"], "pass")
-        self.assertTrue(report["ship_gate_evaluation"]["full_size_allowed"])
+        self.assertTrue(
+            report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["passed"]
+        )
+        self.assertTrue(report["ship_gate_evaluation"]["metric_results"]["sharpe"]["passed"])
+        self.assertTrue(report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]["passed"])
+        self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
+        self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
+        self.assertIn(
+            "capacity/concurrency-adjusted returns are not evaluable",
+            " ".join(report["ship_gate_evaluation"]["limitations"]),
+        )
+        self.assertIn(
+            "not capacity/concurrency-adjusted ship-gate evidence",
+            " ".join(report["limitations"]),
+        )
 
     def test_forward_live_evidence_months_must_match_cli_value(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

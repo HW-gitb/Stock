@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/execution_aggregate_report/1.1.1/schema.json",
+  "$id": "https://stock.local/schemas/execution_aggregate_report/1.1.2/schema.json",
   "title": "Execution Aggregate Report",
-  "description": "Phase 5 multi-period aggregation contract for execution_backtest_report v1.2.0 outputs. It aggregates bucket-aware A-short execution reports for ship-gate evidence without changing the single-run execution report contract. Benchmark-aware alpha remains nullable until an explicit benchmark-excess series is supplied. Full-size permission requires production-mode inputs plus a reviewed forward-live evidence source; smoke aggregates and bare forward-live month values remain diagnostic. Version 1.1.1 excludes zero-trade input reports with null total_return from monthly return, t-stat, and Sharpe statistics unless a reviewed future rule emits an explicit numeric cash return.",
+  "description": "Phase 5 multi-period aggregation contract for execution_backtest_report v1.2.0 outputs. It aggregates bucket-aware A-short execution reports for ship-gate evidence without changing the single-run execution report contract. Benchmark-aware alpha remains nullable until an explicit benchmark-excess series is supplied. Full-size permission requires production-mode inputs plus a reviewed forward-live evidence source; smoke aggregates and bare forward-live month values remain diagnostic. Version 1.1.1 excludes zero-trade input reports with null total_return from monthly return, t-stat, and Sharpe statistics unless a reviewed future rule emits an explicit numeric cash return. Version 1.1.2 keeps full_size_allowed false / not_evaluable while input execution reports are serialized and do not model concurrent open positions or cash locks; return metrics remain diagnostic, not capacity/concurrency-adjusted ship-gate evidence.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -25,7 +25,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.1.1"
+      "const": "1.1.2"
     },
     "generated_at": {
       "type": "string",
@@ -334,7 +334,7 @@
         },
         "full_size_allowed": {
           "type": "boolean",
-          "description": "True only for production-mode aggregate reports with reviewed forward-live evidence and every AND-gate metric evaluable and passing. This is a manual-use gate, not broker automation permission."
+          "description": "True only for production-mode aggregate reports with reviewed forward-live evidence, capacity/concurrency-adjusted returns, and every AND-gate metric evaluable and passing. This is a manual-use gate, not broker automation permission."
         },
         "failure_mode": {
           "type": "string",
