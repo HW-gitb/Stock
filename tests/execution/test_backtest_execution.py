@@ -220,9 +220,15 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             self.assertEqual(report["metrics"]["win_rate"], 1.0)
             self.assertEqual(report["metrics"]["avg_holding_days"], 1.0)
             self.assertGreater(report["metrics"]["ending_equity"], 116666.55)
+            self.assertIsNone(report["metrics"]["max_drawdown"])
             self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
-            self.assertTrue(
-                report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]["passed"]
+            drawdown_result = report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]
+            self.assertIsNone(drawdown_result["value"])
+            self.assertIsNone(drawdown_result["passed"])
+            self.assertIn("mark-to-market", drawdown_result["reason"])
+            self.assertIn(
+                "max_drawdown is null",
+                " ".join(report["limitations"]),
             )
             self.assertIsNone(
                 report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["passed"]
@@ -256,7 +262,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 skipped = list(csv.DictReader(handle))
             self.assertEqual([row["reason"] for row in skipped], ["analyzer_hard_veto"])
 
-    def test_ship_gate_drawdown_uses_realized_multi_trade_path(self) -> None:
+    def test_ship_gate_drawdown_is_not_evaluable_until_mark_to_market_exists(self) -> None:
         payload = self.load_fixture_payload()
         payload["candidates"][1] = deepcopy(payload["candidates"][1])
         payload["candidates"][1]["industry"] = deepcopy(payload["candidates"][1]["industry"])
@@ -299,10 +305,13 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
 
         self.assertEqual(report["metrics"]["trade_count"], 2)
-        self.assertLess(report["metrics"]["max_drawdown"], 0.0)
+        self.assertIsNone(report["metrics"]["max_drawdown"])
         drawdown_result = report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]
-        self.assertEqual(drawdown_result["value"], report["metrics"]["max_drawdown"])
-        self.assertTrue(drawdown_result["passed"])
+        self.assertIsNone(drawdown_result["value"])
+        self.assertIsNone(drawdown_result["passed"])
+        self.assertIn("mark-to-market", drawdown_result["reason"])
+        self.assertIn("not evaluable", drawdown_result["reason"])
+        self.assertIn("max_drawdown is null", " ".join(report["limitations"]))
 
     def test_stop_loss_takes_priority_over_time_stop(self) -> None:
         price_data = json.loads(

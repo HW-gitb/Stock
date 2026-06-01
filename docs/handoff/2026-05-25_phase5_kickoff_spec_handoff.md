@@ -1,5 +1,47 @@
 # Phase 5 kickoff spec handoff
 
+## 2026-06-01 addendum: SR-EXEC-003 drawdown not-evaluable guard
+
+### What changed
+
+- `runners/backtest_execution.py` now emits `metrics.max_drawdown = null` for current execution reports.
+- `ship_gate_evaluation.metric_results.max_drawdown` now keeps `value = null` and `passed = null` unless a future reviewed mark-to-market implementation re-enables numeric drawdown evidence.
+- The report `limitations` now states that realized exit-date cash drawdowns in `daily_equity.csv` are diagnostics only and are not ship-gate drawdown evidence.
+- `tests/execution/test_backtest_execution.py` now locks the single-trade and multi-trade paths to the null / not-evaluable drawdown behavior.
+- `docs/system_risk_register.md` closes `SR-EXEC-003` and removes it from the Hot Queue.
+
+### Why
+
+`SR-EXEC-003` showed that the Phase 5 simulator records starting equity and realized exit-date cash values, but does not mark open positions to market each day. A realized-only cash path can understate drawdown, so this slice chooses the register-approved narrow fix: do not expose numeric execution drawdown as safety or ship-gate evidence until daily MTM exists.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v
+git diff --check
+```
+
+### Validation result
+
+- `tests.execution.test_backtest_execution`: 20 tests passed.
+- `tests.execution.test_aggregate_execution_reports`: 9 tests passed.
+- `tests.schema.test_execution_backtest_report_schema`: 5 tests passed.
+- `tests.schema.test_execution_aggregate_report_schema`: 3 tests passed.
+- `git diff --check`: passed; only expected Windows LF-to-CRLF working-copy warnings.
+
+### Invalidated old conclusions
+
+- Newly emitted Phase 5 execution reports must not treat realized exit-date `daily_equity` drawdown as `metrics.max_drawdown`.
+- A single execution backtest still cannot supply ship-gate drawdown evidence without a reviewed daily mark-to-market equity path.
+
+### Next notes
+
+1. This slice intentionally does not fix `SR-EXEC-004` cooldown / circuit-breaker assumptions, `SR-EXEC-005` zero-trade aggregate monthly returns, `SR-EXEC-007` concurrent cash-lock modeling, `SR-CAP-001` bucket-ceiling validation, or `SR-CONTRACT-002` forward-live evidence schema.
+2. If MTM is later implemented, the numeric drawdown branch needs reviewed tests before it can feed execution evidence or ship-gate-like conclusions.
+
 ## 2026-05-31 addendum: SR-EXEC-006 aggregate ship-gate guard
 
 ### What changed

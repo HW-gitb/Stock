@@ -1008,7 +1008,6 @@ def simulate_execution(
     trade_count = len(trades)
     wins = sum(1 for trade in trades if float(trade["pnl"]) > 0)
     total_pnl = sum(float(trade["pnl"]) for trade in trades)
-    max_drawdown = min(float(row["drawdown"]) for row in daily_equity) if daily_equity else None
     avg_holding_days = None
     if trade_count:
         avg_holding_days = sum(int(trade["holding_days"]) for trade in trades) / trade_count
@@ -1044,7 +1043,7 @@ def simulate_execution(
             "win_rate": (wins / trade_count) if trade_count else None,
             "total_return": (total_pnl / bucket_capital) if trade_count else None,
             "annualized_return": None,
-            "max_drawdown": max_drawdown,
+            "max_drawdown": None,
             "avg_holding_days": avg_holding_days,
             "ending_equity": cash,
         },
@@ -1054,6 +1053,7 @@ def simulate_execution(
             "Stop-loss exits use the day's open_qfq when it opens below the stop; otherwise a low_qfq stop touch fills at the stop price.",
             "The first fill increment processes candidates sequentially and does not yet model concurrent open positions.",
             "Daily equity currently records starting equity and realized exit dates; open-position mark-to-market is not yet modeled.",
+            "max_drawdown is null because realized exit-date cash drawdowns are not ship-gate drawdown evidence until mark-to-market equity is implemented.",
             "total_return is realized total_pnl divided by initial bucket_capital; no alternate ending-equity-normalized return is emitted yet.",
             "All generated actions are backtest events only; manual-order-only boundary remains in force.",
         ],
@@ -1089,19 +1089,15 @@ def build_ship_gate_evaluation(
 ) -> dict[str, Any]:
     policy = capital_context["ship_gate"]
     trade_count = int(report_metrics.get("trade_count") or 0)
-    max_drawdown = report_metrics.get("max_drawdown")
-    max_drawdown_value = (
-        float(max_drawdown) if isinstance(max_drawdown, (int, float)) else None
-    )
+    max_drawdown_value = None
     max_drawdown_threshold = float(policy["max_drawdown_max"])
     max_drawdown_passed = None
-    max_drawdown_reason = "requires simulated equity drawdown; no executable equity path was available"
+    max_drawdown_reason = (
+        "open-position mark-to-market is not implemented; "
+        "max_drawdown is not evaluable for ship-gate evidence"
+    )
     if trade_count == 0:
-        max_drawdown_value = None
         max_drawdown_reason = "no executed trades to evaluate drawdown signal"
-    elif max_drawdown_value is not None:
-        max_drawdown_passed = abs(max_drawdown_value) <= max_drawdown_threshold
-        max_drawdown_reason = "uses realized daily_equity drawdown from this execution run"
 
     metric_results = {
         "monthly_alpha_t_stat": ship_gate_metric_result(

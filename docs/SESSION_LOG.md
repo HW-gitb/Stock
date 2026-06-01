@@ -8,6 +8,59 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-EXEC-003 drawdown not-evaluable guard)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `230e100`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。hot queue #1 余 `SR-EXEC-004/005/007` + `SR-CAP-001` + `SR-CONTRACT-002`。
+
+**Notes**: SR-EXEC-003（execution drawdown 缺开仓 MTM）的 register 批准窄修——不实现完整 MTM，而是把 drawdown 标 `null`/`not_evaluable`，杜绝 realized-only cash drawdown 被当 ship-gate 证据 overread。已全审 `runners/backtest_execution.py`。**逻辑正确**：(1) `simulate_execution` 删除 `max_drawdown = min(daily_equity drawdown)` 计算、`metrics.max_drawdown → None` + 加 limitation 文案，`daily_equity.csv` 诊断保留但显式声明非 ship-gate 证据；(2) `build_ship_gate_evaluation` `max_drawdown_value/passed → None`（hardcode，不再读 report_metrics）+ reason "open-position mark-to-market is not implemented; not evaluable"，**删掉了用 realized drawdown 算 `passed=abs<=threshold` 的 elif 分支** → drawdown 永不能据残缺数据"pass"，full_size AND-gate 不会被误满足（测试断言 ship_gate status=`not_evaluable`）。**独立核实**：(a) grep `max_drawdown` 确认无 dangling 引用——删除的 local 无残留，build_ship_gate hardcode None，line 759 另一处 `max_drawdown:None` 是既有 path 本轮未动；(b) **test 正确反转锁定**——两测试把旧 "drawdown 数值且 passed=True" 反转为 `value/passed is None` + reason 含 mark-to-market/not-evaluable + limitations 含 "max_drawdown is null"，第二测试重命名为 `..._is_not_evaluable_until_mark_to_market_exists`，会捕捉回归（非削弱断言）；(c) 独立跑 execution+aggregate+schema **37 OK**（20+9+5+3，无 NameError/无回归）；CURRENT 149。**治理**：register SR-EXEC-003 open→resolved（closure + verification + "若日后实现 MTM 须先加 reviewed tests 再恢复数值 drawdown 证据"准确）、Hot Queue 移出 SR-EXEC-003、SR-EXEC-002 父条 supersession 说明更新为"子条各自状态、未闭子条仍是 blocker"。**Scope 干净**：只 SR-EXEC-003，明确未折叠 004/005/007/CAP/CONTRACT（rejected alts 确认 aggregate zero-trade 归 SR-EXEC-005）、未跑 EGS/research/fetch。**评价**：对 evidence-integrity 风险，"标 not-evaluable 而非编一个 drawdown 数" 是正确取向。**本轮可一次性 `提交`**；下一刀进 execution-evidence 组余下项（SR-EXEC-004 熔断/冷静期未模拟却上报 / 005 零交易月当 0% / 007 并发资金重用 / CAP-001 capital ceiling 未校验 / CONTRACT-002 forward-live evidence 无 schema）。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-EXEC-003 drawdown not-evaluable guard)
+
+**Commits**: 230e100
+
+**Relationship to prior session(s)**:
+- Builds on the committed `SR-DATA-001` suspend completeness guard and the current risk-register hot queue.
+- Executes only `SR-EXEC-003`; the remaining execution-evidence group stays open for later slices.
+- Does not run EGS, regenerate cohorts, run research, fetch provider data, contact providers, change US data-source access, or commit.
+
+**Worked on**:
+1. [tracked] `runners/backtest_execution.py`: stopped publishing realized exit-date cash drawdown as `metrics.max_drawdown`; current reports emit `max_drawdown = null` and ship-gate drawdown `value/passed = null` until open-position mark-to-market equity exists.
+2. [tracked] `tests/execution/test_backtest_execution.py`: updated the time-stop and multi-trade execution paths to assert null / not-evaluable drawdown evidence and the new MTM limitation text.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-EXEC-003` resolved and removed it from Hot Queue item #1.
+4. [tracked] `docs/CURRENT.md`: updated the active P0/P1 routing and kept the snapshot at 149 lines.
+5. [tracked] `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`: prepended the Phase 5 handoff addendum for this execution-runner evidence guard.
+6. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Chose the register-approved narrow fix, not a full MTM implementation, because daily open-position valuation and concurrency modeling are broader Phase 5 work.
+- Kept `daily_equity.csv` diagnostics in place, but explicitly blocked those realized-only values from being interpreted as ship-gate drawdown evidence.
+- Did not fold in `SR-EXEC-004`, `SR-EXEC-005`, `SR-EXEC-007`, `SR-CAP-001`, or `SR-CONTRACT-002` to keep the review slice narrow.
+
+**Alternatives considered and rejected**:
+- "Implement full daily mark-to-market now" — rejected for this slice because it would require a broader position-accounting design and tests beyond SR-EXEC-003's minimal closure path.
+- "Keep numeric realized drawdown but label it as limited" — rejected because future evidence consumers can still overread a numeric `max_drawdown`.
+- "Change aggregate drawdown semantics in the same slice" — rejected because aggregate zero-trade and legacy/synthetic-report behavior is already tracked separately by `SR-EXEC-005`.
+
+**Validation run/result**:
+- Initial parallel attempt to run `tests.execution.test_backtest_execution` hit a tool sandbox setup refresh failure before the test process started; reran it separately.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v`: passed, 20 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v`: passed, 9 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_backtest_report_schema -v`: passed, 5 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v`: passed, 3 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line-count check via Python `splitlines()`: 149 lines, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- If review passes and the user commits, the next default `执行` is the remaining risk-register execution-evidence group (`SR-EXEC-004/005/007` + `SR-CAP-001` + `SR-CONTRACT-002`), unless the user explicitly approves a narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-001 suspend daily completeness guard)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `3161ab4`)
