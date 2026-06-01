@@ -63,6 +63,17 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(msg, "ok")
 
+    def test_benchmark_cache_hint_uses_benchmark_only_helper(self) -> None:
+        hint = "\n".join(
+            forward_tracker._cache_refresh_hint(
+                "forward_daily cache benchmark input is not same-anchor ready"
+            )
+        )
+
+        self.assertIn("refresh_forward_daily_benchmark_open_tushare.py", hint)
+        self.assertIn("CSI300/CSI1000 index_daily", hint)
+        self.assertNotIn("--refresh-forward-daily", hint)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,31 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-01 append: SR-DATA-003 benchmark-only cache refresh helper
+
+**Changed**:
+- Added `runners/refresh_forward_daily_benchmark_open_tushare.py`, a narrow helper that reads the existing shared `forward_daily.pkl` date range and fetches only CSI300 / CSI1000 `index_daily` `trade_date/open/close` frames before atomically patching the cache benchmark section.
+- Added `tests/phase6/test_refresh_forward_daily_benchmark_open_tushare.py` to prove the helper preserves stock / limit payloads, supports dry-run, and makes the patched cache reusable by `backtest_rank.fetch_forward_daily(..., refresh=False)` without a provider refetch.
+- Updated `runners/README.md`, `docs/CURRENT.md`, and `docs/system_risk_register.md` to route the remaining `SR-DATA-003` work through benchmark-only cache patching before any outcome / excess slice.
+
+**Why**:
+- The local shared `forward_daily.pkl` already contains stock and limit payloads for the research window but its benchmark frames are close-only. A full `--refresh-forward-daily` would refetch the entire stock / limit / benchmark surface, which is wider than the accepted `SR-DATA-003` input slice.
+- The helper creates a reviewable path for the necessary benchmark open input without running outcome / excess or changing the existing return calculation path.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_refresh_forward_daily_benchmark_open_tushare -v
+```
+
+**Validation result**:
+- `tests.phase6.test_refresh_forward_daily_benchmark_open_tushare`: 3 tests passed.
+
+**Invalidated / blocked old conclusion**:
+- "The only way to fix the close-only forward_daily benchmark cache is a full forward-daily refresh" is invalid. The benchmark frames can be patched via a benchmark-only `index_daily` slice.
+- This change does not itself fetch provider data, patch the local cache, compute outcome returns, or compute benchmark excess. `SR-DATA-003` remains open until the cache input is actually patched and reviewed; redesigned outcome / excess still requires a later separate reviewed slice.
+
+---
+
 ## 2026-06-01 append: SR-DATA-003 forward-tracker cache guard
 
 **Changed**:

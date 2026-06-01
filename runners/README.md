@@ -56,6 +56,11 @@ Existing helpers:
   evidence helper; fetches Tushare `index_daily` for CSI1000 / CSI300 and writes
   `YYYYMM -> return` JSON files for `aggregate_execution_reports.py`, plus
   metadata sidecars with provider/API/date-range lineage.
+- `refresh_forward_daily_benchmark_open_tushare.py` - SR-DATA-003 benchmark-only
+  cache helper; reads the existing shared `forward_daily.pkl` date range, fetches
+  only CSI300 / CSI1000 `index_daily` `trade_date/open/close`, and patches the
+  cache benchmark frames without refreshing stock daily, adj_factor, stk_limit,
+  or trade_cal payloads.
 - `audit_candidate_universe_overlap_tushare.py` - Phase 6b benchmark-policy
   audit helper; reads one captured `analysis_input.json`, fetches Tushare
   `index_weight` membership for CSI1000 / CSI300, and writes a schema-valid

@@ -259,15 +259,13 @@ def backfill(windows: list[int]) -> int:
     # Cache coverage gate: tracker is a sidebar; it must not trigger a
     # universe-wide Tushare refetch on its own. The backtest forward_daily
     # cache is the shared source. If the cache does not cover the tracker
-    # as_of range, bail with clear instructions and let the user trigger
-    # the refresh via backtest_rank.py.
+    # as_of range or lacks same-anchor benchmark open, bail with clear
+    # instructions and let the user trigger the narrowest safe refresh.
     coverage_ok, msg = _check_cache_coverage(mature_as_ofs, max_window)
     if not coverage_ok:
         print(f"[SKIP] {msg}")
-        print("[HINT] Refresh the shared forward_daily cache before backfilling. Example:")
-        print('       python runners\\backtest_rank.py --mode production --stats-only \\\n'
-              '           --refresh-forward-daily --windows 5,10,20')
-        print("       (this refetches forward daily for the backtest+tracker shared cache)")
+        for line in _cache_refresh_hint(msg):
+            print(line)
         return 0
 
     payload = fetch_forward_daily(mature_as_ofs, max_window, refresh=False)
@@ -315,6 +313,21 @@ def backfill(windows: list[int]) -> int:
     _write_tracker(df_out)
     print(f"[OK] backfilled {len(updated_keys)} rows across {len(mature_as_ofs)} as_of dates")
     return 0
+
+
+def _cache_refresh_hint(message: str) -> list[str]:
+    if "benchmark input is not same-anchor ready" in message or "benchmark frames" in message:
+        return [
+            "[HINT] Patch benchmark open/close in the shared forward_daily cache before backfilling. Example:",
+            "       python runners\\refresh_forward_daily_benchmark_open_tushare.py",
+            "       (this fetches only CSI300/CSI1000 index_daily trade_date/open/close)",
+        ]
+    return [
+        "[HINT] Refresh the shared forward_daily cache before backfilling. Example:",
+        "       python runners\\backtest_rank.py --mode production --stats-only \\",
+        "           --refresh-forward-daily --windows 5,10,20",
+        "       (this refetches forward daily for the backtest+tracker shared cache)",
+    ]
 
 
 def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str]:

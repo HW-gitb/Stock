@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-003 benchmark-only cache refresh helper)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `459377f`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。
+
+**Notes**: 本 session 代码量最大的一轮——新增 Tushare provider-fetch runner `runners/refresh_forward_daily_benchmark_open_tushare.py`（SR-DATA-003 benchmark-open input helper）+ 其测试 + forward_tracker hint 改动 + 治理文档。**逐行核实窄路径安全属性（最关键）**：(1) `fetch_benchmark_frames` 只对 csi300/csi1000 调 `fetch_index_daily`（复用 SR-MEASURE-001 已验证的 `materialize_benchmark_monthly_returns_tushare.fetch_index_daily / normalized_index_rows`）——只取 2 条 index_daily，绝不碰 stock daily / adj_factor / stk_limit / trade_cal；(2) `patched = dict(cached)` 后只覆盖 `benchmarks`，stocks/limits 原样保留；window 从 cache meta 派生（不可 silent 扩窗）；atomic write（`.tmp`+`replace`）；写 `benchmark_open_patch` provenance（显式 `stock_daily_refetch_allowed:false`）。(3) **测试 test-lock 该安全属性**：`FakeBenchmarkPro` 的 `daily/adj_factor/stk_limit/trade_cal` 全 raise AssertionError（runner 若碰 stock 面则测试失败）；`test_patched_cache_is_reusable_by_backtest_without_refetch` 把 `backtest_rank._tushare_pro` mock 成"调用即 raise"，证明 patch 后 cache 被 `fetch_forward_daily(refresh=False)` **复用而非 refetch**；dry-run 非 mutation 也覆盖。(4) forward_tracker `_cache_refresh_hint`：benchmark 类 `[SKIP]` 消息 → 指向窄 helper、非全量 `--refresh-forward-daily`，检测 substring 与 `_check_cache_coverage` 实际消息对得上，新增 hint test 锁定。**独立跑测试**：`tests/phase6` discovery 23 OK（19→23，无横向回归）、Codex 4-module 命令 18 OK（复现）、新 runner 模块 3 OK；CURRENT.md 149。**Scope（关键）**：本轮只新增 helper+test+hint+治理文档，**未运行该 runner、未 fetch provider、未 patch 本地 cache、未跑 outcome/excess、未 rerun EGS**（Codex 明确声明 + status 无 cache 文件改动）；provider fetch + cache mutation 被显式推迟为单独 input run——正确分片。**治理**：`SR-DATA-003` 正确保持 `open`（helper 存在但 cache 仍需实际 reviewed patch run，之后 outcome 还需单独 reviewed slice），Hot Queue #1 / entry / CURRENT / handoff / runners/README 一致，Codex 明确 reject "mark resolved"。SESSION_LOG entry `[tracked]/[untracked]` 标签 + validation + review state 齐全，`Commits: 459377f` 仍 double-duty。无非阻塞观察——test 设计已主动覆盖我会提的安全点。**下一刀**：运行该 benchmark-only helper 实际 patch 本地 cache（单独 input 动作；建议先 `--dry-run`，因 cache 是 gitignored 本地件、provider fetch 是 sensitive 动作），review/确认后再谈 redesign 的 outcome/excess（仍需单独 reviewed slice）。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-DATA-003 benchmark-only cache refresh helper)
+
+**Commits**: 459377f07247af88a2f74239055a29d8fa563c3a
+
+**Relationship to prior session(s)**:
+- Builds on the reviewed / committed forward-tracker close-only cache guard.
+- **Refines** `SR-DATA-003`: this slice adds the benchmark-only cache patch path needed before the redesigned A-share burst outcome / excess slice, but it does not run provider fetch, patch the local cache, or compute outcome / excess.
+
+**Worked on**:
+1. [untracked] `runners/refresh_forward_daily_benchmark_open_tushare.py`: added a narrow helper that reads the existing `forward_daily.pkl` date range, fetches only CSI300 / CSI1000 `index_daily` `trade_date/open/close`, and atomically patches only the cache benchmark frames while preserving stock / limit payloads.
+2. [untracked] `tests/phase6/test_refresh_forward_daily_benchmark_open_tushare.py`: added regression coverage for benchmark-only patching, dry-run non-mutation, and post-patch `backtest_rank.fetch_forward_daily(..., refresh=False)` reuse without provider refetch.
+3. [tracked] `runners/forward_tracker.py`, `tests/phase6/test_forward_tracker_cache_guard.py`: changed the close-only benchmark cache remediation hint to point at the benchmark-only helper instead of full `--refresh-forward-daily`, with a test guard.
+4. [tracked] `runners/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: routed the remaining `SR-DATA-003` input work through the benchmark-only helper while keeping outcome / excess blocked.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Did not run `runners/refresh_forward_daily_benchmark_open_tushare.py` against Tushare, did not modify the ignored local `forward_daily.pkl`, did not run outcome / excess, and did not rerun EGS.
+- The helper deliberately derives `start_date` / `end_date` from the existing cache metadata rather than accepting a broader ad hoc date range.
+- `SR-DATA-003` remains open: after review / commit, the next input step is to run the benchmark-only cache patch; the redesigned outcome / excess calculation still requires a later separate reviewed slice.
+
+**Alternatives considered and rejected**:
+- "Use `backtest_rank.py --refresh-forward-daily`" — rejected because it would refetch stock daily / adj_factor / stk_limit / trade_cal and is wider than the accepted benchmark-open input slice.
+- "Patch the local cache immediately in this round" — rejected because the reviewable slice is the helper and tests; provider fetch / cache mutation should be a separate explicit input run.
+- "Compute redesigned outcome / excess after adding the helper" — rejected because benchmark-open input has not yet been materialized and outcome remains a separate reviewed slice.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_refresh_forward_daily_benchmark_open_tushare tests.phase6.test_forward_tracker_cache_guard tests.test_backtest_rank_phase3 tests.execution.test_materialize_benchmark_monthly_returns_tushare -v`: passed, 18 tests.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+- New-file trailing whitespace scan for `runners/refresh_forward_daily_benchmark_open_tushare.py` and `tests/phase6/test_refresh_forward_daily_benchmark_open_tushare.py`: passed.
+- `docs/CURRENT.md` length check via `ReadAllLines`: 149 lines.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review. Reviewer should inspect both untracked files in addition to tracked diffs.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-003 forward-tracker cache guard)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8a44297`)

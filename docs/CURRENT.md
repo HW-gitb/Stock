@@ -12,7 +12,7 @@
 - `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` records the preflight: 305 Tier1 rows, 301 hard-filter rows, 17 momentum rows, 38 volume-expansion rows, 7 breakout rows, 0 all-pass signal rows.
 - Do not run outcome / benchmark-excess calculation for the current corrected-basis preregistration; it is spent as `failed_preflight_zero_signal_events`.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` records the reviewed redesigned preflight: 24 frozen full EGS cohorts, 19,000 rows, 6,159 Tier1+Tier2 hard-filter rows, `valid_signal_events = 134`.
-- The redesigned preflight passes the `>=30` event-count gate but computes no outcome / benchmark excess. The forward-tracker close-only cache guard is fixed; `SR-DATA-003` benchmark-open input and a separate reviewed outcome / excess slice remain required before any return calculation.
+- The redesigned preflight passes the `>=30` event-count gate but computes no outcome / benchmark excess. A benchmark-only cache refresh helper now exists, but no provider fetch / cache patch / outcome has run; `SR-DATA-003` input and a separate reviewed outcome / excess slice remain required.
 
 ---
 
@@ -95,7 +95,7 @@
 - The preregistration / ledger-planned-test slice passed review and was committed as `1a3e71e`; do not run the current corrected-basis artifact for outcome / excess calculation.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
 - The redesigned preflight passed event-count with `valid_signal_events=134`, but no outcome / excess was computed.
-- The forward-tracker cache guard portion of `SR-DATA-003` is fixed; remaining work is benchmark-open input plus a separate reviewed outcome / excess slice before computing returns for the unchanged redesigned preregistration.
+- The benchmark-only helper for `SR-DATA-003` is added; remaining work is to run a reviewed CSI300 / CSI1000 index_daily open/close cache patch, then create a separate reviewed outcome / excess slice for the unchanged redesigned preregistration.
 - Any further redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
 
 ### P1 - P1 provider access boundary（仅用户明确要求时）
