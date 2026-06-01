@@ -8,6 +8,63 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-CANARY-001 advisory boundary)
+
+**Commits**: none (review-only entry; reviews working tree vs `4273b66`)
+
+**Scope reviewed** (per `git status -uall`): tracked `runners/data_canary.py`, `runners/weekly_screening.ps1`, `runners/README.md`, `tests/phase6/test_weekly_screening_guardrails.py`, register/CURRENT/SESSION_LOG; untracked `tests/phase6/test_data_canary_advisory_boundary.py` (read in full).
+
+**Independent verification**:
+- **Behavior preserved (this is a governance/labeling change, not a logic change).** Both `main()` paths still `return 0` (canary never blocks); weekly `.ps1` block is purely additive and leaves the `$CanaryExitCode` / EGS-exit semantics untouched.
+- **No field regression in the error-path refactor.** The `error_akshare_fetch_failed` path was switched from an inline dict to `_skip_payload(...)`; confirmed `_skip_payload` sets `ran_at = _now_iso()` (line 202) plus `as_of/status/summary.overall_status/message` and forwards `source/candidates_source` via `**extra` — so all prior fields survive and it additionally gains the scope fields. Strict improvement.
+- **ps1 enrichment wiring connects (not just graceful-degrade).** `_write_log` writes `LOG_DIR/data_canary_<as_of>.json` UTF-8 (line 174/179); the ps1 reads `logs\data_canary_$AsOf.json` with `-Encoding UTF8` — filename/dir/encoding all match, so the advisory line is printed with real `status=` for every outcome (incl. the akshare-error case, which covers the canary's own still-`[ERROR]` console line at the operator layer).
+- **Tests** (read in full, key assertions hand-checked): payload scope fields + `summary.overall_status`; console `[ADVISORY-OK]` present while bare `[OK]` correctly absent (`[OK]` is not a substring of `[ADVISORY-OK]`); ps1 static wording. 
+- **Completeness sweep** — grepped all 14 `canary` references: every active consumer/doc is either in the changeset (updated) or characterizes it accurately as non-gating (`AGENTS.md:427` "不阻断选股"; `egs_main.py:1057` only describes the data source; `forward_tracker.py:18` cites it as a "monitoring, not gating" analogy). No code treats canary status as data-pass / ship-gate evidence; historical handoffs are point-in-time and need no change.
+- CURRENT = 149; register SR-CANARY-001 closure accurate; `Commits` uses the corrected pending-form.
+
+**Verdict**: Pass, clean. Correct, behavior-preserving, fully wired, complete coverage. No Required, no Optional.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001`.
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-CANARY-001 advisory boundary)
+
+**Commits**: none (pending 提交; base commit `4273b66`)
+
+**Relationship to prior session(s)**:
+- Executes the next local risk-register maintenance slice after the latest clean commit.
+- Hot queue items were checked first: `SR-DATA-004` still needs real weekly suspend-coverage logs, and `SR-PROVIDER-001` still blocks US provider access / token / trial / sample / data fetch work without explicit user approval.
+- This slice does not run EGS, weekly screening, research outcome / preflight, provider access, external data fetch, or commit.
+
+**Worked on**:
+1. [tracked] `runners/data_canary.py`: added machine-readable advisory scope fields (`evidence_role`, `gate_effect`, `data_passed_claim`, `ship_gate_evidence`, `scope_note`) to skip/error/success payloads; changed the final status line to `[ADVISORY-*]` and explicit "not a data-pass and not a ship-gate signal" wording.
+2. [tracked] `runners/weekly_screening.ps1`: after the canary sidecar returns, reads the JSON log if present and prints the same advisory boundary without changing the pipeline exit-code semantics.
+3. [tracked] `runners/README.md`: documents that canary exit 0 / warning is advisory-only and cannot support alpha, production-readiness, or ship-gate evidence.
+4. [untracked] `tests/phase6/test_data_canary_advisory_boundary.py`: covers canary non-evidence payload fields and console wording.
+5. [tracked] `tests/phase6/test_weekly_screening_guardrails.py`: covers weekly-script advisory wording.
+6. [tracked] `docs/system_risk_register.md`: marks `SR-CANARY-001` resolved with closure evidence and verification.
+7. [tracked] `docs/CURRENT.md`: updates latest delta to the `SR-CANARY-001` closure while keeping the snapshot at 149 lines.
+8. [tracked] `docs/SESSION_LOG.md`: prepended this execution handoff for Claude review.
+
+**Key decisions**:
+- Kept the intentional bypass semantics: canary still cannot block screening and weekly script still exits with the EGS code.
+- Added explicit non-evidence fields instead of renaming the historical status values, so existing log consumers can keep reading `status` / `summary.overall_status`.
+- Did not run the canary script itself because that path can fetch akshare; validation stayed in unit/static tests.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_data_canary_advisory_boundary tests.phase6.test_weekly_screening_guardrails -v`: 8 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: 51 tests passed.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; print(len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"`: 149.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer should inspect tracked diffs plus the untracked test file listed above.
+
+---
+
 ## 2026-06-01 — Claude re-review — Pass (clean) (SR-LLM-001 inline boundary-token hardening)
 
 **Commits**: none (review-only entry; reviews working tree vs `d53931b`)

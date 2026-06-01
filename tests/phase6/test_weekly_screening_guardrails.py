@@ -93,6 +93,15 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("$EgsArgs += '--l3-pit-strict'", text)
         self.assertIn("default --l3-mode=today is blocked", text)
 
+    def test_canary_output_marks_sidecar_advisory(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("ConvertFrom-Json", text)
+        self.assertIn(
+            "sidecar only, not a data-pass and not a ship-gate signal",
+            text,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

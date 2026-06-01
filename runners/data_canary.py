@@ -76,6 +76,15 @@ AK_SOURCES = {
 
 REQUIRED_CANDIDATE_COLUMNS = ("ts_code", "name", "close")
 
+CANARY_EVIDENCE_ROLE = "advisory_sidecar"
+CANARY_GATE_EFFECT = "never_blocks_screening_or_ship_gate"
+CANARY_ADVISORY_SCOPE_NOTE = (
+    "data_canary is an advisory sidecar only: it does not block screening, "
+    "does not write analysis_input.json, does not affect scoring, and must "
+    "not be used as data_passed, alpha, production-readiness, or ship-gate "
+    "evidence."
+)
+
 
 def _normalize_name(name) -> str:
     if name is None or (isinstance(name, float) and pd.isna(name)):
@@ -195,8 +204,46 @@ def _skip_payload(as_of: str, status: str, message: str, **extra) -> dict:
         "summary": {"overall_status": status},
         "message": message,
     }
+    payload.update(_canary_scope_fields())
     payload.update(extra)
     return payload
+
+
+def _canary_scope_fields() -> dict:
+    return {
+        "evidence_role": CANARY_EVIDENCE_ROLE,
+        "gate_effect": CANARY_GATE_EFFECT,
+        "data_passed_claim": False,
+        "ship_gate_evidence": False,
+        "scope_note": CANARY_ADVISORY_SCOPE_NOTE,
+    }
+
+
+def _advisory_label(status: str) -> str:
+    return {
+        "ok": "[ADVISORY-OK]",
+        "warn": "[ADVISORY-WARN]",
+        "error_drift": "[ADVISORY-ERROR]",
+        "error_missing": "[ADVISORY-ERROR]",
+    }.get(status, "[ADVISORY]")
+
+
+def _advisory_summary_message(
+    overall: str,
+    missing: int,
+    n_error: int,
+    n_warn: int,
+    sample_size: int,
+    row_count: int,
+    tier: str,
+    out: Path,
+) -> str:
+    return (
+        f"{_advisory_label(overall)} canary status={overall}: "
+        f"{missing} missing, {n_error} errors, {n_warn} warnings "
+        f"({sample_size} sampled from {row_count} {tier or 'all'} rows); "
+        f"sidecar only, not a data-pass and not a ship-gate signal -> {out}"
+    )
 
 
 def _now_iso() -> str:
@@ -470,15 +517,13 @@ def main() -> int:
     try:
         ak_spot = fn()
     except Exception as e:
-        out = _write_log({
-            "as_of": args.as_of,
-            "ran_at": _now_iso(),
-            "status": "error_akshare_fetch_failed",
-            "message": f"{type(e).__name__}: {e}",
-            "summary": {"overall_status": "error_akshare_fetch_failed"},
-            "source": args.source,
-            "candidates_source": _display_path(cand_path),
-        }, args.as_of)
+        out = _write_log(_skip_payload(
+            args.as_of,
+            "error_akshare_fetch_failed",
+            f"{type(e).__name__}: {e}",
+            source=args.source,
+            candidates_source=_display_path(cand_path),
+        ), args.as_of)
         print(f"[ERROR] akshare fetch failed: {e}; wrote {out} (not blocking)")
         return 0
 
@@ -536,7 +581,7 @@ def main() -> int:
         "akshare spot 是实时/最近收盘快照，非历史 PIT；若脚本晚于 as_of 超过 1-2 个交易日，close 可能已偏移。",
         "行业字段未对比（Tushare 用 SW 申万，akshare 默认东财/同花顺）。",
         "name 比较忽略 ST/*ST/PT 前缀差异。",
-        "canary 仅旁路 warning，不阻断选股，不写入 analysis_input.json，不影响打分。",
+        CANARY_ADVISORY_SCOPE_NOTE,
     ]
     if source_spec["supports_pe_pb"]:
         limitations.insert(1, "Tushare 的 pe 优先用 pe_ttm（滚动），akshare 的 pe 是动态 PE，口径轻微差异。")
@@ -556,6 +601,7 @@ def main() -> int:
         "sample_seed": seed,
         "source": args.source,
         "akshare_source": source_spec["label"],
+        **_canary_scope_fields(),
         "summary": {
             "overall_status": overall,
             "missing_in_akshare": missing,
@@ -573,10 +619,16 @@ def main() -> int:
     }
 
     out = _write_log(payload, args.as_of)
-    icon = {"ok": "[OK]", "warn": "[WARN]",
-            "error_drift": "[ERROR]", "error_missing": "[ERROR]"}.get(overall, "[?]")
-    print(f"{icon} canary {overall}: {missing} missing, {n_error} errors, "
-          f"{n_warn} warnings ({sample_size} sampled from {len(df)} {args.tier or 'all'} rows) -> {out}")
+    print(_advisory_summary_message(
+        overall,
+        missing,
+        n_error,
+        n_warn,
+        sample_size,
+        len(df),
+        args.tier,
+        out,
+    ))
     return 0
 
 

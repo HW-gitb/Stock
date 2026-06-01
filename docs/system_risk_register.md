@@ -359,11 +359,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-CANARY-001 - Data canary status is advisory but can be overread
 
 - Severity: P2
-- Status: open
+- Status: resolved
 - Owner phase: Phase 2.6 data lineage / weekly operation
 - Evidence: `runners/data_canary.py` intentionally returns exit 0 for drift / missing / fetch errors; `runners/weekly_screening.ps1` treats canary as bypass and exits with the EGS code.
 - Accepted calibration: bypass behavior is intentional; the risk is naming / documentation causing future LLMs to treat "pipeline green" as data validation pass.
-- Required next action: make weekly output and docs distinguish "canary ran / advisory warning" from "data passed"; do not let canary status support alpha or production evidence.
+- Required next action: no active `SR-CANARY-001` action. Keep future canary changes advisory-only unless a separate reviewed gate contract is created.
+- Closure evidence: `runners/data_canary.py` now emits explicit `evidence_role = advisory_sidecar`, `gate_effect = never_blocks_screening_or_ship_gate`, `data_passed_claim = false`, and `ship_gate_evidence = false`; its summary line uses `[ADVISORY-*]` labels and says it is not a data-pass and not a ship-gate signal. `runners/weekly_screening.ps1` parses the canary log after the sidecar run and prints the same advisory boundary, while `runners/README.md` documents that exit 0 / warning cannot support alpha or production evidence.
+- Verification: `tests.phase6.test_data_canary_advisory_boundary` covers the non-evidence payload fields and console wording; `tests.phase6.test_weekly_screening_guardrails` covers weekly-script advisory wording.
 
 ### SR-DET-001 - Deterministic report depends on wall-clock state for circuit breaker status
 

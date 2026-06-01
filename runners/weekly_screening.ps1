@@ -143,6 +143,18 @@ if ($SkipCanary) {
     $CanaryExitCode = $LASTEXITCODE
     if ($null -eq $CanaryExitCode) { $CanaryExitCode = 1 }
 
+    $CanaryLog = Join-Path $ProjectRoot "logs\data_canary_$AsOf.json"
+    if (Test-Path $CanaryLog) {
+        try {
+            $CanaryPayload = Get-Content -Raw -Encoding UTF8 $CanaryLog | ConvertFrom-Json
+            Write-Host "[ADVISORY] data_canary status=$($CanaryPayload.status); sidecar only, not a data-pass and not a ship-gate signal. Log: $CanaryLog" -ForegroundColor Yellow
+        } catch {
+            Write-Host "[ADVISORY] data_canary log exists but could not be parsed; sidecar only, not a data-pass and not a ship-gate signal. Log: $CanaryLog" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "[ADVISORY] data_canary log not found; sidecar only, not a data-pass and not a ship-gate signal." -ForegroundColor Yellow
+    }
+
     if ($CanaryExitCode -ne 0) {
         # canary 本身设计为永远 exit 0；非 0 说明 Python 进程崩了，不是数据问题
         # 仍然不让它影响主流程退出码（旁路约束）
