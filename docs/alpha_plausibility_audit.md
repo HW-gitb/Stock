@@ -26,7 +26,7 @@ The first formal audit must be schema-first. Before a completed audit can be use
 - `schemas/examples/alpha_plausibility_audit.example.json`
 - focused schema tests
 
-The first formal Phase 7a-1 audit artifact is `docs/phase7a_alpha_plausibility_audit.json`. It uses `docs/phase7a_provider_status_snapshot.json` as the shared provider readiness baseline and remains an alpha-plausibility routing artifact, not ship-gate evidence.
+The current formal Phase 7a-1 audit artifact is `docs/phase7a_alpha_plausibility_audit.json`. It uses `docs/phase7a_provider_status_snapshot.json` as the shared provider readiness baseline and remains an alpha-plausibility routing artifact, not ship-gate evidence. The 2026-06-01 rerun supersedes the initial 2026-05-27 audit only for the A-share minimal-data burst downgrade and related portfolio routing.
 
 Each lane record must include at least:
 
@@ -63,7 +63,7 @@ The audit must cover these lane IDs:
 |---|---|---|
 | `a_short_steady` | Risk filter / evidence loop | Existing A-short steady lane should not be treated as the main short-term alpha engine unless future evidence overturns the current finding. |
 | `a_short_variants` | Risk-filter improvement | Variants are bounded comparison tracks for drawdown / bad-ticket reduction and execution-quality improvement. |
-| `a_share_burst_minimal_data` | Research / paper alpha probe | Uses OHLCV, turnover, relative strength, benchmark context, limit / halt, and current A-short candidate context only. |
+| `a_share_burst_minimal_data` | Research / paper alpha probe | Current formal audit verdict is `redesign_required` after the failed full-universe minimal-data outcome; any future A-share minimal-data burst test needs a new ledger planned test and reviewed preregistration. |
 | `a_share_burst_full_data` | Short-term alpha source candidate | Adds reviewed capital flow, catalyst, event, and manual-evidence fields before minimal live observation. |
 | `us_short_steady` | Risk-filtered short decision support | US-short steady lane may contain alpha signals but must not inherit burst-lane evidence. |
 | `us_burst_minimal_data` | Research / paper alpha probe | Uses OHLCV, gap / range, relative strength, benchmark / sector context, and liquidity only. |
@@ -107,7 +107,7 @@ These are not final audit verdicts:
 
 - A-short steady should be treated as a permanent risk filter unless forward evidence creates an explicit escape-valve case.
 - A-short variants should be evaluated mainly for bad-ticket reduction, drawdown reduction, execution quality, and evidence quality.
-- Burst lanes are the short-term alpha candidates, but minimal-data burst tiers are paper/research only until non-price evidence is available.
+- Burst lanes are the short-term alpha candidates, but minimal-data burst tiers are paper/research only until non-price evidence is available. The tested A-share minimal-data-only design is now `redesign_required`, not an active continuation path.
 - Long re-rating / catalyst lanes are the main long push-alpha candidates.
 - Long core quality lanes may be lower-t-stat stabilizers; portfolio value must be assessed before labeling them failures.
 - Provider priority should follow alpha leverage and data blockers, not convenience of already-proven A-share EOD surfaces.

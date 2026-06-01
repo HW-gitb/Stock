@@ -1,5 +1,32 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-01 append: A-share minimal-data burst audit/spec downgrade
+
+**Changed**:
+- Updated `docs/phase7a_alpha_plausibility_audit.json` as a `forward_evidence_changed` rerun superseding `alpha_audit_20260527_initial`; `a_share_burst_minimal_data` is now `redesign_required`, with evidence integrity, cost/return, capital, portfolio contribution, and source refs pointing to the failed full-universe redesigned outcome.
+- Updated `docs/burst_lane_spec.md` and `docs/alpha_plausibility_audit.md` so A-share minimal-data burst is no longer described as an active `continue` path.
+- Updated schema tests to lock the downgraded verdict and evidence refs.
+
+**Why**:
+- The reviewed outcome artifact failed the registered research-continuation thresholds after enough events were available. Leaving the owner audit/spec at `continue` would invite another unreviewed minimal-data A-share burst fishing loop.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_alpha_plausibility_audit_schema -v
+```
+
+**Validation result**:
+- Focused alpha plausibility audit schema suite passed: 15 tests.
+- The actual audit artifact still validates against `schemas/alpha_plausibility_audit.schema.json`, and a new test asserts `a_share_burst_minimal_data = redesign_required`.
+
+**Invalidated / blocked old conclusion**:
+- The prior audit/spec statement "`a_share_burst_minimal_data` = `continue`" is invalid.
+- This does not change `a_share_burst_full_data = defer_until_provider_ready`; full-data burst remains blocked on reviewed provider/manual evidence and is not authorized by this docs-only downgrade.
+- No new research run, provider fetch, US data access, runner change, production claim, live observation, or ship-gate claim is authorized.
+
+---
+
 ## 2026-06-01 append: A-share burst full-universe redesigned outcome failed
 
 **Changed**:

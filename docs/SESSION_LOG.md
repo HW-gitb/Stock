@@ -8,6 +8,55 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (A-share minimal-data burst audit/spec downgrade)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `3753e6e`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。这是把上一轮负面 outcome 固化进 owner audit/spec 的一刀（即我上轮建议的"选项②"）。
+
+**Notes**: docs + audit-artifact + test 轮（无 untracked）。核心是 `docs/phase7a_alpha_plausibility_audit.json` rerun（supersede `alpha_audit_20260527_initial`），把 `a_share_burst_minimal_data` 从 `continue` 降为 `redesign_required`。**最关键审查点——降级是否精准、有无外推**：独立 dump 全 11 lane verdict 确认**唯一改动是 `a_share_burst_minimal_data → redesign_required`**；`us_burst_minimal_data` 仍 `continue`、`a_share_burst_full_data` 仍 `defer_until_provider_ready`、其余 8 条全未动——**失败结论未被错误外推到未测试的 lane**（Codex 明确 reject "把 full-data 也标失败"，理由：失败只覆盖 EOD minimal-data 设计）。**校准得当**：用既有 schema enum `redesign_required`（非自造 `falsified`，也非 `do_not_implement` 永久判死）——准确表达"该设计失败、需新 ledger+prereg 才能再试"。**evidence_integrity 诚实**：`tests_performed_count 0→2`、`current_effective_sample 0→116`、`power_status insufficient→adequate`——**关键：116 样本下 power adequate，证明负面结论是真的没 alpha，不是样本不足的托词**；gross/net excess 填观测值（−2.7096 gross excess = net −2.8696 + cost 0.16，自洽）；`portfolio_contribution.expected_alpha_contribution_pct → 0`、`bucket_status → blocked`；parent `a_burst.active_child_lane_ids` 移除 minimal-data、保留 full-data。**audit 元数据正确**：`audit_run_id`/`supersedes_audit_id`/`audit_date`/`rerun_trigger=forward_evidence_changed` 全更新，supersession 链完整。**独立验证**：alpha audit 模块 15 OK + tests/schema discovery 135 OK（audit JSON 仍过 schema，含改动后的 band/enum）+ CURRENT.md 149；新 test `test_a_share_minimal_data_burst_audit_records_failed_outcome` 逐项 lock（verdict/counts/power/bucket/contribution/source_refs/active_children）。spec docs（burst_lane_spec verdict 表 + §6.1 prereg 史 + alpha_plausibility_audit.md route）一致更新。**Scope/safety**：纯 docs+artifact+test，未 run research、未 fetch、未碰 US 数据、未改 runner、未开新假设。**结论意义**：负面结果已固化为 owner-doc 状态，挡住未来再 fish minimal-data EOD 变体；A-short 这一侧"便宜 alpha 假设"正式记录为耗尽（steady=filter、minimal-data burst=redesign_required、full-data burst=provider-defer）。**下一刀**：默认回 risk-register hot queue（`SR-DATA-001`+`SR-OPS-002`+`SR-OPS-003`，weekly official capture / 直接 EGS 再生前必修），除非用户显式批准新的 research preregistration 或 provider/data 投入决定。
+
+---
+
+## 2026-06-01 — Codex 执行 (A-share minimal-data burst audit/spec downgrade)
+
+**Commits**: 3753e6e
+
+**Relationship to prior session(s)**:
+- Builds on the reviewed / committed A-share burst full-universe redesigned outcome failure.
+- Converts that negative research result into owner audit/spec state so later work does not treat `a_share_burst_minimal_data` as still `continue`.
+- Does not run research, fetch data, use US data, change runners, or authorize production / live / ship-gate claims.
+
+**Worked on**:
+1. [tracked] `docs/phase7a_alpha_plausibility_audit.json`: reran the audit artifact as `alpha_audit_20260601_a_share_minimal_data_burst_downgrade`, superseding `alpha_audit_20260527_initial`; changed `a_share_burst_minimal_data` to `redesign_required` and attached the failed outcome evidence, integrity counts, blocked capital effect, and zero portfolio contribution.
+2. [tracked] `docs/burst_lane_spec.md`: changed the A-share minimal-data burst row from `continue` to `redesign_required` and recorded the failed evidence-report metrics plus the new ledger / preregistration gate for any future A-share minimal-data burst test.
+3. [tracked] `docs/alpha_plausibility_audit.md`: updated the audit route doc so it points to the current rerun artifact and no longer describes the tested A-share minimal-data-only design as an active continuation path.
+4. [tracked] `tests/schema/test_alpha_plausibility_audit_schema.py`: updated the audit expectations and added assertions that lock the downgraded verdict, evidence counts, source refs, blocked capital status, and removal of the failed minimal-data tier from active A-burst contribution.
+5. [tracked] `AGENTS.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, and `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: updated current routing and handoff notes to reflect the audit/spec downgrade.
+6. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Used the existing schema enum `redesign_required`; did not invent a new `falsified` audit decision label.
+- Preserved `a_share_burst_full_data = defer_until_provider_ready`; the failed minimal-data tier does not prove the full-data tier works or fails.
+- Did not open a new A-share burst hypothesis. Any future A-share minimal-data burst test still requires a new ledger planned test, user approval, and reviewed preregistration.
+
+**Alternatives considered and rejected**:
+- "Leave the initial audit metadata unchanged" — rejected because the artifact now includes 2026-06-01 evidence; the audit run id, date, supersession id, and rerun trigger should reflect that.
+- "Mark the full-data tier as failed too" — rejected because the failed result only covers the EOD minimal-data design.
+- "Use a custom falsified verdict" — rejected because the audit schema already defines `redesign_required` for weak or contradictory alpha evidence.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_alpha_plausibility_audit_schema tests.schema.test_research_preregistration_schema tests.schema.test_evidence_report_schema -v`: passed, 53 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\schema -v`: passed, 135 tests.
+- `docs/CURRENT.md` length check: 149 lines.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review. Reviewer should inspect the tracked diffs only; there are no intended untracked files.
+- After review / commit, the default next implementation work remains the risk-register hot queue (`SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003`) unless the user explicitly approves a new research preregistration or a provider/data decision.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (A-share burst full-universe redesigned outcome failed)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `c0f8f3c`)

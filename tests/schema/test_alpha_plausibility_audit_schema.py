@@ -9,7 +9,7 @@ from pathlib import Path
 SCHEMA_PATH = Path("schemas/alpha_plausibility_audit.schema.json")
 EXAMPLE_PATH = Path("schemas/examples/alpha_plausibility_audit.example.json")
 PROVIDER_STATUS_SNAPSHOT_PATH = Path("docs/phase7a_provider_status_snapshot.json")
-INITIAL_AUDIT_PATH = Path("docs/phase7a_alpha_plausibility_audit.json")
+CURRENT_AUDIT_PATH = Path("docs/phase7a_alpha_plausibility_audit.json")
 
 
 class AlphaPlausibilityAuditSchemaTest(unittest.TestCase):
@@ -183,25 +183,27 @@ class AlphaPlausibilityAuditSchemaTest(unittest.TestCase):
             "blocked",
         )
 
-    def test_initial_phase7a_audit_validates_when_jsonschema_available(self) -> None:
+    def test_current_phase7a_audit_validates_when_jsonschema_available(self) -> None:
         try:
             from jsonschema import Draft7Validator
         except ModuleNotFoundError as exc:
             raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
 
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        audit = json.loads(INITIAL_AUDIT_PATH.read_text(encoding="utf-8"))
+        audit = json.loads(CURRENT_AUDIT_PATH.read_text(encoding="utf-8"))
         errors = list(Draft7Validator(schema).iter_errors(audit))
 
         self.assertEqual(errors, [])
 
-    def test_initial_phase7a_audit_is_formal_and_uses_snapshot(self) -> None:
-        audit = json.loads(INITIAL_AUDIT_PATH.read_text(encoding="utf-8"))
+    def test_current_phase7a_audit_is_formal_and_uses_snapshot(self) -> None:
+        audit = json.loads(CURRENT_AUDIT_PATH.read_text(encoding="utf-8"))
         lane_ids = {lane["lane_id"] for lane in audit["lane_records"]}
         parent_ids = {lane["parent_lane_id"] for lane in audit["portfolio_synthesis"]["parent_lanes"]}
         decisions = {lane["lane_id"]: lane["decision"] for lane in audit["lane_records"]}
 
-        self.assertEqual(audit["audit_run_id"], "alpha_audit_20260527_initial")
+        self.assertEqual(audit["audit_run_id"], "alpha_audit_20260601_a_share_minimal_data_burst_downgrade")
+        self.assertEqual(audit["supersedes_audit_id"], "alpha_audit_20260527_initial")
+        self.assertEqual(audit["rerun_trigger"], "forward_evidence_changed")
         self.assertNotIn("example", audit["audit_run_id"])
         self.assertEqual(
             audit["provider_status_snapshot"]["snapshot_id"],
@@ -210,7 +212,7 @@ class AlphaPlausibilityAuditSchemaTest(unittest.TestCase):
         self.assertEqual(len(lane_ids), 11)
         self.assertEqual(len(parent_ids), 6)
         self.assertEqual(decisions["a_short_steady"], "continue_as_risk_filter")
-        self.assertEqual(decisions["a_share_burst_minimal_data"], "continue")
+        self.assertEqual(decisions["a_share_burst_minimal_data"], "redesign_required")
         self.assertEqual(decisions["a_share_burst_full_data"], "defer_until_provider_ready")
         self.assertEqual(decisions["us_long_re_rating_catalyst"], "defer_until_provider_ready")
         self.assertTrue(
@@ -221,6 +223,29 @@ class AlphaPlausibilityAuditSchemaTest(unittest.TestCase):
             )
         )
         self.assertTrue(any("not ship-gate evidence" in item for item in audit["limitations"]))
+
+    def test_a_share_minimal_data_burst_audit_records_failed_outcome(self) -> None:
+        audit = json.loads(CURRENT_AUDIT_PATH.read_text(encoding="utf-8"))
+        lane = next(lane for lane in audit["lane_records"] if lane["lane_id"] == "a_share_burst_minimal_data")
+        parent = next(
+            lane for lane in audit["portfolio_synthesis"]["parent_lanes"] if lane["parent_lane_id"] == "a_burst"
+        )
+
+        self.assertEqual(lane["decision"], "redesign_required")
+        self.assertEqual(lane["evidence_integrity"]["tests_performed_count"], 2)
+        self.assertEqual(lane["evidence_integrity"]["minimum_effective_sample_required"], 30)
+        self.assertEqual(lane["evidence_integrity"]["current_effective_sample"], 116)
+        self.assertEqual(lane["evidence_integrity"]["power_status"], "adequate")
+        self.assertEqual(lane["capital_deployment_effect"]["bucket_status"], "blocked")
+        self.assertEqual(lane["portfolio_contribution"]["expected_alpha_contribution_pct"], 0)
+        self.assertIn("-2.8696001309", lane["decision_reason"])
+        self.assertIn("26.5735343137", lane["decision_reason"])
+        self.assertIn(
+            "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json",
+            lane["source_refs"],
+        )
+        self.assertNotIn("a_share_burst_minimal_data", parent["active_child_lane_ids"])
+        self.assertIn("a_share_burst_full_data", parent["active_child_lane_ids"])
 
     def test_missing_required_lane_is_rejected_when_jsonschema_available(self) -> None:
         try:

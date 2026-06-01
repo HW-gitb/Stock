@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（A-share burst redesigned outcome failed）
+**最后更新**：2026-06-01（A-share burst audit/spec downgraded）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,7 +12,7 @@
 - Do not run outcome / benchmark-excess calculation for the current corrected-basis preregistration; it is spent as `failed_preflight_zero_signal_events`.
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
-- The redesigned test is spent / failed; no production, live, ship-gate, or research-continue conclusion is authorized. Any further redesigned A-share burst test needs a new ledger planned test and reviewed preregistration.
+- Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
 
 ---
 
@@ -29,9 +29,9 @@
 
 ## 2. 最近已完成
 
+- **A-share burst audit/spec downgrade**（2026-06-01）：`docs/phase7a_alpha_plausibility_audit.json` / `docs/burst_lane_spec.md` 已把 A-share minimal-data burst 从 `continue` 降为 `redesign_required`，并引用 failed outcome evidence。
 - **A-share burst redesigned outcome**（2026-06-01）：`evidence_report.json` / `signal_events.csv` / `monthly_stats.csv` 已生成；同一 frozen prereg + patched benchmark-open cache 计算后失败 research-continuation thresholds，decision 为 `falsified_or_redesign_required`。
 - **SR-DATA-003 benchmark-open input**（2026-06-01）：ignored local `result/a_short/backtest/cache/forward_daily.pkl` 已由 benchmark-only helper patch；CSI300 / CSI1000 均为 498 行 `trade_date/open/close`，`fetch_forward_daily(refresh=False)` 验证可复用 cache 且不触发 provider refetch；随后 redesigned outcome slice 使用该 input。
-- **A-share burst redesign preregistration**（2026-05-31）：`research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` 已 review + commit；ledger planned test 已由 preflight 消耗。
 - **A-share burst measurement fix**（2026-05-31）：same-anchor benchmark excess 已在 `runners/backtest_rank.py` / benchmark materializer 中落地；`research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` 已建立，原 prereg 继续 blocked。
 - **Weekly historical PIT interlock**（2026-05-31）：`runners/weekly_screening.ps1` now blocks historical `-AsOf` official-output runs unless L3 mode is explicitly `pit` / `neutralize`, rejects historical `today` L3 mode, and guards existing official outputs from accidental overwrite.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。

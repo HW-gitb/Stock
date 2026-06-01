@@ -33,7 +33,7 @@ Status:
 
 ## Hot Queue
 
-Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration.
+Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration.
 
 1. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
 2. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.

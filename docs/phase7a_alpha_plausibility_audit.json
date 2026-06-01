@@ -1,7 +1,7 @@
 {
   "schema_name": "alpha_plausibility_audit",
   "schema_version": "1.0.0",
-  "generated_at": "2026-05-27T17:00:00Z",
+  "generated_at": "2026-06-01T00:00:00Z",
   "scope": {
     "phase": "7a-1",
     "purpose": "alpha_plausibility_audit_contract",
@@ -15,11 +15,11 @@
     "manual_order_only": true,
     "ship_gate_relaxed": false
   },
-  "audit_run_id": "alpha_audit_20260527_initial",
-  "supersedes_audit_id": null,
-  "audit_date": "2026-05-27",
-  "next_review_date": "2026-08-27",
-  "rerun_trigger": "initial_audit",
+  "audit_run_id": "alpha_audit_20260601_a_share_minimal_data_burst_downgrade",
+  "supersedes_audit_id": "alpha_audit_20260527_initial",
+  "audit_date": "2026-06-01",
+  "next_review_date": "2026-09-01",
+  "rerun_trigger": "forward_evidence_changed",
   "audit_policy": {
     "detailed_field_inventory_owner": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md#3-10",
     "lane_coverage_required": 11,
@@ -446,15 +446,15 @@
       "lane_role": "research_only",
       "alpha_source_hypothesis": {
         "source_type": "flow_momentum_burst",
-        "hypothesis_text": "Minimal A-share burst can test price/volume eruption patterns on paper before full event/flow data is ready.",
-        "expected_edge_mechanism": "Relative strength, turnover, limit/halt context, and benchmark confirmation may identify short-term bursts."
+        "hypothesis_text": "Minimal A-share burst was tested as an EOD-only price / volume paper tier and failed its registered research-continuation thresholds.",
+        "expected_edge_mechanism": "The tested relative-strength, turnover, breakout, limit/halt, and benchmark-confirmation design did not produce positive CSI1000-relative net excess; any future A-share burst alpha hypothesis requires redesign or full-data confirmation."
       },
       "expected_excess_return_band": {
-        "low": 0.5,
-        "high": 2,
+        "low": -3,
+        "high": 0,
         "unit": "pct",
         "time_base": "holding_period",
-        "rationale": "Paper-only expectation; not ship-gate evidence."
+        "rationale": "Observed full-universe redesigned outcome produced mean net CSI1000 5d excess of -2.8696001309 percentage points; no positive expectation remains for the current minimal-data design without reviewed redesign."
       },
       "expected_volatility_band": {
         "low": 5,
@@ -464,11 +464,11 @@
         "rationale": "Burst candidates have high dispersion."
       },
       "expected_max_drawdown_band": {
-        "low": 8,
-        "high": 20,
+        "low": 15,
+        "high": 30,
         "unit": "pct",
         "time_base": "not_applicable",
-        "rationale": "Live eligibility requires full-data promotion and risk locks."
+        "rationale": "Observed max monthly signal-excess drawdown was 26.5735343137 percentage points in the full-universe redesigned outcome slice."
       },
       "data_readiness": "research_only",
       "pit_blockers": [
@@ -521,12 +521,12 @@
       },
       "evidence_integrity": {
         "evidence_window_type": "in_sample",
-        "tests_performed_count": 0,
-        "multiple_testing_notes": "No burst trigger experiment has been registered yet.",
-        "adjustment_method": "not_applicable",
-        "minimum_effective_sample_required": 12,
-        "current_effective_sample": 0,
-        "power_status": "insufficient"
+        "tests_performed_count": 2,
+        "multiple_testing_notes": "Two ledger-recorded spent tests exist: the corrected-basis frozen-cohort preflight failed with zero valid events, and the full-universe redesign failed outcome thresholds. No silent parameter rescue is allowed; any further test needs a new ledger planned test and reviewed preregistration.",
+        "adjustment_method": "none",
+        "minimum_effective_sample_required": 30,
+        "current_effective_sample": 116,
+        "power_status": "adequate"
       },
       "pit_survivorship_security_master": {
         "survivorship_handling_status": "partial",
@@ -551,23 +551,23 @@
         "factor_framework": "sector_size_value_momentum_proxy"
       },
       "cost_execution_feasibility": {
-        "expected_alpha_return_gross_pct": 1.5,
-        "expected_alpha_return_net_pct": null,
+        "expected_alpha_return_gross_pct": -2.7096001309,
+        "expected_alpha_return_net_pct": -2.8696001309,
         "cost_adjustment_required": true,
-        "cost_model_scope": "not_estimable",
-        "execution_cost_feasibility_status": "unknown",
+        "cost_model_scope": "commissions_slippage_tax_fx_dividend",
+        "execution_cost_feasibility_status": "blocked",
         "capacity_status": "unknown",
         "slippage_confidence": "low",
-        "manual_execution_feasibility": "requires_manual_review",
-        "net_alpha_not_estimable_reason": "No slippage and capacity study for burst candidates yet."
+        "manual_execution_feasibility": "blocked",
+        "net_alpha_not_estimable_reason": null
       },
       "capital_deployment_effect": {
-        "capital_deployment_effect": "Paper research only.",
-        "bucket_status": "paper_only",
-        "deployment_scope": "A-share short bucket research track",
+        "capital_deployment_effect": "No production, live observation, ship-gate, or research-continue allocation is authorized for the tested minimal-data design.",
+        "bucket_status": "blocked",
+        "deployment_scope": "A-share short bucket research track remains blocked for this minimal-data design.",
         "release_to_liquidity_reserve": false,
         "requires_user_capital_decision": false,
-        "effect_rationale": "Minimal-data burst cannot support live capital."
+        "effect_rationale": "The registered full-universe redesigned outcome failed; further A-share burst research needs a new ledger planned test and reviewed preregistration."
       },
       "portfolio_correlation_assumption": {
         "correlation_basis": "hypothesized",
@@ -575,17 +575,19 @@
         "lane_level_override_rationale": "Minimal tier is research-only."
       },
       "portfolio_contribution": {
-        "expected_alpha_contribution_pct": null,
+        "expected_alpha_contribution_pct": 0,
         "drawdown_control_contribution": "None until risk locks are validated.",
-        "diversification_contribution": "Potential short-horizon diversification if full tier is proven.",
-        "rationale": "Paper-only contribution should not enter ship-gate evidence."
+        "diversification_contribution": "None from the tested minimal-data tier.",
+        "rationale": "The tested minimal-data tier failed its research-continuation thresholds and should not enter portfolio contribution assumptions."
       },
-      "decision": "continue",
-      "decision_reason": "Continue only as paper/research minimal tier.",
+      "decision": "redesign_required",
+      "decision_reason": "The full-universe minimal-data redesign had enough events but failed outcome thresholds: mean net CSI1000 5d excess -2.8696001309 pp, monthly clustered t-stat -0.6312965283, and max monthly signal-excess drawdown 26.5735343137 pp. Do not continue this minimal-data-only design without a new ledger planned test and reviewed preregistration.",
       "source_refs": [
         "docs/burst_lane_spec.md",
         "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
-        "docs/phase7a_provider_status_snapshot.json"
+        "docs/phase7a_provider_status_snapshot.json",
+        "research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json",
+        "research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json"
       ]
     },
     {
@@ -2067,14 +2069,13 @@
       {
         "parent_lane_id": "a_burst",
         "active_child_lane_ids": [
-          "a_share_burst_minimal_data",
           "a_share_burst_full_data"
         ],
         "parent_aggregation_rule": "active_stage_only",
         "expected_portfolio_role": "A-share short-term alpha candidate.",
-        "expected_contribution": "Minimal tier is paper-only; full tier is provider-blocked.",
+        "expected_contribution": "Minimal-data tier failed its registered outcome thresholds; full-data tier is provider-blocked.",
         "capital_policy_effect": "No live capital until full-data evidence is reviewed.",
-        "notes": "Do not add minimal and full tier contributions together."
+        "notes": "Do not add failed minimal-data contribution to hypothetical full-data contribution; any new minimal-data redesign needs a new ledger planned test and reviewed preregistration."
       },
       {
         "parent_lane_id": "us_burst",
@@ -2134,7 +2135,7 @@
     ],
     "implementation_sequence_implications": [
       "Use this first audit to drive provider priority and Phase 7a-2 spec revisions; do not treat it as ship-gate evidence.",
-      "Keep minimal burst tiers paper-only until full-data provider blockers and promotion criteria are resolved.",
+      "Treat A-share minimal-data burst as redesign_required after the failed full-universe outcome; keep US minimal burst paper-only until provider blockers and promotion criteria are resolved.",
       "Treat current 24p A-short t-stat findings as exploratory until multiple-testing, power, and survivorship review are complete.",
       "Prioritize US fundamentals and filings provider evidence, A-share PIT fundamentals and SW history, and burst full-data blockers before lane implementation."
     ]
@@ -2142,7 +2143,7 @@
   "deferred_decisions": [
     "Final provider priority after this first audit is reviewed and converted into Phase 7a-3 provider sequencing.",
     "Final ship-gate benchmark selection for long and burst lanes.",
-    "Whether minimal-data burst paper evidence justifies full-data provider investment after initial research experiments.",
+    "Whether a future A-share burst hypothesis should spend another ledger-gated research test, and whether full-data burst evidence justifies provider investment.",
     "Exact production sizing, concentration, ADV, and circuit-breaker rules for Phase 7a-4."
   ],
   "limitations": [
@@ -2150,6 +2151,7 @@
     "No provider was selected, no provider data was fetched, no adapter was created, and no DataHub table was implemented.",
     "Expected alpha values are plausibility priors from existing docs and project evidence; they are not live-normalized forward evidence.",
     "Provider readiness follows docs/phase7a_provider_status_snapshot.json and must be refined during Phase 7b provider capability evidence population.",
-    "Any lane marked continue still requires normal schema-first implementation review and the fixed multi-metric ship gate before full-size manual use."
+    "Any lane marked continue still requires normal schema-first implementation review and the fixed multi-metric ship gate before full-size manual use.",
+    "A-share minimal-data burst is no longer marked continue after the reviewed full-universe redesigned outcome failed its registered research-continuation thresholds."
   ]
 }

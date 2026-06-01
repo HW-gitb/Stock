@@ -48,7 +48,7 @@ Burst lanes are split into two data tiers so implementation is not blocked by a 
 | `minimal_data_burst` | OHLCV, volume / turnover, relative strength, benchmark context, liquidity, market mechanics, and existing candidate context | Research / paper only by default | Not live-eligible unless a later reviewed contract adds non-price confirmation and risk controls. |
 | `full_data_burst` | Minimal tier plus reviewed event / catalyst / filing / guidance / capital-flow / options / borrow / short-interest or manual evidence | Paper and minimal live observation | Live-eligible only after provider/manual evidence path, bucket capital context, report path, and forward evidence capture are active. |
 
-The first implementation may start with `minimal_data_burst` to start paper evidence. It must not describe this as production burst readiness. Minimal live observation requires `full_data_burst` or a reviewed exception that documents equivalent non-price confirmation.
+Before direct evidence exists, a market may start with `minimal_data_burst` to start paper evidence. This no longer applies to the tested A-share minimal-data design: its reviewed full-universe outcome failed, so A-share minimal-data burst is not an active continuation path without a new ledger planned test and reviewed preregistration. Minimal live observation requires `full_data_burst` or a reviewed exception that documents equivalent non-price confirmation.
 
 Minimal-to-full promotion criteria are owned by the Phase 7a-4 contract in `docs/evidence_feasibility_controls.md` and `schemas/evidence_feasibility_controls.schema.json`. At minimum, promotion must prove benchmark-relative paper alpha, acceptable drawdown and false-positive behavior, more than pure price momentum, a credible non-price confirmation path, cost / liquidity / spread / borrow / limit-risk feasibility, retained rejected / failed candidates, and a paired comparison between minimal-only and minimal-plus-full-data evidence after full data is available.
 
@@ -58,12 +58,12 @@ The first formal audit (`docs/phase7a_alpha_plausibility_audit.json`) keeps burs
 
 | Lane | Audit verdict | Current allowed work |
 |---|---|---|
-| `a_share_burst_minimal_data` | `continue` | Paper / research only, using OHLCV, benchmark, liquidity, limit / halt, and existing A-short context. |
+| `a_share_burst_minimal_data` | `redesign_required` | Do not continue the tested minimal-data-only design. Any further A-share minimal-data burst test requires a new ledger planned test, user approval, and reviewed preregistration. |
 | `us_burst_minimal_data` | `continue` | Paper / research only; US OHLCV / benchmark provider readiness still needs later evidence before production claims. |
 | `a_share_burst_full_data` | `defer_until_provider_ready` | Do not move to live eligibility until event / catalyst observed dates, capital-flow or manual evidence, and A-share execution constraints are reviewed. |
 | `us_burst_full_data` | `defer_until_provider_ready` | Do not move to live eligibility until filings / events, options / short-interest / borrow or manual evidence, and US microstructure constraints are reviewed. |
 
-Minimal and full tiers are maturity stages of the same parent lane. Portfolio contribution uses the active stage only; do not add minimal-tier paper contribution and full-tier hypothetical contribution together.
+Minimal and full tiers are maturity stages of the same parent lane. Portfolio contribution uses the active stage only; do not add failed minimal-tier paper contribution and full-tier hypothetical contribution together.
 
 ## 3. Candidate Lifecycle
 
@@ -140,7 +140,7 @@ The A-share burst lane may reuse the existing A-short benchmark return materiali
 
 Phase 7a-3 provisional benchmark routing for A-share burst is owned by `docs/provider_priority_benchmark_contract.md`. It keeps CSI1000 as provisional primary reporting benchmark, CSI300 as mandatory secondary context, and SW industry attribution as a full-data sensitivity path where provider coverage supports it.
 
-The superseded A-share `minimal_data_burst` research preregistration is `research/preregistrations/a_share_minimal_data_burst_20260531.json` under `schemas/research_preregistration.schema.json`; it remains `BLOCKED_DO_NOT_RUN` because its benchmark entry basis is invalid. The corrected-basis superseding preregistration is `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`; its frozen-cohort preflight found zero valid signal events, so it must not be run for outcome / excess calculation. Any redesigned A-share minimal-data burst test must route through `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and a new reviewed preregistration. Neither artifact creates production readiness or live eligibility.
+The superseded A-share `minimal_data_burst` research preregistration is `research/preregistrations/a_share_minimal_data_burst_20260531.json` under `schemas/research_preregistration.schema.json`; it remains `BLOCKED_DO_NOT_RUN` because its benchmark entry basis is invalid. The corrected-basis superseding preregistration is `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json`; its frozen-cohort preflight found zero valid signal events, so it must not be run for outcome / excess calculation. The full-universe redesign in `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` completed outcome / excess in `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` and failed with `decision = falsified_or_redesign_required` (mean net CSI1000 5d excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp). The active audit verdict for `a_share_burst_minimal_data` is therefore `redesign_required`. Any further A-share minimal-data burst test must route through `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json`, user approval, and a new reviewed preregistration. None of these artifacts creates production readiness or live eligibility.
 
 ### 6.2 Market Constraints
 
