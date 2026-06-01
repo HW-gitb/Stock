@@ -35,10 +35,9 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
-2. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-3. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
-4. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
+1. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
+2. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+3. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
 
@@ -103,11 +102,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-SEC-001 - Broad local Claude Bash allow rules
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: local AI tooling security
 - Evidence: root `.claude/settings.local.json` allows broad `Bash(python *)`; `A-EGS/.claude/settings.local.json` allows `Bash(python -c ' *)`. These files are local and currently untracked.
 - Accepted calibration: this is local automation exposure, not repository business-code behavior.
-- Required next action: narrow allow rules to concrete project scripts or remove them from local Claude settings; record the local change in `SESSION_LOG.md` if it affects review/execution behavior.
+- Closure evidence: the reviewed change set narrows ignored local Claude settings. Root `.claude/settings.local.json` removes `Bash(python *)` and `Bash(pip install *)`, leaving only `Bash(pip show *)` plus the fixed-path PowerShell listing rule. `A-EGS/.claude/settings.local.json` removes `Bash(python -c ' *)`, leaving only concrete `egs_main.py` and log-writing rules. Both local settings files were restored to read-only after editing.
+- Verification: both settings files parse as JSON; `Select-String` finds no remaining `Bash(python *)`, `Bash(python -c`, or `Bash(pip install` allow rules; `git check-ignore -v` confirms both files are ignored local settings under `.gitignore:75`.
+- Required next action: no active `SR-SEC-001` action. Future broad local automation allow rules should be rejected or re-entered in this register.
 
 ### SR-RESEARCH-001 - Corrected A-share burst preregistration has zero valid signal events
 

@@ -8,6 +8,57 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-SEC-001 local Claude allow-rule narrowing)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs + ignored-local settings files vs `04f7365`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。本轮可 `提交`。hot queue #1 进 `SR-PIT-001` + `SR-CONTRACT-001`。
+
+**Notes**: SR-SEC-001（本地 Claude Bash allow 规则过宽）的修复。**关键改动在 git-ignored 的两个 `settings.local.json`，git diff 是盲区——按 fast-path 纪律我直接读了两文件 body 核实**：root `.claude/settings.local.json` 现仅 `Bash(pip show *)`（只读）+ 固定路径 PowerShell 列目录（只读），`Bash(python *)` / `Bash(pip install *)` 已删；`A-EGS/.claude/settings.local.json` 现仅具体 `Bash(python egs_main.py)` / `python -X utf8 egs_main.py` / `tee egs_run_log.txt`，`Bash(python -c ' *)` 已删。两文件 JSON 有效。符合 SR-SEC-001 required action"收窄到具体项目脚本或移除"——移除了任意执行类宽规则、保留 script-specific/只读窄规则（egs_main.py 由 SR-EXEC-001/SR-OPS-003 等 guard 另行保护，是可接受的窄残留）。register SR-SEC-001 open→resolved（closure/verification 准确，与我读到的两文件一致）+ Hot Queue 收窄。CURRENT 149（可靠计数）、routing 正确（删一条 2026-05-28 历史项保 <150）。scope 仅 2 个 ignored-local settings + register + CURRENT + SESSION_LOG，无业务代码。**副作用（非 finding，告知）**：提交后我自己的 `python -m unittest` / `python -c` 命令将不再 auto-allow、会弹权限窗——与本轮我们定的"改命令习惯、接受弹窗"一致。**本轮可 `提交`**；下一刀 `SR-PIT-001` + `SR-CONTRACT-001`（analysis_input PIT 契约可强制化 + producer/consumer schema 校验落地）——比近期窄修更结构性。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-SEC-001 local Claude allow-rule narrowing)
+
+**Commits**: 04f7365
+
+**Relationship to prior session(s)**:
+- Builds on committed `SR-CONTRACT-002`, after which the risk-register hot queue moved to `SR-SEC-001`.
+- Executes only `SR-SEC-001`: narrow ignored local Claude Bash allow rules before relying on Claude-side automation.
+- Does not change business code, schemas, tests, provider access, data fetch, research, runner behavior, or commits.
+
+**Worked on**:
+1. [ignored-local] `.claude/settings.local.json`: removed broad `Bash(python *)` and `Bash(pip install *)`; retained `Bash(pip show *)` plus the existing fixed-path PowerShell inspection rule; restored the file's read-only attribute after editing.
+2. [ignored-local] `A-EGS/.claude/settings.local.json`: removed broad `Bash(python -c ' *)`; retained concrete `egs_main.py` and log-writing rules; restored the file's read-only attribute after editing.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-SEC-001` resolved, added closure / verification evidence, and moved Hot Queue #1 to `SR-PIT-001` + `SR-CONTRACT-001`.
+4. [tracked] `docs/CURRENT.md`: updated latest delta, current P0 / P1 routing, recent completion, and next-step text for the new hot-queue head.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude review handoff.
+
+**Key decisions**:
+- Removed `Bash(pip install *)` along with the explicitly registered Python rules because package installation is also broad local automation exposure and is not needed for routine Claude review.
+- Kept the concrete `egs_main.py` allow rules because they are script-specific and materially narrower than arbitrary Python execution.
+- Did not add a handoff entry: this is a local-tooling security closure, not a phase or major milestone change.
+
+**Alternatives considered and rejected**:
+- "Replace `Bash(python *)` with a long list of test-command allow rules" — rejected because review-specific commands can still be approved explicitly; a local allowlist should stay narrow.
+- "Leave `Bash(pip install *)` because SR-SEC-001 named only Python" — rejected because broad package install is the same class of local automation exposure.
+
+**Validation run/result**:
+- `Get-Content -Encoding UTF8 -Raw .claude\settings.local.json | ConvertFrom-Json` and same for `A-EGS\.claude\settings.local.json`: both parsed as valid JSON.
+- `Select-String -Path .claude\settings.local.json,A-EGS\.claude\settings.local.json -Pattern 'Bash\(python \*\)|Bash\(python -c|Bash\(pip install'`: no matches.
+- `git check-ignore -v .claude/settings.local.json A-EGS/.claude/settings.local.json`: both files are ignored by `.gitignore:75`.
+- `Get-ChildItem -Force .claude\settings.local.json,A-EGS\.claude\settings.local.json`: both files are read-only after the edit.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: reports `149`, below the 150-line snapshot target.
+- `git status --short --untracked-files=all`: reports only tracked docs (`docs/CURRENT.md`, `docs/system_risk_register.md`, and this `docs/SESSION_LOG.md` entry); ignored-local settings require direct review by path.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer should inspect the two ignored-local settings files directly in addition to `git diff`, because they are intentionally ignored by git.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-CONTRACT-002 R1 re-review + self-correction)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2a4ccd5`)
