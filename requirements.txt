@@ -1,0 +1,6 @@
+# Runtime validation dependencies required by producer / consumer contracts.
+#
+# The user's local Python environment still owns the market-data stack
+# (pandas, tushare, numpy, tqdm, etc.). This file records packages that are
+# required by production code paths because schema validation is mandatory.
+jsonschema>=4.0

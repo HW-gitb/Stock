@@ -20,11 +20,13 @@ Validation environment:
 - Use the project/local Python that has the repo's data stack installed for
   schema-validating commands, for example:
   `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`.
-- Install validation-only dependencies with:
+- Install mandatory runtime validation dependencies with:
+  `python -m pip install -r requirements.txt`.
+- Install development / test dependencies with:
   `python -m pip install -r requirements-dev.txt`.
 - The Codex bundled Python runtime is acceptable for syntax checks and unit
-  tests, but it may not include `jsonschema`; do not treat bundled runtime
-  packages as the project's dependency source.
+  tests only after `requirements.txt` is installed there; do not treat bundled
+  runtime packages as the project's dependency source.
 
 Existing helpers:
 

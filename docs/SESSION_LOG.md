@@ -8,6 +8,109 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-PIT-001 / SR-CONTRACT-001 R1 re-review)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs + untracked files vs `5457820`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。R1 已修复，整个 SR-PIT-001 / SR-CONTRACT-001 轮次可 `提交`。
+
+**Notes**: R1 用方案 (a) 正确解决——新建 runtime `requirements.txt`（`jsonschema>=4.0`，头部声明"required by production code paths because schema validation is mandatory"）；`requirements-dev.txt` 改为 `-r requirements.txt` 并删除"may be missing from tool-bundled runtimes"框架；`engine/data/analysis_input_contract.py` 与 `runners/run_analysis_report.py` 的缺包错误信息改指向 `requirements.txt`（grep 确认 `*.py` 内无残留 install-指针、仅 lock 测试读取该文件）；`runners/README.md` 与 `skills/a_short_analysis/SKILL.md` 文档化 jsonschema 为运行时依赖、安装命令改 requirements.txt（让用户/Skill 报告生成时装上）；新增 lock 测试断言 `requirements.txt` 含 `jsonschema>=4.0` 且 dev 文件 include 它。**validation 语义未削弱**：`A-EGS/egs_main.py` 与 `run_analysis_report.py` 的 wiring 与原轮逐字一致、写前/load 校验仍强制（未改成可跳过——符合"别反噬 SR-CONTRACT-001"）。**scope 全 R1 in-scope**（依赖声明 + 跨文档更新 + lock 测试），无 creep；2 处 2026-05-25 历史 handoff 仍引 requirements-dev.txt 属 append-only 历史记录、按"旧 handoff 不重组"保留。22 tests OK；CURRENT 149；register SR-CONTRACT-001 closure 已扩充（准确）；上方 review entry 的 `USER-APPROVED 2026-06-01` 标记完好。**整个轮次可一次性 `提交`**；提交后回 maintenance 组（`SR-DATA-002`/`SR-DATA-004`/`SR-OPS-004/005/006`/`SR-RANK-001`）或 `SR-PROVIDER-001`（用户 gated）。
+
+---
+
+## 2026-06-01 — Codex 修复 (R1 analysis_input runtime validation dependency)
+
+**Commits**: none
+
+**Relationship to prior session(s)**:
+- Repairs the latest Claude review Required fix R1, which is USER-APPROVED 2026-06-01.
+- Does not change validation semantics, research state, provider access, data fetch, runner output generation, or commits.
+
+**Approved Required fixes repaired**:
+- R1 accepted — kept producer / consumer schema validation mandatory and made `jsonschema` a repo-declared runtime validation dependency instead of a dev-only / maybe-missing package.
+
+**Optional suggestions**: none.
+
+**Worked on**:
+1. [untracked] `requirements.txt`: added mandatory runtime validation dependency `jsonschema>=4.0`.
+2. [tracked] `requirements-dev.txt`: now includes `requirements.txt` instead of owning `jsonschema` as a dev-only validation package.
+3. [untracked] `engine/data/analysis_input_contract.py`: missing-`jsonschema` error now points to `requirements.txt`.
+4. [tracked] `runners/run_analysis_report.py`: missing-`jsonschema` error now points to `requirements.txt`.
+5. [tracked] `runners/README.md`: validation environment now distinguishes runtime validation dependencies from dev/test dependencies.
+6. [tracked] `skills/a_short_analysis/SKILL.md`: report-generation setup now installs `requirements.txt` and states `jsonschema` is runtime validation, not optional dev-only.
+7. [untracked] `tests/schema/test_analysis_input_contract.py`: added a test that locks `jsonschema>=4.0` in `requirements.txt` and `requirements-dev.txt` including it.
+8. [tracked] `docs/system_risk_register.md`: extended `SR-CONTRACT-001` closure / verification evidence for the runtime dependency declaration.
+9. [tracked] `docs/CURRENT.md`: updated the latest delta / recent completion wording for the runtime validation dependency.
+10. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_analysis_input_contract tests.skill.test_run_analysis_report tests.phase6.test_egs_analysis_input_contract -v`: 22 tests OK.
+- `rg -n "may be missing|Install with: python -m pip install -r requirements-dev.txt|validation-only dependencies" requirements.txt requirements-dev.txt engine\data\analysis_input_contract.py runners\run_analysis_report.py runners\README.md skills\a_short_analysis\SKILL.md docs\CURRENT.md docs\system_risk_register.md`: no matches.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+- Reviewer should inspect untracked `requirements.txt` together with the prior untracked validator / tests.
+
+---
+
+## 2026-06-01 — Claude review — Pass with fixes (SR-PIT-001 / SR-CONTRACT-001 analysis_input contract hardening)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs + untracked files vs `5457820`)
+
+**Status**: REVIEW VERDICT RECORDED. Required fix R1 USER-APPROVED 2026-06-01; no Optional suggestions. （Approval recorded per §批准修改 Durable Approval Propagation rule.）
+
+**Verdict**: Pass with fixes —— 契约逻辑/PIT 校验/producer-consumer 接法都正确，但引入了一个生产路径对 dev-only `jsonschema` 的硬依赖（R1）。
+
+**Required fixes (USER-APPROVED 2026-06-01)**:
+- **R1（生产依赖缺口）**：`engine/data/analysis_input_contract.py:validate_json_schema` 在缺 `jsonschema` 时 `raise RuntimeError`。本轮把它接成**强制**校验：`A-EGS/egs_main.py:export_analysis_input` 在每次 `write_json_atomic(analysis_input.json)` **前**调用、`runners/run_analysis_report.py:load_analysis_input` 在 load 时调用。但 `jsonschema` 只在 `requirements-dev.txt`，且该文件头部明写"Runtime deps 由用户本地 env 提供…本文件聚焦 validation 包、**may be missing from tool-bundled Python runtimes**"。⇒ **egs_main 是生产周频引擎,现在硬依赖一个被声明为'可能缺失'的包;若其运行 env 无 jsonschema,每次周频选股会在 export 处崩**。测试测不出(测试 env 有 jsonschema、且新 contract 测试不像项目其它 schema 测试那样 `SkipTest`、缺失时会 error)。**影响是条件性的**(用户本地 env 大概率已装 jsonschema、故当下可能不崩),但依赖契约不一致 + 潜在 crash。修法(择一,优先前者——SR-CONTRACT-001 本就要 validation 为真,别改成可跳过)：(a) 把 jsonschema 提升为 producer/consumer 路径的**保证运行时依赖**(建 runtime `requirements.txt` 或在 requirements-dev.txt 头部声明 egs_main/run_analysis_report 现需它、不再"may be missing");(b) 退而求其次让 producer 端在缺 jsonschema 时仍跑纯 Python 的 PIT 校验、JSON-Schema 部分降级 + 显式 warning。并让新 contract 测试与所选可用性模型一致。
+
+**Notes（实质正确）**：`analysis_input_contract.py` 设计扎实——JSON Schema 校验 + JSON Schema 表达不了的 PIT 跨字段不变量(`l3_snapshot_date <= trade_date` 仅 pit 模式 + 必填;`earnings_report_date <= trade_date`;`today`/`neutralize` 不强制 snapshot-date 合理——历史 today 已由 SR-OPS-003 另行 guard)。producer 写前校验 + consumer load 校验 = SR-CONTRACT-001"validation 做实";PIT 不变量 = SR-PIT-001。21 contract/guard tests OK(我环境有 jsonschema);CURRENT 149;register SR-PIT-001 + SR-CONTRACT-001 resolved、Hot Queue 进 maintenance 组。**非阻塞观察**：PIT 覆盖目前为 l3_snapshot_date + earnings_report_date 两个关键日期(adjunct 机制已立、正是 SR-PIT-001 所求);若 schema 内还有其它带日期的 fundamentals 字段可外泄 look-ahead,可后续扩(非本轮 blocker)。**R1 解决后即可 `提交`**;下一刀回 maintenance 组(`SR-DATA-002`/`SR-DATA-004`/`SR-OPS-004/005/006`/`SR-RANK-001`)或 `SR-PROVIDER-001`(用户 gated)。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-PIT-001 / SR-CONTRACT-001 analysis_input contract hardening)
+
+**Commits**: 5457820
+
+**Relationship to prior session(s)**:
+- Builds on committed `SR-SEC-001`; executes the risk-register hot queue head `SR-PIT-001` + `SR-CONTRACT-001`.
+- Scope is contract hardening only: no research run, provider access, token / trial / sample fetch, data fetch, official result generation, or commit.
+
+**Worked on**:
+1. [untracked] `engine/data/analysis_input_contract.py`: added shared `analysis_input` JSON Schema validation plus adjunct PIT invariant checks that JSON Schema cannot express.
+2. [tracked] `A-EGS/egs_main.py`: validates `analysis_input` before writing `analysis_input.json`.
+3. [tracked] `runners/run_analysis_report.py`: validates `analysis_input` on file load before deterministic report construction.
+4. [untracked] `tests/schema/test_analysis_input_contract.py`: covers schema validation and PIT invariant failures.
+5. [untracked] `tests/phase6/test_egs_analysis_input_contract.py`: covers EGS producer-side valid export and future PIT snapshot rejection before write.
+6. [tracked] `tests/skill/test_run_analysis_report.py`: adds consumer-side validation tests and keeps deterministic-report tests using a schema-normalized in-memory fixture.
+7. [untracked] `tests/support/__init__.py` and `tests/support/analysis_input_payload.py`: adds a schema-valid fixture helper derived from the existing lightweight runner fixture.
+8. [tracked] `docs/system_risk_register.md`: marks `SR-PIT-001` and `SR-CONTRACT-001` resolved with closure / verification evidence and moves Hot Queue to the maintenance group.
+9. [tracked] `docs/CURRENT.md`: updates latest delta, current target, recent completion, and next-step routing while keeping the snapshot at 149 lines.
+10. [tracked] `docs/SESSION_LOG.md`: prepends this Codex-to-Claude review handoff.
+
+**Key decisions**:
+- Used an adjunct validator instead of a schema-version bump because the immediate gap is cross-field date comparison (`l3_snapshot_date <= trade_date`, earnings report date <= trade date), which JSON Schema draft-07 cannot express cleanly.
+- Enforced `source.l3_snapshot_date` only for `source.l3_mode = pit`; did not add a `today` / `neutralize` null rule because current EGS can tag live L3 snapshot dates, while the separate historical `today` guard already protects evidence replays.
+- Left `build_report`'s legacy missing-L3 fallback intact for direct in-memory callers, but `load_analysis_input` now rejects malformed files at the contract boundary.
+- Did not update a phase handoff: this is a risk-register closure, not a phase or major milestone change under `docs/AI_REVIEW_PROTOCOL.md §执行` step 17.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_analysis_input_contract tests.skill.test_run_analysis_report tests.phase6.test_egs_analysis_input_contract -v`: 21 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_l3_guard tests.phase6.test_egs_main_suspend_guard -v`: 7 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\schema -v`: 144 tests OK.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149.
+- `git status --short --untracked-files=all`: shows tracked code/docs/test changes plus untracked validator / test helper files listed above.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer must inspect untracked files in addition to tracked diffs, especially `engine/data/analysis_input_contract.py` and the new tests.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-SEC-001 local Claude allow-rule narrowing)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs + ignored-local settings files vs `04f7365`)

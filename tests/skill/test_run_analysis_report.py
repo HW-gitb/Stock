@@ -5,10 +5,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# Self-contained fixture; tests must not depend on live result/ data because
-# that directory churns each weekly run and would break CI / fresh clones.
-FIXTURE_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "analysis_input_minimal.json"
-
 from engine.analyzer import state_manager
 from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
 from runners.run_analysis_report import (
@@ -21,6 +17,12 @@ from runners.run_analysis_report import (
     validate_enrichment,
     write_report,
 )
+from tests.support.analysis_input_payload import load_minimal_analysis_input_payload
+
+
+def _load_payload() -> dict:
+    return load_minimal_analysis_input_payload()
+
 
 class RunAnalysisReportTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -44,7 +46,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_build_report_replays_phase3_analyzer(self) -> None:
-        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        payload = _load_payload()
         candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
@@ -71,7 +73,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         )
 
     def test_build_report_defaults_legacy_missing_l3_mode_to_today(self) -> None:
-        payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        payload = _load_payload()
         payload["source"].pop("l3_mode")
         candidate = find_candidate(payload, "600000.SH")
 
@@ -84,7 +86,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         self.assertEqual(report["data_lineage"]["l3_mode"], "today")
 
     def test_markdown_renders_m67_table(self) -> None:
-        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        payload = _load_payload()
         candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
@@ -105,7 +107,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         # generated fixture used to: industry_trend, regulatory_check (aliased
         # to prompts/regulatory_48h.md), and policy_news. Also has l2_name="未知"
         # to exercise the l2_unknown veto path.
-        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        payload = _load_payload()
         candidate = find_candidate(payload, "600001.SH")
         report = build_report(
             payload,
@@ -126,7 +128,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         self.assertIn("analyzer_hard_veto:l2_unknown", markdown)
 
     def test_apply_enrichment_only_replaces_llm_notes(self) -> None:
-        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        payload = _load_payload()
         candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
@@ -181,7 +183,7 @@ class RunAnalysisReportTest(unittest.TestCase):
             find_candidate({"candidates": [{"ts_code": "000001.SZ"}]}, "600000.SH")
 
     def test_apply_enrichment_returns_deep_copy(self) -> None:
-        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        payload = _load_payload()
         candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
@@ -215,7 +217,7 @@ class RunAnalysisReportTest(unittest.TestCase):
     def test_decision_reason_code_uses_comma_join(self) -> None:
         # B5: reason_code separator changed from '|' to ',' since '|' collides
         # with Markdown table cells. esp_non_positive < 0 should fire here.
-        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        payload = _load_payload()
         candidate = dict(find_candidate(payload, "600000.SH"))
         # Inject esp_raw < 0 to trigger esp_non_positive veto deterministically.
         fundamental = dict(candidate.get("fundamental") or {})
@@ -233,7 +235,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         self.assertNotIn("|", report["decision"]["reason_code"])
 
     def test_apply_enrichment_rejects_target_mismatch(self) -> None:
-        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        payload = _load_payload()
         candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
@@ -263,7 +265,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         except ModuleNotFoundError as exc:
             raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
 
-        payload = load_analysis_input("ignored", input_path=FIXTURE_PATH)
+        payload = _load_payload()
         candidate = find_candidate(payload, "600000.SH")
         report = build_report(
             payload,
@@ -290,6 +292,37 @@ class RunAnalysisReportTest(unittest.TestCase):
         )
 
         validate_enrichment(enrichment)
+
+    def test_load_analysis_input_validates_contract(self) -> None:
+        payload = _load_payload()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "analysis_input.json"
+            path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+            loaded = load_analysis_input("ignored", input_path=path)
+
+        self.assertEqual(loaded["schema_name"], "analysis_input")
+
+    def test_load_analysis_input_rejects_malformed_payload(self) -> None:
+        payload = _load_payload()
+        payload.pop("candidates")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "analysis_input.json"
+            path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "schema validation failed"):
+                load_analysis_input("ignored", input_path=path)
+
+    def test_load_analysis_input_rejects_future_pit_snapshot(self) -> None:
+        payload = _load_payload()
+        payload["source"]["l3_mode"] = "pit"
+        payload["source"]["l3_snapshot_date"] = "20260523"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "analysis_input.json"
+            path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "l3_snapshot_date"):
+                load_analysis_input("ignored", input_path=path)
 
 
 if __name__ == "__main__":

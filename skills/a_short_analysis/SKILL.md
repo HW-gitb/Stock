@@ -29,13 +29,13 @@ Expected outputs:
 - `result/a_short/<as_of>/reports/<ts_code>.json`
 - `result/a_short/<as_of>/reports/<ts_code>.md`
 
-Use the project Python with `jsonschema` installed for report generation:
+Use the project Python with runtime validation dependencies installed for report generation:
 
 ```powershell
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements.txt
 ```
 
-The bundled Codex Python may run compile/unit tests but may not have `jsonschema`.
+`jsonschema` is a runtime validation dependency for `analysis_input` / report contract checks, not an optional dev-only package.
 
 Generate with an enrichment patch:
 

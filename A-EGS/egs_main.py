@@ -102,6 +102,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 RESULT_DIR = os.path.join(SCRIPT_DIR, "Result")
 L3_SNAPSHOT_DIR = os.path.join(PROJECT_ROOT, "state", "l3_snapshots")
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from engine.data.analysis_input_contract import validate_analysis_input_contract
 
 TOKEN = os.environ.get("TUSHARE_TOKEN")
 if not TOKEN and not any(arg in ("-h", "--help") for arg in sys.argv[1:]):
@@ -807,6 +811,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     snapshot_path = os.path.join(out_dir, "snapshot.json")
     candidates_path = os.path.join(out_dir, "candidates.csv")
 
+    validate_analysis_input_contract(analysis_input, label=f"analysis_input export {latest_td}")
     write_json_atomic(analysis_path, analysis_input)
 
     candidates_df = watch_df.copy()

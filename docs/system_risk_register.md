@@ -35,9 +35,8 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-2. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
-3. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
+1. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+2. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
 
@@ -73,20 +72,24 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-PIT-001 - PIT invariants are not enforceable in the root input contract
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: Phase 7c DataHub / report contract precondition; long-lane blocker
 - Evidence: `schemas/analysis_input.schema.json` has `trade_date` and L3 metadata but cannot express `ann_date <= trade_date` for fundamentals, cannot compare `source.l3_snapshot_date <= trade_date`, and does not require PIT snapshot presence when `source.l3_mode = pit`.
 - Accepted calibration: `A-EGS/egs_main.py` currently filters `fina_indicator.ann_date <= TODAY_DT`; the risk is contract-level non-enforcement and future producer regression, not proof of current look-ahead.
-- Required next action: introduce an `analysis_input` contract revision or adjunct validation that can express PIT dates for fundamentals / L3 and reject future-dated or missing PIT metadata where required.
+- Required next action: no active `SR-PIT-001` action. Future `analysis_input` date-bearing fundamentals fields must be added to the adjunct validator or to a schema version that can enforce the same PIT boundary.
+- Closure evidence: the reviewed change set adds `engine/data/analysis_input_contract.py`, which validates the payload against `schemas/analysis_input.schema.json` and applies adjunct PIT invariants that JSON Schema cannot express: `source.l3_mode = pit` requires `source.l3_snapshot_date`, rejects snapshots after `trade_date`, and rejects `candidate.fundamental.expectation.earnings_report_date` after `trade_date`.
+- Verification: `tests.schema.test_analysis_input_contract` covers valid payload validation, schema-required-field rejection, missing PIT snapshot rejection, future PIT snapshot rejection, and future earnings-report-date rejection.
 
 ### SR-CONTRACT-001 - Producer and consumer do not validate `analysis_input` against schema
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: Phase 1 / Phase 4 contract hardening
 - Evidence: `A-EGS/egs_main.py` writes `analysis_input.json` without jsonschema validation; `runners/run_analysis_report.py` loads `analysis_input` and validates only its own output report.
 - Accepted calibration: `build_data_health` performs some bespoke checks, but it is not equivalent to schema validation at producer and consumer boundaries.
-- Required next action: add shared schema validation for `analysis_input` on write and read, with tests covering malformed payload rejection.
+- Required next action: no active `SR-CONTRACT-001` action. Any new `analysis_input` producer / consumer should call the shared contract validator at its boundary.
+- Closure evidence: `A-EGS/egs_main.py:export_analysis_input` now validates `analysis_input` before writing it, and `runners/run_analysis_report.py:load_analysis_input` now validates the file on read through the shared contract helper. `requirements.txt` declares `jsonschema>=4.0` as a mandatory runtime validation dependency, with `requirements-dev.txt` including it.
+- Verification: `tests.phase6.test_egs_analysis_input_contract` covers producer-side rejection before write and valid exported payload validation. `tests.skill.test_run_analysis_report` covers consumer-side valid load, malformed payload rejection, and future PIT snapshot rejection. `tests.schema.test_analysis_input_contract` locks the runtime dependency declaration.
 
 ### SR-CONTRACT-002 - Forward-live evidence artifact lacks a schema-first contract
 

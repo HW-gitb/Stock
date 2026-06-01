@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
 
 from engine.analyzer import state_manager
 from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
+from engine.data.analysis_input_contract import validate_analysis_input_file
 
 
 SCHEMA_PATH = ROOT / "schemas" / "deterministic_report.schema.json"
@@ -39,8 +40,7 @@ PROMPT_REF_ALIASES = {
 
 def load_analysis_input(as_of: str, input_path: Path | None = None) -> dict[str, Any]:
     path = input_path or (LIVE_RESULT_ROOT / as_of / "analysis_input.json")
-    with Path(path).open("r", encoding="utf-8") as f:
-        return json.load(f)
+    return validate_analysis_input_file(path, label=f"analysis_input {path}")
 
 
 def find_candidate(payload: dict[str, Any], ts_code: str) -> dict[str, Any]:
@@ -350,7 +350,7 @@ def _validate_json_object(obj: dict[str, Any], schema_path: Path, error_prefix: 
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "jsonschema is required to validate Phase 4 report contracts. "
-            "Install with: python -m pip install -r requirements-dev.txt"
+            "Install with: python -m pip install -r requirements.txt"
         ) from exc
 
     with Path(schema_path).open("r", encoding="utf-8") as f:
