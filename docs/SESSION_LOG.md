@@ -8,6 +8,176 @@
 
 ---
 
+## 2026-06-01 — Claude re-review — Pass (clean) (SR-SKILL commit-field optional)
+
+**Commits**: none (review-only entry; reviews working tree vs `2bf8c0f`)
+
+**Scope**: disposes my prior minor Optional. Both uncommitted SR-SKILL Codex handoff entries (执行 + 修复-optional) had their `Commits` field corrected from bare `2bf8c0f` → `none (pending 提交; base commit 2bf8c0f)`.
+
+**Independent verification**:
+- Zero remaining bare `**Commits**: 2bf8c0f` lines; the new disposition entry uses the same corrected form (practices what it states).
+- Review entries' `reviews working tree vs 2bf8c0f` wording correctly left unchanged (that *is* the right diff base for a review-only entry).
+- My prior re-review entry is byte-intact — designer did not alter the reviewer record.
+- No regression: skill / register / CURRENT numstat identical to the last Passed round (15/2, 7/1, 4/1, 4/1, 3/3); CURRENT = 149 lines; no code / schema / runner / register-content touched this round.
+
+**Verdict**: Pass, clean. Nothing further.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001`.
+
+---
+
+## 2026-06-01 — Codex 修复 (SR-SKILL commit-field optional)
+
+**Commits**: none (pending 提交; base commit `2bf8c0f`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest Claude re-review entry: `2026-06-01 — Claude re-review — Pass + 1 minor Optional (SR-SKILL-001 optional disposition + SR-SKILL-002)`.
+- There were no Required fixes and no `USER-APPROVED` Required-fix marker to act on.
+- Disposes the one minor Optional suggestion.
+- Does not run EGS, research, provider access, data fetch, runner changes, schema changes, or commit.
+
+**Worked on**:
+1. [tracked] `docs/SESSION_LOG.md`: corrected the two current SR-SKILL Codex handoff `Commits` fields from prior base commit `2bf8c0f` to `none (pending 提交; base commit 2bf8c0f)`.
+
+**Optional disposition**:
+- O1 accept — corrected the current uncommitted SR-SKILL 执行 / 修复 handoff `Commits` fields so future readers are not pointed at the unrelated `2bf8c0f` SR-OPS-006 diff.
+
+**Key decisions**:
+- Kept the Claude review entries' `reviews working tree vs 2bf8c0f` wording unchanged because that is the correct diff base, not the change-set commit list.
+- Did not update `docs/CURRENT.md` or `docs/system_risk_register.md`; this is session-log hygiene only.
+
+**Validation run/result**:
+- `Select-String -Path docs\SESSION_LOG.md -Pattern "\*\*Commits\*\*: 2bf8c0f|Codex 修复 \(SR-SKILL|Codex 执行 \(SR-SKILL" -Context 1,1`: no remaining bare SR-SKILL `Commits: 2bf8c0f` entries.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+- Reviewer should inspect tracked diffs only; no untracked files are expected.
+
+---
+
+## 2026-06-01 — Claude re-review — Pass + 1 minor Optional (SR-SKILL-001 optional disposition + SR-SKILL-002)
+
+**Commits**: none (review-only entry; reviews working tree vs `2bf8c0f`)
+
+**Scope reviewed** (tracked-only, no untracked per `git status -uall`): increment on top of the already-Passed US-short banners — `skills/a_short_analysis/SKILL.md` (new boundary), `docs/system_risk_register.md` (SR-SKILL-002), plus CURRENT / SESSION_LOG routing.
+
+**Independent verification**:
+- **Optional O1 correctly disposed.** `SKILL.md` gains a `Non-Runtime Reference Boundary` section that now carries the explicit "no live operation advice / buy-sell / sizing outside the schema-validated runner + reviewed ship-gate evidence" clause — matching (and slightly exceeding, via a Skill-wins precedence clause) the US-short banner strength. Closes my gap (a) "strength".
+- **Locality gap (b) honestly tracked, not falsely closed.** `SR-SKILL-002` added as **blocked** P2, explicitly recording the residual "if someone copies the frozen reference file alone without the Skill boundary," with required action gated on the user lifting the `CLAUDE.md` freeze. This is the correct disposition — the inline-banner remedy is genuinely unavailable here, and the entry says so instead of claiming resolution.
+- **Freeze respected**: `v14.2_spec.md` untouched (not in diff). `SR-SKILL-001` not widened (its evidence is US-short-scoped); the higher-exposure A-short sibling is carried by a separate entry so it doesn't vanish behind the clean US-short closure.
+- **No regression**: both US-short banners still intact (`设计参考源` present in both); their diffs unchanged vs the prior Passed round (numstat 4/1 each).
+- Register diff touches only SR-SKILL-001 closure + new SR-SKILL-002; **Hot Queue untouched**. `CURRENT.md` = 149 lines. SESSION_LOG order correct (修复 > review > 执行, newest first). No code / schema / runner touched.
+
+**Verdict**: Pass. The disposition is correct, honest, and constraint-aware.
+
+**Optional (minor, pre-existing, non-blocking)**:
+- The `Commits: 2bf8c0f` field in the uncommitted SR-SKILL-001-arc Codex handoff entries (both the 执行 and 修复 entries) points to the **prior unrelated** commit (`2bf8c0f` = "Fix relisted lookback boundary" / SR-OPS-006). The work these entries describe is uncommitted and will land in a *future* commit at `提交`, so `git show 2bf8c0f` shows the wrong diff for a future reader. Honest value would be `none (pending 提交)`. Pre-existing pattern (present last round in the 执行 entry — I did not flag it then). Trivial; does not affect any code / risk correctness. Defer to user/Codex.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001`. (`SR-SKILL-002` left as a blocked, partially-mitigated residual outside the Hot Queue — defensible given low likelihood; surface it only if the user wants to act on the freeze.)
+
+---
+
+## 2026-06-01 — Codex 修复 (SR-SKILL-001 optional disposition: A-short reference boundary)
+
+**Commits**: none (pending 提交; base commit `2bf8c0f`)
+
+**Relationship to prior session(s)**:
+- Repairs the latest Claude review entry: `2026-06-01 — Claude review — Pass + 1 Optional (SR-SKILL-001 US-short reference boundary)`.
+- There were no Required fixes and no `USER-APPROVED` Required-fix marker to act on.
+- Disposes the one Optional suggestion without touching frozen `skills/a_short_analysis/reference/v14.2_spec.md`.
+- Does not run EGS, research, provider access, data fetch, runner changes, schema changes, or commit.
+
+**Worked on**:
+1. [tracked] `skills/a_short_analysis/SKILL.md`: strengthened the A-short non-runtime boundary, stating frozen `reference/v14.2_spec.md` is not a runtime prompt and cannot authorize live operation advice / buy-sell actions / sizing outside the schema-validated runner / report workflow and reviewed ship-gate evidence.
+2. [tracked] `docs/system_risk_register.md`: added `SR-SKILL-002` as a blocked residual-risk entry for direct-pasting the frozen A-short v14.2 reference without the Skill boundary.
+3. [tracked] `docs/CURRENT.md`: updated latest delta wording while keeping the snapshot below 150 lines.
+4. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff for Claude re-review.
+
+**Optional disposition**:
+- O1 accept with modification — change: strengthened `skills/a_short_analysis/SKILL.md` and added blocked residual `SR-SKILL-002` instead of editing `skills/a_short_analysis/reference/v14.2_spec.md`; reason: `CLAUDE.md` freezes the reference spec, so the safe mitigation is at the active Skill boundary plus durable risk tracking until the user explicitly lifts the freeze for a non-design banner.
+
+**Key decisions**:
+- Did not widen `SR-SKILL-001` because that entry's evidence and closure are scoped to US-short reference docs.
+- Added a separate A-short residual entry so the higher-exposure sibling does not disappear behind the clean US-short closure.
+- Kept `v14.2_spec.md` unchanged.
+
+**Validation run/result**:
+- `rg -n "Non-Runtime Reference Boundary|live operation advice|SR-SKILL-002|v14\.2_spec\.md" skills\a_short_analysis\SKILL.md docs\system_risk_register.md CLAUDE.md`: confirms the strengthened Skill boundary, residual-risk entry, and frozen-spec constraint.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+- Reviewer should inspect tracked diffs only; no untracked files are expected.
+
+---
+
+## 2026-06-01 — Claude review — Pass + 1 Optional (SR-SKILL-001 US-short reference boundary)
+
+**Commits**: none (review-only entry; reviews working tree vs `2bf8c0f`)
+
+**Scope reviewed** (tracked-only, no untracked present per `git status -uall`):
+- `skills/us_short_analysis/reference/us_short_analysis_spec.md`, `..._screening_spec.md`: top-of-file non-runtime banners.
+- `docs/system_risk_register.md`: SR-SKILL-001 open→resolved.
+- `docs/CURRENT.md`, `docs/SESSION_LOG.md`: routing + handoff.
+
+**Independent verification**:
+- Banner text matches SR-SKILL-001 required action (design-reference-only, not runtime prompt, no operation/sizing advice before schema-first impl + reviewed ship-gate evidence). Placement is **before** persona text (analysis_spec) and **before** the opening code fence (screening_spec) — so it renders as a visible blockquote and precedes any pasteable instruction. Trailing-newline normalization on both files is harmless.
+- `CURRENT.md` = 149 lines (`splitlines()`), below 150. CURRENT diff = date-label line only; no stray edits.
+- Register diff (`--numstat` 4/2) touches **only** the SR-SKILL-001 entry body (Status line + required-action/closure/verification). Hot Queue untouched; no other SR entry moved.
+- No code / schema / runner touched. Correct and complete **for its declared scope (US-short pair)**.
+
+**Verdict**: Pass. The change is correct, clean, and in-scope.
+
+**Optional (not blocking; out of declared scope + constraint-gated)**:
+- `skills/a_short_analysis/reference/v14.2_spec.md` opens with the **same imperative persona shape** ("你是一名顶级机构量化交易总监…严格完整执行此框架…操作建议") — the identical SR-SKILL-001 risk class, and **higher exposure** because A-short is the only currently live / paper-usable lane (far likelier to be pasted into an LLM for live operation/sizing advice than the not-yet-built US-short lane).
+- It is **partially** mitigated: `skills/a_short_analysis/SKILL.md:111` already states "`reference/v14.2_spec.md` is the design specification, not a runtime prompt." So this is **not** Required and **not** unmitigated.
+- Two residual gaps remain: (a) **strength** — SKILL.md's one-liner lacks the explicit "no live operation-advice / sizing before schema-first impl + reviewed ship-gate evidence" clause that the new US-short banner carries; that clause guards the most dangerous failure mode; (b) **locality** — the boundary lives in SKILL.md, not inline in the spec, so it does **not** travel if v14.2_spec.md is pasted alone (the exact copy-paste risk SR-SKILL-001 addresses). The inline-banner remedy used for US-short **cannot** be applied here: CLAUDE.md hard-forbids editing `v14.2_spec.md` (设计已固化).
+- Codex was **correct** not to touch v14.2_spec.md.
+- Recommendation (defer to user/Codex): track the residual rather than let SR-SKILL-001's clean closure silently drop the higher-severity sibling — either widen SR-SKILL-001 closure to name the A-short instance + its off-limits constraint, or open a small follow-on SR. Off-limits-aware mitigation path: strengthen the boundary in `SKILL.md` (the file an LLM actually loads) to match the US-short clause, instead of editing the frozen spec; or have the user lift the freeze for a non-design banner only.
+
+**Hot Queue**: unchanged — `SR-DATA-004` (real weekly suspend-coverage logs) + `SR-PROVIDER-001` (user-gated US provider access) still the only hot items.
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-SKILL-001 US-short reference boundary)
+
+**Commits**: none (pending 提交; base commit `2bf8c0f`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `SR-OPS-006` relisted lookback boundary.
+- Executes one non-hot local risk-register item: `SR-SKILL-001`.
+- Leaves Hot Queue items unchanged: `SR-DATA-004` still requires real weekly suspend-coverage logs, and `SR-PROVIDER-001` still requires explicit user approval before any US provider access / sample / data work.
+- Does not run EGS, research, provider access, data fetch, runner changes, schema changes, or commit.
+
+**Worked on**:
+1. [tracked] `skills/us_short_analysis/reference/us_short_analysis_spec.md`: added a top-of-file banner stating this is a design reference only, not a runtime prompt, and cannot support operation advice / sizing before schema-first implementation plus reviewed ship-gate evidence.
+2. [tracked] `skills/us_short_analysis/reference/us_short_screening_spec.md`: added the same non-runtime boundary before the existing fenced persona / workflow text.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-SKILL-001` resolved with closure / verification evidence.
+4. [tracked] `docs/CURRENT.md`: updated latest delta and recent completion text; snapshot remains below 150 lines.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude review handoff.
+
+**Key decisions**:
+- Chose the reference-doc banner fix because the active Hot Queue items are externally gated and `SR-SKILL-001` is a local docs-only risk with a clear required action.
+- Kept the original reference content intact and added the boundary before any persona / imperative text, so future LLMs see the restriction before copy-pasteable instructions.
+- Temporarily cleared the two reference files' read-only attributes to patch them, then restored read-only attributes after the edit.
+- Did not update a phase handoff: this is a narrow risk-register hygiene closure, not a phase or major milestone change.
+
+**Validation run/result**:
+- `rg -n "设计参考源|schema-first runner / Skill implementation|SR-SKILL-001" skills\us_short_analysis\reference\us_short_analysis_spec.md skills\us_short_analysis\reference\us_short_screening_spec.md docs\system_risk_register.md docs\CURRENT.md`: confirms both banners plus register / CURRENT routing.
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer should inspect tracked diffs only; no untracked files are expected.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-006 relisted lookback boundary)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `e4621b0`)

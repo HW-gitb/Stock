@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（SR-OPS-006 relisted lookback boundary）
+**最后更新**：2026-06-01（SR-SKILL reference boundaries）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,7 +12,7 @@
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
 - Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
-- `SR-OPS-006` is resolved: relisted-stock cutoff now uses an inclusive trading-date lookback window and a v2 cache key so old off-by-one relisted sets are not reused.
+- `SR-SKILL-001` is resolved, and the related A-short v14.2 direct-paste residual is tracked as `SR-SKILL-002`: US-short references have inline non-runtime banners; A-short `SKILL.md` now carries the stronger non-runtime boundary while frozen `v14.2_spec.md` remains unchanged.
 
 ---
 
@@ -35,11 +35,11 @@
 - **SR-OPS-002 forward tracker atomic write**（2026-06-01）：`runners/forward_tracker.py:_write_tracker` 已改为同目录 temp CSV + flush/fsync + `os.replace`；测试锁定成功替换与失败保留旧 tracker。
 - **SR-CONTRACT-002 forward-live evidence schema contract**（2026-06-01）：`schemas/forward_live_evidence.schema.json` v1.0.0 and `execution_aggregate_report` v1.1.3 bind forward-live months to reviewed live-normalized evidence provenance; old two-field evidence refs are rejected.
 - **SR-PIT-001 / SR-CONTRACT-001 analysis_input contract hardening**（2026-06-01）：shared `engine/data/analysis_input_contract.py` validates schema + PIT invariants; EGS export and deterministic-report load now reject malformed or future-dated payloads; `requirements.txt` declares `jsonschema`.
-- **SR-OPS-004 weekly xlsx overwrite guard**（2026-06-01）：`weekly_screening.ps1` now detects existing default root-level `A-EGS\egs_tier1_<AsOf>.xlsx` before historical official-output reruns.
 - **SR-DATA-002 daily stats insufficiency guard**（2026-06-01）：`precompute_stock_stats` now hard-fails severe daily payload insufficiency instead of returning neutral stats that could bypass liquidity / crash-veto filters.
 - **SR-OPS-005 forward tracker cache coverage**（2026-06-01）：`forward_tracker.py` now proves backfill coverage from cached stock trading dates instead of calendar-day approximation.
 - **SR-RANK-001 forward-return conversion status**（2026-06-01）：`attach_forward_returns` now reports `pending_return_conversion_failed` instead of `"ok"` when required forward-return conversions fail or leave invalid values.
 - **SR-OPS-006 relisted lookback boundary**（2026-06-01）：`get_relisted_stocks` now uses exact inclusive lookback cutoff semantics and invalidates old relisted caches with `_v2`.
+- **SR-SKILL-001 US-short reference boundary**（2026-06-01）：US-short reference docs now state they are design reference only, not runtime prompts, and cannot authorize operation advice / sizing before schema-first Skill / runner implementation plus reviewed ship-gate evidence.
 - **SR-EXEC-003 drawdown evidence guard**（2026-06-01）：`runners/backtest_execution.py` no longer exposes realized exit-date cash drawdown as numeric `max_drawdown`; ship-gate drawdown remains not evaluable until open-position MTM is implemented.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
 - **US EGS data-source direction / Phase 7b-2 access boundary**（2026-06-01）：FMP 为主源候选，SEC EDGAR 为基本面审计源；`yfinance` 仅可显式批准后作低信任价格 smoke check。`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 仍只定义访问边界和样本验证计划，不授权 provider 行动。

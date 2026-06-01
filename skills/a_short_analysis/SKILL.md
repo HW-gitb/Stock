@@ -9,6 +9,12 @@ This Skill is a usage guide. It is not the deterministic executor.
 
 The executor is `runners/run_analysis_report.py`. It reads `analysis_input.json`, calls the Phase 3 analyzer/state layer, validates `deterministic_report.schema.json`, and writes JSON + Markdown.
 
+## Non-Runtime Reference Boundary
+
+`reference/v14.2_spec.md` is a frozen design specification, not a runtime prompt. Do not paste it into an LLM as operating instructions, do not treat its persona / workflow language as production execution guidance, and do not use it to authorize live operation advice, buy / sell actions, or sizing outside the schema-validated runner / report workflow and reviewed ship-gate evidence.
+
+The current production-facing path is the deterministic executor plus validated report artifacts. If the reference spec and this Skill disagree on execution authority, this Skill and the schema-validated runner boundary win.
+
 ## Inputs
 
 - `result/a_short/<as_of>/analysis_input.json`
@@ -108,7 +114,7 @@ If live/external data was not checked, output `unknown`, not `clear`.
 
 ## Reference Files
 
-- `reference/v14.2_spec.md` is the design specification, not a runtime prompt.
+- `reference/v14.2_spec.md` is the frozen design specification, not a runtime prompt; the non-runtime boundary above applies before any reference-spec content is used.
 - `schemas/deterministic_report_coverage.md` records what Phase 4 v1 covers and what remains unknown.
 
 ## Validation

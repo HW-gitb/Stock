@@ -326,11 +326,24 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-SKILL-001 - US-short reference docs are copy-paste runtime prompt shaped
 
 - Severity: P2
-- Status: open
+- Status: resolved
 - Owner phase: US-short Skill / reference hygiene
 - Evidence: `skills/us_short_analysis/reference/us_short_analysis_spec.md` and `us_short_screening_spec.md` start with imperative persona / execution instructions, while `skills/us_short_analysis/SKILL.md` is reserved for Phase 8.
 - Accepted calibration: the reserved `SKILL.md` prevents normal Skill invocation, but it does not prevent a future LLM from pasting reference material directly into a chat.
-- Required next action: add a clear banner to US-short reference docs: design reference only, not a runtime prompt, no operation advice / sizing without schema-first implementation and ship-gate evidence.
+- Required next action: no active `SR-SKILL-001` action. Future US-short reference imports must keep the non-runtime boundary visible before any persona / workflow text.
+- Closure evidence: the reviewed change set adds top-of-file banners to both US-short reference docs, stating they are design reference only, not runtime prompts, and cannot support operation advice / sizing before schema-first runner / Skill implementation and reviewed ship-gate evidence.
+- Verification: `rg -n "设计参考源|schema-first runner / Skill implementation|SR-SKILL-001" skills\us_short_analysis\reference\us_short_analysis_spec.md skills\us_short_analysis\reference\us_short_screening_spec.md docs\system_risk_register.md docs\CURRENT.md` confirms the banners and register status.
+
+### SR-SKILL-002 - A-short frozen v14.2 reference can still be pasted as a runtime prompt
+
+- Severity: P2
+- Status: blocked
+- Owner phase: A-short Skill / reference hygiene
+- Evidence: `skills/a_short_analysis/reference/v14.2_spec.md` opens with imperative persona / full-framework execution / operation-advice language, but `CLAUDE.md` explicitly says `skills/a_short_analysis/reference/v14.2_spec.md` must not be edited because the design is frozen.
+- Accepted calibration: this is partially mitigated by `skills/a_short_analysis/SKILL.md`, which is the active Skill entrypoint and now states that `v14.2_spec.md` is a frozen design spec, not a runtime prompt, and cannot authorize live operation advice / buy-sell actions / sizing outside the schema-validated runner and reviewed ship-gate evidence. Residual risk remains if someone copies the frozen reference file alone without the Skill boundary.
+- Required next action: do not edit `skills/a_short_analysis/reference/v14.2_spec.md` unless the user explicitly lifts the freeze for a non-design banner only. Until then, treat direct-pasted v14.2 reference text as unsafe / non-authoritative for runtime advice and route through the Skill plus schema-validated runner boundary.
+- Mitigation evidence: this repair strengthens `skills/a_short_analysis/SKILL.md` with a `Non-Runtime Reference Boundary` section and keeps the frozen reference file unchanged.
+- Verification: `rg -n "Non-Runtime Reference Boundary|live operation advice|SR-SKILL-002|v14.2_spec.md" skills\a_short_analysis\SKILL.md docs\system_risk_register.md CLAUDE.md` confirms the boundary, residual-risk entry, and frozen-spec constraint.
 
 ### SR-LLM-001 - Web-news policy-risk prompt injection surface
 
