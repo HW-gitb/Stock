@@ -35,12 +35,11 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-DATA-001` - Fix before the next new weekly official capture or direct historical `egs_main.py` cohort regeneration.
-2. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
-3. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
-4. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-5. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
-6. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
+1. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
+2. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
+3. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
+4. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+5. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
 
@@ -142,11 +141,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-DATA-001 - Suspend inference can silently drop tradable stocks on partial daily response
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: A-short weekly operation / Phase 6b maintenance
 - Evidence: `A-EGS/egs_main.py:get_suspend_info` computes `suspended = all_codes - traded_codes` from single-day `pro.daily` responses and later `filter_l0` removes that set from candidates. There is no row-count / completeness sanity check before treating missing `daily` rows as suspended stocks.
 - Accepted calibration: this is a real wrong-output path, but the trigger is a partial `pro.daily` bulk response. Frequency is not proven and is expected to be low; impact is silent and high when it fires. It does not block corrected 5d revalidation if that revalidation uses frozen historical generated cohorts and does not rerun `A-EGS/egs_main.py`.
-- Required next action: replace the inference with a proper suspend / trade-status source where available, or hard-fail / quarantine the run when daily row-count completeness is below a reviewed threshold. Fix before the next new weekly official capture or any cohort regeneration used as evidence.
+- Required next action: resolved for the suspend-inference path. No further action is required for `SR-DATA-001` unless the suspend source / daily completeness policy is redesigned.
+- Closure evidence: the reviewed change set updates `A-EGS/egs_main.py:get_suspend_info` to validate non-empty `pro.daily` payloads against `suspend_daily_min_coverage = 0.95` before inferring `suspended = all_codes - traded_codes`; below-threshold partial responses now raise instead of silently filtering candidates. The suspend cache key is bumped to `suspend_<date>_v2` so old unvalidated suspend-inference caches are not reused.
+- Verification: `tests.phase6.test_egs_main_suspend_guard` covers partial daily rejection, valid high-coverage daily inference, cache-key v2 save behavior, and the existing all-empty daily fallback that skips suspend filtering rather than marking the whole market suspended.
 
 ### SR-OPS-002 - Forward tracker writes are non-atomic
 

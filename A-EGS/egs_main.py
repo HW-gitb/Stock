@@ -122,6 +122,7 @@ CONF = {
     "watch_n":          15,    # 周频候选观察池（对外展示）
     "final_n":          5,     # 最终推荐数量
     "suspend_lookback":         5,
+    "suspend_daily_min_coverage": 0.95,
     "momentum_std_threshold":   8.0,
     "max_concepts_per_stock":   5,
     "overheat_5d":      8.0,   # 5日涨幅超过此值触发过热标记
@@ -1574,6 +1575,32 @@ def get_daily_basic(trade_date, fallback_dates=None):
     return df
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _validated_suspend_traded_codes(daily_td, all_codes, trade_date):
+    if daily_td is None or daily_td.empty:
+        return None
+    if "ts_code" not in daily_td.columns:
+        raise RuntimeError(
+            f"suspend daily payload for {trade_date} has no ts_code column; "
+            "abort to avoid unsafe suspend inference"
+        )
+    universe = {str(code) for code in all_codes if pd.notna(code)}
+    if not universe:
+        raise RuntimeError("stock list is empty; cannot infer suspended stocks safely")
+
+    traded_codes = set(daily_td["ts_code"].dropna().astype(str).tolist())
+    in_universe_traded = traded_codes & universe
+    coverage = len(in_universe_traded) / len(universe)
+    min_coverage = float(CONF.get("suspend_daily_min_coverage", 0.95))
+    if coverage < min_coverage:
+        raise RuntimeError(
+            f"suspend daily completeness too low for {trade_date}: "
+            f"{len(in_universe_traded)}/{len(universe)} in-universe rows "
+            f"({coverage:.2%}) below suspend_daily_min_coverage={min_coverage:.2%}; "
+            "abort to avoid treating a partial daily response as suspended stocks"
+        )
+    return in_universe_traded
+
+
 def get_suspend_info(trade_dates):
     """
     判断停牌股票。
@@ -1581,16 +1608,19 @@ def get_suspend_info(trade_dates):
     若所有候选日均无数据，跳过停牌过滤（返回空集），
     避免把全市场错误标记为停牌导致 L0 输出为空。
     """
-    key = f"suspend_{trade_dates[0]}"
+    key = f"suspend_{trade_dates[0]}_v2"
     if (cached := load_cache(key)) is not None: return cached
-    all_codes = set(get_stock_list()["ts_code"])
+    all_codes = set(get_stock_list()["ts_code"].dropna().astype(str))
 
     for td in trade_dates[:3]:
         daily_td = safe_api(pro.daily, trade_date=td, fields="ts_code")
-        if daily_td is not None and not daily_td.empty:
-            traded_codes = set(daily_td["ts_code"].tolist())
+        traded_codes = _validated_suspend_traded_codes(daily_td, all_codes, td)
+        if traded_codes is not None:
             suspended    = all_codes - traded_codes
-            log.info(f"停牌数据取自 {td}，停牌股 {len(suspended)} 只")
+            log.info(
+                f"停牌数据取自 {td}，daily覆盖 {len(traded_codes)}/{len(all_codes)}，"
+                f"停牌股 {len(suspended)} 只"
+            )
             save_cache(key, suspended)
             return suspended
 

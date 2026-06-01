@@ -11,7 +11,9 @@ Planned scripts:
 
 Current Phase 1/2 entry remains `A-EGS/egs_main.py`. Direct historical
 `--as-of` runs must use `--l3-mode pit` / `neutralize`, or explicitly declare
-`--allow-historical-live-l3` for non-evidence live-concept smoke runs.
+`--allow-historical-live-l3` for non-evidence live-concept smoke runs. The
+engine also rejects non-empty daily payloads that are too incomplete to support
+safe suspend inference instead of treating missing rows as suspended stocks.
 
 Validation environment:
 

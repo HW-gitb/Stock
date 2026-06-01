@@ -8,6 +8,56 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-001 suspend daily completeness guard)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `3161ab4`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。operational/data-integrity hot-queue 组（SR-DATA-001 + SR-OPS-002 + SR-OPS-003）至此全部 resolved；hot queue #1 进入 execution-evidence 组。
+
+**Notes**: 触及核心引擎 `A-EGS/egs_main.py` 取数/停牌推断路径的 SR-DATA-001 修复，已全审。**Guard 逻辑正确**：新 `_validated_suspend_traded_codes`——daily None/empty → 返 None（保留 empty-fallback、不全市场误停牌）；无 `ts_code` 列 / 空 universe → raise；`coverage = |traded∩universe| / |universe| < suspend_daily_min_coverage(0.95)` → **raise（hard-fail，不把 partial 响应的缺行静默当停牌）**，正是 SR-DATA-001 要的。`get_suspend_info`：**cache key 升 `_v2`**（旧未校验缓存不复用、不绕 guard）、`all_codes` 加 `.dropna().astype(str)`、partial 的 raise 经 get_suspend_info 上抛中止全程（`safe_api` 只包 `pro.daily` fetch、validation raise 在其外，不被吞）。**独立核实**：(1) coverage 用 `traded∩universe`——我独立验证 96 in-universe + 50 out-of-universe junk → coverage 96% 放行、junk 不灌水（partial 无法被垃圾码掩盖）、94 in-universe → raise，边界正确；(2) 正常周频运行 daily 覆盖率 ~97-98%（停牌通常<3%）> 95% → 不触发，不破坏正常选股。**测试**：suspend 3 + l3 4 = 7 OK、phase6 discovery 32 OK（独立复跑，无回归）；test 覆盖 partial→reject、valid→只把真缺码当停牌 + v2 cache、empty→skip-fallback。**治理**：register SR-DATA-001 open→resolved（closure + verification 准确）、Hot Queue 移出 SR-DATA-001 → execution-evidence 组（`SR-EXEC-003/004/005/007`+`SR-CAP-001`+`SR-CONTRACT-002`）;runners/README 记取数 contract;CURRENT 149。**Scope 干净**：只 SR-DATA-001，未碰他项、未跑 EGS/regen/research/fetch。**一条非阻塞观察（运营 watch-item，非 fix）**：0.95 阈值假设正常日停牌<5%；罕见大面积停牌日（>5%，如 2015 式危机）会误中止——但属 **fail-safe**（中止+清晰报错 优于静默误停牌），且 `suspend_daily_min_coverage` 是可调 CONF、符合 SR-DATA-001"reviewed threshold"。建议首个真实周频运行留意覆盖率日志，必要时调阈值。防御分支（无 ts_code 列 / 空 universe）未单测但逻辑 trivial、已读。**本轮可一次性 `提交`**；提交后下一刀进 execution-evidence risk 组（execution 回测证据被引用前的一批 P1/P2）。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-DATA-001 suspend daily completeness guard)
+
+**Commits**: 3161ab4
+
+**Relationship to prior session(s)**:
+- Builds on the committed `SR-OPS-003` historical L3 engine guard and the current risk-register hot queue.
+- Executes only `SR-DATA-001`; the execution-evidence risk group remains the next default hot-queue item after this slice.
+- Does not run EGS, regenerate cohorts, run research, fetch provider data, contact providers, change US data-source access, or commit.
+
+**Worked on**:
+1. [tracked] `A-EGS/egs_main.py`: added `suspend_daily_min_coverage = 0.95`, validates non-empty `pro.daily` rows before suspend inference, raises on below-threshold partial responses, and bumps the suspend cache key to `_v2`.
+2. [untracked] `tests/phase6/test_egs_main_suspend_guard.py`: added focused tests for partial daily rejection, valid high-coverage inference, v2 cache save behavior, and the existing all-empty daily fallback.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-DATA-001` resolved and moved the hot queue to the execution-evidence risk group.
+4. [tracked] `docs/CURRENT.md`, `runners/README.md`, and `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: updated active routing and Phase 7 handoff context for this maintenance slice.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Chose a fail-fast completeness gate for non-empty daily payloads because a partial provider response is exactly the silent wrong-output path in `SR-DATA-001`.
+- Preserved the existing "all candidate days have no daily data => skip suspend filtering" fallback so pre-open / non-trading empty responses still avoid all-market false suspension.
+- Used a v2 cache key so previously cached unvalidated suspend sets cannot bypass the new guard.
+
+**Alternatives considered and rejected**:
+- "Keep `all_codes - traded_codes` without a completeness gate" — rejected because it leaves the partial-response contamination path open.
+- "Treat a partial non-empty response as no data and silently fall back to an older date" — rejected because that can substitute the wrong trading date and still hide provider incompleteness.
+- "Add a new suspend provider endpoint in this slice" — rejected to keep the fix local, reviewed, and no-fetch; a future provider-source redesign can still replace this guard.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_suspend_guard -v`: passed, 3 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_l3_guard -v`: passed, 4 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: passed, 32 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line-count check via Python `splitlines()`: 149 lines, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review. Reviewer should inspect the untracked `tests/phase6/test_egs_main_suspend_guard.py` body in addition to tracked diffs.
+- If review passes and the user commits, the next default `执行` is the risk-register execution-evidence group (`SR-EXEC-003/004/005/007` + `SR-CAP-001` + `SR-CONTRACT-002`), unless the user explicitly approves a narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-003 historical L3 engine guard)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `0fc3e50`)

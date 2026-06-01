@@ -1,5 +1,43 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-01 append: SR-DATA-001 suspend daily completeness guard
+
+**Changed**:
+- Updated `A-EGS/egs_main.py:get_suspend_info` so a non-empty `pro.daily` payload must meet `suspend_daily_min_coverage = 0.95` against the as-of stock universe before missing rows are treated as suspended stocks.
+- Bumped the suspend cache key to `suspend_<date>_v2` so old unvalidated suspend-inference caches are not reused.
+- Added `tests/phase6/test_egs_main_suspend_guard.py` to cover partial daily rejection, high-coverage suspend inference, v2 cache save behavior, and the existing all-empty daily fallback.
+- Marked `SR-DATA-001` resolved in `docs/system_risk_register.md`; the hot queue now moves to the execution-evidence risk group before any execution-backtest evidence or manual sizing conclusion is used.
+
+**Why**:
+- The old `all_codes - traded_codes` inference was safe only when the single-day `daily` response was complete enough. A partial provider response could silently remove tradable stocks during L0.
+- The smallest safe fix is fail-fast / quarantine for suspicious non-empty daily payloads. Fully empty daily responses still keep the existing startup / non-trading fallback behavior and skip suspend filtering rather than marking the whole market suspended.
+- This slice does not run EGS, regenerate cohorts, fetch provider data, change research artifacts, or change alpha conclusions.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_suspend_guard -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_l3_guard -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v
+git diff --check
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; print(len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"
+```
+
+**Validation result**:
+- `tests.phase6.test_egs_main_suspend_guard`: 3 tests passed.
+- `tests.phase6.test_egs_main_l3_guard`: 4 tests passed.
+- `python -m unittest discover -s tests\phase6 -v`: 32 tests passed.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line count: 149 via Python `splitlines()`, below the 150-line snapshot target.
+
+**Invalidated / blocked old conclusion**:
+- "`SR-DATA-001` still blocks the next weekly official capture or direct cohort regeneration" is invalid after this reviewed slice.
+- "Missing rows in a non-empty `daily` response can be treated as suspended without a completeness gate" is invalid after this reviewed slice.
+
+**Next-step notes**:
+- If this slice passes review and is committed, the default next `执行` returns to the risk-register execution-evidence group (`SR-EXEC-003/004/005/007` + `SR-CAP-001` + `SR-CONTRACT-002`) unless the user explicitly approves a narrower override.
+- Do not use this fix as authorization to run weekly capture, rerun EGS, fetch provider data, or open a new A-share burst research test.
+
 ## 2026-06-01 append: SR-OPS-003 historical L3 engine guard
 
 **Changed**:
