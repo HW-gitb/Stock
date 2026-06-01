@@ -8,6 +8,107 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-CONTRACT-002 R1 re-review + self-correction)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2a4ccd5`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。R1 已修复，整个 SR-CONTRACT-002 轮次可 `提交`。
+
+**Notes**: R1 已正确解决：SR-CONTRACT-002 Codex 执行 entry 的假 `59` 已改成 `149`（用可靠的 `[System.IO.File]::ReadAllLines(...).Length`），grep 确认 docs 内不再有作为事实呈现的 `59 lines`（残留 `59` 均为 修复/review 对该问题的描述）。**Self-correction（我 R1 的过度声称）**：R1 称"handoff append 的 validation 也写 59 lines"——**这是我的失误**：我审 SR-CONTRACT-002 时未逐字读 handoff、想当然假设它镜像 SESSION_LOG。实测 committed HEAD 与工作树的 `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` 均无 `59 lines` 这行。Codex 处理正确——只改了真有问题的 SESSION_LOG 执行 entry、查 handoff 确认无此行故未编辑、并在 修复 entry 透明记录（"no matching factual handoff line exists"）。教训：flag false-claim 类 Required 前，对所声称的每个位置都要逐一 grep 确认，不能由一处推断多处（呼应 review fast-path "禁基于推断"）。**Scope/substance**：修复 仅动 SESSION_LOG（改 59→149 + 加 修复 entry），未碰 aggregator / forward_live_evidence schema / example / tests / register——SR-CONTRACT-002 实质（已 Pass 的 schema-first 合同 + 43 tests）保持上轮已验证态。USER-APPROVED 标记完好。**本轮可一次性 `提交`**；提交后 execution-evidence 组全清，hot queue #1 进 `SR-SEC-001`。
+
+---
+
+## 2026-06-01 — Codex 修复 (R1 SR-CONTRACT-002 line-count correction)
+
+**Commits**: none
+
+**Relationship to prior session(s)**:
+- Repairs the latest Claude review Required fix R1, which is USER-APPROVED 2026-06-01.
+- Does not change code, schemas, tests, runner behavior, provider access, data fetch, research, or commits.
+
+**Approved Required fixes repaired**:
+- R1 accepted — corrected the prior Codex execution entry's `docs/CURRENT.md` validation line from the unreliable PowerShell `Get-Content | Measure-Object -Line` count (`59`) to the authoritative physical line count (`149`) via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`.
+
+**Optional suggestions**: none.
+
+**Worked on**:
+1. [tracked] `docs/SESSION_LOG.md`: prepended this repair entry and corrected the prior validation record.
+
+**Verification notes**:
+- Checked `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` for the reported false `59 lines` / `Measure-Object` validation text; no matching factual handoff line exists, so no handoff edit was required for R1.
+
+**Validation run/result**:
+- `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: reports `149`, below the 150-line snapshot target.
+- `rg -n "59 lines|59 行|Measure-Object|line-count|splitlines|150-line" docs/SESSION_LOG.md docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md docs/CURRENT.md`: confirms no remaining Codex factual validation line reports `59 lines`; remaining `59` references are repair/review descriptions of the corrected issue.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review.
+- If review passes, the user can run `提交`.
+
+---
+
+## 2026-06-01 — Claude review — Pass with fixes (SR-CONTRACT-002 forward-live evidence schema contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2a4ccd5`)
+
+**Status**: REVIEW VERDICT RECORDED. Required fix R1 USER-APPROVED 2026-06-01; no Optional suggestions. （Approval recorded per §批准修改 Durable Approval Propagation rule.）
+
+**Verdict**: Pass with fixes —— SR-CONTRACT-002 实质 clean，但本轮 SESSION_LOG + handoff 的 validation 写了一个假行数（R1）。
+
+**Required fixes (USER-APPROVED 2026-06-01)**:
+- **R1**：本 Codex 执行 entry 与 handoff append 的 validation 都写 `docs/CURRENT.md ... 59 lines, below the 150-line snapshot target`，但实测 **149 行**（`splitlines()`）。`Get-Content | Measure-Object -Line` 数错了（已知 PowerShell 陷阱）。结论"below 150"仍成立，但记录里的数字（59）是假的——同 2026-06-01 SR-OPS-002 那次 112 假声明一类。修法：把两处 `59` 改成真实 `149`，并改用可靠计数（`(Get-Content).Count` 或 Python `splitlines()`）。
+
+**Notes（实质 clean，已独立核实）**：新 `schemas/forward_live_evidence.schema.json` v1.0.0 设计扎实——锁 `evidence_level=live_normalized` + `review_status=reviewed` + `review_verdict=pass` + `actual_position_reconciliation_available=true`/`live_reconciled` + scope_locks 全锁（manual-only / no broker / no strategy change / no paper-for-ship-gate / **no full-size-by-artifact**）+ 必填 provenance/tracker_artifact_refs(minItems 1)/review lineage，`additionalProperties:false`。example 形态有效且 limitations 明示"shape only / 非真实证据 / 不授权 full-size"。test 覆盖 schema 有效性、example 有效、**关键锁**（reject draft/paper/未 reconciled/paper-for-ship-gate/full-size-authorized）、tracker refs 必填。aggregator `load_forward_live_evidence` 先 `validate_json_schema(FORWARD_LIVE_EVIDENCE_SCHEMA_PATH)` 再读 review_status/forward_live_months（顺序对）；execution_aggregate schema patch 1.1.3 绑定 ref 到新 schema（字段 shape 不变）；43 tests OK。register SR-CONTRACT-002 resolved（closure+verification 准确）、Hot Queue 收口——execution-evidence 组全清、#1 进 `SR-SEC-001`。scope 仅 SR-CONTRACT-002。**R1 改完即可 `提交`**。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-CONTRACT-002 forward-live evidence schema contract)
+
+**Commits**: 2a4ccd5
+
+**Relationship to prior session(s)**:
+- Builds on committed `SR-EXEC-007`, which kept aggregate execution results diagnostic / `not_evaluable` until capacity / concurrency-adjusted returns exist.
+- Executes only `SR-CONTRACT-002`: forward-live evidence artifact schema-first contract and aggregate-runner validation.
+- Does not produce real forward-live evidence, run EGS, run research, fetch provider data, contact providers, change US data-source access, implement concurrent holdings, or commit.
+
+**Worked on**:
+1. [untracked] `schemas/forward_live_evidence.schema.json`: added v1.0.0 schema requiring reviewed `live_normalized` evidence, source window, captured-month basis, tracker artifact refs, review lineage, actual-position reconciliation, and manual-only / no-direct-full-size scope locks.
+2. [untracked] `schemas/examples/forward_live_evidence.example.json`: added shape-only example artifact; it is explicitly not real forward-live evidence.
+3. [untracked] `tests/schema/test_forward_live_evidence_schema.py`: validates schema meta, example validity, reviewed / live-normalized / reconciliation locks, no paper ship-gate use, no artifact-level full-size authorization, and required tracker refs.
+4. [tracked] `runners/aggregate_execution_reports.py`: validates `--forward-live-evidence-ref` against `schemas/forward_live_evidence.schema.json` before reading `forward_live_months`.
+5. [tracked] `schemas/execution_aggregate_report.schema.json`: bumped output contract to v1.1.3 and documented that `forward_live_evidence_source` is bound to reviewed `forward_live_evidence` v1.0.0, not ad hoc JSON.
+6. [tracked] `tests/execution/test_aggregate_execution_reports.py`: replaced old two-field reviewed evidence fixtures with schema-valid artifacts, kept CLI/evidence month mismatch rejection, and added rejection for the old ad hoc two-field evidence JSON.
+7. [tracked] `tests/schema/test_execution_aggregate_report_schema.py`: validates v1.1.3 and the new forward-live evidence schema reference.
+8. [tracked] `docs/system_risk_register.md`: marked `SR-CONTRACT-002` resolved and moved Hot Queue #1 to `SR-SEC-001`.
+9. [tracked] `docs/CURRENT.md`, `docs/README.md`, `runners/README.md`, `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`: routed the new contract, current state, validation, and next default work.
+
+**Key decisions**:
+- Locked the forward-live evidence artifact to `review_status = reviewed` and `evidence_level = live_normalized` because this contract is for aggregation consumption, not draft tracking.
+- Required actual-position reconciliation in the schema so forward-live months cannot become ship-gate-like evidence without matching the project evidence-capital policy.
+- Kept `full_size_manual_use_authorized_by_this_artifact = false`; aggregate reports may consume the artifact, but the artifact itself never authorizes full-size manual use.
+
+**Alternatives considered and rejected**:
+- "Keep accepting a two-field JSON and document the desired fields elsewhere" — rejected because that was the exact durable contract gap in `SR-CONTRACT-002`.
+- "Make the example look like real 12-month evidence" — rejected; the example is shape-only and must not be used as evidence.
+- "Remove the SR-EXEC-007 not-evaluable gate now that forward-live evidence is structured" — rejected because evidence provenance does not solve serialized cash reuse / concurrency capacity distortion.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_forward_live_evidence_schema -v`: passed, 4 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v`: passed, 10 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v`: passed, 3 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_forward_live_evidence_schema tests.execution.test_aggregate_execution_reports tests.schema.test_execution_aggregate_report_schema tests.execution.test_backtest_execution tests.schema.test_execution_backtest_report_schema -v`: passed, 43 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` physical line-count check via `[System.IO.File]::ReadAllLines((Resolve-Path 'docs\CURRENT.md')).Length`: 149 lines, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- If review passes and the user commits, the next default `执行` is `SR-SEC-001` (local Claude Bash allow-rule narrowing), unless the user explicitly approves a narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-EXEC-007 concurrency evidence gate)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `d6e9060`)

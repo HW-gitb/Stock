@@ -1,0 +1,64 @@
+{
+  "schema_name": "forward_live_evidence",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-01T00:00:00Z",
+  "evidence_id": "a_short_forward_live_evidence_example_20260601",
+  "evidence_date": "20260601",
+  "preset": "a_short",
+  "market": "A",
+  "horizon": "short",
+  "bucket": "short",
+  "lane_id": "a_short_steady",
+  "evidence_level": "live_normalized",
+  "review_status": "reviewed",
+  "forward_live_months": 12,
+  "source_window": {
+    "start_date": "20250501",
+    "end_date": "20260430",
+    "captured_month_basis": "calendar_months_with_reviewed_tracker_packets",
+    "market_calendar": "SSE/SZSE",
+    "process_stable_before_window": true
+  },
+  "provenance": {
+    "source_system": "phase6_forward_tracker",
+    "captured_by": "manual_forward_capture_process",
+    "captured_at": "2026-06-01T00:00:00Z",
+    "tracker_artifact_refs": [
+      {
+        "artifact_type": "forward_tracker_summary",
+        "path": "result/a_short/forward/summary_20250501_20260430.json",
+        "role": "reviewed monthly forward-live tracker summary"
+      },
+      {
+        "artifact_type": "actual_positions",
+        "path": "state/a_short/positions_reviewed_20250501_20260430.json",
+        "role": "actual manual-position reconciliation source"
+      }
+    ]
+  },
+  "review": {
+    "reviewer_role": "claude",
+    "reviewer_id": "claude_independent_reviewer",
+    "reviewed_at": "2026-06-01T00:00:00Z",
+    "review_verdict": "pass",
+    "review_entry_ref": "docs/SESSION_LOG.md#example-forward-live-evidence-review"
+  },
+  "position_reconciliation": {
+    "actual_position_reconciliation_available": true,
+    "reconciliation_status": "live_reconciled",
+    "actual_positions_ref": "state/a_short/positions_reviewed_20250501_20260430.json",
+    "manual_override_log_ref": null
+  },
+  "scope_locks": {
+    "manual_execution_only": true,
+    "broker_or_order_automation_allowed": false,
+    "production_strategy_rule_change_allowed": false,
+    "paper_evidence_allowed_for_ship_gate": false,
+    "full_size_manual_use_authorized_by_this_artifact": false
+  },
+  "limitations": [
+    "This example validates the artifact shape only; it is not real forward-live evidence.",
+    "The artifact can support aggregate evaluation only when paired with compatible execution reports and reviewed aggregation logic.",
+    "The artifact itself never authorizes full-size manual use or any broker automation."
+  ]
+}

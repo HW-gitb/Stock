@@ -1,0 +1,290 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/forward_live_evidence/1.0.0/schema.json",
+  "title": "Forward Live Evidence",
+  "description": "Schema-first contract for reviewed forward-live evidence consumed by execution_aggregate_report ship-gate-like aggregation. It binds forward_live_months to a reviewed, live-normalized evidence window with provenance, tracker artifact references, review lineage, and actual-position reconciliation. This artifact does not authorize full-size manual use by itself, change strategy rules, fetch data, create provider adapters, or authorize broker / OS automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "evidence_id",
+    "evidence_date",
+    "preset",
+    "market",
+    "horizon",
+    "bucket",
+    "lane_id",
+    "evidence_level",
+    "review_status",
+    "forward_live_months",
+    "source_window",
+    "provenance",
+    "review",
+    "position_reconciliation",
+    "scope_locks",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "forward_live_evidence"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evidence_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "evidence_date": {
+      "$ref": "#/$defs/date8"
+    },
+    "preset": {
+      "type": "string",
+      "enum": ["a_short", "us_short", "a_long", "us_long"]
+    },
+    "market": {
+      "type": "string",
+      "enum": ["A", "US"]
+    },
+    "horizon": {
+      "type": "string",
+      "enum": ["short", "long"]
+    },
+    "bucket": {
+      "type": "string",
+      "enum": ["short", "long"]
+    },
+    "lane_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "evidence_level": {
+      "type": "string",
+      "const": "live_normalized"
+    },
+    "review_status": {
+      "type": "string",
+      "const": "reviewed"
+    },
+    "forward_live_months": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source_window": {
+      "$ref": "#/$defs/sourceWindow"
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
+    "review": {
+      "$ref": "#/$defs/review"
+    },
+    "position_reconciliation": {
+      "$ref": "#/$defs/positionReconciliation"
+    },
+    "scope_locks": {
+      "$ref": "#/$defs/scopeLocks"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "sourceWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_date",
+        "end_date",
+        "captured_month_basis",
+        "market_calendar",
+        "process_stable_before_window"
+      ],
+      "properties": {
+        "start_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "end_date": {
+          "$ref": "#/$defs/date8"
+        },
+        "captured_month_basis": {
+          "type": "string",
+          "enum": [
+            "calendar_months_with_reviewed_tracker_packets",
+            "market_months_with_reviewed_tracker_packets"
+          ]
+        },
+        "market_calendar": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "process_stable_before_window": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_system",
+        "captured_by",
+        "captured_at",
+        "tracker_artifact_refs"
+      ],
+      "properties": {
+        "source_system": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "captured_by": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tracker_artifact_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactRef"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewer_role",
+        "reviewer_id",
+        "reviewed_at",
+        "review_verdict",
+        "review_entry_ref"
+      ],
+      "properties": {
+        "reviewer_role": {
+          "type": "string",
+          "enum": ["claude", "human_reviewer", "user_final_approver"]
+        },
+        "reviewer_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "review_verdict": {
+          "type": "string",
+          "const": "pass"
+        },
+        "review_entry_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "positionReconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actual_position_reconciliation_available",
+        "reconciliation_status",
+        "actual_positions_ref",
+        "manual_override_log_ref"
+      ],
+      "properties": {
+        "actual_position_reconciliation_available": {
+          "type": "boolean",
+          "const": true
+        },
+        "reconciliation_status": {
+          "type": "string",
+          "const": "live_reconciled"
+        },
+        "actual_positions_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "manual_override_log_ref": {
+          "type": ["string", "null"],
+          "minLength": 1
+        }
+      }
+    },
+    "scopeLocks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manual_execution_only",
+        "broker_or_order_automation_allowed",
+        "production_strategy_rule_change_allowed",
+        "paper_evidence_allowed_for_ship_gate",
+        "full_size_manual_use_authorized_by_this_artifact"
+      ],
+      "properties": {
+        "manual_execution_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "broker_or_order_automation_allowed": {
+          "type": "boolean",
+          "const": false
+        },
+        "production_strategy_rule_change_allowed": {
+          "type": "boolean",
+          "const": false
+        },
+        "paper_evidence_allowed_for_ship_gate": {
+          "type": "boolean",
+          "const": false
+        },
+        "full_size_manual_use_authorized_by_this_artifact": {
+          "type": "boolean",
+          "const": false
+        }
+      }
+    },
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_type", "path", "role"],
+      "properties": {
+        "artifact_type": {
+          "type": "string",
+          "enum": [
+            "forward_tracker_csv",
+            "forward_tracker_summary",
+            "actual_positions",
+            "manual_override_log",
+            "review_packet",
+            "other"
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

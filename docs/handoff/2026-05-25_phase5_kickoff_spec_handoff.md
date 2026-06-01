@@ -1,5 +1,44 @@
 # Phase 5 kickoff spec handoff
 
+## 2026-06-01 addendum: SR-CONTRACT-002 forward-live evidence schema contract
+
+### What changed
+
+- Added `schemas/forward_live_evidence.schema.json` v1.0.0 and `schemas/examples/forward_live_evidence.example.json`.
+- The new contract requires reviewed `live_normalized` evidence, `forward_live_months`, source-window dates, captured-month basis, market calendar, tracker artifact refs, review lineage, actual-position reconciliation, and scope locks that keep manual-only / no-broker / no-direct-full-size boundaries explicit.
+- `runners/aggregate_execution_reports.py` now validates `--forward-live-evidence-ref` against that schema before using `forward_live_months`.
+- `execution_aggregate_report` is bumped to v1.1.3 to document that a forward-live evidence ref is schema-bound, not an ad hoc two-field JSON.
+- `docs/system_risk_register.md` marks `SR-CONTRACT-002` resolved and the hot queue now starts with `SR-SEC-001`.
+
+### Why
+
+`SR-CONTRACT-002` existed because `--forward-live-evidence-ref` only checked `review_status = "reviewed"` and a non-negative integer month count. That was enough to close the bare CLI bypass, but not enough for a real first forward-live artifact. This change makes the evidence artifact reviewable from repo state: months must be tied to a source window, tracker refs, review entry, and actual-position reconciliation before aggregation can consume them.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_forward_live_evidence_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v
+```
+
+### Validation results
+
+- `tests.schema.test_forward_live_evidence_schema`: 4 tests passed.
+- `tests.execution.test_aggregate_execution_reports`: 10 tests passed.
+- `tests.schema.test_execution_aggregate_report_schema`: 3 tests passed.
+
+### Invalidated old conclusions
+
+- "A reviewed forward-live evidence ref can be a JSON with only `review_status` and `forward_live_months`" is invalid. It must now validate against `schemas/forward_live_evidence.schema.json`.
+- "`execution_aggregate_report` current output is v1.1.2" is stale; current output is v1.1.3.
+
+### Next notes
+
+1. The example forward-live evidence artifact is shape-only and is not real 12-month evidence.
+2. This slice still does not remove the SR-EXEC-007 concurrency gate; aggregate reports remain `not_evaluable` for full-size permission until capacity / concurrency-adjusted returns exist.
+3. Next default hot-queue work is `SR-SEC-001`, unless the user approves a narrower override.
+
 ## 2026-06-01 addendum: SR-EXEC-007 concurrency evidence gate
 
 ### What changed

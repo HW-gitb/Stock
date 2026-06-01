@@ -35,11 +35,10 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-CONTRACT-002` - Fix before first reviewed forward-live evidence artifact is produced or consumed for ship-gate-like aggregation.
-2. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
-3. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
-4. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
-5. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
+1. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
+2. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
+3. `SR-DATA-002` + `SR-DATA-004` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+4. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
 
@@ -93,11 +92,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-CONTRACT-002 - Forward-live evidence artifact lacks a schema-first contract
 
 - Severity: P2
-- Status: open
+- Status: resolved
 - Owner phase: Phase 6 forward evidence / Phase 5 aggregate ship-gate contract
 - Evidence: `runners/aggregate_execution_reports.py` v1.1.x correctly requires `--forward-live-evidence-ref` as a necessary ship-gate input and v1.1.2 additionally blocks `full_size_allowed` until capacity / concurrency-adjusted returns are evaluable, but the referenced forward-live evidence artifact is still validated only inline for `review_status == "reviewed"` and non-negative integer `forward_live_months`. No `schemas/forward_live_evidence.schema.json` contract yet defines provenance fields such as reviewer, source window, tracker artifact ref, captured-month basis, or review lineage.
 - Accepted calibration: this is not an active blocker because no 12-month forward-live artifact exists yet and SR-EXEC-006's inline validation closes the current smoke / bare-CLI gate bug. It becomes material before any real Phase 6 forward-live evidence artifact is produced or used for aggregate full-size permission.
-- Required next action: before the first reviewed forward-live evidence artifact is produced or consumed for ship-gate-like aggregation, add a schema-first contract covering `review_status`, `forward_live_months`, provenance / reviewer / source-window / tracker refs, and validation tests; then update `aggregate_execution_reports.py` to validate the evidence artifact against that schema.
+- Closure evidence: the reviewed change set adds `schemas/forward_live_evidence.schema.json` v1.0.0 and `schemas/examples/forward_live_evidence.example.json`, requiring reviewed live-normalized evidence, source window, captured-month basis, tracker artifact refs, review lineage, actual-position reconciliation, and manual-only / no-full-size-by-artifact scope locks. `runners/aggregate_execution_reports.py` now validates `--forward-live-evidence-ref` against that schema before using `forward_live_months`; `execution_aggregate_report` is bumped to v1.1.3 to document the bound evidence-ref contract.
+- Verification: `tests.schema.test_forward_live_evidence_schema` validates schema meta, the example, reviewed / live-normalized / reconciliation locks, and required tracker refs. `tests.execution.test_aggregate_execution_reports` rejects the old ad hoc two-field forward evidence JSON and accepts schema-valid reviewed evidence while preserving the concurrency not-evaluable gate. `tests.schema.test_execution_aggregate_report_schema` validates v1.1.3 and its new forward-live evidence schema reference.
+- Required next action: no active `SR-CONTRACT-002` action. Before a real 12-month forward-live artifact is produced, fill the schema-required provenance, review, tracker refs, and actual-position reconciliation with real reviewed artifacts; do not use the example as evidence.
 
 ### SR-SEC-001 - Broad local Claude Bash allow rules
 

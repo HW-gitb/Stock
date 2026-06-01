@@ -72,6 +72,72 @@ class AggregateExecutionReportsTest(unittest.TestCase):
         path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return path
 
+    def write_forward_live_evidence(self, work_dir: Path, months: int = 12) -> Path:
+        evidence_path = work_dir / "forward_evidence.json"
+        payload = {
+            "schema_name": "forward_live_evidence",
+            "schema_version": "1.0.0",
+            "generated_at": "2026-06-01T00:00:00Z",
+            "evidence_id": "test_forward_live_evidence",
+            "evidence_date": "20260601",
+            "preset": "a_short",
+            "market": "A",
+            "horizon": "short",
+            "bucket": "short",
+            "lane_id": "a_short_steady",
+            "evidence_level": "live_normalized",
+            "review_status": "reviewed",
+            "forward_live_months": months,
+            "source_window": {
+                "start_date": "20250501",
+                "end_date": "20260430",
+                "captured_month_basis": "calendar_months_with_reviewed_tracker_packets",
+                "market_calendar": "SSE/SZSE",
+                "process_stable_before_window": True,
+            },
+            "provenance": {
+                "source_system": "unit_test_forward_tracker",
+                "captured_by": "unit_test",
+                "captured_at": "2026-06-01T00:00:00Z",
+                "tracker_artifact_refs": [
+                    {
+                        "artifact_type": "forward_tracker_summary",
+                        "path": "result/a_short/forward/unit_test_summary.json",
+                        "role": "unit-test reviewed forward tracker summary",
+                    }
+                ],
+            },
+            "review": {
+                "reviewer_role": "claude",
+                "reviewer_id": "unit_test_reviewer",
+                "reviewed_at": "2026-06-01T00:00:00Z",
+                "review_verdict": "pass",
+                "review_entry_ref": "docs/SESSION_LOG.md#unit-test",
+            },
+            "position_reconciliation": {
+                "actual_position_reconciliation_available": True,
+                "reconciliation_status": "live_reconciled",
+                "actual_positions_ref": "state/a_short/unit_test_positions.json",
+                "manual_override_log_ref": None,
+            },
+            "scope_locks": {
+                "manual_execution_only": True,
+                "broker_or_order_automation_allowed": False,
+                "production_strategy_rule_change_allowed": False,
+                "paper_evidence_allowed_for_ship_gate": False,
+                "full_size_manual_use_authorized_by_this_artifact": False,
+            },
+            "limitations": [
+                "Unit-test fixture only.",
+                "This artifact does not authorize full-size manual use.",
+            ],
+        }
+        evidence_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return evidence_path
+
     def test_aggregate_without_benchmark_keeps_alpha_not_evaluable(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             work_dir = Path(tmpdir)
@@ -104,7 +170,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(report["schema_name"], "execution_aggregate_report")
-        self.assertEqual(report["schema_version"], "1.1.2")
+        self.assertEqual(report["schema_version"], "1.1.3")
         self.assertEqual(report["metrics"]["report_count"], 2)
         self.assertEqual(report["metrics"]["month_count"], 2)
         self.assertEqual(report["metrics"]["trade_count_total"], 2)
@@ -249,11 +315,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
                 json.dumps({"202605": 0.01, "202606": 0.01}),
                 encoding="utf-8",
             )
-            evidence_path = work_dir / "forward_evidence.json"
-            evidence_path.write_text(
-                json.dumps({"review_status": "reviewed", "forward_live_months": 12}),
-                encoding="utf-8",
-            )
+            evidence_path = self.write_forward_live_evidence(work_dir, 12)
             out_path = work_dir / "aggregate.json"
 
             rc = aggregate_main(
@@ -297,11 +359,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
                 json.dumps({"202605": 0.01, "202606": 0.01}),
                 encoding="utf-8",
             )
-            evidence_path = work_dir / "forward_evidence.json"
-            evidence_path.write_text(
-                json.dumps({"review_status": "reviewed", "forward_live_months": 12}),
-                encoding="utf-8",
-            )
+            evidence_path = self.write_forward_live_evidence(work_dir, 12)
             out_path = work_dir / "aggregate.json"
 
             rc = aggregate_main(
@@ -358,11 +416,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
             report_b = self.write_execution_report(
                 work_dir, "20260626", 0.07, -0.10, mode="production"
             )
-            evidence_path = work_dir / "forward_evidence.json"
-            evidence_path.write_text(
-                json.dumps({"review_status": "reviewed", "forward_live_months": 11}),
-                encoding="utf-8",
-            )
+            evidence_path = self.write_forward_live_evidence(work_dir, 11)
 
             with self.assertRaisesRegex(ValueError, "must match"):
                 aggregate_main(
@@ -373,6 +427,33 @@ class AggregateExecutionReportsTest(unittest.TestCase):
                         str(report_b),
                         "--forward-live-months",
                         "12",
+                        "--forward-live-evidence-ref",
+                        str(evidence_path),
+                    ]
+                )
+
+    def test_forward_live_evidence_ref_must_match_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            report_a = self.write_execution_report(
+                work_dir, "20260522", 0.06, -0.05, mode="production"
+            )
+            report_b = self.write_execution_report(
+                work_dir, "20260626", 0.07, -0.10, mode="production"
+            )
+            evidence_path = work_dir / "forward_evidence.json"
+            evidence_path.write_text(
+                json.dumps({"review_status": "reviewed", "forward_live_months": 12}),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "forward-live evidence .*schema validation failed"):
+                aggregate_main(
+                    [
+                        "--report",
+                        str(report_a),
+                        "--report",
+                        str(report_b),
                         "--forward-live-evidence-ref",
                         str(evidence_path),
                     ]
