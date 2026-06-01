@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-DATA-004` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
+1. `SR-DATA-004` - Maintenance watch item before affected subsystem promotion; requires real weekly suspend-coverage logs.
 2. `SR-PROVIDER-001` - Resolve before any US provider token / trial / paid access / sample collection / data fetch / adapter / Phase 7c use.
 
 ## Entries
@@ -286,11 +286,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-OPS-006 - Relisted-stock lookback boundary needs revalidation
 
 - Severity: P3
-- Status: needs_revalidation
+- Status: resolved
 - Owner phase: A-short screening maintenance
 - Evidence: `A-EGS/egs_main.py:get_relisted_stocks` uses `trade_dates[CONF["suspend_lookback"]]` as the cutoff when enough trade dates exist; this may be an off-by-one or short-calendar semantic issue depending on the intended "lookback" definition.
 - Accepted calibration: this is a plausible low-risk boundary defect, not confirmed active contamination.
-- Required next action: re-read the intended lookback semantics, add a small date-list test, and either fix the index / cutoff or close this entry with evidence.
+- Required next action: no active `SR-OPS-006` action. Future relisted-stock lookback changes must preserve inclusive trading-date-window semantics and bump cache keys when cached set semantics change.
+- Closure evidence: the reviewed change set adds `_lookback_cutoff_trade_date`, using `lookback - 1` as the descending `trade_dates` cutoff index so `suspend_lookback = 5` covers exactly the latest five trading dates (`trade_dates[0..4]`) instead of six. Short histories fall back to the oldest available date. `get_relisted_stocks` now uses `relisted_<as_of>_v2` so old off-by-one cached relisted sets are not reused.
+- Verification: `tests.phase6.test_egs_main_relisted_guard` covers the inclusive five-date cutoff, short-history fallback, relisted membership, and v2 cache key. `python -m unittest discover -s tests\phase6 -v` passed 45 tests.
 
 ### SR-RANK-001 - Forward-return status can remain `ok` when conversion leaves NaN
 

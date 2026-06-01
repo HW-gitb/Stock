@@ -1634,15 +1634,20 @@ def get_suspend_info(trade_dates):
     save_cache(key, set())
     return set()
 
+def _lookback_cutoff_trade_date(trade_dates, lookback):
+    lookback = max(1, int(lookback))
+    cutoff_idx = min(len(trade_dates) - 1, lookback - 1)
+    return trade_dates[cutoff_idx]
+
 def get_relisted_stocks(trade_dates):
-    key = f"relisted_{trade_dates[0]}"
+    key = f"relisted_{trade_dates[0]}_v2"
     if (cached := load_cache(key)) is not None: return cached
     all_daily = get_daily_all(trade_dates)
     if all_daily.empty:
         save_cache(key, set())          # [小修复④]
         return set()
     first_trade = all_daily.groupby("ts_code")["trade_date"].min()
-    cutoff   = trade_dates[CONF["suspend_lookback"]] if len(trade_dates) > CONF["suspend_lookback"] else trade_dates[-1]
+    cutoff   = _lookback_cutoff_trade_date(trade_dates, CONF["suspend_lookback"])
     relisted = set(first_trade[first_trade >= cutoff].index)
     save_cache(key, relisted)
     return relisted

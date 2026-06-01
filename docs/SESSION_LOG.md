@@ -8,6 +8,50 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-006 relisted lookback boundary)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `e4621b0`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional）。本轮可 `提交`。
+
+**Notes**: SR-OPS-006（needs_revalidation）——Codex 确认 off-by-one 并修正。`A-EGS/egs_main.py:get_relisted_stocks` cutoff 由 `trade_dates[CONF["suspend_lookback"]]`（降序下 = index 5 = 6 日窗）改为 `_lookback_cutoff_trade_date` 返回 `trade_dates[min(len-1, lookback-1)]`（lookback=5 → index 4 = 最近 5 个交易日 inclusive 窗，与 `suspend_lookback=5` 一致）；`max(1,int(lookback))` + `min(len-1,...)` 兜底 lookback<1 / 短日历；relisted cache key 升 `_v2`。**语义核对**：`trade_dates` 降序（`trade_dates[0]`=最新，与 cache key / suspend `trade_dates[:3]` 用法一致），`first_trade >= cutoff` = 最早出现在最近 N 日内 = 新上市；故旧 index 5 = 6 日窗确为 off-by-one，新 index 4 正确。test 显式证明修正：首次出现于第 6 日（20260523）的 000002 在新 5 日窗外被排除（旧 6 日窗会含）；另含短历史 fallback（3 日历史 → cutoff = 最老 index 2）+ v2 cache。3 OK + phase6 discovery 45 OK。影响低（relisted 仅次要排除新股过滤，5 vs 6 日仅差边界股）。register SR-OPS-006 needs_revalidation→resolved（closure 准确）；CURRENT 149；scope 仅 egs_main + test + register + CURRENT + SESSION_LOG。**里程碑**：本轮提交后 risk register 的可修代码项基本全清；maintenance hot queue 仅余 `SR-DATA-004`（P3 watch，需真实周频 suspend-coverage 日志才能校准 0.95 阈值——本质等运营数据、非写代码）+ user-gated `SR-PROVIDER-001`。**本轮可 `提交`**。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-OPS-006 relisted lookback boundary)
+
+**Commits**: e4621b0
+
+**Relationship to prior session(s)**:
+- Builds on committed `SR-RANK-001` forward-return conversion status.
+- Executes one risk-register maintenance item: `SR-OPS-006`.
+- Leaves `SR-DATA-004` open because its next action requires real weekly suspend-coverage logs; this round does not run weekly capture or fetch data.
+- Does not run EGS, research, provider access, data fetch, or commit.
+
+**Worked on**:
+1. [tracked] `A-EGS/egs_main.py`: added `_lookback_cutoff_trade_date`, changed relisted cutoff semantics from `trade_dates[lookback]` to an inclusive `lookback - 1` trading-date window, and bumped the relisted cache key to `_v2`.
+2. [untracked] `tests/phase6/test_egs_main_relisted_guard.py`: added focused regression coverage for five-trading-date cutoff semantics, short-history fallback, relisted membership, and v2 cache-key persistence.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-OPS-006` resolved and left only `SR-DATA-004` in the maintenance hot queue.
+4. [tracked] `docs/CURRENT.md`: updated latest delta, current hot queue, and recent completion text; snapshot remains below 150 lines.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude review handoff.
+
+**Key decisions**:
+- Treated `suspend_lookback = 5` as the latest five trading dates in descending `trade_dates`, i.e. indices `0..4`; the prior index `5` included a sixth date.
+- Bumped the relisted cache key because old cached relisted sets were computed under the off-by-one boundary.
+- Did not update a phase handoff: this is a narrow risk-register closure, not a phase or major milestone change.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_relisted_guard -v`: 3 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_egs_main_suspend_guard tests.phase6.test_egs_main_daily_stats_guard tests.phase6.test_egs_main_l3_guard -v`: 11 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: 45 tests OK.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer must inspect the untracked test file in addition to tracked diffs.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-RANK-001 forward-return conversion status)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8254805`)
