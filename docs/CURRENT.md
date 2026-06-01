@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（SR-CANARY advisory boundary）
+**最后更新**：2026-06-01（SR-DET state replay determinism）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,7 +12,7 @@
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
 - Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
-- `SR-CANARY-001` is resolved: data canary payloads, console output, weekly wrapper output, and runner docs now label canary as advisory sidecar only; it cannot support data_passed, alpha, production-readiness, or ship-gate evidence.
+- `SR-DET-001` is resolved: deterministic reports now evaluate circuit-breaker state at the as-of A-share close by default, expose explicit `--state-now` replay override, and record `data_lineage.state_evaluation_time` under deterministic_report v1.2.0.
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/deterministic_report/1.1.0/schema.json",
+  "$id": "https://stock.local/schemas/deterministic_report/1.2.0/schema.json",
   "title": "Deterministic Analysis Report",
   "description": "Phase 4 machine-readable contract emitted by runners/run_analysis_report.py before any optional LLM enrichment.",
   "type": "object",
@@ -32,7 +32,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.1.0",
+      "const": "1.2.0",
       "description": "Semantic version of this deterministic report contract."
     },
     "generated_at": {
@@ -426,6 +426,7 @@
         "l3_mode",
         "enrichment_applied",
         "enrichment_source",
+        "state_evaluation_time",
         "generated_at"
       ],
       "properties": {
@@ -466,6 +467,11 @@
             }
           ],
           "description": "Source metadata for the merged enrichment patch, or null when no enrichment was applied."
+        },
+        "state_evaluation_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp used to evaluate JSON state such as circuit_breaker.expires_at. Runner default is the A-share as-of close timestamp, not wall-clock now."
         },
         "generated_at": {
           "type": "string",

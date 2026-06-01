@@ -45,6 +45,19 @@ class RunAnalysisReportTest(unittest.TestCase):
         ) = self._original_paths
         self._tmp.cleanup()
 
+    def write_circuit_breaker(self, **overrides) -> None:
+        payload = {
+            "schema_version": "1.0.0",
+            "preset": "a_short",
+            "updated_at": None,
+            "active": False,
+            "reason": None,
+            "triggered_at": None,
+            "expires_at": None,
+        }
+        payload.update(overrides)
+        state_manager.atomic_write_json(state_manager.CIRCUIT_BREAKER_PATH, payload)
+
     def test_build_report_replays_phase3_analyzer(self) -> None:
         payload = _load_payload()
         candidate = find_candidate(payload, "600000.SH")
@@ -55,12 +68,16 @@ class RunAnalysisReportTest(unittest.TestCase):
         )
 
         self.assertEqual(report["schema_name"], "deterministic_report")
-        self.assertEqual(report["schema_version"], "1.1.0")
+        self.assertEqual(report["schema_version"], "1.2.0")
         self.assertEqual(report["ts_code"], "600000.SH")
         self.assertEqual(report["veto"], run_veto(candidate))
         self.assertEqual(report["data_lineage"]["l3_mode"], "today")
         self.assertFalse(report["data_lineage"]["enrichment_applied"])
         self.assertIsNone(report["data_lineage"]["enrichment_source"])
+        self.assertEqual(
+            report["data_lineage"]["state_evaluation_time"],
+            "2026-05-22T15:00:00+08:00",
+        )
         self.assertEqual(
             {item["code"] for item in report["data_lineage"]["analyzer_rules"]},
             set(RULE_VERSIONS),
@@ -84,6 +101,53 @@ class RunAnalysisReportTest(unittest.TestCase):
         )
 
         self.assertEqual(report["data_lineage"]["l3_mode"], "today")
+
+    def test_circuit_breaker_uses_asof_replay_time_not_wall_clock(self) -> None:
+        payload = _load_payload()
+        candidate = find_candidate(payload, "600000.SH")
+        self.write_circuit_breaker(
+            active=True,
+            reason="test",
+            expires_at="2026-05-22T08:00:00Z",
+        )
+
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-06-01T00:00:00+08:00",
+        )
+
+        self.assertEqual(report["decision"]["action"], "skip")
+        self.assertEqual(
+            report["decision"]["reason_code"],
+            "state_circuit_breaker_active",
+        )
+        self.assertEqual(
+            report["data_lineage"]["state_evaluation_time"],
+            "2026-05-22T15:00:00+08:00",
+        )
+
+    def test_state_now_override_controls_circuit_breaker_replay(self) -> None:
+        payload = _load_payload()
+        candidate = find_candidate(payload, "600000.SH")
+        self.write_circuit_breaker(
+            active=True,
+            reason="test",
+            expires_at="2026-05-22T08:00:00Z",
+        )
+
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-06-01T00:00:00+08:00",
+            state_now="2026-05-22T09:00:00Z",
+        )
+
+        self.assertEqual(report["decision"]["action"], "watch")
+        self.assertEqual(
+            report["data_lineage"]["state_evaluation_time"],
+            "2026-05-22T09:00:00Z",
+        )
 
     def test_markdown_renders_m67_table(self) -> None:
         payload = _load_payload()
@@ -140,7 +204,7 @@ class RunAnalysisReportTest(unittest.TestCase):
             "target": {
                 "as_of": "20260522",
                 "ts_code": "600000.SH",
-                "report_schema_version": "1.1.0",
+                "report_schema_version": "1.2.0",
             },
             "source": {
                 "kind": "manual",
@@ -194,7 +258,7 @@ class RunAnalysisReportTest(unittest.TestCase):
             "target": {
                 "as_of": "20260522",
                 "ts_code": "600000.SH",
-                "report_schema_version": "1.1.0",
+                "report_schema_version": "1.2.0",
             },
             "source": {
                 "kind": "manual",
@@ -246,7 +310,7 @@ class RunAnalysisReportTest(unittest.TestCase):
             "target": {
                 "as_of": "20260522",
                 "ts_code": "999999.SH",  # mismatch vs report ts_code 600000.SH
-                "report_schema_version": "1.1.0",
+                "report_schema_version": "1.2.0",
             },
             "source": {
                 "kind": "manual",

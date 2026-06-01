@@ -16,7 +16,7 @@ import copy
 import hashlib
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -32,10 +32,11 @@ from engine.data.analysis_input_contract import validate_analysis_input_file
 SCHEMA_PATH = ROOT / "schemas" / "deterministic_report.schema.json"
 ENRICHMENT_SCHEMA_PATH = ROOT / "schemas" / "deterministic_report_enrichment.schema.json"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
-REPORT_SCHEMA_VERSION = "1.1.0"
+REPORT_SCHEMA_VERSION = "1.2.0"
 PROMPT_REF_ALIASES = {
     "regulatory_check": "regulatory_48h",
 }
+A_SHARE_STATE_REPLAY_TZ = timezone(timedelta(hours=8))
 
 
 def load_analysis_input(as_of: str, input_path: Path | None = None) -> dict[str, Any]:
@@ -64,14 +65,16 @@ def find_candidate(payload: dict[str, Any], ts_code: str) -> dict[str, Any]:
 
 
 def build_report(payload: dict[str, Any], candidate: dict[str, Any],
-                 generated_at: str | None = None) -> dict[str, Any]:
+                 generated_at: str | None = None,
+                 state_now: datetime | str | None = None) -> dict[str, Any]:
     generated_at = generated_at or datetime.now().astimezone().isoformat(timespec="seconds")
     as_of = str(payload.get("trade_date") or "")
+    state_evaluation_time = _state_evaluation_time(as_of, state_now)
     ts_code = str(candidate.get("ts_code") or "")
     name = str(candidate.get("name") or ts_code)
     veto = run_veto(candidate)
     has_position = state_manager.has_position(ts_code)
-    circuit_active = state_manager.is_circuit_breaker_active()
+    circuit_active = state_manager.is_circuit_breaker_active(state_evaluation_time)
     decision = _build_decision(veto, has_position, circuit_active)
 
     report = {
@@ -121,6 +124,7 @@ def build_report(payload: dict[str, Any], candidate: dict[str, Any],
             "l3_mode": _analysis_input_l3_mode(payload),
             "enrichment_applied": False,
             "enrichment_source": None,
+            "state_evaluation_time": state_evaluation_time,
             "generated_at": generated_at,
         },
         "analyzer_invocations": _build_analyzer_invocations(veto),
@@ -470,6 +474,34 @@ def _analysis_input_l3_mode(payload: dict[str, Any]) -> str:
     return l3_mode
 
 
+def _state_evaluation_time(as_of: str, state_now: datetime | str | None = None) -> str:
+    if state_now is not None:
+        return _normalize_state_now(state_now)
+    try:
+        replay_day = datetime.strptime(as_of, "%Y%m%d")
+    except ValueError as exc:
+        raise ValueError(f"invalid as_of for state replay: {as_of!r}") from exc
+    replay_time = replay_day.replace(hour=15, minute=0, second=0, tzinfo=A_SHARE_STATE_REPLAY_TZ)
+    return replay_time.isoformat(timespec="seconds")
+
+
+def _normalize_state_now(value: datetime | str) -> str:
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        text = str(value).strip()
+        if not text:
+            raise ValueError("state_now must be a non-empty ISO timestamp")
+        parse_text = text[:-1] + "+00:00" if text.endswith("Z") else text
+        try:
+            dt = datetime.fromisoformat(parse_text)
+        except ValueError as exc:
+            raise ValueError(f"invalid state_now timestamp: {value!r}") from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def _state_snapshot_ref() -> str:
     refs = []
     for label, path in [
@@ -498,6 +530,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ts-code", required=True, help="Candidate ts_code, e.g. 600415.SH.")
     parser.add_argument("--input-path", help="Optional explicit analysis_input.json path.")
     parser.add_argument(
+        "--state-now",
+        help=(
+            "Optional ISO timestamp used to evaluate JSON state such as "
+            "circuit_breaker.expires_at. Default: as-of A-share close "
+            "(15:00 +08:00), not wall-clock now."
+        ),
+    )
+    parser.add_argument(
         "--enrichment-path",
         help="Optional deterministic_report_enrichment JSON path. Only llm_notes are merged.",
     )
@@ -516,7 +556,7 @@ def main(argv: list[str] | None = None) -> int:
             f"{payload_trade_date!r}; check --input-path or rerun egs_main."
         )
     candidate = find_candidate(payload, args.ts_code)
-    report = build_report(payload, candidate)
+    report = build_report(payload, candidate, state_now=args.state_now)
     if args.enrichment_path:
         enrichment = load_enrichment(Path(args.enrichment_path))
         validate_enrichment(enrichment)

@@ -1753,6 +1753,47 @@ git diff --check
 2. 若 Pass，用户可 `提交`。
 3. 提交后再进入 Phase 6 kickoff / forward-observation boundary update。
 
+## 2026-06-01 addendum: deterministic_report v1.2.0 state replay time
+
+### What changed
+
+- `schemas/deterministic_report.schema.json` is bumped from v1.1.0 to v1.2.0.
+- `data_lineage.state_evaluation_time` is now required and records the exact timestamp used to evaluate JSON state such as `circuit_breaker.expires_at`.
+- `runners/run_analysis_report.py` no longer calls `state_manager.is_circuit_breaker_active()` with implicit wall-clock time. By default it evaluates state at the report as-of A-share close timestamp (`15:00 +08:00`), and `--state-now <ISO timestamp>` can explicitly override this for replay.
+- `schemas/deterministic_report_enrichment.schema.json` and `schemas/examples/deterministic_report_enrichment.example.json` are bumped to v1.2.0 so enrichment patches target the current report contract.
+- `docs/system_risk_register.md` marks `SR-DET-001` resolved.
+
+### Why
+
+`SR-DET-001` tracked a replay-determinism gap: historical deterministic reports could make a different circuit-breaker decision depending on the machine's current clock. The report already hashed the state files, but it did not record the time at which time-sensitive state was evaluated. v1.2.0 makes that evaluation time explicit and deterministic.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.skill.test_run_analysis_report tests.analyzer.test_state_manager -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "import json; from jsonschema import Draft7Validator; files=['schemas/deterministic_report.schema.json','schemas/deterministic_report_enrichment.schema.json']; [Draft7Validator.check_schema(json.load(open(f, encoding='utf-8'))) for f in files]; print('schema ok')"
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['AGENTS.md','docs/CURRENT.md','docs/system_risk_register.md','schemas/deterministic_report_coverage.md','skills/a_short_analysis/SKILL.md','runners/README.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok')"
+```
+
+### Validation results
+
+- Phase 4 / state targeted tests: 21 tests passed.
+- Full unittest discover: 302 tests passed.
+- Deterministic report and enrichment schema meta-validation: `schema ok`.
+- UTF-8 docs read check: `utf8 ok`.
+
+### Invalidated old conclusions
+
+- "`deterministic_report` current contract is v1.1.0" is stale; current contract is v1.2.0.
+- "Circuit-breaker state in deterministic reports may use wall-clock now" is stale; it now uses `data_lineage.state_evaluation_time`.
+
+### Next notes
+
+1. Future deterministic report consumers should read `data_lineage.state_evaluation_time` before interpreting state-derived decisions.
+2. Future state-consuming report fields must preserve the same explicit evaluation-time pattern.
+3. Historical handoff sections that mention v1.0.0 or v1.1.0 remain point-in-time history; this addendum is the current supersession.
+
 ## 2026-05-26 追加：strategy design synthesis
 
 ### 改了什么

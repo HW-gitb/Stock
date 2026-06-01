@@ -1,8 +1,8 @@
-# deterministic_report 1.1.0 覆盖率说明
+# deterministic_report 1.2.0 覆盖率说明
 
 Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再让 Skill 和可选 LLM enrich 在这个契约外层工作。
 
-当前结论：`deterministic_report.schema.json` v1.1.0 已覆盖 v14.2 M6.7 报告所需的最小结构；`runners/run_analysis_report.py` 已能从 `analysis_input.json + analyzer + state` 生成 schema-validated JSON + Markdown。v1.1.0 在 v1.0.0 基础上补齐 `data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source`，为 Phase 5 execution contract 消除 lineage 缺口。v1 仍然是 minimal runner，真实入场价、止损止盈、仓位、星级和新闻/监管/行业判断不硬编，统一显式标记为 `unknown`、`requires_llm` 或 `not_implemented_phase4`。
+当前结论：`deterministic_report.schema.json` v1.2.0 已覆盖 v14.2 M6.7 报告所需的最小结构；`runners/run_analysis_report.py` 已能从 `analysis_input.json + analyzer + state` 生成 schema-validated JSON + Markdown。v1.1.0 在 v1.0.0 基础上补齐 `data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source`，v1.2.0 进一步补齐 `data_lineage.state_evaluation_time`，让 circuit-breaker state replay 不再依赖 wall-clock now。v1 仍然是 minimal runner，真实入场价、止损止盈、仓位、星级和新闻/监管/行业判断不硬编，统一显式标记为 `unknown`、`requires_llm` 或 `not_implemented_phase4`。
 
 ## 已建立文件
 
@@ -36,7 +36,7 @@ Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再
 
 ## LLM enrichment patch
 
-`schemas/deterministic_report_enrichment.schema.json` v1.1.0 is the only supported patch format for writing LLM notes back through the runner.
+`schemas/deterministic_report_enrichment.schema.json` v1.2.0 is the only supported patch format for writing LLM notes back through the runner.
 
 The patch can target only:
 
@@ -47,7 +47,7 @@ It must also declare:
 
 - `target.as_of`
 - `target.ts_code`
-- `target.report_schema_version` = `1.1.0`
+- `target.report_schema_version` = `1.2.0`
 - `source.kind`
 - `source.prompt_refs`
 
@@ -66,7 +66,7 @@ It must also declare:
 | Rule 9 季报跳空处置 | `risk_flags`, `unknowns` | requires_external / future analyzer |
 | Rule 10 最低盈亏比 | `entry_plan`, `exit_plan`, `unknowns` | not_implemented_phase4 |
 | Rule 11 数据备用协议 | `unknowns`, future `data_lineage` | schema 可承载；搜索审计未实现 |
-| Rule 12 组合熔断 | `decision`, `risk_flags`, `data_lineage.state_snapshot_ref` | state stub 可读；真实熔断状态机未实现 |
+| Rule 12 组合熔断 | `decision`, `risk_flags`, `data_lineage.state_snapshot_ref`, `data_lineage.state_evaluation_time` | state stub 可读；真实熔断状态机未实现；回放时间固定为 as-of A 股收盘或显式 `--state-now` |
 | Rule 13 再入场协议 | `risk_flags`, `unknowns` | state/schema 可承载；状态机未实现 |
 | M0 前置数据采集 | `evidence`, `data_lineage` | 已记录输入和版本；实时数据 requires_external |
 | M0.5 波动率觉醒 | `unknowns`, future `risk_flags` | not_implemented_phase4 |

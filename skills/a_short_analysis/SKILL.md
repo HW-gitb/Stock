@@ -30,6 +30,8 @@ Generate one deterministic report:
 python runners\run_analysis_report.py --as-of 20260522 --ts-code 600415.SH
 ```
 
+State replay is deterministic by default: circuit-breaker expiry is evaluated at the as-of A-share close timestamp. Pass `--state-now <ISO timestamp>` only when intentionally replaying a different state evaluation time.
+
 Expected outputs:
 
 - `result/a_short/<as_of>/reports/<ts_code>.json`

@@ -8,6 +8,67 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-DET-001 state replay determinism)
+
+**Commits**: none (review-only entry; reviews working tree vs `3c04756`)
+
+**Scope reviewed** (per `git status -uall`, all tracked, no untracked): `runners/run_analysis_report.py`; `schemas/deterministic_report.schema.json` (+ enrichment schema/example); `tests/skill/test_run_analysis_report.py`; contract docs (`AGENTS.md`, `runners/README.md`, `skills/a_short_analysis/SKILL.md`, `schemas/deterministic_report_coverage.md`, `docs/CURRENT.md`); phase5 handoff addendum; register.
+
+**Independent verification**:
+- **Signature compat (state_manager NOT in changeset).** `state_manager.is_circuit_breaker_active(now=None)` (state_manager.py:89) already accepted `datetime|str|None`; the old runner just called it with no arg → `datetime.now()` (wall-clock, non-deterministic). The fix passes the deterministic `state_evaluation_time`. No TypeError; explains why state_manager needed no edit.
+- **Determinism fix correct.** Default = as_of close `15:00 +08:00` (depends only on as_of); `--state-now` override normalized (handles trailing `Z`, naive→UTC); new field populated in `build_report` data_lineage.
+- **Determinism test is genuine.** Breaker `expires_at=08:00Z` sits between the two replay times: default as_of close = 07:00Z (< expiry → active → skip), override `09:00Z` (> expiry → expired → watch). Proves replay uses as_of, not wall-clock (generated_at is June, which wall-clock would treat as long-expired). Time math hand-checked.
+- **Contract bump complete & consistent.** v1.1.0→v1.2.0 on: report schema `$id`+const, enrichment schema `$id`+const+`target.report_schema_version`, enrichment example, runner `REPORT_SCHEMA_VERSION`, tests, and all contract docs. AGENTS.md was stale at `1.0.0` → corrected to `1.2.0`. Swept all remaining `1.1.0` refs: every one belongs to an unrelated contract (analysis_input, data_health, provider_evidence_drift_monitor, research_preregistration) — none is a missed deterministic_report surface.
+- **No breaking-completeness gap.** No static `deterministic_report.example.json` exists (report is generated output, validated against runner output in tests), so the new required `state_evaluation_time` has no stale fixture to fail. Old on-disk reports keep their own version (const guards it); no migration.
+- Phase5 handoff change is append-only (numstat 41/0) with an explicit supersession note. CURRENT = 149.
+
+**Verdict**: Pass, clean. Correct determinism wiring, genuine test, exemplary version discipline (every surface bumped, stray-ref swept, changelog preserved). No Required, no Optional.
+
+**Minor note (immaterial, not actionable)**: default path emits `+08:00`-offset timestamps while the `--state-now` path normalizes to `Z` — both are valid RFC3339 date-times, both deterministic, both coerced to UTC by state_manager, and both pinned by tests. Pure representational asymmetry, no consumer impact.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001`.
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-DET-001 state replay determinism)
+
+**Commits**: none (pending 提交; base commit `3c04756`)
+
+**Relationship to prior session(s)**:
+- Executes the next local risk-register maintenance slice after `SR-CANARY-001` was committed.
+- Hot queue items were checked first: `SR-DATA-004` still needs real weekly suspend-coverage logs, and `SR-PROVIDER-001` still blocks US provider access / token / trial / sample / data fetch work without explicit user approval.
+- This slice does not run EGS, weekly screening, research outcome / preflight, provider access, external data fetch, or commit.
+
+**Worked on**:
+1. [tracked] `runners/run_analysis_report.py`: passes a deterministic state evaluation timestamp into `state_manager.is_circuit_breaker_active(...)`; default is the report `as_of` A-share close (`15:00 +08:00`), with explicit `--state-now <ISO timestamp>` override.
+2. [tracked] `schemas/deterministic_report.schema.json`: bumps deterministic report contract to v1.2.0 and requires `data_lineage.state_evaluation_time`.
+3. [tracked] `schemas/deterministic_report_enrichment.schema.json` and `schemas/examples/deterministic_report_enrichment.example.json`: bumps enrichment patch contract / example to v1.2.0 so patch targets match the report contract.
+4. [tracked] `tests/skill/test_run_analysis_report.py`: covers default as-of state replay, explicit `state_now` override, v1.2.0 lineage output, enrichment target-version alignment, and schema-valid write.
+5. [tracked] `docs/system_risk_register.md`: marks `SR-DET-001` resolved with closure evidence and verification.
+6. [tracked] `AGENTS.md`, `docs/CURRENT.md`, `runners/README.md`, `skills/a_short_analysis/SKILL.md`, and `schemas/deterministic_report_coverage.md`: update current contract / usage docs to v1.2.0 and explicit state replay semantics.
+7. [tracked] `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`: appends the v1.2.0 schema evolution note instead of creating a new handoff.
+8. [tracked] `docs/SESSION_LOG.md`: prepended this execution handoff for Claude review.
+
+**Key decisions**:
+- Chose the A-share as-of close timestamp as the default replay time because Phase 4 reports are as-of artifacts, not live wall-clock state probes.
+- Kept a CLI override (`--state-now`) for intentional replay at a different timestamp, but made the default deterministic and recorded the timestamp in report lineage.
+- Bumped the enrichment patch schema in the same slice because its `target.report_schema_version` must match the deterministic report contract.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.skill.test_run_analysis_report tests.analyzer.test_state_manager -v`: 21 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -v`: 302 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "import json; from jsonschema import Draft7Validator; files=['schemas/deterministic_report.schema.json','schemas/deterministic_report_enrichment.schema.json']; [Draft7Validator.check_schema(json.load(open(f, encoding='utf-8'))) for f in files]; print('schema ok')"`: `schema ok`.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=['AGENTS.md','docs/CURRENT.md','docs/system_risk_register.md','schemas/deterministic_report_coverage.md','skills/a_short_analysis/SKILL.md','runners/README.md']; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok')"`: `utf8 ok`.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF working-copy warnings.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; print(len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"`: 149.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- Reviewer should inspect tracked diffs; there are no untracked files in this slice.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-CANARY-001 advisory boundary)
 
 **Commits**: none (review-only entry; reviews working tree vs `4273b66`)

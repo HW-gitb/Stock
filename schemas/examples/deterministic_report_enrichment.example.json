@@ -1,10 +1,10 @@
 {
   "schema_name": "deterministic_report_enrichment",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "target": {
     "as_of": "20260522",
     "ts_code": "600415.SH",
-    "report_schema_version": "1.1.0"
+    "report_schema_version": "1.2.0"
   },
   "generated_at": "2026-05-25T00:00:00+08:00",
   "source": {

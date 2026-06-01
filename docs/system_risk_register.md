@@ -370,11 +370,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-DET-001 - Deterministic report depends on wall-clock state for circuit breaker status
 
 - Severity: P2
-- Status: open
+- Status: resolved
 - Owner phase: Phase 4 deterministic report / state replay
 - Evidence: `runners/run_analysis_report.py` calls `state_manager.is_circuit_breaker_active()` without an as-of replay time; state manager defaults to `datetime.now(timezone.utc)`.
 - Accepted calibration: schema validation is real for report output; the issue is replay determinism, not schema validity.
-- Required next action: allow report generation to pass a deterministic `now` / as-of timestamp when replaying historical reports, or document this as an explicit live-state limitation.
+- Required next action: no active `SR-DET-001` action. Future state-consuming report fields must record their replay/evaluation timestamp instead of relying on wall-clock state.
+- Closure evidence: `runners/run_analysis_report.py` now derives a deterministic state replay timestamp from the report `as_of` date (A-share close, `15:00 +08:00`) and passes it to `state_manager.is_circuit_breaker_active(...)`; callers may override with `--state-now <ISO timestamp>` for explicit replay. `deterministic_report` / enrichment contracts are bumped to v1.2.0 and `data_lineage.state_evaluation_time` records the exact timestamp used.
+- Verification: `tests.skill.test_run_analysis_report` covers default as-of replay activating a circuit breaker that wall-clock now would see as expired, explicit `state_now` override, v1.2.0 lineage output, enrichment target-version alignment, and schema-valid write.
 
 ### SR-OPS-001 - Audit #1 operational findings need line-level revalidation
 
