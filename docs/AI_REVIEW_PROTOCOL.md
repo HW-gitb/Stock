@@ -405,6 +405,15 @@ If the user types:
 
 Then Codex must not execute any Required fixes, but may still dispose of Optional suggestions during `修复`.
 
+#### Durable Approval Propagation
+
+When Claude receives `批准修改` or `暂缓修改`, Claude must first update the top `docs/SESSION_LOG.md` review entry before replying to the user. The update must keep the relevant review entry within the top 1-3 entries and must change the Required-fix status from `PENDING USER APPROVAL` to one of:
+
+- `USER-APPROVED <YYYY-MM-DD>` for approved Required fixes.
+- `USER-DEFERRED <YYYY-MM-DD>` for deferred Required fixes.
+
+If the user partially approves Required fixes, Claude must mark each approved / deferred Required fix explicitly in that same top review entry. This durable marker is the cross-LLM source of truth for later Codex `修复` rounds when the approval happened in a different chat session.
+
 ### User command to Codex: 修复
 
 Meaning:
@@ -423,6 +432,7 @@ Codex must automatically do all of the following:
 4. Read docs/system_risk_register.md.
 5. Read docs/SESSION_LOG.md top 1-3 entries.
 6. Identify which Required fixes are approved by the user.
+   Approval source is the latest relevant `docs/SESSION_LOG.md` review entry's `USER-APPROVED <YYYY-MM-DD>` marker. If a Required fix remains `PENDING USER APPROVAL` and the current Codex chat has no explicit `批准修改` from the user, Codex must not repair it.
 7. Repair only user-approved Required fixes.
 8. Do not repair unapproved Required fixes.
 9. For each Optional suggestion in the latest Claude review, decide one of:

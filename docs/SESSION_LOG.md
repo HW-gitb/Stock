@@ -8,6 +8,58 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (Durable Approval Propagation R1 re-review)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `b920861`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。R1 已修复，整个 Durable Approval Propagation 协议轮次可 `提交`。
+
+**Notes**: R1 repair re-review（增量极小）。(1) **R1 resolved**：Codex 已 prepend `Codex 修复 (R1 Durable Approval Propagation handoff entry)`——形态正确（`[tracked]` 标注 `AI_REVIEW_PROTOCOL.md` 两处改动 + `SESSION_LOG.md` prepend；validation = `git diff --check` exit 0 + `rg` 确认 `Durable Approval Propagation`/`USER-APPROVED`/`Approval source` 在位；current review state = uncommitted / ready）。(2) **协议内容未被本次 修复 改动**：`AI_REVIEW_PROTOCOL.md` 的 +10 与上轮我已 Pass 的版本**逐字一致**（§批准修改 `#### Durable Approval Propagation` + §修复 step 6 read-side addendum），修复只补了缺失的 SESSION_LOG handoff entry。(3) **我的 USER-APPROVED 标记完好**：上方 review entry 的 Status 行 + Required-fixes 标题均为 `USER-APPROVED 2026-06-01`。(4) **新规则端到端实战验收通过 ✅**：本轮就是该规则的首次实战——我先把 R1 在 SESSION_LOG 翻成 `USER-APPROVED 2026-06-01`，Codex `修复` 据此（而非截图）读到批准并补 entry，propagation 闭环成立、上次"批准没传到 Codex"的 bug 已闭。**Scope 干净**：仅 `AI_REVIEW_PROTOCOL.md`（内容不变）+ `SESSION_LOG.md`（加 entry），未碰 AGENTS 别名表 / 业务代码 / schema——符合"保持原设计"。无 §Optional Re-raise。**一条非阻塞观察**（非 Optional）：Codex 修复 entry 的 `Commits: b920861` 指 base/前序 commit（本轮仍 uncommitted，其 review-state 行已澄清），与本 session 一贯 double-duty 写法一致，非 blocker。**整个协议轮次现可一次性 `提交`**；提交后下一刀回 risk-register hot queue `SR-DATA-001` / `SR-OPS-003`。
+
+---
+
+## 2026-06-01 — Codex 修复 (R1 Durable Approval Propagation handoff entry)
+
+**Commits**: b920861
+
+**Relationship to prior session(s)**:
+- Repairs the user-approved R1 from the latest Claude review of the Durable Approval Propagation protocol change.
+- Supplies the missing Codex handoff entry for the protocol-rule execution slice.
+- No Optional suggestions were present in that review.
+
+**Approved Required fixes repaired**:
+- R1 repaired: this SESSION_LOG entry now records the protocol change scope, validation, and current review state for the uncommitted `docs/AI_REVIEW_PROTOCOL.md` change.
+
+**Worked on**:
+1. [tracked] `docs/AI_REVIEW_PROTOCOL.md`: added `§批准修改 / Durable Approval Propagation`, requiring Claude to write `USER-APPROVED <YYYY-MM-DD>` or `USER-DEFERRED <YYYY-MM-DD>` into the top review entry before replying to the user.
+2. [tracked] `docs/AI_REVIEW_PROTOCOL.md`: updated `§修复` step 6 so Codex treats the latest relevant SESSION_LOG `USER-APPROVED <YYYY-MM-DD>` marker as the durable approval source, while still refusing unresolved `PENDING USER APPROVAL` fixes absent explicit approval in the current Codex chat.
+3. [tracked] `docs/SESSION_LOG.md`: prepended this repair handoff entry.
+
+**Validation run/result**:
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `rg -n "Durable Approval Propagation|USER-APPROVED|USER-DEFERRED|Approval source" docs\AI_REVIEW_PROTOCOL.md`: confirmed the new approval-write and repair-read rules are present.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review. Reviewer should verify only R1: the missing Codex handoff entry now exists and the protocol-rule diff remains limited to `docs/AI_REVIEW_PROTOCOL.md`.
+
+---
+
+## 2026-06-01 — Claude review — Pass with fixes (Durable Approval Propagation protocol rule)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `b920861`)
+
+**Status**: REVIEW VERDICT RECORDED. Required fix R1 USER-APPROVED 2026-06-01; no Optional suggestions. （Approval recorded per new §批准修改 Durable Approval Propagation rule.）
+
+**Verdict**: Pass with fixes —— 协议规则内容**正确且与拟稿逐条一致**，但本轮 Codex **漏写 §执行 要求的 SESSION_LOG 执行 entry**（R1）。
+
+**Required fixes (USER-APPROVED 2026-06-01)**:
+- **R1**：本轮 working tree 仅 `docs/AI_REVIEW_PROTOCOL.md`（+10），`git diff --name-only` 中**无 `docs/SESSION_LOG.md`**——即 Codex 未 prepend 本轮执行 handoff entry。AI_REVIEW_PROTOCOL 改动是 always-reviewed / non-trivial（§Lightweight Track Exemption 明确把 AI_REVIEW_PROTOCOL.md 列为 hard exclusion），按 §执行 step 16 + §Standard Workflow step 7 必须有 SESSION_LOG entry（含 `[tracked]` 标签、validation run/result、current review state）作为对 Claude 的 handoff。修法：Codex prepend 一条本轮执行 entry，记录改了 §批准修改（新增 Durable Approval Propagation）+ §修复 step 6（read-side），validation = `git diff --check` exit 0，ready for review。（顺带一提：这一刀正是在加"批准必须落 SESSION_LOG"的传播纪律，自己却漏了 SESSION_LOG entry。）
+
+**Notes（内容部分 clean，已逐行核实）**：§批准修改 末尾新增 `#### Durable Approval Propagation` + §修复 step 6 read-side addendum，与上轮我拟的 spec 逐条一致：(1) Claude 收 `批准修改`/`暂缓修改` 必须**先**把顶部 review entry 的 `PENDING USER APPROVAL` 翻成 `USER-APPROVED <YYYY-MM-DD>` / `USER-DEFERRED <YYYY-MM-DD>`（保持 top 1-3）再回复用户，含 partial-approval 逐条标注；(2) §修复 批准来源 = SESSION_LOG `USER-APPROVED` 标记，仍 `PENDING` 且本 Codex 会话无显式 `批准修改` 则不得修（**保留现状正确行为**——这正是上次卡住的那个正确拒绝）。Owner 正确（只改 `AI_REVIEW_PROTOCOL.md`，未碰 AGENTS 别名表 → 无 detailed-expansion drift）；`####` 嵌套在 `### 批准修改` 下结构正确；与现有 §Review Recording 的 `PENDING USER APPROVAL` 标记 + §修复 step 6 自洽、补全 approval 生命周期（PENDING→APPROVED/DEFERRED）。**符合"保持原设计"**——这是设计内的 propagation 可靠性修补、非 redesign，人工审批 gate 完整保留。`git diff --check` exit 0（仅 CRLF warning）。**唯一问题是 R1（缺 SESSION_LOG handoff entry）**；内容 / scope / 格式均无 issue。R1 补完即可 `提交`，提交后下一刀回 hot queue `SR-DATA-001` / `SR-OPS-003`。
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-002 R1 re-review)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `ffc6e41`)
