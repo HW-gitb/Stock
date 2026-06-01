@@ -23,6 +23,22 @@ def _cache_payload(benchmarks: dict[str, pd.DataFrame]) -> dict:
     }
 
 
+def _tracker_row(as_of: str, ts_code: str) -> dict:
+    row = {col: pd.NA for col in forward_tracker.SCHEMA_COLUMNS}
+    row.update({
+        "as_of": as_of,
+        "captured_at": "2026-06-01T00:00:00+00:00",
+        "ts_code": ts_code,
+        "name": ts_code,
+        "tier": "Tier1",
+        "final_score": 60,
+        "ret_5d_status": "pending_capture",
+        "ret_10d_status": "pending_capture",
+        "ret_20d_status": "pending_capture",
+    })
+    return row
+
+
 class ForwardTrackerCacheGuardTests(unittest.TestCase):
     def _write_cache(self, path: Path, benchmarks: dict[str, pd.DataFrame]) -> None:
         with path.open("wb") as f:
@@ -73,6 +89,50 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
         self.assertIn("refresh_forward_daily_benchmark_open_tushare.py", hint)
         self.assertIn("CSI300/CSI1000 index_daily", hint)
         self.assertNotIn("--refresh-forward-daily", hint)
+
+    def test_write_tracker_uses_same_directory_temp_file_and_atomic_replace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            df = pd.DataFrame([
+                _tracker_row("20240202", "000002.SZ"),
+                _tracker_row("20240131", "000001.SZ"),
+            ])
+
+            with (
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker.os, "replace", wraps=forward_tracker.os.replace) as replace_spy,
+            ):
+                forward_tracker._write_tracker(df)
+
+            replace_spy.assert_called_once()
+            tmp_arg, target_arg = replace_spy.call_args.args
+            tmp_path = Path(tmp_arg)
+            self.assertEqual(Path(target_arg), tracker_path)
+            self.assertEqual(tmp_path.parent, tracker_path.parent)
+            self.assertTrue(tmp_path.name.startswith(f".{tracker_path.name}."))
+            self.assertTrue(tmp_path.name.endswith(".tmp"))
+            self.assertFalse(tmp_path.exists())
+
+            written = pd.read_csv(tracker_path, dtype={"as_of": str, "ts_code": str})
+            self.assertEqual(list(written.columns), forward_tracker.SCHEMA_COLUMNS)
+            self.assertEqual(written["as_of"].tolist(), ["20240131", "20240202"])
+            self.assertEqual(written["ts_code"].tolist(), ["000001.SZ", "000002.SZ"])
+
+    def test_write_tracker_preserves_existing_file_when_csv_write_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            tracker_path.write_text("original\n", encoding="utf-8")
+            df = pd.DataFrame([_tracker_row("20240131", "000001.SZ")])
+
+            with (
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(pd.DataFrame, "to_csv", side_effect=RuntimeError("boom")),
+            ):
+                with self.assertRaises(RuntimeError):
+                    forward_tracker._write_tracker(df)
+
+            self.assertEqual(tracker_path.read_text(encoding="utf-8"), "original\n")
+            self.assertEqual(list(tracker_path.parent.glob(f".{tracker_path.name}.*.tmp")), [])
 
 
 if __name__ == "__main__":

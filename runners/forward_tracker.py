@@ -36,7 +36,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -155,7 +157,23 @@ def _write_tracker(df: pd.DataFrame) -> None:
     TRACKER_CSV.parent.mkdir(parents=True, exist_ok=True)
     df = df[SCHEMA_COLUMNS].copy()
     df.sort_values(["as_of", "ts_code"], inplace=True, kind="mergesort")
-    df.to_csv(TRACKER_CSV, index=False, encoding="utf-8-sig")
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{TRACKER_CSV.name}.",
+        suffix=".tmp",
+        dir=str(TRACKER_CSV.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8-sig", newline="") as handle:
+            df.to_csv(handle, index=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, TRACKER_CSV)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 def capture(as_of: str) -> int:

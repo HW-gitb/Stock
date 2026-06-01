@@ -1,5 +1,40 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-01 append: SR-OPS-002 forward tracker atomic write
+
+**Changed**:
+- Updated `runners/forward_tracker.py:_write_tracker` so tracker persistence writes to a same-directory temp CSV, flushes and `fsync`s the handle, closes it, then atomically replaces `forward_tracker.csv` with `os.replace`.
+- Added focused tests in `tests/phase6/test_forward_tracker_cache_guard.py` for same-directory temp naming, atomic replace, sorted schema-column output, successful temp cleanup, and failure-path preservation of an existing tracker file.
+- Marked `SR-OPS-002` resolved in `docs/system_risk_register.md` and removed it from the hot queue; `SR-DATA-001` and `SR-OPS-003` remain open blockers before new weekly official capture / direct historical cohort regeneration.
+- Updated `docs/CURRENT.md` and `docs/SESSION_LOG.md` with the current routing.
+
+**Why**:
+- Direct CSV writes can leave a partial `forward_tracker.csv` if the process is interrupted during forward-evidence capture or backfill.
+- The fix is intentionally limited to the tracker writer. It does not change research results, EGS generation, provider access, cache refresh behavior, or any strategy threshold.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_forward_tracker_cache_guard -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v
+git diff --check
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; print(len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"
+```
+
+**Validation result**:
+- `tests.phase6.test_forward_tracker_cache_guard`: 5 tests passed.
+- `python -m unittest discover -s tests\phase6 -v`: 25 tests passed.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line count after R1 trim: 149 via Python `splitlines()`, below the 150-line snapshot target.
+
+**Invalidated / blocked old conclusion**:
+- "`SR-OPS-002` still blocks forward-tracker official use because writes are non-atomic" is invalid after this reviewed slice.
+- "The whole hot queue #1 is done" is still false: `SR-DATA-001` and `SR-OPS-003` remain open and must be handled before new weekly official capture / direct historical `egs_main.py` cohort regeneration.
+
+**Next-step notes**:
+- If this slice passes review and is committed, the default next `执行` returns to hot queue item #1: `SR-DATA-001` or `SR-OPS-003`, unless the user explicitly approves a narrower override.
+- Do not use this fix as authorization to run weekly capture, rerun EGS, fetch provider data, or open US provider access.
+
 ## 2026-06-01 append: US EGS data-source direction
 
 **Changed**:

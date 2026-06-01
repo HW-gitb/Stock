@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-DATA-001` + `SR-OPS-002` + `SR-OPS-003` - Fix before the next new weekly official capture, forward-tracker official use, or direct historical `egs_main.py` cohort regeneration.
+1. `SR-DATA-001` + `SR-OPS-003` - Fix before the next new weekly official capture or direct historical `egs_main.py` cohort regeneration.
 2. `SR-EXEC-003` + `SR-EXEC-004` + `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
 3. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
 4. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
@@ -151,11 +151,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-OPS-002 - Forward tracker writes are non-atomic
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: A-short forward evidence / Phase 6b maintenance
 - Evidence: `runners/forward_tracker.py:_write_tracker` sorts and writes the tracker with direct `to_csv(TRACKER_CSV, ...)`; an interruption can leave a partial file.
 - Accepted calibration: this is an operational integrity issue, not a strategy-alpha finding. It does not affect corrected 5d revalidation if that run does not consume or update the forward tracker.
-- Required next action: write to a temp file in the same directory, flush / close it, and atomically replace the tracker file. Add a test or focused review evidence for the write path.
+- Required next action: resolved for the forward-tracker write path. No further action is required for `SR-OPS-002` unless the tracker storage path or writer is redesigned.
+- Closure evidence: the reviewed change set updates `runners/forward_tracker.py:_write_tracker` to write `SCHEMA_COLUMNS` to a same-directory temp CSV, flush and `fsync` the handle, close it, then atomically replace `forward_tracker.csv` with `os.replace`; failures unlink the temp file and leave the existing tracker untouched.
+- Verification: `tests.phase6.test_forward_tracker_cache_guard` covers same-directory temp-file naming, one atomic replace call, sorted schema-column output, cleanup of the temp path after success, and preservation of the existing tracker when CSV serialization fails. `python -m unittest discover -s tests\phase6 -v` passed with 25 tests.
 
 ### SR-OPS-003 - Direct historical `egs_main.py --as-of` still defaults to live L3 concepts
 

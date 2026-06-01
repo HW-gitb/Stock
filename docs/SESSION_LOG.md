@@ -8,6 +8,100 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-OPS-002 R1 re-review)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `ffc6e41`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。R1 已修复，整个 SR-OPS-002 轮次可 `提交`。
+
+**Notes**: R1 repair re-review（增量极小）。独立核实：(1) `docs/CURRENT.md` 现 **149 行**（`splitlines()` 实测），回到 `<150` 目标；trim 无损——Latest Delta 把 2 条 corrected-basis bullet 合并为 1、最近已完成 用 SR-OPS-002 bullet 替换掉已进 handoff/git history 的历史项 `A-share burst measurement fix（2026-05-31）`。(2) false `112 lines / below` 假声明已改正——`grep "112 lines" docs/` 确认仅剩"修复 entry 描述修正"+"我上轮 review 引用"两处，无作为事实呈现的 112；handoff append 现写 `149 via splitlines(), below the 150-line snapshot target`，Codex 执行 entry 的 validation 行已 112→149（149<150 故"below"现为真）。(3) **修复 scope 干净**：`runners/forward_tracker.py` / `tests/phase6/test_forward_tracker_cache_guard.py` / `docs/system_risk_register.md` **未被本次 修复 改动**（diff 内容与上轮 Pass 逐字一致），SR-OPS-002 atomic-write 代码 + 5/25 phase6 测试 + register `open→resolved` closure 保持上轮已独立验证状态，无需重跑。Codex 修复 entry 形态正确（`Approved Required fixes repaired: R1`、无 Optional 故正确跳过 disposition section、Relationship 声明未碰 code/tests/register/provider/EGS/research/fetch）。无 §Optional Re-raise。**整个 SR-OPS-002 轮次（atomic-write 代码修复 + R1 文档修正）现可一次性 `提交`**。提交后下一刀回 risk-register hot queue `SR-DATA-001` 或 `SR-OPS-003`。
+
+---
+
+## 2026-06-01 — Codex 修复 (R1 CURRENT.md line-count correction)
+
+**Commits**: ffc6e41
+
+**Relationship to prior session(s)**:
+- Repairs the user-approved R1 from the latest Claude review.
+- No Optional suggestions were present in that review.
+- Does not change the `SR-OPS-002` code fix, tests, risk-register closure, provider boundary, EGS output, research artifacts, or data-fetch state.
+
+**Approved Required fixes repaired**:
+- R1 repaired: `docs/CURRENT.md` is trimmed below the `<150` snapshot target, and the false validation claim in the Codex execution entry / handoff append is corrected to the true post-trim count.
+
+**Worked on**:
+1. [tracked] `docs/CURRENT.md`: merged the corrected-basis preflight bullets and removed an older completed-item bullet already covered by handoff / SESSION_LOG history, reducing the snapshot to 149 lines by Python `splitlines()`.
+2. [tracked] `docs/SESSION_LOG.md`: corrected the prior Codex execution validation line from the false `112 lines` claim to the post-trim `149 lines` count and prepended this repair entry.
+3. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: changed the validation command to Python `splitlines()` and recorded the post-trim `149` line count.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; print(len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"`: reports `149`.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_forward_tracker_cache_guard -v`: passed, 5 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude re-review. Reviewer should verify R1 only: `CURRENT.md` is now 149 lines and the false validation claim is corrected.
+
+---
+
+## 2026-06-01 — Claude review — Pass with fixes (SR-OPS-002 forward tracker atomic write)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `ffc6e41`)
+
+**Status**: REVIEW VERDICT RECORDED. Required fix R1 PENDING USER APPROVAL; no Optional suggestions.
+
+**Verdict**: Pass with fixes —— 代码修复**正确且已独立验证**，但有 1 个文档准确性 Required fix（CURRENT.md 行数 + false validation claim）。
+
+**Required fixes (PENDING USER APPROVAL)**:
+- **R1**：`docs/CURRENT.md` 实测 **151 行**（我用 `splitlines()` 独立计数），超出文档化的 `<150` snapshot 目标；而本轮 SESSION_LOG（本 Codex 执行 entry）与 handoff append 的 validation **两处**都写 `docs/CURRENT.md ... 112 lines, below the 150-line snapshot target`——**数字（112）与结论（below）均错**（实际 151 / 已超）。修法（按 CURRENT.md §维护规则"超出说明应移到 owner doc / handoff / SESSION_LOG"）：把 CURRENT.md 一条 Latest Delta 或较旧的"最近已完成"项移到 handoff/SESSION_LOG，trim 回 `<150`，并把 SESSION_LOG + handoff 的 validation 行数改成 trim 后的真实值。
+
+**Notes（代码部分 clean，已独立验证）**：`runners/forward_tracker.py:_write_tracker` 的 atomic-write 模式**正确完整**——同目录 `tempfile.mkstemp` → `os.fdopen(..., newline="")` → `df.to_csv(handle)` → `flush()` + `os.fsync(fileno())` → `os.replace(tmp, TRACKER_CSV)`；`except` 里 `os.unlink(tmp)` + `raise`。同目录保证 `os.replace` 跨 FS 安全、fsync 保证落盘、`newline=""` 防 Windows 双换行、失败保留原文件——教科书写法，精确匹配 SR-OPS-002 required-action（且比 benchmark patch 的 atomic_write_pickle 多了 fsync，更稳）。test +60 锁**成功路径**（同目录 temp 命名 `.{name}.*.tmp` / 单次 `os.replace` / `SCHEMA_COLUMNS` 排序 / temp 清理）+ **失败路径**（`to_csv` raise 时原文件 `original\n` 保留、无残留 `.tmp`）——正是 SR-OPS-002 的核心属性。独立跑 `tests.phase6.test_forward_tracker_cache_guard` 5 OK + `tests/phase6` discovery 25 OK；`forward_tracker.os` 已绑定（test 需 patch `forward_tracker.os.replace`）。register `SR-OPS-002` open→resolved + closure/verification 准确；Hot Queue #1 正确移除 SR-OPS-002（留 `SR-DATA-001`+`SR-OPS-003`）。scope 严格——只修 SR-OPS-002，明确未碰 SR-DATA-001/OPS-003、未跑 EGS/research/fetch/weekly capture。**唯一问题是 R1（CURRENT.md 行数 + false validation claim）**；代码、测试、register、scope 全部无 issue。R1 修完即可 `提交`。下一刀仍是 hot queue `SR-DATA-001` 或 `SR-OPS-003`。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-OPS-002 forward tracker atomic write)
+
+**Commits**: ffc6e41
+
+**Relationship to prior session(s)**:
+- Builds on the committed US EGS data-source documentation and the current risk-register hot queue.
+- Executes only `SR-OPS-002`; `SR-DATA-001` and `SR-OPS-003` remain open.
+- Does not run EGS, run research, fetch provider data, contact providers, change US data-source access, or commit.
+
+**Worked on**:
+1. [tracked] `runners/forward_tracker.py`: changed `_write_tracker` from direct CSV overwrite to same-directory temp CSV write, flush/fsync, close, and atomic `os.replace`.
+2. [tracked] `tests/phase6/test_forward_tracker_cache_guard.py`: added tests for atomic replace behavior and failure-path preservation of the existing tracker file.
+3. [tracked] `docs/system_risk_register.md`: marked `SR-OPS-002` resolved and removed it from hot queue item #1.
+4. [tracked] `docs/CURRENT.md`: updated the current snapshot so the default hot queue is now `SR-DATA-001` + `SR-OPS-003`.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: prepended the handoff append for this maintenance slice.
+6. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Used a temp file in the same directory as `forward_tracker.csv` so `os.replace` stays on the same filesystem boundary.
+- Kept the writer's existing schema-column ordering and stable sort behavior.
+- Treated the fix as operational integrity only; it does not change any alpha conclusion, research artifact, cache policy, or provider boundary.
+
+**Alternatives considered and rejected**:
+- "Leave direct `to_csv(TRACKER_CSV)` and rely on rerunning the tracker if interrupted" — rejected because the risk register specifically requires avoiding partial target files.
+- "Add a backup / restore sidecar instead of atomic replace" — rejected because same-directory temp + replace is simpler and gives the target-file integrity property directly.
+- "Fold `SR-DATA-001` / `SR-OPS-003` into the same execution" — rejected to keep this reviewed slice narrow and auditable.
+- "Run weekly capture / tracker backfill to prove the path" — rejected because this task is a writer integrity fix and the user has not authorized new data or official capture.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_forward_tracker_cache_guard -v`: passed, 5 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\phase6 -v`: passed, 25 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line-count check after R1 trim via Python `splitlines()`: 149 lines, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- If review passes and the user commits, the next default `执行` remains the risk-register hot queue: `SR-DATA-001` or `SR-OPS-003`, unless the user explicitly approves a narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (US EGS data-source direction documentation)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `f4f1f04`)
