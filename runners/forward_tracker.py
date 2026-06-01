@@ -47,7 +47,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from runners.backtest_rank import attach_forward_returns, fetch_forward_daily, FORWARD_DAILY_CACHE
+from runners.backtest_rank import (
+    BENCHMARKS,
+    FORWARD_DAILY_CACHE,
+    _benchmark_frame_has_same_anchor_fields,
+    attach_forward_returns,
+    fetch_forward_daily,
+)
 
 TRACKER_CSV = ROOT / "logs" / "forward_tracker.csv"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
@@ -314,7 +320,7 @@ def backfill(windows: list[int]) -> int:
 def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str]:
     """Verify the shared backtest forward_daily cache covers tracker as_ofs.
 
-    Returns (ok, message). Reads the pickle metadata only, no fetch.
+    Returns (ok, message). Reads the pickle cache only, no fetch.
     """
     if not FORWARD_DAILY_CACHE.exists():
         return False, f"forward_daily cache not found at {FORWARD_DAILY_CACHE.relative_to(ROOT)}"
@@ -327,6 +333,22 @@ def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str
     meta = cached.get("meta", {})
     cache_start = str(meta.get("start_date", ""))
     cache_end = str(meta.get("end_date", ""))
+    benches = cached.get("benchmarks")
+    if not isinstance(benches, dict):
+        return False, "forward_daily cache missing benchmark frames with trade_date/open/close fields"
+    missing_benches = sorted(set(BENCHMARKS) - set(benches))
+    close_only_benches = sorted(
+        name
+        for name in BENCHMARKS
+        if name in benches and not _benchmark_frame_has_same_anchor_fields(benches.get(name))
+    )
+    if missing_benches or close_only_benches:
+        problems = []
+        if missing_benches:
+            problems.append(f"missing benchmarks: {', '.join(missing_benches)}")
+        if close_only_benches:
+            problems.append(f"missing same-anchor trade_date/open/close fields: {', '.join(close_only_benches)}")
+        return False, "forward_daily cache benchmark input is not same-anchor ready (" + "; ".join(problems) + ")"
     asof_min = min(as_ofs)
     # We need cache to extend to at least asof_max + max_window calendar days.
     asof_max = max(as_ofs)

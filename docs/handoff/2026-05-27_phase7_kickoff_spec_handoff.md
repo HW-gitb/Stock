@@ -1,5 +1,33 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-01 append: SR-DATA-003 forward-tracker cache guard
+
+**Changed**:
+- Updated `runners/forward_tracker.py:_check_cache_coverage` to inspect cached CSI1000 / CSI300 benchmark frames before backfill and reject caches that lack same-anchor `trade_date/open/close` fields.
+- Added `tests/phase6/test_forward_tracker_cache_guard.py` to lock both close-only benchmark cache rejection and same-anchor benchmark cache acceptance.
+- Updated `docs/CURRENT.md` and `docs/system_risk_register.md` so `SR-DATA-003` remains open for benchmark-open outcome input while recording that the tracker refetch guard is handled.
+
+**Why**:
+- The tracker is a sidebar and must not trigger a universe-wide Tushare refetch through `fetch_forward_daily(..., refresh=False)` when the shared cache has close-only benchmark frames.
+- This is not the redesigned burst outcome / excess slice. It only prevents official `forward_tracker.py backfill` from silently bypassing the `[SKIP]` / remediation-hint path.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_forward_tracker_cache_guard -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_backtest_rank_phase3 -v
+```
+
+**Validation result**:
+- `tests.phase6.test_forward_tracker_cache_guard`: 2 tests passed.
+- `tests.test_backtest_rank_phase3`: 4 tests passed.
+
+**Invalidated / blocked old conclusion**:
+- "Tracker cache coverage only needs date metadata" is invalid. It must also verify same-anchor benchmark `trade_date/open/close` fields.
+- This does not resolve the remaining `SR-DATA-003` outcome precondition: a reviewed benchmark-open input slice is still required before any redesigned A-share burst return / excess calculation.
+
+---
+
 ## 2026-05-31 append: A-share burst full-universe preflight pass
 
 **Changed**:

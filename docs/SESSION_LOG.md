@@ -8,6 +8,52 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-DATA-003 forward-tracker cache guard)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8a44297`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。
+
+**Notes**: 本 session 首个**业务代码**轮次（`runners/forward_tracker.py` +26 / 新 untracked test），修 `SR-DATA-003` 第 2 部分（forward-tracker close-only cache guard）。**逐行核实修复正确且完整**：(1) `_check_cache_coverage` 新增在日期检查前先验 benchmark 帧——`benches` 非 dict / 缺 benchmark / close-only（过不了 `_benchmark_frame_has_same_anchor_fields`）→ 返 `(False, 详细消息)`；(2) call site（forward_tracker.py:264-273）确认 `not coverage_ok` → `[SKIP]`+`[HINT]`+`return 0`，**早返回、不触达 `fetch_forward_daily`**，杜绝 universe-wide refetch——这正是 SR-DATA-003 第 2 部分要的行为，且复用既有 `[SKIP]/[HINT]` 机制；(3) linchpin `_benchmark_frame_has_same_anchor_fields`=`isinstance(frame, pd.DataFrame) and {"trade_date","open","close"}.issubset(...)` 健壮（None/非 DataFrame → False 不抛、close-only → False），我担心的 None-valued 帧边界已被 `isinstance` 守住；(4) 复用 backtest_rank 的 `BENCHMARKS` + 同锚校验函数（不重复造逻辑、无 drift 风险），未改 backtest_rank cache-fetch 语义。**独立跑测试**：新 guard test 2 OK（close-only reject + same-anchor accept，tempfile+patch 隔离）、`tests/phase6` discovery 19 OK（比 Codex 多跑——确认 import 改动未波及其他 phase6 测试）、`backtest_rank_phase3` 4 OK；CURRENT.md 149（2 处 1:1 行替换、净零）。**治理**：`SR-DATA-003` 正确保持 `open`（只修了 tracker-guard 子路径，benchmark-open input for outcome 仍 pending），Hot Queue #1 / SR-DATA-003 entry / CURRENT / handoff 均一致记录"tracker guard 已处理、benchmark-open 仍待"，Codex 明确 reject "mark SR-DATA-003 resolved"——正确。**Scope**：仅 forward_tracker.py + test + 治理文档，未跑 outcome/excess、未 fetch、未 rerun EGS、未改 backtest_rank 语义。SESSION_LOG entry `[tracked]/[untracked]` 标签 + validation + review state 齐全，`Commits: 8a44297` 仍 double-duty。**一条非阻塞观察（非 Optional）**：新 test 覆盖 all-close-only / all-same-anchor 两条核心 SR-DATA-003 场景，未覆盖 benches 缺 key / 非 dict 的防御分支——这些分支我已读过、正确，且属 belt-and-suspenders（非 SR-DATA-003 核心场景），若日后扩展该 guard 建议补一条 missing-benchmark reject test。**下一刀**：SR-DATA-003 剩余部分——单独 reviewed benchmark-open input slice（只刷必要 CSI1000/CSI300 `index_daily` open/close lineage，不 silent 触发 full forward-daily refetch），之后 redesign 的 outcome/excess 仍需单独 review。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-DATA-003 forward-tracker cache guard)
+
+**Commits**: 8a44297ec49b7e1dc586e97bd12d6e9f2f8f8eda
+
+**Relationship to prior session(s)**:
+- Builds on the reviewed / committed A-share burst full-universe preflight pass.
+- **Refines** `SR-DATA-003`: this slice fixes the forward-tracker cache-guard subpath only. The benchmark-open input for redesigned burst outcome / excess remains open and still needs a separate reviewed slice.
+
+**Worked on**:
+1. [tracked] `runners/forward_tracker.py`: `_check_cache_coverage` now rejects shared `forward_daily.pkl` caches whose CSI1000 / CSI300 benchmark frames lack same-anchor `trade_date/open/close` fields before `fetch_forward_daily(..., refresh=False)` can refetch.
+2. [untracked] `tests/phase6/test_forward_tracker_cache_guard.py`: added regression tests for close-only benchmark cache rejection and same-anchor benchmark cache acceptance.
+3. [tracked] `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: recorded that the tracker guard portion is handled while `SR-DATA-003` remains open for benchmark-open outcome input.
+4. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Did not run outcome / excess, did not refresh or fetch provider data, did not run `A-EGS`, and did not change `backtest_rank.py` cache-fetch semantics.
+- Reused `runners.backtest_rank.BENCHMARKS` and `_benchmark_frame_has_same_anchor_fields` so tracker acceptance matches the shared forward-daily cache contract.
+- Kept `SR-DATA-003` open because redesigned burst outcome calculation still needs a reviewed benchmark-open input slice.
+
+**Alternatives considered and rejected**:
+- "Let `fetch_forward_daily(refresh=False)` reject the cache and refetch" — rejected because tracker backfill must not silently trigger a universe-wide provider refetch.
+- "Fetch only benchmark open now" — rejected because this `执行` was the tracker guard slice; benchmark-open input for outcome requires its own reviewed slice.
+- "Mark `SR-DATA-003` resolved" — rejected because only one subpath is fixed; return / excess input is still blocked.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.phase6.test_forward_tracker_cache_guard -v`: passed, 2 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_backtest_rank_phase3 -v`: passed, 4 tests.
+- `git diff --check`: passed; only Git LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` length check via `ReadAllLines`: 149 lines.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review. Reviewer should inspect the untracked test file body in addition to tracked diffs.
+
+---
+
 ## 2026-05-31 — Claude review — Pass (clean) (A-share burst full-universe preflight pass)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `81854fb`)
