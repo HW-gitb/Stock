@@ -18,11 +18,13 @@ class ExecutionAggregateReportSchemaTest(unittest.TestCase):
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
         Draft7Validator.check_schema(schema)
+        self.assertIn("/1.1.1/", schema["$id"])
         self.assertEqual(schema["properties"]["schema_name"]["const"], "execution_aggregate_report")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.1")
         self.assertIn("multi-period aggregation", schema["description"])
         self.assertIn("reviewed forward-live evidence", schema["description"])
         self.assertIn("zero-trade", schema["description"])
+        self.assertIn("excludes zero-trade", schema["description"])
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(
             schema["required"],

@@ -1,5 +1,46 @@
 # Phase 5 kickoff spec handoff
 
+## 2026-06-01 addendum: SR-EXEC-005 zero-trade aggregate return guard
+
+### What changed
+
+- `runners/aggregate_execution_reports.py` no longer imputes `0.0` return when an input execution report has `trade_count = 0` and `metrics.total_return = null`.
+- Aggregate return statistics now consume only explicit numeric `total_return` observations; zero-trade / null-return reports remain visible in input refs and `month_count`, but do not enter `monthly_return_series`, `monthly_return_count`, total-return mean, alpha t-stat, or Sharpe.
+- `schemas/execution_aggregate_report.schema.json` is bumped to v1.1.1 and documents the corrected zero-trade semantics.
+- `tests/execution/test_aggregate_execution_reports.py` reverses the old zero-trade-as-0.0 invariant.
+- `docs/system_risk_register.md` closes `SR-EXEC-005` and removes it from the Hot Queue.
+
+### Why
+
+`SR-EXEC-005` showed that a no-trade month with no explicit return was being treated as a flat 0.0% observation. That can inflate sample count and compress variance in monthly return, alpha t-stat, and Sharpe calculations. The corrected behavior is to treat no-trade / no-return as missing evidence unless a future reviewed cash-return rule emits a numeric return.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v
+git diff --check
+```
+
+### Validation result
+
+- `tests.execution.test_aggregate_execution_reports`: 9 tests passed.
+- `tests.schema.test_execution_aggregate_report_schema`: 3 tests passed.
+- `tests.execution.test_backtest_execution`: 20 tests passed.
+- `git diff --check`: passed; only expected Windows LF-to-CRLF working-copy warnings.
+
+### Invalidated old conclusions
+
+- `execution_aggregate_report` v1.1.0 zero-trade semantics are stale for newly emitted aggregate reports; current output is v1.1.1.
+- The old 202605 real 3-report aggregate interpretation that counted the zero-trade 20260521 report as 0.0 return is no longer a valid aggregation rule.
+
+### Next notes
+
+1. This slice intentionally does not fix `SR-EXEC-007`, `SR-CAP-001`, or `SR-CONTRACT-002`.
+2. A future explicit cash-return model may count zero-trade observations only after a reviewed rule and regression tests.
+3. Aggregate reports still do not rebuild a continuous multi-position portfolio equity curve.
+
 ## 2026-06-01 addendum: SR-EXEC-004 risk-control assumption guard
 
 ### What changed

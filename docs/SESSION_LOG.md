@@ -8,6 +8,60 @@
 
 ---
 
+## 2026-06-01 — Claude review — Pass (clean) (SR-EXEC-005 zero-trade aggregate return guard)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `398e58b`)
+
+**Verdict**: Pass（干净，无 Required / 无 Optional / 无 open question）。本轮可 `提交`。hot queue #1 余 `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002`。
+
+**Notes**: SR-EXEC-005（零交易/null-return 月被当 0% 进 return/t-stat/Sharpe）的 register 批准窄修。已审 `runners/aggregate_execution_reports.py` + schema。**逻辑正确**：`report_total_return_for_aggregation` 删除 `trade_count==0 → return 0.0` 的 fallback，改为返 `None`（missing/not-evaluable）。**downstream None-过滤逐点确认（本轮特意看深）**：`monthly_return_series` 跳过 None → 该月不进 series；`total_returns`（generator）过滤 None 算 mean；`monthly_returns`（源自已过滤 series）→ t-stat/Sharpe 不含 None。test 精确反转旧 invariant：`monthly_return_count 2→1`、series 去掉 `202606/0.0` 项、`total_return_mean 0.015→0.03`，且 **`month_count` 仍 2**（输入月份可见性保留、只改 return-观测计数）——会捕捉回归到 0.0 imputation。**schema**：patch-bump 1.1.0→1.1.1（`$id` + `schema_version` const + description；**字段 shape 不变**），runner `AGGREGATE_SCHEMA_VERSION=1.1.1` 与之同步；属 bug-fix 语义更正、SemVer patch 合理。**独立验证**：execution+aggregate+schema **32 OK**（9+3+20，无回归）；CURRENT 149。**治理**：register SR-EXEC-005 open→resolved（closure+verification 准确）、Hot Queue 移出、SR-CONTRACT-002 evidence 引用 v1.1.0→v1.1.x 同步、scope 仅 SR-EXEC-005。**Optional 口径透明**（回应"是否审得够狠"）：我考虑过把"加一个 aggregate 级 no-trade-excluded 计数字段"提成 Optional，但**不提**——(a) Codex 已在 rejected-alternatives 里推理过并按"不超出 registered fix、不无谓加宽 schema"合理 deferred；(b) 该信息可由 `month_count - monthly_return_count` + 每报告 `trade_count`/`total_return=null` input refs 完全恢复；强提会变成在 advisory 项上二次猜设计（§Optional Re-raise 精神）。故记为 note，非 fix。**本轮可一次性 `提交`**；下一刀进 SR-EXEC-007（并发资金重用）/ SR-CAP-001（capital ceiling 未校验）/ SR-CONTRACT-002（forward-live evidence 无 schema）。
+
+---
+
+## 2026-06-01 — Codex 执行 (SR-EXEC-005 zero-trade aggregate return guard)
+
+**Commits**: 398e58b
+
+**Relationship to prior session(s)**:
+- Builds on the committed `SR-EXEC-004` risk-control assumption guard and the current risk-register hot queue.
+- Executes only `SR-EXEC-005`; `SR-EXEC-007`, `SR-CAP-001`, and `SR-CONTRACT-002` remain open.
+- Does not run EGS, regenerate cohorts, run research, fetch provider data, contact providers, change US data-source access, or commit.
+
+**Worked on**:
+1. [tracked] `runners/aggregate_execution_reports.py`: removed the zero-trade / null-return fallback to `0.0`, so aggregate return statistics consume only explicit numeric `total_return` observations; emitted aggregate schema version is now `1.1.1`.
+2. [tracked] `schemas/execution_aggregate_report.schema.json`: bumped to v1.1.1 and documented that zero-trade reports with null `total_return` are excluded from monthly return / t-stat / Sharpe statistics unless a future reviewed rule emits an explicit cash return.
+3. [tracked] `tests/execution/test_aggregate_execution_reports.py`: reversed the old zero-trade-as-0.0 invariant; `month_count` still sees the input month, but `monthly_return_series`, `monthly_return_count`, and `total_return_mean` exclude the null-return no-trade report.
+4. [tracked] `tests/schema/test_execution_aggregate_report_schema.py`: validates the v1.1.1 const / `$id` and the zero-trade exclusion description.
+5. [tracked] `runners/README.md`: updated the aggregate helper summary to the v1.1.1 return-statistics semantics.
+6. [tracked] `docs/system_risk_register.md`: marked `SR-EXEC-005` resolved and removed it from Hot Queue item #1.
+7. [tracked] `docs/CURRENT.md`: updated the active P0/P1 routing to `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` and kept the snapshot at 149 lines.
+8. [tracked] `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`: prepended the Phase 5 handoff addendum for this aggregate evidence guard.
+9. [tracked] `docs/SESSION_LOG.md`: prepended this handoff entry.
+
+**Key decisions**:
+- Treated no-trade / no-return as missing evidence, not cash return, because no reviewed cash-return model currently exists.
+- Bumped `execution_aggregate_report` to v1.1.1 as a patch-level semantic correction while leaving the field shape unchanged.
+- Preserved input `month_count` so reviewers can still see covered report months; only return-statistics observation counts changed.
+
+**Alternatives considered and rejected**:
+- "Keep imputing zero for no-trade months" — rejected because it inflates sample count and compresses variance in return, t-stat, and Sharpe calculations.
+- "Add a new aggregate diagnostic field for no-trade count" — rejected for this slice because input refs already preserve per-report `trade_count` and `total_return = null`; adding fields would widen the schema beyond the registered fix.
+- "Implement a cash-return model now" — rejected because that requires a separate reviewed rule for cash drag / idle-cash return semantics.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports -v`: passed, 9 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_execution_aggregate_report_schema -v`: passed, 3 tests.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_backtest_execution -v`: passed, 20 tests.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line-count check via Python `splitlines()`: 149 lines, below the 150-line snapshot target.
+
+**Current review state**:
+- Working tree uncommitted.
+- Ready for Claude review.
+- If review passes and the user commits, the next default `执行` is the remaining risk-register execution-evidence group (`SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002`), unless the user explicitly approves a narrower override.
+
+---
+
 ## 2026-06-01 — Claude review — Pass (clean) (SR-EXEC-004 risk-control assumption guard)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `054e1cf`)

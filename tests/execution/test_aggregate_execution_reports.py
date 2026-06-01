@@ -104,7 +104,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(report["schema_name"], "execution_aggregate_report")
-        self.assertEqual(report["schema_version"], "1.1.0")
+        self.assertEqual(report["schema_version"], "1.1.1")
         self.assertEqual(report["metrics"]["report_count"], 2)
         self.assertEqual(report["metrics"]["month_count"], 2)
         self.assertEqual(report["metrics"]["trade_count_total"], 2)
@@ -120,7 +120,9 @@ class AggregateExecutionReportsTest(unittest.TestCase):
         self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
         self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
 
-    def test_zero_trade_report_counts_as_zero_return_in_monthly_series(self) -> None:
+    def test_zero_trade_report_without_return_is_excluded_from_monthly_series(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             work_dir = Path(tmpdir)
             report_a = self.write_execution_report(work_dir, "20260522", 0.03, -0.05)
@@ -147,15 +149,15 @@ class AggregateExecutionReportsTest(unittest.TestCase):
             self.assertEqual(rc, 0)
             report = json.loads(out_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(report["metrics"]["monthly_return_count"], 2)
+        self.assertEqual(report["metrics"]["month_count"], 2)
+        self.assertEqual(report["metrics"]["monthly_return_count"], 1)
         self.assertEqual(
             report["metrics"]["monthly_return_series"],
             [
                 {"month": "202605", "report_count": 1, "total_return_mean": 0.03},
-                {"month": "202606", "report_count": 1, "total_return_mean": 0.0},
             ],
         )
-        self.assertEqual(report["metrics"]["total_return_mean"], 0.015)
+        self.assertEqual(report["metrics"]["total_return_mean"], 0.03)
 
     def test_single_report_aggregate_returns_null_sharpe(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

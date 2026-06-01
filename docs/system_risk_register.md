@@ -35,7 +35,7 @@ Status:
 
 Current routing note: the corrected-basis A-share burst preregistration failed a frozen-cohort preflight with `valid_signal_events = 0`; do not run outcome / benchmark-excess for that artifact. The ledger-gated full-universe redesigned test used the patched benchmark-open cache, then failed its registered outcome thresholds with `decision = falsified_or_redesign_required`. Owner audit/spec now mark `a_share_burst_minimal_data` as `redesign_required`. No further redesigned A-share burst test is authorized without a new ledger planned test, user approval, and reviewed preregistration. For US EGS data, the user-approved direction is FMP primary candidate + SEC EDGAR fundamentals audit; actual access / fetch remains blocked by `SR-PROVIDER-001`.
 
-1. `SR-EXEC-005` + `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
+1. `SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002` - Fix before execution-backtest evidence, ship-gate-like evidence, or manual sizing conclusions are used.
 2. `SR-SEC-001` - Remove or narrow broad local Claude Bash allow rules before relying on Claude-side automation.
 3. `SR-PIT-001` + `SR-CONTRACT-001` - Strengthen `analysis_input` PIT contract and make producer / consumer schema validation real.
 4. `SR-DATA-002` + `SR-OPS-004` + `SR-OPS-005` + `SR-RANK-001` + `SR-OPS-006` - Maintenance queue before affected subsystem promotion.
@@ -95,7 +95,7 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 - Severity: P2
 - Status: open
 - Owner phase: Phase 6 forward evidence / Phase 5 aggregate ship-gate contract
-- Evidence: `runners/aggregate_execution_reports.py` v1.1.0 correctly requires `--forward-live-evidence-ref` before `full_size_allowed` can become true, but the referenced forward-live evidence artifact is currently validated only inline for `review_status == "reviewed"` and non-negative integer `forward_live_months`. No `schemas/forward_live_evidence.schema.json` contract yet defines provenance fields such as reviewer, source window, tracker artifact ref, captured-month basis, or review lineage.
+- Evidence: `runners/aggregate_execution_reports.py` v1.1.x correctly requires `--forward-live-evidence-ref` before `full_size_allowed` can become true, but the referenced forward-live evidence artifact is currently validated only inline for `review_status == "reviewed"` and non-negative integer `forward_live_months`. No `schemas/forward_live_evidence.schema.json` contract yet defines provenance fields such as reviewer, source window, tracker artifact ref, captured-month basis, or review lineage.
 - Accepted calibration: this is not an active blocker because no 12-month forward-live artifact exists yet and SR-EXEC-006's inline validation closes the current smoke / bare-CLI gate bug. It becomes material before any real Phase 6 forward-live evidence artifact is produced or used for aggregate full-size permission.
 - Required next action: before the first reviewed forward-live evidence artifact is produced or consumed for ship-gate-like aggregation, add a schema-first contract covering `review_status`, `forward_live_months`, provenance / reviewer / source-window / tracker refs, and validation tests; then update `aggregate_execution_reports.py` to validate the evidence artifact against that schema.
 
@@ -205,11 +205,13 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 ### SR-EXEC-005 - Zero-trade execution reports are aggregated as 0.0% monthly returns
 
 - Severity: P1
-- Status: open
+- Status: resolved
 - Owner phase: Phase 5 execution aggregation / ship-gate readiness
 - Evidence: `runners/aggregate_execution_reports.py:report_total_return_for_aggregation` returns `0.0` for zero-trade reports when total return is absent, causing those months to enter monthly return, t-stat, and Sharpe calculations as flat observations.
 - Accepted calibration: this does not currently pass the full ship gate because other metrics remain missing / not-evaluable; it can still inflate sample count or compress variance when execution evidence is later summarized.
-- Required next action: treat zero-trade no-return reports as missing / not-evaluable for return statistics, or explicitly model cash return with a documented rule and separate no-trade diagnostics.
+- Closure evidence: the reviewed change set updates `runners/aggregate_execution_reports.py:report_total_return_for_aggregation` so zero-trade reports with null `metrics.total_return` remain missing / not evaluable for return statistics instead of being imputed as `0.0`. The monthly series, `monthly_return_count`, total-return mean, alpha t-stat, and Sharpe now consume only reports with an explicit numeric `total_return`. The aggregate report contract is bumped to `execution_aggregate_report` v1.1.1 and states the corrected zero-trade semantics.
+- Verification: `tests.execution.test_aggregate_execution_reports` reverses the old zero-trade invariant: an input month with `trade_count = 0` and null `total_return` remains in input `month_count` but is excluded from `monthly_return_series` / `monthly_return_count` / `total_return_mean`. `tests.schema.test_execution_aggregate_report_schema` validates v1.1.1 and its zero-trade exclusion description.
+- Required next action: no active `SR-EXEC-005` action. If a future reviewed cash-return model emits an explicit numeric return for zero-trade reports, add tests before allowing those observations into return statistics.
 
 ### SR-EXEC-006 - Execution aggregate can turn smoke / unbound forward-month inputs into full-size permission
 

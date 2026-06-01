@@ -26,7 +26,7 @@ DEFAULT_OUT_PATH = (
     ROOT / "result" / "a_short" / "backtest" / "execution" / "execution_aggregate_report.json"
 )
 SHIP_GATE_FAILURE_MODE = "paper_or_minimal_size_or_risk_filter_only"
-AGGREGATE_SCHEMA_VERSION = "1.1.0"
+AGGREGATE_SCHEMA_VERSION = "1.1.1"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -102,8 +102,6 @@ def report_total_return_for_aggregation(report: dict[str, Any]) -> float | None:
     value = numeric_or_none(metrics.get("total_return"))
     if value is not None:
         return value
-    if int(metrics.get("trade_count") or 0) == 0:
-        return 0.0
     return None
 
 
@@ -488,8 +486,8 @@ def build_aggregate_report(
         ),
         "limitations": [
             "This report aggregates execution-report metrics; it does not rebuild a continuous multi-position portfolio equity curve.",
-            "When multiple reports land in the same month, the monthly series uses the mean of report-level total_return values.",
-            "Input reports with zero executed trades and null total_return are counted as 0.0 return in the monthly aggregation.",
+            "When multiple reports land in the same month, the monthly series uses the mean of evaluable report-level total_return values.",
+            "Input reports with zero executed trades and null total_return are excluded from return, t-stat, and Sharpe statistics unless a future reviewed rule emits an explicit numeric cash return.",
             "All generated gate decisions are analysis/screening evidence only; manual-order-only boundary remains in force.",
         ],
     }

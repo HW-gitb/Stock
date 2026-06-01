@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（SR-EXEC-004 risk-control assumption guard）
+**最后更新**：2026-06-01（SR-EXEC-005 zero-trade aggregate return guard）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,14 +12,14 @@
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
 - Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
-- `SR-EXEC-004` is resolved in this execution slice: execution reports no longer claim portfolio circuit breaker or cooldown controls are enabled when the simulator does not enforce them.
+- `SR-EXEC-005` is resolved in this execution slice: zero-trade execution reports with null `total_return` no longer enter aggregate monthly return / t-stat / Sharpe statistics as 0.0% observations; new aggregate output schema is `1.1.1`.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 7b-2 P1 closure plan is documented; US EGS data-source direction is FMP primary candidate + SEC EDGAR fundamentals audit; A-share minimal-data burst full-universe redesigned outcome is complete and failed.
-- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；默认下一刀回到 risk register hot queue（`SR-EXEC-005/007` + `SR-CAP-001` + `SR-CONTRACT-002`）before execution-backtest evidence / manual sizing conclusions，除非用户先批准新的 research preregistration 或更窄 override。
+- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；默认下一刀回到 risk register hot queue（`SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002`）before execution-backtest evidence / manual sizing conclusions，除非用户先批准新的 research preregistration 或更窄 override。
 - **当前 P1 provider blocker**：任何 FMP token / trial / paid access、SEC parser sample、`yfinance` price smoke check、provider contact、sample 或 data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
 - **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned test 已消耗 ledger planned test 且 outcome 失败。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
@@ -33,6 +33,7 @@
 - **A-share burst redesigned outcome**（2026-06-01）：`evidence_report.json` / `signal_events.csv` / `monthly_stats.csv` 已生成；同一 frozen prereg + patched benchmark-open cache 计算后失败 research-continuation thresholds，decision 为 `falsified_or_redesign_required`。
 - **SR-DATA-003 benchmark-open input**（2026-06-01）：ignored local `result/a_short/backtest/cache/forward_daily.pkl` 已由 benchmark-only helper patch；CSI300 / CSI1000 均为 498 行 `trade_date/open/close`，`fetch_forward_daily(refresh=False)` 验证可复用 cache 且不触发 provider refetch；随后 redesigned outcome slice 使用该 input。
 - **SR-OPS-002 forward tracker atomic write**（2026-06-01）：`runners/forward_tracker.py:_write_tracker` 已改为同目录 temp CSV + flush/fsync + `os.replace`；测试锁定成功替换与失败保留旧 tracker。
+- **SR-EXEC-005 zero-trade aggregate return guard**（2026-06-01）：`runners/aggregate_execution_reports.py` excludes zero-trade reports with null `total_return` from monthly return / t-stat / Sharpe statistics; `execution_aggregate_report` is now v1.1.1.
 - **SR-EXEC-004 risk-control assumption guard**（2026-06-01）：`runners/backtest_execution.py` now marks portfolio circuit breaker / cooldown as not simulated instead of enabled, and stops declaring their event codes as covered.
 - **SR-EXEC-003 drawdown evidence guard**（2026-06-01）：`runners/backtest_execution.py` no longer exposes realized exit-date cash drawdown as numeric `max_drawdown`; ship-gate drawdown remains not evaluable until open-position MTM is implemented.
 - **SR-DATA-001 suspend inference guard**（2026-06-01）：`get_suspend_info` now rejects partial non-empty `daily` responses below `suspend_daily_min_coverage = 0.95` and uses a v2 suspend cache key so old unvalidated inference caches are not reused.
@@ -42,7 +43,6 @@
 - **Phase 7b-2 P1 evidence snapshots**（2026-05-28）：public-source、market-data-candidate、authorization / cost / stability、benchmark / GICS、fundamentals observed-date、coverage / fallback / incident 六份 artifact 均已建立并各有 regression test；这些只证明 candidate evidence。
 - **Phase 7b-1 provider evidence / drift monitor contract**（2026-05-28）：`docs/provider_evidence_drift_monitor.md`、`schemas/provider_evidence_drift_monitor.schema.json`、example 和 schema tests 已建立。
 - **Phase 7a-5 evidence report schema contract**（2026-05-28）：`docs/evidence_report_schema_contract.md`、`schemas/evidence_report.schema.json`、example 和 schema tests 已建立。
-- **Phase 7a-1/2 alpha audit and owner-spec routing**（2026-05-27）：formal audit、provider status snapshot、strategy / burst / long / US-short owner specs 已记录 audit verdict 与 blocker routing。
 
 ---
 
@@ -96,7 +96,7 @@
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
 - The full-universe redesigned outcome / excess slice has failed its registered thresholds; do not rerun EGS, change preregistered parameters, full-refresh forward_daily, or reinterpret it as production evidence.
 - Any further redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
-- If no new research test or provider-access work is user-approved, the next default work is the remaining risk-register execution-evidence group (`SR-EXEC-005/007` + `SR-CAP-001` + `SR-CONTRACT-002`); do not cite execution-backtest evidence or manual sizing conclusions before those entries are fixed.
+- If no new research test or provider-access work is user-approved, the next default work is the remaining risk-register execution-evidence group (`SR-EXEC-007` + `SR-CAP-001` + `SR-CONTRACT-002`); do not cite execution-backtest evidence or manual sizing conclusions before those entries are fixed.
 
 ### P1 - P1 provider access boundary（仅用户明确要求时）
 
