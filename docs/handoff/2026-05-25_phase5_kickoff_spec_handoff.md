@@ -1,5 +1,53 @@
 # Phase 5 kickoff spec handoff
 
+## 2026-06-02 addendum: Forward-live aggregate evidence hardening
+
+### What changed
+
+- `runners/aggregate_execution_reports.py` now loads the full reviewed forward-live evidence payload instead of only `(forward_live_months, path)`.
+- Aggregate reports now reject forward-live evidence whose `preset`, `market`, `horizon`, or `bucket` does not match aggregate `capital_context`; `lane_id` must match the preset or that preset-prefixed lane family.
+- Forward-live evidence `source_window.start_date` / `end_date` must cover the claimed `forward_live_months`; a 12-month claim with a one-day window is rejected before aggregation.
+- `execution_aggregate_report` is bumped to v1.1.4 and adds `metrics.monthly_alpha_observation_count`.
+- Ship-gate metric evaluation now keeps monthly alpha t-stat and Sharpe as diagnostics but sets `passed = null` until at least `ship_gate.forward_live_months_min` matched monthly alpha / monthly return observations exist.
+
+### Why
+
+The reviewed v1.0.0 forward-live evidence schema already carried lane context and source-window fields, but the aggregate loader did not enforce them. That left two latent P1 risks for the future moment when the concurrency gate is unfrozen: evidence from another lane could satisfy this aggregate's forward-live metric, and a reviewed integer month count could overstate the actual evidence window. The two-month alpha / Sharpe pass behavior had the same future-gate risk because it did not bind numeric diagnostics to the 12-month forward-live horizon.
+
+### Validation commands
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports tests.schema.test_execution_aggregate_report_schema tests.schema.test_datahub_job_spec_schema tests.schema.test_datahub_local_resource_budget_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.execution.test_aggregate_execution_reports tests.schema.test_execution_aggregate_report_schema tests.schema.test_datahub_job_spec_schema tests.schema.test_datahub_local_resource_budget_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\execution_aggregate_report.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\datahub_job_spec.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\datahub_local_resource_budget.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\datahub_local_resource_budget_contract_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+### Validation results
+
+- Bundled Python: 30 tests ran; non-jsonschema checks passed where available, 26 jsonschema-dependent tests / subtests skipped because this interpreter lacks `jsonschema`.
+- Python313 with `jsonschema`: 30 tests passed.
+- `json.tool` parsed the aggregate schema, DataHub job spec schema, DataHub resource-budget schema, and DataHub resource-budget contract artifact.
+- `docs/CURRENT.md` line count remained 149.
+- `git diff --check` exited 0 with only normal LF/CRLF working-copy warnings.
+
+### Invalidated old conclusions
+
+- "`execution_aggregate_report` current output is v1.1.3" is stale; current output is v1.1.4.
+- "A schema-valid reviewed forward-live evidence artifact is sufficient regardless of lane context" is false.
+- "A reviewed `forward_live_months = 12` integer is sufficient without source-window coverage" is false.
+- "Two monthly observations can make alpha t-stat / Sharpe ship-gate metrics pass" is false; they remain diagnostics until the required observation count exists.
+
+### Next notes
+
+1. This slice still does not remove the SR-EXEC-007 concurrency gate; aggregate reports remain `not_evaluable` for full-size permission until capacity / concurrency-adjusted returns exist.
+2. Future forward-live artifacts must be real reviewed evidence, not the example fixture, and must match the aggregate context they certify.
+3. The remaining DataHub implementation blocker is still `SR-RESOURCE-001`, now narrowed by schema-level market/lane and lane-concurrency guards.
+
 ## 2026-06-01 addendum: SR-CONTRACT-002 forward-live evidence schema contract
 
 ### What changed

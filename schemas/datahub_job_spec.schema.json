@@ -465,7 +465,53 @@
         "full_history_rebuild_requested": {
           "const": false
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "market": {
+                "const": "A"
+              }
+            },
+            "required": [
+              "market"
+            ]
+          },
+          "then": {
+            "properties": {
+              "lane": {
+                "enum": [
+                  "a_short",
+                  "a_long"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "market": {
+                "const": "US"
+              }
+            },
+            "required": [
+              "market"
+            ]
+          },
+          "then": {
+            "properties": {
+              "lane": {
+                "enum": [
+                  "us_short",
+                  "us_long"
+                ]
+              }
+            }
+          }
+        }
+      ]
     },
     "resourceEstimate": {
       "type": "object",

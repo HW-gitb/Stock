@@ -49,12 +49,14 @@ Existing helpers:
   reads schema-valid `execution_backtest_report` v1.2.0 files, aggregates
   monthly return / Sharpe / worst drawdown evidence, optionally computes
   benchmark-aware monthly alpha t-stat from a `YYYYMM -> return` JSON, and writes
-  schema-valid `execution_aggregate_report` v1.1.3. Zero-trade reports with
+  schema-valid `execution_aggregate_report` v1.1.4. Zero-trade reports with
   null `total_return` are excluded from return statistics rather than counted
   as 0.0% months. Full-size permission remains blocked until execution reports
   provide capacity/concurrency-adjusted returns; production-mode inputs,
   `schemas/forward_live_evidence.schema.json`-valid reviewed forward-live
-  evidence refs, and passing numeric diagnostics are necessary but not
+  evidence refs that match aggregate capital context and source-window coverage,
+  and at least the required monthly observation count for alpha / Sharpe are
+  necessary but not
   sufficient. Smoke aggregates and bare
   `--forward-live-months` values remain diagnostic. It is ship-gate evidence
   only and does not rebuild a full continuous portfolio equity curve.

@@ -8,6 +8,111 @@
 
 ---
 
+## 2026-06-02 — Claude 审查 (Optional disposition: SR-CONTRACT-002 prose drift) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Repair slice + this disposition are ready for 提交.
+
+**Scope reviewed** (base `5957ac5`): the single incremental change since the prior Pass — the Optional I had raised, now disposed accept.
+
+**Independently verified**:
+- The only substantive change vs my prior-Passed state is `docs/system_risk_register.md` SR-CONTRACT-002 verification prose: "validates v1.1.3 …" → "validates the current aggregate schema, now v1.1.4 after `SR-CONTRACT-004`, while preserving the forward-live evidence schema-reference binding." Accurate (the v1.1.4 bump is owned by SR-CONTRACT-004; the forward-live evidence schema-ref binding — SR-CONTRACT-002's actual concern — still holds and is still tested). No over-claim, no scope creep.
+- SR-CONTRACT-003 / SR-CONTRACT-004 entries are byte-for-byte unchanged from the prior review (read the full register diff). No other register content changed.
+- Re-ran the 4 test modules under Python313 + jsonschema → **30/30 pass**, decisively confirming no code / schema / test file was piggybacked onto this prose-only round.
+- Disposition matches intent: the original Optional was housekeeping; this resolves it without introducing any code, schema, behavior, provider, DataHub, runner, research, or ship-gate change.
+
+**Residual blockers unchanged (intentional)**: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open until code-level enforcement; aggregate full-size permission remains `not_evaluable` by the SR-EXEC-007 concurrency gate.
+
+---
+
+## 2026-06-02 — Codex 修复 (Optional disposition: SR-CONTRACT-002 prose drift)
+
+**Commits**: none (repair disposition only; base `5957ac5`)
+
+**Relationship to latest Claude review**:
+- Latest Claude review was Pass with no Required fixes and 1 trivial Optional.
+- Optional disposition: accept. Updated `docs/system_risk_register.md` `SR-CONTRACT-002` verification prose so it no longer says the current aggregate schema test validates v1.1.3; it now says the test validates the current aggregate schema, v1.1.4 after `SR-CONTRACT-004`, while preserving the forward-live evidence schema-reference binding.
+
+**Worked on**:
+1. [tracked] `docs/system_risk_register.md`: one prose-only Optional cleanup.
+
+**Validation run/result**:
+- `rg -n "validates v1\\.1\\.3|SR-CONTRACT-002" docs\system_risk_register.md`: no stale `validates v1.1.3` hit remains.
+- `git diff --check`: exit 0; only normal LF/CRLF working-copy warnings were printed.
+
+**Current review state**:
+- No Required fixes remain.
+- This round made no code, schema, test, provider, DataHub, runner, research, or ship-gate behavior change.
+
+---
+
+## 2026-06-02 — Claude 审查 (forward-live aggregate evidence / DataHub guardrail 修复) — Pass (1 trivial Optional)
+
+**Verdict**: Pass — no Required; 1 trivial Optional (pre-existing historical entry prose; does not block 提交). This repair closes the material findings I raised in the Phase 6-to-now design audit.
+
+**Scope reviewed** (base `5957ac5`): `runners/aggregate_execution_reports.py`, `schemas/execution_aggregate_report.schema.json`, `schemas/datahub_job_spec.schema.json`, `schemas/datahub_local_resource_budget.schema.json`, `docs/datahub_local_resource_budget_contract_20260602.json`, the 4 matching test modules, and doc/register/handoff updates.
+
+**Independently verified each finding is genuinely closed (read actual code + adversarial trace, not register prose)**:
+- P1-A (forward-live evidence cross-context): `validate_forward_live_evidence_context` hard-rejects evidence whose `preset/market/horizon/bucket` ≠ aggregate `capital_context`, and `lane_id` not matching preset / preset-prefixed family; invoked in `build_aggregate_report` after `validate_compatible_reports`. A `us_long` artifact can no longer satisfy an `a_short` aggregate. Test asserts both market and lane_id mismatch raise with specific messages (non-vacuous).
+- P1-B (months vs source_window): `validate_forward_live_evidence_window` with correct day-clamped `add_months`; requires `end ≥ start + months − 1 day`; a 12-month claim with a 1-day window is rejected in the loader. Test asserts the rejection with the coverage-specific message.
+- P2 (low-n alpha/Sharpe): `monthly_alpha_observation_count` added to metrics + schema-required; alpha needs ≥`forward_live_months_min` (12) matched obs and Sharpe needs ≥12 monthly returns before `passed` can be non-null, else `None` (keeps not_evaluable, not hard-fail — correct semantics). Tests now assert the prior 2-month pass is `passed=None` with the right reason strings (reverses the old invariant).
+- P2 (market↔lane): job_spec `allOf` if/then (A→{a_short,a_long}, US→{us_short,us_long}) inside partitionScope; example still valid; mismatch added to scope-creep rejection cases.
+- P2 (max_concurrent_lanes): schema `maximum:2`; artifact's reviewed_heavy_run=2 still valid, 3 rejected (dedicated test + scope-creep case).
+- P3 (SR-ID typo): contract limitation line 170 corrected `SR-PROVIDER-001`→`SR-RESOURCE-001`.
+- Concurrency freeze intact: diff does not touch `concurrency_adjusted_capacity_evaluable = False`; `full_size_allowed` stays false / `not_evaluable` (no accidental unfreeze).
+- Re-ran `tests.execution.test_aggregate_execution_reports` + the 3 schema test modules under Python313+jsonschema → **30/30 pass** (closes the 26 jsonschema-dependent tests skipped by the bundled runtime).
+- Durable tracking: new `SR-CONTRACT-003` (cross-context) + `SR-CONTRACT-004` (window + min-month), both P1 / resolved with file+test closure evidence and the honest "latent under SR-EXEC-007 concurrency gate, active before any future unfreeze" calibration; `SR-RESOURCE-001` correctly stays open with updated mitigation/next-action/verification + Hot Queue note. CURRENT = 149 lines.
+- Scope discipline: the unrelated P3 hygiene items from the audit (benchmark boundary-month abort, dead `report_total_return` branch, forward_tracker terminal-status re-trigger, close-to-close diag adj, unused import, sample-runner post-fetch budget) were intentionally deferred — correct one-scope-per-round.
+
+**Optional (PENDING CODEX DISPOSITION; non-blocking)**:
+- `docs/system_risk_register.md` SR-CONTRACT-002 (resolved, written in a prior slice) verification prose still reads "`tests.schema.test_execution_aggregate_report_schema` validates v1.1.3"; after this slice's bump the test validates v1.1.4. The entry's substantive closure (forward-live evidence schema-ref binding) is still true and still tested, so this is point-in-time-prose drift, not a closure defect. Optional housekeeping only.
+
+**Residual blockers unchanged (intentional)**: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open until code-level enforcement; aggregate full-size permission remains `not_evaluable` by the SR-EXEC-007 concurrency gate.
+
+---
+
+## 2026-06-02 — Codex 修复 (forward-live aggregate evidence / DataHub guardrail)
+
+**Commits**: none (pending Claude review / submit; base `5957ac5`)
+
+**Relationship to prior review**:
+- User approved the material findings from the Phase 6-to-now design audit follow-up.
+- This repair closes the two latent P1 forward-live evidence findings and the P1 minimum-observation binding finding before any future concurrency gate can be unfrozen.
+- It also folds the two DataHub P2 schema-precondition findings into `SR-RESOURCE-001`: market/lane consistency and reviewed `max_concurrent_lanes` bound.
+- This round intentionally does not run research, fetch provider data, change runners outside the aggregate helper, implement DataHub, remove the concurrency gate, or handle unrelated P3 hygiene items.
+
+**Worked on**:
+1. [tracked] `runners/aggregate_execution_reports.py`: bumped aggregate output to v1.1.4; loads the full forward-live evidence payload; validates evidence context against aggregate `capital_context`; validates evidence `source_window` coverage; adds `monthly_alpha_observation_count`; keeps alpha / Sharpe metric `passed = null` until the required monthly observation count exists.
+2. [tracked] `schemas/execution_aggregate_report.schema.json`: bumped to v1.1.4 and requires `metrics.monthly_alpha_observation_count`.
+3. [tracked] `tests/execution/test_aggregate_execution_reports.py`, `tests/schema/test_execution_aggregate_report_schema.py`: added regressions for cross-context evidence rejection, short source-window rejection, v1.1.4 schema shape, and two-month alpha / Sharpe not passing ship-gate metric checks.
+4. [tracked] `schemas/datahub_job_spec.schema.json`, `tests/schema/test_datahub_job_spec_schema.py`: reject `market=A` with `us_*` lanes and `market=US` with `a_*` lanes.
+5. [tracked] `schemas/datahub_local_resource_budget.schema.json`, `tests/schema/test_datahub_local_resource_budget_schema.py`, `docs/datahub_local_resource_budget_contract_20260602.json`: cap `max_concurrent_lanes` at 2 and fix the limitation reference to `SR-RESOURCE-001`.
+6. [tracked] `docs/system_risk_register.md`, `docs/CURRENT.md`, `runners/README.md`, `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: durably recorded closure / routing / validation notes.
+
+**Key decisions**:
+- Treat forward-live context mismatch and source-window mismatch as P1 latent defects because current concurrency gating prevents active full-size permission, but future unfreeze would otherwise make them active.
+- Bind alpha / Sharpe pass/fail to the same 12-month forward-live policy horizon by requiring at least `ship_gate.forward_live_months_min` monthly observations before those metric checks can pass.
+- Keep `SR-RESOURCE-001` open. Schema guards are stronger now, but executable DataHub / runner enforcement still does not exist.
+
+**Rejected alternatives**:
+- "Use only JSON Schema for source-window duration" — rejected; draft-07 cannot compare `YYYYMMDD` dates to an integer month count, so the runner adds an adjunct validator.
+- "Let any reviewed evidence artifact count if schema-valid" — rejected; reviewed evidence must certify the same aggregate context.
+- "Close `SR-RESOURCE-001`" — rejected; market/lane and lane-concurrency schema guards do not equal code-level enforcement.
+- "Fix the P3 hygiene list now" — rejected for scope control; this repair handles the material P1/P2 findings approved by the user.
+
+**Validation run/result**:
+- Bundled Python: `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.execution.test_aggregate_execution_reports tests.schema.test_execution_aggregate_report_schema tests.schema.test_datahub_job_spec_schema tests.schema.test_datahub_local_resource_budget_schema -v` ran 30 tests; non-jsonschema checks passed where available, 26 jsonschema-dependent tests / subtests skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.execution.test_aggregate_execution_reports tests.schema.test_execution_aggregate_report_schema tests.schema.test_datahub_job_spec_schema tests.schema.test_datahub_local_resource_budget_schema -v` ran 30 tests, all pass.
+- `json.tool` parsed `schemas/execution_aggregate_report.schema.json`, `schemas/datahub_job_spec.schema.json`, `schemas/datahub_local_resource_budget.schema.json`, and `docs/datahub_local_resource_budget_contract_20260602.json`.
+- `docs/CURRENT.md` line count = 149.
+- `git diff --check`: exit 0; only normal LF/CRLF working-copy warnings were printed.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review the forward-live evidence compatibility validator, source-window duration validator, minimum-month ship-gate metric logic, DataHub market/lane conditional schema, DataHub lane-concurrency cap, and the resolved / open status wording in `docs/system_risk_register.md`.
+- Primary residual blockers remain intentional: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open until code-level enforcement; aggregate full-size permission remains `not_evaluable` until capacity / concurrency-adjusted returns are implemented.
+
+---
+
 ## 2026-06-02 — Claude 审查 (DataHub job spec contract) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交.

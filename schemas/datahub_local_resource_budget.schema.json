@@ -350,7 +350,8 @@
         },
         "max_concurrent_lanes": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 2
         },
         "allows_whole_system_run": {
           "const": false

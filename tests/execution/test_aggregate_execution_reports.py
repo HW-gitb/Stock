@@ -170,11 +170,12 @@ class AggregateExecutionReportsTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(report["schema_name"], "execution_aggregate_report")
-        self.assertEqual(report["schema_version"], "1.1.3")
+        self.assertEqual(report["schema_version"], "1.1.4")
         self.assertEqual(report["metrics"]["report_count"], 2)
         self.assertEqual(report["metrics"]["month_count"], 2)
         self.assertEqual(report["metrics"]["trade_count_total"], 2)
         self.assertEqual(report["metrics"]["monthly_return_count"], 2)
+        self.assertEqual(report["metrics"]["monthly_alpha_observation_count"], 0)
         self.assertEqual(report["metrics"]["max_drawdown"], -0.1)
         self.assertIsNotNone(report["ship_gate_evaluation"]["metric_results"]["sharpe"]["value"])
         self.assertIsNone(
@@ -287,10 +288,19 @@ class AggregateExecutionReportsTest(unittest.TestCase):
 
         self.assertGreaterEqual(report["metrics"]["monthly_alpha_t_stat"], 2.0)
         self.assertGreaterEqual(report["metrics"]["sharpe"], 1.0)
-        self.assertTrue(
+        self.assertEqual(report["metrics"]["monthly_alpha_observation_count"], 2)
+        self.assertIsNone(
             report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["passed"]
         )
-        self.assertTrue(report["ship_gate_evaluation"]["metric_results"]["sharpe"]["passed"])
+        self.assertIn(
+            "at least 12 matched monthly alpha observations",
+            report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["reason"],
+        )
+        self.assertIsNone(report["ship_gate_evaluation"]["metric_results"]["sharpe"]["passed"])
+        self.assertIn(
+            "at least 12 monthly return observations",
+            report["ship_gate_evaluation"]["metric_results"]["sharpe"]["reason"],
+        )
         self.assertTrue(report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]["passed"])
         self.assertIsNone(
             report["ship_gate_evaluation"]["metric_results"]["forward_live_months"]["passed"]
@@ -391,10 +401,19 @@ class AggregateExecutionReportsTest(unittest.TestCase):
                 "forward_evidence.json"
             )
         )
-        self.assertTrue(
+        self.assertEqual(report["metrics"]["monthly_alpha_observation_count"], 2)
+        self.assertIsNone(
             report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["passed"]
         )
-        self.assertTrue(report["ship_gate_evaluation"]["metric_results"]["sharpe"]["passed"])
+        self.assertIn(
+            "at least 12 matched monthly alpha observations",
+            report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["reason"],
+        )
+        self.assertIsNone(report["ship_gate_evaluation"]["metric_results"]["sharpe"]["passed"])
+        self.assertIn(
+            "at least 12 monthly return observations",
+            report["ship_gate_evaluation"]["metric_results"]["sharpe"]["reason"],
+        )
         self.assertTrue(report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]["passed"])
         self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
         self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
@@ -448,6 +467,70 @@ class AggregateExecutionReportsTest(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ValueError, "forward-live evidence .*schema validation failed"):
+                aggregate_main(
+                    [
+                        "--report",
+                        str(report_a),
+                        "--report",
+                        str(report_b),
+                        "--forward-live-evidence-ref",
+                        str(evidence_path),
+                    ]
+                )
+
+    def test_forward_live_evidence_context_must_match_aggregate_reports(self) -> None:
+        mismatches = [
+            ("market", "US", "aggregate capital_context.market"),
+            ("lane_id", "us_long_core", "lane_id must match aggregate preset"),
+        ]
+        for field, value, message in mismatches:
+            with self.subTest(field=field):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    work_dir = Path(tmpdir)
+                    report_a = self.write_execution_report(
+                        work_dir, "20260522", 0.06, -0.05, mode="production"
+                    )
+                    report_b = self.write_execution_report(
+                        work_dir, "20260626", 0.07, -0.10, mode="production"
+                    )
+                    evidence_path = self.write_forward_live_evidence(work_dir, 12)
+                    payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+                    payload[field] = value
+                    evidence_path.write_text(
+                        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+
+                    with self.assertRaisesRegex(ValueError, message):
+                        aggregate_main(
+                            [
+                                "--report",
+                                str(report_a),
+                                "--report",
+                                str(report_b),
+                                "--forward-live-evidence-ref",
+                                str(evidence_path),
+                            ]
+                        )
+
+    def test_forward_live_evidence_window_must_cover_claimed_months(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            report_a = self.write_execution_report(
+                work_dir, "20260522", 0.06, -0.05, mode="production"
+            )
+            report_b = self.write_execution_report(
+                work_dir, "20260626", 0.07, -0.10, mode="production"
+            )
+            evidence_path = self.write_forward_live_evidence(work_dir, 12)
+            payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+            payload["source_window"]["end_date"] = "20250501"
+            evidence_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "source_window .*forward_live_months"):
                 aggregate_main(
                     [
                         "--report",

@@ -167,7 +167,7 @@
   "limitations": [
     "This contract is a design boundary only; it does not benchmark the user's machine or measure actual CPU, memory, disk, or runtime.",
     "It does not implement DataHub, adapters, runner enforcement, provider access, or cache writers.",
-    "It does not resolve SR-PROVIDER-001 and does not authorize Phase 7c implementation.",
+    "It does not resolve SR-RESOURCE-001 and does not authorize Phase 7c implementation.",
     "Future implementation must add code-level enforcement and tests before this risk can be closed."
   ]
 }

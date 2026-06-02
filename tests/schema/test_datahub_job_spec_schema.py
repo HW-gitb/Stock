@@ -157,6 +157,11 @@ class DataHubJobSpecSchemaTest(unittest.TestCase):
         all_markets["partition_scope"]["all_markets_requested"] = True
         cases["all_markets_requested"] = all_markets
 
+        market_lane_mismatch = copy.deepcopy(self._load_example())
+        market_lane_mismatch["partition_scope"]["market"] = "A"
+        market_lane_mismatch["partition_scope"]["lane"] = "us_short"
+        cases["market_lane_mismatch"] = market_lane_mismatch
+
         all_lanes_execution = copy.deepcopy(self._load_example())
         all_lanes_execution["execution_policy"]["all_markets_all_lanes_allowed"] = True
         cases["all_lanes_execution"] = all_lanes_execution

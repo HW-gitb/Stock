@@ -2498,3 +2498,25 @@ git diff --check
 
 1. Claude review should verify the new schema/example do not authorize provider access, data fetch, raw parse, full-market refresh, DataHub implementation, runner changes, production consumption, Phase 7c, or ship-gate claims.
 2. A future Phase 7c implementation slice must make executable job specs validate against `schemas/datahub_job_spec.schema.json` and enforce the budget / partition / abort policy in code before `SR-RESOURCE-001` can close.
+
+## 2026-06-02 append: DataHub job-spec guardrail hardening
+
+**What changed**:
+
+- `schemas/datahub_job_spec.schema.json` now rejects partition scopes where `market=A` is paired with `us_*` lanes or `market=US` is paired with `a_*` lanes.
+- `schemas/datahub_local_resource_budget.schema.json` now caps `budget_profiles[].max_concurrent_lanes` at 2.
+- `docs/datahub_local_resource_budget_contract_20260602.json` fixes the limitation reference from `SR-PROVIDER-001` to `SR-RESOURCE-001`.
+- `docs/system_risk_register.md` keeps `SR-RESOURCE-001` open but updates mitigation / required-next-action / verification text for market-lane consistency and reviewed lane-concurrency bounds.
+
+**Validation results**:
+
+- Python313 with `jsonschema`: `tests.schema.test_datahub_job_spec_schema` + `tests.schema.test_datahub_local_resource_budget_schema` passed as part of the 30-test forward-live / DataHub suite.
+- Bundled Python non-jsonschema checks passed where available; jsonschema-dependent checks skipped in that interpreter.
+- `json.tool` parsed both DataHub schemas and the resource-budget contract artifact.
+- `git diff --check` exited 0 with only normal LF/CRLF working-copy warnings.
+
+**Invalid conclusions**:
+
+- "The job-spec schema accepts cross-market lane mismatches" is now false.
+- "The resource-budget schema has no upper bound for `max_concurrent_lanes`" is now false.
+- "SR-RESOURCE-001 is closed" remains false; executable code-level enforcement is still required before Phase 7c / runner implementation.

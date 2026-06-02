@@ -77,6 +77,7 @@ class DataHubLocalResourceBudgetSchemaTest(unittest.TestCase):
                 self.assertFalse(profile["authorizes_datahub_implementation"])
                 self.assertTrue(profile["requires_estimated_rows_and_disk"])
                 self.assertTrue(profile["requires_abort_policy"])
+                self.assertLessEqual(profile["max_concurrent_lanes"], 2)
 
     def test_implementation_gates_block_default_full_system_runs(self) -> None:
         artifact = self._load_artifact()
@@ -94,12 +95,19 @@ class DataHubLocalResourceBudgetSchemaTest(unittest.TestCase):
                 self.assertFalse(gate["authorizes_provider_calls"])
                 self.assertFalse(gate["authorizes_phase7c_implementation"])
 
+    def test_max_concurrent_lanes_above_reviewed_bound_is_rejected(self) -> None:
+        invalid = copy.deepcopy(self._load_artifact())
+        invalid["budget_profiles"][1]["max_concurrent_lanes"] = 3
+
+        self.assertNotEqual(self._validate(invalid), [])
+
     def test_scope_creep_is_rejected_when_jsonschema_available(self) -> None:
         invalid = copy.deepcopy(self._load_artifact())
         invalid["scope"]["data_fetch_allowed"] = True
         invalid["scope"]["phase7c_implementation_authorized_by_this_artifact"] = True
         invalid["local_execution_principles"]["whole_system_run_default_allowed"] = True
         invalid["budget_profiles"][0]["authorizes_provider_calls"] = True
+        invalid["budget_profiles"][1]["max_concurrent_lanes"] = 3
         invalid["implementation_gates"][0]["authorizes_phase7c_implementation"] = True
         invalid["prohibited_actions"]["all_systems_default_run"] = True
 

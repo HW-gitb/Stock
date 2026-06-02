@@ -18,15 +18,17 @@ class ExecutionAggregateReportSchemaTest(unittest.TestCase):
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
         Draft7Validator.check_schema(schema)
-        self.assertIn("/1.1.3/", schema["$id"])
+        self.assertIn("/1.1.4/", schema["$id"])
         self.assertEqual(schema["properties"]["schema_name"]["const"], "execution_aggregate_report")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.3")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.4")
         self.assertIn("multi-period aggregation", schema["description"])
         self.assertIn("reviewed forward-live evidence", schema["description"])
         self.assertIn("zero-trade", schema["description"])
         self.assertIn("excludes zero-trade", schema["description"])
         self.assertIn("capacity/concurrency-adjusted", schema["description"])
         self.assertIn("forward_live_evidence.schema.json", schema["description"])
+        self.assertIn("source_window", schema["description"])
+        self.assertIn("matched monthly alpha observation count", schema["description"])
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(
             schema["required"],
@@ -83,6 +85,7 @@ class ExecutionAggregateReportSchemaTest(unittest.TestCase):
         )
         metrics = schema["$defs"]["aggregateMetrics"]
         self.assertIn("monthly_alpha_t_stat", metrics["required"])
+        self.assertIn("monthly_alpha_observation_count", metrics["required"])
         self.assertIn("benchmark_excess_return_source", settings["required"])
         self.assertIn("forward_live_evidence_source", settings["required"])
         self.assertEqual(
