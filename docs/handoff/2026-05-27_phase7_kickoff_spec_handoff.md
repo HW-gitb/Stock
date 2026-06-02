@@ -2005,3 +2005,49 @@ git diff --check
 
 1. Claude 复审应重点核对 contract 是否只定义未来 record shape，且没有授权 log writer、provider status polling、provider calls、fallback execution、provider selection、DataHub、runner 或 Phase 7c。
 2. 如果审查 Pass 并提交，下一条 no-access provider slice 默认应转向 FMP / SEC license / storage / retention review；任何 log-writer implementation、status polling、fallback execution 或 provider call 都需要 separate explicit approval + reviewed decision。
+
+## 2026-06-02 追加：DataHub local resource budget contract
+
+**改了什么**:
+
+- 新增 `schemas/datahub_local_resource_budget.schema.json`，把 Phase 7c 前的本机资源预算边界固化为 schema-first contract：默认 `single_slice_incremental`，单市场 / 单 lane / bounded window、lazy load、incremental cache reuse、heavy job checkpoint / resume、heavy run 必须显式用户批准 + reviewed job spec。
+- 新增 `docs/datahub_local_resource_budget_contract_20260602.json`，记录两个 budget profile：`local_interactive_default` 与 `reviewed_heavy_run_optional`；两者都不授权 provider calls、DataHub implementation、runner change、Phase 7c implementation 或 all-system default run。
+- 新增 `tests/schema/test_datahub_local_resource_budget_schema.py`，验证 schema/artifact、默认分片增量行为、budget profile、implementation gates、scope-creep rejection。
+- 更新 `docs/datahub_design.md`、`docs/README.md`、`docs/CURRENT.md`、`AGENTS.md`，把该 contract 路由为 Phase 7c 前置边界。
+- 更新 `docs/system_risk_register.md`，新增 `SR-RESOURCE-001` P2 open：contract 已定义，但未来 DataHub / runner 代码级 enforcement 尚未实现。
+
+**为什么改**:
+
+- 用户明确担心四套系统全设计完后本机带不动；当前设计并不要求一次性跑四套系统，但旧 DataHub guardrail 没有明确禁止“默认全系统 full refresh”。
+- 直接写资源管理代码会过早进入 Phase 7c implementation。本轮只先固化 contract，约束后续实现必须分片、增量、可恢复、可审查。
+- 该 contract 不解决 `SR-PROVIDER-001`，也不替代 provider license / storage / retention review；它只防止 DataHub / runner 以后把重任务变成默认行为。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_datahub_local_resource_budget_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_datahub_local_resource_budget_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\datahub_local_resource_budget.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\datahub_local_resource_budget_contract_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**验证结果**:
+
+- Bundled Python: `tests.schema.test_datahub_local_resource_budget_schema` ran 6 tests: 3 passed, 3 skipped because this interpreter lacks `jsonschema`; non-jsonschema default-boundary / budget-profile / gate tests passed.
+- Python313 with `jsonschema`: 6 tests passed, including real artifact validation and scope-creep rejection.
+- `json.tool` parsed the new schema and artifact successfully.
+- `docs/CURRENT.md` line count = 145 after slimming old completed-item detail back into risk-register references.
+- `git diff --check` passed after the SESSION_LOG entry was prepended; only normal LF/CRLF working-copy warnings.
+
+**失效旧结论**:
+
+- “四套系统设计完成后必须一次性全量运行”不成立；默认运行边界已固化为 single-slice / incremental。
+- “有 resource-budget contract 就已经可以进 Phase 7c implementation”不成立；artifact 明确不授权 DataHub table、adapter、runner change、provider call 或 Phase 7c。
+- “SR-RESOURCE-001 已关闭”不成立；代码级 enforcement 和 job-spec tests 尚未实现。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 contract 是否没有授权 provider calls、DataHub implementation、runner change、Phase 7c、ship-gate claim 或全系统默认运行。
+2. Provider 方向的自然下一刀仍可回到 FMP / SEC license / storage / retention docs-only review；DataHub implementation 仍需单独 explicit approval + reviewed decision。

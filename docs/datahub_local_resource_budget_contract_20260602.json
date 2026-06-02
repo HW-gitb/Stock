@@ -1,0 +1,173 @@
+{
+  "schema_name": "datahub_local_resource_budget",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7c_precondition",
+    "purpose": "local_resource_budget_boundary_before_datahub_implementation",
+    "contract_status": "schema_first_contract_no_implementation",
+    "data_fetch_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false,
+    "phase7c_implementation_authorized_by_this_artifact": false,
+    "broker_or_order_automation_allowed": false,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_refs": [
+    {
+      "artifact_id": "datahub_design",
+      "path": "docs/datahub_design.md",
+      "consumption_role": "Owns the Phase 7 DataHub guardrails and now routes this local resource budget as a Phase 7c precondition."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "consumption_role": "Defines provider drift and no-silent-default requirements that DataHub jobs must preserve without default full-system refreshes."
+    },
+    {
+      "artifact_id": "portfolio_allocation_policy",
+      "path": "docs/portfolio_allocation_policy.md",
+      "consumption_role": "Defines market and bucket separation; local execution defaults mirror that separation instead of mixing all lanes by default."
+    },
+    {
+      "artifact_id": "system_risk_register",
+      "path": "docs/system_risk_register.md",
+      "consumption_role": "Tracks SR-RESOURCE-001 until future DataHub / runner implementation enforces this contract in code."
+    }
+  ],
+  "local_execution_principles": {
+    "default_run_mode": "single_slice_incremental",
+    "one_market_default": true,
+    "one_lane_default": true,
+    "bounded_date_window_default": true,
+    "lazy_load_required": true,
+    "incremental_cache_reuse_required": true,
+    "checkpoint_resume_required_for_heavy_jobs": true,
+    "whole_system_run_default_allowed": false,
+    "full_market_refresh_default_allowed": false,
+    "all_markets_all_lanes_parallel_default_allowed": false,
+    "explicit_user_approval_required_for_heavy_run": true,
+    "budget_profile_required_before_runner": true,
+    "manual_order_only": true
+  },
+  "partition_axes": [
+    "market",
+    "lane",
+    "as_of_date",
+    "date_window",
+    "provider_family",
+    "artifact_type"
+  ],
+  "budget_profiles": [
+    {
+      "profile_id": "local_interactive_default",
+      "role": "Default mode for a local desktop run, review slice, or single lane evidence task.",
+      "default_allowed": true,
+      "requires_explicit_user_approval": false,
+      "requires_reviewed_job_spec": true,
+      "max_concurrent_markets": 1,
+      "max_concurrent_lanes": 1,
+      "allows_whole_system_run": false,
+      "allows_full_market_refresh": false,
+      "allows_parallel_all_lanes": false,
+      "requires_estimated_rows_and_disk": true,
+      "requires_abort_policy": true,
+      "authorizes_provider_calls": false,
+      "authorizes_datahub_implementation": false,
+      "notes": [
+        "A normal run should target one market, one lane, one bounded as-of or date window, and one artifact family.",
+        "A runner must reuse reviewed local caches when available instead of defaulting to full refresh.",
+        "This profile is sufficient for ordinary manual analysis because the user does not need all four systems to run at once."
+      ]
+    },
+    {
+      "profile_id": "reviewed_heavy_run_optional",
+      "role": "Optional mode for a future batch job that intentionally broadens scope after separate review.",
+      "default_allowed": false,
+      "requires_explicit_user_approval": true,
+      "requires_reviewed_job_spec": true,
+      "max_concurrent_markets": 1,
+      "max_concurrent_lanes": 2,
+      "allows_whole_system_run": false,
+      "allows_full_market_refresh": false,
+      "allows_parallel_all_lanes": false,
+      "requires_estimated_rows_and_disk": true,
+      "requires_abort_policy": true,
+      "authorizes_provider_calls": false,
+      "authorizes_datahub_implementation": false,
+      "notes": [
+        "A heavy profile still does not authorize provider calls, full-market download, DataHub implementation, or all-system parallel execution.",
+        "Future heavy jobs must declare expected row counts, output size, cache impact, checkpoint path, and abort / resume behavior before execution.",
+        "If a future task really needs all markets or all lanes, it requires a separate explicit user approval and reviewed job spec."
+      ]
+    }
+  ],
+  "implementation_gates": [
+    {
+      "gate_id": "job_spec_budget_profile",
+      "status": "required_before_implementation",
+      "blocks_default_full_system_run": true,
+      "required_resolution": "Every future DataHub / runner job spec must declare budget_profile, market, lane, as_of or date_window, expected inputs, expected outputs, cache policy, and abort policy.",
+      "authorizes_runner_change": false,
+      "authorizes_provider_calls": false,
+      "authorizes_phase7c_implementation": false
+    },
+    {
+      "gate_id": "partitioned_reads",
+      "status": "required_before_implementation",
+      "blocks_default_full_system_run": true,
+      "required_resolution": "DataHub reads must be partitionable by market, lane, as_of_date, date_window, provider_family, and artifact_type before production-like use.",
+      "authorizes_runner_change": false,
+      "authorizes_provider_calls": false,
+      "authorizes_phase7c_implementation": false
+    },
+    {
+      "gate_id": "lazy_materialization",
+      "status": "required_before_implementation",
+      "blocks_default_full_system_run": true,
+      "required_resolution": "Future factor and report paths must lazy-load required fields and materialize only the requested slice, not all four systems.",
+      "authorizes_runner_change": false,
+      "authorizes_provider_calls": false,
+      "authorizes_phase7c_implementation": false
+    },
+    {
+      "gate_id": "incremental_resume",
+      "status": "required_before_implementation",
+      "blocks_default_full_system_run": true,
+      "required_resolution": "Longer jobs must be resumable and idempotent, with checkpoints or cache manifests that prevent starting over after a local interruption.",
+      "authorizes_runner_change": false,
+      "authorizes_provider_calls": false,
+      "authorizes_phase7c_implementation": false
+    },
+    {
+      "gate_id": "heavy_run_explicit_approval",
+      "status": "required_before_heavy_run",
+      "blocks_default_full_system_run": true,
+      "required_resolution": "Any future all-market, all-lane, full-refresh, or high-output batch run must be separately approved by the user and reviewed as its own job spec.",
+      "authorizes_runner_change": false,
+      "authorizes_provider_calls": false,
+      "authorizes_phase7c_implementation": false
+    }
+  ],
+  "prohibited_actions": {
+    "provider_call": false,
+    "provider_selection": false,
+    "new_token_or_paid_access": false,
+    "full_market_download": false,
+    "datahub_table_creation": false,
+    "runner_or_adapter_change": false,
+    "all_systems_default_run": false,
+    "parallel_all_lanes_default": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "limitations": [
+    "This contract is a design boundary only; it does not benchmark the user's machine or measure actual CPU, memory, disk, or runtime.",
+    "It does not implement DataHub, adapters, runner enforcement, provider access, or cache writers.",
+    "It does not resolve SR-PROVIDER-001 and does not authorize Phase 7c implementation.",
+    "Future implementation must add code-level enforcement and tests before this risk can be closed."
+  ]
+}

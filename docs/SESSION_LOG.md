@@ -8,6 +8,65 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (DataHub local resource budget contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2ddc8f4`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions. One governance-awareness item for the Final Approver (below) — not a blocker.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/datahub_design.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/system_risk_register.md. [untracked] schemas/datahub_local_resource_budget.schema.json, docs/datahub_local_resource_budget_contract_20260602.json, tests/schema/test_datahub_local_resource_budget_schema.py. No runner / provider_samples / network change (docs+schema+test only).
+
+**Independent verification**:
+- Contract is a genuine Phase 7c *precondition*, not Phase 7c implementation: `phase=7c_precondition`, `contract_status=schema_first_contract_no_implementation`, `phase7c_implementation_authorized_by_this_artifact=false`, and `data_fetch / provider_selection / provider_adapter / datahub_table_implementation / runner_change / broker / ship_gate_relaxed / production_ready` all const-false. Both budget profiles + all 5 implementation gates + all 10 prohibited actions const-false on provider calls / DataHub impl / whole-system run / parallel-all-lanes. `local_interactive_default` = single market/lane/bounded-window/lazy/incremental; `reviewed_heavy_run_optional` requires explicit user approval and still bans all-system run / full refresh / provider calls. Limitations honestly state it does not benchmark the machine and does not resolve `SR-PROVIDER-001`.
+- Ran `tests.schema.test_datahub_local_resource_budget_schema` under Python313 (jsonschema): 6 tests, all pass, 0 skipped — artifact validates, default single-slice-incremental + not-whole-system, profiles don't authorize heavy/provider work, gates block default full-system runs, scope-creep (data_fetch / phase7c_impl / whole_system_default / authorizes_provider_calls / all_systems_default_run) rejected.
+- `docs/datahub_design.md`: new "Local Resource Boundary" section + Phase 7c bullet + completion criterion + anti-pattern, all preserving "schema-first only / does not authorize Phase 7c implementation / SR-RESOURCE-001 stays open until code-enforced." `SR-RESOURCE-001` added (P2, open, Phase 7c local-execution stability) with honest calibration (not proof the machine can't run it; guards future implementation drift), mitigation = this contract, required-next = code/job-spec enforcement + tests before Phase 7c impl. `SR-PROVIDER-001` left unchanged/open.
+- **CURRENT.md slimming verified safe**: ~11 individual 2026-06-01 resolved-SR bullets were collapsed into one "Risk-register maintenance group" pointer line. Every collapsed item is a `resolved` entry with closure evidence already living in `docs/system_risk_register.md`, so this relocates detail to its durable owner per the CURRENT short-snapshot maintenance policy — no material state lost. Independently counted CURRENT = 145 lines (≤150 target).
+
+**Governance-awareness item (Final Approver — not a Required fix):** this slice adds **a new fixed decision #16 to AGENTS.md** (local resource boundary: default single-slice/incremental; all-market/all-lane/full-refresh/heavy runs need explicit approval + reviewed job spec) and moves the Phase 7c roadmap row ⬜→🟡 ("precondition contract complete; implementation not started"). Codex's handoff states this responds to a **user resource concern**. My correctness review: the new rule is sound, additive, weakens no existing gate, reaffirms "四套子系统都是真需求" (it constrains run-time defaults, not roadmap priority), and stays schema-first / non-authorizing. Surfacing it because (a) adding a fixed decision is a governance act the Final Approver should consciously bless, and (b) I cannot see the user's resource concern in this review session — if that premise is wrong, item 16 / the topic pivot can be reconsidered before `提交`. The prior-named "license/storage/retention review" remains the deferred safe provider slice.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (both open, unchanged) + new `SR-RESOURCE-001` (P2 open, code-enforcement pending; not added to Hot Queue routing since it activates only at Phase 7c implementation). No pending Required or Optional — ready for `提交` once the Final Approver is comfortable with new fixed decision #16.
+
+---
+
+## 2026-06-02 — Codex 执行 (DataHub local resource budget contract)
+
+**Commits**: none (pending Claude review / submit; base `2ddc8f4`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `2ddc8f4 Add US EGS incident log contract`.
+- Responds to the user's resource concern with a schema-first local execution boundary before Phase 7c / DataHub implementation.
+- This round does not call providers, does not run research, does not fetch data, does not implement adapters / DataHub tables, does not modify runners, and does not authorize Phase 7c.
+
+**Worked on**:
+1. [untracked] `schemas/datahub_local_resource_budget.schema.json`: added the Phase 7c precondition contract for local-machine-safe defaults: `single_slice_incremental`, one market, one lane, bounded window, lazy / incremental reads, checkpoints, and explicit approval for heavy jobs.
+2. [untracked] `docs/datahub_local_resource_budget_contract_20260602.json`: added the concrete contract artifact with `local_interactive_default` and `reviewed_heavy_run_optional` budget profiles; neither authorizes provider calls, full-market refresh, DataHub implementation, runner changes, all-system default runs, or Phase 7c implementation.
+3. [untracked] `tests/schema/test_datahub_local_resource_budget_schema.py`: validates schema/artifact, default single-slice behavior, budget profiles, implementation gates, and scope-creep rejection.
+4. [tracked] `docs/datahub_design.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `AGENTS.md`: route the resource-budget contract as a Phase 7c precondition, keep DataHub implementation blocked, and add `SR-RESOURCE-001` as P2 open until code-level enforcement exists.
+
+**Key decisions**:
+- Default local operation must be slice-first / incremental, not all-system full refresh. Reason: the user does not need all four systems to run at once, and future DataHub jobs should not overload local execution by default.
+- Keep this as a contract, not implementation. Reason: writing resource-management code now would prematurely enter Phase 7c implementation and risk mixing provider / runner work into the slice.
+- Leave `SR-PROVIDER-001` unchanged and open. Reason: resource budgeting does not resolve provider coverage, license / storage / retention, PIT, fallback execution, stability, provider selection, or DataHub readiness.
+- Add `SR-RESOURCE-001` as P2 open. Reason: the contract is now defined, but future runner / DataHub code still must enforce it before that risk is closed.
+
+**Rejected alternatives**:
+- "Add runtime resource-management code now" — rejected; this round is schema-first boundary only and no runner changes were approved.
+- "Continue directly to FMP / SEC license-storage-retention review" — deferred; still a safe provider next slice, but the user's immediate concern was local system size / runtime load.
+- "Allow a reviewed heavy profile to run all systems by default" — rejected; even optional heavy jobs require explicit user approval and a reviewed job spec, and this artifact authorizes no all-system run.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_datahub_local_resource_budget_schema -v`: 6 tests ran; 3 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_datahub_local_resource_budget_schema -v`: 6 tests passed.
+- `json.tool` parsed `schemas/datahub_local_resource_budget.schema.json` and `docs/datahub_local_resource_budget_contract_20260602.json`.
+- `docs/CURRENT.md` line count = 145 after slimming old completed-item detail into risk-register references.
+- `git diff --check`: passed after this SESSION_LOG entry; only normal LF/CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: the contract accidentally authorizes provider calls, full-market download, all-system default runs, DataHub table implementation, runner / adapter changes, Phase 7c implementation, ship-gate claims, or closes `SR-RESOURCE-001` / `SR-PROVIDER-001` too early.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (US EGS incident-log contract)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `551fd75`)

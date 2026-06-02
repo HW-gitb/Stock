@@ -40,6 +40,17 @@ Current routing note: the corrected-basis A-share burst preregistration failed a
 
 ## Entries
 
+### SR-RESOURCE-001 - DataHub broad jobs lack code-level local resource budget enforcement
+
+- Severity: P2
+- Status: open
+- Owner phase: Phase 7c DataHub / local execution stability
+- Evidence: `docs/datahub_design.md` accepts a future shared DataHub for four subsystems, but before this reviewed slice there was no contract requiring slice-first local execution, partitioned reads, lazy materialization, incremental cache reuse, checkpoint / resume, or explicit user approval before all-market / all-lane / full-refresh jobs.
+- Accepted calibration: this is not proof that the user's machine cannot run the system. The intended operating mode does not require all four systems to run at once. The risk is future implementation drift: a DataHub or runner slice could accidentally make full-system refresh the default and overload local execution or make review / debugging unstable.
+- Mitigation evidence: this reviewed slice adds `schemas/datahub_local_resource_budget.schema.json` and `docs/datahub_local_resource_budget_contract_20260602.json`, and routes them through `docs/datahub_design.md`, `docs/README.md`, `docs/CURRENT.md`, `AGENTS.md`, and the Phase 7 handoff. The contract requires default `single_slice_incremental` behavior and blocks default all-system / all-market / all-lane / full-refresh runs.
+- Required next action: before any Phase 7c DataHub table, adapter, runner, or report job implementation, enforce the contract in code / job specs with tests that require budget profile, market, lane, `as_of_date` or date window, estimated input / output sizes, cache policy, checkpoint / abort behavior, and explicit approval for heavy runs.
+- Verification: `tests.schema.test_datahub_local_resource_budget_schema` validates the schema / artifact, default slice-first behavior, budget profiles, implementation gates, and scope-creep rejection.
+
 ### SR-META-001 - Audit findings were not durably tracked
 
 - Severity: P0

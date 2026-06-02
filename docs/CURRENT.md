@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-02（US EGS incident-log contract）
+**最后更新**：2026-06-02（DataHub local resource budget contract）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -13,12 +13,13 @@
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
 - Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
 - `docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json` routes post-stable-retry blockers, `docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json` defines default-deny fallback / incident / stability behavior, and `docs/provider_evidence_p1_us_incident_log_contract_20260602.json` defines future incident-log record shape; all are no-access schema-first artifacts and authorize no log writer, provider selection, status polling, data fetch, fallback execution, DataHub / runner consumption, Phase 7c, or ship-gate claim.
+- `schemas/datahub_local_resource_budget.schema.json` / `docs/datahub_local_resource_budget_contract_20260602.json` define the Phase 7c precondition that local defaults are single-slice / incremental / lazy / checkpointed, not all-system full refresh; this does not implement DataHub, change runners, fetch provider data, or authorize Phase 7c.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; US EGS direction remains FMP primary candidate + SEC EDGAR fundamentals audit, and FMP stable endpoints have only a two-symbol AAPL / MSFT access / shape retry result.
+- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; US EGS direction remains FMP primary candidate + SEC EDGAR fundamentals audit, FMP stable endpoints have only a two-symbol AAPL / MSFT access / shape retry result, and Phase 7c now has a schema-first local resource budget precondition.
 - **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；use the remaining-blocker plan, fallback playbook, and incident-log contract to prevent broad provider deployment after the FMP stable retry。
 - **当前 P1 provider blocker**：FMP stable small sample succeeded, and fallback / incident / stability plus incident-log behavior is schema-first designed, but coverage / license / PIT semantics / incident-log writer / executed fallback / stability evidence / production readiness remain unresolved；仍不允许 FMP new token / trial / paid access、`yfinance`、provider selection、full-market data fetch、status polling、adapter、DataHub、production runner consumption 或 Phase 7c，除非另有 explicit approval + reviewed decision。
 - **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned test 已消耗 ledger planned test 且 outcome 失败。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
@@ -31,18 +32,9 @@
 
 - **A-share burst audit/spec downgrade**（2026-06-01）：`docs/phase7a_alpha_plausibility_audit.json` / `docs/burst_lane_spec.md` 已把 A-share minimal-data burst 从 `continue` 降为 `redesign_required`，并引用 failed outcome evidence。
 - **A-share burst redesigned outcome**（2026-06-01）：`evidence_report.json` / `signal_events.csv` / `monthly_stats.csv` 已生成；同一 frozen prereg + patched benchmark-open cache 计算后失败 research-continuation thresholds，decision 为 `falsified_or_redesign_required`。
-- **SR-DATA-003 benchmark-open input**（2026-06-01）：ignored local `result/a_short/backtest/cache/forward_daily.pkl` 已由 benchmark-only helper patch；CSI300 / CSI1000 均为 498 行 `trade_date/open/close`，`fetch_forward_daily(refresh=False)` 验证可复用 cache 且不触发 provider refetch；随后 redesigned outcome slice 使用该 input。
-- **SR-OPS-002 forward tracker atomic write**（2026-06-01）：`runners/forward_tracker.py:_write_tracker` 已改为同目录 temp CSV + flush/fsync + `os.replace`；测试锁定成功替换与失败保留旧 tracker。
-- **SR-CONTRACT-002 forward-live evidence schema contract**（2026-06-01）：`schemas/forward_live_evidence.schema.json` v1.0.0 and `execution_aggregate_report` v1.1.3 bind forward-live months to reviewed live-normalized evidence provenance; old two-field evidence refs are rejected.
-- **SR-PIT-001 / SR-CONTRACT-001 analysis_input contract hardening**（2026-06-01）：shared `engine/data/analysis_input_contract.py` validates schema + PIT invariants; EGS export and deterministic-report load now reject malformed or future-dated payloads; `requirements.txt` declares `jsonschema`.
-- **SR-DATA-002 daily stats insufficiency guard**（2026-06-01）：`precompute_stock_stats` now hard-fails severe daily payload insufficiency instead of returning neutral stats that could bypass liquidity / crash-veto filters.
-- **SR-OPS-005 forward tracker cache coverage**（2026-06-01）：`forward_tracker.py` now proves backfill coverage from cached stock trading dates instead of calendar-day approximation.
-- **SR-RANK-001 forward-return conversion status**（2026-06-01）：`attach_forward_returns` now reports `pending_return_conversion_failed` instead of `"ok"` when required forward-return conversions fail or leave invalid values.
-- **SR-OPS-006 relisted lookback boundary**（2026-06-01）：`get_relisted_stocks` now uses exact inclusive lookback cutoff semantics and invalidates old relisted caches with `_v2`.
-- **SR-LLM-001 Stage 3 prompt boundary**（2026-06-01）：DeepSeek policy-risk prompt construction now sanitizes external titles, wraps them in `[UNTRUSTED_NEWS_TITLE]` rows, and tells the LLM not to execute instructions inside titles; focused tests cover injection-style titles.
-- **SR-EXEC-003 drawdown evidence guard**（2026-06-01）：`runners/backtest_execution.py` no longer exposes realized exit-date cash drawdown as numeric `max_drawdown`; ship-gate drawdown remains not evaluable until open-position MTM is implemented.
-- **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
+- **Risk-register maintenance group**（2026-06-01）：benchmark-open input、forward tracker、forward-live evidence、analysis_input PIT/schema、daily stats insufficiency、forward-return status、relisted lookback、LLM prompt boundary、drawdown evidence guard 等已按 `docs/system_risk_register.md` resolved entries 收敛；细节见 risk register。
 - **US EGS remaining blocker / fallback / incident-log contracts**（2026-06-02）：`schemas/provider_p1_remaining_blocker_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json` route post-stable-retry blockers, `schemas/provider_p1_fallback_incident_stability_playbook.schema.json` / `docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json` define default-deny fallback / incident / stability behavior, and `schemas/provider_p1_incident_log_contract.schema.json` / `docs/provider_evidence_p1_us_incident_log_contract_20260602.json` define future incident-log record shape while keeping `SR-PROVIDER-001` open.
+- **DataHub local resource budget contract**（2026-06-02）：`schemas/datahub_local_resource_budget.schema.json` / `docs/datahub_local_resource_budget_contract_20260602.json` require future DataHub / runner jobs to default to single-market, single-lane, bounded-window, lazy / incremental / checkpointed slices; `SR-RESOURCE-001` remains open until code-level enforcement exists.
 
 ---
 
@@ -82,7 +74,7 @@
 - `docs/burst_lane_spec.md` / `docs/us_short_spec.md` / `docs/long_alpha_spec.md` - lane owner specs。
 - `docs/provider_data_requirements_audit.md` / `schemas/provider_capability_catalog.schema.json` - provider requirements / capability contract。
 - `docs/portfolio_allocation_policy.md` - 35/65、bucket、cash non-fungibility、manual-only capital policy。
-- `docs/datahub_design.md` - DataHub / provider / factor-layer guardrails。
+- `docs/datahub_design.md` / `schemas/datahub_local_resource_budget.schema.json` / `docs/datahub_local_resource_budget_contract_20260602.json` - DataHub / provider / factor-layer guardrails and Phase 7c local resource budget precondition。
 - `docs/handoff/README.md` - phase handoff index；不要全量读 handoff。
 
 ---
@@ -103,6 +95,10 @@
 - Treat the remaining-blocker plan, fallback playbook, and incident-log contract as the active `SR-PROVIDER-001` router; a safe next docs-only slice is FMP / SEC license-storage-retention review, while any log-writer or fallback-execution implementation must still perform no provider calls without separate approval.
 - 不得 silent default、latest-only 回填历史证据，或把 provider status guess 写成 production-ready evidence。
 - 不得建 adapter / DataHub table、把 sample runner 接入 production runner、抓 broader provider data 或接 broker / OS automation。
+
+### P2 - DataHub local resource boundary
+
+- Future Phase 7c / runner implementation must consume `schemas/datahub_local_resource_budget.schema.json`; default all-system / all-market / all-lane / full-refresh runs remain disallowed without explicit approval + reviewed job spec.
 
 ### P2 - A-short maintenance line
 

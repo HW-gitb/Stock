@@ -25,10 +25,27 @@ The DataHub idea is accepted, but implementation is staged:
 - **Phase 7a**: perform schema-first alpha-validation work before broad engine modularization. The current action guide is `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`; the next route is the alpha plausibility audit schema and first audit in `docs/alpha_plausibility_audit.md`.
 - **Phase 7b-1**: establish provider capability evidence and data quality / provider drift monitoring contract in `docs/provider_evidence_drift_monitor.md` and `schemas/provider_evidence_drift_monitor.schema.json`; this does not populate real provider evidence.
 - **Phase 7b-2**: populate provider capability evidence in the P1-P4 order. The current P1 snapshots run through `docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json`; the P1 readiness matrix is `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`; the P1 access / sample-validation plan is `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`; the narrow 2026-06-02 sample approval is `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json`. DataHub still cannot rely on P1 fields until that small-sample validation is executed, summarized, and reviewed.
-- **Phase 7c**: define the DataHub shared layer, report contracts, reproducibility plumbing, and data quality monitor before broad implementation.
+- **Phase 7c**: define the DataHub shared layer, report contracts, reproducibility plumbing, local resource budget, and data quality monitor before broad implementation.
 - **Phase 7 implementation**: broad DataHub / engine modularization starts only after provider capability, alpha plausibility, evidence-capital, and early report contracts are reviewed.
 
 Reason: `A-EGS/egs_main.py` v7.10 and `runners/backtest_rank.py` have just passed a 24-period production rank-backtest engineering validation. Large structural rewrites now would add breakage risk before the A-share short-term loop is closed.
+
+## Local Resource Boundary
+
+Four subsystems are real requirements, but the local default must not be "run every market and lane at once." Phase 7c DataHub / runner work must consume `schemas/datahub_local_resource_budget.schema.json` and `docs/datahub_local_resource_budget_contract_20260602.json` before any implementation slice that could create broad refreshes or multi-lane jobs.
+
+Default local operation is `single_slice_incremental`:
+
+- one market by default,
+- one lane by default,
+- one bounded `as_of_date` or date window by default,
+- lazy reads of only the required fields / artifacts,
+- incremental cache reuse instead of default full refresh,
+- checkpoint / resume for longer reviewed jobs.
+
+The following are not default behavior and require a separate explicit user approval plus reviewed job spec: all-market runs, all-lane runs, full-market refresh, full-history rebuild, high-output batch generation, or parallel jobs that exceed the reviewed local budget profile.
+
+The resource-budget contract is schema-first only. It does not fetch provider data, select a provider, implement adapters, create DataHub tables, change runners, authorize Phase 7c implementation, relax ship gates, or prove the user's machine has enough capacity. Future implementation must add code-level enforcement before `SR-RESOURCE-001` can be closed.
 
 ## Layer Design
 
@@ -146,6 +163,7 @@ Completion criteria:
 
 - Provider capability / field catalog contract exists for the data classes required by A-short, US-short, A-long, US-long, and burst lanes. Current baseline: `schemas/provider_capability_catalog.schema.json` v1.0.0.
 - Provider evidence / drift-monitor contract exists for P1-P4 provider evidence records, readiness rollup, and drift-monitor dimensions. Current baseline: `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. Phase 7b-2 now has six P1 evidence snapshots plus `schemas/provider_p1_readiness_review.schema.json` / `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`, `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`, and the narrow `schemas/provider_p1_sample_validation_access_approval.schema.json` / `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json`; P1 remains partial / blocked until the approved small sample is executed, summarized, and reviewed.
+- Local resource budget contract exists before DataHub / runner implementation creates broad refreshes or multi-lane jobs. Current baseline: `schemas/datahub_local_resource_budget.schema.json` v1.0.0 and `docs/datahub_local_resource_budget_contract_20260602.json`; it is schema-first only and does not authorize Phase 7c implementation.
 - Alpha plausibility audit contract exists and has reviewed lane-level verdicts before large implementation investments.
 - Evidence capital policy is reflected in aggregate/report schemas so paper evidence cannot be mistaken for live-normalized ship-gate evidence.
 - Data quality / provider drift monitoring exists before provider-backed evidence is treated as stable. It must cover coverage, freshness, schema drift, outliers, revision rate, provider incidents, and silently changed provider semantics.
@@ -165,3 +183,4 @@ Completion criteria:
 - Do not let backtest and production read different definitions for the same factor.
 - Do not treat DataHub work as a strategy-performance fix. It improves reproducibility and reuse; it does not by itself prove alpha.
 - Do not treat provider readiness as permanent. Provider drift, API schema changes, delayed fields, revised fundamentals, and classification changes must be logged and reviewable.
+- Do not make all-system, all-market, all-lane, or full-history refresh the local default. Use reviewed slice / budget profiles first.
