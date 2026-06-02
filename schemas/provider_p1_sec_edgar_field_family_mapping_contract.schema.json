@@ -1,0 +1,885 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_sec_edgar_field_family_mapping_contract/1.0.0/schema.json",
+  "title": "Provider P1 SEC EDGAR Field-Family Mapping Contract",
+  "description": "Phase 7b-2 no-access field-family mapping contract for a future SEC EDGAR fundamentals audit parser after the SEC EDGAR audit parser scope contract. This artifact defines audit field families, parser lineage gates, and FMP cross-check policy from existing reviewed repository evidence only; it does not perform SEC API calls, parse raw payloads, generate fixtures, fetch data, implement a parser, implement field mappings, select a provider, implement DataHub, change runners, or authorize Phase 7c.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_artifact_refs",
+    "review_basis",
+    "current_scope_summary",
+    "audit_field_family_mappings",
+    "parser_lineage_requirements",
+    "cross_check_policy",
+    "decision_gates",
+    "prohibited_actions",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_sec_edgar_field_family_mapping_contract"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 7,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_sec_edgar_audit_parser_scope_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_license_storage_retention_review_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_remaining_blocker_plan_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_us_egs_sample_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_public_sources_snapshot_20260528"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fundamentals_observed_date_candidates_20260528"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "review_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_type",
+        "sec_api_calls_performed",
+        "raw_payload_read_or_parsed",
+        "fixture_generated",
+        "parser_implemented",
+        "field_mapping_implemented",
+        "uses_existing_reviewed_artifacts_only",
+        "requires_later_user_approved_sec_access_packet",
+        "requires_later_parser_implementation_review",
+        "requires_later_field_mapping_review"
+      ],
+      "properties": {
+        "basis_type": {
+          "const": "existing_repo_artifacts_no_new_external_review"
+        },
+        "sec_api_calls_performed": {
+          "const": false
+        },
+        "raw_payload_read_or_parsed": {
+          "const": false
+        },
+        "fixture_generated": {
+          "const": false
+        },
+        "parser_implemented": {
+          "const": false
+        },
+        "field_mapping_implemented": {
+          "const": false
+        },
+        "uses_existing_reviewed_artifacts_only": {
+          "const": true
+        },
+        "requires_later_user_approved_sec_access_packet": {
+          "const": true
+        },
+        "requires_later_parser_implementation_review": {
+          "const": true
+        },
+        "requires_later_field_mapping_review": {
+          "const": true
+        }
+      }
+    },
+    "current_scope_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sec_scope_status",
+        "sample_evidence",
+        "field_family_mapping_status",
+        "fmp_cross_check_status",
+        "fixture_status",
+        "phase7c_effect"
+      ],
+      "properties": {
+        "sec_scope_status": {
+          "const": "audit_only_scope_defined_not_implemented"
+        },
+        "sample_evidence": {
+          "const": "company_tickers_submissions_companyfacts_success_for_two_symbol_sample_only"
+        },
+        "field_family_mapping_status": {
+          "const": "contract_only_no_taxonomy_mapping_implemented"
+        },
+        "fmp_cross_check_status": {
+          "const": "planned_anomaly_support_only_not_production_provider"
+        },
+        "fixture_status": {
+          "const": "blocked_pending_minimized_fixture_policy_review"
+        },
+        "phase7c_effect": {
+          "const": "does_not_authorize_phase7c_or_datahub_consumption"
+        }
+      }
+    },
+    "audit_field_family_mappings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/auditFieldFamilyMapping"
+      },
+      "minItems": 10,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "company_identity_cik_ticker"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "filing_metadata_accession"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "accepted_filed_timestamps"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "fiscal_period_context"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "income_statement_audit"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "balance_sheet_audit"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "cash_flow_audit"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "shares_outstanding_audit"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "taxonomy_units_currency"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "amendment_restatement_chain"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        }
+      ]
+    },
+    "parser_lineage_requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/parserLineageRequirement"
+      },
+      "minItems": 16
+    },
+    "cross_check_policy": {
+      "$ref": "#/$defs/crossCheckPolicy"
+    },
+    "decision_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decisionGate"
+      },
+      "minItems": 6
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "sec_api_call_allowed",
+        "raw_payload_parse_allowed",
+        "fixture_generation_allowed",
+        "parser_implementation_allowed",
+        "field_mapping_implementation_allowed",
+        "broader_sec_reconstruction_allowed",
+        "data_fetch_allowed",
+        "fmp_endpoint_call_allowed",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "alpha_validation_claim_allowed",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_sec_edgar_field_family_mapping_contract_after_scope_contract"
+        },
+        "contract_status": {
+          "const": "field_family_mapping_contract_only_no_access_no_parser"
+        },
+        "sec_api_call_allowed": {
+          "const": false
+        },
+        "raw_payload_parse_allowed": {
+          "const": false
+        },
+        "fixture_generation_allowed": {
+          "const": false
+        },
+        "parser_implementation_allowed": {
+          "const": false
+        },
+        "field_mapping_implementation_allowed": {
+          "const": false
+        },
+        "broader_sec_reconstruction_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "fmp_endpoint_call_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "alpha_validation_claim_allowed": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "contract_or_schema_ref",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contract_or_schema_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "auditFieldFamilyMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_family_id",
+        "audit_role",
+        "mapping_status",
+        "required_before_audit_mapping_use",
+        "blocks_broader_parser_or_datahub",
+        "authorizes_sec_api_call",
+        "authorizes_raw_payload_parse",
+        "authorizes_fixture_generation",
+        "authorizes_parser_implementation",
+        "authorizes_field_mapping_implementation",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "field_family_id": {
+          "enum": [
+            "company_identity_cik_ticker",
+            "filing_metadata_accession",
+            "accepted_filed_timestamps",
+            "fiscal_period_context",
+            "income_statement_audit",
+            "balance_sheet_audit",
+            "cash_flow_audit",
+            "shares_outstanding_audit",
+            "taxonomy_units_currency",
+            "amendment_restatement_chain"
+          ]
+        },
+        "audit_role": {
+          "enum": [
+            "in_scope_audit_only",
+            "blocked_supporting_identity_only",
+            "blocked_lineage_gate_only"
+          ]
+        },
+        "mapping_status": {
+          "enum": [
+            "blocked_pending_identity_mapping_review",
+            "blocked_pending_time_lineage_review",
+            "blocked_pending_taxonomy_context_review",
+            "blocked_pending_parser_mapping_review",
+            "blocked_audit_only_not_production_provider"
+          ]
+        },
+        "required_before_audit_mapping_use": {
+          "$ref": "#/$defs/stringList"
+        },
+        "blocks_broader_parser_or_datahub": {
+          "const": true
+        },
+        "authorizes_sec_api_call": {
+          "const": false
+        },
+        "authorizes_raw_payload_parse": {
+          "const": false
+        },
+        "authorizes_fixture_generation": {
+          "const": false
+        },
+        "authorizes_parser_implementation": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "parserLineageRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement_id",
+        "status",
+        "lineage_reason",
+        "blocks_broader_parser_or_datahub",
+        "authorizes_sec_api_call",
+        "authorizes_raw_payload_parse",
+        "authorizes_fixture_generation",
+        "authorizes_parser_implementation",
+        "authorizes_field_mapping_implementation",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "requirement_id": {
+          "enum": [
+            "cik_ticker_identity",
+            "accession_number",
+            "submission_ref",
+            "form_type",
+            "accepted_timestamp",
+            "filed_date",
+            "report_period_date",
+            "fiscal_year_period",
+            "amendment_or_restatement_flag",
+            "taxonomy_tag",
+            "taxonomy_extension",
+            "unit_and_currency",
+            "period_start_end_dates",
+            "context_dimensions",
+            "source_endpoint_and_params",
+            "as_of_eligibility_rule"
+          ]
+        },
+        "status": {
+          "const": "required_before_sec_audit_mapping_or_datahub"
+        },
+        "lineage_reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blocks_broader_parser_or_datahub": {
+          "const": true
+        },
+        "authorizes_sec_api_call": {
+          "const": false
+        },
+        "authorizes_raw_payload_parse": {
+          "const": false
+        },
+        "authorizes_fixture_generation": {
+          "const": false
+        },
+        "authorizes_parser_implementation": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "crossCheckPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "sec_replaces_fmp_production_fundamentals",
+        "sec_price_source_allowed",
+        "sec_strict_free_float_authority_allowed",
+        "anomaly_review_requires_sec_ref",
+        "missing_sec_mapping_blocks_audit_claim",
+        "missing_taxonomy_context_blocks_audit_claim",
+        "silent_default_allowed",
+        "zero_fill_allowed",
+        "authorizes_sec_api_call",
+        "authorizes_parser_implementation",
+        "authorizes_field_mapping_implementation",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "audit_expectations_only_no_parser_mapping"
+        },
+        "sec_replaces_fmp_production_fundamentals": {
+          "const": false
+        },
+        "sec_price_source_allowed": {
+          "const": false
+        },
+        "sec_strict_free_float_authority_allowed": {
+          "const": false
+        },
+        "anomaly_review_requires_sec_ref": {
+          "const": true
+        },
+        "missing_sec_mapping_blocks_audit_claim": {
+          "const": true
+        },
+        "missing_taxonomy_context_blocks_audit_claim": {
+          "const": true
+        },
+        "silent_default_allowed": {
+          "const": false
+        },
+        "zero_fill_allowed": {
+          "const": false
+        },
+        "authorizes_sec_api_call": {
+          "const": false
+        },
+        "authorizes_parser_implementation": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "decisionGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "blocks_implementation",
+        "required_resolution",
+        "authorizes_sec_api_call",
+        "authorizes_raw_payload_parse",
+        "authorizes_fixture_generation",
+        "authorizes_parser_implementation",
+        "authorizes_field_mapping_implementation",
+        "authorizes_datahub_or_runner_consumption",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "pending_user_approval",
+            "pending_later_mapping_review",
+            "pending_later_parser_review",
+            "pending_later_artifact_policy"
+          ]
+        },
+        "blocks_implementation": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_sec_api_call": {
+          "const": false
+        },
+        "authorizes_raw_payload_parse": {
+          "const": false
+        },
+        "authorizes_fixture_generation": {
+          "const": false
+        },
+        "authorizes_parser_implementation": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sec_api_call",
+        "raw_payload_parse",
+        "fixture_generation",
+        "parser_implementation",
+        "field_mapping_implementation",
+        "broader_sec_reconstruction",
+        "fmp_endpoint_call",
+        "provider_selection",
+        "provider_ranking",
+        "new_token_or_trial",
+        "paid_access",
+        "provider_contact",
+        "yfinance_check",
+        "full_market_download",
+        "provider_adapter",
+        "datahub_table",
+        "production_runner_consumption",
+        "phase7c_authorization",
+        "alpha_validation_claim",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "sec_api_call": {
+          "const": false
+        },
+        "raw_payload_parse": {
+          "const": false
+        },
+        "fixture_generation": {
+          "const": false
+        },
+        "parser_implementation": {
+          "const": false
+        },
+        "field_mapping_implementation": {
+          "const": false
+        },
+        "broader_sec_reconstruction": {
+          "const": false
+        },
+        "fmp_endpoint_call": {
+          "const": false
+        },
+        "provider_selection": {
+          "const": false
+        },
+        "provider_ranking": {
+          "const": false
+        },
+        "new_token_or_trial": {
+          "const": false
+        },
+        "paid_access": {
+          "const": false
+        },
+        "provider_contact": {
+          "const": false
+        },
+        "yfinance_check": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "provider_adapter": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "phase7c_authorization": {
+          "const": false
+        },
+        "alpha_validation_claim": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

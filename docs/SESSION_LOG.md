@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (SEC EDGAR field-family mapping contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8e11b5c`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/provider_evidence_drift_monitor.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_sec_edgar_field_family_mapping_contract.schema.json, docs/provider_evidence_p1_us_sec_edgar_field_family_mapping_contract_20260602.json, tests/schema/test_provider_p1_sec_edgar_field_family_mapping_contract_schema.py. No runner / provider_samples / network change (docs+schema+test only).
+
+**Independent verification**:
+- Contract authorizes nothing and does no SEC work: `contract_status=field_family_mapping_contract_only_no_access_no_parser`; `sec_api_call_allowed / raw_payload_parse_allowed / fixture_generation_allowed / parser_implementation_allowed / field_mapping_implementation_allowed / alpha_validation_claim_allowed=false`; `review_basis` confirms no SEC calls / no parse / no fixture / no parser / no mapping. All scope / field-family / lineage / gate / prohibited fields const-false.
+- SEC correctly kept audit-only: 10 audit_field_family_mappings (income/balance/cash-flow/shares-outstanding = `in_scope_audit_only` but `mapping_status` blocked-pending-review; identity/filing-metadata/timestamps/fiscal-context/taxonomy-units/amendment = `blocked_lineage_gate`), shares_outstanding explicitly "not strict free-float authority"; 16 parser_lineage_requirements (accession / accepted_timestamp / amendment_or_restatement_flag / taxonomy_tag+extension / context_dimensions / as_of_eligibility_rule …) all `blocks_broader_parser_or_datahub=true`; `cross_check_policy` sets `sec_replaces_fmp_production_fundamentals=false`, `sec_price_source_allowed=false`, `sec_strict_free_float_authority_allowed=false`, `missing_sec_mapping_blocks_audit_claim=true`, `silent_default/zero_fill=false`. Consistent with the §24 SEC scope contract (audit-only, not price/free-float/alpha).
+- Ran `tests.schema.test_provider_p1_sec_edgar_field_family_mapping_contract_schema` under Python313 (jsonschema): 9 tests, all pass, 0 skipped — scope locks, audit field families complete + non-authorizing, cross-check policy SEC-audit-only + no-silent-default, 16-item lineage completeness + blocks-broader, review_basis no-access, scope-creep rejected, sources/limits preserve blockers.
+- AGENTS.md descriptive-only (grep-confirmed fixed decisions remain 14/15/16, no item 17). drift-monitor §27 insert + §28 renumber clean (grep-confirmed §25 PIT / §26 price-adj / §27 field-family / §28 Next Use); register SR-PROVIDER-001 grep-confirmed `Status: open`; CURRENT=145 (≤150); next no-access slice named = coverage-count access-packet planning.
+
+**Process**: correct no-access SEC field-family mapping contract — audit-only role, taxonomy/lineage gates, no parser/mapping/fixture/SEC-call this round; SEC not promoted to price/free-float/production-provider; `SR-PROVIDER-001` not closed. Single-scope working tree.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (open) + `SR-RESOURCE-001` (P2 open) — all unchanged. No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (SEC EDGAR field-family mapping contract)
+
+**Commits**: none (pending Claude review / submit; base `8e11b5c`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `8e11b5c Add FMP price corporate action semantics contract`.
+- Executes the next no-access `SR-PROVIDER-001` provider slice named by current routing: define SEC EDGAR audit field-family mapping gates after the SEC parser scope contract, without doing parser implementation or provider access.
+- This round does not call SEC / FMP / `yfinance`, does not read or parse ignored raw payloads, does not generate fixtures, does not fetch data, does not implement parser or field mappings, does not create adapters / DataHub tables, does not modify runners, and does not authorize Phase 7c.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_sec_edgar_field_family_mapping_contract.schema.json`: added a no-access contract for SEC EDGAR audit field-family mapping, 10 audit field-family gates, 16 parser lineage requirements, FMP cross-check policy, decision gates, and prohibited actions.
+2. [untracked] `docs/provider_evidence_p1_us_sec_edgar_field_family_mapping_contract_20260602.json`: added the concrete no-secret artifact. It treats AAPL / MSFT SEC public API success as response-shape evidence only and blocks SEC audit claims pending later access packet, parser implementation review, taxonomy/context mapping review, FMP cross-check mapping review, and artifact / fixture policy.
+3. [untracked] `tests/schema/test_provider_p1_sec_edgar_field_family_mapping_contract_schema.py`: validates schema/artifact, no-access scope locks, field-family completeness, lineage completeness, cross-check no-silent-default policy, source refs / limitations, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the SEC field-family mapping contract while keeping `SR-PROVIDER-001` open.
+
+**Key decisions**:
+- Treat SEC field-family mapping as a contract-only gate, not implementation. Reason: field-family, taxonomy, context, unit/currency, amendment, and FMP cross-check rules must be reviewed before parser code or fixtures exist.
+- Keep SEC EDGAR as fundamentals anomaly audit / FMP cross-check support only. Reason: SEC EDGAR remains out of scope as price source, strict free-float authority, production fundamentals provider, security master, alpha-validation artifact, or DataHub source authority.
+- Block fixture generation in this slice. Reason: even minimized fixtures would require a later raw-payload retention / no-secret / artifact policy review.
+- Leave `SR-PROVIDER-001` open. Reason: actual SEC access, raw-payload retention, minimized fixtures, parser implementation, field mapping, broader SEC reconstruction, FMP coverage, current terms / production storage rights, PIT, price adjustment, fallback execution, stability evidence, provider selection, DataHub / runner consumption, and Phase 7c remain unresolved.
+
+**Rejected alternatives**:
+- "Parse the existing ignored SEC raw sample now" — rejected; raw-payload parsing and parser implementation are outside this no-access contract.
+- "Generate parser fixtures from sample payloads" — rejected; fixture generation needs later artifact-retention / no-secret review.
+- "Map SEC taxonomy tags into production fields now" — rejected; field mapping implementation and taxonomy correctness review are later work.
+- "Use this as Phase 7c readiness" — rejected; the contract defines gates only and authorizes no DataHub / runner consumption.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_sec_edgar_field_family_mapping_contract_schema -v`: 9 tests ran; 6 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_sec_edgar_field_family_mapping_contract_schema tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v`: 24 tests passed.
+- `json.tool` parsed `schemas/provider_p1_sec_edgar_field_family_mapping_contract.schema.json` and `docs/provider_evidence_p1_us_sec_edgar_field_family_mapping_contract_20260602.json`.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check`: passed after SESSION_LOG prepend; only normal LF/CRLF working-copy warnings were printed.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: the packet accidentally authorizes SEC endpoint calls, raw-payload parsing, fixture generation, parser implementation, field-mapping implementation, provider selection, DataHub / runner consumption, alpha-validation claims, ship-gate claims, Phase 7c, or closes `SR-PROVIDER-001` too early.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (FMP price-adjustment / corporate-action semantics contract)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `7819e23`)

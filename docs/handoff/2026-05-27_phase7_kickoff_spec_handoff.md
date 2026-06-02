@@ -2231,3 +2231,48 @@ git diff --check
 
 1. Claude 复审应重点核对 contract 是否没有授权 FMP endpoint calls、raw-payload parsing、return calculation、corporate-action reconciliation、field mapping implementation、provider selection、DataHub / runner consumption 或 Phase 7c。
 2. 如果审查 Pass 并提交，下一条 no-access provider slice 可转向 SEC parser field-family mapping contract 或 coverage-count access-packet planning；任何 actual FMP adjustment validation、corporate-action sample、coverage-count execution、FMP call、SEC call、raw parse 或 field-mapping / parser implementation 仍需 separate explicit approval + reviewed decision。
+
+## 2026-06-02 append: SEC EDGAR field-family mapping contract
+
+**What changed**:
+
+- Added `schemas/provider_p1_sec_edgar_field_family_mapping_contract.schema.json`, a no-access schema-first contract for future SEC EDGAR audit field-family mapping after the SEC audit parser scope contract.
+- Added `docs/provider_evidence_p1_us_sec_edgar_field_family_mapping_contract_20260602.json`, based only on existing reviewed repo artifacts. It defines 10 audit field-family gates, 16 parser lineage requirements, FMP cross-check policy, decision gates, and prohibited actions.
+- Added `tests/schema/test_provider_p1_sec_edgar_field_family_mapping_contract_schema.py`, covering schema/artifact validation, no-access locks, complete field-family gates, complete lineage gates, cross-check no-silent-default policy, source refs / limitations, and scope-creep rejection.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, and `docs/system_risk_register.md` to route this contract while keeping `SR-PROVIDER-001` open.
+
+**Why**:
+
+- The SEC parser scope contract already blocked broader SEC reconstruction pending later lineage / parser / fair-access / artifact work. This slice defines the field-family mapping gates without crossing into parser implementation.
+- SEC EDGAR remains fundamentals anomaly audit / FMP cross-check support only. The contract explicitly excludes price-source use, strict free-float authority, production fundamentals provider use, security-master use, alpha-validation claims, DataHub source authority, and Phase 7c authorization.
+- This round intentionally performs no SEC API call, no raw-payload parse, no fixture generation, no parser implementation, no field-mapping implementation, no provider call, no adapter / DataHub work, no runner change, and no Phase 7c authorization.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_sec_edgar_field_family_mapping_contract_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_sec_edgar_field_family_mapping_contract_schema tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\provider_p1_sec_edgar_field_family_mapping_contract.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\provider_evidence_p1_us_sec_edgar_field_family_mapping_contract_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**Validation results**:
+
+- Bundled Python: `tests.schema.test_provider_p1_sec_edgar_field_family_mapping_contract_schema` ran 9 tests: 6 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Python313 with `jsonschema`: SEC field-family mapping contract + SEC parser scope contract + remaining-blocker plan targeted schema tests ran 24 tests, all passed.
+- `json.tool` parsed the new schema and artifact successfully.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check` final result is recorded in the top `docs/SESSION_LOG.md` Codex entry for this work round.
+
+**Invalid conclusions**:
+
+- "SEC sample success means SEC parser / mapping can now be implemented" is false. This contract authorizes no SEC call, raw parse, parser implementation, field mapping, fixture generation, or DataHub consumption.
+- "SEC EDGAR can replace FMP as production fundamentals provider" is false. SEC remains audit / cross-check support only.
+- "This closes `SR-PROVIDER-001`" is false. Actual SEC access, raw-payload retention, minimized fixtures, parser implementation, field mapping, coverage, license / production storage, PIT, price adjustment, fallback execution, stability evidence, provider selection, DataHub, runner consumption, and Phase 7c remain blocked.
+
+**Next-step notes**:
+
+1. Claude review should focus on whether the new contract accidentally authorizes SEC endpoint calls, raw-payload parsing, fixture generation, parser implementation, field-mapping implementation, provider selection, DataHub / runner consumption, alpha-validation claims, ship-gate claims, or Phase 7c.
+2. If review passes and the change is committed, the next safe no-access provider slice is coverage-count access-packet planning. Any actual coverage-count execution, FMP call, SEC call, raw parse, fixture generation, field-mapping / parser implementation, provider status polling, adapter, DataHub, runner, or Phase 7c step still requires separate explicit approval + reviewed decision.
