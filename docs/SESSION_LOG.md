@@ -8,6 +8,68 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (A-short threshold governance parity / SR-GOV-001)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `3b3a227`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions. Single-scope (the two coverage scopes were committed as `3b3a227`).
+
+**Scope reviewed**: [tracked] presets/a_short.yaml, presets/README.md, AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/system_risk_register.md. [untracked] schemas/a_short_screening_threshold_governance.schema.json, presets/a_short_screening_threshold_governance_20260602.json, tests/schema/test_a_short_screening_threshold_governance_schema.py. `A-EGS/egs_main.py` NOT modified (git status confirms) — no runtime behavior change.
+
+**Independent verification (this closes SR-GOV-001; verified the closure is complete + behavior-preserving):**
+- **Parity is real, not asserted**: ran the governance test under Python313 (jsonschema) — 7/7 pass, incl. `test_threshold_inventory_matches_current_egs_conf_literals`, which AST-parses `A-EGS/egs_main.py` CONF (no import → no TUSHARE/side-effects) and asserts each governed value equals the live literal. Independently re-extracted CONF myself: all 13 governed values match exactly (min_avg_amount 1.5e8, unlock_ratio 5.0, top_n 50, watch_n 15, final_n 5, suspend_lookback 5, suspend_daily_min_coverage 0.95, daily_stats_min_rows 1000, momentum_std_threshold 8.0, max_concepts_per_stock 5, overheat_5d 8.0, overheat_20d 22.0, esp_raw_cap 200.0).
+- **Completeness check (the substantive closure question)**: CONF has 21 keys; the 13 governed are exactly the numeric screening/selection/risk thresholds. The 8 excluded (request_delay, chunk_size, financial_chunk_size, financial_min_chunk, result_dir, cache_dir, cache_ttl, l3_cache_mode) are genuine operational plumbing (rate delay, batch sizes, paths, cache TTL, L3 cache mode governed by CLI/`--mode production`), not screening thresholds — correct exclusion per the entry's "production-relevant thresholds" wording. No screening threshold is omitted.
+- **Behavior-preserving**: `presets/a_short.yaml` adds only a `screening_threshold_governance` routing block (refs + status), not competing values; runtime still reads CONF; `test_preset_routes_to_governance_artifact_without_breaking_yaml_loader` confirms the new block doesn't break `backtest_execution.load_yaml_mapping`. scope/parity_rules/migration_gates/prohibited all const-false (no runtime/loader/provider/run authorization); scope-creep (adding request_delay / provider_call / run_screening) rejected.
+- **Closure hygiene**: register marks SR-GOV-001 `resolved` with closure evidence + verification + a correct forward rule ("future threshold changes must update artifact + parity test in the same slice; runtime-loader migration is a separate behavior-preserving task"). Chose the entry's allowed "add parity tests" path over a runtime-loader migration (which would change behavior). AGENTS.md adds a descriptive progress bullet + file-ref only (fixed decisions remain 14/15/16/17, no new item). CURRENT=149.
+
+**Process**: good pivot off the exhausted US-provider no-access queue to a real A-short register item; closes SR-GOV-001 with a durable parity guard and zero runtime change. Single-scope working tree.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (open) + `SR-RESOURCE-001` (P2 open). `SR-GOV-001` now resolved. No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (A-short threshold governance parity)
+
+**Commits**: none (pending Claude review / submit; base `3b3a227`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `3b3a227 Add US EGS coverage smoke evidence`.
+- `SR-PROVIDER-001` remains open and no new provider-access approval exists, so this round does not call FMP / SEC, parse raw payloads, derive missing fields, implement DataHub / adapters, or touch production runners.
+- Executes the next safe risk-register maintenance item: close `SR-GOV-001` by adding preset/code parity governance for A-short screening thresholds.
+- This round does not modify `A-EGS/egs_main.py`, run screening, run research / backtests, fetch data, change runtime threshold behavior, relax ship gates, or authorize broker / order automation.
+
+**Worked on**:
+1. [untracked] `schemas/a_short_screening_threshold_governance.schema.json`: added the schema-first governance contract for current A-short screening-threshold parity.
+2. [untracked] `presets/a_short_screening_threshold_governance_20260602.json`: added the concrete artifact mirroring 13 literal `A-EGS/egs_main.py::CONF` screening thresholds.
+3. [untracked] `tests/schema/test_a_short_screening_threshold_governance_schema.py`: added schema/artifact tests plus an AST-based static parser that checks artifact values against `CONF` without importing or running EGS.
+4. [tracked] `presets/a_short.yaml`: replaced the stale "thresholds later" note with a flat `screening_threshold_governance` route to the artifact, source ref, and parity test.
+5. [tracked] `presets/README.md`, `docs/README.md`, `docs/CURRENT.md`, `AGENTS.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: routed the new threshold-governance artifact.
+6. [tracked] `docs/system_risk_register.md`: marked `SR-GOV-001` resolved with closure evidence and verification.
+7. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude handoff.
+
+**Key decisions**:
+- Close `SR-GOV-001` through the smaller allowed path: a governed preset artifact plus tests that assert preset / artifact / code parity. Reason: runtime preset-loader migration would change behavior and is not needed to close the current governance risk.
+- Use AST parsing instead of importing `A-EGS/egs_main.py`. Reason: importing EGS can require `TUSHARE_TOKEN` / Tushare setup and would cross the no-screening/no-provider boundary for a schema test.
+- Mirror only production-relevant screening thresholds, not operational plumbing such as request delay, chunk size, paths, cache TTL, or result directories.
+
+**Rejected alternatives**:
+- "Make EGS load thresholds from YAML now" — rejected; that is a runtime behavior migration and needs its own reviewed behavior-preservation slice.
+- "Import `A-EGS/egs_main.py` in the test" — rejected; static AST parsing is enough and avoids token/provider side effects.
+- "Run screening to prove behavior unchanged" — rejected; not needed for a no-runtime-change governance slice.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_a_short_screening_threshold_governance_schema -v`: 7 tests ran; 4 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_short_screening_threshold_governance_schema tests.schema.test_datahub_local_resource_budget_schema -v`: 13 tests passed.
+- `json.tool` parsed `schemas/a_short_screening_threshold_governance.schema.json` and `presets/a_short_screening_threshold_governance_20260602.json`.
+- `docs/CURRENT.md` line count = 149.
+- `git diff --check`: exit 0; only normal LF/CRLF working-copy warnings were printed.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review the tracked diffs plus the three untracked files above. Primary review risks: the artifact/test accidentally changes runtime threshold behavior, imports or runs EGS, authorizes provider/data/research/DataHub work, overcloses a risk beyond preset/code parity, or misses a production-relevant `CONF` threshold that should be governed.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (Missing key-metrics resolution plan + carried coverage packet)
 
 **Commits**: none (review-only entry; reviews the COMPLETE working tree — two stacked scopes — vs `4ff4909`)

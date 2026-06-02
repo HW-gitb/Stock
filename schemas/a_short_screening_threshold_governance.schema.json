@@ -1,0 +1,409 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_screening_threshold_governance/1.0.0/schema.json",
+  "title": "A-Short Screening Threshold Governance Contract",
+  "description": "Schema-first governance contract for A-share short screening thresholds mirrored from the current EGS CONF block. This artifact enforces preset/code parity; it does not change runtime behavior, fetch data, run screening, or authorize provider/DataHub work.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_refs",
+    "preset_routing",
+    "threshold_items",
+    "parity_rules",
+    "migration_gates",
+    "prohibited_actions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "a_short_screening_threshold_governance"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "a_short_preset"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "egs_main_conf"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "system_risk_register"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "presets_readme"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "preset_routing": {
+      "$ref": "#/$defs/presetRouting"
+    },
+    "threshold_items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/thresholdItem"
+      },
+      "minItems": 13
+    },
+    "parity_rules": {
+      "$ref": "#/$defs/parityRules"
+    },
+    "migration_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/migrationGate"
+      },
+      "minItems": 3
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "runtime_behavior_changed_by_this_artifact",
+        "egs_runner_change_allowed",
+        "data_fetch_allowed",
+        "provider_call_allowed",
+        "provider_selection_allowed",
+        "datahub_or_adapter_allowed",
+        "research_run_allowed",
+        "ship_gate_claim_allowed",
+        "broker_or_order_automation_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "a_short_governance"
+        },
+        "purpose": {
+          "const": "screening_threshold_preset_code_parity"
+        },
+        "contract_status": {
+          "const": "parity_contract_no_runtime_behavior_change"
+        },
+        "runtime_behavior_changed_by_this_artifact": {
+          "const": false
+        },
+        "egs_runner_change_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_call_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "datahub_or_adapter_allowed": {
+          "const": false
+        },
+        "research_run_allowed": {
+          "const": false
+        },
+        "ship_gate_claim_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "presetRouting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_path",
+        "preset_section",
+        "governance_artifact_path",
+        "source_code_ref",
+        "parity_test_path",
+        "runtime_consumption_status"
+      ],
+      "properties": {
+        "preset_path": {
+          "const": "presets/a_short.yaml"
+        },
+        "preset_section": {
+          "const": "screening_threshold_governance"
+        },
+        "governance_artifact_path": {
+          "const": "presets/a_short_screening_threshold_governance_20260602.json"
+        },
+        "source_code_ref": {
+          "const": "A-EGS/egs_main.py::CONF"
+        },
+        "parity_test_path": {
+          "const": "tests/schema/test_a_short_screening_threshold_governance_schema.py"
+        },
+        "runtime_consumption_status": {
+          "const": "current_runtime_still_reads_conf_parity_test_blocks_drift"
+        }
+      }
+    },
+    "thresholdItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conf_key",
+        "expected_value",
+        "value_type",
+        "unit",
+        "production_role",
+        "preset_migration_status"
+      ],
+      "properties": {
+        "conf_key": {
+          "enum": [
+            "min_avg_amount",
+            "unlock_ratio",
+            "top_n",
+            "watch_n",
+            "final_n",
+            "suspend_lookback",
+            "suspend_daily_min_coverage",
+            "daily_stats_min_rows",
+            "momentum_std_threshold",
+            "max_concepts_per_stock",
+            "overheat_5d",
+            "overheat_20d",
+            "esp_raw_cap"
+          ]
+        },
+        "expected_value": {
+          "type": "number"
+        },
+        "value_type": {
+          "enum": [
+            "integer",
+            "number"
+          ]
+        },
+        "unit": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "production_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "preset_migration_status": {
+          "const": "mirrored_from_current_conf_pending_runtime_loader_migration"
+        }
+      }
+    },
+    "parityRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current_runtime_source",
+        "governed_preset_record",
+        "exact_value_match_required",
+        "missing_code_key_blocks_review",
+        "missing_artifact_key_blocks_review",
+        "threshold_change_requires_reviewed_artifact_update",
+        "silent_runtime_default_allowed",
+        "code_only_threshold_allowed"
+      ],
+      "properties": {
+        "current_runtime_source": {
+          "const": "A-EGS/egs_main.py::CONF"
+        },
+        "governed_preset_record": {
+          "const": "presets/a_short_screening_threshold_governance_20260602.json"
+        },
+        "exact_value_match_required": {
+          "const": true
+        },
+        "missing_code_key_blocks_review": {
+          "const": true
+        },
+        "missing_artifact_key_blocks_review": {
+          "const": true
+        },
+        "threshold_change_requires_reviewed_artifact_update": {
+          "const": true
+        },
+        "silent_runtime_default_allowed": {
+          "const": false
+        },
+        "code_only_threshold_allowed": {
+          "const": false
+        }
+      }
+    },
+    "migrationGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "required_resolution",
+        "blocks_sr_gov_001_closure",
+        "authorizes_runtime_loader_change",
+        "authorizes_threshold_behavior_change"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "required_before_future_threshold_change",
+            "deferred_until_runtime_loader_migration",
+            "satisfied_by_this_parity_contract"
+          ]
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blocks_sr_gov_001_closure": {
+          "type": "boolean"
+        },
+        "authorizes_runtime_loader_change": {
+          "const": false
+        },
+        "authorizes_threshold_behavior_change": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modify_egs_main_runtime_behavior",
+        "run_screening",
+        "provider_call",
+        "data_fetch",
+        "research_or_backtest_run",
+        "datahub_or_adapter_implementation",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "modify_egs_main_runtime_behavior": {
+          "const": false
+        },
+        "run_screening": {
+          "const": false
+        },
+        "provider_call": {
+          "const": false
+        },
+        "data_fetch": {
+          "const": false
+        },
+        "research_or_backtest_run": {
+          "const": false
+        },
+        "datahub_or_adapter_implementation": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

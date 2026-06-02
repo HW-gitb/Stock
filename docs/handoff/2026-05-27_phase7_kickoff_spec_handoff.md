@@ -2414,3 +2414,41 @@ git diff --check
 
 1. Claude review should verify that the plan is no-access and does not authorize raw-payload parsing, derivation implementation, field mapping, provider selection, DataHub / runner consumption, ship-gate claims, or Phase 7c.
 2. If review passes and the change is committed, the next concrete missing-field step would need a separate user-approved field-presence / lineage packet before any raw parsing or fresh endpoint calls.
+
+## 2026-06-02 append: A-short screening threshold governance parity
+
+**What changed**:
+
+- Added `schemas/a_short_screening_threshold_governance.schema.json`, a schema-first governance contract for A-share short screening thresholds.
+- Added `presets/a_short_screening_threshold_governance_20260602.json`, mirroring 13 current literal `A-EGS/egs_main.py::CONF` screening thresholds into a governed preset artifact.
+- Updated `presets/a_short.yaml` with a flat `screening_threshold_governance` route to the artifact, source code ref, and parity test.
+- Added `tests/schema/test_a_short_screening_threshold_governance_schema.py`, which statically parses `A-EGS/egs_main.py` with AST and asserts exact artifact/code parity without importing EGS or requiring `TUSHARE_TOKEN`.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `presets/README.md`, and `docs/system_risk_register.md`; `SR-GOV-001` is resolved.
+
+**Why**:
+
+- `SR-GOV-001` tracked that production-relevant A-short screening thresholds lived only in `A-EGS/egs_main.py::CONF` while `presets/a_short.yaml` still said detailed thresholds would be filled later.
+- This slice takes the smaller safe closure path allowed by the risk entry: assert preset / artifact / code parity under test instead of migrating runtime threshold loading now.
+- This round intentionally performs no screening run, no research / backtest run, no provider call, no data fetch, no `A-EGS/egs_main.py` runtime change, no DataHub / adapter implementation, no ship-gate claim, and no broker / order automation.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_a_short_screening_threshold_governance_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_short_screening_threshold_governance_schema tests.schema.test_datahub_local_resource_budget_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\a_short_screening_threshold_governance.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool presets\a_short_screening_threshold_governance_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**Invalid conclusions**:
+
+- "The runtime now loads thresholds from YAML" is false. Current runtime still reads `A-EGS/egs_main.py::CONF`; this slice only adds a reviewed parity gate.
+- "This changes candidate selection / scoring / output" is false. `A-EGS/egs_main.py` was not modified.
+- "This authorizes provider access, research, DataHub, Phase 7c, or ship-gate evidence" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify that the artifact exactly mirrors current `CONF` values and that the test does not import or run `A-EGS/egs_main.py`.
+2. Any future runtime preset-loader migration or threshold behavior change must be a separate reviewed slice with behavior-preservation tests.

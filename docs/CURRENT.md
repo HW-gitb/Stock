@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-02（US EGS missing key-metrics resolution plan）
+**最后更新**：2026-06-02（A-short threshold governance parity）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -15,6 +15,7 @@
 - User approved the exact US EGS coverage-count packet; `runners/us_egs_coverage_count_packet.py` executed 5 active symbols × 6 FMP stable endpoint families (`AAPL`, `MSFT`, `NVDA`, `JPM`, `XOM`) with 30/30 HTTP 200, raw payloads only under gitignored `provider_samples/us_egs_coverage_count_20260602/fmp_stable/`, and tracked no-secret summary at `docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json`.
 - `schemas/provider_p1_missing_key_metrics_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json` now route the three missing key-metrics fields as candidate derivations pending separate field-presence / lineage review; this performs no raw-payload parse, no new provider call, no derivation implementation, no DataHub / runner consumption, and no Phase 7c authorization.
 - `schemas/datahub_local_resource_budget.schema.json` / `docs/datahub_local_resource_budget_contract_20260602.json` define the Phase 7c precondition that local defaults are single-slice / incremental / lazy / checkpointed, not all-system full refresh; this does not implement DataHub, change runners, fetch provider data, or authorize Phase 7c.
+- `schemas/a_short_screening_threshold_governance.schema.json` / `presets/a_short_screening_threshold_governance_20260602.json` now mirror 13 current `A-EGS/egs_main.py::CONF` screening thresholds and test preset/code parity without importing EGS or changing runtime behavior; `SR-GOV-001` is resolved.
 
 ---
 
@@ -36,6 +37,7 @@
 - **Risk-register maintenance group**（2026-06-01）：benchmark-open input、forward tracker、forward-live evidence、analysis_input PIT/schema、daily stats insufficiency、forward-return status、relisted lookback、LLM prompt boundary、drawdown evidence guard 等已按 `docs/system_risk_register.md` resolved entries 收敛；细节见 risk register。
 - **US EGS coverage-count / missing-field routing**（2026-06-02）：the approved FMP stable coverage smoke produced `docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json`; `schemas/provider_p1_missing_key_metrics_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json` route `peRatio`, `revenuePerShare`, and `netIncomePerShare` without authorizing raw parse or derivation; `SR-PROVIDER-001` stays open.
 - **DataHub local resource budget contract**（2026-06-02）：`schemas/datahub_local_resource_budget.schema.json` / `docs/datahub_local_resource_budget_contract_20260602.json` require future DataHub / runner jobs to default to single-market, single-lane, bounded-window, lazy / incremental / checkpointed slices; `SR-RESOURCE-001` remains open until code-level enforcement exists.
+- **A-short threshold governance parity**（2026-06-02）：`presets/a_short.yaml` routes to `presets/a_short_screening_threshold_governance_20260602.json`; tests statically compare the artifact to `A-EGS/egs_main.py::CONF`; no screening run or runtime behavior change.
 
 ---
 
@@ -76,6 +78,7 @@
 - `docs/provider_data_requirements_audit.md` / `schemas/provider_capability_catalog.schema.json` - provider requirements / capability contract。
 - `docs/portfolio_allocation_policy.md` - 35/65、bucket、cash non-fungibility、manual-only capital policy。
 - `docs/datahub_design.md` / `schemas/datahub_local_resource_budget.schema.json` / `docs/datahub_local_resource_budget_contract_20260602.json` - DataHub / provider / factor-layer guardrails and Phase 7c local resource budget precondition。
+- `presets/a_short.yaml` / `presets/a_short_screening_threshold_governance_20260602.json` / `schemas/a_short_screening_threshold_governance.schema.json` - A-short screening threshold governance parity owner。
 - `docs/handoff/README.md` - phase handoff index；不要全量读 handoff。
 
 ---

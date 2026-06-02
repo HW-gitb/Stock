@@ -334,11 +334,13 @@ Missing key-metrics update: `docs/provider_evidence_p1_us_missing_key_metrics_re
 ### SR-GOV-001 - A-short screening thresholds are not governed by preset schema
 
 - Severity: P2
-- Status: open
+- Status: resolved
 - Owner phase: A-short screening governance
 - Evidence: `presets/a_short.yaml` is a capital / routing preset and still says detailed thresholds will be filled later; many live screening thresholds live in `A-EGS/egs_main.py` `CONF` and scoring code.
 - Accepted calibration: `backtest_execution.py` does read `presets/a_short.yaml` for capital profile, so the issue is screening-threshold governance, not total preset non-use.
-- Required next action: move production-relevant A-short thresholds into a governed preset contract or add tests that assert docs / preset / code parity.
+- Closure evidence: this reviewed slice adds `schemas/a_short_screening_threshold_governance.schema.json`, `presets/a_short_screening_threshold_governance_20260602.json`, and routes it from `presets/a_short.yaml` / `presets/README.md` / `docs/README.md` / `docs/CURRENT.md` / `AGENTS.md`. The artifact mirrors 13 current literal `A-EGS/egs_main.py::CONF` screening thresholds and records that runtime behavior still comes from CONF until a later reviewed preset-loader migration.
+- Verification: `tests.schema.test_a_short_screening_threshold_governance_schema` validates the schema / artifact when `jsonschema` is available, statically parses `A-EGS/egs_main.py` with AST instead of importing it, asserts exact preset/artifact/code threshold parity, verifies no provider / screening / runtime behavior authorization, and rejects scope creep.
+- Required next action: no active `SR-GOV-001` action. Future A-short screening threshold changes must update the governance artifact and parity test in the same reviewed slice; a future runtime-loader migration remains a separate reviewed behavior-preservation task.
 
 ### SR-SKILL-001 - US-short reference docs are copy-paste runtime prompt shaped
 
