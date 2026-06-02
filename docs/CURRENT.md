@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-01（SR-DATA-004 suspend coverage observability）
+**最后更新**：2026-06-02（US EGS small sample-validation boundary）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,15 +12,15 @@
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
 - Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
-- `SR-DATA-004` remains open pending real weekly evidence, but the current change set writes `logs/suspend_daily_coverage_<asof>.json` and mirrors the latest observation into schema-validated `data_health` v1.2.0 `metrics.suspend_daily_coverage`.
+- `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json` records the user-approved $0 US EGS small-sample boundary: existing FMP key + SEC EDGAR public APIs, AAPL / MSFT only, local gitignored raw samples, no yfinance / full-market / paid upgrade / Phase 7c.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：Phase 7b-2 P1 closure plan is documented; US EGS data-source direction is FMP primary candidate + SEC EDGAR fundamentals audit; A-share minimal-data burst full-universe redesigned outcome is complete and failed.
-- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；risk register hot queue maintenance 组仅余 `SR-DATA-004`（仍需真实 weekly suspend-coverage 日志），除非用户先批准新的 research preregistration、provider-access work 或更窄 override。
-- **当前 P1 provider blocker**：任何 FMP token / trial / paid access、SEC parser sample、`yfinance` price smoke check、provider contact、sample 或 data-fetch 前，必须先由用户批准 cost ceiling、access path、license / local-storage / non-display / retention 边界，并经后续 reviewed decision。
+- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；next US-provider step is the reviewed AAPL / MSFT FMP + SEC small-sample validation packet only, not broad provider deployment。
+- **当前 P1 provider blocker**：2026-06-02 用户已批准 $0 小样本边界；仍不允许 FMP new token / trial / paid access、`yfinance`、provider selection、full-market data fetch、adapter、DataHub、runner 或 Phase 7c，除非另有 explicit approval + reviewed decision。
 - **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned test 已消耗 ledger planned test 且 outcome 失败。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
@@ -42,7 +42,7 @@
 - **SR-LLM-001 Stage 3 prompt boundary**（2026-06-01）：DeepSeek policy-risk prompt construction now sanitizes external titles, wraps them in `[UNTRUSTED_NEWS_TITLE]` rows, and tells the LLM not to execute instructions inside titles; focused tests cover injection-style titles.
 - **SR-EXEC-003 drawdown evidence guard**（2026-06-01）：`runners/backtest_execution.py` no longer exposes realized exit-date cash drawdown as numeric `max_drawdown`; ship-gate drawdown remains not evaluable until open-position MTM is implemented.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
-- **US EGS data-source direction / Phase 7b-2 access boundary**（2026-06-01）：FMP 为主源候选，SEC EDGAR 为基本面审计源；`yfinance` 仅可显式批准后作低信任价格 smoke check。`docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` 仍只定义访问边界和样本验证计划，不授权 provider 行动。
+- **US EGS small sample boundary**（2026-06-02）：`docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json` narrows approved access to existing FMP key + SEC EDGAR public API, $0, AAPL / MSFT only, raw samples under gitignored `provider_samples/`; it still blocks yfinance, full-market, provider selection, DataHub, runner, and Phase 7c.
 
 ---
 
@@ -72,8 +72,8 @@
 - `research/README.md` / `schemas/research_preregistration.schema.json` / `schemas/research_preflight_result.schema.json` / `schemas/program_test_budget_ledger.schema.json` / `schemas/evidence_report.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` / `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/monthly_stats.csv` / `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` - research-only preregistration, preflight, evidence, and ledger owner files。
 - `docs/provider_priority_benchmark_contract.md` - Phase 7a-3 provider evidence priority / provisional benchmark contract。
 - `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` - Phase 7b provider evidence / drift monitor contract。
-- `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` - Phase 7b-2 P1 access-decision and sample-validation plan（plan-only；approved spend = 0；provider/sample/data/Phase 7c blocked）。
-- `schemas/provider_p1_readiness_review.schema.json` / `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` - Phase 7b-2 P1 readiness review matrix（collection complete；Phase 7c / provider selection / data fetch blocked）。
+- `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` / `schemas/provider_p1_sample_validation_access_approval.schema.json` / `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json` - Phase 7b-2 P1 access plan plus narrow $0 FMP + SEC sample-validation approval（AAPL / MSFT only；no yfinance / full-market / Phase 7c）。
+- `schemas/provider_p1_readiness_review.schema.json` / `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` - Phase 7b-2 P1 readiness review matrix（collection complete；Phase 7c / provider selection / broad data fetch blocked）。
 - `docs/evidence_feasibility_controls.md` / `schemas/evidence_feasibility_controls.schema.json` - Phase 7a-4 burst promotion / evidence feasibility controls。
 - `docs/evidence_report_schema_contract.md` / `schemas/evidence_report.schema.json` - Phase 7a-5 evidence report schema contract。
 - `docs/alpha_plausibility_audit.md` / `schemas/alpha_plausibility_audit.schema.json` - Phase 7a-1 audit owner and contract。
@@ -98,9 +98,9 @@
 - Any further redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
 - If no new research test or provider-access work is user-approved, the next default work is the risk-register maintenance group; reviewed forward-live evidence must now use `schemas/forward_live_evidence.schema.json` and real provenance / reconciliation, not the example artifact.
 
-### P1 - P1 provider access boundary（仅用户明确要求时）
+### P1 - US EGS small sample validation
 
-- 用户可另行批准 cost ceiling、access path、license / local-storage / non-display / retention 边界；之后仍需单独 reviewed decision 才能 request token / trial / paid access / sample rows。
+- After this approval-boundary slice is reviewed and committed, implement the narrow sample-validation packet: environment presence check without printing secrets, AAPL / MSFT FMP samples, SEC EDGAR submissions/companyfacts audit samples, raw rows only under gitignored `provider_samples/`, tracked summary only.
 - 不得 silent default、latest-only 回填历史证据，或把 provider status guess 写成 production-ready evidence。
 - 不得建 adapter / DataHub table、改 runner、抓 provider data 或接 broker / OS automation。
 

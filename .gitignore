@@ -46,6 +46,9 @@ A-EGS/Result/egs_cache/
 # Forward daily price cache for backtest (~120MB)
 result/*/backtest/cache/
 
+# Local provider sample payloads (raw vendor/public API rows; summaries may be tracked separately)
+provider_samples/
+
 # --- L3 snapshots (regenerable, grows over time) ---
 state/*/l3_snapshots/
 state/l3_snapshots/

@@ -8,6 +8,71 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (US EGS small sample validation approval boundary)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `6fc2283`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Independent verification**:
+- Reran all 7 tests in `tests/schema/test_provider_p1_sample_validation_access_approval_schema.py` under a `jsonschema`-equipped interpreter (Python313): 7 passed, 0 skipped — closing the 3 tests Codex's bundled interpreter had to skip. Confirmed the approval artifact validates against the schema and that scope-creep mutations (paid access / full-market / `yfinance` / extra symbol / in-repo secrets) are rejected by the const-locks.
+- Field-by-field traced schema vs artifact: every authorization field is `const`-locked to the boundary — `approved_spend_usd=0`, existing FMP key only, SEC public API only, AAPL+MSFT only (exactly 2), `yfinance`/new-token/trial/paid/full-market/provider-selection/adapter/DataHub/runner all `false`, `phase7c_authorized=false`, `ship_gate_relaxed=false`, raw storage gitignored, no secret logging. The artifact cannot express more than the recorded user approval without failing validation.
+- `git status` (15 tracked M + 3 untracked) fully reconciles with the SESSION_LOG `Worked on` (14 listed tracked + SESSION_LOG itself + 3 untracked). No business code / `state/` / out-of-scope files touched. Only additive schema; no existing schema mutated.
+- `.gitignore` adds `provider_samples/` at line 50 (matches the cited `git check-ignore` output). The plan-only `..._access_decision_sample_validation_plan_20260531.json` is unmodified and the test proves it still self-reports non-authorizing — the approval lives only in the separate additive artifact, as designed.
+- Doc routing updates (AGENTS.md item 14 + progress + roadmap, CURRENT, README, ALPHA guide, datahub, drift-monitor, priority-benchmark, data-requirements, feasibility, report-schema, strategy, handoff append) are consistent and non-over-claiming. `provider_evidence_drift_monitor.md` §16 insert + §15 cross-ref + §16→§17 renumber is clean.
+
+**Process note**: `SR-PROVIDER-001` `blocked→open` is the correct transition — the user has now decided (narrow $0 boundary), there is a concrete actionable next step (the sample-validation packet), and broad provider readiness remains unfixed/tracked. Material finding correctly routed to the register, not left in chat.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001` (now open; the reviewed narrow AAPL/MSFT FMP-existing-key + SEC public-API sample-validation packet is the only authorized next provider step).
+
+---
+
+## 2026-06-02 — Codex 执行 (US EGS small sample validation approval boundary)
+
+**Commits**: none (pending Claude review / submit; base `6fc2283`)
+
+**Relationship to prior session(s)**:
+- Builds on the Phase 7b-2 P1 readiness matrix, access-decision / sample-validation plan, and US EGS data-source direction.
+- **Refines** `SR-PROVIDER-001`: the risk is no longer "waiting for any user decision" for all sample work. The user has approved only a narrow $0 AAPL / MSFT sample-validation boundary using existing FMP key + SEC EDGAR public APIs; broader provider work remains blocked.
+- Does not reverse A-share burst conclusions; `a_share_burst_minimal_data` remains `redesign_required`.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_sample_validation_access_approval.schema.json`: added a schema-first contract for the 2026-06-02 user-approved US EGS small-sample validation boundary.
+2. [untracked] `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json`: records $0, existing FMP key, SEC EDGAR public API, AAPL / MSFT only, local gitignored raw samples, no `yfinance`, no full-market, no paid upgrade, no provider selection / adapter / DataHub / runner / Phase 7c.
+3. [untracked] `tests/schema/test_provider_p1_sample_validation_access_approval_schema.py`: validates the approval artifact boundary, confirms the original access plan remains non-authorizing, and adds a no-`jsonschema` structural test for schema const locks.
+4. [tracked] `.gitignore`: ignores `provider_samples/` so future raw provider/public API sample rows stay local-only; tracked summaries remain possible.
+5. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `AGENTS.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/CURRENT.md`, `docs/README.md`: routed the approval boundary through current owner docs and hot queue.
+6. [tracked] `docs/datahub_design.md`, `docs/provider_priority_benchmark_contract.md`, `docs/provider_data_requirements_audit.md`, `docs/evidence_feasibility_controls.md`, `docs/evidence_report_schema_contract.md`, `docs/strategy_design_synthesis.md`: replaced stale "waiting for user-approved access boundaries" wording with "approval recorded; small sample still must be executed / summarized / reviewed before consumption".
+7. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7b-2 small-sample approval-boundary handoff.
+
+**Key decisions**:
+- Keep `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` plan-only. Do not mutate it to pretend the plan itself authorizes sample fetch.
+- Record user approval in a separate additive artifact so the boundary is durable and reviewable.
+- Only the next reviewed sample-validation packet may use `FMP_API_KEY` and `SEC_USER_AGENT`, and only for AAPL / MSFT small samples. It must not print secrets.
+- Raw provider/public API sample rows must be written only under `provider_samples/us_egs_sample_validation_20260602/` or another gitignored `provider_samples/` path; any tracked output must be a no-secret summary without full raw rows.
+- `SR-PROVIDER-001` remains open because `yfinance`, new FMP token, trial, paid access, full-market fetch, provider selection, adapters, DataHub tables, runner consumption, Phase 7c, and ship-gate claims are still blocked.
+
+**Rejected alternatives**:
+- "Fetch FMP / SEC samples in this slice" — rejected. This slice records the approval boundary only; implementation and network calls belong to the next reviewed packet.
+- "Use yfinance now as a price cross-check" — rejected. The current user approval did not include `yfinance`.
+- "Treat AAPL / MSFT samples as provider selection or production readiness" — rejected. The artifact only authorizes sample validation, not provider selection, DataHub, runner, or ship-gate evidence.
+- "Commit raw provider payloads" — rejected. Raw rows are explicitly gitignored; only no-secret summaries may be tracked.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_sample_validation_access_approval_schema -v`: 7 tests ran, 4 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema tests.schema.test_provider_p1_sample_validation_access_approval_schema -v`: 15 tests ran, 9 passed, 6 skipped because this interpreter lacks `jsonschema`.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\schema -v`: failed for environment dependency, not this slice; 5 existing `tests/schema/test_analysis_input_contract.py` tests error because `engine/data/analysis_input_contract.py` requires `jsonschema`, and the available Python runtime does not have it installed. Many schema-validation tests also skipped for the same missing dependency.
+- `git diff --check`: passed; only normal LF-to-CRLF working-copy warnings.
+- UTF-8 read check passed; `docs/CURRENT.md` line count = 149.
+- `git check-ignore -v provider_samples/us_egs_sample_validation_20260602/raw.json`: matched `.gitignore:50:provider_samples/`.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- No network calls, FMP calls, SEC EDGAR calls, research run, EGS run, weekly screening, provider adapter, DataHub table, runner change, or commit was performed.
+- Claude should review all tracked diffs plus all three untracked files. Primary review risk is whether the approval artifact accidentally opens anything beyond $0 AAPL / MSFT FMP existing-key + SEC public-API sample validation.
+
+---
+
 ## 2026-06-01 — Claude re-review — Pass (clean) (SR-DATA-004 data_health schema sync — Required R1 resolved)
 
 **Commits**: none (review-only entry; reviews working tree vs `fae4e2c`)

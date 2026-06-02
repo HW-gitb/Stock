@@ -1689,3 +1689,51 @@ git diff --check
 
 1. Claude 复审应确认只放宽了 pct return max 字段，未放宽 amount ratio / execution boundary / ledger review gate。
 2. 如果审查 Pass 并提交，下一条 alpha-validation `执行` 仍是 ledger-gated redesigned A-share burst preregistration。
+
+## 2026-06-02 追加：US EGS small sample validation approval boundary
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_sample_validation_access_approval.schema.json`，把用户批准的 US EGS 小样本验证边界固化为 schema-first artifact：$0、现有 FMP key、SEC EDGAR public API、AAPL / MSFT only、no `yfinance`、no full-market、no paid upgrade、no provider selection、no adapter / DataHub / runner / Phase 7c。
+- 新增 `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json`，记录 2026-06-02 用户批准内容与后续 sample-validation packet 的 storage / secret 边界。
+- `.gitignore` 新增 `provider_samples/`，确保后续 raw vendor / public API sample rows 只能作为本地样本保存，不进入 git；tracked summary 仍可单独提交。
+- 更新 `docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`、`AGENTS.md`、`docs/ALPHA_VALIDATION_ACTION_GUIDE.md`、`docs/CURRENT.md`、`docs/README.md`、`docs/datahub_design.md`、`docs/provider_priority_benchmark_contract.md`、`docs/provider_data_requirements_audit.md`、`docs/evidence_feasibility_controls.md`、`docs/evidence_report_schema_contract.md`、`docs/strategy_design_synthesis.md`，把旧的“sample/data fetch 完全未授权”改成“只授权后续 reviewed AAPL / MSFT 小样本验证，其余仍阻断”。
+- 新增 `tests/schema/test_provider_p1_sample_validation_access_approval_schema.py`，验证 approval artifact、原 access plan 仍非授权、schema const locks、next-step 不授权 provider selection / Phase 7c。
+
+**为什么改**:
+
+- 用户明确批准：FMP 使用当前账号 / API key，预算上限 $0；允许 SEC EDGAR 公共 API；允许本地保存少量样本和校验结果；只允许抓少数股票小样本；不允许全市场下载、不允许付费升级。
+- 需要把 chat approval 转成 durable repo artifact，避免后续 LLM 继续认为 sample validation 完全未授权，或反向误读成可做 provider selection / broad data fetch / Phase 7c。
+- 旧 access plan 保持 plan-only；新的 approval artifact 只解决其中最窄的一条 access boundary，不改变 P1 readiness matrix 的 partial / blocked 结论。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_sample_validation_access_approval_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_access_decision_plan_schema tests.schema.test_provider_p1_sample_validation_access_approval_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests\schema -v
+git diff --check
+git check-ignore -v provider_samples/us_egs_sample_validation_20260602/raw.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from pathlib import Path; files=[...]; [Path(f).read_text(encoding='utf-8') for f in files]; print('utf8 ok'); print('CURRENT lines', len(Path('docs/CURRENT.md').read_text(encoding='utf-8').splitlines()))"
+```
+
+**验证结果**:
+
+- `tests.schema.test_provider_p1_sample_validation_access_approval_schema`: 7 tests ran, 4 passed, 3 skipped because this bundled interpreter lacks `jsonschema`.
+- `tests.schema.test_provider_p1_access_decision_plan_schema tests.schema.test_provider_p1_sample_validation_access_approval_schema`: 15 tests ran, 9 passed, 6 skipped because this bundled interpreter lacks `jsonschema`.
+- `python -m unittest discover -s tests\schema -v`: failed for environment dependency, not this slice; 5 existing `tests/schema/test_analysis_input_contract.py` tests error because `engine/data/analysis_input_contract.py` requires `jsonschema`, and the available Python runtime does not have it installed. Many schema-validation tests also skip for the same missing dependency.
+- `git diff --check`: passed；仅有正常 LF/CRLF working-copy warnings。
+- UTF-8 read check passed；`docs/CURRENT.md` authoritative line count = 149，低于 150-line snapshot target。
+- `git check-ignore -v provider_samples/us_egs_sample_validation_20260602/raw.json`: matched `.gitignore:50:provider_samples/`，raw provider sample path is ignored.
+
+**失效旧结论**:
+
+- “US EGS sample validation 完全没有用户授权”失效；现在只对 AAPL / MSFT、现有 FMP key、SEC EDGAR public API、$0 小样本验证授权。
+- “P1 access plan 本身可授权 sample fetch / provider access”仍不成立；计划文件仍是 plan-only，授权只存在于新的 2026-06-02 approval artifact。
+- “小样本批准可进入 provider selection / full-market / DataHub / Phase 7c”不成立；这些仍需单独 explicit approval + reviewed decision。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 approval schema / artifact 是否只解锁 AAPL / MSFT 小样本验证，且没有把 `yfinance`、paid access、full-market、provider selection、adapter、DataHub、runner 或 Phase 7c 打开。
+2. 如果审查 Pass 并提交，下一条 `执行` 可以实现 narrow sample-validation packet：只检查 `FMP_API_KEY` / `SEC_USER_AGENT` 存在且不打印 secrets，只抓 AAPL / MSFT 的 FMP + SEC EDGAR small samples，raw rows 写到 gitignored `provider_samples/us_egs_sample_validation_20260602/`，tracked summary 不含 secrets 或完整 raw rows。
+3. 由于当前可用 Python runtime 缺 `jsonschema`，若复审需要完整 Draft-07 validation，应先在合规环境安装项目 `requirements.txt` 依赖或用已有含 `jsonschema` 的解释器重跑 schema tests。

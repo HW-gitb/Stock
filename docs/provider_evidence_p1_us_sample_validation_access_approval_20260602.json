@@ -1,0 +1,127 @@
+{
+  "schema_name": "provider_p1_sample_validation_access_approval",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+08:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "user_approved_us_egs_small_sample_validation_boundary",
+    "approval_status": "user_approved_boundary_recorded_for_review",
+    "based_on_access_plan_ref": "docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json",
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_access_decision_plan_20260531",
+      "path_or_ref": "docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json",
+      "role": "Defines the access / sample-validation gates that this narrower user approval resolves only for FMP existing-key and SEC public-API small samples."
+    },
+    {
+      "artifact_id": "p1_readiness_matrix_20260529",
+      "path_or_ref": "docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json",
+      "role": "Defines the unresolved P1 field blockers; this approval does not mark those blockers ready."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path_or_ref": "docs/provider_evidence_drift_monitor.md",
+      "role": "Owns the provider evidence / drift-monitor routing and US EGS data-source direction."
+    },
+    {
+      "artifact_id": "user_approval_20260602",
+      "path_or_ref": "chat:user-approved-fmp-sec-small-sample-validation-2026-06-02",
+      "role": "User approved FMP current account/API key with zero-dollar budget, SEC EDGAR public API, local small-sample storage and validation results, only a few stocks, no full-market download, and no paid upgrade."
+    }
+  ],
+  "approval_boundary": {
+    "approved_spend_usd": 0,
+    "fmp_existing_api_key_use_allowed": true,
+    "fmp_new_token_request_allowed": false,
+    "fmp_trial_request_allowed": false,
+    "paid_access_allowed": false,
+    "sec_edgar_public_api_allowed": true,
+    "sec_fair_access_required": true,
+    "yfinance_allowed": false,
+    "small_sample_endpoint_calls_allowed": true,
+    "full_market_download_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false
+  },
+  "sample_universe": {
+    "allowed_symbols": [
+      "AAPL",
+      "MSFT"
+    ],
+    "max_symbols": 2,
+    "max_total_endpoint_calls": 40,
+    "allowed_fmp_endpoint_families": [
+      "profile_or_company_metadata",
+      "income_statement",
+      "balance_sheet_statement",
+      "cash_flow_statement",
+      "financial_ratios_or_key_metrics",
+      "historical_eod_price_volume"
+    ],
+    "allowed_sec_endpoint_families": [
+      "company_tickers_mapping",
+      "submissions",
+      "companyfacts"
+    ],
+    "blocked_security_scope": [
+      "full_market_download",
+      "inactive_or_delisted_universe_expansion",
+      "index_constituent_history",
+      "benchmark_return_feed",
+      "gics_history_feed",
+      "intraday_or_tick_data"
+    ]
+  },
+  "provider_roles": [
+    {
+      "provider_id": "financial_modeling_prep",
+      "role": "Primary candidate for US EGS fundamentals, valuation / ratio inputs, EOD price / volume, and liquidity small-sample validation using the user's existing API key only.",
+      "allowed_in_sample_validation": true
+    },
+    {
+      "provider_id": "sec_edgar",
+      "role": "Public fundamentals authority / audit source for filing-grounded anomaly checks via company tickers, submissions, and companyfacts under fair-access limits.",
+      "allowed_in_sample_validation": true
+    },
+    {
+      "provider_id": "yfinance",
+      "role": "Not authorized in this packet; may only be considered later as a separately approved low-trust price smoke check.",
+      "allowed_in_sample_validation": false
+    }
+  ],
+  "storage_and_secret_boundary": {
+    "raw_sample_storage_path": "provider_samples/us_egs_sample_validation_20260602/",
+    "raw_sample_storage_must_be_gitignored": true,
+    "tracked_summary_without_raw_rows_allowed": true,
+    "secrets_in_repo_allowed": false,
+    "api_key_logging_allowed": false
+  },
+  "prohibited_actions": [
+    "Do not request a new FMP token, trial, plan upgrade, paid subscription, or vendor contact.",
+    "Do not use yfinance in this packet.",
+    "Do not download the full US market or build a survivorship-safe security master.",
+    "Do not request benchmark return feeds or issuer-level GICS history.",
+    "Do not include inactive / delisted expansion beyond the two approved active sample symbols.",
+    "Do not write provider adapters, DataHub tables, runner changes, or production presets.",
+    "Do not treat sample rows as alpha evidence, ship-gate evidence, or provider selection.",
+    "Do not commit API keys, Authorization headers, raw secrets, or full raw provider payloads."
+  ],
+  "next_steps": [
+    "After review and commit, implement one small sample-validation script or packet that checks environment variable presence without printing secrets, fetches only the approved AAPL / MSFT FMP and SEC EDGAR samples, writes raw provider samples only under the gitignored provider_samples path, and writes a tracked summary without secrets or full raw rows.",
+    "A later review must inspect the sample summary for field availability, observed-date semantics, missing fields, SEC reconciliation feasibility, rate-limit behavior, and fallback implications before any provider selection, DataHub work, adapter work, runner consumption, or Phase 7c authorization."
+  ],
+  "limitations": [
+    "This approval does not prove FMP license sufficiency, PIT semantics, coverage counts, provider stability, fallback behavior, or production readiness.",
+    "This approval does not make SEC EDGAR a price source or a strict free-float source.",
+    "This approval does not authorize yfinance, Polygon / Massive, Intrinio, Norgate, Nasdaq Data Link, benchmark-feed, or GICS-history access.",
+    "This approval does not change any A-share research conclusion or revive A-share minimal-data burst.",
+    "This approval does not relax manual-only operation, capital policy, or ship gates."
+  ]
+}
