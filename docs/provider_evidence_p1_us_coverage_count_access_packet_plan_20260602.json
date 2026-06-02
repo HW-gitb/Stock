@@ -1,0 +1,549 @@
+{
+  "schema_name": "provider_p1_coverage_count_access_packet_plan",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_coverage_count_access_packet_planning_after_sec_field_family_mapping",
+    "contract_status": "access_packet_plan_only_no_execution_no_provider_call",
+    "coverage_count_execution_allowed": false,
+    "fmp_endpoint_call_allowed": false,
+    "sec_api_call_allowed": false,
+    "data_fetch_allowed": false,
+    "raw_payload_parse_allowed": false,
+    "fixture_generation_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_status_polling_allowed": false,
+    "fallback_execution_allowed": false,
+    "incident_log_writer_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "alpha_validation_claim_allowed": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_access_decision_sample_validation_plan_20260531",
+      "path": "docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json",
+      "contract_or_schema_ref": "schemas/provider_p1_access_decision_plan.schema.json",
+      "consumption_role": "Defines original access, license, sample, coverage-count, fallback, and Phase 7c gates."
+    },
+    {
+      "artifact_id": "p1_sample_validation_access_approval_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_sample_validation_access_approval.schema.json",
+      "consumption_role": "Defines the only approved sample boundary: AAPL / MSFT, existing FMP key, SEC public API, zero dollars, no full-market expansion."
+    },
+    {
+      "artifact_id": "p1_us_egs_sample_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_us_egs_sample_validation_summary.schema.json",
+      "consumption_role": "Records the approved tracked no-secret two-symbol SEC and FMP legacy endpoint sample result."
+    },
+    {
+      "artifact_id": "p1_fmp_stable_retry_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json",
+      "consumption_role": "Records two-symbol FMP stable endpoint access / response-shape success without proving coverage."
+    },
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_remaining_blocker_resolution_plan.schema.json",
+      "consumption_role": "Routes unresolved coverage, license, PIT, price, SEC audit, fallback, stability, and production-readiness blockers."
+    },
+    {
+      "artifact_id": "p1_coverage_fallback_incident_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Records vendor-level coverage and incident candidate evidence while distinguishing it from project-specific coverage counts."
+    },
+    {
+      "artifact_id": "p1_license_storage_retention_review_20260602",
+      "path": "docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_license_storage_retention_review.schema.json",
+      "consumption_role": "Classifies current production storage and broader sample rights as blocked pending later review."
+    },
+    {
+      "artifact_id": "p1_sec_edgar_field_family_mapping_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_sec_edgar_field_family_mapping_contract_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_sec_edgar_field_family_mapping_contract.schema.json",
+      "consumption_role": "Confirms SEC audit field-family mapping remains contract-only and does not authorize fixtures, parser implementation, or broader SEC reconstruction."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Owns provider evidence, drift-monitor routing, no-silent-default policy, and no-selection / no-implementation locks."
+    }
+  ],
+  "review_basis": {
+    "basis_type": "existing_repo_artifacts_no_new_external_review",
+    "coverage_count_execution_performed": false,
+    "fmp_endpoint_calls_performed": false,
+    "sec_api_calls_performed": false,
+    "raw_payload_read_or_parsed": false,
+    "full_market_fetch_performed": false,
+    "provider_status_polling_performed": false,
+    "fallback_execution_performed": false,
+    "uses_existing_reviewed_artifacts_only": true,
+    "requires_later_user_approved_coverage_access_packet": true,
+    "requires_later_no_secret_summary_review": true,
+    "requires_later_license_storage_review_or_acceptance": true
+  },
+  "current_scope_summary": {
+    "stable_retry_status": "two_symbol_current_stable_endpoint_response_shape_passed",
+    "coverage_status": "plan_only_no_coverage_counts_executed",
+    "approved_current_sample_scope": "aapl_msft_only_no_broader_universe",
+    "full_market_status": "blocked_pending_user_approved_access_packet",
+    "phase7c_effect": "does_not_authorize_phase7c_or_datahub_consumption"
+  },
+  "coverage_request_profiles": [
+    {
+      "profile_id": "us_active_symbol_smoke_count",
+      "profile_status": "planned_not_approved",
+      "intended_count_question": "How many symbols from an explicitly defined US EGS smoke universe can be checked under an approved call budget without implying full-market coverage?",
+      "allowed_until_approval": false,
+      "required_before_execution": [
+        "Define a bounded symbol list and exclusion policy.",
+        "Set maximum endpoint calls and storage policy.",
+        "Record manual approval for the exact symbols and endpoint families."
+      ],
+      "authorizes_provider_call": false,
+      "authorizes_raw_parse": false,
+      "authorizes_full_market_download": false,
+      "authorizes_datahub_or_runner": false
+    },
+    {
+      "profile_id": "us_fundamentals_endpoint_family_count",
+      "profile_status": "blocked_pending_access_packet",
+      "intended_count_question": "For a separately approved symbol universe, what are the FMP statement / key-metric endpoint success, missing-field, and observed-date field counts?",
+      "allowed_until_approval": false,
+      "required_before_execution": [
+        "List the exact FMP endpoint families and field families.",
+        "Define PIT observed-date fields and missing-field behavior.",
+        "Define no-secret summary shape before calls are made."
+      ],
+      "authorizes_provider_call": false,
+      "authorizes_raw_parse": false,
+      "authorizes_full_market_download": false,
+      "authorizes_datahub_or_runner": false
+    },
+    {
+      "profile_id": "us_market_data_endpoint_family_count",
+      "profile_status": "blocked_pending_license_or_scope",
+      "intended_count_question": "For a separately approved symbol universe, what are the FMP EOD price / volume response, missing-session, OHLCV field, and corporate-action field-presence counts?",
+      "allowed_until_approval": false,
+      "required_before_execution": [
+        "Define whether price rows are counted only for response-shape or also for later adjustment validation.",
+        "Define no return calculation and no corporate-action reconciliation in the count packet unless separately approved.",
+        "Confirm storage and retention boundaries for any raw or normalized price sample."
+      ],
+      "authorizes_provider_call": false,
+      "authorizes_raw_parse": false,
+      "authorizes_full_market_download": false,
+      "authorizes_datahub_or_runner": false
+    },
+    {
+      "profile_id": "us_security_master_or_delisting_gap_count",
+      "profile_status": "blocked_pending_security_master_review",
+      "intended_count_question": "Which active, inactive, delisted, ADR, ETF, SPAC, preferred, fund, and common-stock classes remain outside the current AAPL / MSFT two-symbol evidence boundary?",
+      "allowed_until_approval": false,
+      "required_before_execution": [
+        "Define whether any inactive or delisted sample is in scope.",
+        "Define class filters and security-master identifiers.",
+        "Confirm this count is not a full survivorship-safe security-master build."
+      ],
+      "authorizes_provider_call": false,
+      "authorizes_raw_parse": false,
+      "authorizes_full_market_download": false,
+      "authorizes_datahub_or_runner": false
+    }
+  ],
+  "access_packet_requirements": [
+    {
+      "requirement_id": "symbol_universe_definition",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Exact symbols, class filters, inclusion / exclusion rules, and whether inactive or delisted securities are included."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "endpoint_family_list",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Exact provider, endpoint families, field families, and intended count-only role for each endpoint."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "max_symbol_count",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Hard maximum symbol count and rule that exceeding it requires a new review."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "max_endpoint_call_count",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Hard maximum endpoint call count, retry count, and abort behavior."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "time_window_and_as_of",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Date window, as-of semantics, historical window, and rule that current response shape is not historical PIT coverage."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "rate_limit_and_retry_policy",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Provider rate limit, retry, throttle, timeout, and failure-to-block behavior."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "user_agent_policy_for_sec_if_any",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "SEC fair-access and user-agent expectations if any SEC public API calls are in scope."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "storage_retention_policy",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Raw, normalized, summary, cache, retention, deletion, and after-lapse storage treatment."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "no_secret_summary_policy",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Tracked summary shape with no API keys, no Authorization headers, no full request URLs with secrets, and no full raw rows."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "raw_payload_gitignore_policy",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Raw payload location, gitignore proof, and rule that raw retention is not production storage authorization."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "coverage_metric_definitions",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Definitions for success, error, missing field, missing symbol, missing session, observed-date presence, and class-coverage counts."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "pass_fail_thresholds",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Explicit pass / fail / defer thresholds and rule that missing thresholds block readiness claims."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "fallback_and_incident_behavior",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "How endpoint failures, missing fields, drift, provider incidents, and fallback review are recorded without executing production fallback."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "requirement_id": "manual_approval_marker",
+      "status": "required_before_coverage_count_execution",
+      "blocks_execution": true,
+      "required_content": [
+        "Explicit user approval reference for the exact cost, endpoint, symbol, storage, and call-budget boundary."
+      ],
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "count_metric_plan": [
+    {
+      "metric_id": "active_symbol_count",
+      "metric_status": "planned_not_executed",
+      "required_dimensions": [
+        "symbol_universe",
+        "security_class",
+        "listing_state"
+      ],
+      "missing_or_ambiguous_behavior": "block_readiness_claim_no_silent_default",
+      "authorizes_coverage_claim": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "metric_id": "endpoint_success_count",
+      "metric_status": "planned_not_executed",
+      "required_dimensions": [
+        "provider",
+        "endpoint_family",
+        "symbol"
+      ],
+      "missing_or_ambiguous_behavior": "block_readiness_claim_no_silent_default",
+      "authorizes_coverage_claim": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "metric_id": "endpoint_error_count",
+      "metric_status": "planned_not_executed",
+      "required_dimensions": [
+        "provider",
+        "endpoint_family",
+        "http_status_or_error_type"
+      ],
+      "missing_or_ambiguous_behavior": "block_readiness_claim_no_silent_default",
+      "authorizes_coverage_claim": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "metric_id": "missing_required_field_count",
+      "metric_status": "planned_not_executed",
+      "required_dimensions": [
+        "field_family",
+        "symbol",
+        "time_window"
+      ],
+      "missing_or_ambiguous_behavior": "block_readiness_claim_no_silent_default",
+      "authorizes_coverage_claim": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "metric_id": "observed_date_field_presence_count",
+      "metric_status": "planned_not_executed",
+      "required_dimensions": [
+        "statement_family",
+        "filingDate_or_acceptedDate",
+        "fiscal_period"
+      ],
+      "missing_or_ambiguous_behavior": "block_readiness_claim_no_silent_default",
+      "authorizes_coverage_claim": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "metric_id": "price_ohlcv_presence_count",
+      "metric_status": "planned_not_executed",
+      "required_dimensions": [
+        "symbol",
+        "date_window",
+        "ohlcv_field"
+      ],
+      "missing_or_ambiguous_behavior": "block_readiness_claim_no_silent_default",
+      "authorizes_coverage_claim": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "metric_id": "corporate_action_field_presence_count",
+      "metric_status": "planned_not_executed",
+      "required_dimensions": [
+        "event_type",
+        "effective_date",
+        "symbol"
+      ],
+      "missing_or_ambiguous_behavior": "block_readiness_claim_no_silent_default",
+      "authorizes_coverage_claim": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "metric_id": "delisting_inactive_gap_count",
+      "metric_status": "planned_not_executed",
+      "required_dimensions": [
+        "listing_state",
+        "security_class",
+        "provider_identifier"
+      ],
+      "missing_or_ambiguous_behavior": "block_readiness_claim_no_silent_default",
+      "authorizes_coverage_claim": false,
+      "authorizes_data_fetch": false
+    }
+  ],
+  "no_silent_default_policy": {
+    "policy_status": "policy_expectations_only_no_counts_executed",
+    "missing_coverage_count_blocks_readiness_claim": true,
+    "two_symbol_sample_cannot_imply_universe_coverage": true,
+    "endpoint_response_shape_cannot_imply_coverage": true,
+    "failed_or_unreachable_endpoint_blocks_or_flags_claim": true,
+    "silent_default_allowed": false,
+    "zero_fill_allowed": false,
+    "authorizes_coverage_count_execution": false,
+    "authorizes_phase7c": false
+  },
+  "decision_gates": [
+    {
+      "gate_id": "coverage_access_packet_approval",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "User explicitly approves the exact coverage-count access packet before any FMP or SEC call, broader symbol sample, or coverage-count execution.",
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_or_runner": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "license_storage_scope_review",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "License, storage, retention, derived-report, non-display, export, and raw-payload rights must be reviewed or explicitly accepted for the proposed packet.",
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_or_runner": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "call_budget_and_rate_policy",
+      "status": "pending_later_access_review",
+      "blocks_implementation": true,
+      "required_resolution": "Call budget, rate limit, retry, timeout, abort, and SEC fair-access behavior must be defined before execution.",
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_or_runner": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "no_secret_summary_review",
+      "status": "pending_later_access_review",
+      "blocks_implementation": true,
+      "required_resolution": "Tracked summary, raw-sample gitignore proof, and secret-redaction rules must be reviewed before any packet executes.",
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_or_runner": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "coverage_threshold_review",
+      "status": "pending_later_access_review",
+      "blocks_implementation": true,
+      "required_resolution": "Pass / fail / defer thresholds must be defined before coverage counts can support a readiness decision.",
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_or_runner": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "incident_fallback_review",
+      "status": "pending_later_access_review",
+      "blocks_implementation": true,
+      "required_resolution": "Endpoint failure, incident, fallback-review, and block-production-use behavior must be defined before the packet executes.",
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_or_runner": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_consumption_gate",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Phase 7c consumption remains blocked until reviewed Phase 7b evidence closes or explicitly accepts coverage, license, PIT, price, SEC audit, fallback, and stability blockers.",
+      "authorizes_coverage_count_execution": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_or_runner": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "prohibited_actions": {
+    "coverage_count_execution": false,
+    "fmp_endpoint_call": false,
+    "sec_api_call": false,
+    "data_fetch": false,
+    "raw_payload_parse": false,
+    "fixture_generation": false,
+    "provider_selection": false,
+    "provider_ranking": false,
+    "provider_contact": false,
+    "new_token_or_trial": false,
+    "paid_access": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_status_polling": false,
+    "fallback_execution": false,
+    "incident_log_writer": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "phase7c_authorization": false,
+    "alpha_validation_claim": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Use this artifact as the no-access planning source before any future coverage-count access request.",
+    "Do not execute coverage counts or provider calls from this artifact; a later user-approved access packet must define symbols, endpoints, call budget, storage, no-secret summary, and pass / fail thresholds.",
+    "A later reviewed coverage-count summary must remain no-secret and must treat missing or ambiguous counts as blockers rather than silent defaults.",
+    "Keep Phase 7c, provider selection, DataHub, adapter, runner, production readiness, alpha validation, and ship-gate claims blocked until the broader SR-PROVIDER-001 gates are resolved or explicitly accepted."
+  ],
+  "limitations": [
+    "This artifact performs no web research, provider contact, FMP endpoint call, SEC API call, status polling, data fetch, coverage-count execution, raw-payload parsing, fixture generation, fallback execution, incident-log writer implementation, adapter work, DataHub work, runner change, broker automation, or ship-gate claim.",
+    "The AAPL / MSFT stable retry is response-shape evidence only and cannot imply target-universe coverage.",
+    "Vendor marketing coverage claims remain non-project coverage until converted into reviewed, reproducible counts against an approved universe and field list.",
+    "This artifact does not resolve SR-PROVIDER-001 and does not authorize Phase 7c."
+  ]
+}

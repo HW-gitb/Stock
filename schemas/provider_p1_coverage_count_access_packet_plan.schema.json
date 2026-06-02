@@ -1,0 +1,840 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_coverage_count_access_packet_plan/1.0.0/schema.json",
+  "title": "Provider P1 Coverage Count Access Packet Plan",
+  "description": "Phase 7b-2 schema-first plan for the next US EGS coverage-count access packet after the SEC EDGAR field-family mapping contract. This artifact defines the approval packet required before any coverage-count execution; it does not execute coverage counts, call FMP or SEC, parse raw payloads, generate fixtures, select providers, contact vendors, implement adapters or DataHub tables, change runners, authorize Phase 7c, relax ship gates, or claim production readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_artifact_refs",
+    "review_basis",
+    "current_scope_summary",
+    "coverage_request_profiles",
+    "access_packet_requirements",
+    "count_metric_plan",
+    "no_silent_default_policy",
+    "decision_gates",
+    "prohibited_actions",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_coverage_count_access_packet_plan"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 8,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_access_decision_sample_validation_plan_20260531"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_sample_validation_access_approval_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_us_egs_sample_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_stable_retry_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_remaining_blocker_plan_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_coverage_fallback_incident_candidates_20260528"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_license_storage_retention_review_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "review_basis": {
+      "$ref": "#/$defs/reviewBasis"
+    },
+    "current_scope_summary": {
+      "$ref": "#/$defs/currentScopeSummary"
+    },
+    "coverage_request_profiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/coverageRequestProfile"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "profile_id": {
+                "const": "us_active_symbol_smoke_count"
+              }
+            },
+            "required": [
+              "profile_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "profile_id": {
+                "const": "us_fundamentals_endpoint_family_count"
+              }
+            },
+            "required": [
+              "profile_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "profile_id": {
+                "const": "us_market_data_endpoint_family_count"
+              }
+            },
+            "required": [
+              "profile_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "profile_id": {
+                "const": "us_security_master_or_delisting_gap_count"
+              }
+            },
+            "required": [
+              "profile_id"
+            ]
+          }
+        }
+      ]
+    },
+    "access_packet_requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/accessPacketRequirement"
+      },
+      "minItems": 14
+    },
+    "count_metric_plan": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/countMetric"
+      },
+      "minItems": 8
+    },
+    "no_silent_default_policy": {
+      "$ref": "#/$defs/noSilentDefaultPolicy"
+    },
+    "decision_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decisionGate"
+      },
+      "minItems": 7
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "contract_or_schema_ref",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contract_or_schema_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "coverage_count_execution_allowed",
+        "fmp_endpoint_call_allowed",
+        "sec_api_call_allowed",
+        "data_fetch_allowed",
+        "raw_payload_parse_allowed",
+        "fixture_generation_allowed",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "provider_status_polling_allowed",
+        "fallback_execution_allowed",
+        "incident_log_writer_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "alpha_validation_claim_allowed",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_coverage_count_access_packet_planning_after_sec_field_family_mapping"
+        },
+        "contract_status": {
+          "const": "access_packet_plan_only_no_execution_no_provider_call"
+        },
+        "coverage_count_execution_allowed": {
+          "const": false
+        },
+        "fmp_endpoint_call_allowed": {
+          "const": false
+        },
+        "sec_api_call_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "raw_payload_parse_allowed": {
+          "const": false
+        },
+        "fixture_generation_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "provider_status_polling_allowed": {
+          "const": false
+        },
+        "fallback_execution_allowed": {
+          "const": false
+        },
+        "incident_log_writer_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "alpha_validation_claim_allowed": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "reviewBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_type",
+        "coverage_count_execution_performed",
+        "fmp_endpoint_calls_performed",
+        "sec_api_calls_performed",
+        "raw_payload_read_or_parsed",
+        "full_market_fetch_performed",
+        "provider_status_polling_performed",
+        "fallback_execution_performed",
+        "uses_existing_reviewed_artifacts_only",
+        "requires_later_user_approved_coverage_access_packet",
+        "requires_later_no_secret_summary_review",
+        "requires_later_license_storage_review_or_acceptance"
+      ],
+      "properties": {
+        "basis_type": {
+          "const": "existing_repo_artifacts_no_new_external_review"
+        },
+        "coverage_count_execution_performed": {
+          "const": false
+        },
+        "fmp_endpoint_calls_performed": {
+          "const": false
+        },
+        "sec_api_calls_performed": {
+          "const": false
+        },
+        "raw_payload_read_or_parsed": {
+          "const": false
+        },
+        "full_market_fetch_performed": {
+          "const": false
+        },
+        "provider_status_polling_performed": {
+          "const": false
+        },
+        "fallback_execution_performed": {
+          "const": false
+        },
+        "uses_existing_reviewed_artifacts_only": {
+          "const": true
+        },
+        "requires_later_user_approved_coverage_access_packet": {
+          "const": true
+        },
+        "requires_later_no_secret_summary_review": {
+          "const": true
+        },
+        "requires_later_license_storage_review_or_acceptance": {
+          "const": true
+        }
+      }
+    },
+    "currentScopeSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stable_retry_status",
+        "coverage_status",
+        "approved_current_sample_scope",
+        "full_market_status",
+        "phase7c_effect"
+      ],
+      "properties": {
+        "stable_retry_status": {
+          "const": "two_symbol_current_stable_endpoint_response_shape_passed"
+        },
+        "coverage_status": {
+          "const": "plan_only_no_coverage_counts_executed"
+        },
+        "approved_current_sample_scope": {
+          "const": "aapl_msft_only_no_broader_universe"
+        },
+        "full_market_status": {
+          "const": "blocked_pending_user_approved_access_packet"
+        },
+        "phase7c_effect": {
+          "const": "does_not_authorize_phase7c_or_datahub_consumption"
+        }
+      }
+    },
+    "coverageRequestProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "profile_status",
+        "intended_count_question",
+        "allowed_until_approval",
+        "required_before_execution",
+        "authorizes_provider_call",
+        "authorizes_raw_parse",
+        "authorizes_full_market_download",
+        "authorizes_datahub_or_runner"
+      ],
+      "properties": {
+        "profile_id": {
+          "enum": [
+            "us_active_symbol_smoke_count",
+            "us_fundamentals_endpoint_family_count",
+            "us_market_data_endpoint_family_count",
+            "us_security_master_or_delisting_gap_count"
+          ]
+        },
+        "profile_status": {
+          "enum": [
+            "planned_not_approved",
+            "blocked_pending_license_or_scope",
+            "blocked_pending_access_packet",
+            "blocked_pending_security_master_review"
+          ]
+        },
+        "intended_count_question": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "allowed_until_approval": {
+          "const": false
+        },
+        "required_before_execution": {
+          "$ref": "#/$defs/stringList"
+        },
+        "authorizes_provider_call": {
+          "const": false
+        },
+        "authorizes_raw_parse": {
+          "const": false
+        },
+        "authorizes_full_market_download": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner": {
+          "const": false
+        }
+      }
+    },
+    "accessPacketRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement_id",
+        "status",
+        "blocks_execution",
+        "required_content",
+        "authorizes_coverage_count_execution",
+        "authorizes_provider_call",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "requirement_id": {
+          "enum": [
+            "symbol_universe_definition",
+            "endpoint_family_list",
+            "max_symbol_count",
+            "max_endpoint_call_count",
+            "time_window_and_as_of",
+            "rate_limit_and_retry_policy",
+            "user_agent_policy_for_sec_if_any",
+            "storage_retention_policy",
+            "no_secret_summary_policy",
+            "raw_payload_gitignore_policy",
+            "coverage_metric_definitions",
+            "pass_fail_thresholds",
+            "fallback_and_incident_behavior",
+            "manual_approval_marker"
+          ]
+        },
+        "status": {
+          "const": "required_before_coverage_count_execution"
+        },
+        "blocks_execution": {
+          "const": true
+        },
+        "required_content": {
+          "$ref": "#/$defs/stringList"
+        },
+        "authorizes_coverage_count_execution": {
+          "const": false
+        },
+        "authorizes_provider_call": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "countMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric_id",
+        "metric_status",
+        "required_dimensions",
+        "missing_or_ambiguous_behavior",
+        "authorizes_coverage_claim",
+        "authorizes_data_fetch"
+      ],
+      "properties": {
+        "metric_id": {
+          "enum": [
+            "active_symbol_count",
+            "endpoint_success_count",
+            "endpoint_error_count",
+            "missing_required_field_count",
+            "observed_date_field_presence_count",
+            "price_ohlcv_presence_count",
+            "corporate_action_field_presence_count",
+            "delisting_inactive_gap_count"
+          ]
+        },
+        "metric_status": {
+          "const": "planned_not_executed"
+        },
+        "required_dimensions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "missing_or_ambiguous_behavior": {
+          "const": "block_readiness_claim_no_silent_default"
+        },
+        "authorizes_coverage_claim": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        }
+      }
+    },
+    "noSilentDefaultPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "missing_coverage_count_blocks_readiness_claim",
+        "two_symbol_sample_cannot_imply_universe_coverage",
+        "endpoint_response_shape_cannot_imply_coverage",
+        "failed_or_unreachable_endpoint_blocks_or_flags_claim",
+        "silent_default_allowed",
+        "zero_fill_allowed",
+        "authorizes_coverage_count_execution",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "policy_expectations_only_no_counts_executed"
+        },
+        "missing_coverage_count_blocks_readiness_claim": {
+          "const": true
+        },
+        "two_symbol_sample_cannot_imply_universe_coverage": {
+          "const": true
+        },
+        "endpoint_response_shape_cannot_imply_coverage": {
+          "const": true
+        },
+        "failed_or_unreachable_endpoint_blocks_or_flags_claim": {
+          "const": true
+        },
+        "silent_default_allowed": {
+          "const": false
+        },
+        "zero_fill_allowed": {
+          "const": false
+        },
+        "authorizes_coverage_count_execution": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "decisionGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "blocks_implementation",
+        "required_resolution",
+        "authorizes_coverage_count_execution",
+        "authorizes_provider_call",
+        "authorizes_datahub_or_runner",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "gate_id": {
+          "enum": [
+            "coverage_access_packet_approval",
+            "license_storage_scope_review",
+            "call_budget_and_rate_policy",
+            "no_secret_summary_review",
+            "coverage_threshold_review",
+            "incident_fallback_review",
+            "phase7c_consumption_gate"
+          ]
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "pending_user_approval",
+            "pending_later_access_review"
+          ]
+        },
+        "blocks_implementation": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_coverage_count_execution": {
+          "const": false
+        },
+        "authorizes_provider_call": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverage_count_execution",
+        "fmp_endpoint_call",
+        "sec_api_call",
+        "data_fetch",
+        "raw_payload_parse",
+        "fixture_generation",
+        "provider_selection",
+        "provider_ranking",
+        "provider_contact",
+        "new_token_or_trial",
+        "paid_access",
+        "yfinance_check",
+        "full_market_download",
+        "provider_status_polling",
+        "fallback_execution",
+        "incident_log_writer",
+        "provider_adapter",
+        "datahub_table",
+        "production_runner_consumption",
+        "phase7c_authorization",
+        "alpha_validation_claim",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "coverage_count_execution": {
+          "const": false
+        },
+        "fmp_endpoint_call": {
+          "const": false
+        },
+        "sec_api_call": {
+          "const": false
+        },
+        "data_fetch": {
+          "const": false
+        },
+        "raw_payload_parse": {
+          "const": false
+        },
+        "fixture_generation": {
+          "const": false
+        },
+        "provider_selection": {
+          "const": false
+        },
+        "provider_ranking": {
+          "const": false
+        },
+        "provider_contact": {
+          "const": false
+        },
+        "new_token_or_trial": {
+          "const": false
+        },
+        "paid_access": {
+          "const": false
+        },
+        "yfinance_check": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "provider_status_polling": {
+          "const": false
+        },
+        "fallback_execution": {
+          "const": false
+        },
+        "incident_log_writer": {
+          "const": false
+        },
+        "provider_adapter": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "phase7c_authorization": {
+          "const": false
+        },
+        "alpha_validation_claim": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

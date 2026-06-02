@@ -2276,3 +2276,46 @@ git diff --check
 
 1. Claude review should focus on whether the new contract accidentally authorizes SEC endpoint calls, raw-payload parsing, fixture generation, parser implementation, field-mapping implementation, provider selection, DataHub / runner consumption, alpha-validation claims, ship-gate claims, or Phase 7c.
 2. If review passes and the change is committed, the next safe no-access provider slice is coverage-count access-packet planning. Any actual coverage-count execution, FMP call, SEC call, raw parse, fixture generation, field-mapping / parser implementation, provider status polling, adapter, DataHub, runner, or Phase 7c step still requires separate explicit approval + reviewed decision.
+
+## 2026-06-02 append: Coverage-count access-packet plan
+
+**What changed**:
+
+- Added `schemas/provider_p1_coverage_count_access_packet_plan.schema.json`, a no-access schema-first plan for the future US EGS coverage-count access packet.
+- Added `docs/provider_evidence_p1_us_coverage_count_access_packet_plan_20260602.json`, based only on existing reviewed repo artifacts. It defines four planned coverage request profiles, fourteen access-packet requirements, eight count metrics, no-silent-default policy, decision gates, and prohibited actions.
+- Added `tests/schema/test_provider_p1_coverage_count_access_packet_plan_schema.py`, covering schema/artifact validation, no-execution locks, profile completeness, access-packet requirements, metric / no-silent-default behavior, source refs / limitations, and scope-creep rejection.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, and `docs/system_risk_register.md` to route the plan while keeping `SR-PROVIDER-001` open.
+
+**Why**:
+
+- The AAPL / MSFT FMP stable retry proves only two-symbol endpoint access / response shape. It does not prove target-universe coverage, missing-field rates, inactive / delisted behavior, or class coverage.
+- This slice defines what a later user-approved coverage-count access packet must contain before any provider call or count execution: bounded symbol universe, endpoint families, call budget, time window, rate / retry policy, SEC fair-access if relevant, storage / retention, no-secret summary, raw-payload gitignore proof, metric definitions, pass / fail thresholds, fallback / incident behavior, and explicit manual approval.
+- This round intentionally performs no coverage-count execution, no FMP or SEC endpoint calls, no status polling, no data fetch, no raw-payload parsing, no fixture generation, no fallback execution, no incident-log writer implementation, no provider selection, no adapter / DataHub work, no runner change, and no Phase 7c authorization.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_coverage_count_access_packet_plan_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_coverage_count_access_packet_plan_schema tests.schema.test_provider_p1_sec_edgar_field_family_mapping_contract_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\provider_p1_coverage_count_access_packet_plan.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\provider_evidence_p1_us_coverage_count_access_packet_plan_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**Validation results**:
+
+- Bundled Python: `tests.schema.test_provider_p1_coverage_count_access_packet_plan_schema` ran 9 tests: 6 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Python313 with `jsonschema`: coverage-count access-packet plan + SEC field-family mapping contract + remaining-blocker plan targeted schema tests ran 24 tests, all passed.
+- `json.tool` parsed the new schema and artifact successfully before docs routing updates.
+
+**Invalid conclusions**:
+
+- "FMP stable retry success means coverage is proven" is false. The plan explicitly says two-symbol response shape cannot imply target-universe coverage.
+- "This plan authorizes the coverage-count run" is false. It defines the later access packet required before execution; it performs and authorizes no provider call.
+- "This closes `SR-PROVIDER-001`" is false. Actual coverage counts, current terms / production storage rights, PIT row validation, price / corporate-action validation, SEC parser implementation, field mapping, fallback execution, stability evidence, provider selection, DataHub, runner consumption, and Phase 7c remain blocked.
+
+**Next-step notes**:
+
+1. Claude review should focus on whether the new plan accidentally authorizes coverage execution, FMP / SEC calls, raw parsing, fixture generation, provider selection, status polling, fallback execution, DataHub / runner consumption, ship-gate claims, or Phase 7c.
+2. If review passes and the change is committed, any actual coverage-count packet must be a separate user-approved and reviewed access request with exact symbols, endpoints, call budget, storage, no-secret summary, and pass / fail thresholds.

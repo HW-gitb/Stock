@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (Coverage-count access-packet plan)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `c50d201`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/provider_evidence_drift_monitor.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_coverage_count_access_packet_plan.schema.json, docs/provider_evidence_p1_us_coverage_count_access_packet_plan_20260602.json, tests/schema/test_provider_p1_coverage_count_access_packet_plan_schema.py. No runner / provider_samples / network change (docs+schema+test only).
+
+**Independent verification**:
+- Plan-only, executes nothing: `contract_status=access_packet_plan_only_no_execution_no_provider_call`; `coverage_count_execution_allowed / fmp_endpoint_call_allowed / sec_api_call_allowed / data_fetch_allowed / full_market_download_allowed=false`; `review_basis.coverage_count_execution_performed=false`. 4 coverage_request_profiles all `planned_not_approved` / `blocked_pending_*` with `allowed_until_approval=false`; 14 access_packet_requirements all `blocks_execution=true` (incl. `manual_approval_marker`); 8 count_metric_plan entries all `planned_not_executed`; `coverage_access_packet_approval` gate = `pending_user_approval`. All scope/profile/requirement/metric/gate/prohibited fields const-false.
+- Anti-overclaim guard is the substantive value: `no_silent_default_policy` locks `two_symbol_sample_cannot_imply_universe_coverage=true`, `endpoint_response_shape_cannot_imply_coverage=true`, `missing_coverage_count_blocks_readiness_claim=true`, `silent_default/zero_fill=false` — so the AAPL/MSFT pass cannot be read as universe coverage, and a future coverage count needs explicit user approval before any broader fetch.
+- Ran `tests.schema.test_provider_p1_coverage_count_access_packet_plan_schema` under Python313 (jsonschema): 9 tests, all pass, 0 skipped — scope locks, profiles non-authorizing, requirements block execution, count-metric + no-silent-default block readiness claims, review_basis no-access, scope-creep rejected, sources/limits preserve blockers.
+- AGENTS.md descriptive-only (grep-confirmed fixed decisions remain 14/15/16); drift-monitor §28 insert + §29 renumber clean (grep-confirmed §26 price-adj / §27 field-family / §28 coverage-count / §29 Next Use); register SR-PROVIDER-001 grep-confirmed `Status: open`; CURRENT=145 (≤150).
+
+**Process note (for Final Approver)**: this completes the named no-access SR-PROVIDER-001 design queue (remaining-blocker plan → fallback / incident-log → license → SEC scope / field-family → FMP PIT / price → coverage-count plan). The contracts are sound, but they all end `blocked pending user approval`. Real forward progress now requires a user decision: either approve a concrete coverage-count access packet (per the 14 requirements here) or explicitly accept the residual blockers — further no-access design slices would add diminishing value.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (open) + `SR-RESOURCE-001` (P2 open) — all unchanged. No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (Coverage-count access-packet plan)
+
+**Commits**: none (pending Claude review / submit; base `c50d201`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `c50d201 Add SEC EDGAR field-family mapping contract`.
+- Executes the next no-access `SR-PROVIDER-001` provider slice named by current routing: define the future coverage-count access packet requirements before any actual count execution.
+- This round does not call FMP / SEC / `yfinance`, does not execute coverage counts, does not fetch data, does not read or parse ignored raw payloads, does not generate fixtures, does not poll provider status, does not execute fallback, does not implement incident-log writer / adapter / DataHub / runner changes, and does not authorize Phase 7c.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_coverage_count_access_packet_plan.schema.json`: added a no-access contract for four coverage request profiles, fourteen access-packet requirements, eight planned count metrics, no-silent-default policy, decision gates, and prohibited actions.
+2. [untracked] `docs/provider_evidence_p1_us_coverage_count_access_packet_plan_20260602.json`: added the concrete plan artifact. It treats AAPL / MSFT FMP stable retry as response-shape evidence only and blocks coverage claims until a later user-approved packet defines exact symbols, endpoints, call budget, storage, no-secret summary, and thresholds.
+3. [untracked] `tests/schema/test_provider_p1_coverage_count_access_packet_plan_schema.py`: validates schema/artifact, no-execution locks, request profile completeness, access-packet requirement completeness, metric / no-silent-default blocking, source refs / limitations, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the coverage-count access-packet plan while keeping `SR-PROVIDER-001` open.
+
+**Key decisions**:
+- Treat coverage-count work as access-packet planning only. Reason: any real count requires provider calls or broader sample access and must be explicitly approved with exact scope.
+- Keep AAPL / MSFT stable retry as response-shape evidence only. Reason: two active symbols cannot prove target-universe coverage, inactive / delisted behavior, missing-field rates, class filters, or historical depth.
+- Require no-secret summary and gitignored raw-payload policy before execution. Reason: broader count packets may involve raw provider rows, request params, errors, and storage / retention concerns.
+- Leave `SR-PROVIDER-001` open. Reason: actual coverage counts, current terms / production storage rights, FMP PIT row validation, price / corporate-action validation, SEC parser implementation and field mapping, fixtures, fallback execution, incident writer, stability evidence, provider selection, DataHub / runner consumption, and Phase 7c remain unresolved.
+
+**Rejected alternatives**:
+- "Run a small coverage count now" — rejected; this `执行` has no provider-call or coverage-execution approval.
+- "Use vendor marketing coverage claims as project coverage" — rejected; the plan requires project-specific, reviewed, reproducible counts.
+- "Parse existing raw sample payloads to infer counts" — rejected; raw-payload parsing and fixture / field mapping work are outside this no-access planning slice.
+- "Treat this as Phase 7c readiness" — rejected; the plan defines a future approval packet and authorizes no DataHub / runner consumption.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_coverage_count_access_packet_plan_schema -v`: 9 tests ran; 6 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_coverage_count_access_packet_plan_schema tests.schema.test_provider_p1_sec_edgar_field_family_mapping_contract_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v`: 24 tests passed.
+- `json.tool` parsed `schemas/provider_p1_coverage_count_access_packet_plan.schema.json` and `docs/provider_evidence_p1_us_coverage_count_access_packet_plan_20260602.json`.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check`: passed after SESSION_LOG prepend; only normal LF/CRLF working-copy warnings were printed.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: the packet accidentally authorizes coverage-count execution, FMP / SEC endpoint calls, raw-payload parsing, fixture generation, provider status polling, fallback execution, provider selection, DataHub / runner consumption, alpha-validation claims, ship-gate claims, Phase 7c, or closes `SR-PROVIDER-001` too early.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (SEC EDGAR field-family mapping contract)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `8e11b5c`)
