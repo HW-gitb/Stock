@@ -1,0 +1,202 @@
+{
+  "schema_name": "provider_p1_fmp_endpoint_mapping_review",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T14:20:00+08:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "fmp_current_endpoint_mapping_review",
+    "review_status": "docs_only_mapping_review",
+    "docs_only_review": true,
+    "data_fetch_performed": false,
+    "fmp_live_retry_performed": false,
+    "provider_selection_allowed": false,
+    "paid_access_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_change_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "production_ready_claim_allowed": false,
+    "ship_gate_evidence_claimed": false
+  },
+  "based_on_sample_summary_ref": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+  "source_refs": [
+    {
+      "source_id": "fmp_quickstart_stable_base_and_auth",
+      "source_type": "official_provider_docs",
+      "url_or_path": "https://site.financialmodelingprep.com/developer/docs/quickstart",
+      "review_date": "2026-06-02",
+      "evidence_note": "FMP quickstart documents the stable base URL, API-key query authorization, and popular stable endpoint examples for historical price, profile, and income statement."
+    },
+    {
+      "source_id": "fmp_docs_statements_stable",
+      "source_type": "official_provider_docs",
+      "url_or_path": "https://site.financialmodelingprep.com/developer/docs",
+      "review_date": "2026-06-02",
+      "evidence_note": "FMP API docs list stable statement endpoints for income statement, balance sheet statement, cash-flow statement, and key metrics."
+    },
+    {
+      "source_id": "fmp_profile_stable_doc",
+      "source_type": "official_provider_docs",
+      "url_or_path": "https://site.financialmodelingprep.com/developer/docs/stable/profile-symbol",
+      "review_date": "2026-06-02",
+      "evidence_note": "FMP company profile documentation lists the stable profile endpoint and describes company profile fields such as market cap, industry, identifiers, and IPO / active-trading context."
+    },
+    {
+      "source_id": "fmp_historical_eod_full_stable_doc",
+      "source_type": "official_provider_docs",
+      "url_or_path": "https://site.financialmodelingprep.com/developer/docs/stable/historical-price-eod-full",
+      "review_date": "2026-06-02",
+      "evidence_note": "FMP stock price and volume documentation lists the stable full historical EOD endpoint and describes open, high, low, close, volume, change, percent-change, and VWAP coverage."
+    },
+    {
+      "source_id": "sample_summary_fmp_403",
+      "source_type": "tracked_sample_summary",
+      "url_or_path": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+      "review_date": "2026-06-02",
+      "evidence_note": "Tracked summary records that all sampled FMP v3 endpoint families returned HTTP 403 while SEC EDGAR samples succeeded."
+    },
+    {
+      "source_id": "raw_fmp_403_wrappers_ignored",
+      "source_type": "gitignored_raw_sample_note",
+      "url_or_path": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/",
+      "review_date": "2026-06-02",
+      "evidence_note": "Gitignored raw FMP wrappers contain the provider error body; they are not tracked and must not be committed."
+    }
+  ],
+  "mapping_review": {
+    "legacy_failure_summary": {
+      "sample_status": "completed_with_endpoint_errors",
+      "fmp_legacy_endpoint_errors": "all_sampled_fmp_v3_endpoint_families_returned_http_403",
+      "legacy_error_basis": "The tracked summary and ignored raw wrappers show HTTP 403 legacy-endpoint errors for every sampled FMP v3 endpoint family on AAPL and MSFT.",
+      "sec_edgar_status": "sample_succeeded"
+    },
+    "current_base_url": "https://financialmodelingprep.com/stable/",
+    "authentication_note": {
+      "api_key_required": true,
+      "secret_persistence_allowed": false,
+      "url_persistence_allowed": false,
+      "note": "FMP quickstart documents API-key authorization; future retry code must not persist request URLs or key values in raw wrappers, tracked summaries, logs, or SESSION_LOG."
+    },
+    "endpoint_mappings": [
+      {
+        "endpoint_family": "profile_or_company_metadata",
+        "failed_legacy_template": "https://financialmodelingprep.com/api/v3/profile/{symbol}",
+        "stable_candidate_template": "https://financialmodelingprep.com/stable/profile?symbol={symbol}",
+        "official_doc_source_ids": [
+          "fmp_quickstart_stable_base_and_auth",
+          "fmp_profile_stable_doc"
+        ],
+        "sample_live_validated": false,
+        "parameter_parity_status": "endpoint_path_identified_no_extra_params_validated",
+        "egs_relevance": "Candidate source for company metadata, sector / industry, identifiers, market cap, and profile context.",
+        "retry_notes": "Retry should check response shape and whether fields needed by EGS are present without storing raw rows in git."
+      },
+      {
+        "endpoint_family": "income_statement",
+        "failed_legacy_template": "https://financialmodelingprep.com/api/v3/income-statement/{symbol}?limit=4",
+        "stable_candidate_template": "https://financialmodelingprep.com/stable/income-statement?symbol={symbol}",
+        "official_doc_source_ids": [
+          "fmp_quickstart_stable_base_and_auth",
+          "fmp_docs_statements_stable"
+        ],
+        "sample_live_validated": false,
+        "parameter_parity_status": "endpoint_path_identified_limit_or_timeseries_params_not_validated",
+        "egs_relevance": "Candidate source for normalized revenue, net income, period, filing date, and accepted-date fields if returned by the current API plan.",
+        "retry_notes": "Retry must validate observed-date fields explicitly; endpoint path mapping alone does not prove PIT suitability."
+      },
+      {
+        "endpoint_family": "balance_sheet_statement",
+        "failed_legacy_template": "https://financialmodelingprep.com/api/v3/balance-sheet-statement/{symbol}?limit=4",
+        "stable_candidate_template": "https://financialmodelingprep.com/stable/balance-sheet-statement?symbol={symbol}",
+        "official_doc_source_ids": [
+          "fmp_docs_statements_stable"
+        ],
+        "sample_live_validated": false,
+        "parameter_parity_status": "endpoint_path_identified_limit_or_timeseries_params_not_validated",
+        "egs_relevance": "Candidate source for normalized balance-sheet fields such as assets and debt if returned by the current API plan.",
+        "retry_notes": "Retry must validate observed-date fields and compare basic plausibility against SEC EDGAR audit fields."
+      },
+      {
+        "endpoint_family": "cash_flow_statement",
+        "failed_legacy_template": "https://financialmodelingprep.com/api/v3/cash-flow-statement/{symbol}?limit=4",
+        "stable_candidate_template": "https://financialmodelingprep.com/stable/cash-flow-statement?symbol={symbol}",
+        "official_doc_source_ids": [
+          "fmp_docs_statements_stable"
+        ],
+        "sample_live_validated": false,
+        "parameter_parity_status": "endpoint_path_identified_limit_or_timeseries_params_not_validated",
+        "egs_relevance": "Candidate source for operating cash flow and free cash flow if returned by the current API plan.",
+        "retry_notes": "Retry must validate row count, date fields, and whether free-cash-flow naming matches current stable response shape."
+      },
+      {
+        "endpoint_family": "financial_ratios_or_key_metrics",
+        "failed_legacy_template": "https://financialmodelingprep.com/api/v3/key-metrics/{symbol}?limit=4",
+        "stable_candidate_template": "https://financialmodelingprep.com/stable/key-metrics?symbol={symbol}",
+        "official_doc_source_ids": [
+          "fmp_docs_statements_stable"
+        ],
+        "sample_live_validated": false,
+        "parameter_parity_status": "endpoint_path_identified_limit_or_timeseries_params_not_validated",
+        "egs_relevance": "Candidate source for EGS valuation / ratio inputs such as market cap, P/E, revenue per share, and net income per share if returned by the current API plan.",
+        "retry_notes": "Retry must not use these derived metrics as audited truth; SEC EDGAR remains the fundamental audit source."
+      },
+      {
+        "endpoint_family": "historical_eod_price_volume",
+        "failed_legacy_template": "https://financialmodelingprep.com/api/v3/historical-price-full/{symbol}?timeseries=5",
+        "stable_candidate_template": "https://financialmodelingprep.com/stable/historical-price-eod/full?symbol={symbol}",
+        "official_doc_source_ids": [
+          "fmp_quickstart_stable_base_and_auth",
+          "fmp_historical_eod_full_stable_doc"
+        ],
+        "sample_live_validated": false,
+        "parameter_parity_status": "endpoint_path_identified_limit_or_timeseries_params_not_validated",
+        "egs_relevance": "Candidate source for EOD OHLCV and liquidity fields, subject to adjusted-price semantics and current-plan access.",
+        "retry_notes": "Retry must validate adjusted / unadjusted semantics and must not treat a two-symbol EOD sample as coverage or production evidence."
+      }
+    ],
+    "mapping_verdict": "stable_endpoint_candidates_identified_not_live_validated"
+  },
+  "retry_gate": {
+    "retry_authorized_by_this_artifact": false,
+    "allowed_retry_scope_if_user_approves": {
+      "symbols": [
+        "AAPL",
+        "MSFT"
+      ],
+      "spend_usd": 0,
+      "use_existing_fmp_key_only": true,
+      "store_raw_payloads_only_under_gitignored_provider_samples": true,
+      "tracked_summary_no_secrets_or_raw_rows": true
+    },
+    "required_before_retry": [
+      "Update or parameterize the standalone sample-validation runner to use the stable endpoint candidate templates only for the approved AAPL / MSFT scope.",
+      "Keep URL / API key values out of raw wrappers, tracked summaries, logs, SESSION_LOG, and exceptions.",
+      "Keep endpoint-call budget within the 2026-06-02 approval boundary and do not add providers or symbols."
+    ],
+    "blocked_actions": [
+      "new_fmp_token",
+      "fmp_trial_request",
+      "paid_upgrade",
+      "yfinance_check",
+      "full_market_download",
+      "provider_selection",
+      "provider_adapter",
+      "datahub_table",
+      "production_runner_consumption",
+      "phase7c_authorization",
+      "ship_gate_claim"
+    ]
+  },
+  "limitations": [
+    "This artifact is a documentation mapping review only; no FMP stable endpoint has been live-retried or sample-validated here.",
+    "Stable endpoint path existence in official docs does not prove the current account / API key can access the endpoint, nor does it prove row shape, PIT semantics, license sufficiency, fallback behavior, or provider stability.",
+    "Limit / timeseries parameter parity from legacy endpoints remains unvalidated and must not be assumed.",
+    "SEC EDGAR remains the fundamentals audit source; FMP stable endpoints, if later validated, would remain a production-source candidate, not an authority override."
+  ],
+  "next_steps": [
+    "After review and commit, the next narrow candidate is an approved same-scope stable-endpoint retry for AAPL / MSFT using the existing FMP key and tracked no-secret summary.",
+    "Do not proceed to yfinance, full-market fetch, paid access, provider selection, adapters, DataHub, production runner consumption, or Phase 7c without separate explicit approval and review."
+  ]
+}

@@ -1785,3 +1785,46 @@ git check-ignore -v provider_samples\us_egs_sample_validation_20260602\raw\finan
 1. Claude 复审应重点核对 summary 是否没有 raw rows / secrets、raw payload 是否保持 ignored、FMP 403 是否被正确降级为 blocker 而不是失败后 silent retry 或 provider selection。
 2. 如果审查 Pass 并提交，下一条 `执行` 的自然候选是 current FMP endpoint mapping / account boundary review；不应直接扩大到 `yfinance`、full-market fetch、paid upgrade、DataHub、production runner consumption 或 Phase 7c。
 3. 若要完整 Draft-07 validation，应在含 `jsonschema` 的环境中重跑 summary schema test；当前 bundled Python 仍缺该依赖。
+
+## 2026-06-02 追加：US EGS FMP current endpoint mapping review
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_fmp_endpoint_mapping_review.schema.json`，锁定 FMP current-endpoint mapping review 的 docs-only 边界：不 live retry、不抓数据、不选 provider、不用 `yfinance`、不 full-market、不 paid upgrade、不建 adapter / DataHub、不改 production runner、不授权 Phase 7c / ship-gate。
+- 新增 `docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json`，基于 FMP 官方 docs 把上一轮失败的 sampled v3 endpoint families 映射到 stable endpoint candidates：profile、income statement、balance sheet、cash flow、key metrics、historical EOD full。
+- 更新 `docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`、`docs/CURRENT.md`、`docs/README.md`，把状态从“需要 mapping review”改为“stable endpoint candidates 已 docs-only 映射；下一步可做同范围 stable retry，但仍需 review / no broad deployment”。
+- 新增 `tests/schema/test_provider_p1_fmp_endpoint_mapping_review_schema.py`，验证 scope locks、六个 endpoint family 覆盖、stable URL 前缀、no retry / no provider selection / no yfinance / no Phase 7c。
+
+**为什么改**:
+
+- 上一轮真实 AAPL / MSFT sample 证明 SEC EDGAR 可访问，但 FMP v3 endpoint families 全部 403。Claude review 指出这是真实 endpoint/account 边界，不是 runner bug。
+- 直接改 runner 并 live retry 会把“mapping review”和“数据抓取”混成一刀；本轮只先固化 current stable endpoint candidates 和 retry gate，避免 silent retry / scope creep。
+- FMP 官方 docs 当前使用 `https://financialmodelingprep.com/stable/` base URL；旧 `/api/v3/...` 样本不能再被当作当前 endpoint mapping。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema -v
+git diff --check
+(Get-Content -Path docs\CURRENT.md -Encoding UTF8).Count
+```
+
+**验证结果**:
+
+- Bundled Python: `tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema` ran 6 tests: 3 passed, 3 skipped because this interpreter lacks `jsonschema`; non-jsonschema scope-lock and mapping-coverage tests passed.
+- Python313 with `jsonschema`: combined sample-summary + FMP-mapping schema tests ran 11 tests, all passed; the real sample summary and new mapping artifact both validate against their schemas, and scope-creep mutations are rejected.
+- `docs/CURRENT.md` line count = 149。
+- Full `git diff --check` should be rerun after SESSION_LOG is prepended in the same work round.
+
+**失效旧结论**:
+
+- “FMP endpoint mapping 尚未完成”失效；stable endpoint candidates 已 docs-only mapped。
+- “stable endpoint candidates 已 live validated”不成立；本轮没有 FMP live retry，也没有新 data fetch。
+- “mapping review 可授权 provider selection / DataHub / Phase 7c”不成立；schema 和 artifact 都显式阻断。
+
+**下一步注意事项**:
+
+1. Claude 复审应核对 mapping artifact 是否只引用官方 docs + tracked sample summary，并没有把 stable candidate 写成 validated provider readiness。
+2. 如果审查 Pass 并提交，下一条 `执行` 的自然候选是更新 / parameterize standalone sample-validation runner，用 same-scope AAPL / MSFT stable endpoints 做一次 no-secret retry；不应扩大到 `yfinance`、full-market、paid access、provider selection、DataHub、production runner consumption 或 Phase 7c。
+3. 若需要完整 Draft-07 validation，应在含 `jsonschema` 的解释器中重跑新增 schema test。

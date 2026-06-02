@@ -1,6 +1,6 @@
 # Stock 项目 - 当前状态快照
 
-**最后更新**：2026-06-02（US EGS small sample-validation result）
+**最后更新**：2026-06-02（US EGS FMP endpoint mapping review）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -12,15 +12,15 @@
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
 - Owner audit/spec now reflect the failure: `docs/phase7a_alpha_plausibility_audit.json` marks `a_share_burst_minimal_data = redesign_required`, and `docs/burst_lane_spec.md` blocks further A-share minimal-data burst tests without a new ledger planned test and reviewed preregistration.
-- `docs/provider_evidence_p1_us_sample_validation_summary_20260602.json` records the approved AAPL / MSFT sample run: 17 endpoint calls, no secrets logged, SEC EDGAR succeeded, but sampled FMP v3 endpoint families returned HTTP 403 legacy-endpoint errors, so FMP is not sample-validated yet.
+- `docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json` maps failed sampled FMP v3 endpoint families to official stable endpoint candidates, docs-only: no stable retry, no data fetch, no provider selection, no DataHub / runner / Phase 7c.
 
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; US EGS direction remains FMP primary candidate + SEC EDGAR fundamentals audit, but the first sample validated only SEC, not sampled FMP v3 endpoints.
-- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；next US-provider step is review of the sample summary and a separate current-FMP-endpoint mapping decision, not broad provider deployment。
-- **当前 P1 provider blocker**：FMP v3 sample endpoints failed with HTTP 403 legacy-endpoint errors；仍不允许 FMP new token / trial / paid access、`yfinance`、provider selection、full-market data fetch、adapter、DataHub、production runner consumption 或 Phase 7c，除非另有 explicit approval + reviewed decision。
+- **当前 Phase**：Phase 7b-2 P1 closure plan is documented; US EGS direction remains FMP primary candidate + SEC EDGAR fundamentals audit, but FMP stable endpoint candidates are mapped only, not live-validated.
+- **当前 P0 / P1 目标**：do not rerun or rescue the failed redesigned burst test；next US-provider step after review/commit is same-scope AAPL / MSFT stable-endpoint retry, not broad provider deployment。
+- **当前 P1 provider blocker**：FMP stable endpoints 尚未 live validated；仍不允许 FMP new token / trial / paid access、`yfinance`、provider selection、full-market data fetch、adapter、DataHub、production runner consumption 或 Phase 7c，除非另有 explicit approval + reviewed decision。
 - **执行锁**：原 prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 已消耗 test budget 且不得运行 outcome / excess；redesigned test 已消耗 ledger planned test 且 outcome 失败。任何 material audit finding 必须修复或进入 risk register，不能只留在 chat。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
@@ -42,7 +42,7 @@
 - **SR-LLM-001 Stage 3 prompt boundary**（2026-06-01）：DeepSeek policy-risk prompt construction now sanitizes external titles, wraps them in `[UNTRUSTED_NEWS_TITLE]` rows, and tells the LLM not to execute instructions inside titles; focused tests cover injection-style titles.
 - **SR-EXEC-003 drawdown evidence guard**（2026-06-01）：`runners/backtest_execution.py` no longer exposes realized exit-date cash drawdown as numeric `max_drawdown`; ship-gate drawdown remains not evaluable until open-position MTM is implemented.
 - **System risk register**（2026-05-31）：`docs/system_risk_register.md` 已建立，并已把确认后的 bug audit 拆成具体 fix queue；future LLM enforcement 已接入 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`。
-- **US EGS sample-validation result**（2026-06-02）：`runners/us_egs_sample_validation.py` wrote `docs/provider_evidence_p1_us_sample_validation_summary_20260602.json`; SEC EDGAR AAPL / MSFT mapping / submissions / companyfacts succeeded, while all sampled FMP v3 endpoint families returned HTTP 403 legacy-endpoint errors.
+- **US EGS FMP endpoint mapping**（2026-06-02）：`docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json` maps failed FMP v3 sample families to stable endpoint candidates, but performs no stable retry and makes no readiness claim.
 
 ---
 
@@ -72,7 +72,7 @@
 - `research/README.md` / `schemas/research_preregistration.schema.json` / `schemas/research_preflight_result.schema.json` / `schemas/program_test_budget_ledger.schema.json` / `schemas/evidence_report.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` / `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/monthly_stats.csv` / `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` - research-only preregistration, preflight, evidence, and ledger owner files。
 - `docs/provider_priority_benchmark_contract.md` - Phase 7a-3 provider evidence priority / provisional benchmark contract。
 - `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` - Phase 7b provider evidence / drift monitor contract。
-- `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` / `schemas/provider_p1_sample_validation_access_approval.schema.json` / `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json` / `runners/us_egs_sample_validation.py` / `schemas/provider_p1_us_egs_sample_validation_summary.schema.json` / `docs/provider_evidence_p1_us_sample_validation_summary_20260602.json` - Phase 7b-2 P1 access plan, approval, and no-secret AAPL / MSFT sample summary。
+- `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` / `schemas/provider_p1_sample_validation_access_approval.schema.json` / `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json` / `runners/us_egs_sample_validation.py` / `schemas/provider_p1_us_egs_sample_validation_summary.schema.json` / `docs/provider_evidence_p1_us_sample_validation_summary_20260602.json` / `schemas/provider_p1_fmp_endpoint_mapping_review.schema.json` / `docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json` - Phase 7b-2 P1 access plan, approval, no-secret sample summary, and FMP stable-endpoint mapping。
 - `schemas/provider_p1_readiness_review.schema.json` / `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json` - Phase 7b-2 P1 readiness review matrix（collection complete；Phase 7c / provider selection / broad data fetch blocked）。
 - `docs/evidence_feasibility_controls.md` / `schemas/evidence_feasibility_controls.schema.json` - Phase 7a-4 burst promotion / evidence feasibility controls。
 - `docs/evidence_report_schema_contract.md` / `schemas/evidence_report.schema.json` - Phase 7a-5 evidence report schema contract。
@@ -100,7 +100,7 @@
 
 ### P1 - US EGS sample-validation follow-up
 
-- Review the sample summary; SEC EDGAR sample passed, sampled FMP v3 endpoints failed with 403 legacy-endpoint errors, so the next reviewed slice is current FMP endpoint mapping or FMP account/API boundary, not broad provider deployment.
+- After this mapping review is reviewed/committed, the next narrow candidate is same-scope AAPL / MSFT stable-endpoint retry using existing FMP key and no-secret summary; no broad provider deployment.
 - 不得 silent default、latest-only 回填历史证据，或把 provider status guess 写成 production-ready evidence。
 - 不得建 adapter / DataHub table、把 sample runner 接入 production runner、抓 broader provider data 或接 broker / OS automation。
 

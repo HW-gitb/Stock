@@ -1,0 +1,372 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_fmp_endpoint_mapping_review/1.0.0/schema.json",
+  "title": "Provider P1 FMP Endpoint Mapping Review",
+  "description": "Docs-only review artifact for mapping failed FMP legacy/v3 sample endpoints to current FMP stable endpoint candidates. This artifact does not perform a live retry, select a provider, authorize paid access, use yfinance, download full-market data, create adapters, implement DataHub tables, change production runners, authorize Phase 7c, or claim production readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "based_on_sample_summary_ref",
+    "source_refs",
+    "mapping_review",
+    "retry_gate",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_fmp_endpoint_mapping_review"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "review_status",
+        "docs_only_review",
+        "data_fetch_performed",
+        "fmp_live_retry_performed",
+        "provider_selection_allowed",
+        "paid_access_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_change_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "production_ready_claim_allowed",
+        "ship_gate_evidence_claimed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "fmp_current_endpoint_mapping_review"
+        },
+        "review_status": {
+          "const": "docs_only_mapping_review"
+        },
+        "docs_only_review": {
+          "const": true
+        },
+        "data_fetch_performed": {
+          "const": false
+        },
+        "fmp_live_retry_performed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_change_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        },
+        "ship_gate_evidence_claimed": {
+          "const": false
+        }
+      }
+    },
+    "based_on_sample_summary_ref": {
+      "const": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 4
+    },
+    "mapping_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legacy_failure_summary",
+        "current_base_url",
+        "authentication_note",
+        "endpoint_mappings",
+        "mapping_verdict"
+      ],
+      "properties": {
+        "legacy_failure_summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sample_status",
+            "fmp_legacy_endpoint_errors",
+            "legacy_error_basis",
+            "sec_edgar_status"
+          ],
+          "properties": {
+            "sample_status": {
+              "const": "completed_with_endpoint_errors"
+            },
+            "fmp_legacy_endpoint_errors": {
+              "const": "all_sampled_fmp_v3_endpoint_families_returned_http_403"
+            },
+            "legacy_error_basis": {
+              "type": "string"
+            },
+            "sec_edgar_status": {
+              "const": "sample_succeeded"
+            }
+          }
+        },
+        "current_base_url": {
+          "const": "https://financialmodelingprep.com/stable/"
+        },
+        "authentication_note": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "api_key_required",
+            "secret_persistence_allowed",
+            "url_persistence_allowed",
+            "note"
+          ],
+          "properties": {
+            "api_key_required": {
+              "const": true
+            },
+            "secret_persistence_allowed": {
+              "const": false
+            },
+            "url_persistence_allowed": {
+              "const": false
+            },
+            "note": {
+              "type": "string"
+            }
+          }
+        },
+        "endpoint_mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/endpointMapping"
+          },
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "mapping_verdict": {
+          "const": "stable_endpoint_candidates_identified_not_live_validated"
+        }
+      }
+    },
+    "retry_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retry_authorized_by_this_artifact",
+        "allowed_retry_scope_if_user_approves",
+        "required_before_retry",
+        "blocked_actions"
+      ],
+      "properties": {
+        "retry_authorized_by_this_artifact": {
+          "const": false
+        },
+        "allowed_retry_scope_if_user_approves": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "symbols",
+            "spend_usd",
+            "use_existing_fmp_key_only",
+            "store_raw_payloads_only_under_gitignored_provider_samples",
+            "tracked_summary_no_secrets_or_raw_rows"
+          ],
+          "properties": {
+            "symbols": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "AAPL",
+                  "MSFT"
+                ]
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true
+            },
+            "spend_usd": {
+              "const": 0
+            },
+            "use_existing_fmp_key_only": {
+              "const": true
+            },
+            "store_raw_payloads_only_under_gitignored_provider_samples": {
+              "const": true
+            },
+            "tracked_summary_no_secrets_or_raw_rows": {
+              "const": true
+            }
+          }
+        },
+        "required_before_retry": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2
+        },
+        "blocked_actions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "new_fmp_token",
+              "fmp_trial_request",
+              "paid_upgrade",
+              "yfinance_check",
+              "full_market_download",
+              "provider_selection",
+              "provider_adapter",
+              "datahub_table",
+              "production_runner_consumption",
+              "phase7c_authorization",
+              "ship_gate_claim"
+            ]
+          },
+          "minItems": 11,
+          "uniqueItems": true
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 3
+    },
+    "next_steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 2
+    }
+  },
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "source_type",
+        "url_or_path",
+        "review_date",
+        "evidence_note"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "official_provider_docs",
+            "tracked_sample_summary",
+            "gitignored_raw_sample_note"
+          ]
+        },
+        "url_or_path": {
+          "type": "string"
+        },
+        "review_date": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "evidence_note": {
+          "type": "string"
+        }
+      }
+    },
+    "endpointMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "endpoint_family",
+        "failed_legacy_template",
+        "stable_candidate_template",
+        "official_doc_source_ids",
+        "sample_live_validated",
+        "parameter_parity_status",
+        "egs_relevance",
+        "retry_notes"
+      ],
+      "properties": {
+        "endpoint_family": {
+          "enum": [
+            "profile_or_company_metadata",
+            "income_statement",
+            "balance_sheet_statement",
+            "cash_flow_statement",
+            "financial_ratios_or_key_metrics",
+            "historical_eod_price_volume"
+          ]
+        },
+        "failed_legacy_template": {
+          "type": "string",
+          "pattern": "^https://financialmodelingprep.com/api/v3/"
+        },
+        "stable_candidate_template": {
+          "type": "string",
+          "pattern": "^https://financialmodelingprep.com/stable/"
+        },
+        "official_doc_source_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "sample_live_validated": {
+          "const": false
+        },
+        "parameter_parity_status": {
+          "enum": [
+            "endpoint_path_identified_limit_or_timeseries_params_not_validated",
+            "endpoint_path_identified_no_extra_params_validated"
+          ]
+        },
+        "egs_relevance": {
+          "type": "string"
+        },
+        "retry_notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

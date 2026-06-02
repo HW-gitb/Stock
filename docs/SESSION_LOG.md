@@ -8,6 +8,72 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (US EGS FMP current endpoint mapping review)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `e819df3`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/provider_evidence_drift_monitor.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_fmp_endpoint_mapping_review.schema.json, docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json, tests/schema/test_provider_p1_fmp_endpoint_mapping_review_schema.py. No runner change, no provider_samples change, nothing staged.
+
+**Independent verification**:
+- Ran `tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema` under a `jsonschema`-equipped interpreter (Python313): 6 tests, all pass, 0 skipped — closing the 3 the bundled interpreter skipped. Confirms the artifact validates against the schema, scope-creep mutations (`fmp_live_retry_performed=true` / `provider_selection_allowed=true` / `retry_authorized=true` / extra `sample_live_validated=true` / TSLA) are rejected, and all six failed endpoint families map to `/stable/` candidates.
+- Docs-only confirmed: `scope.data_fetch_performed=false`, `fmp_live_retry_performed=false`, `retry_authorized_by_this_artifact=false`; git status shows no runner / no `provider_samples/` change, so no network call happened this slice. Artifact carries no API keys or key-bearing URLs (stable templates use `{symbol}` placeholders); `authentication_note` forbids future URL/secret persistence.
+- No overclaim: every `endpoint_mapping.sample_live_validated=false`, `mapping_verdict=stable_endpoint_candidates_identified_not_live_validated`, limitations state path existence ≠ account access / PIT / license / coverage. `blocked_actions` enumerates all 11 (new token, trial, paid upgrade, yfinance, full-market, provider selection, adapter, DataHub, production runner consumption, Phase 7c, ship-gate).
+
+**Process note**: the 403 is correctly read as FMP v3 *legacy-endpoint deprecation* (raw body: "only available for legacy users with valid subscriptions prior August 31, 2025"), not as "FMP requires paid upgrade." The mapped fix is the current `/stable/` base, retestable at $0 with the existing key — so the gated next step is a same-scope AAPL/MSFT stable retry, not a paid decision. This avoids prematurely concluding FMP is unusable. Material state correctly carried in `SR-PROVIDER-001` (stays `open`). drift-monitor §18 insert + §19 renumber clean; CURRENT = 149. New `runners/` was not touched (the standalone sample runner is unchanged; runner update + live retry is deferred to the next slice, as the artifact states).
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001` (open; next provider step is the gated same-scope `/stable/` retry — still no yfinance / full-market / paid / provider-selection / DataHub / production-runner / Phase 7c without new explicit approval).
+
+---
+
+## 2026-06-02 — Codex 执行 (US EGS FMP current endpoint mapping review)
+
+**Commits**: none (pending Claude review / submit; base `e819df3`)
+
+**Relationship to prior session(s)**:
+- Builds on the committed AAPL / MSFT sample-validation packet (`e819df3`), where SEC EDGAR succeeded but all sampled FMP v3 endpoint families returned HTTP 403 legacy-endpoint errors.
+- Executes the next `SR-PROVIDER-001` slice from `docs/CURRENT.md`: current-FMP-endpoint mapping / account boundary review.
+- This round is docs-only / schema-first. It does not run FMP again, does not fetch provider data, does not use `yfinance`, does not update the sample runner, and does not authorize DataHub / production runner / Phase 7c.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_fmp_endpoint_mapping_review.schema.json`: added a schema-first contract for FMP current-endpoint mapping review. Scope locks: no live retry, no data fetch, no provider selection, no paid access, no `yfinance`, no full-market, no adapter/DataHub, no production runner change, no Phase 7c, no production-ready / ship-gate claim.
+2. [untracked] `docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json`: maps the failed sampled FMP v3 endpoint families to official stable endpoint candidates for profile, income statement, balance sheet, cash flow, key metrics, and historical EOD full. It records `mapping_verdict = stable_endpoint_candidates_identified_not_live_validated`.
+3. [untracked] `tests/schema/test_provider_p1_fmp_endpoint_mapping_review_schema.py`: validates scope locks, mapping coverage for all six failed endpoint families, stable URL prefixes, and scope-creep rejection under `jsonschema`.
+4. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the mapping result and keep `SR-PROVIDER-001` open.
+
+**External docs reviewed**:
+- FMP Quickstart: stable base URL, API-key query authorization, and stable examples for historical price, profile, and income statement.
+- FMP API docs / stable pages: stable statement, profile, key metrics, and historical EOD endpoint candidates.
+- These are documentation sources only; no FMP stable endpoint was called in this round.
+
+**Key decisions**:
+- Treat current stable endpoints as retry candidates, not validated provider capability.
+- Do not update `runners/us_egs_sample_validation.py` in this slice. Updating the runner plus live retry is the next separate slice after review/commit.
+- Keep retry scope, if later approved/executed, within AAPL / MSFT, existing FMP key, $0, ignored raw payloads, and tracked no-secret summary.
+
+**Rejected alternatives**:
+- "Patch the runner now and retry stable endpoints" — rejected as mixing docs-only mapping with a new live data fetch.
+- "Use yfinance to bypass FMP failure" — rejected; not approved and still blocked.
+- "Mark FMP viable because stable docs exist" — rejected; docs existence does not prove account access, response shape, PIT fields, license, coverage, fallback, or production readiness.
+
+**Validation run/result**:
+- Bundled Python: `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema -v`: 6 tests ran, 3 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Bundled Python combined: `... -m unittest tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema -v`: 11 tests ran, 4 passed, 7 skipped because this interpreter lacks `jsonschema`.
+- Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema -v`: 11 tests passed.
+- `git diff --check`: passed before SESSION_LOG entry; rerun after this entry is expected.
+- `docs/CURRENT.md` line count = 149.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review all tracked diffs plus the three untracked files listed above. There are no new raw provider samples from this round.
+- Primary review risks: whether the mapping artifact overclaims live validation; whether retry gates accidentally authorize FMP retry / provider selection / DataHub / Phase 7c; whether source refs support each mapped stable endpoint family.
+
+**Next recommended action after Pass + commit**:
+- Same-scope AAPL / MSFT stable-endpoint retry in the standalone sample-validation runner, still under existing key / $0 / no-secret / ignored-raw boundary. No `yfinance`, full-market fetch, paid access, provider selection, DataHub, production runner consumption, or Phase 7c.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (US EGS AAPL/MSFT sample-validation packet)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files + gitignored raw samples vs `0ebae05`)
