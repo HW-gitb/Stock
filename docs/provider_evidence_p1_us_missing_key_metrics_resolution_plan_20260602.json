@@ -1,0 +1,347 @@
+{
+  "schema_name": "provider_p1_missing_key_metrics_resolution_plan",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_missing_key_metrics_resolution_plan_after_coverage_smoke",
+    "contract_status": "resolution_plan_only_no_access_no_raw_parse_no_derivation",
+    "fmp_endpoint_call_allowed": false,
+    "sec_api_call_allowed": false,
+    "broader_provider_sample_allowed": false,
+    "data_fetch_allowed": false,
+    "raw_payload_parse_allowed": false,
+    "fixture_generation_allowed": false,
+    "field_derivation_implementation_allowed": false,
+    "field_mapping_implementation_allowed": false,
+    "return_calculation_allowed": false,
+    "corporate_action_reconciliation_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_coverage_count_execution_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_coverage_count_execution_summary.schema.json",
+      "consumption_role": "Records the approved five-symbol FMP stable coverage smoke and the 15 missing key-metrics field observations."
+    },
+    {
+      "artifact_id": "p1_fmp_pit_observed_date_semantics_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_pit_observed_date_semantics_contract_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_pit_observed_date_semantics_contract.schema.json",
+      "consumption_role": "Defines FMP PIT / observed-date gates that any derived ratio or per-share metric must satisfy before historical use."
+    },
+    {
+      "artifact_id": "p1_fmp_price_adjustment_corporate_action_semantics_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_price_adjustment_corporate_action_semantics_contract_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_price_adjustment_corporate_action_semantics_contract.schema.json",
+      "consumption_role": "Keeps price inputs and returns blocked until adjustment, corporate-action, delisting, and missing-session semantics are reviewed."
+    },
+    {
+      "artifact_id": "p1_sec_edgar_field_family_mapping_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_sec_edgar_field_family_mapping_contract_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_sec_edgar_field_family_mapping_contract.schema.json",
+      "consumption_role": "Defines SEC EDGAR audit / cross-check field-family gates without parser implementation."
+    },
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_remaining_blocker_resolution_plan.schema.json",
+      "consumption_role": "Routes provider blockers that remain before Phase 7c or production consumption."
+    },
+    {
+      "artifact_id": "p1_license_storage_retention_review_20260602",
+      "path": "docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_license_storage_retention_review.schema.json",
+      "consumption_role": "Keeps production raw storage, normalized storage, derived outputs, and broader provider use blocked pending current terms review."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Defines no-silent-default, no-latest-only historical backfill, PIT drift, and provider evidence locks."
+    }
+  ],
+  "review_basis": {
+    "basis_type": "tracked_summary_only_no_raw_payload_parse_no_new_access",
+    "coverage_summary_ref": "docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json",
+    "fmp_endpoint_calls_performed": false,
+    "sec_api_calls_performed": false,
+    "raw_payload_read_or_parsed": false,
+    "field_derivation_implemented": false,
+    "field_mapping_implemented": false,
+    "uses_tracked_no_secret_summary_only": true,
+    "missing_field_count_source": "coverage_count_summary_missing_required_fields",
+    "missing_field_count_total": 15,
+    "missing_symbol_count": 5,
+    "requires_later_user_approved_field_presence_review": true,
+    "requires_later_derivation_lineage_review": true
+  },
+  "missing_field_observations": [
+    {
+      "field_id": "peRatio",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "symbols_checked": [
+        "AAPL",
+        "MSFT",
+        "NVDA",
+        "JPM",
+        "XOM"
+      ],
+      "missing_symbol_count": 5,
+      "current_status": "missing_in_fmp_stable_key_metrics_sample",
+      "candidate_resolution_class": "potentially_derivable_pending_field_presence_and_lineage_review",
+      "production_use_allowed": false,
+      "silent_default_allowed": false,
+      "required_before_resolution": [
+        "Confirm a reviewed PIT-safe price input and an EPS or net-income-per-share input exist for the intended as-of date.",
+        "If EPS is absent, confirm weighted share-count lineage before any price divided by earnings derivation.",
+        "Define zero or negative earnings behavior; do not default to zero, infinity, or vendor-like ratios silently."
+      ]
+    },
+    {
+      "field_id": "revenuePerShare",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "symbols_checked": [
+        "AAPL",
+        "MSFT",
+        "NVDA",
+        "JPM",
+        "XOM"
+      ],
+      "missing_symbol_count": 5,
+      "current_status": "missing_in_fmp_stable_key_metrics_sample",
+      "candidate_resolution_class": "potentially_derivable_pending_field_presence_and_lineage_review",
+      "production_use_allowed": false,
+      "silent_default_allowed": false,
+      "required_before_resolution": [
+        "Confirm PIT-safe revenue and weighted share-count inputs under a later approved field-presence review.",
+        "Define fiscal-period alignment and unit / currency scaling before using the derived value.",
+        "Do not substitute current profile shares or latest-only share counts for historical rows."
+      ]
+    },
+    {
+      "field_id": "netIncomePerShare",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "symbols_checked": [
+        "AAPL",
+        "MSFT",
+        "NVDA",
+        "JPM",
+        "XOM"
+      ],
+      "missing_symbol_count": 5,
+      "current_status": "missing_in_fmp_stable_key_metrics_sample",
+      "candidate_resolution_class": "potentially_derivable_pending_field_presence_and_lineage_review",
+      "production_use_allowed": false,
+      "silent_default_allowed": false,
+      "required_before_resolution": [
+        "Confirm PIT-safe netIncome and weighted share-count inputs before any net-income-per-share derivation.",
+        "Define diluted versus basic share policy and restatement / amendment behavior before historical use.",
+        "Do not treat derived EPS-like values as vendor ratios without formula and lineage disclosure."
+      ]
+    }
+  ],
+  "candidate_derivation_paths": [
+    {
+      "target_field_id": "peRatio",
+      "candidate_formula_family": "price_divided_by_eps_or_price_divided_by_net_income_per_share",
+      "required_input_families": [
+        "PIT-safe price close or approved valuation price input",
+        "PIT-safe EPS or derived netIncomePerShare",
+        "Observed-date and as-of eligibility rule for both price and fundamentals",
+        "Negative / zero denominator policy"
+      ],
+      "current_status": "candidate_only_blocked_pending_review",
+      "pit_and_lineage_requirements": [
+        "Price input must use reviewed adjustment / corporate-action semantics before valuation use.",
+        "Earnings input must use filingDate / acceptedDate or reviewed equivalent observed-date lineage.",
+        "Formula must disclose whether it is vendor-provided, locally derived, diluted, basic, trailing, annual, or quarterly."
+      ],
+      "authorizes_raw_parse": false,
+      "authorizes_derivation_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "target_field_id": "revenuePerShare",
+      "candidate_formula_family": "revenue_divided_by_weighted_average_shares",
+      "required_input_families": [
+        "PIT-safe revenue statement row",
+        "Weighted average shares or reviewed share-count denominator",
+        "Fiscal period and statement type",
+        "Unit and currency scaling"
+      ],
+      "current_status": "candidate_only_blocked_pending_review",
+      "pit_and_lineage_requirements": [
+        "Revenue and shares must share a reviewed fiscal-period alignment.",
+        "Share-count denominator cannot come from current profile metadata unless a later review proves as-of semantics.",
+        "Missing denominator must block the derived field rather than zero-fill."
+      ],
+      "authorizes_raw_parse": false,
+      "authorizes_derivation_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "target_field_id": "netIncomePerShare",
+      "candidate_formula_family": "net_income_divided_by_weighted_average_shares",
+      "required_input_families": [
+        "PIT-safe netIncome statement row",
+        "Weighted average shares or reviewed diluted share denominator",
+        "Fiscal period and statement type",
+        "Restatement / amendment behavior"
+      ],
+      "current_status": "candidate_only_blocked_pending_review",
+      "pit_and_lineage_requirements": [
+        "Net income and shares must share a reviewed fiscal-period alignment.",
+        "Diluted versus basic denominator must be explicit and tested.",
+        "Derived values must be flagged as local derivations, not vendor-provided ratios."
+      ],
+      "authorizes_raw_parse": false,
+      "authorizes_derivation_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "resolution_decision_gates": [
+    {
+      "gate_id": "field_presence_review_packet",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "A later reviewed packet must be explicitly approved before reading existing gitignored raw payloads or making any fresh provider call to check formula input fields.",
+      "authorizes_data_fetch": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_derivation_implementation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "derivation_formula_lineage_spec",
+      "status": "pending_later_lineage_review",
+      "blocks_implementation": true,
+      "required_resolution": "Define formula, denominator, fiscal-period alignment, units, currency, observed-date eligibility, and missing / zero denominator behavior before implementation.",
+      "authorizes_data_fetch": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_derivation_implementation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "fmp_pit_row_validation",
+      "status": "pending_later_lineage_review",
+      "blocks_implementation": true,
+      "required_resolution": "Validate field-level PIT row behavior, revisions, restatements, and latest-only exclusion before historical use.",
+      "authorizes_data_fetch": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_derivation_implementation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "price_adjustment_for_pe",
+      "status": "pending_later_lineage_review",
+      "blocks_implementation": true,
+      "required_resolution": "Any P/E derivation using price must consume a reviewed price-adjustment / corporate-action input, not an unreviewed latest profile or unvalidated EOD field.",
+      "authorizes_data_fetch": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_derivation_implementation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "alternate_endpoint_or_provider_review",
+      "status": "pending_later_provider_or_endpoint_review",
+      "blocks_implementation": true,
+      "required_resolution": "If the free stable key-metrics endpoint cannot support inputs safely, a later reviewed decision must classify alternate endpoints, paid access, or alternate providers without silently promoting FMP.",
+      "authorizes_data_fetch": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_derivation_implementation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_consumption_gate",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Phase 7c, DataHub, adapters, and production runners remain blocked until provider blockers are resolved or explicitly accepted in a reviewed decision.",
+      "authorizes_data_fetch": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_derivation_implementation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "no_silent_default_policy": {
+    "policy_status": "policy_expectations_only_no_derivation_or_mapping",
+    "missing_vendor_ratio_blocks_vendor_ratio_claim": true,
+    "derived_metric_allowed_without_review": false,
+    "null_fill_allowed": false,
+    "zero_fill_allowed": false,
+    "latest_price_substitution_allowed": false,
+    "current_profile_share_substitution_allowed": false,
+    "production_default_allowed": false,
+    "authorizes_datahub_or_runner_consumption": false
+  },
+  "go_no_go_summary": {
+    "go_for_controlled_resolution_planning": true,
+    "go_for_raw_payload_parse": false,
+    "go_for_derivation_implementation": false,
+    "go_for_provider_selection": false,
+    "go_for_datahub_or_runner_consumption": false,
+    "no_go_rationale": "The missing fields can be routed toward reviewed derivation or alternate-provider decisions, but this artifact authorizes no raw parsing, no fresh access, no formula implementation, no field mapping, no provider selection, and no Phase 7c consumption."
+  },
+  "prohibited_actions": {
+    "fmp_endpoint_call": false,
+    "sec_api_call": false,
+    "broader_provider_sample": false,
+    "raw_payload_parse": false,
+    "fixture_generation": false,
+    "field_derivation_implementation": false,
+    "field_mapping_implementation": false,
+    "return_calculation": false,
+    "corporate_action_reconciliation": false,
+    "provider_selection": false,
+    "provider_ranking": false,
+    "new_token_or_trial": false,
+    "paid_access": false,
+    "provider_contact": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "phase7c_authorization": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Use this artifact as the no-access router for the three missing key-metrics fields after the approved 5-symbol coverage smoke.",
+    "The next safe access-adjacent packet, if the user approves it, is a bounded field-presence review that either inspects existing gitignored raw payloads or defines a fresh no-secret provider-call packet; both require separate explicit approval and reviewed scope.",
+    "After field-presence evidence exists, define a derivation lineage spec before any formula, parser, field mapping, fixture, DataHub, runner, or Phase 7c work.",
+    "If required inputs are absent or unsafe, keep the fields blocked or route to a separate alternate-endpoint / alternate-provider review instead of defaulting values."
+  ],
+  "limitations": [
+    "This artifact performs no FMP endpoint calls, SEC API calls, raw payload parsing, field derivation, field mapping, fixture generation, provider contact, adapter work, DataHub work, runner change, broker automation, or ship-gate claim.",
+    "The 5-symbol coverage smoke proves endpoint response success for active large-cap names, not derived ratio availability, inactive / delisted coverage, PIT semantics, price adjustment, corporate actions, fallback behavior, stability, provider selection, or production readiness.",
+    "The three missing key-metrics fields remain blockers until later reviewed evidence proves direct availability, safe derivation, or an accepted alternate source.",
+    "This plan narrows the missing-field blocker but does not resolve SR-PROVIDER-001."
+  ]
+}

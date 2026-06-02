@@ -1,0 +1,751 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_missing_key_metrics_resolution_plan/1.0.0/schema.json",
+  "title": "Provider P1 Missing Key Metrics Resolution Plan",
+  "description": "Phase 7b-2 no-access resolution plan for the missing FMP stable key-metrics fields observed in the approved five-symbol coverage-count smoke. This artifact classifies peRatio, revenuePerShare, and netIncomePerShare as blocked pending reviewed derivation / field-presence work; it does not call FMP or SEC, parse raw payloads, implement derivations or field mappings, select a provider, implement DataHub, change runners, authorize Phase 7c, or claim production readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_artifact_refs",
+    "review_basis",
+    "missing_field_observations",
+    "candidate_derivation_paths",
+    "resolution_decision_gates",
+    "no_silent_default_policy",
+    "go_no_go_summary",
+    "prohibited_actions",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_missing_key_metrics_resolution_plan"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 6,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_coverage_count_execution_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_pit_observed_date_semantics_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_price_adjustment_corporate_action_semantics_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_sec_edgar_field_family_mapping_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_remaining_blocker_plan_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "review_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_type",
+        "coverage_summary_ref",
+        "fmp_endpoint_calls_performed",
+        "sec_api_calls_performed",
+        "raw_payload_read_or_parsed",
+        "field_derivation_implemented",
+        "field_mapping_implemented",
+        "uses_tracked_no_secret_summary_only",
+        "missing_field_count_source",
+        "missing_field_count_total",
+        "missing_symbol_count",
+        "requires_later_user_approved_field_presence_review",
+        "requires_later_derivation_lineage_review"
+      ],
+      "properties": {
+        "basis_type": {
+          "const": "tracked_summary_only_no_raw_payload_parse_no_new_access"
+        },
+        "coverage_summary_ref": {
+          "const": "docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json"
+        },
+        "fmp_endpoint_calls_performed": {
+          "const": false
+        },
+        "sec_api_calls_performed": {
+          "const": false
+        },
+        "raw_payload_read_or_parsed": {
+          "const": false
+        },
+        "field_derivation_implemented": {
+          "const": false
+        },
+        "field_mapping_implemented": {
+          "const": false
+        },
+        "uses_tracked_no_secret_summary_only": {
+          "const": true
+        },
+        "missing_field_count_source": {
+          "const": "coverage_count_summary_missing_required_fields"
+        },
+        "missing_field_count_total": {
+          "const": 15
+        },
+        "missing_symbol_count": {
+          "const": 5
+        },
+        "requires_later_user_approved_field_presence_review": {
+          "const": true
+        },
+        "requires_later_derivation_lineage_review": {
+          "const": true
+        }
+      }
+    },
+    "missing_field_observations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/missingFieldObservation"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_id": {
+                "const": "peRatio"
+              }
+            },
+            "required": [
+              "field_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_id": {
+                "const": "revenuePerShare"
+              }
+            },
+            "required": [
+              "field_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_id": {
+                "const": "netIncomePerShare"
+              }
+            },
+            "required": [
+              "field_id"
+            ]
+          }
+        }
+      ]
+    },
+    "candidate_derivation_paths": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/candidateDerivationPath"
+      },
+      "minItems": 3
+    },
+    "resolution_decision_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resolutionDecisionGate"
+      },
+      "minItems": 6
+    },
+    "no_silent_default_policy": {
+      "$ref": "#/$defs/noSilentDefaultPolicy"
+    },
+    "go_no_go_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "go_for_controlled_resolution_planning",
+        "go_for_raw_payload_parse",
+        "go_for_derivation_implementation",
+        "go_for_provider_selection",
+        "go_for_datahub_or_runner_consumption",
+        "no_go_rationale"
+      ],
+      "properties": {
+        "go_for_controlled_resolution_planning": {
+          "const": true
+        },
+        "go_for_raw_payload_parse": {
+          "const": false
+        },
+        "go_for_derivation_implementation": {
+          "const": false
+        },
+        "go_for_provider_selection": {
+          "const": false
+        },
+        "go_for_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "no_go_rationale": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "fmp_endpoint_call_allowed",
+        "sec_api_call_allowed",
+        "broader_provider_sample_allowed",
+        "data_fetch_allowed",
+        "raw_payload_parse_allowed",
+        "fixture_generation_allowed",
+        "field_derivation_implementation_allowed",
+        "field_mapping_implementation_allowed",
+        "return_calculation_allowed",
+        "corporate_action_reconciliation_allowed",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_missing_key_metrics_resolution_plan_after_coverage_smoke"
+        },
+        "contract_status": {
+          "const": "resolution_plan_only_no_access_no_raw_parse_no_derivation"
+        },
+        "fmp_endpoint_call_allowed": {
+          "const": false
+        },
+        "sec_api_call_allowed": {
+          "const": false
+        },
+        "broader_provider_sample_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "raw_payload_parse_allowed": {
+          "const": false
+        },
+        "fixture_generation_allowed": {
+          "const": false
+        },
+        "field_derivation_implementation_allowed": {
+          "const": false
+        },
+        "field_mapping_implementation_allowed": {
+          "const": false
+        },
+        "return_calculation_allowed": {
+          "const": false
+        },
+        "corporate_action_reconciliation_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "contract_or_schema_ref",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contract_or_schema_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "missingFieldObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_id",
+        "endpoint_family",
+        "symbols_checked",
+        "missing_symbol_count",
+        "current_status",
+        "candidate_resolution_class",
+        "production_use_allowed",
+        "silent_default_allowed",
+        "required_before_resolution"
+      ],
+      "properties": {
+        "field_id": {
+          "enum": [
+            "peRatio",
+            "revenuePerShare",
+            "netIncomePerShare"
+          ]
+        },
+        "endpoint_family": {
+          "const": "financial_ratios_or_key_metrics"
+        },
+        "symbols_checked": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "AAPL",
+              "MSFT",
+              "NVDA",
+              "JPM",
+              "XOM"
+            ]
+          },
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "missing_symbol_count": {
+          "const": 5
+        },
+        "current_status": {
+          "const": "missing_in_fmp_stable_key_metrics_sample"
+        },
+        "candidate_resolution_class": {
+          "enum": [
+            "potentially_derivable_pending_field_presence_and_lineage_review",
+            "needs_alternate_endpoint_or_provider_pending_approval"
+          ]
+        },
+        "production_use_allowed": {
+          "const": false
+        },
+        "silent_default_allowed": {
+          "const": false
+        },
+        "required_before_resolution": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "candidateDerivationPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_field_id",
+        "candidate_formula_family",
+        "required_input_families",
+        "current_status",
+        "pit_and_lineage_requirements",
+        "authorizes_raw_parse",
+        "authorizes_derivation_implementation",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "target_field_id": {
+          "enum": [
+            "peRatio",
+            "revenuePerShare",
+            "netIncomePerShare"
+          ]
+        },
+        "candidate_formula_family": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required_input_families": {
+          "$ref": "#/$defs/stringList"
+        },
+        "current_status": {
+          "const": "candidate_only_blocked_pending_review"
+        },
+        "pit_and_lineage_requirements": {
+          "$ref": "#/$defs/stringList"
+        },
+        "authorizes_raw_parse": {
+          "const": false
+        },
+        "authorizes_derivation_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "resolutionDecisionGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "blocks_implementation",
+        "required_resolution",
+        "authorizes_data_fetch",
+        "authorizes_raw_payload_parse",
+        "authorizes_derivation_implementation",
+        "authorizes_field_mapping_implementation",
+        "authorizes_datahub_or_runner_consumption",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "pending_user_approval",
+            "pending_later_field_presence_review",
+            "pending_later_lineage_review",
+            "pending_later_provider_or_endpoint_review"
+          ]
+        },
+        "blocks_implementation": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_raw_payload_parse": {
+          "const": false
+        },
+        "authorizes_derivation_implementation": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "noSilentDefaultPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "missing_vendor_ratio_blocks_vendor_ratio_claim",
+        "derived_metric_allowed_without_review",
+        "null_fill_allowed",
+        "zero_fill_allowed",
+        "latest_price_substitution_allowed",
+        "current_profile_share_substitution_allowed",
+        "production_default_allowed",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "policy_expectations_only_no_derivation_or_mapping"
+        },
+        "missing_vendor_ratio_blocks_vendor_ratio_claim": {
+          "const": true
+        },
+        "derived_metric_allowed_without_review": {
+          "const": false
+        },
+        "null_fill_allowed": {
+          "const": false
+        },
+        "zero_fill_allowed": {
+          "const": false
+        },
+        "latest_price_substitution_allowed": {
+          "const": false
+        },
+        "current_profile_share_substitution_allowed": {
+          "const": false
+        },
+        "production_default_allowed": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_endpoint_call",
+        "sec_api_call",
+        "broader_provider_sample",
+        "raw_payload_parse",
+        "fixture_generation",
+        "field_derivation_implementation",
+        "field_mapping_implementation",
+        "return_calculation",
+        "corporate_action_reconciliation",
+        "provider_selection",
+        "provider_ranking",
+        "new_token_or_trial",
+        "paid_access",
+        "provider_contact",
+        "yfinance_check",
+        "full_market_download",
+        "provider_adapter",
+        "datahub_table",
+        "production_runner_consumption",
+        "phase7c_authorization",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "fmp_endpoint_call": {
+          "const": false
+        },
+        "sec_api_call": {
+          "const": false
+        },
+        "broader_provider_sample": {
+          "const": false
+        },
+        "raw_payload_parse": {
+          "const": false
+        },
+        "fixture_generation": {
+          "const": false
+        },
+        "field_derivation_implementation": {
+          "const": false
+        },
+        "field_mapping_implementation": {
+          "const": false
+        },
+        "return_calculation": {
+          "const": false
+        },
+        "corporate_action_reconciliation": {
+          "const": false
+        },
+        "provider_selection": {
+          "const": false
+        },
+        "provider_ranking": {
+          "const": false
+        },
+        "new_token_or_trial": {
+          "const": false
+        },
+        "paid_access": {
+          "const": false
+        },
+        "provider_contact": {
+          "const": false
+        },
+        "yfinance_check": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "provider_adapter": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "phase7c_authorization": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

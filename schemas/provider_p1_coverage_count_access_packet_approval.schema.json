@@ -1,0 +1,455 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_coverage_count_access_packet_approval/1.0.0/schema.json",
+  "title": "Provider P1 Coverage Count Access Packet Approval",
+  "description": "Machine-checkable approval boundary for the narrow 2026-06-02 US EGS coverage-count packet. It allows only a bounded FMP stable endpoint count run using the existing FMP key, and does not select a provider, permit SEC or yfinance calls, full-market downloads, adapters, DataHub tables, runner consumption, Phase 7c, ship-gate evidence, or production-readiness claims.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "approval_ref",
+    "plan_ref",
+    "scope",
+    "sample_universe",
+    "endpoint_families",
+    "endpoint_call_budget",
+    "cost_and_access_boundary",
+    "storage_and_secret_boundary",
+    "coverage_metric_definitions",
+    "decision_thresholds",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_coverage_count_access_packet_approval"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "approval_ref": {
+      "const": "user_chat_20260602_approved_and_execute"
+    },
+    "plan_ref": {
+      "const": "docs/provider_evidence_p1_us_coverage_count_access_packet_plan_20260602.json"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "approval_status",
+        "coverage_count_execution_allowed",
+        "fmp_stable_endpoint_calls_allowed",
+        "count_only_response_inspection_allowed",
+        "raw_payload_storage_allowed",
+        "sec_api_calls_allowed",
+        "yfinance_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "full_market_download_allowed",
+        "provider_status_polling_allowed",
+        "fallback_execution_allowed",
+        "fixture_generation_allowed",
+        "field_mapping_or_parser_implementation_allowed",
+        "return_calculation_allowed",
+        "corporate_action_reconciliation_allowed",
+        "provider_selection_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_approval",
+        "manual_order_only",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "approved_fmp_stable_coverage_count_packet"
+        },
+        "approval_status": {
+          "const": "approved_by_user_for_exact_packet"
+        },
+        "coverage_count_execution_allowed": {
+          "const": true
+        },
+        "fmp_stable_endpoint_calls_allowed": {
+          "const": true
+        },
+        "count_only_response_inspection_allowed": {
+          "const": true
+        },
+        "raw_payload_storage_allowed": {
+          "const": true
+        },
+        "sec_api_calls_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "provider_status_polling_allowed": {
+          "const": false
+        },
+        "fallback_execution_allowed": {
+          "const": false
+        },
+        "fixture_generation_allowed": {
+          "const": false
+        },
+        "field_mapping_or_parser_implementation_allowed": {
+          "const": false
+        },
+        "return_calculation_allowed": {
+          "const": false
+        },
+        "corporate_action_reconciliation_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_approval": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sample_universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbols",
+        "max_symbols",
+        "universe_role",
+        "inactive_or_delisted_in_scope"
+      ],
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "AAPL",
+              "MSFT",
+              "NVDA",
+              "JPM",
+              "XOM"
+            ]
+          },
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "max_symbols": {
+          "const": 5
+        },
+        "universe_role": {
+          "const": "bounded_active_symbol_smoke_not_full_market"
+        },
+        "inactive_or_delisted_in_scope": {
+          "const": false
+        }
+      }
+    },
+    "endpoint_families": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/endpointFamily"
+      },
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "endpoint_call_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_total_endpoint_calls",
+        "retry_count_allowed",
+        "abort_if_budget_exceeded"
+      ],
+      "properties": {
+        "max_total_endpoint_calls": {
+          "const": 30
+        },
+        "retry_count_allowed": {
+          "const": 0
+        },
+        "abort_if_budget_exceeded": {
+          "const": true
+        }
+      }
+    },
+    "cost_and_access_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approved_spend_usd",
+        "existing_fmp_key_only",
+        "new_token_request_allowed",
+        "trial_request_allowed",
+        "paid_upgrade_allowed",
+        "provider_contact_allowed"
+      ],
+      "properties": {
+        "approved_spend_usd": {
+          "const": 0
+        },
+        "existing_fmp_key_only": {
+          "const": true
+        },
+        "new_token_request_allowed": {
+          "const": false
+        },
+        "trial_request_allowed": {
+          "const": false
+        },
+        "paid_upgrade_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        }
+      }
+    },
+    "storage_and_secret_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_sample_storage_path",
+        "raw_sample_storage_must_be_gitignored",
+        "tracked_summary_path",
+        "tracked_summary_contains_raw_rows",
+        "request_urls_in_summary_allowed",
+        "api_key_logging_allowed",
+        "secrets_in_repo_allowed",
+        "raw_retention_authorizes_production_storage"
+      ],
+      "properties": {
+        "raw_sample_storage_path": {
+          "const": "provider_samples/us_egs_coverage_count_20260602/fmp_stable/"
+        },
+        "raw_sample_storage_must_be_gitignored": {
+          "const": true
+        },
+        "tracked_summary_path": {
+          "const": "docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json"
+        },
+        "tracked_summary_contains_raw_rows": {
+          "const": false
+        },
+        "request_urls_in_summary_allowed": {
+          "const": false
+        },
+        "api_key_logging_allowed": {
+          "const": false
+        },
+        "secrets_in_repo_allowed": {
+          "const": false
+        },
+        "raw_retention_authorizes_production_storage": {
+          "const": false
+        }
+      }
+    },
+    "coverage_metric_definitions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 5
+    },
+    "decision_thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "smoke_pass_condition",
+        "endpoint_error_behavior",
+        "missing_required_field_behavior",
+        "readiness_claim_allowed"
+      ],
+      "properties": {
+        "smoke_pass_condition": {
+          "const": "all_30_fmp_stable_calls_return_http_200_and_summary_has_no_secrets"
+        },
+        "endpoint_error_behavior": {
+          "const": "record_error_keep_sr_provider_001_open"
+        },
+        "missing_required_field_behavior": {
+          "const": "record_missing_field_keep_readiness_blocked_no_silent_default"
+        },
+        "readiness_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 4
+    }
+  },
+  "$defs": {
+    "endpointFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "endpoint_family",
+        "provider_id",
+        "endpoint_mode",
+        "count_role",
+        "authorizes_return_calculation",
+        "authorizes_field_mapping"
+      ],
+      "properties": {
+        "endpoint_family": {
+          "enum": [
+            "profile_or_company_metadata",
+            "income_statement",
+            "balance_sheet_statement",
+            "cash_flow_statement",
+            "financial_ratios_or_key_metrics",
+            "historical_eod_price_volume"
+          ]
+        },
+        "provider_id": {
+          "const": "financial_modeling_prep"
+        },
+        "endpoint_mode": {
+          "const": "stable"
+        },
+        "count_role": {
+          "const": "count_only_response_shape_and_required_field_presence"
+        },
+        "authorizes_return_calculation": {
+          "const": false
+        },
+        "authorizes_field_mapping": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "provider_ranked",
+        "full_market_download_performed",
+        "yfinance_used",
+        "sec_api_used",
+        "paid_access_used",
+        "raw_rows_in_tracked_summary",
+        "fixture_generated",
+        "return_calculation_performed",
+        "corporate_action_reconciliation_performed",
+        "field_mapping_or_parser_implemented",
+        "provider_status_polled",
+        "fallback_executed",
+        "datahub_or_adapter_implemented",
+        "production_runner_consumption_authorized",
+        "phase7c_authorized",
+        "ship_gate_evidence_claimed",
+        "production_ready_claimed"
+      ],
+      "properties": {
+        "provider_selected": {
+          "const": false
+        },
+        "provider_ranked": {
+          "const": false
+        },
+        "full_market_download_performed": {
+          "const": false
+        },
+        "yfinance_used": {
+          "const": false
+        },
+        "sec_api_used": {
+          "const": false
+        },
+        "paid_access_used": {
+          "const": false
+        },
+        "raw_rows_in_tracked_summary": {
+          "const": false
+        },
+        "fixture_generated": {
+          "const": false
+        },
+        "return_calculation_performed": {
+          "const": false
+        },
+        "corporate_action_reconciliation_performed": {
+          "const": false
+        },
+        "field_mapping_or_parser_implemented": {
+          "const": false
+        },
+        "provider_status_polled": {
+          "const": false
+        },
+        "fallback_executed": {
+          "const": false
+        },
+        "datahub_or_adapter_implemented": {
+          "const": false
+        },
+        "production_runner_consumption_authorized": {
+          "const": false
+        },
+        "phase7c_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence_claimed": {
+          "const": false
+        },
+        "production_ready_claimed": {
+          "const": false
+        }
+      }
+    }
+  }
+}

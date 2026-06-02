@@ -1,0 +1,162 @@
+{
+  "schema_name": "provider_p1_coverage_count_access_packet_approval",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "approval_ref": "user_chat_20260602_approved_and_execute",
+  "plan_ref": "docs/provider_evidence_p1_us_coverage_count_access_packet_plan_20260602.json",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "approved_fmp_stable_coverage_count_packet",
+    "approval_status": "approved_by_user_for_exact_packet",
+    "coverage_count_execution_allowed": true,
+    "fmp_stable_endpoint_calls_allowed": true,
+    "count_only_response_inspection_allowed": true,
+    "raw_payload_storage_allowed": true,
+    "sec_api_calls_allowed": false,
+    "yfinance_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_status_polling_allowed": false,
+    "fallback_execution_allowed": false,
+    "fixture_generation_allowed": false,
+    "field_mapping_or_parser_implementation_allowed": false,
+    "return_calculation_allowed": false,
+    "corporate_action_reconciliation_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_approval": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "sample_universe": {
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "NVDA",
+      "JPM",
+      "XOM"
+    ],
+    "max_symbols": 5,
+    "universe_role": "bounded_active_symbol_smoke_not_full_market",
+    "inactive_or_delisted_in_scope": false
+  },
+  "endpoint_families": [
+    {
+      "endpoint_family": "profile_or_company_metadata",
+      "provider_id": "financial_modeling_prep",
+      "endpoint_mode": "stable",
+      "count_role": "count_only_response_shape_and_required_field_presence",
+      "authorizes_return_calculation": false,
+      "authorizes_field_mapping": false
+    },
+    {
+      "endpoint_family": "income_statement",
+      "provider_id": "financial_modeling_prep",
+      "endpoint_mode": "stable",
+      "count_role": "count_only_response_shape_and_required_field_presence",
+      "authorizes_return_calculation": false,
+      "authorizes_field_mapping": false
+    },
+    {
+      "endpoint_family": "balance_sheet_statement",
+      "provider_id": "financial_modeling_prep",
+      "endpoint_mode": "stable",
+      "count_role": "count_only_response_shape_and_required_field_presence",
+      "authorizes_return_calculation": false,
+      "authorizes_field_mapping": false
+    },
+    {
+      "endpoint_family": "cash_flow_statement",
+      "provider_id": "financial_modeling_prep",
+      "endpoint_mode": "stable",
+      "count_role": "count_only_response_shape_and_required_field_presence",
+      "authorizes_return_calculation": false,
+      "authorizes_field_mapping": false
+    },
+    {
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "provider_id": "financial_modeling_prep",
+      "endpoint_mode": "stable",
+      "count_role": "count_only_response_shape_and_required_field_presence",
+      "authorizes_return_calculation": false,
+      "authorizes_field_mapping": false
+    },
+    {
+      "endpoint_family": "historical_eod_price_volume",
+      "provider_id": "financial_modeling_prep",
+      "endpoint_mode": "stable",
+      "count_role": "count_only_response_shape_and_required_field_presence",
+      "authorizes_return_calculation": false,
+      "authorizes_field_mapping": false
+    }
+  ],
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 30,
+    "retry_count_allowed": 0,
+    "abort_if_budget_exceeded": true
+  },
+  "cost_and_access_boundary": {
+    "approved_spend_usd": 0,
+    "existing_fmp_key_only": true,
+    "new_token_request_allowed": false,
+    "trial_request_allowed": false,
+    "paid_upgrade_allowed": false,
+    "provider_contact_allowed": false
+  },
+  "storage_and_secret_boundary": {
+    "raw_sample_storage_path": "provider_samples/us_egs_coverage_count_20260602/fmp_stable/",
+    "raw_sample_storage_must_be_gitignored": true,
+    "tracked_summary_path": "docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json",
+    "tracked_summary_contains_raw_rows": false,
+    "request_urls_in_summary_allowed": false,
+    "api_key_logging_allowed": false,
+    "secrets_in_repo_allowed": false,
+    "raw_retention_authorizes_production_storage": false
+  },
+  "coverage_metric_definitions": [
+    "endpoint_success_count by symbol and endpoint_family",
+    "endpoint_error_count by symbol and endpoint_family",
+    "required_field_presence_count by endpoint_family",
+    "missing_required_field_count by endpoint_family",
+    "statement_observed_date_field_presence_count",
+    "price_ohlcv_presence_count",
+    "payload_row_count by endpoint_family"
+  ],
+  "decision_thresholds": {
+    "smoke_pass_condition": "all_30_fmp_stable_calls_return_http_200_and_summary_has_no_secrets",
+    "endpoint_error_behavior": "record_error_keep_sr_provider_001_open",
+    "missing_required_field_behavior": "record_missing_field_keep_readiness_blocked_no_silent_default",
+    "readiness_claim_allowed": false
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "provider_ranked": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "sec_api_used": false,
+    "paid_access_used": false,
+    "raw_rows_in_tracked_summary": false,
+    "fixture_generated": false,
+    "return_calculation_performed": false,
+    "corporate_action_reconciliation_performed": false,
+    "field_mapping_or_parser_implemented": false,
+    "provider_status_polled": false,
+    "fallback_executed": false,
+    "datahub_or_adapter_implemented": false,
+    "production_runner_consumption_authorized": false,
+    "phase7c_authorized": false,
+    "ship_gate_evidence_claimed": false,
+    "production_ready_claimed": false
+  },
+  "limitations": [
+    "This approval is bounded to five active symbols and thirty FMP stable endpoint calls.",
+    "This approval does not include SEC EDGAR, yfinance, inactive or delisted securities, full-market fetches, retries, paid access, provider contact, or provider status polling.",
+    "Count-only response inspection may summarize row counts and required-field presence; it does not authorize production field mapping, parser implementation, fixtures, return calculation, or corporate-action reconciliation.",
+    "Raw payloads may be stored only under gitignored provider_samples/ and do not create production storage rights.",
+    "The execution summary may support only a narrow coverage smoke observation and cannot close SR-PROVIDER-001, select FMP, authorize DataHub, authorize Phase 7c, or claim ship-gate evidence."
+  ]
+}

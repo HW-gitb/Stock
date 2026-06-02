@@ -8,6 +8,147 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (Missing key-metrics resolution plan + carried coverage packet)
+
+**Commits**: none (review-only entry; reviews the COMPLETE working tree — two stacked scopes — vs `4ff4909`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions. Two carried-forward awareness items for the Final Approver (multi-scope commit + fixed decision #17) — neither blocks.
+
+**Working tree is now two stacked uncommitted scopes** (the prior coverage packet was reviewed but not yet committed):
+- **Scope A — approved coverage-count execution packet** (real 30-call FMP fetch): re-confirmed intact, not modified since my prior clean Pass. Coverage tests re-run under Python313 = 14/14 pass (runner + both schema modules), so the on-disk execution summary + runner still validate. The 6+2 scope-A files remain untracked in the tree. My prior Pass for scope A stands.
+- **Scope B — missing key-metrics resolution plan** (new this round, docs+schema+test only): reviewed below.
+
+**Scope B independent verification**:
+- Authorizes nothing and reads no raw: `contract_status=resolution_plan_only_no_access_no_raw_parse_no_derivation`; `review_basis=tracked_summary_only_no_raw_payload_parse_no_new_access` (works from the tracked coverage summary's `missing_required_fields`, does NOT open the gitignored raw payloads); all scope/observation/derivation/gate/prohibited fields const-false.
+- Correct conservative handling of the 3 missing ratios (peRatio / revenuePerShare / netIncomePerShare, 5 symbols each = 15): each `candidate_resolution_class=potentially_derivable_pending_field_presence_and_lineage_review`, `production_use_allowed=false`, `silent_default_allowed=false`. 3 candidate_derivation_paths (P/E=price÷EPS, rev/sh=revenue÷wtd-shares, NI/sh=netincome÷wtd-shares) all `candidate_only_blocked_pending_review` with PIT/adjustment/diluted-vs-basic/observed-date lineage requirements; `no_silent_default_policy` bans null/zero fill, latest-price substitution, and current-profile-share substitution. 6 resolution gates all `blocks_implementation`; `go_no_go_summary` = planning-only, everything else false.
+- Ran `tests.schema.test_provider_p1_missing_key_metrics_resolution_plan_schema` under Python313 (jsonschema): 9 tests, all pass, 0 skipped (missing-field completeness, no-access locks, candidate-derivation status, no-silent-default, gates, scope-creep rejected).
+- No new provider fetch / no new raw this round (scope B is no-access; scope A's 30 raw files unchanged). AGENTS.md descriptive-only (grep-confirmed fixed decisions remain 14/15/16/17 — no new item 18); drift-monitor §30 insert + §31 renumber clean (grep-confirmed §29 coverage-execution / §30 missing-key-metrics / §31 Next Use); register SR-PROVIDER-001 grep-confirmed `Status: open` (no improper new entry); CURRENT=146.
+
+**Carried awareness items (Final Approver)**:
+1. **Multi-scope commit**: the tree holds scope A (coverage execution, real fetch) + scope B (missing-field plan, docs). B depends on A (cites A's summary), so at `提交` either commit A then B (B noting it builds on A) per §Multi-scope Commit Splitting, or one combined "coverage smoke + missing-field plan" commit — just don't lose the distinction.
+2. Scope A still carries **fixed decision #17** (the user-approved coverage smoke exception) — sound/additive, flagged for conscious acknowledgment before commit.
+
+**Substantive**: scope B routes the free-tier missing ratios correctly — they are locally derivable from statements you already pulled (revenue, net income) + share counts + a PIT-safe price, but only behind a reviewed derivation/lineage gate; it does not implement or default them. So the free-tier ratio gap is not a dead end, just deferred to a reviewed derivation slice.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (open) + `SR-RESOURCE-001` (P2 open) — all unchanged. No pending Required or Optional — the full two-scope tree is ready for `提交` (handle multi-scope split + hold #17).
+
+---
+
+## 2026-06-02 — Codex 执行 (Missing key-metrics resolution plan)
+
+**Commits**: none (pending Claude review / submit; extends the uncommitted approved coverage-count packet working tree)
+
+**Relationship to prior session(s)**:
+- Builds on the uncommitted approved coverage-count execution packet that Claude already reviewed cleanly.
+- User asked what to do with missing fields, then approved the recommended no-access next slice with `按你的建议执行`.
+- Because this round adds new files and doc routing after the prior Pass, the previous Claude Pass is no longer sufficient for `提交`; Claude should re-review the complete current working tree.
+- This round does not call FMP / SEC / `yfinance`, does not read or parse gitignored raw payloads, does not generate fixtures, does not implement derivations or field mappings, does not calculate returns, does not reconcile corporate actions, does not select providers, does not implement adapters / DataHub tables, does not connect production runners, does not authorize Phase 7c, and does not claim production readiness.
+
+**Worked on**:
+1. [untracked - new this round] `schemas/provider_p1_missing_key_metrics_resolution_plan.schema.json`: added the no-access resolution-plan contract for `peRatio`, `revenuePerShare`, and `netIncomePerShare`.
+2. [untracked - new this round] `docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json`: added the concrete plan artifact. It uses only the tracked coverage-count summary and existing reviewed repo artifacts; it treats all three fields as candidate derivations pending separate field-presence / lineage review.
+3. [untracked - new this round] `tests/schema/test_provider_p1_missing_key_metrics_resolution_plan_schema.py`: added tests for schema/artifact validation, exact missing-field count, no-access locks, candidate derivation status, no-silent-default policy, decision gates, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: routed the missing-field plan while keeping `SR-PROVIDER-001` open.
+5. [tracked] `docs/SESSION_LOG.md`: prepended this Codex-to-Claude handoff.
+6. [untracked - carried from prior approved coverage-count packet] `schemas/provider_p1_coverage_count_access_packet_approval.schema.json`, `docs/provider_evidence_p1_us_coverage_count_access_packet_approval_20260602.json`, `runners/us_egs_coverage_count_packet.py`, `schemas/provider_p1_coverage_count_execution_summary.schema.json`, `docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json`, `tests/provider/test_us_egs_coverage_count_packet.py`, `tests/schema/test_provider_p1_coverage_count_access_packet_approval_schema.py`, `tests/schema/test_provider_p1_coverage_count_execution_summary_schema.py` remain part of the working tree and should still be reviewed.
+
+**Key decisions**:
+- Treat the three missing key-metrics fields as `potentially_derivable_pending_field_presence_and_lineage_review`, not as safe defaults. Reason: P/E, revenue/share, and net income/share may be computable from price / statement / share-count inputs, but only after reviewed PIT-safe field presence, formula, denominator, fiscal-period, unit / currency, restatement, and price-adjustment lineage.
+- Do not read existing gitignored raw payloads in this slice. Reason: `docs/CURRENT.md` and `SR-PROVIDER-001` require separate approval for raw-payload parse beyond the count-only summary.
+- Keep `SR-PROVIDER-001` open. Reason: direct ratio availability, safe derived ratios, current terms / production storage, field-level PIT validation, price adjustment, corporate actions, SEC parser work, fixtures, fallback execution, stability evidence, provider selection, DataHub / runner consumption, Phase 7c, and ship-gate evidence remain unresolved.
+
+**Rejected alternatives**:
+- "Derive the fields now from the raw payloads" — rejected; raw parsing and formula implementation need separate explicit approval and reviewed scope.
+- "Use latest profile price or current profile shares as fallback inputs" — rejected; that would violate PIT / no-latest-only / no-silent-default policy.
+- "Treat missing vendor ratios as harmless because the endpoint returned 200" — rejected; missing vendor ratio fields block vendor-ratio claims and production mapping.
+- "Broaden to a new endpoint or paid provider now" — rejected; this round is no-access resolution planning only.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_missing_key_metrics_resolution_plan_schema -v`: 9 tests ran; 6 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_missing_key_metrics_resolution_plan_schema tests.schema.test_provider_p1_coverage_count_execution_summary_schema tests.schema.test_provider_p1_fmp_pit_observed_date_semantics_contract_schema -v`: 23 tests passed.
+- `json.tool` parsed `schemas/provider_p1_missing_key_metrics_resolution_plan.schema.json` and `docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json`.
+- `docs/CURRENT.md` line count = 146.
+- `git diff --check`: exit 0; only normal LF/CRLF working-copy warnings were printed.
+- `Select-String` for `apikey=|FMP_API_KEY|Bearer |financialmodelingprep.com` against the missing-key-metrics plan returned no matches.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review the complete working tree, not only the new missing-field files, because this round extends an already-uncommitted reviewed packet. Primary review risks: the new plan accidentally authorizes raw-payload parsing, fresh provider calls, derivation / field-mapping implementation, provider selection, DataHub / runner consumption, Phase 7c, production readiness, or closes `SR-PROVIDER-001` too early.
+
+---
+
+## 2026-06-02 — Claude review — Pass (clean) (Approved coverage-count execution packet)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files + gitignored raw vs `4ff4909`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions. One governance-awareness item (new fixed decision #17) for the Final Approver — not a blocker.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/provider_evidence_drift_monitor.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_coverage_count_access_packet_approval.schema.json, schemas/provider_p1_coverage_count_execution_summary.schema.json, runners/us_egs_coverage_count_packet.py, docs/provider_evidence_p1_us_coverage_count_access_packet_approval_20260602.json, docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json, tests/provider/test_us_egs_coverage_count_packet.py, tests/schema/test_provider_p1_coverage_count_access_packet_approval_schema.py, tests/schema/test_provider_p1_coverage_count_execution_summary_schema.py. [gitignored, read not committed] provider_samples/us_egs_coverage_count_20260602/fmp_stable/raw/* (30 real-data files).
+
+**This is a real broader-than-2-symbol live FMP fetch (5 symbols × 6 families = 30 calls). Verified:**
+- **Authorization provenance**: SESSION_LOG + approval artifact record the user approved with `批准并执行`; `approval_ref=user_chat_20260602_approved_and_execute`, `approval_status=approved_by_user_for_exact_packet`. The approved scope (5 active symbols AAPL/MSFT/NVDA/JPM/XOM, 6 FMP stable families, 30 calls, $0, existing key, FMP-only/no SEC) is more conservative than the ~50–100 I had suggested. (I cannot see the Codex-side approval chat; the user as Final Approver can confirm. The runner additionally hard-gates on `approval_ref`, so it would refuse to run without that exact user-approval marker.)
+- **Execution within approval**: execution summary = exactly 5 symbols × 6 families = 30 calls, all HTTP 200, FMP stable only, within budget; `git status`/glob confirm 30 raw files only under gitignored `provider_samples/us_egs_coverage_count_20260602/fmp_stable/raw/`. Matches the approval exactly.
+- **Security (real key)**: `rg --no-ignore` over the new 30-file raw tree AND the tracked summary/approval = zero matches for apikey / bearer / FMP request URL. Raw wrapper stores response payload (not the URL); summary stores payload_shape + field_presence + missing-field names only. `git check-ignore` confirms `.gitignore:50`.
+- **Runner**: `load_and_validate_approval` hard-checks schema_name + user `approval_ref` + 4 true-locks + 17 false-locks + exact 5-symbol universe + 6-family list + 30-call/0-retry budget + $0/existing-key + gitignored/no-secret storage + all prohibited_claims false; budget re-checked in the fetch loop; dry-run returns in-memory and does NOT write (carries the prior O1 lesson). Reuses the proven-safe sample-validation primitives.
+- **Result (honest, no overclaim)**: 30/30 HTTP 200; statements (income/balance/cash-flow) + profile + 5y daily OHLCV all field-complete; the only gap is FMP stable key-metrics `peRatio`/`revenuePerShare`/`netIncomePerShare` absent across all 5 symbols (15 missing, recorded as `missing_required_fields`, no silent default). `coverage_smoke_decision` = `keep_sr_provider_001_open`, `sr_provider_001_closed=false`, provider-selection/Phase7c = false.
+- 14/14 tests pass under Python313 (jsonschema): runner fake-client (only /stable/ URLs, no SEC/yfinance/TSLA, NVDA/JPM/XOM present, no secret in summary, dry-run no write, scope-creep + raw-root guards) + both schema modules. drift-monitor §29 insert + §30 renumber clean; register SR-PROVIDER-001 `Status: open`; CURRENT=146.
+
+**Governance-awareness item (Final Approver):** AGENTS.md adds **fixed decision #17** recording this user-approved coverage smoke as an exact-scope exception to item 14, and reaffirming it does NOT equal provider selection / coverage validation / production-storage / PIT / Phase 7c / production-readiness / ship-gate, with any broader call still needing separate approval. My read: sound, additive, non-weakening, and it codifies the user's own `批准并执行` decision rather than inventing a rule. Flagging only because adding a fixed decision is a governance act you should consciously hold.
+
+**Substantive finding (the go/no-go you asked for)**: free-tier FMP `/stable/` serves the 6 US EGS families for active large-caps — full income/balance/cash-flow statements + 5y daily OHLCV — but **derived ratios (P/E, rev/share, NI/share) are absent on this tier**. So the free tier gives raw statements (ratios would have to be computed locally) but not vendor ratios; still unproven: inactive/delisted coverage, PIT/restatement semantics, adjustment/corporate actions, broad-universe rate limits.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (open) + `SR-RESOURCE-001` (P2 open) — all unchanged. No pending Required or Optional — ready for `提交` once you're comfortable holding fixed decision #17.
+
+---
+
+## 2026-06-02 — Codex 执行 (Approved coverage-count execution packet)
+
+**Commits**: none (pending Claude review / submit; base `4ff4909`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `4ff4909 Add coverage count access packet plan`.
+- User explicitly approved the next access packet with `批准并执行`.
+- Executes only the exact bounded coverage-count packet required by the prior plan: 5 active US symbols, 6 FMP stable endpoint families, max 30 calls, $0, existing FMP key, gitignored raw payloads, tracked no-secret summary.
+- This round does not call SEC, use `yfinance`, request a new token / trial / paid access, poll provider status, execute fallback, generate fixtures, calculate returns, reconcile corporate actions, implement field mappings or parsers, select providers, implement adapters / DataHub tables, connect production runners, authorize Phase 7c, relax ship gates, or claim production readiness.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_coverage_count_access_packet_approval.schema.json` and `docs/provider_evidence_p1_us_coverage_count_access_packet_approval_20260602.json`: added the exact approval boundary for `AAPL`, `MSFT`, `NVDA`, `JPM`, `XOM`, six FMP stable endpoint families, 30-call budget, no-secret storage, and prohibited claims.
+2. [untracked] `runners/us_egs_coverage_count_packet.py`: added the narrow execution runner. It validates the approval artifact, reads only `FMP_API_KEY`, calls only FMP stable endpoints, writes raw payloads only under `provider_samples/us_egs_coverage_count_20260602/fmp_stable/`, and emits a tracked summary without secrets or request URLs.
+3. [untracked] `schemas/provider_p1_coverage_count_execution_summary.schema.json` and `docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json`: added/generated the no-secret summary contract and execution artifact.
+4. [untracked] `tests/provider/test_us_egs_coverage_count_packet.py`, `tests/schema/test_provider_p1_coverage_count_access_packet_approval_schema.py`, `tests/schema/test_provider_p1_coverage_count_execution_summary_schema.py`: added runner and schema tests.
+5. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: routed the executed coverage smoke while keeping `SR-PROVIDER-001` open.
+
+**Execution result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\us_egs_coverage_count_packet.py` completed with `actual_total_endpoint_calls = 30`, `endpoint_success_count = 30`, `endpoint_error_count = 0`, `secrets_logged = false`.
+- Summary metrics: `symbol_all_endpoint_success_count = 5`, `statement_observed_date_endpoint_count = 15`, `price_ohlcv_presence_count = 5`, `missing_required_field_count = 15`.
+- Missing fields are only `peRatio`, `revenuePerShare`, and `netIncomePerShare` in FMP stable key-metrics responses across the five active symbols; no silent default is applied.
+- Raw payloads are ignored by `.gitignore:50 provider_samples/`; tracked summary has no API key, request URL, bearer token, or raw rows.
+
+**Key decisions**:
+- Treat `filingDate` / `fillingDate` as observed-date aliases for statement missing-field counts. Reason: FMP stable returns `filingDate`; missing the legacy spelling must not be counted as a required-field failure when the observed-date field is present.
+- Keep key-metrics field gaps as blockers. Reason: missing `peRatio`, `revenuePerShare`, and `netIncomePerShare` cannot be silently defaulted or backfilled for production field mapping.
+- Leave `SR-PROVIDER-001` open. Reason: this smoke does not resolve inactive / delisted coverage, current terms / production storage, field-level PIT validation, price adjustment, corporate actions, SEC parser implementation, fixtures, fallback execution, stability evidence, provider selection, DataHub / runner consumption, Phase 7c, or ship-gate evidence.
+
+**Rejected alternatives**:
+- "Broaden to more symbols or inactive / delisted names" — rejected; the user approval was exact and bounded.
+- "Call SEC for the same symbols" — rejected; this packet is FMP stable only.
+- "Treat 30/30 HTTP 200 as provider selection" — rejected; endpoint access / response shape is not provider readiness.
+- "Generate fixtures from raw payloads" — rejected; fixture generation and raw-payload retention policy need a separate reviewed slice.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.provider.test_us_egs_coverage_count_packet -v`: 4 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_coverage_count_access_packet_approval_schema tests.schema.test_provider_p1_coverage_count_execution_summary_schema -v`: 10 tests ran; 3 passed, 7 skipped because this interpreter lacks `jsonschema`.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_coverage_count_access_packet_approval_schema tests.schema.test_provider_p1_coverage_count_execution_summary_schema tests.provider.test_us_egs_coverage_count_packet -v`: 14 tests passed.
+- `json.tool` parsed the approval schema, approval artifact, execution schema, and execution summary.
+- `git check-ignore -v provider_samples\us_egs_coverage_count_20260602\fmp_stable\raw\financial_modeling_prep\AAPL\profile_or_company_metadata.json`: matched `.gitignore:50 provider_samples/`.
+- `Select-String` for `apikey=|FMP_API_KEY|Bearer |financialmodelingprep.com` against the tracked summary returned no matches.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the eight untracked files above. Primary review risks: approval accidentally authorizes broader calls, runner leaks secrets or requests URLs, raw payloads are not ignored, summary overclaims provider readiness, schema permits scope creep, docs close `SR-PROVIDER-001` too early, or AGENTS / CURRENT contradict the exact-scope exception.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (Coverage-count access-packet plan)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `c50d201`)
