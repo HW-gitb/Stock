@@ -1,0 +1,424 @@
+{
+  "schema_name": "provider_p1_fmp_pit_observed_date_semantics_contract",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_fmp_pit_observed_date_semantics_contract_after_sec_scope",
+    "contract_status": "semantics_contract_only_no_access_no_field_mapping",
+    "fmp_endpoint_call_allowed": false,
+    "broader_fmp_sample_allowed": false,
+    "data_fetch_allowed": false,
+    "raw_payload_parse_allowed": false,
+    "field_mapping_implementation_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_remaining_blocker_resolution_plan.schema.json",
+      "consumption_role": "Defines PIT / observed-date semantics as a remaining blocker after the AAPL / MSFT FMP stable retry."
+    },
+    {
+      "artifact_id": "p1_fmp_stable_retry_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json",
+      "consumption_role": "Records two-symbol stable endpoint response-shape evidence and statement observed-date field presence."
+    },
+    {
+      "artifact_id": "p1_fmp_current_endpoint_mapping_review_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_endpoint_mapping_review.schema.json",
+      "consumption_role": "Maps failed legacy endpoint families to stable endpoint candidates without proving field-level PIT or historical semantics."
+    },
+    {
+      "artifact_id": "p1_us_egs_sample_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_us_egs_sample_validation_summary.schema.json",
+      "consumption_role": "Records the original approved sample boundary, SEC EDGAR success, and legacy FMP errors before the stable retry."
+    },
+    {
+      "artifact_id": "p1_fundamentals_observed_date_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Records the earlier observed-date candidate evidence and the warning that FMP latest/current endpoint evidence is not PIT historical validation."
+    },
+    {
+      "artifact_id": "p1_license_storage_retention_review_20260602",
+      "path": "docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_license_storage_retention_review.schema.json",
+      "consumption_role": "Keeps local raw sample and production storage / DataHub rights blocked while this semantics contract is reviewed."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Defines no-silent-default, no-latest-only historical backfill, PIT drift, and provider evidence locks."
+    }
+  ],
+  "review_basis": {
+    "basis_type": "existing_repo_artifacts_no_new_external_review",
+    "fmp_endpoint_calls_performed": false,
+    "raw_payload_read_or_parsed": false,
+    "field_mapping_implemented": false,
+    "uses_existing_reviewed_artifacts_only": true,
+    "requires_later_user_approved_fmp_access_packet": true,
+    "requires_later_field_level_validation_review": true
+  },
+  "current_scope_summary": {
+    "stable_retry_status": "two_symbol_current_stable_endpoint_response_shape_passed",
+    "statement_observed_date_evidence": "filingDate_and_acceptedDate_present_in_two_symbol_sample_only",
+    "pit_semantics_status": "contract_only_field_level_pit_not_validated",
+    "latest_endpoint_status": "blocked_for_historical_pit_until_asof_semantics_review",
+    "price_adjustment_status": "blocked_pending_later_corporate_action_adjustment_review",
+    "phase7c_effect": "does_not_authorize_phase7c_or_datahub_consumption"
+  },
+  "field_family_semantics": [
+    {
+      "field_family_id": "income_statement",
+      "current_sample_evidence": "AAPL / MSFT stable income-statement samples reported date, filingDate, acceptedDate, period, revenue, and netIncome field presence, but the raw rows were not parsed in this contract.",
+      "historical_pit_status": "blocked_pending_field_level_validation",
+      "required_before_historical_use": [
+        "Validate filingDate / acceptedDate behavior across amended filings, restatements, fiscal periods, and duplicate filings under a separate approved access packet.",
+        "Define an as-of eligibility rule that blocks any row whose filing or accepted timestamp is after the intended as-of date.",
+        "Record SEC EDGAR anomaly cross-check fields before any production or DataHub use."
+      ],
+      "latest_or_current_endpoint_historical_use_allowed": false,
+      "missing_observed_date_behavior": "block_historical_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "balance_sheet_statement",
+      "current_sample_evidence": "AAPL / MSFT stable balance-sheet samples reported date, filingDate, acceptedDate, totalAssets, and totalDebt field presence, but the raw rows were not parsed in this contract.",
+      "historical_pit_status": "blocked_pending_field_level_validation",
+      "required_before_historical_use": [
+        "Validate filingDate / acceptedDate behavior for quarterly and annual rows before historical factor use.",
+        "Define amendment, restatement, unit, and currency handling before any row can become PIT evidence.",
+        "Block historical use when observed-date or revision lineage is missing."
+      ],
+      "latest_or_current_endpoint_historical_use_allowed": false,
+      "missing_observed_date_behavior": "block_historical_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "cash_flow_statement",
+      "current_sample_evidence": "AAPL / MSFT stable cash-flow samples reported date, filingDate, acceptedDate, operatingCashFlow, and freeCashFlow field presence, but the raw rows were not parsed in this contract.",
+      "historical_pit_status": "blocked_pending_field_level_validation",
+      "required_before_historical_use": [
+        "Validate free-cash-flow naming and formula consistency before using the derived field as a signal input.",
+        "Define as-of eligibility, duplicate-filing behavior, and SEC cross-check triggers before historical use.",
+        "Block any row missing filingDate / acceptedDate or revision lineage."
+      ],
+      "latest_or_current_endpoint_historical_use_allowed": false,
+      "missing_observed_date_behavior": "block_historical_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "key_metrics",
+      "current_sample_evidence": "AAPL / MSFT stable key-metrics samples reported date and marketCap field presence, while several ratio fields were absent in the tracked summary.",
+      "historical_pit_status": "blocked_pending_field_level_validation",
+      "required_before_historical_use": [
+        "Tie each derived metric to an observed-date rule or treat it as blocked for historical evidence.",
+        "Validate whether marketCap and ratio fields are recalculated from current prices or statement rows before any as-of use.",
+        "Define missing-field and duplicate-row behavior without zero-fill or silent default."
+      ],
+      "latest_or_current_endpoint_historical_use_allowed": false,
+      "missing_observed_date_behavior": "block_historical_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "company_profile",
+      "current_sample_evidence": "AAPL / MSFT stable profile samples reported symbol, companyName, sector, industry, marketCap, price, and volume field presence, but profile rows are not filing-observed fundamentals.",
+      "historical_pit_status": "blocked_not_observed_date_bearing",
+      "required_before_historical_use": [
+        "Do not use current profile marketCap, price, volume, sector, or industry as historical PIT evidence without a reviewed historical as-of source.",
+        "Separate current metadata smoke checks from PIT security master and GICS history requirements.",
+        "Block profile-derived historical defaults unless a later reviewed source proves as-of semantics."
+      ],
+      "latest_or_current_endpoint_historical_use_allowed": false,
+      "missing_observed_date_behavior": "not_applicable_but_blocks_if_used_as_fundamental_pit",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "historical_eod_price_volume",
+      "current_sample_evidence": "AAPL / MSFT stable historical EOD samples reported OHLCV, change, changePercent, and VWAP field presence, but adjustment, split, dividend, delisting, and missing-session semantics remain unvalidated.",
+      "historical_pit_status": "blocked_pending_adjustment_and_corporate_action_review",
+      "required_before_historical_use": [
+        "Validate adjusted versus unadjusted semantics, split and dividend handling, zero-volume behavior, and missing-session policy before return or liquidity use.",
+        "Record corporate-action conflict behavior and fallback rules before any historical evidence or runner consumption.",
+        "Do not treat EOD price availability as proof of fundamentals observed-date or PIT security-master readiness."
+      ],
+      "latest_or_current_endpoint_historical_use_allowed": false,
+      "missing_observed_date_behavior": "not_applicable_but_blocks_if_used_as_fundamental_pit",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "pit_lineage_requirements": [
+    {
+      "requirement_id": "provider_symbol_and_identifier",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "FMP symbol rows must be linked to reviewed ticker / CIK / security-master identity before historical use.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "endpoint_mode_and_version",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Stable endpoint mode must be recorded so legacy v3 failures and future endpoint changes are not mixed silently.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "request_parameters",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Limit, period, from / to, and timeseries parameters determine which rows are present and must be replayable.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "fetch_timestamp",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Fetch time is needed to distinguish observed-date eligibility from later provider revisions or endpoint drift.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "filing_date",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Filing date is a necessary but not sufficient observed-date input for statement rows.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "accepted_date",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Accepted date or an equivalent reviewed timestamp is required before using statement rows as historical evidence.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "report_period_date",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Report period date must be separate from observed date to avoid treating period-end data as already observable.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "fiscal_year_period",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Fiscal year and period are required for quarterly / annual row matching and duplicate-row checks.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "statement_type",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Income, balance-sheet, cash-flow, and derived metrics need separate semantics and cross-check rules.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "revision_or_restatement_behavior",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Historical evidence must define how amended filings, provider restatements, and revised values change or invalidate rows.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "latest_endpoint_exclusion_rule",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Latest/current endpoint values must be explicitly excluded from historical evidence unless a later review proves as-of semantics.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "currency_unit_scaling",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Units and currency scaling must be recorded to prevent cross-company or cross-period factor drift.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "duplicate_or_missing_field_policy",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Duplicate, missing, absent ratio, or blank fields must block, defer, or flag records rather than silently default.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "sec_cross_check_ref",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "SEC EDGAR cross-check references are required for anomaly review, while SEC remains audit-only and not a replacement price or free-float source.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "as_of_eligibility_rule",
+      "status": "required_before_historical_fmp_use_or_datahub",
+      "lineage_reason": "Every historical FMP row must have a reviewed rule for when it becomes eligible at a specific as-of date.",
+      "blocks_historical_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "no_silent_default_policy": {
+    "policy_status": "policy_expectations_only_no_field_mapping",
+    "missing_filing_or_accepted_date_blocks_historical_use": true,
+    "latest_only_values_block_historical_use": true,
+    "missing_or_ambiguous_revision_blocks_historical_use": true,
+    "sec_cross_check_required_for_anomaly_review": true,
+    "silent_default_allowed": false,
+    "zero_fill_allowed": false,
+    "authorizes_data_fetch": false,
+    "authorizes_datahub_or_runner_consumption": false
+  },
+  "decision_gates": [
+    {
+      "gate_id": "fmp_broader_access_approval",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "Any additional FMP endpoint calls, broader symbols, paid access, trial, or new token require separate explicit user approval and reviewed no-secret summary.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "field_level_pit_validation",
+      "status": "pending_later_semantics_review",
+      "blocks_implementation": true,
+      "required_resolution": "Validate observed-date, revision, restatement, duplicate, unit, currency, and as-of eligibility semantics before historical use.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "latest_endpoint_exclusion_rule",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Latest/current endpoint values must remain excluded from historical evidence until a later review proves as-of semantics.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "sec_cross_check_mapping",
+      "status": "pending_later_mapping_review",
+      "blocks_implementation": true,
+      "required_resolution": "Define exact SEC EDGAR anomaly cross-check mapping for FMP statement fields before production or DataHub use.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "price_adjustment_corporate_action_gate",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Historical EOD price / volume requires a separate reviewed adjustment, split, dividend, delisting, and missing-session semantics contract.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_consumption_gate",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Phase 7c, DataHub, adapters, and production runners remain blocked until Phase 7b provider blockers are closed or explicitly accepted in a reviewed decision.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "prohibited_actions": {
+    "fmp_endpoint_call": false,
+    "broader_fmp_sample": false,
+    "raw_payload_parse": false,
+    "field_mapping_implementation": false,
+    "provider_selection": false,
+    "provider_ranking": false,
+    "new_token_or_trial": false,
+    "paid_access": false,
+    "provider_contact": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "phase7c_authorization": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Use this artifact as the no-access routing source for FMP PIT / observed-date semantics after the reviewed stable retry and SEC parser scope contract.",
+    "Do not run additional FMP endpoints, read ignored raw payloads, or implement field mapping by default; those actions require explicit user approval and reviewed packets.",
+    "A safe next no-access slice is FMP price-adjustment / corporate-action semantics contract for EOD fields, or a coverage-count access packet plan that still performs no data calls.",
+    "Any actual FMP PIT row validation, SEC cross-check mapping implementation, broader sample validation, or DataHub consumption must be separate reviewed work."
+  ],
+  "limitations": [
+    "This artifact performs no FMP endpoint calls, raw payload parsing, field mapping implementation, provider contact, data fetch, adapter work, DataHub work, runner change, broker automation, or ship-gate claim.",
+    "Two-symbol field presence proves only response shape for active AAPL / MSFT samples; it does not prove field-level PIT, revision behavior, restatement behavior, coverage, adjustment semantics, or production readiness.",
+    "FMP latest/current/profile values remain blocked for historical evidence until reviewed as-of semantics exist.",
+    "This contract narrows the PIT / observed-date blocker but does not resolve SR-PROVIDER-001."
+  ]
+}

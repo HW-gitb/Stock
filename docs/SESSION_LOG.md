@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (FMP PIT / observed-date semantics contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `463ee51`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/provider_evidence_drift_monitor.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_fmp_pit_observed_date_semantics_contract.schema.json, docs/provider_evidence_p1_us_fmp_pit_observed_date_semantics_contract_20260602.json, tests/schema/test_provider_p1_fmp_pit_observed_date_semantics_contract_schema.py. No runner / provider_samples / network change (docs+schema+test only).
+
+**Independent verification**:
+- Contract authorizes nothing and does no FMP work: `contract_status=semantics_contract_only_no_access_no_field_mapping`; `fmp_endpoint_call_allowed / data_fetch_allowed / raw_payload_parse_allowed / field_mapping_implementation_allowed=false`; `review_basis.fmp_endpoint_calls_performed / raw_payload_read_or_parsed / field_mapping_implemented=false`. All scope / field-family / lineage / gate / prohibited fields const-false.
+- PIT discipline is correct and is the substantive value here: all 6 field families (income/balance/cash-flow/key-metrics/profile/EOD) set `latest_or_current_endpoint_historical_use_allowed=false` and `missing_observed_date_behavior=block_historical_use_no_silent_default`; 15 pit_lineage_requirements (filing_date / accepted_date / report_period_date separation, `latest_endpoint_exclusion_rule`, revision_or_restatement, currency_unit_scaling, duplicate_or_missing_field_policy, `as_of_eligibility_rule`, sec_cross_check_ref …) all `blocks_historical_use=true`; `no_silent_default_policy` blocks missing-observed-date + latest-only + missing-revision and sets `silent_default_allowed / zero_fill_allowed=false`. This matches the ALPHA-guide PIT / no-look-ahead / no-silent-default guardrails exactly.
+- Ran `tests.schema.test_provider_p1_fmp_pit_observed_date_semantics_contract_schema` under Python313 (jsonschema): 9 tests, all pass, 0 skipped — scope locks, field-family semantics don't authorize historical use, 15-item lineage completeness + blocks-historical, no-silent-default blocks latest-only/missing-dates, review_basis no-access, scope-creep rejected, sources/next-steps preserve blockers.
+- AGENTS.md descriptive-only (fixed decisions remain 14/15/16, no new item 17): progress/roadmap/item-14 add the FMP PIT contract and extend the non-authorized list with `FMP or SEC endpoint call` + `field-mapping or parser implementation`. drift-monitor §25 insert + §26 renumber clean; register SR-PROVIDER-001 verified `Status: open`; CURRENT=145 (≤150); next no-access slice named = FMP price-adjustment / corporate-action semantics or a coverage-count access-packet plan.
+
+**Process**: correct PIT-discipline contract — latest/current/profile values blocked for historical evidence, observed-date required, no silent default; no FMP calls/parse/mapping this round; `SR-PROVIDER-001` not closed. Single-scope working tree.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (open) + `SR-RESOURCE-001` (P2 open) — all unchanged. No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (FMP PIT / observed-date semantics contract)
+
+**Commits**: none (pending Claude review / submit; base `463ee51`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `463ee51 Add SEC EDGAR audit parser scope contract`.
+- Executes the next no-access `SR-PROVIDER-001` provider slice named by the SEC scope contract / current routing: define FMP PIT / observed-date semantics before any actual FMP PIT row validation, raw-payload parsing, field mapping, DataHub, runner, or Phase 7c work.
+- This round does not call FMP / SEC / `yfinance`, does not read or parse ignored raw payloads, does not fetch data, does not implement field mappings or parsers, does not create adapters / DataHub tables, does not modify runners, and does not authorize Phase 7c.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_fmp_pit_observed_date_semantics_contract.schema.json`: added the no-access contract for FMP field-family historical-use gates, 15 PIT lineage requirements, no-silent-default policy, decision gates, and prohibited actions.
+2. [untracked] `docs/provider_evidence_p1_us_fmp_pit_observed_date_semantics_contract_20260602.json`: added the concrete semantics artifact. It treats `filingDate` / `acceptedDate` as two-symbol response-shape evidence only and blocks latest/current endpoint historical use, missing observed-date defaults, and EOD price use pending adjustment / corporate-action review.
+3. [untracked] `tests/schema/test_provider_p1_fmp_pit_observed_date_semantics_contract_schema.py`: validates schema/artifact, no-access scope locks, two-symbol evidence calibration, 6 field-family gates, 15 lineage requirements, no-silent-default policy, source refs, limitations, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the FMP PIT semantics contract while keeping `SR-PROVIDER-001` open.
+
+**Key decisions**:
+- Treat FMP statement `filingDate` / `acceptedDate` presence as response-shape evidence, not historical PIT proof. Reason: two active symbols do not prove amendment / restatement behavior, as-of eligibility, latest endpoint exclusion, coverage, or production readiness.
+- Block current profile / latest/current values from historical evidence. Reason: profile, current market cap, current price, current volume, and derived metrics are not filing-observed PIT rows unless a later reviewed source proves as-of semantics.
+- Keep EOD price / volume separate from fundamentals PIT. Reason: OHLCV field presence still needs adjusted / unadjusted, split, dividend, delisting, zero-volume, and missing-session semantics before returns or liquidity can be used.
+- Leave `SR-PROVIDER-001` open. Reason: coverage, current terms / production storage rights, actual FMP PIT row validation, price adjustment, actual SEC parser implementation, incident-log writer behavior, executable fallback, stability evidence, provider selection, DataHub / runner consumption, and Phase 7c remain unresolved.
+
+**Rejected alternatives**:
+- "Parse the existing ignored FMP stable retry raw payloads now" — rejected; raw-payload parsing and field mapping are implementation work, not a no-access semantics contract.
+- "Call FMP again to validate more PIT rows" — rejected; no new endpoint calls or broader access were approved.
+- "Treat `filingDate` / `acceptedDate` presence as enough for historical PIT use" — rejected; field presence is not revision, restatement, duplicate, or as-of eligibility evidence.
+- "Use this as DataHub / runner readiness" — rejected; the packet defines gates only and authorizes no consumption path.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fmp_pit_observed_date_semantics_contract_schema -v`: 9 tests ran; 6 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fmp_pit_observed_date_semantics_contract_schema tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v`: 24 tests passed.
+- `json.tool` parsed `schemas/provider_p1_fmp_pit_observed_date_semantics_contract.schema.json` and `docs/provider_evidence_p1_us_fmp_pit_observed_date_semantics_contract_20260602.json`.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check`: passed after this SESSION_LOG entry; only normal LF/CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: the packet accidentally authorizes FMP endpoint calls, raw-payload parsing, field mapping implementation, latest/current historical backfill, provider selection, DataHub / runner consumption, Phase 7c, ship-gate claims, or closes `SR-PROVIDER-001` too early.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (SEC EDGAR audit parser scope contract)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `6fb15ad`)

@@ -2141,3 +2141,48 @@ git diff --check
 
 1. Claude 复审应重点核对 contract 是否没有授权 SEC endpoint calls、raw-payload parsing、parser implementation、DataHub / runner consumption、provider selection 或 Phase 7c。
 2. 如果审查 Pass 并提交，下一条 no-access provider slice 可转向 FMP PIT / observed-date semantics design，或继续做 SEC parser field-family mapping contract；任何 actual parser implementation 或 SEC call 仍需 separate explicit approval + reviewed decision。
+
+## 2026-06-02 追加：FMP PIT / observed-date semantics contract
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_fmp_pit_observed_date_semantics_contract.schema.json`，把 FMP stable retry 之后的 PIT / observed-date 语义边界固化为 schema-first contract：field-family historical-use gates、15 个 PIT lineage requirements、no-silent-default policy、decision gates、prohibited actions。
+- 新增 `docs/provider_evidence_p1_us_fmp_pit_observed_date_semantics_contract_20260602.json`，只基于既有 reviewed repo artifacts 做 semantics contract；不做 FMP endpoint call、不读取或解析 raw payload、不实现 field mapping、不抓数据。
+- 新增 `tests/schema/test_provider_p1_fmp_pit_observed_date_semantics_contract_schema.py`，验证 schema/artifact、no-access locks、two-symbol evidence calibration、6 个 field-family gates、15 个 lineage requirements、latest-only / missing-date blocking、scope-creep rejection。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`，把 FMP PIT / observed-date semantics contract 路由进 Phase 7b-2，同时保持 `SR-PROVIDER-001` open。
+
+**为什么改**:
+
+- FMP stable retry 的 `filingDate` / `acceptedDate` 字段存在只证明 AAPL / MSFT 两只活跃样本的 response shape；它不能证明历史 PIT、amendment / restatement、latest/current endpoint as-of semantics、coverage、price adjustment 或 DataHub eligibility。
+- 本轮先把 statement / key metrics / profile / EOD price-volume 的历史使用门槛写成可审查契约，避免后续 LLM 把 stable retry 字段存在误读成 provider selection 或 Phase 7c 可用性。
+- 本轮刻意不调用 FMP、不解析 ignored raw payload、不实现 field mapping、不建 adapter / DataHub、不改 runner、不授权 Phase 7c。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fmp_pit_observed_date_semantics_contract_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fmp_pit_observed_date_semantics_contract_schema tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\provider_p1_fmp_pit_observed_date_semantics_contract.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\provider_evidence_p1_us_fmp_pit_observed_date_semantics_contract_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**验证结果**:
+
+- Bundled Python: `tests.schema.test_provider_p1_fmp_pit_observed_date_semantics_contract_schema` ran 9 tests: 6 passed, 3 skipped because this interpreter lacks `jsonschema`; non-jsonschema no-access / field-family / lineage / policy tests passed.
+- Python313 with `jsonschema`: FMP PIT semantics contract + SEC parser scope contract + remaining-blocker plan targeted schema tests ran 24 tests, all passed.
+- `json.tool` parsed the new schema and artifact successfully.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check` final result is recorded in the top `docs/SESSION_LOG.md` Codex entry for this work round.
+
+**失效旧结论**:
+
+- “FMP stable retry 看到 `filingDate` / `acceptedDate` 就可历史 PIT 使用”不成立；本轮 contract 明确 field-level PIT validation、revision / restatement、as-of eligibility 和 latest endpoint exclusion 仍 blocked。
+- “FMP profile / key metrics / EOD 字段存在就可进 DataHub / runner”不成立；profile 不具备 filing-observed semantics，key metrics 需证明派生规则，EOD 需另做 adjustment / corporate-action review。
+- “本轮 artifact 证明 FMP production readiness”不成立；它只定义 semantics gates，不证明 coverage、license、price adjustment、fallback、stability 或 production readiness。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 contract 是否没有授权 FMP endpoint calls、raw-payload parsing、field mapping implementation、provider selection、DataHub / runner consumption 或 Phase 7c。
+2. 如果审查 Pass 并提交，下一条 no-access provider slice 可转向 FMP price-adjustment / corporate-action semantics contract，或 SEC parser field-family mapping contract；任何 actual FMP PIT row validation、FMP call、SEC call、raw parse 或 field-mapping / parser implementation 仍需 separate explicit approval + reviewed decision。
