@@ -110,7 +110,7 @@
       "gate_id": "job_spec_budget_profile",
       "status": "required_before_implementation",
       "blocks_default_full_system_run": true,
-      "required_resolution": "Every future DataHub / runner job spec must declare budget_profile, market, lane, as_of or date_window, expected inputs, expected outputs, cache policy, and abort policy.",
+      "required_resolution": "Every future DataHub / runner job spec must validate against schemas/datahub_job_spec.schema.json and declare budget_profile, market, lane, as_of or date_window, expected inputs, expected outputs, cache policy, and abort policy.",
       "authorizes_runner_change": false,
       "authorizes_provider_calls": false,
       "authorizes_phase7c_implementation": false

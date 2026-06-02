@@ -8,6 +8,64 @@
 
 ---
 
+## 2026-06-02 — Claude 审查 (DataHub job spec contract) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交.
+
+**Scope reviewed** (base `7a6f552`): new `schemas/datahub_job_spec.schema.json` + `schemas/examples/datahub_job_spec.example.json`; new `tests/schema/test_datahub_job_spec_schema.py`; doc/governance edits to `AGENTS.md` / `docs/CURRENT.md` / `docs/datahub_design.md` / `docs/system_risk_register.md` / `docs/datahub_local_resource_budget_contract_20260602.json`.
+
+**Independently verified**:
+- Job-spec schema const-locks every authorization field false (data_fetch / provider_call / provider_selection / new_token_or_paid_access / datahub_table_implementation / runner_change / phase7c_implementation / broker / ship_gate / production_ready); partition_scope const-locks full_market_refresh / all_markets / all_lanes / full_history_rebuild = false; execution_policy const-true lazy/incremental/checkpoint/abort and const-false full_market/all_lanes/provider_calls/raw_payload_write/production_runner_consumption; budget_profile conditional (reviewed_heavy_run_optional → requires approval_ref); resource_estimate required; 12 prohibited_actions all false. Authorizes nothing.
+- Example is `schema_validation_only` / `schema_example_not_executable`, market A / lane a_short / single as_of 20260602 (max_calendar_days 1) / provider_family none, all `*_requested` false, heavy_run_approval gate blocks_execution true, limitations explicitly disclaim SR-RESOURCE-001 closure + executability.
+- Python313 + jsonschema: `test_datahub_job_spec_schema` + `test_datahub_local_resource_budget_schema` → **14/14 pass** (example validates + scope-creep rejected; modified committed resource-budget artifact still validates → const-locks intact).
+- `SR-RESOURCE-001` Status = **open**; Hot Queue item 3 reworded to "contracts now exist, code-level enforcement remains open" — no premature closure.
+- `docs/datahub_local_resource_budget_contract_20260602.json` +1/-1 = `job_spec_budget_profile` gate `required_resolution` string only (adds "must validate against schemas/datahub_job_spec.schema.json"); same-gate const-locks (blocks_default_full_system_run true; authorizes_runner_change/provider_calls/phase7c_implementation false) unchanged — strengthening, not weakening.
+- `AGENTS.md` fixed-decision **item 16 modified** (not a new item): required-declaration list expanded (+ provider family, artifact type, data boundaries, approval gates, validate-against-schema) and non-authorization clause now lists 4 artifacts but still "不授权 provider call / DataHub impl / runner / Phase 7c". Additive/strengthening; authorizes nothing new. Noted for Final Approver. Fixed decisions remain 14/15/16/17.
+- `CURRENT.md` / `datahub_design.md` edits descriptive routing; all preserve "does not implement DataHub / fetch provider data / authorize Phase 7c" and "SR-RESOURCE-001 remains open until code-level enforcement exists". CURRENT = 149 lines.
+
+**Risk check**: does NOT authorize provider call / raw-payload parse / full-market download / all-system default run / DataHub table impl / runner-adapter change / production runner consumption / Phase 7c implementation / ship-gate claim / SR-RESOURCE-001 closure. Schema-first precondition only.
+
+---
+
+## 2026-06-02 — Codex 执行 (DataHub job spec contract)
+
+**Commits**: none (pending Claude review / submit; base `7a6f552`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `7a6f552 Add A-short threshold governance parity`.
+- `SR-PROVIDER-001` remains open and no new provider-access approval exists, so this round does not call FMP / SEC, parse raw payloads, derive missing fields, implement DataHub / adapters, or touch production runners.
+- Executes the next safe `SR-RESOURCE-001` maintenance slice: define the future job-spec shape that DataHub / runner implementation must consume before any executable broad job is reviewed.
+- This round does not implement DataHub, change runners, run screening / research / backtests, fetch data, relax ship gates, or authorize broker / order automation.
+
+**Worked on**:
+1. [untracked] `schemas/datahub_job_spec.schema.json`: added the Phase 7c precondition schema for future DataHub / runner job specs.
+2. [untracked] `schemas/examples/datahub_job_spec.example.json`: added a schema-only, non-executable one-market / one-lane example.
+3. [untracked] `tests/schema/test_datahub_job_spec_schema.py`: added schema/example tests for scope locks, budget profile, partition scope, resource estimates, execution policy, approval gates, and scope-creep rejection.
+4. [tracked] `docs/datahub_design.md`, `docs/README.md`, `docs/CURRENT.md`, `AGENTS.md`, `docs/system_risk_register.md`, `docs/datahub_local_resource_budget_contract_20260602.json`: routed the job-spec contract while keeping `SR-RESOURCE-001` open until code-level enforcement exists.
+
+**Key decisions**:
+- Keep `SR-RESOURCE-001` open. Reason: the repo now has resource-budget and job-spec contracts, but future executable DataHub / runner jobs still need code-level enforcement and tests.
+- Use `schemas/examples/` for the example artifact. Reason: this is not a real job approval or execution record; it validates shape only.
+- Require future specs to declare budget profile, market, lane, bounded date window, provider family, artifact type, resource estimate, lazy / incremental / checkpoint / abort policy, data boundaries, and approval gates.
+
+**Rejected alternatives**:
+- "Close `SR-RESOURCE-001` now" — rejected; no code-level enforcement exists.
+- "Implement a DataHub job runner now" — rejected; Phase 7c implementation needs a separate reviewed slice.
+- "Allow provider-access job specs through this artifact" — rejected; provider calls remain blocked by `SR-PROVIDER-001` without separate explicit approval.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_datahub_job_spec_schema -v`: 8 tests ran; non-jsonschema boundary tests passed; jsonschema-dependent checks skipped in this interpreter (reported `skipped=8` because scope-creep subtests also skip).
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_datahub_job_spec_schema tests.schema.test_datahub_local_resource_budget_schema -v`: 14 tests passed.
+- `json.tool` parsed `schemas/datahub_job_spec.schema.json`, `schemas/examples/datahub_job_spec.example.json`, and `docs/datahub_local_resource_budget_contract_20260602.json`.
+- `docs/CURRENT.md` line count = 149.
+- `git diff --check`: exit 0; only normal LF/CRLF working-copy warnings were printed.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: the schema/example accidentally authorizes provider calls, raw-payload parsing, full-market download, all-system default runs, DataHub table implementation, runner / adapter changes, production runner consumption, Phase 7c implementation, ship-gate claims, or premature closure of `SR-RESOURCE-001`.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (A-short threshold governance parity / SR-GOV-001)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `3b3a227`)

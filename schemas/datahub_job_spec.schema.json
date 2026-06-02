@@ -1,0 +1,729 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/datahub_job_spec/1.0.0/schema.json",
+  "title": "DataHub Job Spec Contract",
+  "description": "Phase 7c precondition contract for reviewed local-machine-safe DataHub and runner job specs. This artifact defines the minimum job-spec shape that future implementation must consume; it does not fetch data, call providers, implement DataHub tables, change runners, authorize Phase 7c implementation, or prove production readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_refs",
+    "job_identity",
+    "budget_profile",
+    "partition_scope",
+    "resource_estimate",
+    "execution_policy",
+    "checkpoint_policy",
+    "data_boundaries",
+    "approval_gates",
+    "prohibited_actions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "datahub_job_spec"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 3,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_local_resource_budget_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_design"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "system_risk_register"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "job_identity": {
+      "$ref": "#/$defs/jobIdentity"
+    },
+    "budget_profile": {
+      "$ref": "#/$defs/budgetProfileRef"
+    },
+    "partition_scope": {
+      "$ref": "#/$defs/partitionScope"
+    },
+    "resource_estimate": {
+      "$ref": "#/$defs/resourceEstimate"
+    },
+    "execution_policy": {
+      "$ref": "#/$defs/executionPolicy"
+    },
+    "checkpoint_policy": {
+      "$ref": "#/$defs/checkpointPolicy"
+    },
+    "data_boundaries": {
+      "$ref": "#/$defs/dataBoundaries"
+    },
+    "approval_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/approvalGate"
+      },
+      "minItems": 4
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "dateKey": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "data_fetch_allowed",
+        "provider_call_allowed",
+        "provider_selection_allowed",
+        "new_token_or_paid_access_allowed",
+        "datahub_table_implementation_allowed",
+        "runner_change_allowed",
+        "phase7c_implementation_authorized_by_this_artifact",
+        "broker_or_order_automation_allowed",
+        "ship_gate_claim_allowed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7c_precondition"
+        },
+        "purpose": {
+          "const": "local_resource_budget_job_spec_contract"
+        },
+        "contract_status": {
+          "const": "schema_first_job_spec_contract_no_runtime_enforcement"
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_call_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "new_token_or_paid_access_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "phase7c_implementation_authorized_by_this_artifact": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "ship_gate_claim_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "jobIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_spec_id",
+        "job_kind",
+        "job_spec_status",
+        "owner_phase",
+        "requested_by",
+        "review_status"
+      ],
+      "properties": {
+        "job_spec_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "job_kind": {
+          "enum": [
+            "schema_validation_only",
+            "datahub_read",
+            "datahub_write",
+            "report_generation",
+            "runner_execution",
+            "provider_access"
+          ]
+        },
+        "job_spec_status": {
+          "enum": [
+            "schema_example_not_executable",
+            "draft_requires_review",
+            "reviewed_plan_not_executed",
+            "reviewed_executable_plan"
+          ]
+        },
+        "owner_phase": {
+          "const": "7c_precondition"
+        },
+        "requested_by": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "review_status": {
+          "enum": [
+            "schema_example",
+            "requires_review",
+            "reviewed"
+          ]
+        }
+      }
+    },
+    "budgetProfileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "profile_source_ref",
+        "requires_explicit_user_approval",
+        "explicit_user_approval_recorded",
+        "approval_ref",
+        "reviewed_job_spec_required",
+        "profile_must_match_resource_budget_contract",
+        "authorizes_provider_calls",
+        "authorizes_datahub_implementation",
+        "authorizes_runner_change"
+      ],
+      "properties": {
+        "profile_id": {
+          "enum": [
+            "local_interactive_default",
+            "reviewed_heavy_run_optional"
+          ]
+        },
+        "profile_source_ref": {
+          "const": "docs/datahub_local_resource_budget_contract_20260602.json"
+        },
+        "requires_explicit_user_approval": {
+          "type": "boolean"
+        },
+        "explicit_user_approval_recorded": {
+          "type": "boolean"
+        },
+        "approval_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "reviewed_job_spec_required": {
+          "const": true
+        },
+        "profile_must_match_resource_budget_contract": {
+          "const": true
+        },
+        "authorizes_provider_calls": {
+          "const": false
+        },
+        "authorizes_datahub_implementation": {
+          "const": false
+        },
+        "authorizes_runner_change": {
+          "const": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "profile_id": {
+                "const": "local_interactive_default"
+              }
+            },
+            "required": [
+              "profile_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "requires_explicit_user_approval": {
+                "const": false
+              },
+              "explicit_user_approval_recorded": {
+                "const": false
+              },
+              "approval_ref": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "profile_id": {
+                "const": "reviewed_heavy_run_optional"
+              }
+            },
+            "required": [
+              "profile_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "requires_explicit_user_approval": {
+                "const": true
+              },
+              "explicit_user_approval_recorded": {
+                "const": true
+              },
+              "approval_ref": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "partitionScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "as_of_date",
+        "date_window",
+        "provider_family",
+        "artifact_type",
+        "full_market_refresh_requested",
+        "all_markets_requested",
+        "all_lanes_requested",
+        "full_history_rebuild_requested"
+      ],
+      "properties": {
+        "market": {
+          "enum": [
+            "A",
+            "US"
+          ]
+        },
+        "lane": {
+          "enum": [
+            "a_short",
+            "us_short",
+            "a_long",
+            "us_long"
+          ]
+        },
+        "as_of_date": {
+          "$ref": "#/$defs/dateKey"
+        },
+        "date_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start_date",
+            "end_date",
+            "window_role",
+            "max_calendar_days"
+          ],
+          "properties": {
+            "start_date": {
+              "$ref": "#/$defs/dateKey"
+            },
+            "end_date": {
+              "$ref": "#/$defs/dateKey"
+            },
+            "window_role": {
+              "enum": [
+                "single_as_of",
+                "bounded_history_slice",
+                "bounded_forward_capture_slice"
+              ]
+            },
+            "max_calendar_days": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "provider_family": {
+          "enum": [
+            "none",
+            "local_cache",
+            "local_fixture",
+            "tushare",
+            "fmp",
+            "sec_edgar"
+          ]
+        },
+        "artifact_type": {
+          "enum": [
+            "schema_example",
+            "contract_validation",
+            "provider_sample_summary",
+            "screening_output",
+            "datahub_table",
+            "runner_output",
+            "report"
+          ]
+        },
+        "full_market_refresh_requested": {
+          "const": false
+        },
+        "all_markets_requested": {
+          "const": false
+        },
+        "all_lanes_requested": {
+          "const": false
+        },
+        "full_history_rebuild_requested": {
+          "const": false
+        }
+      }
+    },
+    "resourceEstimate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estimated_input_rows",
+        "estimated_output_rows",
+        "estimated_input_mb",
+        "estimated_output_mb",
+        "max_runtime_minutes",
+        "max_memory_mb",
+        "local_disk_write_mb"
+      ],
+      "properties": {
+        "estimated_input_rows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "estimated_output_rows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "estimated_input_mb": {
+          "type": "number",
+          "minimum": 0
+        },
+        "estimated_output_mb": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_runtime_minutes": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_memory_mb": {
+          "type": "number",
+          "minimum": 0
+        },
+        "local_disk_write_mb": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "executionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lazy_load_required",
+        "incremental_cache_reuse_required",
+        "checkpoint_required",
+        "abort_policy_required",
+        "full_market_refresh_allowed",
+        "all_markets_all_lanes_allowed",
+        "provider_calls_allowed",
+        "raw_payload_write_allowed",
+        "production_runner_consumption_allowed"
+      ],
+      "properties": {
+        "lazy_load_required": {
+          "const": true
+        },
+        "incremental_cache_reuse_required": {
+          "const": true
+        },
+        "checkpoint_required": {
+          "const": true
+        },
+        "abort_policy_required": {
+          "const": true
+        },
+        "full_market_refresh_allowed": {
+          "const": false
+        },
+        "all_markets_all_lanes_allowed": {
+          "const": false
+        },
+        "provider_calls_allowed": {
+          "const": false
+        },
+        "raw_payload_write_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        }
+      }
+    },
+    "checkpointPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpoint_path",
+        "resume_supported",
+        "idempotent",
+        "abort_on_budget_exceed"
+      ],
+      "properties": {
+        "checkpoint_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "resume_supported": {
+          "type": "boolean"
+        },
+        "idempotent": {
+          "type": "boolean"
+        },
+        "abort_on_budget_exceed": {
+          "const": true
+        }
+      }
+    },
+    "dataBoundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_inputs",
+        "allowed_outputs",
+        "gitignored_raw_paths",
+        "tracked_summary_paths",
+        "raw_payloads_must_remain_gitignored",
+        "tracked_outputs_must_be_no_secret_summaries"
+      ],
+      "properties": {
+        "allowed_inputs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "allowed_outputs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "gitignored_raw_paths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "tracked_summary_paths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "raw_payloads_must_remain_gitignored": {
+          "const": true
+        },
+        "tracked_outputs_must_be_no_secret_summaries": {
+          "const": true
+        }
+      }
+    },
+    "approvalGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "blocks_execution",
+        "required_resolution",
+        "authorizes_data_fetch",
+        "authorizes_provider_call",
+        "authorizes_datahub_implementation",
+        "authorizes_runner_change",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "satisfied_for_schema_example",
+            "required_before_execution",
+            "required_before_heavy_run",
+            "blocked_pending_approval"
+          ]
+        },
+        "blocks_execution": {
+          "type": "boolean"
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_provider_call": {
+          "const": false
+        },
+        "authorizes_datahub_implementation": {
+          "const": false
+        },
+        "authorizes_runner_change": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_call",
+        "provider_selection",
+        "new_token_or_paid_access",
+        "full_market_download",
+        "raw_payload_parse",
+        "datahub_table_creation",
+        "runner_or_adapter_change",
+        "production_runner_consumption",
+        "all_systems_default_run",
+        "parallel_all_lanes_default",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "provider_call": {
+          "const": false
+        },
+        "provider_selection": {
+          "const": false
+        },
+        "new_token_or_paid_access": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "raw_payload_parse": {
+          "const": false
+        },
+        "datahub_table_creation": {
+          "const": false
+        },
+        "runner_or_adapter_change": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "all_systems_default_run": {
+          "const": false
+        },
+        "parallel_all_lanes_default": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

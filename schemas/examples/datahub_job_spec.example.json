@@ -1,0 +1,180 @@
+{
+  "schema_name": "datahub_job_spec",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00Z",
+  "scope": {
+    "phase": "7c_precondition",
+    "purpose": "local_resource_budget_job_spec_contract",
+    "contract_status": "schema_first_job_spec_contract_no_runtime_enforcement",
+    "data_fetch_allowed": false,
+    "provider_call_allowed": false,
+    "provider_selection_allowed": false,
+    "new_token_or_paid_access_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false,
+    "phase7c_implementation_authorized_by_this_artifact": false,
+    "broker_or_order_automation_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_refs": [
+    {
+      "artifact_id": "datahub_local_resource_budget_contract",
+      "path": "docs/datahub_local_resource_budget_contract_20260602.json",
+      "consumption_role": "Defines local resource budget profiles and the job-spec requirement."
+    },
+    {
+      "artifact_id": "datahub_design",
+      "path": "docs/datahub_design.md",
+      "consumption_role": "Owns DataHub guardrails and local-resource routing before Phase 7c implementation."
+    },
+    {
+      "artifact_id": "system_risk_register",
+      "path": "docs/system_risk_register.md",
+      "consumption_role": "Keeps SR-RESOURCE-001 open until future code-level enforcement exists."
+    }
+  ],
+  "job_identity": {
+    "job_spec_id": "datahub_job_spec_schema_example_20260602",
+    "job_kind": "schema_validation_only",
+    "job_spec_status": "schema_example_not_executable",
+    "owner_phase": "7c_precondition",
+    "requested_by": "codex_schema_first_contract",
+    "review_status": "schema_example"
+  },
+  "budget_profile": {
+    "profile_id": "local_interactive_default",
+    "profile_source_ref": "docs/datahub_local_resource_budget_contract_20260602.json",
+    "requires_explicit_user_approval": false,
+    "explicit_user_approval_recorded": false,
+    "approval_ref": null,
+    "reviewed_job_spec_required": true,
+    "profile_must_match_resource_budget_contract": true,
+    "authorizes_provider_calls": false,
+    "authorizes_datahub_implementation": false,
+    "authorizes_runner_change": false
+  },
+  "partition_scope": {
+    "market": "A",
+    "lane": "a_short",
+    "as_of_date": "20260602",
+    "date_window": {
+      "start_date": "20260602",
+      "end_date": "20260602",
+      "window_role": "single_as_of",
+      "max_calendar_days": 1
+    },
+    "provider_family": "none",
+    "artifact_type": "schema_example",
+    "full_market_refresh_requested": false,
+    "all_markets_requested": false,
+    "all_lanes_requested": false,
+    "full_history_rebuild_requested": false
+  },
+  "resource_estimate": {
+    "estimated_input_rows": 0,
+    "estimated_output_rows": 1,
+    "estimated_input_mb": 0,
+    "estimated_output_mb": 0.01,
+    "max_runtime_minutes": 1,
+    "max_memory_mb": 64,
+    "local_disk_write_mb": 0.01
+  },
+  "execution_policy": {
+    "lazy_load_required": true,
+    "incremental_cache_reuse_required": true,
+    "checkpoint_required": true,
+    "abort_policy_required": true,
+    "full_market_refresh_allowed": false,
+    "all_markets_all_lanes_allowed": false,
+    "provider_calls_allowed": false,
+    "raw_payload_write_allowed": false,
+    "production_runner_consumption_allowed": false
+  },
+  "checkpoint_policy": {
+    "checkpoint_path": null,
+    "resume_supported": true,
+    "idempotent": true,
+    "abort_on_budget_exceed": true
+  },
+  "data_boundaries": {
+    "allowed_inputs": [
+      "schemas/datahub_job_spec.schema.json"
+    ],
+    "allowed_outputs": [
+      "schemas/examples/datahub_job_spec.example.json"
+    ],
+    "gitignored_raw_paths": [],
+    "tracked_summary_paths": [
+      "schemas/examples/datahub_job_spec.example.json"
+    ],
+    "raw_payloads_must_remain_gitignored": true,
+    "tracked_outputs_must_be_no_secret_summaries": true
+  },
+  "approval_gates": [
+    {
+      "gate_id": "budget_profile_declared",
+      "status": "satisfied_for_schema_example",
+      "blocks_execution": false,
+      "required_resolution": "Future executable specs must declare an approved budget profile before execution.",
+      "authorizes_data_fetch": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_implementation": false,
+      "authorizes_runner_change": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "single_slice_partition_declared",
+      "status": "satisfied_for_schema_example",
+      "blocks_execution": false,
+      "required_resolution": "Future executable specs must declare exactly one market, one lane, and one bounded as-of or date window.",
+      "authorizes_data_fetch": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_implementation": false,
+      "authorizes_runner_change": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "resource_estimate_declared",
+      "status": "satisfied_for_schema_example",
+      "blocks_execution": false,
+      "required_resolution": "Future executable specs must declare rows, memory, runtime, and local disk estimates before execution.",
+      "authorizes_data_fetch": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_implementation": false,
+      "authorizes_runner_change": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "heavy_run_approval",
+      "status": "required_before_heavy_run",
+      "blocks_execution": true,
+      "required_resolution": "Any heavy run must carry a separate explicit user approval reference and reviewed job spec.",
+      "authorizes_data_fetch": false,
+      "authorizes_provider_call": false,
+      "authorizes_datahub_implementation": false,
+      "authorizes_runner_change": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "prohibited_actions": {
+    "provider_call": false,
+    "provider_selection": false,
+    "new_token_or_paid_access": false,
+    "full_market_download": false,
+    "raw_payload_parse": false,
+    "datahub_table_creation": false,
+    "runner_or_adapter_change": false,
+    "production_runner_consumption": false,
+    "all_systems_default_run": false,
+    "parallel_all_lanes_default": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "limitations": [
+    "This example validates the job-spec shape only; it is not an executable DataHub or runner job.",
+    "This contract does not benchmark the user's machine or prove the system can run every market and lane together.",
+    "This artifact does not resolve SR-RESOURCE-001 because future code-level enforcement is still required.",
+    "This artifact does not authorize provider access, DataHub table creation, runner changes, production consumption, Phase 7c implementation, or ship-gate claims."
+  ]
+}

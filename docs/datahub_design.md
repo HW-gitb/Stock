@@ -32,7 +32,7 @@ Reason: `A-EGS/egs_main.py` v7.10 and `runners/backtest_rank.py` have just passe
 
 ## Local Resource Boundary
 
-Four subsystems are real requirements, but the local default must not be "run every market and lane at once." Phase 7c DataHub / runner work must consume `schemas/datahub_local_resource_budget.schema.json` and `docs/datahub_local_resource_budget_contract_20260602.json` before any implementation slice that could create broad refreshes or multi-lane jobs.
+Four subsystems are real requirements, but the local default must not be "run every market and lane at once." Phase 7c DataHub / runner work must consume `schemas/datahub_local_resource_budget.schema.json`, `docs/datahub_local_resource_budget_contract_20260602.json`, and `schemas/datahub_job_spec.schema.json` before any implementation slice that could create broad refreshes or multi-lane jobs.
 
 Default local operation is `single_slice_incremental`:
 
@@ -45,7 +45,9 @@ Default local operation is `single_slice_incremental`:
 
 The following are not default behavior and require a separate explicit user approval plus reviewed job spec: all-market runs, all-lane runs, full-market refresh, full-history rebuild, high-output batch generation, or parallel jobs that exceed the reviewed local budget profile.
 
-The resource-budget contract is schema-first only. It does not fetch provider data, select a provider, implement adapters, create DataHub tables, change runners, authorize Phase 7c implementation, relax ship gates, or prove the user's machine has enough capacity. Future implementation must add code-level enforcement before `SR-RESOURCE-001` can be closed.
+The job-spec contract requires future jobs to declare budget profile, market, lane, as-of/date window, provider family, artifact type, resource estimates, lazy / incremental / checkpoint / abort policy, data boundaries, and approval gates before any executable job is reviewed.
+
+The resource-budget and job-spec contracts are schema-first only. They do not fetch provider data, select a provider, implement adapters, create DataHub tables, change runners, authorize Phase 7c implementation, relax ship gates, or prove the user's machine has enough capacity. Future implementation must add code-level enforcement before `SR-RESOURCE-001` can be closed.
 
 ## Layer Design
 
@@ -163,7 +165,7 @@ Completion criteria:
 
 - Provider capability / field catalog contract exists for the data classes required by A-short, US-short, A-long, US-long, and burst lanes. Current baseline: `schemas/provider_capability_catalog.schema.json` v1.0.0.
 - Provider evidence / drift-monitor contract exists for P1-P4 provider evidence records, readiness rollup, and drift-monitor dimensions. Current baseline: `schemas/provider_evidence_drift_monitor.schema.json` v1.1.0. Phase 7b-2 now has six P1 evidence snapshots plus `schemas/provider_p1_readiness_review.schema.json` / `docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json`, `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json`, and the narrow `schemas/provider_p1_sample_validation_access_approval.schema.json` / `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json`; P1 remains partial / blocked until the approved small sample is executed, summarized, and reviewed.
-- Local resource budget contract exists before DataHub / runner implementation creates broad refreshes or multi-lane jobs. Current baseline: `schemas/datahub_local_resource_budget.schema.json` v1.0.0 and `docs/datahub_local_resource_budget_contract_20260602.json`; it is schema-first only and does not authorize Phase 7c implementation.
+- Local resource budget and job-spec contracts exist before DataHub / runner implementation creates broad refreshes or multi-lane jobs. Current baseline: `schemas/datahub_local_resource_budget.schema.json` v1.0.0, `docs/datahub_local_resource_budget_contract_20260602.json`, and `schemas/datahub_job_spec.schema.json` v1.0.0 with `schemas/examples/datahub_job_spec.example.json`; they are schema-first only and do not authorize Phase 7c implementation.
 - Alpha plausibility audit contract exists and has reviewed lane-level verdicts before large implementation investments.
 - Evidence capital policy is reflected in aggregate/report schemas so paper evidence cannot be mistaken for live-normalized ship-gate evidence.
 - Data quality / provider drift monitoring exists before provider-backed evidence is treated as stable. It must cover coverage, freshness, schema drift, outliers, revision rate, provider incidents, and silently changed provider semantics.

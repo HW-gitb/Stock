@@ -2452,3 +2452,49 @@ git diff --check
 
 1. Claude review should verify that the artifact exactly mirrors current `CONF` values and that the test does not import or run `A-EGS/egs_main.py`.
 2. Any future runtime preset-loader migration or threshold behavior change must be a separate reviewed slice with behavior-preservation tests.
+
+## 2026-06-02 append: DataHub job spec contract
+
+**What changed**:
+
+- Added `schemas/datahub_job_spec.schema.json`, a Phase 7c precondition schema for future DataHub / runner job specs.
+- Added `schemas/examples/datahub_job_spec.example.json`, a schema-only, non-executable example that declares `local_interactive_default`, one market, one lane, one as-of date, resource estimates, lazy / incremental / checkpoint / abort policy, data boundaries, and approval gates.
+- Added `tests/schema/test_datahub_job_spec_schema.py`, covering schema/example validation, no-runtime scope locks, budget profile, partition scope, resource estimates, execution policy, approval gates, and scope-creep rejection.
+- Updated `docs/datahub_design.md`, `docs/README.md`, `docs/CURRENT.md`, `AGENTS.md`, `docs/system_risk_register.md`, and `docs/datahub_local_resource_budget_contract_20260602.json` to route the job-spec contract while keeping `SR-RESOURCE-001` open.
+
+**Why**:
+
+- The local resource budget contract already required future reviewed job specs, but it did not define the job-spec shape.
+- This slice adds the missing schema-first bridge without implementing DataHub, changing runners, or executing any broad job.
+- `SR-RESOURCE-001` remains open because future executable DataHub / runner jobs still need code-level enforcement and tests.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_datahub_job_spec_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_datahub_job_spec_schema tests.schema.test_datahub_local_resource_budget_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\datahub_job_spec.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\examples\datahub_job_spec.example.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\datahub_local_resource_budget_contract_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**Validation results**:
+
+- Bundled Python: `tests.schema.test_datahub_job_spec_schema` ran 8 tests; non-jsonschema boundary tests passed; jsonschema-dependent checks skipped in this interpreter (`skipped=8` due skipped subtests).
+- Python313 with `jsonschema`: `tests.schema.test_datahub_job_spec_schema` + `tests.schema.test_datahub_local_resource_budget_schema` ran 14 tests, all pass.
+- `json.tool` parsed the new schema, new example, and updated resource-budget contract artifact.
+- `docs/CURRENT.md` line count remained 149.
+- `git diff --check` exited 0 with only normal LF/CRLF working-copy warnings.
+
+**Invalid conclusions**:
+
+- "SR-RESOURCE-001 is closed" is false; code-level enforcement does not exist yet.
+- "This authorizes Phase 7c implementation" is false.
+- "This authorizes provider calls, raw-payload parsing, DataHub tables, runner changes, production runner consumption, full-system runs, or ship-gate claims" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify the new schema/example do not authorize provider access, data fetch, raw parse, full-market refresh, DataHub implementation, runner changes, production consumption, Phase 7c, or ship-gate claims.
+2. A future Phase 7c implementation slice must make executable job specs validate against `schemas/datahub_job_spec.schema.json` and enforce the budget / partition / abort policy in code before `SR-RESOURCE-001` can close.
