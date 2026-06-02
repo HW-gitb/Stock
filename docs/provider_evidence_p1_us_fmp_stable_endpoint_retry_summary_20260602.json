@@ -1,0 +1,400 @@
+{
+  "schema_name": "provider_p1_fmp_stable_endpoint_retry_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T05:46:51+00:00",
+  "approval_ref": "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json",
+  "mapping_review_ref": "docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json",
+  "schema_ref": "schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "fmp_stable_endpoint_retry_summary",
+    "validation_status": "completed",
+    "fmp_endpoint_mode": "stable",
+    "data_fetch_performed": true,
+    "fmp_live_retry_performed": true,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "provider_selection_allowed": false,
+    "paid_access_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_summary": false,
+    "production_ready_claim_allowed": false
+  },
+  "environment": {
+    "fmp_api_key_present": true,
+    "fmp_api_key_source": "windows_environment",
+    "secrets_logged": false
+  },
+  "storage": {
+    "raw_sample_storage_path": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/",
+    "raw_samples_gitignored": true,
+    "tracked_summary_contains_raw_rows": false,
+    "secrets_in_summary": false,
+    "request_urls_in_summary": false
+  },
+  "sample_universe": {
+    "symbols": [
+      "AAPL",
+      "MSFT"
+    ],
+    "max_symbols": 2
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 40,
+    "actual_total_endpoint_calls": 12,
+    "within_budget": true
+  },
+  "mapping_basis": {
+    "mapping_verdict": "stable_endpoint_candidates_identified_not_live_validated",
+    "stable_base_url": "https://financialmodelingprep.com/stable/",
+    "stable_endpoint_candidates_count": 6
+  },
+  "endpoint_results": [
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "AAPL",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/AAPL/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 1
+      },
+      "field_presence": {
+        "symbol": true,
+        "companyName": true,
+        "sector": true,
+        "industry": true,
+        "marketCap": true,
+        "price": true,
+        "volume": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "income_statement",
+      "symbol": "AAPL",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/AAPL/income_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 5
+      },
+      "field_presence": {
+        "date": true,
+        "filingDate": true,
+        "fillingDate": false,
+        "acceptedDate": true,
+        "period": true,
+        "revenue": true,
+        "netIncome": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "balance_sheet_statement",
+      "symbol": "AAPL",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/AAPL/balance_sheet_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 5
+      },
+      "field_presence": {
+        "date": true,
+        "filingDate": true,
+        "fillingDate": false,
+        "acceptedDate": true,
+        "totalAssets": true,
+        "totalDebt": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "cash_flow_statement",
+      "symbol": "AAPL",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/AAPL/cash_flow_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 5
+      },
+      "field_presence": {
+        "date": true,
+        "filingDate": true,
+        "fillingDate": false,
+        "acceptedDate": true,
+        "operatingCashFlow": true,
+        "freeCashFlow": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "symbol": "AAPL",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/AAPL/financial_ratios_or_key_metrics.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 5
+      },
+      "field_presence": {
+        "date": true,
+        "marketCap": true,
+        "peRatio": false,
+        "revenuePerShare": false,
+        "netIncomePerShare": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "historical_eod_price_volume",
+      "symbol": "AAPL",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/AAPL/historical_eod_price_volume.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 1254
+      },
+      "field_presence": {
+        "date": true,
+        "open": true,
+        "high": true,
+        "low": true,
+        "close": true,
+        "volume": true,
+        "change": true,
+        "changePercent": true,
+        "vwap": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "MSFT",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/MSFT/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 1
+      },
+      "field_presence": {
+        "symbol": true,
+        "companyName": true,
+        "sector": true,
+        "industry": true,
+        "marketCap": true,
+        "price": true,
+        "volume": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "income_statement",
+      "symbol": "MSFT",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/MSFT/income_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 5
+      },
+      "field_presence": {
+        "date": true,
+        "filingDate": true,
+        "fillingDate": false,
+        "acceptedDate": true,
+        "period": true,
+        "revenue": true,
+        "netIncome": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "balance_sheet_statement",
+      "symbol": "MSFT",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/MSFT/balance_sheet_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 5
+      },
+      "field_presence": {
+        "date": true,
+        "filingDate": true,
+        "fillingDate": false,
+        "acceptedDate": true,
+        "totalAssets": true,
+        "totalDebt": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "cash_flow_statement",
+      "symbol": "MSFT",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/MSFT/cash_flow_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 5
+      },
+      "field_presence": {
+        "date": true,
+        "filingDate": true,
+        "fillingDate": false,
+        "acceptedDate": true,
+        "operatingCashFlow": true,
+        "freeCashFlow": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "symbol": "MSFT",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/MSFT/financial_ratios_or_key_metrics.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 5
+      },
+      "field_presence": {
+        "date": true,
+        "marketCap": true,
+        "peRatio": false,
+        "revenuePerShare": false,
+        "netIncomePerShare": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "historical_eod_price_volume",
+      "symbol": "MSFT",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/raw/financial_modeling_prep/MSFT/historical_eod_price_volume.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "list",
+        "top_level_key_count": null,
+        "row_count": 1254
+      },
+      "field_presence": {
+        "date": true,
+        "open": true,
+        "high": true,
+        "low": true,
+        "close": true,
+        "volume": true,
+        "change": true,
+        "changePercent": true,
+        "vwap": true
+      }
+    }
+  ],
+  "symbol_results": [
+    {
+      "symbol": "AAPL",
+      "fmp": {
+        "endpoints_ok": 6,
+        "endpoints_error": 0,
+        "statement_observed_date_fields_present": true,
+        "price_volume_fields_present": true
+      },
+      "validation_observations": [
+        "AAPL: all approved FMP stable endpoint families returned HTTP success.",
+        "AAPL: no provider selection, production readiness, or alpha evidence is claimed."
+      ]
+    },
+    {
+      "symbol": "MSFT",
+      "fmp": {
+        "endpoints_ok": 6,
+        "endpoints_error": 0,
+        "statement_observed_date_fields_present": true,
+        "price_volume_fields_present": true
+      },
+      "validation_observations": [
+        "MSFT: all approved FMP stable endpoint families returned HTTP success.",
+        "MSFT: no provider selection, production readiness, or alpha evidence is claimed."
+      ]
+    }
+  ],
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "phase7c_authorized": false,
+    "ship_gate_evidence_claimed": false
+  },
+  "limitations": [
+    "This is a two-symbol active-name stable-endpoint retry, not a coverage proof.",
+    "FMP stable endpoint success does not prove PIT semantics, license sufficiency, fallback behavior, provider stability, or production readiness.",
+    "FMP derived metrics remain candidate production-source fields only; SEC EDGAR remains the fundamentals audit source.",
+    "No provider selection, DataHub implementation, production runner consumption, Phase 7c authorization, or ship-gate evidence is claimed."
+  ],
+  "next_steps": [
+    "Review stable endpoint availability, response shape, observed-date fields, EOD price fields, endpoint errors, and whether any paid-plan boundary appeared.",
+    "Do not broaden symbols, endpoints, providers, yfinance checks, full-market fetches, paid access, provider selection, DataHub work, or production runner consumption without separate explicit approval and review."
+  ]
+}

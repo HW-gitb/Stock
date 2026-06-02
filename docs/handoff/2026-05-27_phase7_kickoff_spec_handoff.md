@@ -1828,3 +1828,53 @@ git diff --check
 1. Claude 复审应核对 mapping artifact 是否只引用官方 docs + tracked sample summary，并没有把 stable candidate 写成 validated provider readiness。
 2. 如果审查 Pass 并提交，下一条 `执行` 的自然候选是更新 / parameterize standalone sample-validation runner，用 same-scope AAPL / MSFT stable endpoints 做一次 no-secret retry；不应扩大到 `yfinance`、full-market、paid access、provider selection、DataHub、production runner consumption 或 Phase 7c。
 3. 若需要完整 Draft-07 validation，应在含 `jsonschema` 的解释器中重跑新增 schema test。
+
+## 2026-06-02 追加：US EGS FMP stable endpoint retry result
+
+**改了什么**:
+
+- 更新 `runners/us_egs_sample_validation.py`，新增 `--fmp-endpoint-mode stable`，只用已批准的 AAPL / MSFT、现有 FMP key、$0、小样本边界，调用 mapped FMP stable endpoint families；legacy v3 + SEC sample 路径保留。
+- 新增 `schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json`，锁定 stable retry summary 的 no provider selection、no paid、no `yfinance`、no full-market、no adapter / DataHub、no production runner consumption、no Phase 7c、no ship-gate claim 边界。
+- 真实执行 stable retry，新增 `docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json`。结果为 `completed`：12 FMP stable calls within budget；AAPL / MSFT 的 profile、income statement、balance sheet statement、cash-flow statement、key metrics、historical EOD price / volume 均 HTTP 200；summary 不含 secrets 或 request URLs。
+- 更新 `docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`、`docs/CURRENT.md`、`docs/README.md`，把状态从“stable candidates mapped only”改为“two-symbol stable retry succeeded, but remaining provider blockers stay open”。
+- 新增 / 更新测试：`tests/provider/test_us_egs_sample_validation.py` 覆盖 stable fake-client 路径、12-call / no SEC / no yfinance / no secrets / stable field presence；`tests/schema/test_provider_p1_fmp_stable_endpoint_retry_summary_schema.py` 覆盖 schema locks 与真实 summary validation。
+
+**为什么改**:
+
+- 上一轮 mapping review 已经证明旧 `/api/v3` endpoint 不是当前 retry 目标；本轮按 review 后的最小下一刀，把 stable candidate 真正跑一次，验证当前账号 / key 对两只样本股票的 endpoint access 和基本 response shape。
+- 这能防止两个错误方向：一是继续误读 v3 403 为 FMP 不可用；二是把 stable docs path 误读成已验证可用。
+- 仍然只解决小样本 access / shape；coverage、license / retention、PIT semantics、fallback / incident、provider stability、production readiness 仍不是本轮结论。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.provider.test_us_egs_sample_validation -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fmp_stable_endpoint_retry_summary_schema tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fmp_stable_endpoint_retry_summary_schema tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\us_egs_sample_validation.py --fmp-endpoint-mode stable
+git diff --check
+git check-ignore -v provider_samples\us_egs_sample_validation_20260602\fmp_stable_retry\raw\financial_modeling_prep\AAPL\income_statement.json
+Select-String -Path docs\provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json -Pattern 'apikey=','Bearer ','SEC_USER_AGENT=' -SimpleMatch
+```
+
+**验证结果**:
+
+- Real stable retry wrote `docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json`; `validation_status = completed`; `actual_total_endpoint_calls = 12`; `secrets_logged = false`。
+- `tests.provider.test_us_egs_sample_validation`: 7 tests passed.
+- Bundled Python targeted schema tests: 16 tests ran, 5 passed, 11 skipped because this interpreter lacks `jsonschema`; non-jsonschema scope-lock tests passed.
+- Python313 with `jsonschema`: 16 tests passed, including the real stable retry summary validation and scope-creep rejection.
+- `git diff --check`: passed before SESSION_LOG entry; rerun after SESSION_LOG is expected.
+- `git check-ignore`: stable raw sample path matched `.gitignore:50:provider_samples/`。
+- Secret-pattern check for key-bearing URL / bearer / SEC env syntax returned no matches.
+
+**失效旧结论**:
+
+- “FMP stable endpoint candidates 尚未 live retried”失效；AAPL / MSFT same-scope stable retry 已执行并成功。
+- “旧 FMP v3 403 足以判断 FMP 当前账号不可用”不成立；当前 stable endpoint families 对 AAPL / MSFT 返回 HTTP 200。
+- “FMP stable retry 成功 = provider selected / production ready / Phase 7c 可开工”不成立；本轮只提供两只股票的小样本 access / response-shape evidence。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 summary 是否没有 raw rows / request URLs / secrets，raw payload 是否保持 ignored，stable runner 是否没有调用 SEC / `yfinance` / TSLA / full-market。
+2. `SR-PROVIDER-001` 仍 open；后续若要推进 provider work，必须另行处理 coverage、license / storage、PIT semantics、fallback / incident、stability 和 production-readiness evidence。
+3. 不要把 sample runner 接入 production runner，也不要进入 DataHub / adapter / Phase 7c，除非用户另有 explicit approval + reviewed decision。

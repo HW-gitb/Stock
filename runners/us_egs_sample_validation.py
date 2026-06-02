@@ -16,18 +16,24 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 APPROVAL_PATH = ROOT / "docs" / "provider_evidence_p1_us_sample_validation_access_approval_20260602.json"
+MAPPING_REVIEW_PATH = ROOT / "docs" / "provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json"
 SUMMARY_PATH = ROOT / "docs" / "provider_evidence_p1_us_sample_validation_summary_20260602.json"
+STABLE_RETRY_SUMMARY_PATH = ROOT / "docs" / "provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json"
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "provider_p1_us_egs_sample_validation_summary.schema.json"
+STABLE_RETRY_SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "provider_p1_fmp_stable_endpoint_retry_summary.schema.json"
 RAW_SAMPLE_REL_ROOT = Path("provider_samples/us_egs_sample_validation_20260602")
 RAW_SAMPLE_ROOT = ROOT / RAW_SAMPLE_REL_ROOT / "raw"
+STABLE_RETRY_RAW_SAMPLE_REL_ROOT = RAW_SAMPLE_REL_ROOT / "fmp_stable_retry"
+STABLE_RETRY_RAW_SAMPLE_ROOT = ROOT / STABLE_RETRY_RAW_SAMPLE_REL_ROOT / "raw"
 
-FMP_BASE_URL = "https://financialmodelingprep.com/api/v3"
+FMP_LEGACY_BASE_URL = "https://financialmodelingprep.com/api/v3"
+FMP_STABLE_BASE_URL = "https://financialmodelingprep.com/stable"
 SEC_FILES_BASE_URL = "https://www.sec.gov/files"
 SEC_DATA_BASE_URL = "https://data.sec.gov"
 DEFAULT_TIMEOUT_SECONDS = 30
 SEC_FAIR_ACCESS_SLEEP_SECONDS = 0.12
 
-FMP_ENDPOINTS = [
+FMP_LEGACY_ENDPOINTS = [
     {
         "endpoint_family": "profile_or_company_metadata",
         "path_template": "profile/{symbol}",
@@ -65,6 +71,50 @@ FMP_ENDPOINTS = [
         "fields": ["date", "open", "close", "adjClose", "volume"],
     },
 ]
+
+FMP_STABLE_ENDPOINTS = [
+    {
+        "endpoint_family": "profile_or_company_metadata",
+        "path_template": "profile",
+        "params": {},
+        "fields": ["symbol", "companyName", "sector", "industry", "marketCap", "price", "volume"],
+    },
+    {
+        "endpoint_family": "income_statement",
+        "path_template": "income-statement",
+        "params": {},
+        "fields": ["date", "filingDate", "fillingDate", "acceptedDate", "period", "revenue", "netIncome"],
+    },
+    {
+        "endpoint_family": "balance_sheet_statement",
+        "path_template": "balance-sheet-statement",
+        "params": {},
+        "fields": ["date", "filingDate", "fillingDate", "acceptedDate", "totalAssets", "totalDebt"],
+    },
+    {
+        "endpoint_family": "cash_flow_statement",
+        "path_template": "cash-flow-statement",
+        "params": {},
+        "fields": ["date", "filingDate", "fillingDate", "acceptedDate", "operatingCashFlow", "freeCashFlow"],
+    },
+    {
+        "endpoint_family": "financial_ratios_or_key_metrics",
+        "path_template": "key-metrics",
+        "params": {},
+        "fields": ["date", "marketCap", "peRatio", "revenuePerShare", "netIncomePerShare"],
+    },
+    {
+        "endpoint_family": "historical_eod_price_volume",
+        "path_template": "historical-price-eod/full",
+        "params": {},
+        "fields": ["date", "open", "high", "low", "close", "volume", "change", "changePercent", "vwap"],
+    },
+]
+
+FMP_ENDPOINTS_BY_MODE = {
+    "legacy_v3": FMP_LEGACY_ENDPOINTS,
+    "stable": FMP_STABLE_ENDPOINTS,
+}
 
 SEC_COMPANYFACTS_TAGS = {
     "revenue": [
@@ -140,8 +190,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
     )
     parser.add_argument("--approval-path", type=Path, default=APPROVAL_PATH)
-    parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
-    parser.add_argument("--raw-root", type=Path, default=RAW_SAMPLE_ROOT)
+    parser.add_argument("--mapping-review-path", type=Path, default=MAPPING_REVIEW_PATH)
+    parser.add_argument("--summary-path", type=Path)
+    parser.add_argument("--raw-root", type=Path)
+    parser.add_argument(
+        "--fmp-endpoint-mode",
+        choices=["legacy_v3", "stable"],
+        default="legacy_v3",
+        help="legacy_v3 reproduces the original FMP+SEC sample; stable retries only FMP stable endpoints.",
+    )
     parser.add_argument("--generated-at", help="Optional deterministic timestamp for tests.")
     parser.add_argument(
         "--dry-run-env",
@@ -228,6 +285,53 @@ def load_and_validate_approval(path: Path) -> dict[str, Any]:
     return approval
 
 
+def load_and_validate_mapping_review(path: Path, approval: dict[str, Any]) -> dict[str, Any]:
+    mapping_review = read_json(path)
+    scope = mapping_review.get("scope") or {}
+    retry_gate = mapping_review.get("retry_gate") or {}
+    allowed_retry = retry_gate.get("allowed_retry_scope_if_user_approves") or {}
+    endpoint_mappings = ((mapping_review.get("mapping_review") or {}).get("endpoint_mappings") or [])
+
+    expected_false_scope = [
+        "data_fetch_performed",
+        "fmp_live_retry_performed",
+        "provider_selection_allowed",
+        "paid_access_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_change_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "production_ready_claim_allowed",
+        "ship_gate_evidence_claimed",
+    ]
+    if scope.get("docs_only_review") is not True:
+        raise ValueError("mapping review must be docs-only before stable retry")
+    for field in expected_false_scope:
+        if scope.get(field) is not False:
+            raise ValueError(f"mapping review must keep {field}=false")
+    if retry_gate.get("retry_authorized_by_this_artifact") is not False:
+        raise ValueError("mapping review itself must not authorize retry")
+    if allowed_retry.get("symbols") != approval["sample_universe"]["allowed_symbols"]:
+        raise ValueError("mapping review retry universe must match approval universe")
+    if allowed_retry.get("spend_usd") != 0:
+        raise ValueError("mapping review retry spend must stay 0")
+    if allowed_retry.get("use_existing_fmp_key_only") is not True:
+        raise ValueError("mapping review retry must use only the existing FMP key")
+    expected_families = {endpoint["endpoint_family"] for endpoint in FMP_STABLE_ENDPOINTS}
+    mapped_families = {item.get("endpoint_family") for item in endpoint_mappings if isinstance(item, dict)}
+    if mapped_families != expected_families:
+        raise ValueError("mapping review must cover exactly the stable retry endpoint families")
+    for item in endpoint_mappings:
+        if item.get("sample_live_validated") is not False:
+            raise ValueError("mapping review stable candidates must be marked not live validated")
+        template = str(item.get("stable_candidate_template", ""))
+        if not template.startswith("https://financialmodelingprep.com/stable/"):
+            raise ValueError("mapping review stable candidates must use the FMP stable base URL")
+    return mapping_review
+
+
 def read_required_env(name: str) -> EnvValue:
     process_value = os.environ.get(name, "").strip()
     if process_value:
@@ -263,11 +367,21 @@ def _read_windows_environment_value(name: str) -> str | None:
     return None
 
 
-def fmp_url(path_template: str, symbol: str, params: dict[str, str], api_key: str) -> str:
+def fmp_url(
+    path_template: str,
+    symbol: str,
+    params: dict[str, str],
+    api_key: str,
+    *,
+    endpoint_mode: str,
+) -> str:
     params_with_key = dict(params)
+    base_url = FMP_LEGACY_BASE_URL if endpoint_mode == "legacy_v3" else FMP_STABLE_BASE_URL
+    if endpoint_mode == "stable":
+        params_with_key["symbol"] = symbol
     params_with_key["apikey"] = api_key
     encoded = urllib.parse.urlencode(params_with_key)
-    return f"{FMP_BASE_URL}/{path_template.format(symbol=symbol)}?{encoded}"
+    return f"{base_url}/{path_template.format(symbol=symbol)}?{encoded}"
 
 
 def sec_url(endpoint_family: str, cik10: str | None = None) -> str:
@@ -414,7 +528,7 @@ def run_sample_validation(
 
     fmp_headers = {"User-Agent": "StockSystem/0.1 sample-validation"}
     for symbol in symbols:
-        for endpoint in FMP_ENDPOINTS:
+        for endpoint in FMP_LEGACY_ENDPOINTS:
             endpoint_records.append(
                 fetch_and_store(
                     client,
@@ -423,6 +537,7 @@ def run_sample_validation(
                         symbol,
                         endpoint["params"],
                         fmp_env.value,
+                        endpoint_mode="legacy_v3",
                     ),
                     provider_id="financial_modeling_prep",
                     endpoint_family=endpoint["endpoint_family"],
@@ -462,6 +577,84 @@ def run_sample_validation(
         env_summary=env_summary,
         endpoint_records=endpoint_records,
         cik_by_symbol=cik_by_symbol,
+        max_total_endpoint_calls=max_total_endpoint_calls,
+        dry_run_env=False,
+    )
+    write_json_atomic(summary, summary_path)
+    return summary
+
+
+def run_fmp_stable_endpoint_retry(
+    *,
+    approval_path: Path = APPROVAL_PATH,
+    mapping_review_path: Path = MAPPING_REVIEW_PATH,
+    summary_path: Path = STABLE_RETRY_SUMMARY_PATH,
+    raw_root: Path = STABLE_RETRY_RAW_SAMPLE_ROOT,
+    generated_at: str | None = None,
+    client: JsonHttpClient | None = None,
+    dry_run_env: bool = False,
+) -> dict[str, Any]:
+    approval = load_and_validate_approval(approval_path)
+    mapping_review = load_and_validate_mapping_review(mapping_review_path, approval)
+    validate_raw_root(raw_root)
+    generated_at = generated_at or iso_now()
+    symbols = approval["sample_universe"]["allowed_symbols"]
+    max_total_endpoint_calls = int(approval["sample_universe"]["max_total_endpoint_calls"])
+    fmp_env = read_required_env("FMP_API_KEY")
+    env_summary = {
+        "fmp_api_key_present": True,
+        "fmp_api_key_source": fmp_env.source,
+        "secrets_logged": False,
+    }
+
+    if dry_run_env:
+        summary = build_fmp_stable_retry_summary(
+            approval=approval,
+            mapping_review=mapping_review,
+            generated_at=generated_at,
+            env_summary=env_summary,
+            endpoint_records=[],
+            max_total_endpoint_calls=max_total_endpoint_calls,
+            dry_run_env=True,
+        )
+        # The stable retry summary schema represents live retry evidence; dry-run is in-memory only.
+        return summary
+
+    client = client or JsonHttpClient()
+    endpoint_records: list[FetchRecord] = []
+    fmp_headers = {"User-Agent": "StockSystem/0.1 fmp-stable-endpoint-retry"}
+    for symbol in symbols:
+        for endpoint in FMP_STABLE_ENDPOINTS:
+            endpoint_records.append(
+                fetch_and_store(
+                    client,
+                    url=fmp_url(
+                        endpoint["path_template"],
+                        symbol,
+                        endpoint["params"],
+                        fmp_env.value,
+                        endpoint_mode="stable",
+                    ),
+                    provider_id="financial_modeling_prep",
+                    endpoint_family=endpoint["endpoint_family"],
+                    symbol=symbol,
+                    raw_root=raw_root,
+                    headers=fmp_headers,
+                )
+            )
+
+    if len(endpoint_records) > max_total_endpoint_calls:
+        raise RuntimeError(
+            f"endpoint call count {len(endpoint_records)} exceeded approval budget "
+            f"{max_total_endpoint_calls}"
+        )
+
+    summary = build_fmp_stable_retry_summary(
+        approval=approval,
+        mapping_review=mapping_review,
+        generated_at=generated_at,
+        env_summary=env_summary,
+        endpoint_records=endpoint_records,
         max_total_endpoint_calls=max_total_endpoint_calls,
         dry_run_env=False,
     )
@@ -565,7 +758,105 @@ def build_summary(
     }
 
 
-def summarize_endpoint_record(record: FetchRecord) -> dict[str, Any]:
+def build_fmp_stable_retry_summary(
+    *,
+    approval: dict[str, Any],
+    mapping_review: dict[str, Any],
+    generated_at: str,
+    env_summary: dict[str, Any],
+    endpoint_records: list[FetchRecord],
+    max_total_endpoint_calls: int,
+    dry_run_env: bool,
+) -> dict[str, Any]:
+    symbols = approval["sample_universe"]["allowed_symbols"]
+    endpoint_summaries = [summarize_endpoint_record(record, endpoint_mode="stable") for record in endpoint_records]
+    symbol_summaries = [summarize_fmp_stable_symbol(symbol, endpoint_records) for symbol in symbols]
+    endpoint_errors = sum(1 for record in endpoint_records if not record.ok)
+    if dry_run_env:
+        validation_status = "dry_run_env_only"
+        data_fetch_performed = False
+        fmp_live_retry_performed = False
+    elif endpoint_errors:
+        validation_status = "completed_with_endpoint_errors"
+        data_fetch_performed = True
+        fmp_live_retry_performed = True
+    else:
+        validation_status = "completed"
+        data_fetch_performed = True
+        fmp_live_retry_performed = True
+
+    return {
+        "schema_name": "provider_p1_fmp_stable_endpoint_retry_summary",
+        "schema_version": "1.0.0",
+        "generated_at": generated_at,
+        "approval_ref": "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json",
+        "mapping_review_ref": "docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json",
+        "schema_ref": "schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json",
+        "scope": {
+            "phase": "7b-2",
+            "purpose": "fmp_stable_endpoint_retry_summary",
+            "validation_status": validation_status,
+            "fmp_endpoint_mode": "stable",
+            "data_fetch_performed": data_fetch_performed,
+            "fmp_live_retry_performed": fmp_live_retry_performed,
+            "manual_order_only": True,
+            "ship_gate_relaxed": False,
+            "provider_selection_allowed": False,
+            "paid_access_allowed": False,
+            "yfinance_allowed": False,
+            "full_market_download_allowed": False,
+            "provider_adapter_allowed": False,
+            "datahub_table_implementation_allowed": False,
+            "production_runner_consumption_allowed": False,
+            "phase7c_authorized_by_this_summary": False,
+            "production_ready_claim_allowed": False,
+        },
+        "environment": env_summary,
+        "storage": {
+            "raw_sample_storage_path": STABLE_RETRY_RAW_SAMPLE_REL_ROOT.as_posix() + "/",
+            "raw_samples_gitignored": True,
+            "tracked_summary_contains_raw_rows": False,
+            "secrets_in_summary": False,
+            "request_urls_in_summary": False,
+        },
+        "sample_universe": {
+            "symbols": symbols,
+            "max_symbols": approval["sample_universe"]["max_symbols"],
+        },
+        "endpoint_call_budget": {
+            "max_total_endpoint_calls": max_total_endpoint_calls,
+            "actual_total_endpoint_calls": len(endpoint_records),
+            "within_budget": len(endpoint_records) <= max_total_endpoint_calls,
+        },
+        "mapping_basis": {
+            "mapping_verdict": (mapping_review.get("mapping_review") or {}).get("mapping_verdict"),
+            "stable_base_url": (mapping_review.get("mapping_review") or {}).get("current_base_url"),
+            "stable_endpoint_candidates_count": len((mapping_review.get("mapping_review") or {}).get("endpoint_mappings") or []),
+        },
+        "endpoint_results": endpoint_summaries,
+        "symbol_results": symbol_summaries,
+        "prohibited_claims": {
+            "provider_selected": False,
+            "full_market_download_performed": False,
+            "yfinance_used": False,
+            "paid_access_used": False,
+            "phase7c_authorized": False,
+            "ship_gate_evidence_claimed": False,
+        },
+        "limitations": [
+            "This is a two-symbol active-name stable-endpoint retry, not a coverage proof.",
+            "FMP stable endpoint success does not prove PIT semantics, license sufficiency, fallback behavior, provider stability, or production readiness.",
+            "FMP derived metrics remain candidate production-source fields only; SEC EDGAR remains the fundamentals audit source.",
+            "No provider selection, DataHub implementation, production runner consumption, Phase 7c authorization, or ship-gate evidence is claimed.",
+        ],
+        "next_steps": [
+            "Review stable endpoint availability, response shape, observed-date fields, EOD price fields, endpoint errors, and whether any paid-plan boundary appeared.",
+            "Do not broaden symbols, endpoints, providers, yfinance checks, full-market fetches, paid access, provider selection, DataHub work, or production runner consumption without separate explicit approval and review.",
+        ],
+    }
+
+
+def summarize_endpoint_record(record: FetchRecord, *, endpoint_mode: str = "legacy_v3") -> dict[str, Any]:
     payload = record.payload
     rows = payload_rows(record.endpoint_family, payload)
     return {
@@ -577,12 +868,13 @@ def summarize_endpoint_record(record: FetchRecord) -> dict[str, Any]:
         "error_type": record.error_type,
         "raw_sample_ref": record.raw_sample_ref,
         "raw_sample_ref_gitignored": record.raw_sample_ref.startswith("provider_samples/"),
+        "fmp_endpoint_mode": endpoint_mode if record.provider_id == "financial_modeling_prep" else None,
         "payload_shape": {
             "payload_type": type(payload).__name__,
             "top_level_key_count": len(payload) if isinstance(payload, dict) else None,
             "row_count": len(rows) if rows is not None else None,
         },
-        "field_presence": endpoint_field_presence(record.endpoint_family, payload),
+        "field_presence": endpoint_field_presence(record.endpoint_family, payload, endpoint_mode=endpoint_mode),
     }
 
 
@@ -595,8 +887,13 @@ def payload_rows(endpoint_family: str, payload: Any) -> list[Any] | None:
     return None
 
 
-def endpoint_field_presence(endpoint_family: str, payload: Any) -> dict[str, bool]:
-    fields = fields_for_endpoint(endpoint_family)
+def endpoint_field_presence(
+    endpoint_family: str,
+    payload: Any,
+    *,
+    endpoint_mode: str = "legacy_v3",
+) -> dict[str, bool]:
+    fields = fields_for_endpoint(endpoint_family, endpoint_mode=endpoint_mode)
     if not fields:
         return {}
     row = first_row(endpoint_family, payload)
@@ -605,8 +902,9 @@ def endpoint_field_presence(endpoint_family: str, payload: Any) -> dict[str, boo
     return {field: field in row for field in fields}
 
 
-def fields_for_endpoint(endpoint_family: str) -> list[str]:
-    for endpoint in FMP_ENDPOINTS:
+def fields_for_endpoint(endpoint_family: str, *, endpoint_mode: str = "legacy_v3") -> list[str]:
+    endpoint_defs = FMP_ENDPOINTS_BY_MODE.get(endpoint_mode, FMP_LEGACY_ENDPOINTS)
+    for endpoint in endpoint_defs:
         if endpoint["endpoint_family"] == endpoint_family:
             return list(endpoint["fields"])
     if endpoint_family == "submissions":
@@ -687,11 +985,41 @@ def summarize_symbol(
     }
 
 
+def summarize_fmp_stable_symbol(symbol: str, endpoint_records: list[FetchRecord]) -> dict[str, Any]:
+    symbol_records = [
+        record for record in endpoint_records
+        if record.symbol == symbol and record.provider_id == "financial_modeling_prep"
+    ]
+    fmp_statement_records = [
+        record for record in symbol_records
+        if record.endpoint_family in {"income_statement", "balance_sheet_statement", "cash_flow_statement"}
+    ]
+    return {
+        "symbol": symbol,
+        "fmp": {
+            "endpoints_ok": sum(1 for record in symbol_records if record.ok),
+            "endpoints_error": sum(1 for record in symbol_records if not record.ok),
+            "statement_observed_date_fields_present": all(
+                observed_date_fields_present(record.payload) for record in fmp_statement_records
+            )
+            if fmp_statement_records
+            else False,
+            "price_volume_fields_present": any(
+                record.endpoint_family == "historical_eod_price_volume"
+                and all(endpoint_field_presence(record.endpoint_family, record.payload, endpoint_mode="stable").get(field, False)
+                        for field in ["date", "open", "close", "volume"])
+                for record in symbol_records
+            ),
+        },
+        "validation_observations": fmp_stable_symbol_observations(symbol, symbol_records),
+    }
+
+
 def observed_date_fields_present(payload: Any) -> bool:
     row = first_row("income_statement", payload)
     if not isinstance(row, dict):
         return False
-    return all(field in row for field in ["date", "fillingDate", "acceptedDate"])
+    return "date" in row and ("fillingDate" in row or "filingDate" in row) and "acceptedDate" in row
 
 
 def sec_submissions_observed_date_fields_present(payload: Any) -> bool:
@@ -740,19 +1068,48 @@ def symbol_observations(
     return observations
 
 
+def fmp_stable_symbol_observations(symbol: str, fmp_records: list[FetchRecord]) -> list[str]:
+    observations: list[str] = []
+    if fmp_records and all(record.ok for record in fmp_records):
+        observations.append(f"{symbol}: all approved FMP stable endpoint families returned HTTP success.")
+    elif fmp_records:
+        observations.append(f"{symbol}: one or more approved FMP stable endpoint families returned an error.")
+    else:
+        observations.append(f"{symbol}: no FMP stable endpoint calls were made.")
+    observations.append(f"{symbol}: no provider selection, production readiness, or alpha evidence is claimed.")
+    return observations
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    summary = run_sample_validation(
-        approval_path=args.approval_path,
-        summary_path=args.summary_path,
-        raw_root=args.raw_root,
-        generated_at=args.generated_at,
-        dry_run_env=args.dry_run_env,
+    summary_path = args.summary_path
+    raw_root = args.raw_root
+    effective_summary_path = summary_path or (
+        STABLE_RETRY_SUMMARY_PATH if args.fmp_endpoint_mode == "stable" else SUMMARY_PATH
     )
+    summary_written = not (args.fmp_endpoint_mode == "stable" and args.dry_run_env)
+    if args.fmp_endpoint_mode == "stable":
+        summary = run_fmp_stable_endpoint_retry(
+            approval_path=args.approval_path,
+            mapping_review_path=args.mapping_review_path,
+            summary_path=effective_summary_path,
+            raw_root=raw_root or STABLE_RETRY_RAW_SAMPLE_ROOT,
+            generated_at=args.generated_at,
+            dry_run_env=args.dry_run_env,
+        )
+    else:
+        summary = run_sample_validation(
+            approval_path=args.approval_path,
+            summary_path=effective_summary_path,
+            raw_root=raw_root or RAW_SAMPLE_ROOT,
+            generated_at=args.generated_at,
+            dry_run_env=args.dry_run_env,
+        )
     print(
         json.dumps(
             {
-                "summary_path": str(args.summary_path),
+                "summary_path": str(effective_summary_path) if summary_written else None,
+                "summary_written": summary_written,
                 "validation_status": summary["scope"]["validation_status"],
                 "actual_total_endpoint_calls": summary["endpoint_call_budget"]["actual_total_endpoint_calls"],
                 "secrets_logged": summary["environment"]["secrets_logged"],

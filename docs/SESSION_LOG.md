@@ -8,6 +8,128 @@
 
 ---
 
+## 2026-06-02 — Claude re-review — Pass (clean) (US EGS FMP stable dry-run guard — O1 resolved)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `382714b`)
+
+**Verdict**: Pass, clean. O1 resolved; no Required fixes, no new Optional, no re-raise.
+
+**O1 (accept with modification) — verified resolved:** `run_fmp_stable_endpoint_retry(dry_run_env=True)` now builds the env-check summary in memory and `return`s it WITHOUT `write_json_atomic` (runner:610-621), so a stable dry-run can no longer clobber the tracked `STABLE_RETRY_SUMMARY_PATH`. `main` sets `summary_written = not (stable and dry_run_env)` and reports `summary_path=null` / `summary_written=false` for stable dry-run (runner:1090,1111-1112). The stable retry schema stays live-retry-only (enum `[completed, completed_with_endpoint_errors]`, `data_fetch_performed`/`fmp_live_retry_performed` const `true`) — confirmed unchanged. The modification fully hits O1's intent (no schema-invalid payload reaches the tracked artifact) and is cleaner than the suggested schema-widening, so no re-raise per §Optional Re-raise Constraint.
+- New test `test_stable_dry_run_validates_env_without_fetching_or_writing_summary` is non-vacuous: asserts `client.calls == []` AND `summary_path.exists() is False` AND status `dry_run_env_only` / 0 calls. Schema test adds a `dry_run_env_only`-not-valid lock.
+- Real (non-dry-run) stable path unchanged (runner:623-662); legacy dry-run still writes (its schema supports `dry_run_env_only`); `summary_written` logic correct for all four mode×dry-run combinations. Ran Python313 (jsonschema): provider 8 + stable-retry-schema 5 = 13 pass, 0 fail. No regression to unrelated code; the repair touched only the stable dry-run branch, `main` CLI output, and the two test files.
+
+**Process**: Codex's 修复 entry records the O1 disposition (accept with modification) with reasoning; CURRENT / register / drift-monitor correctly left unchanged (an internal robustness guard, not a provider-readiness state change).
+
+**Standing item for Final Approver (carried, not blocking):** the prior-round authorization note is unresolved — the live stable retry ran under the standing 2026-06-02 approval (my assessment: within scope; same families/symbols/key/$0, runner-enforced). It needs no fix; flagging only so you can object before `提交` if you intended per-call approval.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001` (open). No pending Required fixes or Optional dispositions remain; the reviewed stable-retry working tree is ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 修复 (US EGS FMP stable dry-run summary guard)
+
+**Commits**: none (repair-only; pending Claude re-review / submit; builds on uncommitted stable retry worktree)
+
+**Relationship to prior review**:
+- Latest Claude review was Pass with no Required fixes and one Optional: stable `--dry-run-env` could overwrite the tracked stable retry summary with a schema-invalid dry-run payload.
+- This round does not fetch provider data, does not run FMP / SEC network calls, does not broaden symbols / providers / endpoints, and does not change provider readiness claims.
+
+**Approved Required fixes repaired**: 0 (no Required fixes in latest Claude review).
+
+**Optional disposition**:
+- O1 accept with modification — change: stable dry-run now returns its environment-check payload in memory only and never writes a stable retry summary file; CLI output reports `summary_written=false` / `summary_path=null` for stable dry-run. The stable retry summary schema remains live-retry-only, and tests assert `dry_run_env_only` is not accepted by the tracked stable summary schema. Reason: preserve the real tracked stable retry artifact instead of widening the evidence schema to dry-run payloads.
+
+**Worked on**:
+1. [tracked] `runners/us_egs_sample_validation.py`: changed `run_fmp_stable_endpoint_retry(..., dry_run_env=True)` to skip summary writes; updated CLI JSON output with `summary_written` so stable dry-run is not misleading.
+2. [tracked] `tests/provider/test_us_egs_sample_validation.py`: added stable dry-run coverage proving no FMP/SEC/yfinance calls and no summary file write.
+3. [untracked] `tests/schema/test_provider_p1_fmp_stable_endpoint_retry_summary_schema.py`: added a schema-lock assertion that `dry_run_env_only` is not a valid tracked stable retry summary status.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.provider.test_us_egs_sample_validation -v`: 8 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fmp_stable_endpoint_retry_summary_schema -v`: 5 tests ran; 1 passed, 4 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fmp_stable_endpoint_retry_summary_schema tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema -v`: 16 tests passed.
+- `git diff --check`: passed after this SESSION_LOG entry; only normal LF/CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree is still uncommitted per Commit Timing Rule.
+- Claude should re-review the stable retry worktree plus this repair, focusing on O1 disposition: stable dry-run cannot clobber the tracked stable retry summary, while the real stable summary still validates as live-retry evidence only.
+
+---
+
+## 2026-06-02 — Claude review — Pass (1 Optional) (US EGS FMP stable endpoint retry)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files + gitignored raw samples vs `382714b`)
+
+**Verdict**: Pass. No Required fixes. One Optional (below) → PENDING CODEX DISPOSITION.
+
+**Scope reviewed**: [tracked] runners/us_egs_sample_validation.py (+396/-42), tests/provider/test_us_egs_sample_validation.py (+191), docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/provider_evidence_drift_monitor.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json, docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json, tests/schema/test_provider_p1_fmp_stable_endpoint_retry_summary_schema.py. [gitignored, read not committed] provider_samples/.../fmp_stable_retry/raw/* (12 files, now real AAPL/MSFT financial data).
+
+**Independent verification**:
+- Security (real-secret slice): `rg --no-ignore -i "apikey|api_key=|bearer |financialmodelingprep.com/(stable|api)"` over the entire `provider_samples/` tree (incl. the new real-data `fmp_stable_retry/raw/`) returned zero matches — the key value AND the key-bearing request URL are in no file. The raw wrapper persists only the response `payload`, never the URL; the tracked summary stores only `payload_shape` + `field_presence` booleans + env-presence labels (`fmp_api_key_source=windows_environment`), no key. `git check-ignore` confirms `fmp_stable_retry/` under `.gitignore:50`.
+- Ran provider tests + all three schema test modules under a `jsonschema`-equipped interpreter (Python313): 23 tests, all pass, 0 skipped. Confirms the real stable retry summary validates against its schema, scope-creep (provider_selection/paid/phase7c/TSLA) is rejected, and `load_and_validate_mapping_review` raises on a tampered mapping artifact.
+- Boundary: stable retry is gated by BOTH `load_and_validate_approval` AND new `load_and_validate_mapping_review` (requires docs_only mapping, retry_authorized=false, retry universe==approval, $0, existing-key, families==stable set, all `sample_live_validated=false`, stable base URL). Default `--fmp-endpoint-mode legacy_v3` leaves the original committed sample path byte-for-byte unchanged; stable is an explicit, separate flow (FMP-only, no SEC). 12 calls (6 families × 2 symbols), within budget; test asserts URLs are all `/stable/`, none `/api/v3/`, no sec.gov / TSLA / yfinance.
+- Result is honest: 12/12 HTTP 200, stable field names present (marketCap/volume, filingDate vs legacy fillingDate handled), historical 1254 rows; key-metrics peRatio/revenuePerShare/netIncomePerShare recorded `false` (current plan returns a reduced set) rather than papered over. SR-PROVIDER-001 stays `open`; summary + docs scope it to "two-symbol access/response-shape, not coverage/PIT/license/fallback/stability/production readiness."
+
+**Optional O1 — stable dry-run can write a schema-invalid summary over the tracked artifact (PENDING CODEX DISPOSITION):** `build_fmp_stable_retry_summary(dry_run_env=True)` emits `validation_status="dry_run_env_only"`, `data_fetch_performed=false`, `fmp_live_retry_performed=false`, but the stable retry schema's `scope.validation_status` enum is only `[completed, completed_with_endpoint_errors]` and locks `data_fetch_performed`/`fmp_live_retry_performed` to const `true`. `run_fmp_stable_endpoint_retry` writes to the tracked `STABLE_RETRY_SUMMARY_PATH` with no pre-write schema validation, so `--fmp-endpoint-mode stable --dry-run-env` would overwrite the real summary with a payload that fails its own schema. Not exercised by tests; does not affect the current (real-run) artifact. Suggest either mirroring the legacy summary schema (add `dry_run_env_only` + relax those two flags for the dry-run case) or guarding the stable dry-run so it cannot clobber the tracked path (skip write / temp path / validate-before-write). Aligns with the SR-DET/SR-DATA-004 pre-write-validation discipline already adopted elsewhere.
+
+**Authorization note (for Final Approver — not a fix):** the live stable retry ran under the standing 2026-06-02 approval, not a fresh per-call OK. My assessment is it is within that approval — same 6 FMP families, AAPL/MSFT, existing key, $0, gitignored storage; only the URL namespace changed (`/api/v3/`→`/stable/`), and the runner structurally enforces the approved boundary. Surfacing it because the mapping-review/handoff used "if user approves" wording: if you intended each live FMP call to need a fresh approval (rather than a standing same-scope approval), say so and the retry can be reverted; otherwise no action needed.
+
+**Process**: drift-monitor §19 insert + §20 renumber clean; §18 reworded to point to §19; CURRENT=149; register SR-PROVIDER-001 evidence/calibration/next-action updated and kept `open`. Codex this round ran the Python313 jsonschema tests + secret-pattern check itself.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001` (open; remaining blockers: coverage / license / PIT / fallback / stability / production readiness; no provider selection / DataHub / adapter / production-runner / Phase 7c / paid / yfinance / full-market without new explicit approval).
+
+---
+
+## 2026-06-02 — Codex 执行 (US EGS FMP stable endpoint retry)
+
+**Commits**: none (pending Claude review / submit; base `382714b`)
+
+**Relationship to prior session(s)**:
+- Builds on the committed FMP current-endpoint mapping review (`382714b`), which mapped failed `/api/v3` endpoint families to current `/stable/` candidates but did not fetch data.
+- Executes the next `SR-PROVIDER-001` slice: same-scope AAPL / MSFT FMP stable retry under the already approved $0 existing-key / no-secret / ignored-raw boundary.
+- Does not use `yfinance`, does not fetch full-market data, does not request a new token / trial / paid access, does not select a provider, does not build adapters / DataHub, does not connect the sample runner to production runners, and does not authorize Phase 7c or ship-gate evidence.
+
+**Worked on**:
+1. [tracked] `runners/us_egs_sample_validation.py`: added `--fmp-endpoint-mode stable`, stable endpoint definitions, mapping-review gate validation, stable-only retry flow, no-secret summary builder, stable field-presence handling, and legacy v3 compatibility.
+2. [untracked] `schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json`: added the stable retry summary contract. It locks no provider selection, no paid access, no `yfinance`, no full-market, no adapter / DataHub, no production runner consumption, no Phase 7c, no production-ready / ship-gate claim, no request URLs, and no secrets.
+3. [untracked] `docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json`: real FMP stable retry summary. Status `completed`; 12 endpoint calls; AAPL / MSFT profile, income statement, balance sheet statement, cash-flow statement, key metrics, and historical EOD price / volume all returned HTTP 200; no secrets or request URLs in summary.
+4. [tracked] `tests/provider/test_us_egs_sample_validation.py`: added fake-client stable endpoint coverage and scope-creep checks; proves stable retry uses only FMP stable URLs, only AAPL / MSFT, no SEC, no `yfinance`, no TSLA, no secret in summary, and stable field presence.
+5. [untracked] `tests/schema/test_provider_p1_fmp_stable_endpoint_retry_summary_schema.py`: validates the schema, real summary when present, and scope-creep rejection under `jsonschema`.
+6. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the stable retry result while keeping `SR-PROVIDER-001` open.
+
+**External docs spot-checked**:
+- Official FMP stable docs still show stable endpoint examples for `income-statement?symbol=AAPL` and `historical-price-eod/full?symbol=AAPL`. This was used only to confirm that the retry paths match the mapping review; the actual result comes from the live same-scope retry.
+
+**Key decisions**:
+- Treat `12/12 HTTP 200` as a narrow endpoint access / response-shape result, not provider readiness.
+- Keep `SR-PROVIDER-001` open because coverage, license / local-storage rights beyond the approved sample, PIT semantics, fallback / incident behavior, stability, and production readiness remain unresolved.
+- Keep raw FMP payloads local-only under ignored `provider_samples/us_egs_sample_validation_20260602/fmp_stable_retry/`; only the no-secret summary is tracked.
+
+**Rejected alternatives**:
+- "Mark FMP selected because AAPL / MSFT stable endpoints worked" — rejected. Two active symbols do not prove coverage, PIT, license, fallback, stability, or production readiness.
+- "Broaden to more symbols or yfinance now" — rejected; not approved and explicitly blocked.
+- "Connect this runner to production or DataHub" — rejected; this is a standalone sample-validation runner only.
+
+**Validation run/result**:
+- Real approved network run: `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\us_egs_sample_validation.py --fmp-endpoint-mode stable`: wrote `docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json`; `validation_status = completed`; `actual_total_endpoint_calls = 12`; `secrets_logged = false`.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.provider.test_us_egs_sample_validation -v`: 7 tests passed.
+- Bundled Python schema target tests: `... -m unittest tests.schema.test_provider_p1_fmp_stable_endpoint_retry_summary_schema tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema -v`: 16 tests ran, 5 passed, 11 skipped because this interpreter lacks `jsonschema`; non-jsonschema scope-lock tests passed.
+- Python313 with `jsonschema`: same three schema test modules ran 16 tests, all passed, including real stable retry summary validation and scope-creep rejection.
+- `git diff --check`: passed after this SESSION_LOG entry was prepended; only normal LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` line count = 149.
+- `git check-ignore -v provider_samples\us_egs_sample_validation_20260602\fmp_stable_retry\raw\financial_modeling_prep\AAPL\income_statement.json`: matched `.gitignore:50:provider_samples/`.
+- Secret-pattern check on tracked stable summary for `apikey=`, `Bearer `, and `SEC_USER_AGENT=` returned no matches.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files listed above. Raw FMP payloads under ignored `provider_samples/.../fmp_stable_retry/raw/` should be read only as needed to verify sample boundaries and must not be committed.
+- Primary review risks: whether the stable summary or docs overclaim provider readiness; whether runner stable mode can accidentally use legacy / SEC / yfinance / broader symbols; whether the new schema permits scope creep; whether `SR-PROVIDER-001` remains open with correct residual blockers.
+
+**Next recommended action after Pass + commit**:
+- Do not run more provider data by default. The next provider decision must explicitly handle remaining coverage / license / PIT / fallback / stability blockers before any provider selection, DataHub, adapter, production runner consumption, or Phase 7c work.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (US EGS FMP current endpoint mapping review)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `e819df3`)
