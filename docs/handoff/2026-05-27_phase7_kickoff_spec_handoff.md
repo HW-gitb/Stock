@@ -2096,3 +2096,48 @@ git diff --check
 
 1. Claude 复审应重点核对 rights matrix 是否没有把 sample storage、tracked summary、SEC public API、FMP stable retry误读成 production storage / derived output / DataHub / runner 授权。
 2. 如果审查 Pass 并提交，下一条 no-access provider slice 可转向 SEC EDGAR audit parser feasibility / scope contract 或 FMP PIT / observed-date semantics design；current terms legal review、broader sample、provider call、status polling、DataHub 或 runner consumption 仍需 separate explicit approval + reviewed decision。
+
+## 2026-06-02 追加：SEC EDGAR audit parser scope contract
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_sec_edgar_audit_parser_scope_contract.schema.json`，把未来 SEC EDGAR audit parser 的 audit-only role、lineage requirements、fair-access expectations、artifact policy、decision gates 和 prohibited actions 固化为 schema-first scope contract。
+- 新增 `docs/provider_evidence_p1_us_sec_edgar_audit_parser_scope_contract_20260602.json`，只基于既有 reviewed repo artifacts 和 tracked no-secret sample summary 做 scope contract；不做 SEC API call、不读取或解析 raw payload、不实现 parser、不抓数据。
+- 新增 `tests/schema/test_provider_p1_sec_edgar_audit_parser_scope_contract_schema.py`，验证 schema/artifact、no-access locks、audit role boundaries、13 个 lineage requirements、fair-access / artifact policy、scope-creep rejection。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`，把 SEC parser scope contract 路由进 Phase 7b-2，同时保持 `SR-PROVIDER-001` open。
+
+**为什么改**:
+
+- 上一轮 license-storage-retention review 已把 SEC broader reconstruction 阻断在 parser / fair-access / artifact-retention contract 之前；本轮先定义 parser 能做什么、不能做什么。
+- SEC EDGAR 只保留为 fundamentals anomaly audit / FMP cross-check support；本轮明确它不是 price source、strict free-float authority、production fundamentals provider、security master、alpha-validation artifact 或 DataHub source。
+- 本轮刻意不调用 SEC、不解析本地 raw payload、不实现 parser、不建 adapter / DataHub、不改 runner、不授权 Phase 7c。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema tests.schema.test_provider_p1_license_storage_retention_review_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\provider_p1_sec_edgar_audit_parser_scope_contract.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\provider_evidence_p1_us_sec_edgar_audit_parser_scope_contract_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**验证结果**:
+
+- Bundled Python: `tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema` ran 9 tests: 6 passed, 3 skipped because this interpreter lacks `jsonschema`; non-jsonschema no-access / boundary / lineage / policy tests passed.
+- Python313 with `jsonschema`: SEC parser scope contract + license-storage review + remaining-blocker plan tests ran 22 tests, all passed.
+- `json.tool` parsed the new schema and artifact successfully.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check` final result is recorded in the top `docs/SESSION_LOG.md` Codex entry for this work round.
+
+**失效旧结论**:
+
+- “SEC EDGAR public API sample 成功即可 broader reconstruction / parser implementation”不成立；本轮 contract 明确 broader SEC endpoint call、raw parse、parser implementation 均 blocked。
+- “SEC parser scope = price source / strict free-float authority / alpha validation / DataHub source”不成立；这些都被 audit role boundaries 排除或阻断。
+- “本轮 artifact 证明 parser feasibility at scale”不成立；它只定义 scope 和 gates，不证明 coverage、PIT normalization、free-float reconciliation 或 production readiness。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 contract 是否没有授权 SEC endpoint calls、raw-payload parsing、parser implementation、DataHub / runner consumption、provider selection 或 Phase 7c。
+2. 如果审查 Pass 并提交，下一条 no-access provider slice 可转向 FMP PIT / observed-date semantics design，或继续做 SEC parser field-family mapping contract；任何 actual parser implementation 或 SEC call 仍需 separate explicit approval + reviewed decision。

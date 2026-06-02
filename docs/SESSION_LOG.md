@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (SEC EDGAR audit parser scope contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `6fb15ad`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/provider_evidence_drift_monitor.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_sec_edgar_audit_parser_scope_contract.schema.json, docs/provider_evidence_p1_us_sec_edgar_audit_parser_scope_contract_20260602.json, tests/schema/test_provider_p1_sec_edgar_audit_parser_scope_contract_schema.py. No runner / provider_samples / network change (docs+schema+test only); the other named safe slice (FMP PIT/observed-date) remains deferred.
+
+**Independent verification**:
+- Scope contract authorizes nothing and does no SEC work: `contract_status=scope_contract_only_no_access_no_parser`, `sec_api_call_allowed / broader_sec_reconstruction_allowed / parser_implementation_allowed / data_fetch_allowed=false`; `review_basis.sec_api_calls_performed / raw_payload_read_or_parsed / parser_implemented=false`. Every scope / boundary / lineage / gate / prohibited field is const-false.
+- SEC correctly bounded: 8 audit_role_boundaries lock `price_source`, `strict_free_float_authority`, and **`alpha_validation`** to `out_of_scope` (alpha boundary reason = "provider-evidence feasibility, not US-long alpha validation" — matches AGENTS §14 / ALPHA guide exactly); production_fundamentals_provider / security_master / datahub_source = `blocked_pending_later_contract`; only fundamentals_anomaly_audit + fmp_cross_check stay in-scope-audit-only. 13 parser_lineage_requirements (accession / accepted-timestamp / filed-date / amendment-restatement / taxonomy / unit-currency / period / context-dims / as-of-eligibility …) all block broader reconstruction — a genuinely thorough PIT/XBRL look-ahead guard. fair_access + artifact policies are expectations-only, no-secret, no production/DataHub storage.
+- Ran `tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema` under Python313 (jsonschema): 9 tests, all pass, 0 skipped — scope locks, audit boundaries don't authorize production, 13-item lineage completeness + blocks-reconstruction, review_basis no-access, scope-creep rejected, sources/next-steps preserve blockers.
+- AGENTS.md descriptive-only (no new fixed decision; item 16 unchanged): progress/roadmap/item-14 add the SEC scope contract and extend the non-authorized list with `SEC endpoint call` + `parser implementation`. drift-monitor §24 insert + §25 renumber clean; register Hot Queue + SR-PROVIDER-001 evidence updated, kept `open` (adds SEC API call / raw parse / parser implementation to blocked list); CURRENT next-step now names FMP PIT/observed-date design or SEC parser field-family mapping as the next no-access slices.
+
+**Process**: correct conservative handling — SEC stays audit-only, explicitly not price/free-float/alpha-validation, no calls/parser this round, `SR-PROVIDER-001` not closed. Single-scope working tree.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (open) + `SR-RESOURCE-001` (P2 open) — all unchanged. No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (SEC EDGAR audit parser scope contract)
+
+**Commits**: none (pending Claude review / submit; base `6fb15ad`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `6fb15ad Add US EGS license storage retention review`.
+- Executes the next no-access `SR-PROVIDER-001` provider slice named by the license-storage-retention review: define SEC EDGAR audit parser scope before any broader SEC reconstruction, SEC endpoint call, raw-payload parsing, parser implementation, DataHub, runner, or Phase 7c work.
+- This round does not call SEC / FMP / `yfinance`, does not parse ignored raw payloads, does not fetch data, does not implement a parser, does not create adapters / DataHub tables, does not modify runners, and does not authorize Phase 7c.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_sec_edgar_audit_parser_scope_contract.schema.json`: added the no-access scope contract for future SEC EDGAR audit parser role boundaries, lineage requirements, fair-access policy, artifact policy, decision gates, and prohibited actions.
+2. [untracked] `docs/provider_evidence_p1_us_sec_edgar_audit_parser_scope_contract_20260602.json`: added the concrete scope artifact. It keeps SEC EDGAR audit-only for fundamentals anomaly / FMP cross-check support, and explicitly excludes price source, strict free-float authority, production fundamentals provider, security master, alpha validation, and DataHub source authority.
+3. [untracked] `tests/schema/test_provider_p1_sec_edgar_audit_parser_scope_contract_schema.py`: validates schema/artifact, no-access scope locks, review-basis locks, audit role boundaries, 13 lineage requirements, fair-access / artifact policy, source refs, limitations, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the SEC parser scope contract while keeping `SR-PROVIDER-001` open.
+
+**Key decisions**:
+- Treat SEC EDGAR parser work as audit-scope definition only in this slice. Reason: broader SEC reconstruction still needs user-approved endpoint scope, fair-access behavior, raw-payload policy, parser implementation review, and no-secret summaries.
+- Keep SEC EDGAR limited to fundamentals anomaly audit / FMP cross-check support. Reason: repo evidence says EDGAR is not a price source and not strict free-float authority; this contract also blocks production provider, security master, alpha-validation, and DataHub-source interpretations.
+- Require 13 lineage gates before any broader parser or DataHub use: CIK/ticker identity, accession, accepted timestamp, filed date, form type, fiscal period, amendment / restatement chain, taxonomy tag / extension, unit / currency, period dates, context / dimensions, source endpoint / params, and as-of eligibility rule.
+- Leave `SR-PROVIDER-001` open. Reason: actual SEC parser implementation, broader SEC access, raw-payload retention, minimized fixtures, FMP PIT / observed-date semantics, coverage, price adjustment, fallback execution, stability, provider selection, DataHub / runner consumption, and Phase 7c remain unresolved.
+
+**Rejected alternatives**:
+- "Parse the existing ignored SEC raw payloads now" — rejected; raw-payload parsing is parser implementation, not a no-access scope contract.
+- "Call SEC again to validate fields" — rejected; no new endpoint calls or broader access were approved.
+- "Treat SEC public API status as production storage / DataHub authorization" — rejected; this packet only defines scope and gates.
+- "Use this as US-long alpha evidence" — rejected; SEC parser feasibility remains provider-evidence feasibility, not alpha validation or ship-gate evidence.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema -v`: 9 tests ran; 6 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_sec_edgar_audit_parser_scope_contract_schema tests.schema.test_provider_p1_license_storage_retention_review_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v`: 22 tests passed.
+- `json.tool` parsed `schemas/provider_p1_sec_edgar_audit_parser_scope_contract.schema.json` and `docs/provider_evidence_p1_us_sec_edgar_audit_parser_scope_contract_20260602.json`.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check`: passed after docs / handoff updates; only normal LF/CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: the packet accidentally authorizes SEC endpoint calls, raw-payload parsing, parser implementation, broader SEC reconstruction, production storage, DataHub / runner consumption, Phase 7c, provider selection, `yfinance`, full-market fetch, ship-gate claims, or closes `SR-PROVIDER-001` too early.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (US EGS license / storage / retention review)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `bf08746`)

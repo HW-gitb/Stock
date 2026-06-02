@@ -1,0 +1,383 @@
+{
+  "schema_name": "provider_p1_sec_edgar_audit_parser_scope_contract",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_sec_edgar_audit_parser_scope_contract_after_license_review",
+    "contract_status": "scope_contract_only_no_access_no_parser",
+    "sec_api_call_allowed": false,
+    "broader_sec_reconstruction_allowed": false,
+    "data_fetch_allowed": false,
+    "parser_implementation_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "consumption_role": "Names SEC EDGAR audit parser feasibility as a remaining blocker after the FMP stable retry."
+    },
+    {
+      "artifact_id": "p1_license_storage_retention_review_20260602",
+      "path": "docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json",
+      "consumption_role": "Requires a parser / fair-access / artifact-retention contract before broader SEC reconstruction or production storage."
+    },
+    {
+      "artifact_id": "p1_us_egs_sample_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+      "consumption_role": "Records only the approved AAPL / MSFT SEC public API response-shape success, not broad parser feasibility."
+    },
+    {
+      "artifact_id": "p1_sample_validation_access_approval_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json",
+      "consumption_role": "Defines the only approved SEC access boundary consumed by prior sample validation."
+    },
+    {
+      "artifact_id": "p1_public_sources_snapshot_20260528",
+      "path": "docs/provider_evidence_p1_us_public_sources_20260528.json",
+      "consumption_role": "Records official SEC public-source candidate evidence and remaining public-source blockers."
+    },
+    {
+      "artifact_id": "p1_fundamentals_observed_date_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json",
+      "consumption_role": "Records SEC observed-date reconstruction candidate evidence and missing lineage requirements."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "consumption_role": "Owns provider evidence, no-selection, no-fetch, no-silent-default, and drift-monitor boundaries."
+    }
+  ],
+  "review_basis": {
+    "basis_type": "existing_repo_artifacts_no_new_external_review",
+    "sec_api_calls_performed": false,
+    "raw_payload_read_or_parsed": false,
+    "parser_implemented": false,
+    "uses_existing_reviewed_artifacts_only": true,
+    "requires_later_user_approved_sec_access_packet": true,
+    "requires_later_parser_implementation_review": true
+  },
+  "current_scope_summary": {
+    "sec_sample_status": "two_symbol_public_api_response_shape_passed",
+    "parser_scope_status": "scope_contract_only_no_parser_implementation",
+    "audit_role": "fundamentals_anomaly_review_only",
+    "broader_reconstruction_status": "blocked_pending_user_approved_access_packet_and_parser_review",
+    "price_source_status": "out_of_scope_not_a_price_source",
+    "free_float_status": "out_of_scope_not_strict_free_float_authority",
+    "phase7c_effect": "does_not_authorize_phase7c_or_datahub_consumption"
+  },
+  "audit_role_boundaries": [
+    {
+      "boundary_id": "fundamentals_anomaly_audit",
+      "role_status": "in_scope_audit_only",
+      "boundary_reason": "SEC EDGAR may be scoped as an audit source for filing-grounded fundamentals anomalies once a later reviewed parser and access packet exist.",
+      "authorizes_data_fetch": false,
+      "authorizes_production_use": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "boundary_id": "fmp_cross_check_support",
+      "role_status": "in_scope_audit_only",
+      "boundary_reason": "A future parser may cross-check FMP-derived financial statement fields and obvious anomalies, but cannot replace provider selection or production readiness review.",
+      "authorizes_data_fetch": false,
+      "authorizes_production_use": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "boundary_id": "price_source",
+      "role_status": "out_of_scope",
+      "boundary_reason": "SEC EDGAR remains out of scope for EOD price, volume, liquidity, return, or benchmark evidence.",
+      "authorizes_data_fetch": false,
+      "authorizes_production_use": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "boundary_id": "strict_free_float_authority",
+      "role_status": "out_of_scope",
+      "boundary_reason": "SEC filing-derived share fields may support limited sanity checks later, but this contract forbids treating SEC as strict free-float authority.",
+      "authorizes_data_fetch": false,
+      "authorizes_production_use": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "boundary_id": "production_fundamentals_provider",
+      "role_status": "blocked_pending_later_contract",
+      "boundary_reason": "SEC EDGAR is not promoted to a normalized production fundamentals provider by this scope contract.",
+      "authorizes_data_fetch": false,
+      "authorizes_production_use": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "boundary_id": "security_master",
+      "role_status": "blocked_pending_later_contract",
+      "boundary_reason": "CIK / ticker mapping may support parser identity checks later, but survivorship-aware security master coverage remains unresolved.",
+      "authorizes_data_fetch": false,
+      "authorizes_production_use": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "boundary_id": "alpha_validation",
+      "role_status": "out_of_scope",
+      "boundary_reason": "SEC parser feasibility is provider-evidence feasibility, not US-long alpha validation or ship-gate evidence.",
+      "authorizes_data_fetch": false,
+      "authorizes_production_use": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "boundary_id": "datahub_source",
+      "role_status": "blocked_pending_later_contract",
+      "boundary_reason": "DataHub-normalized SEC tables require a separate Phase 7c implementation-design review after Phase 7b blockers are resolved or explicitly accepted.",
+      "authorizes_data_fetch": false,
+      "authorizes_production_use": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "parser_lineage_requirements": [
+    {
+      "requirement_id": "cik_ticker_identity_link",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Parser output must link CIK, ticker, company identity, listing state, and effective window without survivorship leakage.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "accession_number",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Every audited fact must trace to an accession or equivalent filing identifier before it can be compared to vendor fields.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "accepted_timestamp",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Historical eligibility must be based on acceptance / observed timestamp, not latest-only availability.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "filed_date",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Filed date must be retained separately from accepted timestamp and fiscal period to audit timing assumptions.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "form_type",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Parser output must retain 10-K, 10-Q, 8-K, amendment, and other form context before anomaly rules consume it.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "fiscal_year_period",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Fiscal year / period must be explicit to prevent trailing-period, quarterly, annual, and restated values from being mixed silently.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "amendment_and_restatement_chain",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Amendments and restatements must have a deterministic precedence rule before any historical audit or PIT evidence consumes SEC facts.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "taxonomy_tag_and_extension",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Standard and company-extension XBRL tags must be retained so missing, renamed, or custom facts do not become silent defaults.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "unit_and_currency",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Units and currencies must be retained and checked before facts can be compared to FMP fields or used in ratios.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "period_start_end",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Period start and end dates are required to distinguish instant, duration, quarterly, year-to-date, and annual values.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "fact_context_and_dimensions",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Context and dimensional qualifiers must be retained to avoid mixing consolidated, segment, class, or per-share facts.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "source_endpoint_and_request_params",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Future parser output must record endpoint family and request parameters for replay, incident review, and no-secret summaries.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "as_of_eligibility_rule",
+      "status": "required_before_broader_sec_parser_or_datahub",
+      "lineage_reason": "Each fact family needs an as-of eligibility rule based on accepted timestamp and parser lineage before it can be used historically.",
+      "blocks_broader_reconstruction": true,
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "fair_access_policy": {
+    "policy_status": "policy_expectations_only_no_sec_calls",
+    "sec_api_calls_authorized": false,
+    "bulk_reconstruction_authorized": false,
+    "user_agent_policy_required": true,
+    "rate_limit_policy_required": true,
+    "retry_backoff_required": true,
+    "endpoint_budget_required": true,
+    "incident_logging_required": true,
+    "reviewed_access_packet_required": true
+  },
+  "artifact_policy": {
+    "raw_payload_policy": "gitignored_sample_only_until_later_parser_artifact_contract",
+    "tracked_summary_policy": "no_secret_no_raw_rows_summary_only",
+    "fixture_policy": "blocked_until_minimized_fixture_policy_review",
+    "retention_policy_status": "pending_later_parser_artifact_contract",
+    "no_secret_required": true,
+    "production_storage_authorized": false,
+    "datahub_storage_authorized": false,
+    "tracked_raw_rows_authorized": false
+  },
+  "decision_gates": [
+    {
+      "gate_id": "sec_broader_access_approval",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "User must approve symbols, endpoint families, call budget, fair-access behavior, and raw-payload storage before any broader SEC endpoint call.",
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "parser_lineage_contract",
+      "status": "pending_later_parser_review",
+      "blocks_implementation": true,
+      "required_resolution": "A later parser contract must define accession, acceptance timestamp, filing date, fiscal period, taxonomy, unit, context, and as-of eligibility behavior.",
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "fair_access_contract",
+      "status": "pending_later_parser_review",
+      "blocks_implementation": true,
+      "required_resolution": "A later reviewed packet must define SEC user-agent, rate limits, retry / backoff, endpoint budget, and incident-log behavior before automation.",
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "artifact_retention_contract",
+      "status": "pending_later_artifact_policy",
+      "blocks_implementation": true,
+      "required_resolution": "A later reviewed artifact policy must define raw local payload retention, tracked summary limits, minimized fixtures, and no-secret checks.",
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "audit_output_scope_contract",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Audit outputs must be limited to fundamentals anomaly review and must not be treated as price, strict free-float, alpha-validation, or production provider evidence.",
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_consumption_gate",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Phase 7c / DataHub / runner consumption remains blocked until SEC parser, FMP coverage, license, PIT, price adjustment, fallback, stability, and production-readiness blockers are closed or explicitly accepted.",
+      "authorizes_data_fetch": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "prohibited_actions": {
+    "sec_api_call": false,
+    "broader_sec_reconstruction": false,
+    "raw_payload_parse": false,
+    "parser_implementation": false,
+    "provider_selection": false,
+    "provider_ranking": false,
+    "new_token_or_trial": false,
+    "paid_access": false,
+    "provider_contact": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "phase7c_authorization": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Use this packet to keep SEC EDGAR broader reconstruction blocked until a user-approved access packet and reviewed parser implementation contract exist.",
+    "Use this packet to keep SEC EDGAR scoped as fundamentals anomaly audit support only, not price, strict free-float, production fundamentals provider, alpha-validation, or DataHub source authority.",
+    "A later reviewed SEC parser implementation packet must define lineage, fair-access, artifact-retention, minimized fixtures, and no-secret summary behavior before any endpoint calls beyond the approved sample.",
+    "A safe next no-access slice is FMP PIT / observed-date semantics design, or a parser field-family mapping contract that still performs no SEC calls."
+  ],
+  "limitations": [
+    "This packet performs no SEC API calls, parses no raw payloads, and implements no parser.",
+    "It relies on existing reviewed repository artifacts and the tracked no-secret sample summary only.",
+    "It narrows SEC audit parser scope but does not prove SEC parser feasibility at scale, PIT normalization, coverage, free-float reconciliation, or production readiness.",
+    "It does not resolve SR-PROVIDER-001; coverage, FMP current terms and production storage rights, PIT, price adjustment, broader SEC access, parser implementation, fallback execution, stability evidence, provider selection, DataHub consumption, and Phase 7c remain blocked."
+  ]
+}
