@@ -1,0 +1,554 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_license_storage_retention_review/1.0.0/schema.json",
+  "title": "Provider P1 License Storage Retention Review",
+  "description": "Phase 7b-2 no-access review packet for FMP / SEC license, local storage, tracked summary, non-display, export, cache-retention, and retention-after-lapse blockers. This artifact classifies rights from existing reviewed repository evidence only; it does not perform web research, provide legal advice, fetch data, select a provider, authorize paid access, implement DataHub, change runners, or authorize Phase 7c.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_artifact_refs",
+    "review_basis",
+    "current_classification_summary",
+    "rights_matrix",
+    "decision_gates",
+    "prohibited_actions",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_license_storage_retention_review"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 7,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_remaining_blocker_plan_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_sample_validation_access_approval_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_authorization_cost_stability_snapshot_20260528"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_us_egs_sample_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_stable_retry_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fundamentals_observed_date_candidates_20260528"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "review_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_type",
+        "current_terms_web_refresh_performed",
+        "provider_contact_performed",
+        "legal_advice_claimed",
+        "uses_existing_reviewed_artifacts_only",
+        "requires_later_current_terms_review_before_paid_or_production_use"
+      ],
+      "properties": {
+        "basis_type": {
+          "const": "existing_repo_artifacts_no_new_external_review"
+        },
+        "current_terms_web_refresh_performed": {
+          "const": false
+        },
+        "provider_contact_performed": {
+          "const": false
+        },
+        "legal_advice_claimed": {
+          "const": false
+        },
+        "uses_existing_reviewed_artifacts_only": {
+          "const": true
+        },
+        "requires_later_current_terms_review_before_paid_or_production_use": {
+          "const": true
+        }
+      }
+    },
+    "current_classification_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_license_storage_status",
+        "sec_edgar_storage_status",
+        "tracked_summary_policy",
+        "raw_payload_policy",
+        "production_storage_policy",
+        "phase7c_effect"
+      ],
+      "properties": {
+        "fmp_license_storage_status": {
+          "const": "blocked_beyond_user_approved_two_symbol_sample"
+        },
+        "sec_edgar_storage_status": {
+          "const": "public_api_sample_only_parser_and_fair_access_contract_required"
+        },
+        "tracked_summary_policy": {
+          "const": "no_secret_no_raw_rows_summary_allowed_for_reviewed_sample"
+        },
+        "raw_payload_policy": {
+          "const": "gitignored_sample_only_until_later_storage_rights_review"
+        },
+        "production_storage_policy": {
+          "const": "blocked_until_current_terms_and_user_decision_review"
+        },
+        "phase7c_effect": {
+          "const": "does_not_authorize_phase7c_or_datahub_consumption"
+        }
+      }
+    },
+    "rights_matrix": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/providerRights"
+      },
+      "minItems": 2,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "provider_id": {
+                "const": "financial_modeling_prep"
+              }
+            },
+            "required": [
+              "provider_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "provider_id": {
+                "const": "sec_edgar"
+              }
+            },
+            "required": [
+              "provider_id"
+            ]
+          }
+        }
+      ]
+    },
+    "decision_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decisionGate"
+      },
+      "minItems": 5
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "review_status",
+        "data_fetch_allowed",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_license_storage_retention_review_after_fmp_stable_retry"
+        },
+        "review_status": {
+          "const": "no_access_blocker_classification_existing_repo_evidence"
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "providerRights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "provider_role",
+        "rights"
+      ],
+      "properties": {
+        "provider_id": {
+          "enum": [
+            "financial_modeling_prep",
+            "sec_edgar"
+          ]
+        },
+        "provider_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "rights": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rightClassification"
+          },
+          "minItems": 8
+        }
+      }
+    },
+    "rightClassification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "right_id",
+        "classification",
+        "classification_reason",
+        "authorizes_broader_access",
+        "authorizes_data_fetch",
+        "authorizes_datahub_or_runner_consumption",
+        "required_before_status_can_improve"
+      ],
+      "properties": {
+        "right_id": {
+          "enum": [
+            "local_raw_sample_storage",
+            "tracked_no_secret_summary",
+            "production_raw_storage",
+            "normalized_datahub_storage",
+            "derived_reports_or_factor_outputs",
+            "non_display_use",
+            "export_or_redistribution",
+            "cache_retention_after_lapse",
+            "professional_or_business_use",
+            "full_market_or_broader_sample"
+          ]
+        },
+        "classification": {
+          "enum": [
+            "allowed_narrow_sample_only",
+            "allowed_tracked_summary_only",
+            "blocked_pending_current_terms_review",
+            "blocked_pending_parser_and_fair_access_contract",
+            "not_applicable"
+          ]
+        },
+        "classification_reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_broader_access": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "required_before_status_can_improve": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "decisionGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "blocks_implementation",
+        "required_resolution",
+        "authorizes_provider_selection",
+        "authorizes_data_fetch",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "pending_user_decision",
+            "pending_current_terms_review",
+            "pending_later_parser_contract"
+          ]
+        },
+        "blocks_implementation": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_provider_selection": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selection",
+        "provider_ranking",
+        "new_fmp_token",
+        "trial_request",
+        "paid_upgrade",
+        "provider_contact",
+        "yfinance_check",
+        "full_market_download",
+        "provider_adapter",
+        "datahub_table",
+        "production_runner_consumption",
+        "phase7c_authorization",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "provider_selection": {
+          "const": false
+        },
+        "provider_ranking": {
+          "const": false
+        },
+        "new_fmp_token": {
+          "const": false
+        },
+        "trial_request": {
+          "const": false
+        },
+        "paid_upgrade": {
+          "const": false
+        },
+        "provider_contact": {
+          "const": false
+        },
+        "yfinance_check": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "provider_adapter": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "phase7c_authorization": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,413 @@
+{
+  "schema_name": "provider_p1_license_storage_retention_review",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_license_storage_retention_review_after_fmp_stable_retry",
+    "review_status": "no_access_blocker_classification_existing_repo_evidence",
+    "data_fetch_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "consumption_role": "Names license / storage / retention as a docs-or-user-decision blocker track after the FMP stable retry."
+    },
+    {
+      "artifact_id": "p1_access_decision_plan_20260531",
+      "path": "docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json",
+      "consumption_role": "Defines local storage, non-display, derived report, export, cache retention, and retention-after-lapse questions that remain open."
+    },
+    {
+      "artifact_id": "p1_sample_validation_access_approval_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json",
+      "consumption_role": "Records the only approved storage boundary: AAPL / MSFT small-sample raw payloads under gitignored provider_samples and tracked no-secret summary."
+    },
+    {
+      "artifact_id": "p1_authorization_cost_stability_snapshot_20260528",
+      "path": "docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json",
+      "consumption_role": "Provides existing reviewed authorization / cost / terms blockers for candidate providers, but not a current terms refresh for FMP."
+    },
+    {
+      "artifact_id": "p1_fundamentals_observed_date_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json",
+      "consumption_role": "Separates SEC EDGAR public reconstruction and FMP filing / statement candidates while keeping license and field-level validation open."
+    },
+    {
+      "artifact_id": "p1_us_egs_sample_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+      "consumption_role": "Records the approved two-symbol SEC EDGAR public API sample and the legacy FMP v3 endpoint errors."
+    },
+    {
+      "artifact_id": "p1_fmp_stable_retry_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+      "consumption_role": "Records the same-scope AAPL / MSFT FMP stable endpoint access / response-shape pass, not storage or production rights."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "consumption_role": "Owns no-selection, no-fetch, no-silent-default, provider drift, and incident routing boundaries."
+    }
+  ],
+  "review_basis": {
+    "basis_type": "existing_repo_artifacts_no_new_external_review",
+    "current_terms_web_refresh_performed": false,
+    "provider_contact_performed": false,
+    "legal_advice_claimed": false,
+    "uses_existing_reviewed_artifacts_only": true,
+    "requires_later_current_terms_review_before_paid_or_production_use": true
+  },
+  "current_classification_summary": {
+    "fmp_license_storage_status": "blocked_beyond_user_approved_two_symbol_sample",
+    "sec_edgar_storage_status": "public_api_sample_only_parser_and_fair_access_contract_required",
+    "tracked_summary_policy": "no_secret_no_raw_rows_summary_allowed_for_reviewed_sample",
+    "raw_payload_policy": "gitignored_sample_only_until_later_storage_rights_review",
+    "production_storage_policy": "blocked_until_current_terms_and_user_decision_review",
+    "phase7c_effect": "does_not_authorize_phase7c_or_datahub_consumption"
+  },
+  "rights_matrix": [
+    {
+      "provider_id": "financial_modeling_prep",
+      "provider_role": "Preferred US EGS primary candidate for fundamentals, valuation / ratio inputs, EOD price / volume, and liquidity; not selected and not production-ready.",
+      "rights": [
+        {
+          "right_id": "local_raw_sample_storage",
+          "classification": "allowed_narrow_sample_only",
+          "classification_reason": "The user-approved 2026-06-02 boundary allowed only AAPL / MSFT raw sample payloads under gitignored provider_samples using the existing FMP key.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "A separately approved access packet for any broader sample or full-market request.",
+            "Current terms review for local storage and retention beyond the two-symbol sample."
+          ]
+        },
+        {
+          "right_id": "tracked_no_secret_summary",
+          "classification": "allowed_tracked_summary_only",
+          "classification_reason": "Tracked summaries may record status, counts, field presence, and no-secret metadata when they omit API keys, request URLs, and raw rows.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Keep raw payloads and any request-sensitive fields out of tracked files.",
+            "Maintain no-secret validation in future summary schemas."
+          ]
+        },
+        {
+          "right_id": "production_raw_storage",
+          "classification": "blocked_pending_current_terms_review",
+          "classification_reason": "Existing evidence does not approve production raw FMP storage, normalized storage, retained private artifacts, non-display use, or retention after subscription changes.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Review current FMP terms for raw local storage, cache duration, retention after lapse, and deletion obligations.",
+            "Record user classification and accepted-risk decision if any term remains ambiguous."
+          ]
+        },
+        {
+          "right_id": "normalized_datahub_storage",
+          "classification": "blocked_pending_current_terms_review",
+          "classification_reason": "Normalizing FMP rows into DataHub would be a production storage / derived data use path not authorized by the two-symbol sample.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Current FMP terms review for normalized copies, derived fields, and local database use.",
+            "Separate Phase 7c schema-first implementation approval after SR-PROVIDER-001 blockers are resolved."
+          ]
+        },
+        {
+          "right_id": "derived_reports_or_factor_outputs",
+          "classification": "blocked_pending_current_terms_review",
+          "classification_reason": "The current repo evidence does not approve private derived reports, factor outputs, or redistribution-adjacent use from FMP data beyond no-secret sample summaries.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Current FMP terms review for derived reports, factor outputs, non-display use, and export restrictions.",
+            "Reviewed decision on which derived artifacts may be tracked versus local-only."
+          ]
+        },
+        {
+          "right_id": "non_display_use",
+          "classification": "blocked_pending_current_terms_review",
+          "classification_reason": "US EGS DataHub / runner use would be non-display analytical use; existing evidence has not approved that use under an FMP plan.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Current FMP plan / terms review for non-display research and private analytical use.",
+            "User approval of professional / non-professional or business-use classification."
+          ]
+        },
+        {
+          "right_id": "export_or_redistribution",
+          "classification": "blocked_pending_current_terms_review",
+          "classification_reason": "No FMP export, redistribution, or raw-row sharing right is approved by the reviewed small-sample artifacts.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Current terms review for export, redistribution, and tracked artifact limits.",
+            "Document raw rows as local-only unless a reviewed decision says otherwise."
+          ]
+        },
+        {
+          "right_id": "cache_retention_after_lapse",
+          "classification": "blocked_pending_current_terms_review",
+          "classification_reason": "Retention after plan downgrade, subscription lapse, account closure, or provider termination remains unreviewed for FMP.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Current terms review for retention-after-lapse and deletion obligations.",
+            "Define deletion / archival behavior before any broader local cache is created."
+          ]
+        },
+        {
+          "right_id": "professional_or_business_use",
+          "classification": "blocked_pending_current_terms_review",
+          "classification_reason": "The user's intended classification for provider-license purposes has not been reviewed for FMP beyond the zero-dollar small-sample boundary.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "User classification decision for personal / professional / business use under current FMP terms.",
+            "Cost ceiling and plan review if a paid or business tier is required."
+          ]
+        },
+        {
+          "right_id": "full_market_or_broader_sample",
+          "classification": "blocked_pending_current_terms_review",
+          "classification_reason": "Broader FMP sampling, coverage counts, or full-market fetch require both explicit access approval and license / storage review.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Explicit user approval for the broader access packet.",
+            "Current FMP license / storage / retention review and no-secret summary contract."
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "sec_edgar",
+      "provider_role": "Public fundamentals authority / audit source for filing-grounded anomaly checks; not a price source and not a strict free-float authority.",
+      "rights": [
+        {
+          "right_id": "local_raw_sample_storage",
+          "classification": "allowed_narrow_sample_only",
+          "classification_reason": "The user-approved 2026-06-02 boundary allowed AAPL / MSFT SEC EDGAR public API raw sample payloads under gitignored provider_samples.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Separate parser / fair-access contract before broader SEC reconstruction.",
+            "No full-market SEC reconstruction without explicit user approval."
+          ]
+        },
+        {
+          "right_id": "tracked_no_secret_summary",
+          "classification": "allowed_tracked_summary_only",
+          "classification_reason": "Tracked summaries may record CIK mapping success, endpoint status, and field-presence metadata when they omit raw rows and request-sensitive details.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Keep raw SEC payloads local-only unless a later parser contract approves tracked fixtures.",
+            "Preserve fair-access and source-lineage notes in future summaries."
+          ]
+        },
+        {
+          "right_id": "production_raw_storage",
+          "classification": "blocked_pending_parser_and_fair_access_contract",
+          "classification_reason": "SEC EDGAR is public, but broad raw storage / reconstruction needs a reviewed parser, lineage, fair-access, and artifact-retention contract before production use.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Define SEC parser scope, rate limits, fair-access behavior, and retained-artifact policy.",
+            "Review accession, accepted timestamp, fiscal period, amendment, restatement, unit, and currency lineage."
+          ]
+        },
+        {
+          "right_id": "normalized_datahub_storage",
+          "classification": "blocked_pending_parser_and_fair_access_contract",
+          "classification_reason": "DataHub-normalized SEC fundamentals would require field-level parser lineage and PIT semantics not established by the two-symbol public API sample.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Schema-first SEC parser contract and PIT normalization review.",
+            "Separate Phase 7c implementation approval."
+          ]
+        },
+        {
+          "right_id": "derived_reports_or_factor_outputs",
+          "classification": "blocked_pending_parser_and_fair_access_contract",
+          "classification_reason": "SEC-derived audit flags or anomaly reports need a parser and reconciliation contract before they can feed production evidence or DataHub outputs.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Define SEC audit scope as fundamentals anomaly review.",
+            "Prohibit price-source and strict free-float claims in the parser contract."
+          ]
+        },
+        {
+          "right_id": "non_display_use",
+          "classification": "blocked_pending_parser_and_fair_access_contract",
+          "classification_reason": "No broad automated SEC reconstruction or internal analytical use path is authorized beyond the reviewed two-symbol sample.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Fair-access and local-use policy for any automated SEC parser.",
+            "Explicit user approval for broader SEC endpoint calls."
+          ]
+        },
+        {
+          "right_id": "export_or_redistribution",
+          "classification": "blocked_pending_parser_and_fair_access_contract",
+          "classification_reason": "The repo has not defined which SEC raw, normalized, or derived artifacts may be exported, tracked, or redistributed.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Artifact policy separating raw local payloads, tracked summaries, tests, and derived reports.",
+            "Reviewed source-attribution and fixture-minimization rules."
+          ]
+        },
+        {
+          "right_id": "cache_retention_after_lapse",
+          "classification": "not_applicable",
+          "classification_reason": "Subscription lapse is not applicable to SEC public APIs, but retention policy for local raw payloads still belongs in a future parser / artifact contract.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Define SEC raw-payload retention and deletion policy before broader reconstruction.",
+            "Keep sample raw payloads gitignored until reviewed otherwise."
+          ]
+        },
+        {
+          "right_id": "professional_or_business_use",
+          "classification": "not_applicable",
+          "classification_reason": "Provider plan classification is not applicable to SEC public APIs, but the project still needs fair-access and usage-scope controls before broader automation.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Fair-access policy and parser scope review.",
+            "User approval before broad endpoint calls."
+          ]
+        },
+        {
+          "right_id": "full_market_or_broader_sample",
+          "classification": "blocked_pending_parser_and_fair_access_contract",
+          "classification_reason": "Broader SEC sampling or reconstruction remains blocked until a reviewed access / parser / fair-access packet exists.",
+          "authorizes_broader_access": false,
+          "authorizes_data_fetch": false,
+          "authorizes_datahub_or_runner_consumption": false,
+          "required_before_status_can_improve": [
+            "Explicit user approval for symbols, endpoint families, and call limits.",
+            "Schema-first no-secret summary and raw-payload storage policy."
+          ]
+        }
+      ]
+    }
+  ],
+  "decision_gates": [
+    {
+      "gate_id": "fmp_current_terms_review",
+      "status": "pending_current_terms_review",
+      "blocks_implementation": true,
+      "required_resolution": "Review current FMP terms for local raw storage, normalized storage, non-display analytical use, derived reports, exports, redistribution, retention after lapse, plan tier, and user classification.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "fmp_user_classification_and_cost",
+      "status": "pending_user_decision",
+      "blocks_implementation": true,
+      "required_resolution": "User must explicitly approve any professional / business / paid-tier classification, cost ceiling, new token, trial, paid access, or provider contact before it occurs.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "tracked_vs_local_artifact_policy",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Define which future raw rows, normalized rows, derived factors, summaries, and fixtures may be tracked versus local-only before broader provider work.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "sec_parser_fair_access_contract",
+      "status": "pending_later_parser_contract",
+      "blocks_implementation": true,
+      "required_resolution": "Define SEC EDGAR parser scope, fair-access behavior, raw-payload retention, tracked fixture minimization, accession / timestamp lineage, and audit-only role.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_consumption_gate",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Phase 7c / DataHub / runner consumption remains blocked until license, storage, PIT, coverage, fallback, stability, and production-readiness blockers are closed or explicitly accepted.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "prohibited_actions": {
+    "provider_selection": false,
+    "provider_ranking": false,
+    "new_fmp_token": false,
+    "trial_request": false,
+    "paid_upgrade": false,
+    "provider_contact": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "phase7c_authorization": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Use this packet to keep FMP production storage, DataHub storage, derived outputs, non-display use, export, and retention-after-lapse blocked until a current terms review and user decision resolve them.",
+    "Use this packet to keep SEC EDGAR broader reconstruction blocked until a schema-first parser / fair-access / artifact-retention contract exists.",
+    "Do not rerun provider samples, contact providers, request tokens, request trials, upgrade paid access, use yfinance, fetch broader symbols, or build DataHub from this packet.",
+    "A safe next no-access slice is SEC EDGAR audit parser feasibility / scope contract, or FMP PIT / observed-date semantics contract, if no new access is approved."
+  ],
+  "limitations": [
+    "This packet is not legal advice and does not refresh current provider terms from the web.",
+    "It classifies blockers using existing reviewed repository artifacts only.",
+    "It narrows storage policy for the already-approved AAPL / MSFT sample but does not approve production FMP storage, normalized DataHub storage, derived reports, or retention after lapse.",
+    "It does not resolve SR-PROVIDER-001; coverage, PIT, price adjustment, SEC parser feasibility, fallback execution, stability evidence, provider selection, DataHub consumption, and Phase 7c remain blocked."
+  ]
+}

@@ -2051,3 +2051,48 @@ git diff --check
 
 1. Claude 复审应重点核对 contract 是否没有授权 provider calls、DataHub implementation、runner change、Phase 7c、ship-gate claim 或全系统默认运行。
 2. Provider 方向的自然下一刀仍可回到 FMP / SEC license / storage / retention docs-only review；DataHub implementation 仍需单独 explicit approval + reviewed decision。
+
+## 2026-06-02 追加：US EGS license / storage / retention review
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_license_storage_retention_review.schema.json`，把 FMP / SEC EDGAR 的 local raw sample、tracked no-secret summary、production raw storage、normalized DataHub storage、derived outputs、non-display use、export / redistribution、retention、professional / business use、broader sample / full-market use 分类为 schema-first review contract。
+- 新增 `docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json`，只基于既有 reviewed repo artifacts 做 blocker classification；不做 current provider terms web refresh、不联系 provider、不提供法律建议、不抓数据。
+- 新增 `tests/schema/test_provider_p1_license_storage_retention_review_schema.py`，验证 schema/artifact、no-access locks、rights matrix、remaining gates、scope-creep rejection。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`，把 license-storage-retention review 路由进 Phase 7b-2，同时保持 `SR-PROVIDER-001` open。
+
+**为什么改**:
+
+- stable retry 只证明 AAPL / MSFT 两只股票 endpoint access / response-shape；它没有回答 FMP current terms、local storage、normalized DataHub storage、derived outputs、retention、non-display use 或 SEC broader reconstruction 的生产边界。
+- 本轮先用既有 repo 证据把 “已批准小样本” 与 “生产 / broader use 仍 blocked” 分开，避免后续 LLM 把 sample raw storage 或 tracked summary 误读成 DataHub / runner 存储授权。
+- 本轮刻意不刷新当前 provider terms、不做 legal conclusion、不抓新数据、不用 `yfinance`、不建 adapter / DataHub、不改 runner、不授权 Phase 7c。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_license_storage_retention_review_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_license_storage_retention_review_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema tests.schema.test_provider_p1_incident_log_contract_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\provider_p1_license_storage_retention_review.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\provider_evidence_p1_us_license_storage_retention_review_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**验证结果**:
+
+- Bundled Python: `tests.schema.test_provider_p1_license_storage_retention_review_schema` ran 7 tests: 4 passed, 3 skipped because this interpreter lacks `jsonschema`; non-jsonschema scope / rights / blocker tests passed.
+- Python313 with `jsonschema`: license-storage-retention review + remaining-blocker plan + incident-log contract tests ran 20 tests, all passed.
+- `json.tool` parsed the new schema and artifact successfully.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check` final result is recorded in the top `docs/SESSION_LOG.md` Codex entry for this work round.
+
+**失效旧结论**:
+
+- “FMP stable retry 成功即可进入 production storage / DataHub / runner consumption”不成立；license-storage-retention review 明确只允许已批准两 symbol sample 范围和 tracked no-secret summary。
+- “SEC EDGAR public API 可直接扩成 broader reconstruction / production normalized storage”不成立；仍需 parser / fair-access / artifact-retention contract。
+- “本轮 artifact 等于 current terms / legal signoff”不成立；artifact 明确没有 current terms web refresh、provider contact 或 legal advice。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 rights matrix 是否没有把 sample storage、tracked summary、SEC public API、FMP stable retry误读成 production storage / derived output / DataHub / runner 授权。
+2. 如果审查 Pass 并提交，下一条 no-access provider slice 可转向 SEC EDGAR audit parser feasibility / scope contract 或 FMP PIT / observed-date semantics design；current terms legal review、broader sample、provider call、status polling、DataHub 或 runner consumption 仍需 separate explicit approval + reviewed decision。

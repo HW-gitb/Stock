@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (US EGS license / storage / retention review)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `bf08746`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/provider_evidence_drift_monitor.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_license_storage_retention_review.schema.json, docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json, tests/schema/test_provider_p1_license_storage_retention_review_schema.py. No runner / provider_samples / network change (docs+schema+test only). Back on the named SR-PROVIDER-001 safe no-access slice (the license/storage/retention review prior rounds deferred).
+
+**Independent verification (focus: license-overclaim risk — handled correctly):**
+- `review_basis` disclaims the dangerous failure mode: `basis_type=existing_repo_artifacts_no_new_external_review`, `current_terms_web_refresh_performed=false`, `provider_contact_performed=false`, `legal_advice_claimed=false`, `requires_later_current_terms_review_before_paid_or_production_use=true`. So it does NOT assert authoritative/current license grants.
+- rights_matrix grants nothing new: for both FMP and SEC, only `local_raw_sample_storage` (= the already-approved AAPL/MSFT narrow sample) and `tracked_no_secret_summary` are "allowed"; production_raw_storage / normalized_datahub_storage / derived_reports / non_display_use / export_or_redistribution / cache_retention_after_lapse / professional_or_business_use / full_market are `blocked_pending_current_terms_review` (FMP) or `blocked_pending_parser_and_fair_access_contract` (SEC); SEC retention/business = `not_applicable` (public). Every right is `authorizes_broader_access=false / authorizes_data_fetch=false / authorizes_datahub_or_runner_consumption=false`. scope + 5 decision_gates + 14 prohibited_actions all const-false.
+- Ran `tests.schema.test_provider_p1_license_storage_retention_review_schema` under Python313 (jsonschema): 7 tests, all pass, 0 skipped — incl. `test_review_basis_disclaims_current_terms_refresh_and_legal_advice` and `test_rights_matrix_keeps_broad_storage_and_datahub_blocked` (production / normalized-DataHub storage confirmed blocked); scope-creep (data_fetch / provider_selection / current_terms_refresh / authorizes_datahub / authorizes_phase7c / paid_upgrade) rejected.
+- AGENTS.md is descriptive-only this round (no new fixed decision): progress bullet + roadmap-7b-2 status + item 14 add the license review and extend the non-authorized list with `production storage`; boundary strengthened, nothing weakened. drift-monitor §23 insert + §24 renumber clean; register SR-PROVIDER-001 evidence/calibration updated and kept `open` with honest "does not prove current FMP terms / production storage rights" calibration; CURRENT next-step now names the next safe no-access slices (SEC parser-feasibility / FMP PIT-semantics).
+
+**Process**: correct conservative handling of license territory — classifies blockers from existing repo evidence, refuses to manufacture license grants, keeps production storage / DataHub / Phase 7c blocked, and does not resolve `SR-PROVIDER-001`. Single-scope working tree.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (both open, unchanged) + `SR-RESOURCE-001` (P2 open). No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (US EGS license / storage / retention review)
+
+**Commits**: none (pending Claude review / submit; base `bf08746`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `bf08746 Add DataHub local resource budget contract`.
+- Executes the next no-access `SR-PROVIDER-001` provider slice named by the remaining-blocker plan / handoff: classify FMP / SEC license, storage, and retention blockers before any production storage, DataHub, runner, broader sample, or Phase 7c work.
+- This round does not perform current provider-terms web refresh, does not provide legal advice, does not contact providers, does not call FMP / SEC / `yfinance`, does not fetch data, does not implement adapters / DataHub tables, does not modify runners, and does not authorize Phase 7c.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_license_storage_retention_review.schema.json`: added the no-access review contract for FMP / SEC local raw sample, tracked summary, production storage, normalized DataHub storage, derived outputs, non-display use, export / redistribution, retention, professional / business use, and broader sample rights.
+2. [untracked] `docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json`: added the concrete blocker-classification artifact using only existing reviewed repo evidence. It keeps FMP blocked beyond the approved AAPL / MSFT sample and keeps SEC EDGAR broader reconstruction blocked pending parser / fair-access / artifact-retention work.
+3. [untracked] `tests/schema/test_provider_p1_license_storage_retention_review_schema.py`: validates schema/artifact, no-access scope locks, review-basis disclaimers, rights matrix, remaining blockers, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the new license-storage-retention packet while keeping `SR-PROVIDER-001` open.
+
+**Key decisions**:
+- Treat the approved FMP / SEC storage boundary as two-symbol sample-only plus tracked no-secret summary. Reason: the approved packet and stable retry do not establish production raw storage, normalized DataHub storage, derived-output, non-display, export, retention, or broader sample rights.
+- Classify SEC EDGAR as public-API sample-only for now, not a broad reconstruction source. Reason: broader use still needs parser scope, fair-access behavior, retained-artifact policy, PIT lineage, and explicit user approval for endpoint calls.
+- Keep this artifact as blocker classification, not current legal / terms signoff. Reason: no current provider-terms web refresh, provider contact, or legal advice occurred in this slice.
+- Leave `SR-PROVIDER-001` open. Reason: coverage, current terms / production storage rights, PIT / observed-date semantics, price adjustment / corporate-action samples, SEC parser feasibility, incident-log writer behavior, executable fallback, stability evidence, provider selection, DataHub / runner consumption, and Phase 7c remain unresolved.
+
+**Rejected alternatives**:
+- "Refresh FMP current terms / make a legal conclusion now" — rejected; this was not approved and would be a different task.
+- "Broaden the approved sample or call providers again" — rejected; no data fetch or provider call was authorized for this round.
+- "Implement storage policy, adapter, DataHub, or runner behavior" — rejected; this slice is schema-first blocker classification only.
+- "Close `SR-PROVIDER-001` after classifying license-storage blockers" — rejected; the packet narrows a blocker but does not resolve the implementation gates.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_license_storage_retention_review_schema -v`: 7 tests ran; 4 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_license_storage_retention_review_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema tests.schema.test_provider_p1_incident_log_contract_schema -v`: 20 tests passed.
+- `json.tool` parsed `schemas/provider_p1_license_storage_retention_review.schema.json` and `docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json`.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check`: passed after docs / handoff updates; only normal LF/CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: the packet accidentally authorizes current-terms legal signoff, broader provider access, provider calls, production storage, DataHub / runner consumption, Phase 7c, provider selection, `yfinance`, full-market fetch, ship-gate claims, or closes `SR-PROVIDER-001` too early.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (DataHub local resource budget contract)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2ddc8f4`)
