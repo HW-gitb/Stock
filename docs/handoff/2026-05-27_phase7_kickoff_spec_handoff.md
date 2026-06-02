@@ -2520,3 +2520,25 @@ git diff --check
 - "The job-spec schema accepts cross-market lane mismatches" is now false.
 - "The resource-budget schema has no upper bound for `max_concurrent_lanes`" is now false.
 - "SR-RESOURCE-001 is closed" remains false; executable code-level enforcement is still required before Phase 7c / runner implementation.
+
+## 2026-06-02 append: P3 hygiene slice after Phase 6-to-now audit
+
+**What changed**:
+
+- `runners/materialize_benchmark_monthly_returns_tushare.py` now skips boundary months with fewer than two usable `index_daily` rows into metadata `skipped_months` when other months remain usable; fully unusable ranges still raise.
+- `runners/forward_tracker.py` now excludes terminal forward statuses from the pending backfill mask and filters work rows by that same mask.
+- `runners/backtest_rank.py` now leaves close-to-close diagnostic return empty when the actual as-of bar close / adj_factor is missing, without blocking primary `t1` / `t1_net`.
+- `runners/us_egs_sample_validation.py` removed an unused `sys` import and checks endpoint-call budget before each fetch in the approved legacy small-sample and stable retry paths.
+- `runners/aggregate_execution_reports.py` collapsed a dead `report_total_return_for_aggregation` branch without behavior change.
+
+**Validation results**:
+
+- Python313: `tests.execution.test_materialize_benchmark_monthly_returns_tushare`, `tests.phase6.test_forward_tracker_cache_guard`, `tests.test_backtest_rank_phase3`, `tests.provider.test_us_egs_sample_validation`, and `tests.execution.test_aggregate_execution_reports` ran 48 tests, all pass.
+- Python313: `tests.provider.test_us_egs_coverage_count_packet` ran 4 tests, all pass.
+- `git diff --check` exited 0 with only normal LF/CRLF working-copy warnings.
+- `rg --files -g 'tmp*' -g '!provider_samples/**'` returned no output.
+
+**Invalid conclusions**:
+
+- "This changes provider authorization, Phase 7c, DataHub, production runner consumption, ship-gate policy, or full-size permission" is false.
+- "This closes `SR-PROVIDER-001` or `SR-RESOURCE-001`" is false; both remain open by design.

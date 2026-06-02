@@ -94,6 +94,12 @@ DEFAULT_WINDOWS = [5, 10, 20]
 # Calendar-day pad beyond the trading-day window estimate. Lets the cache
 # refresh job land Tushare's close before tracker tries to read it.
 MATURE_BUFFER_CALENDAR_DAYS = 3
+TERMINAL_FORWARD_STATUSES = {
+    "ok",
+    "pending_no_entry_limit_up",
+    "pending_missing_future_close",
+    "pending_return_conversion_failed",
+}
 
 
 # ============================================================
@@ -241,16 +247,10 @@ def _mature_as_ofs(df: pd.DataFrame, today: str, windows: list[int]) -> list[str
     # 5 trading days span ~7 calendar days; add a calendar-day buffer so we
     # don't poke the cache before today's close is published.
     threshold_calendar_days = int(min_window * 1.4) + MATURE_BUFFER_CALENDAR_DAYS
-    pending_rows = []
-    for w in windows:
-        status_col = f"ret_{w}d_status"
-        if status_col not in df.columns:
-            continue
-        pending_mask = df[status_col].astype(str).ne("ok") & df[status_col].astype(str).ne("pending_no_entry_limit_up")
-        pending_rows.append(df.loc[pending_mask, "as_of"].astype(str))
-    if not pending_rows:
+    pending_mask = _pending_backfill_mask(df, windows)
+    if not pending_mask.any():
         return []
-    pending_as_of = pd.concat(pending_rows).unique().tolist()
+    pending_as_of = df.loc[pending_mask, "as_of"].astype(str).unique().tolist()
     out = []
     for as_of in sorted(pending_as_of):
         as_of_dt = pd.to_datetime(str(as_of), format="%Y%m%d")
@@ -258,6 +258,16 @@ def _mature_as_ofs(df: pd.DataFrame, today: str, windows: list[int]) -> list[str
         if gap_days >= threshold_calendar_days:
             out.append(str(as_of))
     return out
+
+
+def _pending_backfill_mask(df: pd.DataFrame, windows: list[int]) -> pd.Series:
+    pending_mask = pd.Series(False, index=df.index)
+    for w in windows:
+        status_col = f"ret_{w}d_status"
+        if status_col not in df.columns:
+            continue
+        pending_mask |= ~df[status_col].astype(str).isin(TERMINAL_FORWARD_STATUSES)
+    return pending_mask
 
 
 def backfill(windows: list[int]) -> int:
@@ -290,7 +300,8 @@ def backfill(windows: list[int]) -> int:
 
     # attach_forward_returns expects samples with trade_date column;
     # rename our as_of -> trade_date in a slim view.
-    work = df[df["as_of"].astype(str).isin(mature_as_ofs)].copy()
+    work_mask = df["as_of"].astype(str).isin(mature_as_ofs) & _pending_backfill_mask(df, windows)
+    work = df[work_mask].copy()
     if work.empty:
         return 0
     work["trade_date"] = work["as_of"].astype(str)

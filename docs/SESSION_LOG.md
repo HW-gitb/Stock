@@ -8,6 +8,55 @@
 
 ---
 
+## 2026-06-02 — Claude 审查 (P3 hygiene slice) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. This slice implements the 5 deferred P3 items from the Phase 6-to-now audit; all are correct, tested, and regression-free.
+
+**Scope reviewed** (base `1dace74`): `runners/materialize_benchmark_monthly_returns_tushare.py`, `runners/forward_tracker.py`, `runners/backtest_rank.py`, `runners/us_egs_sample_validation.py`, `runners/aggregate_execution_reports.py`, their 4 test modules, and the phase7 handoff append.
+
+**Independently verified (read actual code + adversarial trace)**:
+- backtest_rank close-to-close (PIT-sensitive): the dimensionally-inconsistent fallback is removed — `base_close`/`base_adj` (real as-of bar) are no longer overwritten with screening close + T+1 adj; the cc diagnostic now raises→stays NaN if the as-of bar is missing, and **only a t1 failure** sets `t1_return_failed`→`pending_return_conversion_failed`. Primary `t1`/`t1_net` math (entry_open·entry_adj → exit_close·exit_adj) is unchanged; no new look-ahead. `base_close_for_limit` separately preserves the limit-up check's screening-close fallback. Test asserts `ret_5d_close=NaN`, `t1_net=79.84`, `status=ok` for a missing-as-of-bar row (exact values, non-vacuous).
+- forward_tracker terminal statuses: enumerated the full status taxonomy (9 statuses). The chosen `TERMINAL_FORWARD_STATUSES` = {ok, pending_no_entry_limit_up, pending_missing_future_close, pending_return_conversion_failed} is conservative and correct — only immutable historical facts are terminalized. Verified `pending_immature_asof` (window not yet elapsed) is correctly LEFT retryable, and `pending_missing_future_close` is correctly terminal (exit_date is in `trade_dates` = market traded that day, so a missing per-stock bar is a real historical suspension that refetch cannot change; a whole-day gap would fall into the immature branch instead). The ambiguous statuses (no_t_plus_one / no_entry_price / asof_not_in_future_cache / no_future_price) are left retryable (safe — at worst reprocesses, never abandons a recoverable row). `backfill` also `& _pending_backfill_mask` so terminal rows aren't reprocessed via a same-as_of pending neighbor. No data-completeness regression. Test asserts terminal row excluded, `pending_capture` row included.
+- materialize boundary month: `<2`-row months are skipped into `metadata.skipped_months` + `continue`; all-unusable ranges still raise ("at least one month with two index_daily rows"). Consumer impact safe: a skipped benchmark month is simply absent from aggregate alpha (already filtered + min-month gated). Tests assert both the skip path (exact skipped_months) and the all-unusable raise.
+- us_egs_sample_validation: unused `import sys` removed; `assert_endpoint_budget_available` invoked PRE-fetch at all four fetch sites (SEC map, FMP legacy loop, SEC subs/companyfacts, FMP stable retry); `attempted=len+1>max` raises before the call. Within-budget runs unaffected (no regression). Secret handling untouched. Tests set max=1 and assert raise "before next fetch" with `client.calls==1` for both legacy and stable paths.
+- aggregate dead branch: `report_total_return_for_aggregation` collapsed to `return numeric_or_none(...)` — behavior-identical for all inputs.
+- Tests: re-ran the 6 affected modules → **52 pass**; full `tests/phase6` discover → **54 pass** (Python313 + jsonschema; confirms no forward_tracker / backtest_rank cross-module regression).
+- phase7 handoff append is descriptive and accurate; explicitly disclaims any provider / Phase 7c / DataHub / ship-gate / full-size / SR-PROVIDER-001 / SR-RESOURCE-001 change.
+
+**Scope discipline**: exactly the deferred P3 set; no research run, provider fetch, DataHub, ship-gate, concurrency, or production-sizing change. PIT safety and secret hygiene preserved.
+
+**Residual blockers unchanged (intentional)**: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open; aggregate full-size permission remains `not_evaluable` by the SR-EXEC-007 concurrency gate.
+
+---
+
+## 2026-06-02 — Codex 执行 (P3 hygiene slice)
+
+**Commits**: none (pending independent review / submit; base `1dace74`)
+
+**Scope**:
+- User approved executing the deferred P3 hygiene slice from the Phase 6-to-now audit.
+- This round does not run research, fetch provider data, broaden provider approval, implement DataHub, change ship-gate policy, unfreeze concurrency capacity, or alter production sizing.
+
+**Worked on**:
+1. [tracked] `runners/materialize_benchmark_monthly_returns_tushare.py`, `tests/execution/test_materialize_benchmark_monthly_returns_tushare.py`: boundary months with fewer than two usable `index_daily` rows are skipped into metadata `skipped_months` when at least one other month is usable; all-unusable ranges still raise clearly.
+2. [tracked] `runners/forward_tracker.py`, `tests/phase6/test_forward_tracker_cache_guard.py`: terminal forward statuses no longer keep a row in the backfill pending set, and backfill work rows are filtered by the same pending mask so terminal rows are not reprocessed just because another row on the same as-of is pending.
+3. [tracked] `runners/backtest_rank.py`, `tests/test_backtest_rank_phase3.py`: close-to-close diagnostic returns now require the actual as-of bar close / adj_factor; if missing, only the diagnostic stays empty while primary `t1` / `t1_net` can still be `ok`.
+4. [tracked] `runners/us_egs_sample_validation.py`, `tests/provider/test_us_egs_sample_validation.py`: removed an unused `sys` import and added pre-fetch endpoint-budget checks for both legacy small-sample and stable retry paths, with regressions proving the runner does not exceed a lowered budget.
+5. [tracked] `runners/aggregate_execution_reports.py`: collapsed the dead `report_total_return_for_aggregation` branch without behavior change.
+6. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the P3 hygiene handoff without changing provider / DataHub / ship-gate routing.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.execution.test_materialize_benchmark_monthly_returns_tushare tests.phase6.test_forward_tracker_cache_guard tests.test_backtest_rank_phase3 tests.provider.test_us_egs_sample_validation tests.execution.test_aggregate_execution_reports -v`: 48 tests, all pass.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.provider.test_us_egs_coverage_count_packet -v`: 4 tests, all pass.
+- `git diff --check`: exit 0; only normal LF/CRLF working-copy warnings were printed.
+- `rg --files -g 'tmp*' -g '!provider_samples/**'`: no output.
+
+**Current review state**:
+- This is a P3 hygiene implementation slice. No known Required fixes are pending from this slice yet; it needs independent review before `提交`.
+- Residual blockers unchanged: `SR-PROVIDER-001` and `SR-RESOURCE-001` remain open by design; aggregate full-size permission remains `not_evaluable` by the concurrency gate.
+
+---
+
 ## 2026-06-02 — Claude 审查 (Optional disposition: SR-CONTRACT-002 prose drift) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Repair slice + this disposition are ready for 提交.

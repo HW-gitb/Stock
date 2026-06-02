@@ -107,10 +107,7 @@ def mean_or_none(values: list[float]) -> float | None:
 
 def report_total_return_for_aggregation(report: dict[str, Any]) -> float | None:
     metrics = report["metrics"]
-    value = numeric_or_none(metrics.get("total_return"))
-    if value is not None:
-        return value
-    return None
+    return numeric_or_none(metrics.get("total_return"))
 
 
 def sample_std(values: list[float]) -> float | None:

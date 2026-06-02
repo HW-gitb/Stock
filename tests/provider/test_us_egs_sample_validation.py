@@ -425,6 +425,35 @@ class UsEgsSampleValidationTest(unittest.TestCase):
         self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 0)
         self.assertEqual(client.calls, [])
 
+    def test_small_sample_budget_is_checked_before_next_fetch(self) -> None:
+        approval = json.loads(APPROVAL_PATH.read_text(encoding="utf-8"))
+        approval["sample_universe"]["max_total_endpoint_calls"] = 1
+        base = ROOT / "provider_samples" / "us_egs_sample_validation_20260602" / "raw" / "_unit_tests"
+        base.mkdir(parents=True, exist_ok=True)
+        client = FakeHttpClient()
+        with tempfile.TemporaryDirectory(prefix="budget_", dir=base) as tmp_dir:
+            temp_root = Path(tmp_dir)
+            approval_path = temp_root / "approval.json"
+            approval_path.write_text(json.dumps(approval), encoding="utf-8")
+            with mock.patch.dict(
+                sample_validation.os.environ,
+                {
+                    "FMP_API_KEY": "UNIT_TEST_FMP_SECRET",
+                    "SEC_USER_AGENT": "UnitTest/0.1 contact:test@example.com",
+                },
+                clear=True,
+            ), mock.patch.object(sample_validation, "_read_windows_environment_value", return_value=None):
+                with self.assertRaisesRegex(RuntimeError, "before next fetch"):
+                    sample_validation.run_sample_validation(
+                        approval_path=approval_path,
+                        summary_path=temp_root / "summary.json",
+                        raw_root=temp_root / "raw",
+                        generated_at="2026-06-02T00:00:00+00:00",
+                        client=client,
+                    )
+
+        self.assertEqual(len(client.calls), 1)
+
     def test_stable_dry_run_validates_env_without_fetching_or_writing_summary(self) -> None:
         base = (
             ROOT
@@ -461,6 +490,40 @@ class UsEgsSampleValidationTest(unittest.TestCase):
         self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 0)
         self.assertEqual(client.calls, [])
         self.assertFalse(summary_path.exists())
+
+    def test_stable_retry_budget_is_checked_before_next_fetch(self) -> None:
+        approval = json.loads(APPROVAL_PATH.read_text(encoding="utf-8"))
+        approval["sample_universe"]["max_total_endpoint_calls"] = 1
+        base = (
+            ROOT
+            / "provider_samples"
+            / "us_egs_sample_validation_20260602"
+            / "fmp_stable_retry"
+            / "raw"
+            / "_unit_tests"
+        )
+        base.mkdir(parents=True, exist_ok=True)
+        client = FakeHttpClient()
+        with tempfile.TemporaryDirectory(prefix="stable_budget_", dir=base) as tmp_dir:
+            temp_root = Path(tmp_dir)
+            approval_path = temp_root / "approval.json"
+            approval_path.write_text(json.dumps(approval), encoding="utf-8")
+            with mock.patch.dict(
+                sample_validation.os.environ,
+                {"FMP_API_KEY": "UNIT_TEST_FMP_SECRET"},
+                clear=True,
+            ), mock.patch.object(sample_validation, "_read_windows_environment_value", return_value=None):
+                with self.assertRaisesRegex(RuntimeError, "before next fetch"):
+                    sample_validation.run_fmp_stable_endpoint_retry(
+                        approval_path=approval_path,
+                        mapping_review_path=MAPPING_REVIEW_PATH,
+                        summary_path=temp_root / "summary.json",
+                        raw_root=temp_root / "raw",
+                        generated_at="2026-06-02T00:00:00+00:00",
+                        client=client,
+                    )
+
+        self.assertEqual(len(client.calls), 1)
 
     def test_runtime_approval_validation_rejects_scope_creep(self) -> None:
         approval = json.loads(APPROVAL_PATH.read_text(encoding="utf-8"))

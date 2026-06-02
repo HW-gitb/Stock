@@ -182,6 +182,21 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
         self.assertIn("CSI300/CSI1000 index_daily", hint)
         self.assertNotIn("--refresh-forward-daily", hint)
 
+    def test_mature_as_ofs_ignores_terminal_failure_statuses(self) -> None:
+        df = pd.DataFrame(
+            [
+                _tracker_row("20240131", "000001.SZ"),
+                _tracker_row("20240201", "000002.SZ"),
+            ]
+        )
+        for window in [5, 10, 20]:
+            df.at[0, f"ret_{window}d_status"] = "pending_missing_future_close"
+            df.at[1, f"ret_{window}d_status"] = "pending_capture"
+
+        mature = forward_tracker._mature_as_ofs(df, "20240301", [5, 10, 20])
+
+        self.assertEqual(mature, ["20240201"])
+
     def test_write_tracker_uses_same_directory_temp_file_and_atomic_replace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tracker_path = Path(tmp) / "forward_tracker.csv"

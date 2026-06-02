@@ -74,6 +74,7 @@ class BenchmarkMonthlyReturnsMaterializerTest(unittest.TestCase):
         self.assertEqual(metadata["months"][0]["first_trade_date"], "20260506")
         self.assertEqual(metadata["months"][0]["last_trade_date"], "20260531")
         self.assertEqual(metadata["months"][0]["first_open"], 95.0)
+        self.assertEqual(metadata["skipped_months"], [])
 
     def test_cli_writes_primary_and_secondary_return_jsons_with_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -126,14 +127,36 @@ class BenchmarkMonthlyReturnsMaterializerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "start_date must be <= end_date"):
             validate_date_range("20260630", "20260501")
 
-    def test_single_row_month_is_rejected(self) -> None:
+    def test_single_row_boundary_month_is_skipped_when_other_months_are_usable(self) -> None:
+        rows = normalized_index_rows(
+            pd.DataFrame(
+                [
+                    {"trade_date": "20260506", "open": 99.0, "close": 100.0},
+                    {"trade_date": "20260603", "open": 100.0, "close": 101.0},
+                    {"trade_date": "20260628", "open": 102.0, "close": 103.0},
+                ]
+            ),
+            "20260501",
+            "20260630",
+        )
+
+        returns, month_rows, skipped_months = monthly_returns_from_rows(rows)
+
+        self.assertEqual(returns, {"202606": 0.03})
+        self.assertEqual([row["month"] for row in month_rows], ["202606"])
+        self.assertEqual(
+            skipped_months,
+            [{"month": "202605", "row_count": 1, "reason": "requires at least two index_daily rows"}],
+        )
+
+    def test_all_single_row_months_are_rejected(self) -> None:
         rows = normalized_index_rows(
             pd.DataFrame([{"trade_date": "20260506", "open": 99.0, "close": 100.0}]),
             "20260501",
             "20260531",
         )
 
-        with self.assertRaisesRegex(ValueError, "requires at least two index_daily rows"):
+        with self.assertRaisesRegex(ValueError, "at least one month with two index_daily rows"):
             monthly_returns_from_rows(rows)
 
     def test_missing_required_columns_are_rejected(self) -> None:

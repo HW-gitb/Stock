@@ -586,9 +586,9 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
         base_row = lookup.get((ts_code, trade_date))
         base_close = base_row[1] if base_row else None
         base_adj = base_row[2] if base_row else None
-        if base_close is None or pd.isna(base_close) or float(base_close) == 0:
-            base_close = row.get("close")
-            base_adj = entry_adj  # fallback
+        base_close_for_limit = base_close
+        if base_close_for_limit is None or pd.isna(base_close_for_limit) or float(base_close_for_limit) == 0:
+            base_close_for_limit = row.get("close")
 
         blocked, block_source = _is_entry_limit_up(
             ts_code,
@@ -596,7 +596,7 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
             row.get("board"),
             entry_date,
             entry_open,
-            base_close,
+            base_close_for_limit,
             limit_lookup,
         )
         if blocked:
@@ -620,16 +620,18 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
                 continue
             _exit_open, exit_close, exit_adj = exit_row
 
-            required_return_failed = False
+            t1_return_failed = False
             # qfq-adjusted close-to-close
             try:
+                if base_close is None or base_adj is None or pd.isna(base_close) or pd.isna(base_adj) or float(base_close) == 0:
+                    raise ValueError("missing as-of close/adj_factor for close-to-close diagnostic")
                 cc = (float(exit_close) * float(exit_adj)) / (float(base_close) * float(base_adj)) - 1.0
                 cc_pct = cc * 100.0
                 if pd.isna(cc_pct) or not np.isfinite(cc_pct):
                     raise ValueError("non-finite close-to-close return")
                 samples.at[idx, f"ret_{window}d_close"] = cc_pct
             except Exception:
-                required_return_failed = True
+                pass
             # qfq-adjusted T+1 open -> exit close
             try:
                 t1 = (float(exit_close) * float(exit_adj)) / (float(entry_open) * float(entry_adj)) - 1.0
@@ -640,8 +642,8 @@ def attach_forward_returns(samples, windows, daily_payload, cost_pct=DEFAULT_COS
                 samples.at[idx, f"ret_{window}d_t1"] = t1_pct
                 samples.at[idx, f"ret_{window}d_t1_net"] = t1_net_pct
             except Exception:
-                required_return_failed = True
-            if required_return_failed:
+                t1_return_failed = True
+            if t1_return_failed:
                 samples.at[idx, f"ret_{window}d_status"] = "pending_return_conversion_failed"
                 continue
             samples.at[idx, f"ret_{window}d_status"] = "ok"

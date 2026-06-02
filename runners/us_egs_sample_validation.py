@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -450,6 +449,20 @@ def fetch_and_store(
     )
 
 
+def assert_endpoint_budget_available(
+    endpoint_records: list[FetchRecord],
+    max_total_endpoint_calls: int,
+    *,
+    next_call_count: int = 1,
+) -> None:
+    attempted = len(endpoint_records) + next_call_count
+    if attempted > max_total_endpoint_calls:
+        raise RuntimeError(
+            f"endpoint call budget would be exceeded before next fetch: "
+            f"{attempted} > {max_total_endpoint_calls}"
+        )
+
+
 def parse_sec_cik_map(company_tickers_payload: Any, symbols: list[str]) -> dict[str, str]:
     wanted = {symbol.upper() for symbol in symbols}
     cik_by_symbol: dict[str, str] = {}
@@ -513,6 +526,7 @@ def run_sample_validation(
         "User-Agent": sec_user_agent_env.value,
         "Host": "www.sec.gov",
     }
+    assert_endpoint_budget_available(endpoint_records, max_total_endpoint_calls)
     endpoint_records.append(
         fetch_and_store(
             client,
@@ -529,6 +543,7 @@ def run_sample_validation(
     fmp_headers = {"User-Agent": "StockSystem/0.1 sample-validation"}
     for symbol in symbols:
         for endpoint in FMP_LEGACY_ENDPOINTS:
+            assert_endpoint_budget_available(endpoint_records, max_total_endpoint_calls)
             endpoint_records.append(
                 fetch_and_store(
                     client,
@@ -549,6 +564,7 @@ def run_sample_validation(
         cik10 = cik_by_symbol.get(symbol)
         for endpoint_family in ["submissions", "companyfacts"]:
             if cik10:
+                assert_endpoint_budget_available(endpoint_records, max_total_endpoint_calls)
                 time.sleep(SEC_FAIR_ACCESS_SLEEP_SECONDS)
                 endpoint_records.append(
                     fetch_and_store(
@@ -625,6 +641,7 @@ def run_fmp_stable_endpoint_retry(
     fmp_headers = {"User-Agent": "StockSystem/0.1 fmp-stable-endpoint-retry"}
     for symbol in symbols:
         for endpoint in FMP_STABLE_ENDPOINTS:
+            assert_endpoint_budget_available(endpoint_records, max_total_endpoint_calls)
             endpoint_records.append(
                 fetch_and_store(
                     client,

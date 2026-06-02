@@ -167,6 +167,36 @@ class BacktestRankPhase3Tests(unittest.TestCase):
         self.assertTrue(pd.isna(out.loc[0, "ret_5d_close"]))
         self.assertTrue(pd.isna(out.loc[0, "ret_5d_t1_net"]))
 
+    def test_missing_asof_bar_does_not_mix_close_to_close_adj_or_block_t1(self):
+        samples = pd.DataFrame([
+            {
+                "trade_date": "20260520",
+                "ts_code": "000001.SZ",
+                "close": 10.0,
+                "name": "Ping An Bank",
+                "board": "main",
+            }
+        ])
+        stocks = pd.DataFrame([
+            {"ts_code": "999999.SZ", "trade_date": "20260520", "open": 1.0, "close": 1.0, "adj_factor": 1.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260521", "open": 10.0, "close": 11.0, "adj_factor": 2.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260522", "open": 11.0, "close": 12.0, "adj_factor": 2.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260523", "open": 12.0, "close": 13.0, "adj_factor": 2.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260526", "open": 13.0, "close": 14.0, "adj_factor": 2.0},
+            {"ts_code": "000001.SZ", "trade_date": "20260527", "open": 17.0, "close": 18.0, "adj_factor": 2.0},
+        ])
+
+        out = attach_forward_returns(
+            samples,
+            [5],
+            {"stocks": stocks, "limits": pd.DataFrame(), "benchmarks": {}},
+            cost_pct=0.16,
+        )
+
+        self.assertEqual(out.loc[0, "ret_5d_status"], "ok")
+        self.assertTrue(pd.isna(out.loc[0, "ret_5d_close"]))
+        self.assertAlmostEqual(out.loc[0, "ret_5d_t1_net"], 79.84)
+
     def test_smoke_today_l3_generation_declares_live_l3_non_evidence_path(self):
         with TemporaryDirectory(dir=backtest_rank.ROOT) as tmp:
             with patch("runners.backtest_rank.subprocess.run") as run:

@@ -119,13 +119,21 @@ def normalized_index_rows(frame: pd.DataFrame, start_date: str, end_date: str) -
     return normalized
 
 
-def monthly_returns_from_rows(rows: pd.DataFrame) -> tuple[dict[str, float], list[dict[str, Any]]]:
+def monthly_returns_from_rows(rows: pd.DataFrame) -> tuple[dict[str, float], list[dict[str, Any]], list[dict[str, Any]]]:
     returns: dict[str, float] = {}
     month_rows: list[dict[str, Any]] = []
+    skipped_months: list[dict[str, Any]] = []
     for month, group in rows.groupby(rows["trade_date"].str[:6], sort=True):
         ordered = group.sort_values("trade_date")
         if len(ordered) < 2:
-            raise ValueError(f"benchmark month {month} requires at least two index_daily rows")
+            skipped_months.append(
+                {
+                    "month": str(month),
+                    "row_count": int(len(ordered)),
+                    "reason": "requires at least two index_daily rows",
+                }
+            )
+            continue
         first = ordered.iloc[0]
         last = ordered.iloc[-1]
         first_open = float(first["open"])
@@ -146,7 +154,9 @@ def monthly_returns_from_rows(rows: pd.DataFrame) -> tuple[dict[str, float], lis
                 "return": round(monthly_return, 10),
             }
         )
-    return returns, month_rows
+    if not returns:
+        raise ValueError("benchmark monthly returns require at least one month with two index_daily rows")
+    return returns, month_rows, skipped_months
 
 
 def build_benchmark_payload(
@@ -163,7 +173,7 @@ def build_benchmark_payload(
         start_date,
         end_date,
     )
-    returns, month_rows = monthly_returns_from_rows(rows)
+    returns, month_rows, skipped_months = monthly_returns_from_rows(rows)
     return {
         "returns": returns,
         "metadata": {
@@ -178,9 +188,11 @@ def build_benchmark_payload(
             "date_range": {"start_date": start_date, "end_date": end_date},
             "monthly_return_method": MONTHLY_RETURN_METHOD,
             "months": month_rows,
+            "skipped_months": skipped_months,
             "limitations": [
                 "Return JSON is a plain YYYYMM -> return object for aggregate_execution_reports.py compatibility.",
                 "Monthly return uses the first available index_daily open and last available index_daily close within each month in the requested date range.",
+                "Boundary months with fewer than two usable index_daily rows are omitted and listed in skipped_months.",
                 "Per-candidate corrected revalidation uses runners/backtest_rank.py same-anchor benchmark T+1 open to exit close; this monthly file is for execution aggregate compatibility.",
                 "CSI1000 is the Phase 6a primary A-short benchmark; CSI300 is mandatory secondary sensitivity.",
             ],
