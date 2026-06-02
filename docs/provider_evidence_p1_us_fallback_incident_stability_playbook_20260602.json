@@ -1,0 +1,754 @@
+{
+  "schema_name": "provider_p1_fallback_incident_stability_playbook",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_fallback_incident_stability_playbook_design",
+    "playbook_status": "schema_first_design_no_provider_calls",
+    "remaining_blocker_plan_ref": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_status_polling_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "fallback_execution_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_remaining_blocker_resolution_plan.schema.json",
+      "consumption_role": "Defines fallback / incident / stability as a remaining blocker that can be addressed by reviewed schema-first design without new access."
+    },
+    {
+      "artifact_id": "p1_coverage_fallback_incident_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Records candidate status-page, outage, coverage, fallback, and unresolved incident evidence from prior documentation review."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Defines drift dimensions, no silent defaults, no latest-only historical backfill, incident logging, and allowed monitor action names."
+    },
+    {
+      "artifact_id": "p1_us_egs_sample_validation_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_us_egs_sample_validation_summary.schema.json",
+      "consumption_role": "Records the approved SEC EDGAR sample success and FMP legacy endpoint errors that must remain incident evidence, not provider selection."
+    },
+    {
+      "artifact_id": "p1_fmp_stable_retry_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json",
+      "consumption_role": "Records the same-scope AAPL / MSFT FMP stable endpoint access / response-shape pass that this playbook deliberately does not overread."
+    }
+  ],
+  "stable_retry_boundary": {
+    "fmp_stable_retry_status": "two_symbol_access_response_shape_passed_only",
+    "approved_sample_scope": "AAPL_MSFT_only_existing_fmp_key_sec_public_api_zero_usd",
+    "fallback_evidence_status": "design_only_not_executed",
+    "incident_stability_evidence_status": "not_validated",
+    "not_proven": [
+      "The FMP stable retry did not prove provider uptime, quota stability, incident-history reliability, or status-page integration.",
+      "The FMP stable retry did not prove that fallback paths can be executed without user-approved access packets.",
+      "The SEC EDGAR sample did not prove full parser scale, price fallback capability, free-float authority, or DataHub readiness.",
+      "This playbook defines default-deny behavior only; it does not poll any provider status page or run any new endpoint call."
+    ]
+  },
+  "field_family_playbooks": [
+    {
+      "family_id": "fundamentals",
+      "primary_candidate_status": "candidate_only_not_selected",
+      "fallback_order": [
+        {
+          "step_order": 1,
+          "source_role": "FMP stable financial statement and metric endpoints",
+          "allowed_use": "Candidate primary source only after license, PIT, coverage, and approved sample validation are separately resolved.",
+          "required_precondition": "Reviewed coverage, license / storage / retention, PIT observed-date, and field-missing-rate evidence.",
+          "if_unavailable_action": "manual_review",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 2,
+          "source_role": "SEC EDGAR companyfacts / submissions audit",
+          "allowed_use": "Audit source for filing-grounded anomalies and observed-date sanity checks, not a price source or full normalized vendor.",
+          "required_precondition": "Reviewed parser lineage for accession, accepted timestamp, units, currency, period, amendment, and restatement behavior.",
+          "if_unavailable_action": "defer_field_family",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 3,
+          "source_role": "No silent fallback",
+          "allowed_use": "Block production use or mark the field family not evaluable when both candidate source and audit source are unresolved.",
+          "required_precondition": "Incident log and manual review disposition.",
+          "if_unavailable_action": "block_production_use",
+          "authorizes_data_fetch": false
+        }
+      ],
+      "hard_block_triggers": [
+        "Missing filingDate / acceptedDate or ambiguous observed-date behavior for historical use.",
+        "Latest/current endpoint semantics used as historical evidence without reviewed PIT rows.",
+        "SEC audit conflict on EGS-sensitive fields without a reviewed reconciliation rule.",
+        "Field units, currency, fiscal period, or restatement behavior cannot be reconciled."
+      ],
+      "manual_review_triggers": [
+        "FMP and SEC disagree on revenue, income, shares, period, or filing identity for a required field.",
+        "A previously present required field disappears or changes type.",
+        "Provider exposes a new metric name that looks equivalent but lacks reviewed semantics."
+      ],
+      "incident_log_fields": [
+        "provider",
+        "endpoint_family",
+        "symbol",
+        "field_name",
+        "filing_or_period_ref",
+        "observed_date_ref",
+        "raw_error_or_conflict_summary",
+        "manual_disposition"
+      ],
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "family_id": "price_volume_liquidity",
+      "primary_candidate_status": "candidate_only_not_selected",
+      "fallback_order": [
+        {
+          "step_order": 1,
+          "source_role": "FMP stable historical EOD endpoint",
+          "allowed_use": "Candidate daily price / volume / liquidity source only after adjustment semantics, coverage, and approved sample validation are separately resolved.",
+          "required_precondition": "Reviewed price adjustment, volume, missing-session, zero-volume, halted, delisted, and corporate-action behavior.",
+          "if_unavailable_action": "manual_review",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 2,
+          "source_role": "Optional yfinance smoke check",
+          "allowed_use": "Low-trust ad hoc price smoke check only after explicit user approval for that check; not part of official provider chain.",
+          "required_precondition": "Separate user approval and reviewed no-secret result artifact.",
+          "if_unavailable_action": "defer_field_family",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 3,
+          "source_role": "No price fallback",
+          "allowed_use": "Block production use when official candidate source is unavailable or semantically unreviewed.",
+          "required_precondition": "Incident log and manual review disposition.",
+          "if_unavailable_action": "block_production_use",
+          "authorizes_data_fetch": false
+        }
+      ],
+      "hard_block_triggers": [
+        "Missing price, volume, date, adjustment, or currency fields for required rows.",
+        "Split / dividend behavior conflicts with required return or liquidity construction.",
+        "Zero-filled benchmark, price, or volume row appears in evidence or runner input.",
+        "Provider source changes adjusted / unadjusted semantics without reviewed decision."
+      ],
+      "manual_review_triggers": [
+        "Large price jump, zero-volume anomaly, missing session, or return spike exceeds reviewed expectations.",
+        "Historical endpoint row count changes for an already reviewed symbol/date window.",
+        "Potential delisting or inactive-security behavior affects eligibility."
+      ],
+      "incident_log_fields": [
+        "provider",
+        "endpoint_family",
+        "symbol",
+        "trade_date",
+        "price_fields_present",
+        "volume_fields_present",
+        "adjustment_context",
+        "manual_disposition"
+      ],
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "family_id": "corporate_actions",
+      "primary_candidate_status": "candidate_only_not_selected",
+      "fallback_order": [
+        {
+          "step_order": 1,
+          "source_role": "Reviewed FMP corporate-action and adjusted-price evidence",
+          "allowed_use": "Candidate split / dividend / adjustment context only after a separate reviewed sample proves semantics.",
+          "required_precondition": "Approved corporate-action sample packet with split, dividend, and adjusted price reconciliation.",
+          "if_unavailable_action": "manual_review",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 2,
+          "source_role": "Manual corporate-action review",
+          "allowed_use": "Manual evidence note for isolated analysis; cannot silently normalize production rows.",
+          "required_precondition": "Reviewed source refs and incident log.",
+          "if_unavailable_action": "defer_field_family",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 3,
+          "source_role": "No adjustment fallback",
+          "allowed_use": "Block production use when adjustment source or reconciliation is unresolved.",
+          "required_precondition": "Incident log and manual review disposition.",
+          "if_unavailable_action": "block_production_use",
+          "authorizes_data_fetch": false
+        }
+      ],
+      "hard_block_triggers": [
+        "Split or dividend event changes return calculation and no reviewed reconciliation exists.",
+        "Adjusted and unadjusted prices are mixed in the same evidence window.",
+        "Corporate-action endpoint semantics are unknown or change silently."
+      ],
+      "manual_review_triggers": [
+        "Corporate action occurs inside a sample or evidence holding window.",
+        "Provider price history changes after a split, dividend, symbol change, merger, or delisting."
+      ],
+      "incident_log_fields": [
+        "provider",
+        "symbol",
+        "corporate_action_type",
+        "effective_date",
+        "affected_fields",
+        "reconciliation_status",
+        "manual_disposition"
+      ],
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "family_id": "security_master_coverage",
+      "primary_candidate_status": "candidate_only_not_selected",
+      "fallback_order": [
+        {
+          "step_order": 1,
+          "source_role": "FMP coverage / symbol / delisted candidate surfaces",
+          "allowed_use": "Candidate coverage source only after approved counts prove active, inactive, delisted, CIK, exchange, and security-class behavior.",
+          "required_precondition": "Reviewed coverage count packet and license decision.",
+          "if_unavailable_action": "manual_review",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 2,
+          "source_role": "SEC / exchange current-reference aids",
+          "allowed_use": "Current-reference sanity checks only; not historical survivorship-safe security master.",
+          "required_precondition": "Reviewed limitation note and manual reconciliation plan.",
+          "if_unavailable_action": "defer_field_family",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 3,
+          "source_role": "No survivorship fallback",
+          "allowed_use": "Block historical production use when listing / delisting / security-class eligibility is unresolved.",
+          "required_precondition": "Incident log and manual review disposition.",
+          "if_unavailable_action": "block_production_use",
+          "authorizes_data_fetch": false
+        }
+      ],
+      "hard_block_triggers": [
+        "Historical eligibility depends on listing, delisting, exchange, ADR, SPAC, ETF, or security class not covered by reviewed evidence.",
+        "CIK / ticker mapping is missing or ambiguous for a required issuer.",
+        "Active-only source is used to construct historical universe membership."
+      ],
+      "manual_review_triggers": [
+        "Ticker change, merger, delisting, inactive listing, ADR, duplicate CIK, or class-share ambiguity affects a candidate.",
+        "Coverage count changes materially between reviewed packets."
+      ],
+      "incident_log_fields": [
+        "provider",
+        "symbol",
+        "cik_or_issuer_ref",
+        "listing_status",
+        "security_class",
+        "coverage_gap",
+        "manual_disposition"
+      ],
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "family_id": "sec_edgar_audit",
+      "primary_candidate_status": "audit_source_only_not_price_or_primary",
+      "fallback_order": [
+        {
+          "step_order": 1,
+          "source_role": "SEC EDGAR submissions / companyfacts",
+          "allowed_use": "Fundamentals audit source for filing lineage and anomaly review only.",
+          "required_precondition": "Reviewed parser lineage, fair-access behavior, and field mapping for the target audit fields.",
+          "if_unavailable_action": "manual_review",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 2,
+          "source_role": "FMP statement candidate fields",
+          "allowed_use": "Candidate primary fields only after separate PIT, coverage, and license review; not a fallback that overrides SEC conflicts silently.",
+          "required_precondition": "Reviewed reconciliation rule for the specific conflict.",
+          "if_unavailable_action": "defer_field_family",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 3,
+          "source_role": "No audit fallback",
+          "allowed_use": "Mark audit not evaluable and block production use of conflicting fields.",
+          "required_precondition": "Incident log and manual review disposition.",
+          "if_unavailable_action": "block_production_use",
+          "authorizes_data_fetch": false
+        }
+      ],
+      "hard_block_triggers": [
+        "SEC audit conflict affects EGS-sensitive field and no reviewed reconciliation rule exists.",
+        "Accession, accepted timestamp, fiscal period, unit, currency, or amendment lineage cannot be reconstructed.",
+        "SEC is treated as price source or exact free-float authority."
+      ],
+      "manual_review_triggers": [
+        "Companyfacts tag choice is ambiguous for a required metric.",
+        "Amended filing or restatement changes the audit value.",
+        "SEC fair-access or request identity requirements are not satisfied."
+      ],
+      "incident_log_fields": [
+        "sec_cik",
+        "accession_or_filing_ref",
+        "xbrl_tag",
+        "period",
+        "unit",
+        "candidate_provider_value",
+        "sec_value",
+        "manual_disposition"
+      ],
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "family_id": "benchmark_gics",
+      "primary_candidate_status": "blocked_until_licensed_feed",
+      "fallback_order": [
+        {
+          "step_order": 1,
+          "source_role": "Licensed benchmark / GICS history feed",
+          "allowed_use": "Required before any official US benchmark return or issuer-level PIT GICS membership evidence is used.",
+          "required_precondition": "Reviewed license, coverage, as-of semantics, and sample rows from the selected feed.",
+          "if_unavailable_action": "manual_review",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 2,
+          "source_role": "Official methodology pages",
+          "allowed_use": "Methodology context only; not a historical return feed or issuer-level PIT membership table.",
+          "required_precondition": "Clear limitation note in evidence packet.",
+          "if_unavailable_action": "defer_field_family",
+          "authorizes_data_fetch": false
+        },
+        {
+          "step_order": 3,
+          "source_role": "No benchmark / GICS fallback",
+          "allowed_use": "Block benchmark or industry-normalized evidence when licensed feed / PIT membership is unresolved.",
+          "required_precondition": "Incident log and manual review disposition.",
+          "if_unavailable_action": "block_production_use",
+          "authorizes_data_fetch": false
+        }
+      ],
+      "hard_block_triggers": [
+        "Benchmark return feed is unavailable, unlicensed, stale, or zero-filled.",
+        "Issuer-level GICS membership is latest-only or lacks as-of history.",
+        "Official methodology context is used as if it were a licensed data feed."
+      ],
+      "manual_review_triggers": [
+        "Benchmark constituent methodology, index return type, or GICS taxonomy changes affect evidence interpretation.",
+        "Industry-normalized thresholds are requested before PIT membership evidence exists."
+      ],
+      "incident_log_fields": [
+        "source_role",
+        "benchmark_or_gics_ref",
+        "date_window",
+        "return_type_or_industry_level",
+        "missing_or_ambiguous_field",
+        "manual_disposition"
+      ],
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "incident_response_matrix": [
+    {
+      "incident_id": "quota_or_rate_limit",
+      "severity": "production_blocker",
+      "trigger": "Quota exhaustion, throttling, 429-like response, daily cap, or unreviewed rate-limit behavior affects required provider evidence.",
+      "default_action": "block_production_use",
+      "required_actions": [
+        "record_incident",
+        "fallback_path_review",
+        "manual_review"
+      ],
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_id": "http_5xx_or_provider_outage",
+      "severity": "production_blocker",
+      "trigger": "Provider outage, repeated server errors, delayed availability, or unreliable status-page evidence affects required fields.",
+      "default_action": "block_production_use",
+      "required_actions": [
+        "record_incident",
+        "fallback_path_review",
+        "manual_review"
+      ],
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_id": "http_401_403_auth_scope",
+      "severity": "evidence_blocker",
+      "trigger": "Authorization or account-scope error appears for a required endpoint family, including legacy 403-style failures.",
+      "default_action": "record_incident",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "fallback_path_review"
+      ],
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_id": "schema_or_field_semantics_drift",
+      "severity": "production_blocker",
+      "trigger": "Provider field names, types, units, endpoint path, row shape, or documented semantics change relative to reviewed evidence.",
+      "default_action": "manual_review",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "fallback_path_review",
+        "rerun_provider_evidence"
+      ],
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_id": "stale_or_missing_rows",
+      "severity": "production_blocker",
+      "trigger": "Required row, date, price, volume, statement, filing, benchmark, or coverage record is stale, missing, empty, or unexpectedly sparse.",
+      "default_action": "block_production_use",
+      "required_actions": [
+        "record_incident",
+        "block_production_use",
+        "fallback_path_review"
+      ],
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_id": "pit_or_observed_date_ambiguity",
+      "severity": "evidence_blocker",
+      "trigger": "As-of eligibility, filing observed date, accepted timestamp, latest-only status, or historical reconstruction boundary becomes ambiguous.",
+      "default_action": "freeze_latest_only_claims",
+      "required_actions": [
+        "record_incident",
+        "freeze_latest_only_claims",
+        "manual_review"
+      ],
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_id": "corporate_action_adjustment_conflict",
+      "severity": "evidence_blocker",
+      "trigger": "Split, dividend, symbol change, delisting, restatement, or adjusted-price behavior conflicts with reviewed return or factor construction.",
+      "default_action": "manual_review",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "rerun_provider_evidence"
+      ],
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_id": "sec_edgar_audit_conflict",
+      "severity": "evidence_blocker",
+      "trigger": "SEC EDGAR audit source conflicts with FMP-derived fundamentals, or SEC parser lineage is insufficient for the requested audit field.",
+      "default_action": "manual_review",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "use_reviewed_audit_source_only"
+      ],
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "drift_monitor_bindings": [
+    {
+      "dimension": "coverage_count",
+      "source_contract_dimension": "coverage_count",
+      "trigger": "Provider coverage counts, missing-field rates, active / inactive / delisted behavior, or universe filters change.",
+      "blocking_actions": [
+        "warn",
+        "block_production_use",
+        "rerun_provider_evidence"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "dimension": "freshness_latency",
+      "source_contract_dimension": "freshness_latency",
+      "trigger": "Freshness, latency, or cycle-time behavior affects required evidence or report timing.",
+      "blocking_actions": [
+        "warn",
+        "manual_review",
+        "record_incident"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "dimension": "schema_or_field_semantics",
+      "source_contract_dimension": "schema_or_field_semantics",
+      "trigger": "Field names, units, row shape, endpoint paths, or field meanings drift from reviewed evidence.",
+      "blocking_actions": [
+        "manual_review",
+        "record_incident",
+        "fallback_path_review"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "dimension": "pit_as_of_integrity",
+      "source_contract_dimension": "pit_as_of_integrity",
+      "trigger": "Observed date, as-of eligibility, latest-only status, or restatement behavior becomes ambiguous.",
+      "blocking_actions": [
+        "block_production_use",
+        "freeze_latest_only_claims",
+        "record_incident"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "dimension": "corporate_action_revision",
+      "source_contract_dimension": "corporate_action_revision",
+      "trigger": "Split, dividend, restatement, revised fundamentals, or adjustment behavior changes.",
+      "blocking_actions": [
+        "record_incident",
+        "rerun_provider_evidence",
+        "manual_review"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "dimension": "authorization_cost_quota",
+      "source_contract_dimension": "authorization_cost_quota",
+      "trigger": "License scope, storage rights, quota, cost, account scope, or throttling changes.",
+      "blocking_actions": [
+        "manual_review",
+        "fallback_path_review",
+        "record_incident"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "dimension": "provider_incident",
+      "source_contract_dimension": "provider_incident",
+      "trigger": "Provider outage, retry instability, delayed data, or incident notice affects required evidence.",
+      "blocking_actions": [
+        "warn",
+        "record_incident",
+        "fallback_path_review"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false
+    },
+    {
+      "dimension": "outlier_revision_rate",
+      "source_contract_dimension": "outlier_revision_rate",
+      "trigger": "Outlier rate, revision rate, zero-volume anomalies, or return spikes exceed reviewed expectations.",
+      "blocking_actions": [
+        "manual_review",
+        "rerun_provider_evidence",
+        "record_incident"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false
+    }
+  ],
+  "decision_gates": [
+    {
+      "gate_id": "playbook_design_only_not_execution",
+      "status": "defined_but_not_implemented",
+      "blocks_implementation": true,
+      "required_resolution": "This playbook must be converted into reviewed implementation contracts before any provider adapter, DataHub table, or runner consumes it.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "license_storage_retention_required",
+      "status": "blocked_pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "License, local-storage, export, derived-report, retention, and non-display rights remain unresolved before production storage or DataHub design.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "coverage_pit_adjustment_required",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "Coverage counts, PIT observed-date rows, and corporate-action adjustment samples require separate explicit approval before any endpoint calls.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "incident_log_schema_required",
+      "status": "blocked_pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "A later implementation slice must define incident log schema, storage path, retention, review ownership, and replay behavior before execution.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_separate_authorization_required",
+      "status": "blocked_pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "Phase 7c must remain a separate reviewed schema-first DataHub / report / reproducibility slice after provider blockers are closed or accepted.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "prohibited_actions": {
+    "provider_selection": false,
+    "provider_ranking": false,
+    "new_fmp_token": false,
+    "trial_request": false,
+    "paid_upgrade": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_status_page_poll": false,
+    "provider_data_fetch": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "fallback_execution": false,
+    "phase7c_authorization": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "limitations": [
+    "This playbook is schema-first design only; it performs no web research, provider contact, status-page polling, endpoint call, data fetch, paid upgrade, yfinance check, full-market download, adapter work, DataHub work, runner change, broker automation, or ship-gate claim.",
+    "Fallback order definitions do not select FMP or any other provider; they only state default-deny behavior if a later reviewed provider implementation encounters missing or drifting evidence.",
+    "Incident response definitions do not prove provider stability, status-page reliability, quota behavior, fallback execution, or production readiness.",
+    "SEC EDGAR remains an audit source for filing-grounded fundamentals; it is not a price source, strict free-float source, or broad normalized fundamentals vendor.",
+    "All field families remain blocked for production consumption until license, coverage, PIT, adjustment, audit-parser, fallback-execution, and incident-log gates are separately reviewed."
+  ],
+  "next_steps": [
+    "Use this artifact as the fallback / incident / stability design owner for SR-PROVIDER-001 after the remaining-blocker plan.",
+    "Do not run provider status polling or additional endpoint calls by default; any broader data or yfinance check needs separate explicit approval and review.",
+    "The next no-access provider slice can be license / storage / retention review, or an incident-log schema contract that still performs no provider calls.",
+    "Any implementation of fallback execution, status monitoring, provider adapter, DataHub table, runner consumption, or Phase 7c remains blocked until a separate reviewed slice authorizes it."
+  ]
+}

@@ -8,6 +8,65 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (US EGS fallback / incident / stability playbook)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `edd7026`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/provider_evidence_drift_monitor.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_fallback_incident_stability_playbook.schema.json, docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json, tests/schema/test_provider_p1_fallback_incident_stability_playbook_schema.py. No runner / provider_samples / network change (docs+schema+test only).
+
+**Independent verification**:
+- **AGENTS.md (highest rule — scrutinized line-by-line):** changes are purely descriptive — the 🟡 Phase 7b-2 progress bullet, fixed-decision item 14, and the file-reference index add the fallback playbook and EXTEND the non-authorized list with `provider status polling` + `fallback execution`. Boundary is strengthened, not weakened; no fixed decision / ship gate / capital policy / execution boundary / governance rule altered. Correctly routed through standard review (AGENTS.md is a hard `[trivial]` exclusion).
+- Playbook authorizes nothing: `playbook_status=schema_first_design_no_provider_calls`, `data_fetch_allowed=false`, `provider_status_polling_allowed=false`, `fallback_execution_allowed=false`, and every scope / field-family / fallback-step / incident / drift-binding / decision-gate / prohibited-action flag is const-false. 6 field-family playbooks all `silent_default_allowed=false` / `zero_fill_allowed=false` / `latest_only_backfill_allowed=false`; 8 incident responses all `production_use_allowed_until_review=false` + require `record_incident` + incident log; `benchmark_gics` kept `blocked_until_licensed_feed`; `yfinance` only as an explicitly-approved future smoke check with `authorizes_data_fetch=false`.
+- Ran `tests.schema.test_provider_p1_fallback_incident_stability_playbook_schema` under Python313 (jsonschema): 7 tests, all pass, 0 skipped — artifact validates, scope-creep (provider_selection / status_polling / data_fetch / fallback_execution / silent_default / authorizes_data_fetch / production_use_allowed) rejected, 6-family + 8-incident completeness + default-deny asserted.
+- Docs consistent: drift-monitor §21 insert + §22 renumber clean (§20 text repointed; "§20+§21 do not broaden the boundary"); register Hot Queue + SR-PROVIDER-001 evidence/calibration/next-action updated, kept `open` (adds status-polling / fallback-execution to blocked list); CURRENT=149; handoff append-only; Codex entry properly [tracked]/[untracked]-tagged with Python313 validation.
+
+**Process**: this is the no-access schema-first `fallback_incident_stability` slice the remaining-blocker plan named as safe. It correctly stays design-only (does not overread the two-symbol stable retry as stability evidence) and narrows one blocker without closing `SR-PROVIDER-001`. Single-scope working tree.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001` (open; remaining no-access safe work is docs-only license/storage/retention review or an incident-log schema contract; license / coverage / PIT / executed-fallback / stability / provider-selection / DataHub / runner / Phase 7c all still require separate explicit approval). No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (US EGS fallback / incident / stability playbook)
+
+**Commits**: none (pending Claude review / submit; base `edd7026`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `edd7026 Add US EGS remaining blocker plan`.
+- Executes the no-access `SR-PROVIDER-001` safe slice named by the remaining-blocker plan: fallback / incident / stability playbook schema-first design.
+- This round does not call FMP / SEC / `yfinance`, does not poll provider status pages, does not fetch provider data, does not broaden symbols, does not request token / trial / paid access, does not implement fallback execution, and does not change any runner / adapter / DataHub table.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_fallback_incident_stability_playbook.schema.json`: added the playbook contract for field-family fallback order, incident response matrix, drift-monitor bindings, decision gates, and no-access / no-implementation scope locks.
+2. [untracked] `docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json`: added the design artifact for fundamentals, price / volume / liquidity, corporate actions, security master / coverage, SEC EDGAR audit, benchmark / GICS, and incident triggers.
+3. [untracked] `tests/schema/test_provider_p1_fallback_incident_stability_playbook_schema.py`: validates schema/artifact, field-family and incident completeness, non-authorizing locks, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the new playbook while keeping `SR-PROVIDER-001` open and `CURRENT.md` at 149 lines.
+
+**Key decisions**:
+- Treat fallback / incident / stability as design-only in this slice. Reason: status-page existence and a two-symbol stable retry do not prove provider stability or executable fallback behavior.
+- Default-deny every field family: no silent defaults, no zero fill, no latest-only historical backfill, no production use until later reviewed gates close.
+- Keep `yfinance` in the playbook only as an explicitly approved future low-trust price smoke check, not as a current fallback source or official provider-chain member.
+- Leave `SR-PROVIDER-001` open because license / storage / retention, coverage, PIT / observed-date semantics, price adjustment, SEC parser feasibility, executed fallback, incident-log implementation, provider stability evidence, provider selection, DataHub / runner consumption, and Phase 7c remain unresolved.
+
+**Rejected alternatives**:
+- "Do license / storage / retention review now" — rejected for this slice because it would require fresh external terms review; the playbook can be completed from existing repo evidence without web research.
+- "Poll provider status pages or run another stability sample" — rejected; no approval for new access, provider polling, or endpoint calls.
+- "Implement incident logging or fallback execution now" — rejected; this slice is schema-first design only, and implementation would be a separate reviewed contract.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fallback_incident_stability_playbook_schema -v`: 7 tests ran; 4 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fallback_incident_stability_playbook_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema tests.schema.test_provider_p1_fmp_stable_endpoint_retry_summary_schema tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema -v`: 23 tests passed.
+- `json.tool` parsed the new schema and artifact successfully.
+- `docs/CURRENT.md` line count = 149.
+- `git diff --check`: passed after this SESSION_LOG entry; only normal LF/CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: schema accidentally authorizes provider status polling / data fetch / fallback execution / provider selection / DataHub / runner / Phase 7c, artifact overclaims provider stability, or docs incorrectly close `SR-PROVIDER-001`.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (US EGS remaining blocker plan)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2b72b24`)

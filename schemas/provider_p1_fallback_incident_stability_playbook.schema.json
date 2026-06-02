@@ -1,0 +1,864 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_fallback_incident_stability_playbook/1.0.0/schema.json",
+  "title": "Provider P1 Fallback Incident Stability Playbook",
+  "description": "Phase 7b-2 schema-first playbook for US EGS provider fallback, incident, and stability rules after the AAPL / MSFT FMP stable endpoint retry. This artifact defines blocking behavior and review gates only; it does not fetch data, poll provider status pages, select a provider, authorize yfinance, create adapters, implement DataHub tables, change runners, relax ship gates, or authorize Phase 7c.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_artifact_refs",
+    "stable_retry_boundary",
+    "field_family_playbooks",
+    "incident_response_matrix",
+    "drift_monitor_bindings",
+    "decision_gates",
+    "prohibited_actions",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_fallback_incident_stability_playbook"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 5,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_remaining_blocker_plan_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_coverage_fallback_incident_candidates_20260528"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_us_egs_sample_validation_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_stable_retry_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "stable_retry_boundary": {
+      "$ref": "#/$defs/stableRetryBoundary"
+    },
+    "field_family_playbooks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fieldFamilyPlaybook"
+      },
+      "minItems": 6,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "fundamentals"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "price_volume_liquidity"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "corporate_actions"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "security_master_coverage"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "sec_edgar_audit"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "benchmark_gics"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        }
+      ]
+    },
+    "incident_response_matrix": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/incidentResponse"
+      },
+      "minItems": 8,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_id": {
+                "const": "quota_or_rate_limit"
+              }
+            },
+            "required": [
+              "incident_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_id": {
+                "const": "http_5xx_or_provider_outage"
+              }
+            },
+            "required": [
+              "incident_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_id": {
+                "const": "http_401_403_auth_scope"
+              }
+            },
+            "required": [
+              "incident_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_id": {
+                "const": "schema_or_field_semantics_drift"
+              }
+            },
+            "required": [
+              "incident_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_id": {
+                "const": "stale_or_missing_rows"
+              }
+            },
+            "required": [
+              "incident_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_id": {
+                "const": "pit_or_observed_date_ambiguity"
+              }
+            },
+            "required": [
+              "incident_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_id": {
+                "const": "corporate_action_adjustment_conflict"
+              }
+            },
+            "required": [
+              "incident_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_id": {
+                "const": "sec_edgar_audit_conflict"
+              }
+            },
+            "required": [
+              "incident_id"
+            ]
+          }
+        }
+      ]
+    },
+    "drift_monitor_bindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/driftMonitorBinding"
+      },
+      "minItems": 7
+    },
+    "decision_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decisionGate"
+      },
+      "minItems": 5
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "fieldFamilyId": {
+      "enum": [
+        "fundamentals",
+        "price_volume_liquidity",
+        "corporate_actions",
+        "security_master_coverage",
+        "sec_edgar_audit",
+        "benchmark_gics"
+      ]
+    },
+    "incidentId": {
+      "enum": [
+        "quota_or_rate_limit",
+        "http_5xx_or_provider_outage",
+        "http_401_403_auth_scope",
+        "schema_or_field_semantics_drift",
+        "stale_or_missing_rows",
+        "pit_or_observed_date_ambiguity",
+        "corporate_action_adjustment_conflict",
+        "sec_edgar_audit_conflict"
+      ]
+    },
+    "playbookAction": {
+      "enum": [
+        "warn",
+        "block_production_use",
+        "manual_review",
+        "fallback_path_review",
+        "rerun_provider_evidence",
+        "record_incident",
+        "freeze_latest_only_claims",
+        "defer_field_family",
+        "use_reviewed_audit_source_only",
+        "reject_silent_default"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "playbook_status",
+        "remaining_blocker_plan_ref",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "data_fetch_allowed",
+        "provider_status_polling_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "fallback_execution_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_fallback_incident_stability_playbook_design"
+        },
+        "playbook_status": {
+          "const": "schema_first_design_no_provider_calls"
+        },
+        "remaining_blocker_plan_ref": {
+          "const": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json"
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_status_polling_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "fallback_execution_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "contract_or_schema_ref",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contract_or_schema_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "stableRetryBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_stable_retry_status",
+        "approved_sample_scope",
+        "fallback_evidence_status",
+        "incident_stability_evidence_status",
+        "not_proven"
+      ],
+      "properties": {
+        "fmp_stable_retry_status": {
+          "const": "two_symbol_access_response_shape_passed_only"
+        },
+        "approved_sample_scope": {
+          "const": "AAPL_MSFT_only_existing_fmp_key_sec_public_api_zero_usd"
+        },
+        "fallback_evidence_status": {
+          "const": "design_only_not_executed"
+        },
+        "incident_stability_evidence_status": {
+          "const": "not_validated"
+        },
+        "not_proven": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "fallbackStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "step_order",
+        "source_role",
+        "allowed_use",
+        "required_precondition",
+        "if_unavailable_action",
+        "authorizes_data_fetch"
+      ],
+      "properties": {
+        "step_order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "allowed_use": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required_precondition": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "if_unavailable_action": {
+          "$ref": "#/$defs/playbookAction"
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        }
+      }
+    },
+    "fieldFamilyPlaybook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family_id",
+        "primary_candidate_status",
+        "fallback_order",
+        "hard_block_triggers",
+        "manual_review_triggers",
+        "incident_log_fields",
+        "silent_default_allowed",
+        "zero_fill_allowed",
+        "latest_only_backfill_allowed",
+        "authorizes_provider_selection",
+        "authorizes_data_fetch",
+        "authorizes_adapter_or_datahub",
+        "authorizes_runner_consumption",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "family_id": {
+          "$ref": "#/$defs/fieldFamilyId"
+        },
+        "primary_candidate_status": {
+          "enum": [
+            "candidate_only_not_selected",
+            "audit_source_only_not_price_or_primary",
+            "blocked_until_licensed_feed",
+            "manual_review_only"
+          ]
+        },
+        "fallback_order": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fallbackStep"
+          },
+          "minItems": 2
+        },
+        "hard_block_triggers": {
+          "$ref": "#/$defs/stringList"
+        },
+        "manual_review_triggers": {
+          "$ref": "#/$defs/stringList"
+        },
+        "incident_log_fields": {
+          "$ref": "#/$defs/stringList"
+        },
+        "silent_default_allowed": {
+          "const": false
+        },
+        "zero_fill_allowed": {
+          "const": false
+        },
+        "latest_only_backfill_allowed": {
+          "const": false
+        },
+        "authorizes_provider_selection": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_adapter_or_datahub": {
+          "const": false
+        },
+        "authorizes_runner_consumption": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "incidentResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "incident_id",
+        "severity",
+        "trigger",
+        "default_action",
+        "required_actions",
+        "requires_incident_log",
+        "production_use_allowed_until_review",
+        "fallback_may_be_used_without_new_data",
+        "authorizes_provider_selection",
+        "authorizes_data_fetch",
+        "authorizes_adapter_or_datahub",
+        "authorizes_runner_consumption",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "incident_id": {
+          "$ref": "#/$defs/incidentId"
+        },
+        "severity": {
+          "enum": [
+            "warning_only",
+            "production_blocker",
+            "evidence_blocker"
+          ]
+        },
+        "trigger": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "default_action": {
+          "$ref": "#/$defs/playbookAction"
+        },
+        "required_actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/playbookAction"
+          },
+          "minItems": 2,
+          "contains": {
+            "const": "record_incident"
+          }
+        },
+        "requires_incident_log": {
+          "const": true
+        },
+        "production_use_allowed_until_review": {
+          "const": false
+        },
+        "fallback_may_be_used_without_new_data": {
+          "type": "boolean"
+        },
+        "authorizes_provider_selection": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_adapter_or_datahub": {
+          "const": false
+        },
+        "authorizes_runner_consumption": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "driftMonitorBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dimension",
+        "source_contract_dimension",
+        "trigger",
+        "blocking_actions",
+        "authorizes_status_polling",
+        "authorizes_data_fetch"
+      ],
+      "properties": {
+        "dimension": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_contract_dimension": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "trigger": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blocking_actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/playbookAction"
+          },
+          "minItems": 1
+        },
+        "authorizes_status_polling": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        }
+      }
+    },
+    "decisionGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "blocks_implementation",
+        "required_resolution",
+        "authorizes_provider_selection",
+        "authorizes_data_fetch",
+        "authorizes_adapter_or_datahub",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "defined_but_not_implemented",
+            "blocked_pending_later_review",
+            "pending_user_approval"
+          ]
+        },
+        "blocks_implementation": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_provider_selection": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_adapter_or_datahub": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selection",
+        "provider_ranking",
+        "new_fmp_token",
+        "trial_request",
+        "paid_upgrade",
+        "yfinance_check",
+        "full_market_download",
+        "provider_status_page_poll",
+        "provider_data_fetch",
+        "provider_adapter",
+        "datahub_table",
+        "production_runner_consumption",
+        "fallback_execution",
+        "phase7c_authorization",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "provider_selection": {
+          "const": false
+        },
+        "provider_ranking": {
+          "const": false
+        },
+        "new_fmp_token": {
+          "const": false
+        },
+        "trial_request": {
+          "const": false
+        },
+        "paid_upgrade": {
+          "const": false
+        },
+        "yfinance_check": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "provider_status_page_poll": {
+          "const": false
+        },
+        "provider_data_fetch": {
+          "const": false
+        },
+        "provider_adapter": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "fallback_execution": {
+          "const": false
+        },
+        "phase7c_authorization": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

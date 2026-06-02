@@ -1915,3 +1915,48 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest te
 
 1. Claude 复审应重点核对 artifact 是否只做 blocker routing，且没有授权新 access / data fetch / `yfinance` / provider selection / DataHub / runner / Phase 7c。
 2. 如果审查 Pass 并提交，下一条 provider 方向的 `执行` 默认不抓数据；应先做 FMP / SEC license-storage-retention review，或 fallback / incident / stability playbook schema-first design。
+
+## 2026-06-02 追加：US EGS fallback / incident / stability playbook
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_fallback_incident_stability_playbook.schema.json`，把 `fallback_incident_stability` blocker 拆成 schema-first playbook contract：field-family fallback order、incident response matrix、drift-monitor bindings、decision gates、prohibited actions。
+- 新增 `docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json`，定义 fundamentals、price / volume / liquidity、corporate actions、security master / coverage、SEC EDGAR audit、benchmark / GICS 的默认阻断规则；定义 quota / outage / auth-scope / schema drift / stale rows / PIT ambiguity / corporate-action conflict / SEC audit conflict 的 incident actions。
+- 新增 `tests/schema/test_provider_p1_fallback_incident_stability_playbook_schema.py`，验证 schema/artifact、scope locks、field-family completeness、incident completeness、design-only limitations、scope-creep rejection。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`，把 provider routing 从 remaining-blocker plan 推进到 fallback playbook design，但保持 `SR-PROVIDER-001` open。
+
+**为什么改**:
+
+- 上一轮 remaining-blocker plan 明确 safe schema-first next slice 是 fallback / incident / stability playbook。这个 slice 不需要新 provider access，也不需要联网查 license terms。
+- Stable retry 的 12/12 HTTP 200 只证明 AAPL / MSFT access / shape；如果没有 default-deny fallback / incident contract，后续 DataHub / runner 容易 silent default 或把 status-page existence 误读成 stability evidence。
+- 本轮刻意不执行 provider status polling、不抓新数据、不用 `yfinance`、不实现 fallback execution、不建 adapter / DataHub、不授权 Phase 7c。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fallback_incident_stability_playbook_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fallback_incident_stability_playbook_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema tests.schema.test_provider_p1_fmp_stable_endpoint_retry_summary_schema tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\provider_p1_fallback_incident_stability_playbook.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**验证结果**:
+
+- Bundled Python: `tests.schema.test_provider_p1_fallback_incident_stability_playbook_schema` ran 7 tests: 4 passed, 3 skipped because this interpreter lacks `jsonschema`; non-jsonschema scope / completeness / no-access tests passed.
+- Python313 with `jsonschema`: fallback playbook + remaining-blocker plan + FMP stable retry summary + US EGS sample summary tests ran 23 tests, all passed.
+- `json.tool` parsed the new schema and artifact successfully.
+- `docs/CURRENT.md` line count = 149。
+- `git diff --check` passed after the SESSION_LOG entry was prepended; only normal LF/CRLF working-copy warnings.
+
+**失效旧结论**:
+
+- “fallback / incident / stability playbook 尚未定义”失效；default-deny playbook 已 schema-first recorded。
+- “playbook design = fallback execution / provider stability evidence”不成立；本轮 artifact 明确不执行 fallback、不轮询 status page、不抓数据、不证明稳定性。
+- “有 playbook 就可进 DataHub / runner / Phase 7c”不成立；这些仍被 scope locks 和 `SR-PROVIDER-001` 阻断。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 playbook 是否只定义默认阻断行为，且没有授权 provider status polling、fallback execution、new access、`yfinance`、provider selection、DataHub、runner 或 Phase 7c。
+2. 如果审查 Pass 并提交，下一条 no-access provider slice 可以是 license / storage / retention review；如果继续 incident 方向，只能先做 incident-log schema contract，仍不得 provider calls。
