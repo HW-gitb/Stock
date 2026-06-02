@@ -1737,3 +1737,51 @@ C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\p
 1. Claude 复审应重点核对 approval schema / artifact 是否只解锁 AAPL / MSFT 小样本验证，且没有把 `yfinance`、paid access、full-market、provider selection、adapter、DataHub、runner 或 Phase 7c 打开。
 2. 如果审查 Pass 并提交，下一条 `执行` 可以实现 narrow sample-validation packet：只检查 `FMP_API_KEY` / `SEC_USER_AGENT` 存在且不打印 secrets，只抓 AAPL / MSFT 的 FMP + SEC EDGAR small samples，raw rows 写到 gitignored `provider_samples/us_egs_sample_validation_20260602/`，tracked summary 不含 secrets 或完整 raw rows。
 3. 由于当前可用 Python runtime 缺 `jsonschema`，若复审需要完整 Draft-07 validation，应先在合规环境安装项目 `requirements.txt` 依赖或用已有含 `jsonschema` 的解释器重跑 schema tests。
+
+## 2026-06-02 追加：US EGS AAPL/MSFT sample-validation result
+
+**改了什么**:
+
+- 新增 `runners/us_egs_sample_validation.py`，实现已批准的窄 sample-validation packet：运行时校验 approval artifact、检查 `FMP_API_KEY` / `SEC_USER_AGENT` 存在但不打印值、只抓 AAPL / MSFT、raw payload 只写入 gitignored `provider_samples/us_egs_sample_validation_20260602/`、tracked summary 不含 raw rows 或 secrets。
+- 新增 `schemas/provider_p1_us_egs_sample_validation_summary.schema.json`，锁定 summary 的 scope：no provider selection、no full-market、no `yfinance`、no paid access、no DataHub、no production runner consumption、no Phase 7c、no ship-gate claim。
+- 真实执行 approved small sample，新增 `docs/provider_evidence_p1_us_sample_validation_summary_20260602.json`。结果为 `completed_with_endpoint_errors`：17 calls within budget；SEC EDGAR company tickers / submissions / companyfacts 对 AAPL 和 MSFT 成功；FMP v3 endpoint families 对两只股票均返回 HTTP 403 legacy-endpoint errors。
+- 更新 `docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`、`docs/CURRENT.md`、`docs/README.md`，把状态从“待执行小样本”改为“SEC 样本通过，FMP v3 样本未验证通过；下一步需审查 current FMP endpoint mapping 或 FMP account/API boundary”。
+- 新增 `tests/provider/test_us_egs_sample_validation.py` 与 `tests/schema/test_provider_p1_us_egs_sample_validation_summary_schema.py`，覆盖 fake-client 小样本、secret 不落 summary、raw root 必须在 ignored `provider_samples/`、SEC 不请求压缩 payload、schema scope locks。
+
+**为什么改**:
+
+- 上一轮 approval artifact 已经 reviewed / committed，只解锁 AAPL / MSFT 小样本验证；本轮把批准边界落实为可复跑 runner + schema + tracked no-secret summary。
+- 真实小样本验证发现 FMP v3 legacy endpoint 问题，必须 durable 记录，避免后续 LLM 误把“已有 FMP key”当成“FMP 已验证可用”。
+- SEC EDGAR 样本成功只证明公共 filing audit source 的小样本可访问；不证明 FMP、coverage、license、PIT、fallback、DataHub 或 production readiness。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\us_egs_sample_validation.py
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.provider.test_us_egs_sample_validation -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema tests.schema.test_provider_p1_sample_validation_access_approval_schema -v
+git diff --check
+(Get-Content -Path docs\CURRENT.md -Encoding UTF8).Count
+git check-ignore -v provider_samples\us_egs_sample_validation_20260602\raw\financial_modeling_prep\AAPL\income_statement.json
+```
+
+**验证结果**:
+
+- `runners/us_egs_sample_validation.py`: wrote `docs/provider_evidence_p1_us_sample_validation_summary_20260602.json`; `validation_status = completed_with_endpoint_errors`; `actual_total_endpoint_calls = 17`; `secrets_logged = false`。
+- `tests.provider.test_us_egs_sample_validation`: 5 tests passed.
+- Combined summary / approval schema targeted tests: 12 tests ran, 5 passed, 7 skipped because this bundled interpreter lacks `jsonschema`; non-jsonschema scope-lock tests passed.
+- `git diff --check`: passed；仅有正常 LF/CRLF working-copy warnings。
+- `docs/CURRENT.md` line count = 149。
+- `git check-ignore`: raw sample path matched `.gitignore:50:provider_samples/`。
+
+**失效旧结论**:
+
+- “AAPL / MSFT sample-validation packet 尚未执行”失效；packet 已执行并生成 tracked no-secret summary。
+- “FMP existing API key 已可直接作为 US EGS 主源”不能成立；本轮 sampled FMP v3 endpoint families 均 403，FMP 未被此 packet 验证通过。
+- “SEC EDGAR 小样本可访问意味着 provider / DataHub / Phase 7c 可推进”不成立；SEC 成功只支持 fundamentals audit source 的小样本可访问。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 summary 是否没有 raw rows / secrets、raw payload 是否保持 ignored、FMP 403 是否被正确降级为 blocker 而不是失败后 silent retry 或 provider selection。
+2. 如果审查 Pass 并提交，下一条 `执行` 的自然候选是 current FMP endpoint mapping / account boundary review；不应直接扩大到 `yfinance`、full-market fetch、paid upgrade、DataHub、production runner consumption 或 Phase 7c。
+3. 若要完整 Draft-07 validation，应在含 `jsonschema` 的环境中重跑 summary schema test；当前 bundled Python 仍缺该依赖。

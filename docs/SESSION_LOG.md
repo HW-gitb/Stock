@@ -8,6 +8,70 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (US EGS AAPL/MSFT sample-validation packet)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files + gitignored raw samples vs `0ebae05`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/provider_evidence_drift_monitor.md, docs/system_risk_register.md. [untracked] runners/us_egs_sample_validation.py, schemas/provider_p1_us_egs_sample_validation_summary.schema.json, docs/provider_evidence_p1_us_sample_validation_summary_20260602.json, tests/provider/{__init__,test_us_egs_sample_validation}.py, tests/schema/test_provider_p1_us_egs_sample_validation_summary_schema.py. [gitignored, read not committed] provider_samples/us_egs_sample_validation_20260602/raw/* (17 files).
+
+**Independent verification**:
+- Security (real-secret slice): `rg --no-ignore -i "apikey|api_key=|bearer"` over the entire gitignored `provider_samples/` raw tree AND the tracked summary returned zero matches — the FMP key value is in no file. The key reaches only the FMP request URL; `FetchRecord`/summary persist only the `raw_sample_ref` path + payload_shape/field-presence booleans, never the URL or payload body. Read a raw FMP 403 wrapper directly: body is `{"Error Message":"Legacy Endpoint ..."}`, no key echoed. `git check-ignore` confirms `provider_samples/` (.gitignore:50) and `__pycache__/` (.gitignore:6) ignored; `git add -A --dry-run` under tests/provider stages only the two `.py` files, not bytecode.
+- Ran all 17 tests under a `jsonschema`-equipped interpreter (Python313): 5 runner (fake-client) + 5 summary-schema + 7 approval-schema, all pass, 0 skipped — closing the 7 the bundled interpreter skipped. `test_generated_summary_validates_when_present` validates the REAL summary against its schema; `test_runtime_approval_validation_rejects_scope_creep` proves the runner refuses a tampered (yfinance=true) approval; both schema scope-creep tests reject mutated payloads.
+- Boundary: `load_and_validate_approval` hard-checks every false-lock + `approved_spend_usd=0` + existing-FMP-key + exact AAPL/MSFT universe + ≤40-call budget + gitignored storage path BEFORE any network call; `validate_raw_root` forces raw output under `provider_samples/`. Live run did 17 calls (1 SEC tickers + 12 FMP + 4 SEC), within budget.
+- FMP 403 root cause is real, not a runner bug: FMP deprecated v3 on 2025-08-31; the existing non-legacy key returns 403. Runner records it as `error`, does not retry/broaden, flags FMP `not sample-validated`, adds a limitation + next-step. SEC EDGAR (tickers/submissions/companyfacts) succeeded for both symbols with correct CIKs (AAPL 0000320193, MSFT 0000789019) and core companyfacts tags present.
+
+**Process note**: the new `runners/us_egs_sample_validation.py` does not violate the approval's `runner_change_allowed=false` — that lock targets production-runner changes / provider consumption into the pipeline; this is the standalone sample-validation script the approval's own `next_steps` explicitly authorized. CURRENT P1, drift-monitor §17/§18, and the register consistently fence it from production runner consumption, which stays blocked. The material FMP-403 finding is correctly routed into `SR-PROVIDER-001` (stays `open`, not closed; not over-read as readiness), not left in chat. drift-monitor §17 insert + §18 renumber is clean; CURRENT = 149.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001` (open; next provider step is a separate reviewed current-FMP-endpoint-mapping / FMP account-boundary decision — no yfinance / full-market / paid / provider-selection / DataHub / production-runner / Phase 7c without new explicit approval).
+
+---
+
+## 2026-06-02 — Codex 执行 (US EGS AAPL/MSFT sample-validation packet)
+
+**Commits**: none (pending Claude review / submit; base `0ebae05`)
+
+**Relationship to prior session(s)**:
+- Builds on the reviewed / committed US EGS small-sample approval boundary (`0ebae05`): existing FMP key + SEC EDGAR public API, $0, AAPL / MSFT only, raw samples under ignored `provider_samples/`, no `yfinance`, no full-market, no paid upgrade, no provider selection / DataHub / Phase 7c.
+- Does not reopen A-share burst research; A-share minimal-data burst remains `redesign_required` / failed.
+- Refines `SR-PROVIDER-001`: the approved sample packet has now run, but FMP is still not validated because sampled FMP v3 endpoint families returned 403 legacy-endpoint errors.
+
+**Worked on**:
+1. [untracked] `runners/us_egs_sample_validation.py`: added the approved narrow sample runner. It validates the approval artifact, requires `FMP_API_KEY` / `SEC_USER_AGENT` presence without printing values, writes raw payload wrappers only under ignored `provider_samples/us_egs_sample_validation_20260602/`, and writes a tracked no-secret summary.
+2. [untracked] `schemas/provider_p1_us_egs_sample_validation_summary.schema.json`: added the tracked-summary contract with scope locks for no provider selection, no full-market, no `yfinance`, no paid access, no DataHub, no production runner consumption, no Phase 7c, and no ship-gate claim.
+3. [untracked] `docs/provider_evidence_p1_us_sample_validation_summary_20260602.json`: actual AAPL / MSFT sample summary. Status `completed_with_endpoint_errors`; 17 endpoint calls; no secrets logged; SEC EDGAR succeeded; FMP v3 endpoint families returned HTTP 403 legacy-endpoint errors.
+4. [untracked] `tests/provider/__init__.py`, `tests/provider/test_us_egs_sample_validation.py`, `tests/schema/test_provider_p1_us_egs_sample_validation_summary_schema.py`: added fake-client and schema-lock coverage.
+5. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: routed the sample result and next boundary.
+
+**Key decisions**:
+- Treat the FMP 403 result as evidence, not as a reason to silently broaden or retry with guessed endpoints. Current status is: SEC EDGAR small sample succeeded; sampled FMP v3 endpoints did not validate.
+- Do not fetch more symbols, call `yfinance`, upgrade/pay/request tokens, pick a provider, build adapters/DataHub, or connect the sample runner to production runners.
+- Keep raw SEC / FMP payloads local-only under `provider_samples/`; only the summary is tracked.
+
+**Rejected alternatives**:
+- "Retry with a guessed current FMP endpoint family in the same slice" — rejected. The next reviewed slice should map current FMP endpoints or the FMP account/API boundary explicitly before another live retry.
+- "Call yfinance as fallback" — rejected; not approved for this packet.
+- "Treat SEC success as US EGS provider readiness" — rejected; SEC only validates public filing/audit-source access for this two-symbol sample.
+
+**Validation run/result**:
+- Real approved network run: `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\us_egs_sample_validation.py` wrote the tracked summary with `validation_status = completed_with_endpoint_errors`, `actual_total_endpoint_calls = 17`, `secrets_logged = false`.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.provider.test_us_egs_sample_validation -v`: 5 tests passed.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema tests.schema.test_provider_p1_sample_validation_access_approval_schema -v`: 12 tests ran, 5 passed, 7 skipped because this bundled interpreter lacks `jsonschema`.
+- `git diff --check`: passed; only normal LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` line count = 149.
+- `git check-ignore -v provider_samples\us_egs_sample_validation_20260602\raw\financial_modeling_prep\AAPL\income_statement.json`: matched `.gitignore:50:provider_samples/`.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus all untracked files/folders, and read the raw ignored sample paths only as needed to confirm FMP 403 / SEC success without committing them.
+- Primary review risks: accidental scope expansion beyond AAPL / MSFT; summary containing raw rows or secrets; FMP 403 being over-interpreted as provider readiness; `SR-PROVIDER-001` being closed prematurely.
+
+**Next recommended action after Pass + commit**:
+- Review current FMP endpoint mapping / account boundary as a separate narrow slice before any live retry. Do not proceed to `yfinance`, full-market fetch, provider selection, DataHub, production runner consumption, or Phase 7c without separate explicit approval and review.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (US EGS small sample validation approval boundary)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `6fc2283`)

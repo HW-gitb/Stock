@@ -1,0 +1,448 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_us_egs_sample_validation_summary/1.0.0/schema.json",
+  "title": "Provider P1 US EGS Sample Validation Summary",
+  "description": "Tracked no-secret summary for the narrow 2026-06-02 US EGS AAPL/MSFT FMP existing-key plus SEC EDGAR public-API sample-validation packet. Raw provider/public API rows must stay under gitignored provider_samples/. This summary does not select a provider, authorize yfinance, permit full-market downloads, implement adapters or DataHub tables, change runners, authorize Phase 7c, relax ship gates, or claim production readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "approval_ref",
+    "schema_ref",
+    "scope",
+    "environment",
+    "storage",
+    "sample_universe",
+    "endpoint_call_budget",
+    "endpoint_results",
+    "symbol_results",
+    "prohibited_claims",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_us_egs_sample_validation_summary"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "approval_ref": {
+      "const": "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json"
+    },
+    "schema_ref": {
+      "const": "schemas/provider_p1_us_egs_sample_validation_summary.schema.json"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "validation_status",
+        "manual_order_only",
+        "ship_gate_relaxed",
+        "provider_selection_allowed",
+        "datahub_table_implementation_allowed",
+        "runner_change_allowed",
+        "phase7c_authorized_by_this_summary",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "us_egs_small_sample_validation_summary"
+        },
+        "validation_status": {
+          "enum": [
+            "dry_run_env_only",
+            "completed",
+            "completed_with_endpoint_errors"
+          ]
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_summary": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_api_key_present",
+        "fmp_api_key_source",
+        "sec_user_agent_present",
+        "sec_user_agent_source",
+        "secrets_logged"
+      ],
+      "properties": {
+        "fmp_api_key_present": {
+          "const": true
+        },
+        "fmp_api_key_source": {
+          "enum": [
+            "process",
+            "windows_environment"
+          ]
+        },
+        "sec_user_agent_present": {
+          "const": true
+        },
+        "sec_user_agent_source": {
+          "enum": [
+            "process",
+            "windows_environment"
+          ]
+        },
+        "secrets_logged": {
+          "const": false
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_sample_storage_path",
+        "raw_samples_gitignored",
+        "tracked_summary_contains_raw_rows",
+        "secrets_in_summary"
+      ],
+      "properties": {
+        "raw_sample_storage_path": {
+          "const": "provider_samples/us_egs_sample_validation_20260602/"
+        },
+        "raw_samples_gitignored": {
+          "const": true
+        },
+        "tracked_summary_contains_raw_rows": {
+          "const": false
+        },
+        "secrets_in_summary": {
+          "const": false
+        }
+      }
+    },
+    "sample_universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbols",
+        "max_symbols"
+      ],
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "AAPL",
+              "MSFT"
+            ]
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "max_symbols": {
+          "const": 2
+        }
+      }
+    },
+    "endpoint_call_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_total_endpoint_calls",
+        "actual_total_endpoint_calls",
+        "within_budget"
+      ],
+      "properties": {
+        "max_total_endpoint_calls": {
+          "type": "integer",
+          "maximum": 40
+        },
+        "actual_total_endpoint_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 40
+        },
+        "within_budget": {
+          "const": true
+        }
+      }
+    },
+    "endpoint_results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/endpointResult"
+      }
+    },
+    "symbol_results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/symbolResult"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "full_market_download_performed",
+        "yfinance_used",
+        "paid_access_used",
+        "phase7c_authorized",
+        "ship_gate_evidence_claimed"
+      ],
+      "properties": {
+        "provider_selected": {
+          "const": false
+        },
+        "full_market_download_performed": {
+          "const": false
+        },
+        "yfinance_used": {
+          "const": false
+        },
+        "paid_access_used": {
+          "const": false
+        },
+        "phase7c_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence_claimed": {
+          "const": false
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_steps": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "endpointResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "endpoint_family",
+        "symbol",
+        "status",
+        "http_status",
+        "error_type",
+        "raw_sample_ref",
+        "raw_sample_ref_gitignored",
+        "payload_shape",
+        "field_presence"
+      ],
+      "properties": {
+        "provider_id": {
+          "enum": [
+            "financial_modeling_prep",
+            "sec_edgar"
+          ]
+        },
+        "endpoint_family": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "AAPL",
+            "MSFT",
+            null
+          ]
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "http_status": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "error_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw_sample_ref": {
+          "type": "string",
+          "pattern": "^provider_samples/us_egs_sample_validation_20260602/raw/"
+        },
+        "raw_sample_ref_gitignored": {
+          "const": true
+        },
+        "payload_shape": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "payload_type",
+            "top_level_key_count",
+            "row_count"
+          ],
+          "properties": {
+            "payload_type": {
+              "type": "string"
+            },
+            "top_level_key_count": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "row_count": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "field_presence": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "symbolResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol",
+        "cik",
+        "fmp",
+        "sec_edgar",
+        "validation_observations"
+      ],
+      "properties": {
+        "symbol": {
+          "enum": [
+            "AAPL",
+            "MSFT"
+          ]
+        },
+        "cik": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fmp": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "endpoints_ok",
+            "endpoints_error",
+            "statement_observed_date_fields_present",
+            "price_volume_fields_present"
+          ],
+          "properties": {
+            "endpoints_ok": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "endpoints_error": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "statement_observed_date_fields_present": {
+              "type": "boolean"
+            },
+            "price_volume_fields_present": {
+              "type": "boolean"
+            }
+          }
+        },
+        "sec_edgar": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cik_found",
+            "endpoints_ok",
+            "endpoints_error",
+            "submissions_observed_date_fields_present",
+            "companyfacts_core_tags_present"
+          ],
+          "properties": {
+            "cik_found": {
+              "type": "boolean"
+            },
+            "endpoints_ok": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "endpoints_error": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "submissions_observed_date_fields_present": {
+              "type": "boolean"
+            },
+            "companyfacts_core_tags_present": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "validation_observations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

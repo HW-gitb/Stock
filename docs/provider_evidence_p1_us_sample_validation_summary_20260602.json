@@ -1,0 +1,495 @@
+{
+  "schema_name": "provider_p1_us_egs_sample_validation_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T05:01:10+00:00",
+  "approval_ref": "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json",
+  "schema_ref": "schemas/provider_p1_us_egs_sample_validation_summary.schema.json",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "us_egs_small_sample_validation_summary",
+    "validation_status": "completed_with_endpoint_errors",
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "provider_selection_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false,
+    "phase7c_authorized_by_this_summary": false,
+    "production_ready_claim_allowed": false
+  },
+  "environment": {
+    "fmp_api_key_present": true,
+    "fmp_api_key_source": "windows_environment",
+    "sec_user_agent_present": true,
+    "sec_user_agent_source": "windows_environment",
+    "secrets_logged": false
+  },
+  "storage": {
+    "raw_sample_storage_path": "provider_samples/us_egs_sample_validation_20260602/",
+    "raw_samples_gitignored": true,
+    "tracked_summary_contains_raw_rows": false,
+    "secrets_in_summary": false
+  },
+  "sample_universe": {
+    "symbols": [
+      "AAPL",
+      "MSFT"
+    ],
+    "max_symbols": 2
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 40,
+    "actual_total_endpoint_calls": 17,
+    "within_budget": true
+  },
+  "endpoint_results": [
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_tickers_mapping",
+      "symbol": null,
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/sec_edgar/_market/company_tickers_mapping.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 10365,
+        "row_count": null
+      },
+      "field_presence": {
+        "ticker": true,
+        "cik_str": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "AAPL",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/AAPL/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "symbol": false,
+        "companyName": false,
+        "sector": false,
+        "industry": false,
+        "mktCap": false,
+        "price": false,
+        "volAvg": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "income_statement",
+      "symbol": "AAPL",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/AAPL/income_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "fillingDate": false,
+        "acceptedDate": false,
+        "period": false,
+        "revenue": false,
+        "netIncome": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "balance_sheet_statement",
+      "symbol": "AAPL",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/AAPL/balance_sheet_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "fillingDate": false,
+        "acceptedDate": false,
+        "totalAssets": false,
+        "totalDebt": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "cash_flow_statement",
+      "symbol": "AAPL",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/AAPL/cash_flow_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "fillingDate": false,
+        "acceptedDate": false,
+        "operatingCashFlow": false,
+        "freeCashFlow": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "symbol": "AAPL",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/AAPL/financial_ratios_or_key_metrics.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "marketCap": false,
+        "peRatio": false,
+        "revenuePerShare": false,
+        "netIncomePerShare": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "historical_eod_price_volume",
+      "symbol": "AAPL",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/AAPL/historical_eod_price_volume.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "open": false,
+        "close": false,
+        "adjClose": false,
+        "volume": false
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "submissions",
+      "symbol": "AAPL",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/sec_edgar/AAPL/submissions.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 24,
+        "row_count": null
+      },
+      "field_presence": {
+        "filings": true,
+        "recent": true,
+        "filingDate": true,
+        "acceptanceDateTime": true,
+        "accessionNumber": true,
+        "form": true
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "companyfacts",
+      "symbol": "AAPL",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/sec_edgar/AAPL/companyfacts.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 3,
+        "row_count": null
+      },
+      "field_presence": {
+        "facts": true
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "MSFT",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/MSFT/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "symbol": false,
+        "companyName": false,
+        "sector": false,
+        "industry": false,
+        "mktCap": false,
+        "price": false,
+        "volAvg": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "income_statement",
+      "symbol": "MSFT",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/MSFT/income_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "fillingDate": false,
+        "acceptedDate": false,
+        "period": false,
+        "revenue": false,
+        "netIncome": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "balance_sheet_statement",
+      "symbol": "MSFT",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/MSFT/balance_sheet_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "fillingDate": false,
+        "acceptedDate": false,
+        "totalAssets": false,
+        "totalDebt": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "cash_flow_statement",
+      "symbol": "MSFT",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/MSFT/cash_flow_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "fillingDate": false,
+        "acceptedDate": false,
+        "operatingCashFlow": false,
+        "freeCashFlow": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "symbol": "MSFT",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/MSFT/financial_ratios_or_key_metrics.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "marketCap": false,
+        "peRatio": false,
+        "revenuePerShare": false,
+        "netIncomePerShare": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "historical_eod_price_volume",
+      "symbol": "MSFT",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/financial_modeling_prep/MSFT/historical_eod_price_volume.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 1,
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "open": false,
+        "close": false,
+        "adjClose": false,
+        "volume": false
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "submissions",
+      "symbol": "MSFT",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/sec_edgar/MSFT/submissions.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 24,
+        "row_count": null
+      },
+      "field_presence": {
+        "filings": true,
+        "recent": true,
+        "filingDate": true,
+        "acceptanceDateTime": true,
+        "accessionNumber": true,
+        "form": true
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "companyfacts",
+      "symbol": "MSFT",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_egs_sample_validation_20260602/raw/sec_edgar/MSFT/companyfacts.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 3,
+        "row_count": null
+      },
+      "field_presence": {
+        "facts": true
+      }
+    }
+  ],
+  "symbol_results": [
+    {
+      "symbol": "AAPL",
+      "cik": "0000320193",
+      "fmp": {
+        "endpoints_ok": 0,
+        "endpoints_error": 6,
+        "statement_observed_date_fields_present": false,
+        "price_volume_fields_present": false
+      },
+      "sec_edgar": {
+        "cik_found": true,
+        "endpoints_ok": 2,
+        "endpoints_error": 0,
+        "submissions_observed_date_fields_present": true,
+        "companyfacts_core_tags_present": {
+          "revenue": true,
+          "net_income": true,
+          "assets": true,
+          "shares_outstanding": true
+        }
+      },
+      "validation_observations": [
+        "AAPL: SEC ticker mapping found CIK.",
+        "AAPL: one or more approved FMP endpoint families returned an error.",
+        "AAPL: SEC submissions and companyfacts returned HTTP success.",
+        "AAPL: no provider selection, production readiness, or alpha evidence is claimed."
+      ]
+    },
+    {
+      "symbol": "MSFT",
+      "cik": "0000789019",
+      "fmp": {
+        "endpoints_ok": 0,
+        "endpoints_error": 6,
+        "statement_observed_date_fields_present": false,
+        "price_volume_fields_present": false
+      },
+      "sec_edgar": {
+        "cik_found": true,
+        "endpoints_ok": 2,
+        "endpoints_error": 0,
+        "submissions_observed_date_fields_present": true,
+        "companyfacts_core_tags_present": {
+          "revenue": true,
+          "net_income": true,
+          "assets": true,
+          "shares_outstanding": true
+        }
+      },
+      "validation_observations": [
+        "MSFT: SEC ticker mapping found CIK.",
+        "MSFT: one or more approved FMP endpoint families returned an error.",
+        "MSFT: SEC submissions and companyfacts returned HTTP success.",
+        "MSFT: no provider selection, production readiness, or alpha evidence is claimed."
+      ]
+    }
+  ],
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "phase7c_authorized": false,
+    "ship_gate_evidence_claimed": false
+  },
+  "limitations": [
+    "This is a two-symbol active-name small sample, not a coverage proof.",
+    "FMP endpoint success does not prove PIT semantics, license sufficiency, fallback behavior, or provider stability.",
+    "SEC EDGAR checks are filing-grounded anomaly checks and do not make EDGAR a price or strict free-float source.",
+    "No provider selection, DataHub implementation, runner consumption, Phase 7c authorization, or ship-gate evidence is claimed.",
+    "FMP v3 endpoint families returned 403 errors in this run; FMP is not sample-validated by this packet."
+  ],
+  "next_steps": [
+    "Review current FMP endpoint mapping and plan a separate reviewed retry before treating FMP as a viable EGS source.",
+    "Review endpoint availability, field presence, observed-date fields, SEC tag availability, and endpoint errors before deciding any follow-up.",
+    "Do not broaden symbols, endpoints, providers, yfinance checks, full-market fetches, or DataHub work without separate explicit approval and review."
+  ]
+}
