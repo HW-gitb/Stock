@@ -8,6 +8,67 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (FMP price-adjustment / corporate-action semantics contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `7819e23`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/provider_evidence_drift_monitor.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_fmp_price_adjustment_corporate_action_semantics_contract.schema.json, docs/provider_evidence_p1_us_fmp_price_adjustment_corporate_action_semantics_contract_20260602.json, tests/schema/test_provider_p1_fmp_price_adjustment_corporate_action_semantics_contract_schema.py. No runner / provider_samples / network change (docs+schema+test only).
+
+**Independent verification**:
+- Contract authorizes nothing and does no FMP work: `contract_status=semantics_contract_only_no_access_no_price_mapping`; `fmp_endpoint_call_allowed / data_fetch_allowed / raw_payload_parse_allowed / return_calculation_allowed / corporate_action_reconciliation_allowed / field_mapping_implementation_allowed=false`; `review_basis` confirms no calls / no parse / no return calc / no reconciliation / no mapping. All scope / semantics / lineage / gate / prohibited fields const-false.
+- Data-quality discipline is correct and is the substantive value: 8 market_data_semantics families (EOD OHLCV, adjusted/unadjusted mode, split factor, dividend, delisting/inactive, zero-volume/halt/missing-session, liquidity/VWAP/turnover, calendar/timezone) all `blocked_pending_*` with `missing_or_ambiguous_behavior=block_..._no_silent_default`; 18 price_lineage_requirements (price_adjustment_mode, split_factor/dividend event refs, corporate_action_effective_date, delisting_status, missing_session_policy, return_eligibility_rule, as_of_eligibility_rule …) all `blocks_return_or_liquidity_use=true`; `no_silent_default_policy` sets `unadjusted_price_cannot_be_silent_default=true`, `split_or_dividend_backfill_without_event_ref_allowed=false`, `silent_default_allowed / zero_fill_allowed=false`. This extends the SR-MEASURE-001 lesson (explicit entry/exit anchor + adjustment mode) to the US EGS price path.
+- Ran `tests.schema.test_provider_p1_fmp_price_adjustment_corporate_action_semantics_contract_schema` under Python313 (jsonschema): 9 tests, all pass, 0 skipped — scope locks, semantics don't authorize return/liquidity use, 18-item lineage completeness + blocks-use, no-silent-default blocks ambiguous price / corporate actions, review_basis no-access, scope-creep rejected, sources/next-steps preserve blockers.
+- AGENTS.md descriptive-only (fixed decisions remain 14/15/16 — grep-confirmed no item 17): progress/roadmap/item-14 add the price-adjustment contract and extend the non-authorized list. drift-monitor §26 insert + §27 renumber clean (grep-confirmed §24 SEC / §25 PIT / §26 price-adj / §27 Next Use); register SR-PROVIDER-001 grep-confirmed `Status: open`; CURRENT=145 (≤150); next no-access slice named = SEC parser field-family mapping or coverage-count access-packet plan.
+
+**Process**: correct no-access price/corporate-action semantics contract — adjusted-vs-unadjusted, splits, dividends, delisting, missing sessions, liquidity, and calendar/timezone all blocked pending validation with no silent default; no FMP calls/parse/return-calc this round; `SR-PROVIDER-001` not closed. Single-scope working tree.
+
+**Hot Queue**: `SR-DATA-004` + `SR-PROVIDER-001` (open) + `SR-RESOURCE-001` (P2 open) — all unchanged. No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (FMP price-adjustment / corporate-action semantics contract)
+
+**Commits**: none (pending Claude review / submit; base `7819e23`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `7819e23 Add FMP PIT semantics contract`.
+- Executes the next no-access `SR-PROVIDER-001` provider slice named by the FMP PIT contract / current routing: define FMP historical EOD price-adjustment, corporate-action, delisting / inactive, missing-session, zero-volume, calendar / timezone, and liquidity gates before any actual return calculation, raw-payload parsing, field mapping, DataHub, runner, or Phase 7c work.
+- This round does not call FMP / SEC / `yfinance`, does not read or parse ignored raw payloads, does not fetch data, does not calculate returns, does not reconcile corporate actions, does not implement field mappings or parsers, does not create adapters / DataHub tables, does not modify runners, and does not authorize Phase 7c.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_fmp_price_adjustment_corporate_action_semantics_contract.schema.json`: added the no-access contract for FMP EOD return / liquidity gates, 8 market-data gate families, 18 price lineage requirements, no-silent-default policy, decision gates, and prohibited actions.
+2. [untracked] `docs/provider_evidence_p1_us_fmp_price_adjustment_corporate_action_semantics_contract_20260602.json`: added the concrete semantics artifact. It treats AAPL / MSFT OHLCV / change / changePercent / VWAP presence as response-shape evidence only and blocks return / liquidity use pending adjustment-mode, split / dividend, delisting / inactive, zero-volume / missing-session, calendar / timezone, and liquidity validation.
+3. [untracked] `tests/schema/test_provider_p1_fmp_price_adjustment_corporate_action_semantics_contract_schema.py`: validates schema/artifact, no-access scope locks, two-symbol evidence calibration, 8 market-data gates, 18 lineage requirements, no-silent-default policy, source refs, limitations, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the FMP price / corporate-action semantics contract while keeping `SR-PROVIDER-001` open.
+
+**Key decisions**:
+- Treat FMP EOD OHLCV / VWAP presence as response-shape evidence, not return or liquidity evidence. Reason: two active symbols do not prove adjusted versus unadjusted mode, dividend treatment, split factors, delisting behavior, missing sessions, or liquidity definitions.
+- Block silent fallback to raw close, adjusted close, current profile price / volume, zero fill, or event backfill without reviewed lineage. Reason: missing adjustment and corporate-action semantics would contaminate benchmark excess, capacity, and execution-cost feasibility.
+- Keep this slice no-access and no-implementation. Reason: actual FMP adjustment validation or corporate-action sample work needs separate user approval and reviewed no-secret summary; return calculation and field mapping are implementation work.
+- Leave `SR-PROVIDER-001` open. Reason: coverage, current terms / production storage rights, actual FMP PIT row validation, actual price-adjustment and corporate-action validation, SEC parser implementation, incident-log writer behavior, executable fallback, stability evidence, provider selection, DataHub / runner consumption, and Phase 7c remain unresolved.
+
+**Rejected alternatives**:
+- "Parse the existing ignored FMP stable retry raw payloads now" — rejected; raw-payload parsing and field mapping are implementation work, not a no-access semantics contract.
+- "Calculate sample returns from AAPL / MSFT EOD fields" — rejected; return calculation would overread adjustment / corporate-action semantics that are not validated.
+- "Call FMP corporate-action endpoints now" — rejected; no new endpoint calls or broader access were approved.
+- "Use this as DataHub / runner readiness" — rejected; the packet defines gates only and authorizes no consumption path.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fmp_price_adjustment_corporate_action_semantics_contract_schema -v`: 9 tests ran; 6 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fmp_price_adjustment_corporate_action_semantics_contract_schema tests.schema.test_provider_p1_fmp_pit_observed_date_semantics_contract_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v`: 24 tests passed.
+- `json.tool` parsed `schemas/provider_p1_fmp_price_adjustment_corporate_action_semantics_contract.schema.json` and `docs/provider_evidence_p1_us_fmp_price_adjustment_corporate_action_semantics_contract_20260602.json`.
+- `docs/CURRENT.md` line count = 145.
+- `git diff --check`: passed after docs / handoff updates; only normal LF/CRLF working-copy warnings.
+- `git status --short`: tracked docs modified plus three untracked files above; no runner / provider_samples / network change. Git also printed the known local warning about `C:\Users\cnhea/.config/git/ignore` permission.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: the packet accidentally authorizes FMP endpoint calls, raw-payload parsing, return calculation, corporate-action reconciliation, field mapping implementation, provider selection, DataHub / runner consumption, Phase 7c, ship-gate claims, or closes `SR-PROVIDER-001` too early.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (FMP PIT / observed-date semantics contract)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `463ee51`)

@@ -1,0 +1,806 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_fmp_price_adjustment_corporate_action_semantics_contract/1.0.0/schema.json",
+  "title": "Provider P1 FMP Price-Adjustment Corporate-Action Semantics Contract",
+  "description": "Phase 7b-2 no-access semantics contract for FMP historical EOD price / volume adjustment, corporate actions, delisting / inactive behavior, missing sessions, and liquidity use after the AAPL / MSFT stable endpoint retry. This artifact defines return / liquidity use gates, lineage requirements, and no-silent-default policy from existing reviewed repository evidence only; it does not call FMP endpoints, parse raw payloads, fetch data, calculate returns, reconcile corporate actions, select a provider, implement field mappings, implement DataHub, change runners, or authorize Phase 7c.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_artifact_refs",
+    "review_basis",
+    "current_scope_summary",
+    "market_data_semantics",
+    "price_lineage_requirements",
+    "no_silent_default_policy",
+    "decision_gates",
+    "prohibited_actions",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_fmp_price_adjustment_corporate_action_semantics_contract"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 8,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_remaining_blocker_plan_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_stable_retry_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_current_endpoint_mapping_review_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_market_data_candidates_20260528"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_coverage_fallback_incident_candidates_20260528"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_license_storage_retention_review_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_pit_semantics_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "review_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_type",
+        "fmp_endpoint_calls_performed",
+        "raw_payload_read_or_parsed",
+        "price_return_calculation_performed",
+        "corporate_action_reconciliation_performed",
+        "field_mapping_implemented",
+        "uses_existing_reviewed_artifacts_only",
+        "requires_later_user_approved_fmp_access_packet",
+        "requires_later_adjustment_corporate_action_validation_review"
+      ],
+      "properties": {
+        "basis_type": {
+          "const": "existing_repo_artifacts_no_new_external_review"
+        },
+        "fmp_endpoint_calls_performed": {
+          "const": false
+        },
+        "raw_payload_read_or_parsed": {
+          "const": false
+        },
+        "price_return_calculation_performed": {
+          "const": false
+        },
+        "corporate_action_reconciliation_performed": {
+          "const": false
+        },
+        "field_mapping_implemented": {
+          "const": false
+        },
+        "uses_existing_reviewed_artifacts_only": {
+          "const": true
+        },
+        "requires_later_user_approved_fmp_access_packet": {
+          "const": true
+        },
+        "requires_later_adjustment_corporate_action_validation_review": {
+          "const": true
+        }
+      }
+    },
+    "current_scope_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stable_retry_status",
+        "eod_shape_evidence",
+        "adjustment_semantics_status",
+        "corporate_action_status",
+        "return_liquidity_use_status",
+        "phase7c_effect"
+      ],
+      "properties": {
+        "stable_retry_status": {
+          "const": "two_symbol_current_stable_endpoint_response_shape_passed"
+        },
+        "eod_shape_evidence": {
+          "const": "ohlcv_change_changePercent_vwap_present_in_two_symbol_sample_only"
+        },
+        "adjustment_semantics_status": {
+          "const": "contract_only_adjusted_unadjusted_not_validated"
+        },
+        "corporate_action_status": {
+          "const": "contract_only_split_dividend_delisting_not_reconciled"
+        },
+        "return_liquidity_use_status": {
+          "const": "blocked_until_adjustment_corporate_action_missing_session_review"
+        },
+        "phase7c_effect": {
+          "const": "does_not_authorize_phase7c_or_datahub_consumption"
+        }
+      }
+    },
+    "market_data_semantics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/marketDataSemantics"
+      },
+      "minItems": 8,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "historical_eod_ohlcv"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "adjusted_unadjusted_price_mode"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "split_adjustment_factor"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "dividend_cash_distribution"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "delisting_inactive_status"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "zero_volume_halt_missing_session"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "liquidity_vwap_turnover"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_family_id": {
+                "const": "calendar_timezone"
+              }
+            },
+            "required": [
+              "field_family_id"
+            ]
+          }
+        }
+      ]
+    },
+    "price_lineage_requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/priceLineageRequirement"
+      },
+      "minItems": 18
+    },
+    "no_silent_default_policy": {
+      "$ref": "#/$defs/noSilentDefaultPolicy"
+    },
+    "decision_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decisionGate"
+      },
+      "minItems": 7
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "fmp_endpoint_call_allowed",
+        "broader_fmp_sample_allowed",
+        "data_fetch_allowed",
+        "raw_payload_parse_allowed",
+        "return_calculation_allowed",
+        "corporate_action_reconciliation_allowed",
+        "field_mapping_implementation_allowed",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_fmp_price_adjustment_corporate_action_semantics_contract_after_pit_semantics"
+        },
+        "contract_status": {
+          "const": "semantics_contract_only_no_access_no_price_mapping"
+        },
+        "fmp_endpoint_call_allowed": {
+          "const": false
+        },
+        "broader_fmp_sample_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "raw_payload_parse_allowed": {
+          "const": false
+        },
+        "return_calculation_allowed": {
+          "const": false
+        },
+        "corporate_action_reconciliation_allowed": {
+          "const": false
+        },
+        "field_mapping_implementation_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "contract_or_schema_ref",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contract_or_schema_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "marketDataSemantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_family_id",
+        "current_sample_evidence",
+        "semantics_status",
+        "required_before_return_or_liquidity_use",
+        "missing_or_ambiguous_behavior",
+        "authorizes_data_fetch",
+        "authorizes_field_mapping_implementation",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "field_family_id": {
+          "enum": [
+            "historical_eod_ohlcv",
+            "adjusted_unadjusted_price_mode",
+            "split_adjustment_factor",
+            "dividend_cash_distribution",
+            "delisting_inactive_status",
+            "zero_volume_halt_missing_session",
+            "liquidity_vwap_turnover",
+            "calendar_timezone"
+          ]
+        },
+        "current_sample_evidence": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "semantics_status": {
+          "enum": [
+            "blocked_pending_adjustment_validation",
+            "blocked_pending_corporate_action_reconciliation",
+            "blocked_pending_security_master_coverage_validation",
+            "blocked_pending_calendar_missing_session_policy",
+            "blocked_pending_liquidity_policy"
+          ]
+        },
+        "required_before_return_or_liquidity_use": {
+          "$ref": "#/$defs/stringList"
+        },
+        "missing_or_ambiguous_behavior": {
+          "enum": [
+            "block_return_and_liquidity_use_no_silent_default",
+            "block_universe_or_flag_no_silent_default"
+          ]
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "priceLineageRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement_id",
+        "status",
+        "lineage_reason",
+        "blocks_return_or_liquidity_use",
+        "authorizes_data_fetch",
+        "authorizes_field_mapping_implementation",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "requirement_id": {
+          "enum": [
+            "provider_symbol_and_identifier",
+            "endpoint_mode_and_version",
+            "request_parameters",
+            "fetch_timestamp",
+            "trade_date",
+            "market_calendar_session",
+            "exchange_timezone_and_close_time",
+            "open_high_low_close_volume",
+            "price_adjustment_mode",
+            "split_factor_or_event_ref",
+            "dividend_event_ref",
+            "corporate_action_effective_date",
+            "delisting_or_inactive_status",
+            "zero_volume_halt_policy",
+            "missing_session_policy",
+            "return_eligibility_rule",
+            "liquidity_metric_rule",
+            "as_of_eligibility_rule"
+          ]
+        },
+        "status": {
+          "const": "required_before_return_liquidity_or_datahub"
+        },
+        "lineage_reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "blocks_return_or_liquidity_use": {
+          "const": true
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "noSilentDefaultPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "missing_adjustment_mode_blocks_return_use",
+        "missing_split_or_dividend_policy_blocks_return_use",
+        "missing_delisting_or_inactive_policy_blocks_universe_use",
+        "missing_session_or_zero_volume_policy_blocks_or_flags_use",
+        "unadjusted_price_cannot_be_silent_default",
+        "split_or_dividend_backfill_without_event_ref_allowed",
+        "silent_default_allowed",
+        "zero_fill_allowed",
+        "authorizes_data_fetch",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "policy_expectations_only_no_price_mapping"
+        },
+        "missing_adjustment_mode_blocks_return_use": {
+          "const": true
+        },
+        "missing_split_or_dividend_policy_blocks_return_use": {
+          "const": true
+        },
+        "missing_delisting_or_inactive_policy_blocks_universe_use": {
+          "const": true
+        },
+        "missing_session_or_zero_volume_policy_blocks_or_flags_use": {
+          "const": true
+        },
+        "unadjusted_price_cannot_be_silent_default": {
+          "const": true
+        },
+        "split_or_dividend_backfill_without_event_ref_allowed": {
+          "const": false
+        },
+        "silent_default_allowed": {
+          "const": false
+        },
+        "zero_fill_allowed": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "decisionGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "blocks_implementation",
+        "required_resolution",
+        "authorizes_data_fetch",
+        "authorizes_field_mapping_implementation",
+        "authorizes_datahub_or_runner_consumption",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "pending_user_approval",
+            "pending_later_semantics_review",
+            "pending_later_mapping_review"
+          ]
+        },
+        "blocks_implementation": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_endpoint_call",
+        "broader_fmp_sample",
+        "raw_payload_parse",
+        "return_calculation",
+        "corporate_action_reconciliation",
+        "field_mapping_implementation",
+        "provider_selection",
+        "provider_ranking",
+        "new_token_or_trial",
+        "paid_access",
+        "provider_contact",
+        "yfinance_check",
+        "full_market_download",
+        "provider_adapter",
+        "datahub_table",
+        "production_runner_consumption",
+        "phase7c_authorization",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "fmp_endpoint_call": {
+          "const": false
+        },
+        "broader_fmp_sample": {
+          "const": false
+        },
+        "raw_payload_parse": {
+          "const": false
+        },
+        "return_calculation": {
+          "const": false
+        },
+        "corporate_action_reconciliation": {
+          "const": false
+        },
+        "field_mapping_implementation": {
+          "const": false
+        },
+        "provider_selection": {
+          "const": false
+        },
+        "provider_ranking": {
+          "const": false
+        },
+        "new_token_or_trial": {
+          "const": false
+        },
+        "paid_access": {
+          "const": false
+        },
+        "provider_contact": {
+          "const": false
+        },
+        "yfinance_check": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "provider_adapter": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "phase7c_authorization": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

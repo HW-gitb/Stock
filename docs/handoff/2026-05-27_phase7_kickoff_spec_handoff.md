@@ -2186,3 +2186,48 @@ git diff --check
 
 1. Claude 复审应重点核对 contract 是否没有授权 FMP endpoint calls、raw-payload parsing、field mapping implementation、provider selection、DataHub / runner consumption 或 Phase 7c。
 2. 如果审查 Pass 并提交，下一条 no-access provider slice 可转向 FMP price-adjustment / corporate-action semantics contract，或 SEC parser field-family mapping contract；任何 actual FMP PIT row validation、FMP call、SEC call、raw parse 或 field-mapping / parser implementation 仍需 separate explicit approval + reviewed decision。
+
+## 2026-06-02 追加：FMP price-adjustment / corporate-action semantics contract
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_fmp_price_adjustment_corporate_action_semantics_contract.schema.json`，把 FMP stable historical EOD 之后的 price adjustment / corporate-action 语义边界固化为 schema-first contract：8 个 market-data gate families、18 个 price lineage requirements、no-silent-default policy、decision gates、prohibited actions。
+- 新增 `docs/provider_evidence_p1_us_fmp_price_adjustment_corporate_action_semantics_contract_20260602.json`，只基于既有 reviewed repo artifacts 做 semantics contract；不做 FMP endpoint call、不读取或解析 raw payload、不计算 returns、不 reconciliation corporate actions、不实现 field mapping、不抓数据。
+- 新增 `tests/schema/test_provider_p1_fmp_price_adjustment_corporate_action_semantics_contract_schema.py`，验证 schema/artifact、no-access locks、two-symbol EOD response-shape calibration、8 个 market-data gates、18 个 lineage requirements、adjustment / split / dividend / delisting / missing-session blocking、scope-creep rejection。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`，把 FMP price / corporate-action semantics contract 路由进 Phase 7b-2，同时保持 `SR-PROVIDER-001` open。
+
+**为什么改**:
+
+- FMP stable retry 的 historical EOD rows 只在 AAPL / MSFT 两只活跃样本上证明 OHLCV / change / changePercent / VWAP response shape；它不能证明 adjusted-return semantics、split / dividend handling、delisting / inactive coverage、zero-volume / halt behavior、missing-session policy、liquidity validity 或 DataHub eligibility。
+- 上一轮 FMP PIT contract 已明确 EOD price-volume 需另做 adjustment / corporate-action review；本轮先把 return / liquidity 使用门槛写成可审查契约，避免后续 LLM 把 EOD 字段存在误读成 provider selection 或 Phase 7c 可用性。
+- 本轮刻意不调用 FMP、不解析 ignored raw payload、不计算 returns、不 reconciliation corporate actions、不实现 field mapping、不建 adapter / DataHub、不改 runner、不授权 Phase 7c。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_fmp_price_adjustment_corporate_action_semantics_contract_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fmp_price_adjustment_corporate_action_semantics_contract_schema tests.schema.test_provider_p1_fmp_pit_observed_date_semantics_contract_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\provider_p1_fmp_price_adjustment_corporate_action_semantics_contract.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\provider_evidence_p1_us_fmp_price_adjustment_corporate_action_semantics_contract_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**验证结果**:
+
+- Bundled Python: `tests.schema.test_provider_p1_fmp_price_adjustment_corporate_action_semantics_contract_schema` ran 9 tests: 6 passed, 3 skipped because this interpreter lacks `jsonschema`; non-jsonschema no-access / market-data gate / lineage / no-silent-default tests passed。
+- Python313 with `jsonschema`: FMP price/corporate-action semantics contract + FMP PIT semantics contract + remaining-blocker plan targeted schema tests ran 24 tests, all passed。
+- `json.tool` parsed the new schema and artifact successfully。
+- `docs/CURRENT.md` line count = 145。
+- `git diff --check` final result is recorded in the top `docs/SESSION_LOG.md` Codex entry for this work round。
+
+**失效旧结论**:
+
+- “FMP stable retry 看到 OHLCV / VWAP 字段就可算 historical returns / liquidity”不成立；本轮 contract 明确 adjustment mode、corporate actions、delisting / inactive status、zero-volume / missing-session policy、calendar / timezone 和 liquidity rules 仍 blocked。
+- “FMP price/corporate-action contract = actual adjusted-return validation / corporate-action reconciliation”不成立；它只定义 gates，不调用 FMP、不读 raw payload、不算 returns、不 reconciliation corporate actions。
+- “本轮 artifact 证明 FMP production readiness”不成立；它不证明 coverage、license、PIT、price adjustment、fallback、stability 或 production readiness，也不关闭 `SR-PROVIDER-001`。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 contract 是否没有授权 FMP endpoint calls、raw-payload parsing、return calculation、corporate-action reconciliation、field mapping implementation、provider selection、DataHub / runner consumption 或 Phase 7c。
+2. 如果审查 Pass 并提交，下一条 no-access provider slice 可转向 SEC parser field-family mapping contract 或 coverage-count access-packet planning；任何 actual FMP adjustment validation、corporate-action sample、coverage-count execution、FMP call、SEC call、raw parse 或 field-mapping / parser implementation 仍需 separate explicit approval + reviewed decision。

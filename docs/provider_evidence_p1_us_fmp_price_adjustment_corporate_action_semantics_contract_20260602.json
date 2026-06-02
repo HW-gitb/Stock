@@ -1,0 +1,497 @@
+{
+  "schema_name": "provider_p1_fmp_price_adjustment_corporate_action_semantics_contract",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_fmp_price_adjustment_corporate_action_semantics_contract_after_pit_semantics",
+    "contract_status": "semantics_contract_only_no_access_no_price_mapping",
+    "fmp_endpoint_call_allowed": false,
+    "broader_fmp_sample_allowed": false,
+    "data_fetch_allowed": false,
+    "raw_payload_parse_allowed": false,
+    "return_calculation_allowed": false,
+    "corporate_action_reconciliation_allowed": false,
+    "field_mapping_implementation_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_remaining_blocker_resolution_plan.schema.json",
+      "consumption_role": "Defines price adjustment, corporate actions, missing sessions, and zero-volume behavior as remaining blockers after the AAPL / MSFT FMP stable retry."
+    },
+    {
+      "artifact_id": "p1_fmp_stable_retry_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json",
+      "consumption_role": "Records two-symbol stable historical EOD response-shape evidence with OHLCV, change, changePercent, and VWAP field presence."
+    },
+    {
+      "artifact_id": "p1_fmp_current_endpoint_mapping_review_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_endpoint_mapping_review.schema.json",
+      "consumption_role": "Maps failed legacy endpoint families to stable endpoint candidates without proving adjustment, corporate-action, or return semantics."
+    },
+    {
+      "artifact_id": "p1_market_data_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_market_data_candidates_20260528.json",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Records earlier adjusted EOD, corporate-action, delisting, security-master, and market-status candidate evidence that remains partial / blocked."
+    },
+    {
+      "artifact_id": "p1_coverage_fallback_incident_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Records coverage, fallback, and incident candidate evidence needed before missing-session or provider-drift behavior can be trusted."
+    },
+    {
+      "artifact_id": "p1_license_storage_retention_review_20260602",
+      "path": "docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_license_storage_retention_review.schema.json",
+      "consumption_role": "Keeps local raw sample and production storage / DataHub rights blocked while price semantics are only contract-level."
+    },
+    {
+      "artifact_id": "p1_fmp_pit_semantics_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_pit_observed_date_semantics_contract_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_pit_observed_date_semantics_contract.schema.json",
+      "consumption_role": "Separates fundamentals PIT semantics from EOD price adjustment / corporate-action semantics and keeps EOD fields blocked pending this contract."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Defines drift-monitor dimensions for corporate actions, calendar / timezone, PIT / as-of, fallback, incidents, and no-silent-default behavior."
+    }
+  ],
+  "review_basis": {
+    "basis_type": "existing_repo_artifacts_no_new_external_review",
+    "fmp_endpoint_calls_performed": false,
+    "raw_payload_read_or_parsed": false,
+    "price_return_calculation_performed": false,
+    "corporate_action_reconciliation_performed": false,
+    "field_mapping_implemented": false,
+    "uses_existing_reviewed_artifacts_only": true,
+    "requires_later_user_approved_fmp_access_packet": true,
+    "requires_later_adjustment_corporate_action_validation_review": true
+  },
+  "current_scope_summary": {
+    "stable_retry_status": "two_symbol_current_stable_endpoint_response_shape_passed",
+    "eod_shape_evidence": "ohlcv_change_changePercent_vwap_present_in_two_symbol_sample_only",
+    "adjustment_semantics_status": "contract_only_adjusted_unadjusted_not_validated",
+    "corporate_action_status": "contract_only_split_dividend_delisting_not_reconciled",
+    "return_liquidity_use_status": "blocked_until_adjustment_corporate_action_missing_session_review",
+    "phase7c_effect": "does_not_authorize_phase7c_or_datahub_consumption"
+  },
+  "market_data_semantics": [
+    {
+      "field_family_id": "historical_eod_ohlcv",
+      "current_sample_evidence": "AAPL / MSFT stable historical EOD samples reported date, open, high, low, close, volume, change, changePercent, and vwap field presence, but this contract does not read raw rows or calculate returns.",
+      "semantics_status": "blocked_pending_adjustment_validation",
+      "required_before_return_or_liquidity_use": [
+        "Validate whether FMP historical EOD rows are adjusted, unadjusted, or mixed for each OHLC field.",
+        "Define which price column can be used for return measurement and how volume is paired with adjusted or unadjusted prices.",
+        "Block historical return / liquidity use when adjustment mode is absent or ambiguous."
+      ],
+      "missing_or_ambiguous_behavior": "block_return_and_liquidity_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "adjusted_unadjusted_price_mode",
+      "current_sample_evidence": "The tracked stable retry summary does not record an adjusted-price flag, adjusted-close field, or provider adjustment-mode declaration for the EOD rows.",
+      "semantics_status": "blocked_pending_adjustment_validation",
+      "required_before_return_or_liquidity_use": [
+        "Prove adjustment mode with provider documentation or reviewed sample rows under a separate approved access packet.",
+        "Define whether split and dividend adjustments are total-return, price-return-only, or absent.",
+        "Reject silent fallback to raw close, adjusted close, or current-price profile values."
+      ],
+      "missing_or_ambiguous_behavior": "block_return_and_liquidity_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "split_adjustment_factor",
+      "current_sample_evidence": "The two-symbol response-shape summary does not reconcile split events or split factors against EOD rows.",
+      "semantics_status": "blocked_pending_corporate_action_reconciliation",
+      "required_before_return_or_liquidity_use": [
+        "Validate split event availability, effective-date handling, and factor application before any return evidence.",
+        "Define how split conflicts, missing factors, reverse splits, and duplicate split events block or flag affected rows.",
+        "Record event references so adjusted prices can be reproduced rather than silently inferred."
+      ],
+      "missing_or_ambiguous_behavior": "block_return_and_liquidity_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "dividend_cash_distribution",
+      "current_sample_evidence": "The tracked stable retry summary does not reconcile dividends, ex-dates, payable dates, or cash-distribution treatment against EOD rows.",
+      "semantics_status": "blocked_pending_corporate_action_reconciliation",
+      "required_before_return_or_liquidity_use": [
+        "Define whether the return series is price-only or total-return and whether dividends are included.",
+        "Validate cash dividend ex-date / pay-date / record-date semantics under a later approved packet.",
+        "Block total-return claims unless dividend event references and adjustment math are reviewed."
+      ],
+      "missing_or_ambiguous_behavior": "block_return_and_liquidity_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "delisting_inactive_status",
+      "current_sample_evidence": "AAPL and MSFT are active large-cap symbols, so the current sample cannot prove delisted, inactive, OTC-transfer, ticker-change, merger, or bankruptcy behavior.",
+      "semantics_status": "blocked_pending_security_master_coverage_validation",
+      "required_before_return_or_liquidity_use": [
+        "Validate active / inactive / delisted / ticker-change coverage and history before universe or survivorship-sensitive evidence.",
+        "Tie price availability to a reviewed security-master identity and corporate-action timeline.",
+        "Block or explicitly flag rows when a symbol cannot be matched to a reviewed active-status lifecycle."
+      ],
+      "missing_or_ambiguous_behavior": "block_universe_or_flag_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "zero_volume_halt_missing_session",
+      "current_sample_evidence": "The tracked stable retry summary does not inspect raw rows for zero-volume days, market holidays, trading halts, stale bars, duplicated sessions, or missing sessions.",
+      "semantics_status": "blocked_pending_calendar_missing_session_policy",
+      "required_before_return_or_liquidity_use": [
+        "Define market calendar membership and missing-session behavior before any return window construction.",
+        "Define whether zero volume indicates a valid quoted bar, halt, stale row, data defect, or missing liquidity.",
+        "Block or flag return / liquidity rows when session completeness cannot be proven."
+      ],
+      "missing_or_ambiguous_behavior": "block_return_and_liquidity_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "liquidity_vwap_turnover",
+      "current_sample_evidence": "The stable retry summary records vwap and volume field presence only; it does not validate VWAP definition, adjusted-price pairing, turnover denominator, or ADV calculation.",
+      "semantics_status": "blocked_pending_liquidity_policy",
+      "required_before_return_or_liquidity_use": [
+        "Define VWAP source semantics and whether it is exchange-volume weighted, adjusted-price compatible, or provider-derived.",
+        "Define ADV / turnover windows, missing-volume behavior, and capacity-scaling limits before liquidity evidence.",
+        "Block liquidity claims when volume, VWAP, shares outstanding, or free-float denominator lineage is missing."
+      ],
+      "missing_or_ambiguous_behavior": "block_return_and_liquidity_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "field_family_id": "calendar_timezone",
+      "current_sample_evidence": "The tracked stable retry summary records date fields only; it does not validate exchange timezone, close timestamp, early close, daylight-saving, or multi-exchange calendar semantics.",
+      "semantics_status": "blocked_pending_calendar_missing_session_policy",
+      "required_before_return_or_liquidity_use": [
+        "Define exchange timezone, close timestamp, and early-close policy before aligning prices to fundamentals or signals.",
+        "Define date-window inclusion for US market holidays, half-days, and daylight-saving transitions.",
+        "Block as-of evidence when trade date and exchange session cannot be mapped reproducibly."
+      ],
+      "missing_or_ambiguous_behavior": "block_return_and_liquidity_use_no_silent_default",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "price_lineage_requirements": [
+    {
+      "requirement_id": "provider_symbol_and_identifier",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "EOD rows must be tied to reviewed ticker / CIK / security-master identity before survivorship-sensitive universe or return use.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "endpoint_mode_and_version",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Stable endpoint mode and version must be recorded so legacy v3 failures and future endpoint drift are not mixed silently.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "request_parameters",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "From / to, limit, symbol, and endpoint parameters determine row availability and must be replayable.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "fetch_timestamp",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Fetch time is needed to identify provider revisions, late backfills, and drift from the original observed sample.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "trade_date",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Trade date must be distinct from fetch date and must match a reviewed market-calendar session.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "market_calendar_session",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Rows must map to a valid US exchange session before return windows or missing-session checks are reliable.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "exchange_timezone_and_close_time",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Timezone and close-time semantics are required for PIT alignment with filings, signals, and manual-report cutoffs.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "open_high_low_close_volume",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "OHLCV fields must be present, numeric, internally consistent, and paired with the same adjustment mode before use.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "price_adjustment_mode",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Adjusted versus unadjusted semantics must be explicit before any return or liquidity result can be interpreted.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "split_factor_or_event_ref",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Split factors or event references are required to reproduce adjusted prices and detect corporate-action conflicts.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "dividend_event_ref",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Dividend event references are required before price-only versus total-return treatment can be claimed.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "corporate_action_effective_date",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Effective dates and ex-dates must be explicit to align corporate actions with price rows and return windows.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "delisting_or_inactive_status",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Inactive, delisted, merged, bankrupt, ticker-change, and OTC-transfer behavior must be known before universe or return evidence.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "zero_volume_halt_policy",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Zero-volume rows must have a reviewed interpretation before liquidity or execution-cost feasibility can use them.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "missing_session_policy",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Missing rows, duplicate rows, and stale rows must block or flag evidence rather than silently forward-fill.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "return_eligibility_rule",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Each return window must state which price column, entry / exit anchor, adjustment mode, and missing-row policy it uses.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "liquidity_metric_rule",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "ADV, turnover, VWAP, and capacity metrics need explicit denominator, window, and missing-volume rules.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "requirement_id": "as_of_eligibility_rule",
+      "status": "required_before_return_liquidity_or_datahub",
+      "lineage_reason": "Every historical price row must have a reviewed rule for when it is eligible at a specific as-of date.",
+      "blocks_return_or_liquidity_use": true,
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "no_silent_default_policy": {
+    "policy_status": "policy_expectations_only_no_price_mapping",
+    "missing_adjustment_mode_blocks_return_use": true,
+    "missing_split_or_dividend_policy_blocks_return_use": true,
+    "missing_delisting_or_inactive_policy_blocks_universe_use": true,
+    "missing_session_or_zero_volume_policy_blocks_or_flags_use": true,
+    "unadjusted_price_cannot_be_silent_default": true,
+    "split_or_dividend_backfill_without_event_ref_allowed": false,
+    "silent_default_allowed": false,
+    "zero_fill_allowed": false,
+    "authorizes_data_fetch": false,
+    "authorizes_datahub_or_runner_consumption": false
+  },
+  "decision_gates": [
+    {
+      "gate_id": "fmp_price_sample_access_approval",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "Any additional FMP endpoint calls, broader symbols, corporate-action endpoints, paid access, trial, or new token require separate explicit user approval and reviewed no-secret summary.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "adjustment_mode_validation",
+      "status": "pending_later_semantics_review",
+      "blocks_implementation": true,
+      "required_resolution": "Validate adjusted versus unadjusted OHLCV semantics and the exact return-eligible price field before historical evidence.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "corporate_action_reconciliation",
+      "status": "pending_later_semantics_review",
+      "blocks_implementation": true,
+      "required_resolution": "Reconcile split, dividend, merger, ticker-change, and other corporate-action events to price rows before return or liquidity use.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "delisting_inactive_coverage",
+      "status": "pending_later_semantics_review",
+      "blocks_implementation": true,
+      "required_resolution": "Validate inactive / delisted / non-common-stock / ticker-change coverage before target-universe or survivorship-sensitive evidence.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "missing_session_halt_zero_volume_policy",
+      "status": "pending_later_semantics_review",
+      "blocks_implementation": true,
+      "required_resolution": "Define missing-session, zero-volume, halt, stale-row, duplicate-row, and market-calendar behavior before return windows.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "liquidity_policy_validation",
+      "status": "pending_later_mapping_review",
+      "blocks_implementation": true,
+      "required_resolution": "Define VWAP, ADV, turnover, shares-outstanding / free-float denominator, and capacity scaling rules before liquidity evidence.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_consumption_gate",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Phase 7c, DataHub, adapters, and production runners remain blocked until Phase 7b provider blockers are closed or explicitly accepted in a reviewed decision.",
+      "authorizes_data_fetch": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "prohibited_actions": {
+    "fmp_endpoint_call": false,
+    "broader_fmp_sample": false,
+    "raw_payload_parse": false,
+    "return_calculation": false,
+    "corporate_action_reconciliation": false,
+    "field_mapping_implementation": false,
+    "provider_selection": false,
+    "provider_ranking": false,
+    "new_token_or_trial": false,
+    "paid_access": false,
+    "provider_contact": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "phase7c_authorization": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Use this artifact as the no-access routing source for FMP EOD price adjustment, corporate-action, delisting, missing-session, and liquidity semantics after the reviewed FMP PIT contract.",
+    "Do not run additional FMP endpoints, read ignored raw payloads, calculate returns, reconcile corporate actions, or implement field mapping by default; those actions require explicit user approval and reviewed packets.",
+    "A safe next no-access slice is SEC parser field-family mapping contract or coverage-count access packet planning that still performs no data calls.",
+    "Any actual FMP adjustment validation, corporate-action sample, broader coverage count, DataHub consumption, or runner use must be separate reviewed work."
+  ],
+  "limitations": [
+    "This artifact performs no FMP endpoint calls, raw payload parsing, return calculation, corporate-action reconciliation, field-mapping implementation, provider contact, data fetch, adapter work, DataHub work, runner change, broker automation, or ship-gate claim.",
+    "Two-symbol field presence proves only response shape for active AAPL / MSFT historical EOD samples; it does not prove adjusted-return semantics, dividend handling, split handling, delisting / inactive coverage, missing-session behavior, liquidity validity, or production readiness.",
+    "FMP profile current price / volume and EOD field presence remain blocked for historical evidence until reviewed price adjustment and corporate-action semantics exist.",
+    "This contract narrows the price adjustment / corporate-action blocker but does not resolve SR-PROVIDER-001."
+  ]
+}
