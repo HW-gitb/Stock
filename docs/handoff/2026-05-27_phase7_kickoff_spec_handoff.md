@@ -1960,3 +1960,48 @@ git diff --check
 
 1. Claude 复审应重点核对 playbook 是否只定义默认阻断行为，且没有授权 provider status polling、fallback execution、new access、`yfinance`、provider selection、DataHub、runner 或 Phase 7c。
 2. 如果审查 Pass 并提交，下一条 no-access provider slice 可以是 license / storage / retention review；如果继续 incident 方向，只能先做 incident-log schema contract，仍不得 provider calls。
+
+## 2026-06-02 追加：US EGS incident-log contract
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_incident_log_contract.schema.json`，把 fallback playbook 里要求的 incident log 进一步固化为未来记录契约：required record fields、incident-type mappings、storage / retention policy、review / replay policy、decision gates、prohibited actions。
+- 新增 `docs/provider_evidence_p1_us_incident_log_contract_20260602.json`，记录 planned log root / raw payload root / tracked summary pattern 只是 contract design，不创建日志路径、不写 incident rows、不实现 writer、不授权 storage / retention。
+- 新增 `tests/schema/test_provider_p1_incident_log_contract_schema.py`，验证 schema/artifact、scope locks、24 个 required record fields、8 个 playbook incident mappings、storage/review no-authorization locks、scope-creep rejection。
+- 更新 `AGENTS.md`、`docs/README.md`、`docs/CURRENT.md`、`docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`，把 provider routing 从 fallback playbook 推进到 incident-log contract，同时保持 `SR-PROVIDER-001` open。
+
+**为什么改**:
+
+- 上一轮 playbook 已经要求 incident log，但如果只停在字段期望，后续实现容易把 log writer、status polling、fallback execution、storage rights 混在同一刀里。
+- 本轮先把记录形状和 review / replay boundary 固化为 schema-first contract，避免 future LLM 把 "record_incident" 误读成已经能写日志或能自动轮询 provider status。
+- 本轮刻意不运行 provider status polling、不抓新数据、不用 `yfinance`、不创建日志路径、不实现 writer、不执行 fallback、不建 adapter / DataHub、不授权 Phase 7c。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_incident_log_contract_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_incident_log_contract_schema tests.schema.test_provider_p1_fallback_incident_stability_playbook_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool schemas\provider_p1_incident_log_contract.schema.json
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m json.tool docs\provider_evidence_p1_us_incident_log_contract_20260602.json
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**验证结果**:
+
+- Bundled Python: `tests.schema.test_provider_p1_incident_log_contract_schema` ran 7 tests: 4 passed, 3 skipped because this interpreter lacks `jsonschema`; non-jsonschema scope / completeness / no-access tests passed.
+- Python313 with `jsonschema`: incident-log contract + fallback playbook + remaining-blocker plan targeted schema tests ran 20 tests, all passed.
+- `json.tool` parsed the new schema and artifact successfully.
+- `docs/CURRENT.md` line count remained 149.
+- `git diff --check` passed before SESSION_LOG; the final after-SESSION_LOG check is recorded in the top `docs/SESSION_LOG.md` Codex entry for this work round.
+
+**失效旧结论**:
+
+- “incident-log schema contract 尚未定义”失效；future record contract 已 schema-first recorded。
+- “incident-log contract = log writer / storage authorization / provider status polling / fallback execution”不成立；本轮 artifact 明确不创建日志、不实现 writer、不授权 storage / retention、不轮询 status page、不抓数据、不执行 fallback。
+- “有 incident-log contract 就可进 DataHub / runner / Phase 7c”不成立；这些仍被 scope locks 和 `SR-PROVIDER-001` 阻断。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 contract 是否只定义未来 record shape，且没有授权 log writer、provider status polling、provider calls、fallback execution、provider selection、DataHub、runner 或 Phase 7c。
+2. 如果审查 Pass 并提交，下一条 no-access provider slice 默认应转向 FMP / SEC license / storage / retention review；任何 log-writer implementation、status polling、fallback execution 或 provider call 都需要 separate explicit approval + reviewed decision。

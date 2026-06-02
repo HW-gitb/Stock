@@ -1,0 +1,565 @@
+{
+  "schema_name": "provider_p1_incident_log_contract",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_incident_log_contract_design",
+    "contract_status": "schema_first_contract_no_logging_implementation",
+    "fallback_playbook_ref": "docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json",
+    "incident_log_write_implemented": false,
+    "log_storage_path_created": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_status_polling_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "fallback_execution_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_fallback_incident_stability_playbook_20260602",
+      "path": "docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fallback_incident_stability_playbook.schema.json",
+      "consumption_role": "Defines default-deny incident actions and states that a later incident-log schema contract is required before execution."
+    },
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_remaining_blocker_resolution_plan.schema.json",
+      "consumption_role": "Keeps fallback / incident / stability and production-readiness blockers open after the FMP stable retry."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Defines provider-incident drift dimension, record_incident action, no silent defaults, and freeze-latest-only behavior."
+    },
+    {
+      "artifact_id": "p1_coverage_fallback_incident_candidates_20260528",
+      "path": "docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Records candidate coverage, fallback, status-page, and incident evidence but no executed incident log."
+    },
+    {
+      "artifact_id": "p1_fmp_stable_retry_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json",
+      "consumption_role": "Provides the narrow AAPL / MSFT stable endpoint access result that remains insufficient for provider stability evidence."
+    },
+    {
+      "artifact_id": "p1_us_egs_sample_validation_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_us_egs_sample_validation_summary.schema.json",
+      "consumption_role": "Records SEC EDGAR sample success and FMP legacy endpoint errors that would require incident-log records in a future implementation."
+    }
+  ],
+  "incident_log_contract": {
+    "record_schema_name": "provider_p1_incident_log_record",
+    "record_scope": "future_record_contract_only_no_actual_incident_rows",
+    "planned_log_root": "logs/provider_incidents/",
+    "planned_raw_payload_root": "provider_samples/provider_incidents/",
+    "planned_tracked_summary_pattern": "docs/provider_incident_summary_<YYYYMMDD>.json",
+    "no_actual_incident_records_created": true,
+    "authorizes_log_writer": false,
+    "authorizes_status_polling": false,
+    "authorizes_data_fetch": false,
+    "requires_review_before_writer": true,
+    "requires_secret_scan_before_tracking": true,
+    "request_url_or_secret_storage_allowed": false,
+    "raw_payloads_must_be_gitignored": true,
+    "manual_order_only": true
+  },
+  "required_record_fields": [
+    {
+      "field_name": "incident_id",
+      "required_for_record": true,
+      "field_role": "Stable unique incident identifier assigned by a future reviewed writer or manual record process.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "detected_at",
+      "required_for_record": true,
+      "field_role": "Timestamp when the issue was detected; must be separate from any provider data timestamp.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "detected_by",
+      "required_for_record": true,
+      "field_role": "Human reviewer, test, runner, or manual audit surface that noticed the issue.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "source_family",
+      "required_for_record": true,
+      "field_role": "Affected field family such as fundamentals, price_volume_liquidity, corporate_actions, security_master_coverage, sec_edgar_audit, or benchmark_gics.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "provider_candidate",
+      "required_for_record": true,
+      "field_role": "Provider or public-source candidate involved; candidate mention is not provider selection.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "endpoint_family",
+      "required_for_record": true,
+      "field_role": "Endpoint or source-family label without request URL, query string, API key, bearer token, or secret-bearing header.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "affected_symbols_or_universe",
+      "required_for_record": true,
+      "field_role": "Symbols, universe slice, or coverage class affected by the incident, with no raw rows.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "affected_date_window",
+      "required_for_record": true,
+      "field_role": "Date range or as-of window affected by the incident.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "incident_type",
+      "required_for_record": true,
+      "field_role": "One of the playbook incident types mapped by this contract.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "severity",
+      "required_for_record": true,
+      "field_role": "Warning, production blocker, or evidence blocker classification.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "trigger_summary",
+      "required_for_record": true,
+      "field_role": "Short human-readable description of what triggered the incident; must not include full payloads or request URLs.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "evidence_artifact_refs",
+      "required_for_record": true,
+      "field_role": "References to tracked summaries, schema tests, review entries, or no-secret artifacts that support the incident.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "raw_payload_storage_ref",
+      "required_for_record": true,
+      "field_role": "Gitignored raw payload pointer if a later approved data packet produced raw payloads; never a request URL or secret-bearing path.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "secret_scan_status",
+      "required_for_record": true,
+      "field_role": "Tracked summary must record secret-scan status before any artifact is committed.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "immediate_action",
+      "required_for_record": true,
+      "field_role": "Action taken from the playbook, such as block_production_use, manual_review, fallback_path_review, or freeze_latest_only_claims.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "production_use_blocked",
+      "required_for_record": true,
+      "field_role": "Explicit boolean in future records; production use remains blocked until reviewed resolution.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "fallback_execution_performed",
+      "required_for_record": true,
+      "field_role": "Explicit false unless a later separate reviewed slice implements and runs fallback execution.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "provider_calls_performed_by_log_contract",
+      "required_for_record": true,
+      "field_role": "Must remain false for this contract; incident logging cannot itself be a data-fetch approval.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "status_page_polled_by_log_contract",
+      "required_for_record": true,
+      "field_role": "Must remain false for this contract; status polling requires separate approval and review.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "manual_review_owner",
+      "required_for_record": true,
+      "field_role": "Person or review role responsible for disposition and unblock decision.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "review_status",
+      "required_for_record": true,
+      "field_role": "Review state such as pending_review, reviewed_blocked, reviewed_resolved, or accepted_risk_by_user.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "disposition",
+      "required_for_record": true,
+      "field_role": "Final reviewed disposition, if any; unresolved incidents must not be treated as resolved.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "replay_or_revalidation_requirement",
+      "required_for_record": true,
+      "field_role": "Whether later provider evidence must be rerun; any data or access rerun still needs separate explicit approval.",
+      "secret_or_request_url_allowed": false
+    },
+    {
+      "field_name": "scope_locks",
+      "required_for_record": true,
+      "field_role": "Future records must repeat no provider selection, no status polling, no fallback execution, no DataHub / runner, no Phase 7c, and no ship-gate claim locks.",
+      "secret_or_request_url_allowed": false
+    }
+  ],
+  "incident_type_mappings": [
+    {
+      "incident_type": "quota_or_rate_limit",
+      "playbook_incident_ref": "quota_or_rate_limit",
+      "default_severity": "production_blocker",
+      "required_actions": [
+        "record_incident",
+        "block_production_use",
+        "fallback_path_review"
+      ],
+      "required_log_field_refs": [
+        "incident_id",
+        "detected_at",
+        "provider_candidate",
+        "endpoint_family",
+        "trigger_summary",
+        "production_use_blocked"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_type": "http_5xx_or_provider_outage",
+      "playbook_incident_ref": "http_5xx_or_provider_outage",
+      "default_severity": "production_blocker",
+      "required_actions": [
+        "record_incident",
+        "block_production_use",
+        "manual_review"
+      ],
+      "required_log_field_refs": [
+        "incident_id",
+        "detected_at",
+        "provider_candidate",
+        "endpoint_family",
+        "immediate_action",
+        "manual_review_owner"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_type": "http_401_403_auth_scope",
+      "playbook_incident_ref": "http_401_403_auth_scope",
+      "default_severity": "evidence_blocker",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "fallback_path_review"
+      ],
+      "required_log_field_refs": [
+        "incident_id",
+        "source_family",
+        "provider_candidate",
+        "endpoint_family",
+        "evidence_artifact_refs",
+        "review_status"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_type": "schema_or_field_semantics_drift",
+      "playbook_incident_ref": "schema_or_field_semantics_drift",
+      "default_severity": "production_blocker",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "rerun_provider_evidence"
+      ],
+      "required_log_field_refs": [
+        "incident_id",
+        "source_family",
+        "endpoint_family",
+        "affected_date_window",
+        "trigger_summary",
+        "replay_or_revalidation_requirement"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_type": "stale_or_missing_rows",
+      "playbook_incident_ref": "stale_or_missing_rows",
+      "default_severity": "production_blocker",
+      "required_actions": [
+        "record_incident",
+        "block_production_use",
+        "fallback_path_review"
+      ],
+      "required_log_field_refs": [
+        "incident_id",
+        "affected_symbols_or_universe",
+        "affected_date_window",
+        "trigger_summary",
+        "production_use_blocked",
+        "disposition"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_type": "pit_or_observed_date_ambiguity",
+      "playbook_incident_ref": "pit_or_observed_date_ambiguity",
+      "default_severity": "evidence_blocker",
+      "required_actions": [
+        "record_incident",
+        "freeze_latest_only_claims",
+        "manual_review"
+      ],
+      "required_log_field_refs": [
+        "incident_id",
+        "source_family",
+        "affected_date_window",
+        "trigger_summary",
+        "review_status",
+        "scope_locks"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_type": "corporate_action_adjustment_conflict",
+      "playbook_incident_ref": "corporate_action_adjustment_conflict",
+      "default_severity": "evidence_blocker",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "rerun_provider_evidence"
+      ],
+      "required_log_field_refs": [
+        "incident_id",
+        "source_family",
+        "affected_symbols_or_universe",
+        "affected_date_window",
+        "trigger_summary",
+        "replay_or_revalidation_requirement"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "incident_type": "sec_edgar_audit_conflict",
+      "playbook_incident_ref": "sec_edgar_audit_conflict",
+      "default_severity": "evidence_blocker",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "use_reviewed_audit_source_only"
+      ],
+      "required_log_field_refs": [
+        "incident_id",
+        "source_family",
+        "provider_candidate",
+        "evidence_artifact_refs",
+        "trigger_summary",
+        "manual_review_owner"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "storage_and_retention_policy": {
+    "policy_status": "planned_policy_only_storage_rights_unresolved",
+    "planned_log_root": "logs/provider_incidents/",
+    "planned_raw_payload_root": "provider_samples/provider_incidents/",
+    "logs_created_by_this_artifact": false,
+    "local_storage_rights_resolved": false,
+    "retention_rights_resolved": false,
+    "request_urls_allowed_in_tracked_files": false,
+    "secrets_allowed_in_tracked_files": false,
+    "raw_payloads_must_be_gitignored": true,
+    "tracked_summary_requires_secret_scan": true,
+    "authorizes_storage_or_retention": false
+  },
+  "review_and_replay_policy": {
+    "policy_status": "review_contract_only_not_workflow_implementation",
+    "allowed_review_status_values": [
+      "pending_review",
+      "reviewed_blocked",
+      "reviewed_resolved",
+      "accepted_risk_by_user"
+    ],
+    "required_review_before_production_unblock": true,
+    "automatic_replay_allowed": false,
+    "provider_status_polling_allowed": false,
+    "provider_data_rerun_allowed_by_contract": false,
+    "fallback_execution_allowed_by_contract": false,
+    "manual_disposition_required": true,
+    "revalidation_requires_separate_approval_when_data_or_access_needed": true
+  },
+  "decision_gates": [
+    {
+      "gate_id": "incident_log_contract_only_not_writer",
+      "status": "defined_but_not_implemented",
+      "blocks_implementation": true,
+      "required_resolution": "A later reviewed implementation slice must create a writer, storage behavior, and validation tests before any incident records are produced.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_status_polling": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "storage_retention_rights_unresolved",
+      "status": "blocked_pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "License, local-storage, raw-payload retention, export, and tracked-summary rights must be reviewed before any production storage contract uses provider rows.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_status_polling": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "status_polling_requires_separate_approval",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "Provider status-page polling or uptime checks require a separate explicit approval and reviewed no-secret artifact.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_status_polling": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "fallback_execution_requires_separate_contract",
+      "status": "blocked_pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "Fallback execution remains blocked until a later reviewed contract defines behavior, approval boundary, evidence writes, and tests.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_status_polling": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_separate_authorization_required",
+      "status": "blocked_pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "Phase 7c DataHub / report / reproducibility work remains a separate reviewed slice after provider blockers are resolved or explicitly accepted.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_status_polling": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "prohibited_actions": {
+    "provider_selection": false,
+    "provider_ranking": false,
+    "new_fmp_token": false,
+    "trial_request": false,
+    "paid_upgrade": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_status_page_poll": false,
+    "provider_data_fetch": false,
+    "incident_log_writer_implementation": false,
+    "log_storage_path_creation": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "fallback_execution": false,
+    "phase7c_authorization": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "limitations": [
+    "This artifact defines a future incident-log record contract only; it creates no logs, no storage paths, no writer, no status poller, no provider calls, and no fallback execution.",
+    "The planned log and raw-payload roots are not storage authorization. License, local-storage, export, and retention rights remain unresolved under SR-PROVIDER-001.",
+    "An incident-log record cannot by itself unblock production use, provider selection, DataHub / runner consumption, Phase 7c, or ship-gate evidence.",
+    "Request URLs, API keys, bearer tokens, SEC user-agent values, raw rows, and raw payloads must not be stored in tracked incident summaries.",
+    "Any replay, provider evidence rerun, yfinance smoke check, provider status poll, broader sample, fallback execution, or endpoint call requires separate explicit approval and reviewed decision."
+  ],
+  "next_steps": [
+    "Use this artifact as the incident-log contract owner for the fallback / incident / stability blocker after the playbook.",
+    "Keep SR-PROVIDER-001 open because incident-log design does not solve license, coverage, PIT, adjustment, SEC parser, executed fallback, provider stability, provider selection, DataHub / runner, or Phase 7c blockers.",
+    "A later implementation slice may add a log writer only after review defines validation, secret scanning, ignored raw storage, tracked summaries, and replay semantics.",
+    "If no new provider-access work is approved, the next safe provider slice remains docs-only license / storage / retention review."
+  ]
+}

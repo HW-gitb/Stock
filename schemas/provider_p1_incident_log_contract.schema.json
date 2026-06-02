@@ -1,0 +1,1002 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_incident_log_contract/1.0.0/schema.json",
+  "title": "Provider P1 Incident Log Contract",
+  "description": "Phase 7b-2 schema-first contract for future US EGS provider incident-log records after the fallback / incident / stability playbook. This artifact defines the required incident-log record shape, storage policy, and review gates only; it does not create log files, implement a writer, poll provider status pages, fetch data, execute fallback paths, select providers, create adapters, implement DataHub tables, change runners, relax ship gates, or authorize Phase 7c.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_artifact_refs",
+    "incident_log_contract",
+    "required_record_fields",
+    "incident_type_mappings",
+    "storage_and_retention_policy",
+    "review_and_replay_policy",
+    "decision_gates",
+    "prohibited_actions",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_incident_log_contract"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 5,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fallback_incident_stability_playbook_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_remaining_blocker_plan_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_coverage_fallback_incident_candidates_20260528"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_stable_retry_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "incident_log_contract": {
+      "$ref": "#/$defs/incidentLogContract"
+    },
+    "required_record_fields": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/requiredRecordField"
+      },
+      "minItems": 22,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "incident_id"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "detected_at"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "incident_type"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "source_family"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "affected_date_window"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "secret_scan_status"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "production_use_blocked"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "fallback_execution_performed"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "provider_calls_performed_by_log_contract"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "status_page_polled_by_log_contract"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "field_name": {
+                "const": "review_status"
+              }
+            },
+            "required": [
+              "field_name"
+            ]
+          }
+        }
+      ]
+    },
+    "incident_type_mappings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/incidentTypeMapping"
+      },
+      "minItems": 8,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_type": {
+                "const": "quota_or_rate_limit"
+              }
+            },
+            "required": [
+              "incident_type"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_type": {
+                "const": "http_5xx_or_provider_outage"
+              }
+            },
+            "required": [
+              "incident_type"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_type": {
+                "const": "http_401_403_auth_scope"
+              }
+            },
+            "required": [
+              "incident_type"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_type": {
+                "const": "schema_or_field_semantics_drift"
+              }
+            },
+            "required": [
+              "incident_type"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_type": {
+                "const": "stale_or_missing_rows"
+              }
+            },
+            "required": [
+              "incident_type"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_type": {
+                "const": "pit_or_observed_date_ambiguity"
+              }
+            },
+            "required": [
+              "incident_type"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_type": {
+                "const": "corporate_action_adjustment_conflict"
+              }
+            },
+            "required": [
+              "incident_type"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "incident_type": {
+                "const": "sec_edgar_audit_conflict"
+              }
+            },
+            "required": [
+              "incident_type"
+            ]
+          }
+        }
+      ]
+    },
+    "storage_and_retention_policy": {
+      "$ref": "#/$defs/storageAndRetentionPolicy"
+    },
+    "review_and_replay_policy": {
+      "$ref": "#/$defs/reviewAndReplayPolicy"
+    },
+    "decision_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decisionGate"
+      },
+      "minItems": 5
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "fieldName": {
+      "enum": [
+        "incident_id",
+        "detected_at",
+        "detected_by",
+        "source_family",
+        "provider_candidate",
+        "endpoint_family",
+        "affected_symbols_or_universe",
+        "affected_date_window",
+        "incident_type",
+        "severity",
+        "trigger_summary",
+        "evidence_artifact_refs",
+        "raw_payload_storage_ref",
+        "secret_scan_status",
+        "immediate_action",
+        "production_use_blocked",
+        "fallback_execution_performed",
+        "provider_calls_performed_by_log_contract",
+        "status_page_polled_by_log_contract",
+        "manual_review_owner",
+        "review_status",
+        "disposition",
+        "replay_or_revalidation_requirement",
+        "scope_locks"
+      ]
+    },
+    "incidentType": {
+      "enum": [
+        "quota_or_rate_limit",
+        "http_5xx_or_provider_outage",
+        "http_401_403_auth_scope",
+        "schema_or_field_semantics_drift",
+        "stale_or_missing_rows",
+        "pit_or_observed_date_ambiguity",
+        "corporate_action_adjustment_conflict",
+        "sec_edgar_audit_conflict"
+      ]
+    },
+    "incidentSeverity": {
+      "enum": [
+        "warning_only",
+        "production_blocker",
+        "evidence_blocker"
+      ]
+    },
+    "incidentAction": {
+      "enum": [
+        "warn",
+        "block_production_use",
+        "manual_review",
+        "fallback_path_review",
+        "rerun_provider_evidence",
+        "record_incident",
+        "freeze_latest_only_claims",
+        "defer_field_family",
+        "use_reviewed_audit_source_only",
+        "reject_silent_default"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "fallback_playbook_ref",
+        "incident_log_write_implemented",
+        "log_storage_path_created",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "data_fetch_allowed",
+        "provider_status_polling_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "fallback_execution_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_incident_log_contract_design"
+        },
+        "contract_status": {
+          "const": "schema_first_contract_no_logging_implementation"
+        },
+        "fallback_playbook_ref": {
+          "const": "docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json"
+        },
+        "incident_log_write_implemented": {
+          "const": false
+        },
+        "log_storage_path_created": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_status_polling_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "fallback_execution_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "contract_or_schema_ref",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contract_or_schema_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "incidentLogContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_schema_name",
+        "record_scope",
+        "planned_log_root",
+        "planned_raw_payload_root",
+        "planned_tracked_summary_pattern",
+        "no_actual_incident_records_created",
+        "authorizes_log_writer",
+        "authorizes_status_polling",
+        "authorizes_data_fetch",
+        "requires_review_before_writer",
+        "requires_secret_scan_before_tracking",
+        "request_url_or_secret_storage_allowed",
+        "raw_payloads_must_be_gitignored",
+        "manual_order_only"
+      ],
+      "properties": {
+        "record_schema_name": {
+          "const": "provider_p1_incident_log_record"
+        },
+        "record_scope": {
+          "const": "future_record_contract_only_no_actual_incident_rows"
+        },
+        "planned_log_root": {
+          "const": "logs/provider_incidents/"
+        },
+        "planned_raw_payload_root": {
+          "const": "provider_samples/provider_incidents/"
+        },
+        "planned_tracked_summary_pattern": {
+          "const": "docs/provider_incident_summary_<YYYYMMDD>.json"
+        },
+        "no_actual_incident_records_created": {
+          "const": true
+        },
+        "authorizes_log_writer": {
+          "const": false
+        },
+        "authorizes_status_polling": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "requires_review_before_writer": {
+          "const": true
+        },
+        "requires_secret_scan_before_tracking": {
+          "const": true
+        },
+        "request_url_or_secret_storage_allowed": {
+          "const": false
+        },
+        "raw_payloads_must_be_gitignored": {
+          "const": true
+        },
+        "manual_order_only": {
+          "const": true
+        }
+      }
+    },
+    "requiredRecordField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_name",
+        "required_for_record",
+        "field_role",
+        "secret_or_request_url_allowed"
+      ],
+      "properties": {
+        "field_name": {
+          "$ref": "#/$defs/fieldName"
+        },
+        "required_for_record": {
+          "const": true
+        },
+        "field_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "secret_or_request_url_allowed": {
+          "const": false
+        }
+      }
+    },
+    "incidentTypeMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "incident_type",
+        "playbook_incident_ref",
+        "default_severity",
+        "required_actions",
+        "required_log_field_refs",
+        "blocks_production_use_until_review",
+        "authorizes_status_polling",
+        "authorizes_provider_selection",
+        "authorizes_data_fetch",
+        "authorizes_fallback_execution",
+        "authorizes_adapter_or_datahub",
+        "authorizes_runner_consumption",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "incident_type": {
+          "$ref": "#/$defs/incidentType"
+        },
+        "playbook_incident_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "default_severity": {
+          "$ref": "#/$defs/incidentSeverity"
+        },
+        "required_actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/incidentAction"
+          },
+          "minItems": 2,
+          "contains": {
+            "const": "record_incident"
+          }
+        },
+        "required_log_field_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldName"
+          },
+          "minItems": 5
+        },
+        "blocks_production_use_until_review": {
+          "const": true
+        },
+        "authorizes_status_polling": {
+          "const": false
+        },
+        "authorizes_provider_selection": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_fallback_execution": {
+          "const": false
+        },
+        "authorizes_adapter_or_datahub": {
+          "const": false
+        },
+        "authorizes_runner_consumption": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "storageAndRetentionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "planned_log_root",
+        "planned_raw_payload_root",
+        "logs_created_by_this_artifact",
+        "local_storage_rights_resolved",
+        "retention_rights_resolved",
+        "request_urls_allowed_in_tracked_files",
+        "secrets_allowed_in_tracked_files",
+        "raw_payloads_must_be_gitignored",
+        "tracked_summary_requires_secret_scan",
+        "authorizes_storage_or_retention"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "planned_policy_only_storage_rights_unresolved"
+        },
+        "planned_log_root": {
+          "const": "logs/provider_incidents/"
+        },
+        "planned_raw_payload_root": {
+          "const": "provider_samples/provider_incidents/"
+        },
+        "logs_created_by_this_artifact": {
+          "const": false
+        },
+        "local_storage_rights_resolved": {
+          "const": false
+        },
+        "retention_rights_resolved": {
+          "const": false
+        },
+        "request_urls_allowed_in_tracked_files": {
+          "const": false
+        },
+        "secrets_allowed_in_tracked_files": {
+          "const": false
+        },
+        "raw_payloads_must_be_gitignored": {
+          "const": true
+        },
+        "tracked_summary_requires_secret_scan": {
+          "const": true
+        },
+        "authorizes_storage_or_retention": {
+          "const": false
+        }
+      }
+    },
+    "reviewAndReplayPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "allowed_review_status_values",
+        "required_review_before_production_unblock",
+        "automatic_replay_allowed",
+        "provider_status_polling_allowed",
+        "provider_data_rerun_allowed_by_contract",
+        "fallback_execution_allowed_by_contract",
+        "manual_disposition_required",
+        "revalidation_requires_separate_approval_when_data_or_access_needed"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "review_contract_only_not_workflow_implementation"
+        },
+        "allowed_review_status_values": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "pending_review",
+              "reviewed_blocked",
+              "reviewed_resolved",
+              "accepted_risk_by_user"
+            ]
+          },
+          "minItems": 4,
+          "uniqueItems": true
+        },
+        "required_review_before_production_unblock": {
+          "const": true
+        },
+        "automatic_replay_allowed": {
+          "const": false
+        },
+        "provider_status_polling_allowed": {
+          "const": false
+        },
+        "provider_data_rerun_allowed_by_contract": {
+          "const": false
+        },
+        "fallback_execution_allowed_by_contract": {
+          "const": false
+        },
+        "manual_disposition_required": {
+          "const": true
+        },
+        "revalidation_requires_separate_approval_when_data_or_access_needed": {
+          "const": true
+        }
+      }
+    },
+    "decisionGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "blocks_implementation",
+        "required_resolution",
+        "authorizes_provider_selection",
+        "authorizes_data_fetch",
+        "authorizes_status_polling",
+        "authorizes_fallback_execution",
+        "authorizes_adapter_or_datahub",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "defined_but_not_implemented",
+            "blocked_pending_later_review",
+            "pending_user_approval"
+          ]
+        },
+        "blocks_implementation": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_provider_selection": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_status_polling": {
+          "const": false
+        },
+        "authorizes_fallback_execution": {
+          "const": false
+        },
+        "authorizes_adapter_or_datahub": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selection",
+        "provider_ranking",
+        "new_fmp_token",
+        "trial_request",
+        "paid_upgrade",
+        "yfinance_check",
+        "full_market_download",
+        "provider_status_page_poll",
+        "provider_data_fetch",
+        "incident_log_writer_implementation",
+        "log_storage_path_creation",
+        "provider_adapter",
+        "datahub_table",
+        "production_runner_consumption",
+        "fallback_execution",
+        "phase7c_authorization",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "provider_selection": {
+          "const": false
+        },
+        "provider_ranking": {
+          "const": false
+        },
+        "new_fmp_token": {
+          "const": false
+        },
+        "trial_request": {
+          "const": false
+        },
+        "paid_upgrade": {
+          "const": false
+        },
+        "yfinance_check": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "provider_status_page_poll": {
+          "const": false
+        },
+        "provider_data_fetch": {
+          "const": false
+        },
+        "incident_log_writer_implementation": {
+          "const": false
+        },
+        "log_storage_path_creation": {
+          "const": false
+        },
+        "provider_adapter": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "fallback_execution": {
+          "const": false
+        },
+        "phase7c_authorization": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

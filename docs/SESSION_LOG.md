@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (US EGS incident-log contract)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `551fd75`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/provider_evidence_drift_monitor.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_incident_log_contract.schema.json, docs/provider_evidence_p1_us_incident_log_contract_20260602.json, tests/schema/test_provider_p1_incident_log_contract_schema.py. No runner / logs / provider_samples / network change (docs+schema+test only).
+
+**Independent verification**:
+- **AGENTS.md (highest rule — scrutinized line-by-line):** changes are descriptive only — the 🟡 Phase 7b-2 progress bullet, roadmap-table 7b-2 status, fixed-decision item 14, and the file-reference index add the incident-log contract and EXTEND the non-authorized list with `incident-log writer`. Boundary strengthened, not weakened; no fixed decision / ship gate / capital policy / execution boundary / governance rule changed. Hard `[trivial]` exclusion correctly routed through standard review.
+- Contract authorizes nothing and creates nothing: `contract_status=schema_first_contract_no_logging_implementation`, `incident_log_write_implemented=false`, `log_storage_path_created=false`, `incident_log_contract.no_actual_incident_records_created=true`, `authorizes_log_writer/status_polling/data_fetch=false`, plus all scope / mapping / gate / prohibited flags const-false. Planned roots `logs/provider_incidents/` + `provider_samples/provider_incidents/` are labels only (the latter already under gitignored `provider_samples/`); git status confirms nothing created there. 24 required record fields all `secret_or_request_url_allowed=false`, and `provider_calls_performed_by_log_contract` / `status_page_polled_by_log_contract` are pinned-false record fields — logging can't smuggle in a fetch/poll. 8 incident-type mappings align with the playbook, all `blocks_production_use_until_review=true`.
+- Ran `tests.schema.test_provider_p1_incident_log_contract_schema` under Python313 (jsonschema): 7 tests, all pass, 0 skipped — artifact validates, 24-field completeness + no-secret, 8-incident mapping match + default-blocking, storage/review design-only, scope-creep (write_implemented / status_polling / data_fetch / authorizes_log_writer / secrets_in_tracked / authorizes_fallback / writer_impl) rejected.
+- Docs consistent: drift-monitor §22 insert + §23 renumber clean (§20/§21 repointed; "§20+§21+§22 do not broaden the boundary"); register Hot Queue + SR-PROVIDER-001 evidence/calibration/next-action updated, kept `open` (adds incident-log-writer to blocked list); CURRENT=149; handoff append-only; Codex entry [tracked]/[untracked]-tagged with Python313 validation.
+
+**Process**: this is the no-access incident-log-design slice the playbook named. It correctly stays a future-record contract (no writer, no storage, no calls) and narrows one design sub-blocker without closing `SR-PROVIDER-001`. Single-scope working tree.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001` (open; remaining no-access safe work is docs-only license/storage/retention review; log-writer / fallback-execution / coverage / PIT / provider-selection / DataHub / runner / Phase 7c all still require separate explicit approval). No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (US EGS incident-log contract)
+
+**Commits**: none (pending Claude review / submit; base `551fd75`)
+
+**Relationship to prior session(s)**:
+- Builds on committed `551fd75 Add US EGS fallback incident playbook`.
+- Executes the next no-access `SR-PROVIDER-001` incident-direction slice named by the fallback playbook: define the incident-log contract before any log writer, status polling, fallback execution, provider adapter, DataHub, runner consumption, or Phase 7c work.
+- This round does not call FMP / SEC / `yfinance`, does not poll provider status pages, does not fetch provider data, does not create log directories, does not implement a writer, does not execute fallback, and does not change any runner / adapter / DataHub table.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_incident_log_contract.schema.json`: added the future incident-log record contract with scope locks, required record fields, incident-type mappings, storage / retention policy, review / replay policy, decision gates, and prohibited actions.
+2. [untracked] `docs/provider_evidence_p1_us_incident_log_contract_20260602.json`: added the no-access contract artifact. Planned log / raw-payload roots are documented as non-authorizing; no actual incident records, storage paths, writer, provider calls, or status polling are created.
+3. [untracked] `tests/schema/test_provider_p1_incident_log_contract_schema.py`: validates schema/artifact, 24 required record fields, 8 playbook incident mappings, no-secret / no-request-url fields, storage / review locks, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the incident-log contract while keeping `SR-PROVIDER-001` open and `docs/CURRENT.md` at 149 lines.
+
+**Key decisions**:
+- Treat incident logging as a record-shape contract only in this slice. Reason: a log schema cannot be allowed to smuggle in a log writer, status-page polling, fallback execution, storage authorization, or provider readiness evidence.
+- Keep planned roots `logs/provider_incidents/` and `provider_samples/provider_incidents/` as future policy labels, not created paths or storage authorization; license / storage / retention rights remain unresolved.
+- Require future records to carry explicit false fields for provider calls, status-page polling, fallback execution, production unblock, and scope locks.
+- Leave `SR-PROVIDER-001` open because coverage, license / storage / retention, PIT, price adjustment, SEC parser feasibility, actual incident-log writer behavior, executed fallback, provider stability evidence, provider selection, DataHub / runner consumption, and Phase 7c remain unresolved.
+
+**Rejected alternatives**:
+- "Implement the incident-log writer now" — rejected; that would add storage behavior and a workflow path beyond this schema-first slice.
+- "Poll provider status pages or run uptime checks" — rejected; no approval for status polling or provider calls.
+- "Treat the incident-log contract as a production unblocker" — rejected; a record contract narrows a design blocker but proves no provider stability or executable fallback behavior.
+- "Do license / storage / retention review in the same round" — rejected as a second task; it remains the next safe no-access provider slice.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_incident_log_contract_schema -v`: 7 tests ran; 4 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_incident_log_contract_schema tests.schema.test_provider_p1_fallback_incident_stability_playbook_schema tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v`: 20 tests passed.
+- `json.tool` parsed the new schema and artifact successfully.
+- `docs/CURRENT.md` line count = 149.
+- `git diff --check`: passed after this SESSION_LOG entry; only normal LF/CRLF working-copy warnings.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: schema/artifact accidentally authorize log-writer implementation, storage / retention, provider status polling, provider calls, fallback execution, provider selection, DataHub / runner consumption, Phase 7c, or production-readiness / ship-gate claims; docs incorrectly close `SR-PROVIDER-001`.
+
+---
+
 ## 2026-06-02 — Claude review — Pass (clean) (US EGS fallback / incident / stability playbook)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `edd7026`)
