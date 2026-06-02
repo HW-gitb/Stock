@@ -8,6 +8,63 @@
 
 ---
 
+## 2026-06-02 — Claude review — Pass (clean) (US EGS remaining blocker plan)
+
+**Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `2b72b24`)
+
+**Verdict**: Pass, clean. No Required fixes, no Optional suggestions, no open questions.
+
+**Scope reviewed**: [tracked] AGENTS.md, docs/CURRENT.md, docs/README.md, docs/SESSION_LOG.md, docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md, docs/provider_evidence_drift_monitor.md, docs/system_risk_register.md. [untracked] schemas/provider_p1_remaining_blocker_resolution_plan.schema.json, docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json, tests/schema/test_provider_p1_remaining_blocker_resolution_plan_schema.py. No runner / provider_samples / network change this round (docs+schema+test only).
+
+**Independent verification**:
+- **AGENTS.md (highest rule — scrutinized line-by-line):** the only changes are descriptive — the 🟡 Phase 7b-2 progress bullet, fixed-decision item 14, and the file-reference index are updated to reflect the already-committed FMP stable retry (12/12 HTTP 200) and this blocker-routing plan. It STRENGTHENS the boundary ("stable retry + plan 都不等于 provider selection / PIT security master / production readiness") and weakens no fixed decision, ship gate, capital policy, or execution boundary. No governance rule altered. Correctly routed through standard review (AGENTS.md is a hard `[trivial]` exclusion).
+- Plan artifact authorizes nothing: `plan_status=plan_only_no_new_access`, `data_fetch_allowed=false`, and every scope flag / blocker-track `authorizes_*` / decision-gate `authorizes_*` / prohibited_actions field is const-locked false. 7 blocker tracks (coverage / license-storage / PIT / price-adjustment / SEC-audit / fallback-stability / production-readiness-Phase7c), all `blocked_pending_review_or_approval`; 6 decision gates, all `blocks_implementation=true`. current_evidence_summary honestly scopes the stable retry to "two-symbol access/response-shape" and lists what is NOT proven.
+- Ran `tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema` under Python313 (jsonschema): 6 tests, all pass, 0 skipped — artifact validates, scope-creep (provider_selection/data_fetch/phase7c/yfinance/authorizes_data_fetch) rejected, 7-track completeness + non-authorizing locks + narrow-evidence framing asserted.
+- Docs consistent: drift-monitor §20 insert + §21 renumber clean ("plan does not broaden the boundary"); register Hot Queue + SR-PROVIDER-001 evidence/calibration/next-action updated, kept `open`; CURRENT=149; handoff append-only.
+
+**Process**: this is the no-data `SR-PROVIDER-001` routing slice; it correctly makes the post-stable-retry blockers a machine-checkable durable artifact instead of leaving them in chat. Single-scope working tree.
+
+**Hot Queue**: unchanged — `SR-DATA-004` + `SR-PROVIDER-001` (open; the remaining-blocker plan is now the active router — next safe slices are docs-only license/storage/retention review or schema-first fallback/incident/stability playbook; no new access / provider-selection / DataHub / runner / Phase 7c / paid / yfinance / full-market without separate explicit approval). No pending Required or Optional — ready for `提交`.
+
+---
+
+## 2026-06-02 — Codex 执行 (US EGS remaining blocker plan)
+
+**Commits**: none (pending Claude review / submit; base `2b72b24`)
+
+**Relationship to prior session(s)**:
+- Builds on the committed FMP stable endpoint retry (`2b72b24`), where AAPL / MSFT returned 12/12 HTTP 200 but `SR-PROVIDER-001` stayed open.
+- Executes the next no-data `SR-PROVIDER-001` slice: make the post-stable-retry blockers machine-checkable before any provider selection, broader sample, DataHub, adapter, runner consumption, or Phase 7c work.
+- This round does not call FMP / SEC / `yfinance`, does not fetch provider data, does not broaden symbols, does not request a token / trial / paid access, and does not change any runner.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_remaining_blocker_resolution_plan.schema.json`: added a plan-only schema for coverage, license / storage, PIT, price adjustment / corporate actions, SEC EDGAR audit feasibility, fallback / stability, and production-readiness / Phase 7c blocker routing.
+2. [untracked] `docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json`: added the actual post-stable-retry blocker plan. It treats stable retry as two-symbol access / response-shape evidence only and authorizes no new access or implementation.
+3. [untracked] `tests/schema/test_provider_p1_remaining_blocker_resolution_plan_schema.py`: validates the schema / artifact, blocker-track completeness, source refs, scope locks, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: routed the remaining-blocker plan while keeping `SR-PROVIDER-001` open and `CURRENT.md` at 149 lines.
+
+**Key decisions**:
+- Treat FMP stable retry as access / response-shape evidence, not provider readiness. Reason: two active symbols do not prove coverage, license, PIT, adjustment semantics, fallback, stability, or production readiness.
+- Make the next safe provider slices docs-only / schema-first: license-storage-retention review or fallback / incident / stability playbook. Any coverage-count, PIT-row, corporate-action, broader sample-validation, `yfinance`, new-token, trial, paid, full-market, provider-selection, adapter, DataHub, runner-consumption, or Phase 7c step still needs separate explicit approval and review.
+- Sync `AGENTS.md` because its root Phase 7b summary still stopped at sample approval and would otherwise understate the committed stable retry and this blocker-routing artifact.
+
+**Rejected alternatives**:
+- "Run more FMP or SEC samples now" — rejected; no approval for broader access and this slice is blocker routing only.
+- "Mark FMP selected or Phase 7c-ready after stable retry" — rejected; the current evidence lacks coverage, license, PIT, fallback, stability, and production-readiness proof.
+- "Leave remaining blockers only in chat / SESSION_LOG" — rejected; `SR-PROVIDER-001` is a durable risk-register item and needs a schema-first routing artifact.
+
+**Validation run/result**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v`: 6 tests ran; 3 passed, 3 skipped because this interpreter lacks `jsonschema`.
+- Escalated Python313 with `jsonschema`: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema tests.schema.test_provider_p1_fmp_stable_endpoint_retry_summary_schema tests.schema.test_provider_p1_fmp_endpoint_mapping_review_schema tests.schema.test_provider_p1_us_egs_sample_validation_summary_schema tests.schema.test_provider_p1_sample_validation_access_approval_schema -v`: 29 tests passed.
+- `git diff --check`: passed; only normal Windows LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` line count = 149.
+
+**Current review state**:
+- Working tree is uncommitted per Commit Timing Rule.
+- Claude should review tracked diffs plus the three untracked files above. Primary review risks: schema permits scope creep, artifact accidentally authorizes new access / `yfinance` / provider selection / DataHub / runner / Phase 7c, or docs overclaim stable retry evidence.
+
+---
+
 ## 2026-06-02 — Claude re-review — Pass (clean) (US EGS FMP stable dry-run guard — O1 resolved)
 
 **Commits**: none (review-only entry; reviews working tree status/diffs/untracked files vs `382714b`)

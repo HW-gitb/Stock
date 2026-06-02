@@ -1878,3 +1878,40 @@ Select-String -Path docs\provider_evidence_p1_us_fmp_stable_endpoint_retry_summa
 1. Claude 复审应重点核对 summary 是否没有 raw rows / request URLs / secrets，raw payload 是否保持 ignored，stable runner 是否没有调用 SEC / `yfinance` / TSLA / full-market。
 2. `SR-PROVIDER-001` 仍 open；后续若要推进 provider work，必须另行处理 coverage、license / storage、PIT semantics、fallback / incident、stability 和 production-readiness evidence。
 3. 不要把 sample runner 接入 production runner，也不要进入 DataHub / adapter / Phase 7c，除非用户另有 explicit approval + reviewed decision。
+
+## 2026-06-02 追加：US EGS post-stable-retry remaining blocker plan
+
+**改了什么**:
+
+- 新增 `schemas/provider_p1_remaining_blocker_resolution_plan.schema.json`，把 AAPL / MSFT FMP stable retry 之后仍未解决的 P1 blocker 固化为 schema-first plan：coverage counts、license / storage / retention、PIT / observed-date semantics、price adjustment / corporate actions、SEC EDGAR audit parser feasibility、fallback / incident / stability、production-readiness / Phase 7c gate。
+- 新增 `docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json`，记录 stable retry 只关闭 two-symbol access / response-shape sub-blocker；其余 blocker 仍不得 silent default、不得转成 provider selection / DataHub / runner consumption。
+- 新增 `tests/schema/test_provider_p1_remaining_blocker_resolution_plan_schema.py`，验证 schema、真实 artifact、scope locks、blocker-track completeness、source refs 和 scope-creep rejection。
+- 更新 `docs/provider_evidence_drift_monitor.md`、`docs/system_risk_register.md`、`docs/CURRENT.md`、`docs/README.md`，把 active provider routing 从“stable retry result”推进到“remaining blocker plan”，但保持 `SR-PROVIDER-001` open。
+
+**为什么改**:
+
+- Stable retry 成功后，最容易出现的误读是把 12/12 HTTP 200 当作 FMP 可选定或 Phase 7c 可开工。这个 artifact 把剩余 blocker 逐项拆开，明确下一步只能先解决 blocker，而不是扩大抓数或实现。
+- 这轮刻意不调用 FMP / SEC / `yfinance`，不扩大 symbol，不接 adapter / DataHub / production runner，不放松 ship gate。
+- 安全的后续 docs-only 切片是 license / storage / retention review；安全的 schema-first 切片是 fallback / incident / stability playbook。任何 coverage-count、PIT-row、corporate-action 或 broader sample validation 都必须重新获得 user approval。
+
+**验证命令**:
+
+```powershell
+C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_remaining_blocker_resolution_plan_schema -v
+```
+
+**验证结果**:
+
+- Bundled Python: 6 tests ran; 3 passed, 3 skipped because this interpreter lacks `jsonschema`; non-jsonschema scope-lock / blocker / routing tests passed.
+- Python313 with `jsonschema`: 6 tests passed, including real artifact validation and scope-creep rejection.
+
+**失效旧结论**:
+
+- “stable retry 之后下一步可以直接 provider selection / DataHub / runner consumption / Phase 7c”不成立。
+- “remaining blockers 只需要在 chat 里提醒”失效；现在由 schema-first artifact 路由，Claude review 应直接检查该 artifact 的 blockers 和 scope locks。
+
+**下一步注意事项**:
+
+1. Claude 复审应重点核对 artifact 是否只做 blocker routing，且没有授权新 access / data fetch / `yfinance` / provider selection / DataHub / runner / Phase 7c。
+2. 如果审查 Pass 并提交，下一条 provider 方向的 `执行` 默认不抓数据；应先做 FMP / SEC license-storage-retention review，或 fallback / incident / stability playbook schema-first design。

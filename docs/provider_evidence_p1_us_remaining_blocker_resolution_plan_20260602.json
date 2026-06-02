@@ -1,0 +1,320 @@
+{
+  "schema_name": "provider_p1_remaining_blocker_resolution_plan",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-02T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_remaining_blocker_resolution_plan_after_fmp_stable_retry",
+    "plan_status": "plan_only_no_new_access",
+    "based_on_stable_retry_ref": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_readiness_matrix_20260529",
+      "path": "docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json",
+      "contract_or_schema_ref": "schemas/provider_p1_readiness_review.schema.json",
+      "consumption_role": "Defines the original P1 field-by-field blockers before user-approved AAPL / MSFT sample work."
+    },
+    {
+      "artifact_id": "p1_access_decision_plan_20260531",
+      "path": "docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json",
+      "contract_or_schema_ref": "schemas/provider_p1_access_decision_plan.schema.json",
+      "consumption_role": "Defines the pre-approval access and sample-validation decision gates that remain relevant after the narrow sample."
+    },
+    {
+      "artifact_id": "p1_sample_validation_access_approval_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_sample_validation_access_approval.schema.json",
+      "consumption_role": "Defines the only user-approved data boundary consumed by the AAPL / MSFT sample and stable retry."
+    },
+    {
+      "artifact_id": "p1_us_egs_sample_validation_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_us_egs_sample_validation_summary.schema.json",
+      "consumption_role": "Records SEC EDGAR public API success and FMP legacy v3 endpoint errors for the approved two-symbol packet."
+    },
+    {
+      "artifact_id": "p1_fmp_stable_retry_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+      "contract_or_schema_ref": "schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json",
+      "consumption_role": "Records the same-scope AAPL / MSFT FMP stable endpoint access and response-shape pass."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "contract_or_schema_ref": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "Defines provider evidence, drift-monitor, no-silent-default, no-selection, and no-implementation locks."
+    }
+  ],
+  "current_evidence_summary": {
+    "fmp_stable_retry_status": "two_symbol_access_response_shape_passed",
+    "sec_edgar_sample_status": "two_symbol_public_api_sample_passed",
+    "approved_sample_scope": "AAPL_MSFT_only_existing_fmp_key_sec_public_api_zero_usd",
+    "not_proven_by_current_evidence": [
+      "FMP full target-universe coverage counts, history depth, missing-field rates, and delisted / inactive / non-common-stock behavior are not proven.",
+      "FMP license, local-storage, non-display, derived-report, export, cache-retention, and retention-after-lapse rights are not approved beyond the narrow local sample.",
+      "FMP field-level PIT semantics for fundamentals, revisions, restatements, and latest/current endpoint behavior are not proven by two current active symbols.",
+      "FMP price adjustment, corporate-action, missing-session, and zero-volume behavior are not validated for a reproducible US EGS universe.",
+      "SEC EDGAR is only a fundamentals audit source; it is not a price source and does not strictly audit free float.",
+      "Fallback hierarchy, incident response, quota stability, provider drift monitors, and production-readiness evidence remain unresolved."
+    ]
+  },
+  "blocker_resolution_tracks": [
+    {
+      "blocker_id": "coverage_counts",
+      "status": "blocked_pending_review_or_approval",
+      "current_evidence_status": "AAPL / MSFT stable endpoints returned HTTP 200, but no target-universe coverage count or missing-field distribution exists.",
+      "required_resolution_items": [
+        "Define the intended US EGS sample universe and field families before any broader count request.",
+        "Obtain user approval before any additional endpoint calls or broader symbol coverage sampling.",
+        "Record counts by active / inactive / delisted, security class, history window, field family, and endpoint mode.",
+        "Tie missing-field rates to block / fallback / defer decisions rather than silent defaulting."
+      ],
+      "allowed_next_action_type": "user_approved_access_packet_required",
+      "requires_user_approval_before_data_or_access": true,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false,
+      "review_refs_required": [
+        "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+        "docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json",
+        "docs/provider_evidence_drift_monitor.md"
+      ]
+    },
+    {
+      "blocker_id": "license_storage_retention_rights",
+      "status": "blocked_pending_review_or_approval",
+      "current_evidence_status": "The approved sample allowed local ignored raw storage for AAPL / MSFT only; it did not approve production storage, non-display use, exports, derived reports, or retention after subscription changes.",
+      "required_resolution_items": [
+        "Review FMP terms for local raw storage, normalized storage, derived reports, non-display use, export, redistribution, personal / professional classification, and retention after lapse.",
+        "Classify which tracked summaries may be committed and which raw artifacts must remain ignored.",
+        "Record explicit accepted / blocked license rights before any broader sample or DataHub design consumes fields."
+      ],
+      "allowed_next_action_type": "docs_or_user_decision_only",
+      "requires_user_approval_before_data_or_access": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false,
+      "review_refs_required": [
+        "docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json",
+        "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json",
+        "docs/provider_evidence_p1_us_authorization_cost_stability_20260528.json"
+      ]
+    },
+    {
+      "blocker_id": "pit_observed_date_semantics",
+      "status": "blocked_pending_review_or_approval",
+      "current_evidence_status": "FMP stable statement payloads exposed filingDate / acceptedDate fields in two samples, but field-level PIT construction and revision behavior are not proven.",
+      "required_resolution_items": [
+        "Define which FMP fields may be used only when a filingDate / acceptedDate / observed-date rule is present.",
+        "Validate revision, amended filing, restatement, fiscal-period, currency, unit, and duplicate-filing behavior before historical use.",
+        "Keep latest/current endpoints out of historical PIT evidence unless reviewed rows prove as-of semantics.",
+        "Document SEC EDGAR cross-check fields and anomaly-triggered audit rules separately from FMP production fields."
+      ],
+      "allowed_next_action_type": "user_approved_access_packet_required",
+      "requires_user_approval_before_data_or_access": true,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false,
+      "review_refs_required": [
+        "docs/provider_evidence_p1_us_fundamentals_observed_date_candidates_20260528.json",
+        "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+        "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json"
+      ]
+    },
+    {
+      "blocker_id": "price_adjustment_corporate_actions",
+      "status": "blocked_pending_review_or_approval",
+      "current_evidence_status": "FMP stable historical EOD rows returned price / volume fields for AAPL and MSFT, but adjustment mode, split / dividend reconciliation, delisting behavior, and missing-session rules are not validated.",
+      "required_resolution_items": [
+        "Review adjustment semantics for FMP historical EOD rows before any return or liquidity field is used.",
+        "Validate split, dividend, zero-volume, newly listed, delisted, and halted examples under an approved sample packet.",
+        "Record explicit fallback rules for missing prices, missing volume, and corporate-action conflicts."
+      ],
+      "allowed_next_action_type": "user_approved_access_packet_required",
+      "requires_user_approval_before_data_or_access": true,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false,
+      "review_refs_required": [
+        "docs/provider_evidence_p1_us_market_data_candidates_20260528.json",
+        "docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json",
+        "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json"
+      ]
+    },
+    {
+      "blocker_id": "sec_edgar_audit_parser_feasibility",
+      "status": "blocked_pending_review_or_approval",
+      "current_evidence_status": "SEC EDGAR company tickers, submissions, and companyfacts succeeded for AAPL and MSFT, but scale, parser lineage, XBRL normalization, and exact free-float audit remain unresolved.",
+      "required_resolution_items": [
+        "Define SEC EDGAR audit scope as fundamentals anomaly review, not price or strict free-float source authority.",
+        "Prove parser lineage for accession, accepted timestamp, fiscal period, unit, currency, amendment, and restatement behavior before relying on audit output.",
+        "Keep SEC parser feasibility on provider-evidence track; do not reinterpret it as US-long alpha validation."
+      ],
+      "allowed_next_action_type": "reviewed_schema_first_design_required",
+      "requires_user_approval_before_data_or_access": true,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false,
+      "review_refs_required": [
+        "docs/provider_evidence_p1_us_public_sources_20260528.json",
+        "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+        "docs/provider_evidence_drift_monitor.md"
+      ]
+    },
+    {
+      "blocker_id": "fallback_incident_stability",
+      "status": "blocked_pending_review_or_approval",
+      "current_evidence_status": "A two-symbol successful retry does not prove quota stability, incident behavior, fallback paths, status-page reliability, or drift-monitor thresholds.",
+      "required_resolution_items": [
+        "Define field-family fallback hierarchy for fundamentals, price / volume, liquidity, corporate actions, and SEC audit fields.",
+        "Define block-production-use triggers for stale rows, missing rows, schema drift, quota exhaustion, provider incident, and silent semantic changes.",
+        "Record retry, throttle, backoff, incident logging, and manual-review rules before any implementation consumes provider data."
+      ],
+      "allowed_next_action_type": "reviewed_schema_first_design_required",
+      "requires_user_approval_before_data_or_access": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false,
+      "review_refs_required": [
+        "docs/provider_evidence_drift_monitor.md",
+        "docs/provider_evidence_p1_us_coverage_fallback_incident_candidates_20260528.json",
+        "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json"
+      ]
+    },
+    {
+      "blocker_id": "production_readiness_phase7c_gate",
+      "status": "blocked_pending_review_or_approval",
+      "current_evidence_status": "No provider has been selected, no broad access has been approved, no DataHub / adapter / runner consumption exists, and no production-readiness or ship-gate claim is allowed.",
+      "required_resolution_items": [
+        "Require reviewed closure or accepted-risk decision for coverage, license, PIT, price adjustment, SEC audit, fallback, and stability tracks before provider selection.",
+        "Start Phase 7c only as a separate schema-first DataHub / report / reproducibility contract after reviewed Phase 7b blockers are accepted.",
+        "Keep ship-gate evidence separate from provider-readiness evidence and require live-normalized forward evidence for any full-size claim."
+      ],
+      "allowed_next_action_type": "reviewed_schema_first_design_required",
+      "requires_user_approval_before_data_or_access": false,
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_phase7c": false,
+      "review_refs_required": [
+        "docs/provider_evidence_p1_us_readiness_review_matrix_20260529.json",
+        "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+        "docs/evidence_capital_policy.md"
+      ]
+    }
+  ],
+  "decision_gates": [
+    {
+      "gate_id": "new_access_or_data_fetch_approval",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "The user must explicitly approve any new endpoint calls, broader symbols, yfinance check, new token, trial, paid access, or full-market download before it occurs.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "license_storage_retention_review",
+      "status": "pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "A reviewed license / storage / retention packet must classify rights for FMP and any fallback source before production storage or DataHub design.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "coverage_count_validation",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "Coverage counts and missing-field distributions require a separately approved access packet and reviewed no-secret summary.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "pit_and_adjustment_semantics",
+      "status": "pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "Field-level PIT, observed-date, revision, adjustment, corporate-action, and no-latest-only semantics must be reviewed before historical evidence or runner consumption.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "fallback_incident_stability_playbook",
+      "status": "pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "Fallback hierarchy, incident response, drift-monitor thresholds, retry / throttle rules, and block-production-use triggers must be reviewed before implementation.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    },
+    {
+      "gate_id": "phase7c_design_authorization",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "Phase 7c requires separate explicit approval and a reviewed schema-first implementation-design slice after remaining Phase 7b blockers are closed or explicitly accepted.",
+      "authorizes_provider_selection": false,
+      "authorizes_data_fetch": false,
+      "authorizes_phase7c": false
+    }
+  ],
+  "prohibited_actions": {
+    "provider_selection": false,
+    "provider_ranking": false,
+    "new_fmp_token": false,
+    "trial_request": false,
+    "paid_upgrade": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "phase7c_authorization": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Use this artifact as the routing source for SR-PROVIDER-001 after the reviewed AAPL / MSFT stable retry.",
+    "Do not run additional provider data by default; first choose one blocker track and obtain explicit user approval if the track needs any new access or endpoint calls.",
+    "A safe next docs-only slice is license / storage / retention review for FMP and SEC audit artifacts, because it can narrow blocker scope without fetching data.",
+    "A safe next schema-first design slice is fallback / incident / stability playbook, because it defines production-blocking behavior without consuming provider data.",
+    "Any coverage-count, PIT-row, corporate-action, or broader sample validation packet must be separately approved and reviewed before execution."
+  ],
+  "limitations": [
+    "This artifact is a plan-only blocker router; it performs no web research, provider contact, token request, trial request, paid access, yfinance check, endpoint call, full-market download, adapter work, DataHub work, runner change, broker automation, or ship-gate claim.",
+    "The AAPL / MSFT stable retry is treated as access / response-shape evidence only; it is not provider selection, provider ranking, production readiness, or Phase 7c authorization.",
+    "SEC EDGAR success is treated as public fundamentals audit feasibility for two symbols only; it is not a price source, strict free-float source, or alpha-validation result.",
+    "FMP remains blocked for implementation until coverage, license, PIT, price adjustment, SEC audit scope, fallback, stability, and production-readiness gates are separately resolved."
+  ]
+}
