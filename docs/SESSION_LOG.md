@@ -8,6 +8,62 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (FMP entitlement + corporate-action no-access diagnostic) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. Executes the drafted diagnostic slice exactly: docs-only review + SIVB-402-as-open-hypotheses + runner error-body-capture hardening; no new provider call, nothing over-concluded.
+
+**Scope reviewed** (base `1eb8480`): new `schemas/provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic.schema.json` + `docs/..._diagnostic_20260603.json` + its test; modified `runners/us_egs_sample_validation.py` (shared fetch primitive) + `tests/provider/test_us_egs_sample_validation.py`; doc routing.
+
+**Independently verified (read runner diff + artifact + schema test in full)**:
+- Runner change is secret-safe and correctly scoped: `_parse_json_bytes(..., preserve_non_json_body=True)` adds `non_json_response_body_text` ONLY on the `HTTPError` branch (success/URLError/timeout paths unchanged → no regression to normal flow). The captured text is FMP's response BODY (the apikey lives in the request URL, which `fetch_and_store` never persists) and lands only in gitignored raw; the tracked summary still stores shape+booleans only. The new fake-402 regression plants `url=...apikey=UNIT_TEST_FMP_SECRET` + body `Payment Required...` and asserts: raw has no `apikey=`, summary has neither the body text nor the fake key, field_presence false. Non-vacuous, exactly the right secret check.
+- Diagnostic artifact does NOT over-conclude (the core ask): `sivb_http_402_classification.classification_status = open_hypothesis_set_not_conclusive`, `direct_paid_wall_conclusion_allowed = false`, all 4 hypotheses `open_unconfirmed` with `current_artifact_conclusion_allowed = false`; `basic_entitlement_docs_review.sivb_402_paid_wall_conclusion_allowed = false`, `endpoint_level_basic_entitlement_cleared = false`; `no_silent_default_policy` locks 402≠missing-default, body-absence≠classification, TWTR-success≠coverage, paid-wall-without-evidence=false. `twtr_success_refutes_universal_delisted_block = true`, issue narrowed to SIVB.
+- Useful forward signal from the public-docs review: FMP stable `/stable/splits?symbol=` and `/stable/dividends?symbol=` templates exist (corporate-action route exists at template level), plus a Delisted Companies endpoint — but all marked `template_listed_but_plan_access_not_validated`, `sample_live_validated=false`, 0 calls, no endpoint-call/reconciliation authorization.
+- Future SIVB re-probe is shaped but NOT authorized: `reprobe_authorized_by_this_artifact=false`, `requires_separate_reviewed_execution_packet=true` + user execute; SIVB-only / 5 failed endpoints / max 5 calls / retry 0 / $0 / existing key / gitignored body capture / no-secret summary. The runner hardening now makes that future re-probe able to actually classify the 402.
+- Schema const-locks enforced (confirmed via the passing scope-creep test: flipping `direct_paid_wall_conclusion_allowed`/`reprobe_authorized`/`fmp_endpoint_call_allowed`/`live_reprobe_performed`/`provider_selection` etc. to true is rejected); `additionalProperties:false` throughout.
+- Re-ran diagnostic-schema + both provider runner test modules under Python313+jsonschema → **26/26 pass** (incl. the fake-402 regression). `SR-PROVIDER-001` stays **open**; no new AGENTS fixed decision (routing-only); CURRENT=149; the 3 new diagnostic files are secret-clean (the modified runner test's `UNIT_TEST_FMP_SECRET` is an intentional planted fake asserting exclusion).
+
+**Residual blockers unchanged (intentional)**: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open; aggregate full-size permission `not_evaluable` by the SR-EXEC-007 concurrency gate.
+
+---
+
+## 2026-06-03 — Codex 执行 (FMP entitlement + corporate-action no-access diagnostic)
+
+**Commits**: none (pending independent review / submit; base after inactive / delisted gap plan commit `1eb8480`)
+
+**Scope**:
+- User asked for a no-access diagnostic slice to classify SIVB HTTP 402 ambiguity and identify current FMP split / dividend endpoint templates.
+- This round performs docs-only FMP endpoint / Basic entitlement review, consumes only existing tracked validation evidence plus existing gitignored SIVB 402 wrappers, and hardens future non-JSON HTTP error raw capture.
+- No FMP endpoint call, SEC API call, SIVB re-probe, split / dividend endpoint call, paid access, new token, provider contact, `yfinance`, full-market fetch, raw-row parse, fixture generation, return calculation, corporate-action reconciliation, provider selection, adapter, DataHub, runner consumption, Phase 7c authorization, production-readiness claim, alpha evidence, or ship-gate evidence is performed or authorized.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic.schema.json`: no-access schema for FMP Basic entitlement / SIVB 402 / split-dividend template diagnostic.
+2. [untracked] `docs/provider_evidence_p1_us_fmp_entitlement_corporate_action_no_access_diagnostic_20260603.json`: artifact recording official FMP docs / pricing / FAQ evidence, existing validation-summary facts, SIVB 402 hypothesis set, and future re-probe packet shape.
+3. [untracked] `tests/schema/test_provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic_schema.py`: schema / artifact validation, scope locks, no-silent-default policy, split / dividend template checks, and scope-creep rejection.
+4. [tracked] `runners/us_egs_sample_validation.py`: preserves non-JSON HTTP error body text only in gitignored raw wrappers for future failed calls; tracked summaries remain body / request-URL / secret free.
+5. [tracked] `tests/provider/test_us_egs_sample_validation.py`: fake HTTP 402 regression proves raw body capture and summary exclusion without network.
+6. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/CURRENT.md`, `docs/README.md`, `AGENTS.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the diagnostic and keep `SR-PROVIDER-001` open.
+
+**Design decision**:
+- FMP public docs identify stable `/stable/splits?symbol={symbol}` and `/stable/dividends?symbol={symbol}` templates, but that is template evidence only: no access, entitlement, event correctness, adjusted-return, or reconciliation claim.
+- SIVB HTTP 402 remains an unresolved hypothesis set: Basic endpoint-family entitlement, SIVB-specific lifecycle / receivership behavior, historical or delisted-data paid tier, or transient quota / provider incident. The artifact explicitly forbids direct paid-wall and missing-data-default conclusions.
+- TWTR's six FMP stable successes refute "inactive / delisted symbols always unsupported", but do not prove universe coverage.
+- A future SIVB-only re-probe is shaped but not authorized: SIVB only, five failed endpoint families only, max 5 calls, zero retry, $0, existing FMP key, gitignored raw body capture, tracked no-secret summary, separate reviewed packet, and later user `执行`.
+
+**Validation run/result**:
+- Bundled Python: `json.tool` parsed the new schema and artifact.
+- Bundled Python: `tests.schema.test_provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic_schema tests.provider.test_us_egs_sample_validation -v` ran 20 tests, all non-jsonschema checks passed; 3 jsonschema subtests skipped because bundled Python lacks `jsonschema`.
+- Python313 + jsonschema (elevated because sandbox denied direct Python313 execution): targeted provider/schema set ran 40 tests, all pass.
+- Python313 + jsonschema full discovery: `unittest discover -v` ran 506 tests, all pass.
+- Sensitive-string scan over new schema / artifact / schema-test for `apikey=`, bearer tokens, env var names, fake unit-test key, and OpenAI-style key pattern returned no matches. The modified provider test intentionally contains `UNIT_TEST_FMP_SECRET` / `apikey=` as fake regression input and asserts they do not enter summaries or raw wrappers.
+- `docs/CURRENT.md` line count remains 149.
+- `git diff --check` exited 0 with only normal Windows LF/CRLF warnings.
+
+**Current review state**:
+- Needs independent review before `提交`.
+- `SR-PROVIDER-001` remains open. The next actual provider-access step, if approved later, is a separate reviewed SIVB-only re-probe packet or separate split / dividend endpoint packet; neither is authorized by this slice.
+
+---
+
 ## 2026-06-03 — Claude 审查 (inactive / delisted gap resolution plan) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. No-access schema-first plan; uses only the tracked validation-summary evidence, authorizes nothing.

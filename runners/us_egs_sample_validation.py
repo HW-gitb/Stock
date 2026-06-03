@@ -162,7 +162,7 @@ class JsonHttpClient:
                 return _parse_json_bytes(body), int(response.status), True, None
         except urllib.error.HTTPError as exc:
             body = exc.read()
-            payload = _parse_json_bytes(body)
+            payload = _parse_json_bytes(body, preserve_non_json_body=True)
             return payload, int(exc.code), False, "http_error"
         except urllib.error.URLError as exc:
             return {"error": str(exc.reason)}, None, False, "url_error"
@@ -170,13 +170,17 @@ class JsonHttpClient:
             return {"error": str(exc)}, None, False, "timeout"
 
 
-def _parse_json_bytes(body: bytes) -> Any:
+def _parse_json_bytes(body: bytes, *, preserve_non_json_body: bool = False) -> Any:
     if not body:
         return None
     try:
         return json.loads(body.decode("utf-8"))
     except Exception:
-        return {"non_json_response_bytes": len(body)}
+        payload: dict[str, Any] = {"non_json_response_bytes": len(body)}
+        if preserve_non_json_body:
+            payload["non_json_response_body_text"] = body.decode("utf-8", errors="replace")
+            payload["non_json_response_body_encoding"] = "utf-8-replacement"
+        return payload
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
 import tempfile
 import unittest
+import urllib.error
 import urllib.parse
 from pathlib import Path
 from unittest import mock
@@ -554,6 +556,50 @@ class UsEgsSampleValidationTest(unittest.TestCase):
     def test_raw_root_must_stay_under_gitignored_provider_samples(self) -> None:
         with self.assertRaisesRegex(ValueError, "provider_samples"):
             sample_validation.validate_raw_root(ROOT / "docs")
+
+    def test_non_json_http_error_body_is_written_to_gitignored_raw_only(self) -> None:
+        base = ROOT / "provider_samples" / "us_egs_sample_validation_20260602" / "raw" / "_unit_tests"
+        base.mkdir(parents=True, exist_ok=True)
+        body = b"Payment Required: endpoint unavailable for this plan"
+        with tempfile.TemporaryDirectory(prefix="non_json_error_", dir=base) as tmp_dir:
+            raw_root = Path(tmp_dir) / "raw"
+            http_error = urllib.error.HTTPError(
+                url="https://financialmodelingprep.com/stable/income-statement?symbol=SIVB",
+                code=402,
+                msg="Payment Required",
+                hdrs={},
+                fp=io.BytesIO(body),
+            )
+            with mock.patch.object(sample_validation.urllib.request, "urlopen", side_effect=http_error):
+                record = sample_validation.fetch_and_store(
+                    sample_validation.JsonHttpClient(),
+                    url="https://financialmodelingprep.com/stable/income-statement?symbol=SIVB&apikey=UNIT_TEST_FMP_SECRET",
+                    provider_id="financial_modeling_prep",
+                    endpoint_family="income_statement",
+                    symbol="SIVB",
+                    raw_root=raw_root,
+                    headers={"User-Agent": "UnitTest/0.1"},
+                )
+
+            raw_path = ROOT / record.raw_sample_ref
+            raw_payload = json.loads(raw_path.read_text(encoding="utf-8"))
+            self.assertEqual(record.http_status, 402)
+            self.assertFalse(record.ok)
+            self.assertEqual(record.error_type, "http_error")
+            self.assertTrue(record.raw_sample_ref.startswith("provider_samples/"))
+            self.assertEqual(raw_payload["payload"]["non_json_response_bytes"], len(body))
+            self.assertEqual(
+                raw_payload["payload"]["non_json_response_body_text"],
+                "Payment Required: endpoint unavailable for this plan",
+            )
+            self.assertNotIn("apikey=", raw_path.read_text(encoding="utf-8").lower())
+
+            summary_shape = sample_validation.summarize_endpoint_record(record, endpoint_mode="stable")
+            summary_text = json.dumps(summary_shape, ensure_ascii=False)
+            self.assertNotIn("Payment Required", summary_text)
+            self.assertNotIn("UNIT_TEST_FMP_SECRET", summary_text)
+            self.assertEqual(summary_shape["payload_shape"]["payload_type"], "dict")
+            self.assertFalse(summary_shape["field_presence"]["date"])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1078 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic/1.0.0/schema.json",
+  "title": "Provider P1 FMP Entitlement Corporate-Action No-Access Diagnostic",
+  "description": "Phase 7b-2 no-access diagnostic for FMP Basic entitlement ambiguity, SIVB HTTP 402 classification, and current FMP split / dividend endpoint-template review after the inactive / delisted gap plan. This artifact uses official public FMP docs, tracked no-secret summaries, and existing gitignored SIVB error wrappers only. It does not execute provider calls, perform a SIVB re-probe, select a provider, implement DataHub, authorize Phase 7c, or claim production readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_refs",
+    "evidence_basis",
+    "fmp_docs_mapping_review",
+    "basic_entitlement_docs_review",
+    "sivb_http_402_classification",
+    "runner_error_body_capture_contract",
+    "future_reprobe_packet_shape",
+    "no_silent_default_policy",
+    "go_no_go_summary",
+    "prohibited_actions",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 7,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "fmp_stable_docs_earnings_dividends_splits"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "fmp_splits_company_doc"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "fmp_pricing_plans_public_page"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "fmp_faq_entitlement_and_data_range"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "p1_validation_execution_summary_20260603"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "existing_sivb_http_402_raw_wrappers"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "p1_inactive_delisted_gap_plan_20260603"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        }
+      ]
+    },
+    "evidence_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_type",
+        "fmp_endpoint_calls_performed",
+        "sec_api_calls_performed",
+        "new_provider_data_fetch_performed",
+        "existing_gitignored_error_wrappers_read",
+        "raw_payload_rows_parsed",
+        "sivb_reprobe_performed",
+        "corporate_action_endpoint_calls_performed",
+        "provider_selection_allowed",
+        "uses_tracked_no_secret_summary",
+        "uses_official_public_fmp_docs",
+        "sivb_existing_raw_wrappers_body_text_available",
+        "sivb_existing_raw_wrappers_non_json_bytes",
+        "twtr_success_refutes_universal_delisted_block",
+        "issue_narrowed_to_sivb_or_sivb_endpoint_families"
+      ],
+      "properties": {
+        "basis_type": {
+          "const": "official_fmp_docs_plus_tracked_summary_plus_existing_error_wrappers_no_new_call"
+        },
+        "fmp_endpoint_calls_performed": {
+          "const": false
+        },
+        "sec_api_calls_performed": {
+          "const": false
+        },
+        "new_provider_data_fetch_performed": {
+          "const": false
+        },
+        "existing_gitignored_error_wrappers_read": {
+          "const": true
+        },
+        "raw_payload_rows_parsed": {
+          "const": false
+        },
+        "sivb_reprobe_performed": {
+          "const": false
+        },
+        "corporate_action_endpoint_calls_performed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "uses_tracked_no_secret_summary": {
+          "const": true
+        },
+        "uses_official_public_fmp_docs": {
+          "const": true
+        },
+        "sivb_existing_raw_wrappers_body_text_available": {
+          "const": false
+        },
+        "sivb_existing_raw_wrappers_non_json_bytes": {
+          "const": 215
+        },
+        "twtr_success_refutes_universal_delisted_block": {
+          "const": true
+        },
+        "issue_narrowed_to_sivb_or_sivb_endpoint_families": {
+          "const": true
+        }
+      }
+    },
+    "fmp_docs_mapping_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_status",
+        "docs_only_review",
+        "current_base_url",
+        "endpoint_templates",
+        "mapping_verdict",
+        "sample_live_validated",
+        "endpoint_call_authorized_by_this_artifact"
+      ],
+      "properties": {
+        "review_status": {
+          "const": "split_dividend_stable_templates_identified_not_live_validated"
+        },
+        "docs_only_review": {
+          "const": true
+        },
+        "current_base_url": {
+          "const": "https://financialmodelingprep.com/stable/"
+        },
+        "endpoint_templates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/endpointTemplate"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "endpoint_family": {
+                    "const": "stock_split_candidate"
+                  }
+                },
+                "required": [
+                  "endpoint_family"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "endpoint_family": {
+                    "const": "dividend_or_distribution_candidate"
+                  }
+                },
+                "required": [
+                  "endpoint_family"
+                ]
+              }
+            }
+          ]
+        },
+        "mapping_verdict": {
+          "const": "current_template_candidates_identified_not_access_validated_not_reconciled"
+        },
+        "sample_live_validated": {
+          "const": false
+        },
+        "endpoint_call_authorized_by_this_artifact": {
+          "const": false
+        }
+      }
+    },
+    "basic_entitlement_docs_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_review_status",
+        "user_confirmed_account_plan",
+        "docs_review_date",
+        "public_docs_observations",
+        "endpoint_family_entitlement_findings",
+        "endpoint_level_basic_entitlement_cleared",
+        "sivb_402_paid_wall_conclusion_allowed",
+        "requires_limited_access_modal_or_reprobe_evidence",
+        "requires_no_cost_boundary"
+      ],
+      "properties": {
+        "plan_review_status": {
+          "const": "public_docs_review_not_endpoint_level_entitlement_clearance"
+        },
+        "user_confirmed_account_plan": {
+          "const": "FMP Basic"
+        },
+        "docs_review_date": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "public_docs_observations": {
+          "$ref": "#/$defs/stringList"
+        },
+        "endpoint_family_entitlement_findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entitlementFinding"
+          },
+          "minItems": 5
+        },
+        "endpoint_level_basic_entitlement_cleared": {
+          "const": false
+        },
+        "sivb_402_paid_wall_conclusion_allowed": {
+          "const": false
+        },
+        "requires_limited_access_modal_or_reprobe_evidence": {
+          "const": true
+        },
+        "requires_no_cost_boundary": {
+          "const": true
+        }
+      }
+    },
+    "sivb_http_402_classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification_status",
+        "affected_symbol",
+        "http_status",
+        "affected_endpoint_families",
+        "profile_endpoint_succeeded",
+        "failed_endpoint_count",
+        "twtr_comparison_endpoint_success_count",
+        "twtr_success_refutes_universal_delisted_block",
+        "direct_paid_wall_conclusion_allowed",
+        "missing_data_default_allowed",
+        "open_hypotheses"
+      ],
+      "properties": {
+        "classification_status": {
+          "const": "open_hypothesis_set_not_conclusive"
+        },
+        "affected_symbol": {
+          "const": "SIVB"
+        },
+        "http_status": {
+          "const": 402
+        },
+        "affected_endpoint_families": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "income_statement",
+              "balance_sheet_statement",
+              "cash_flow_statement",
+              "financial_ratios_or_key_metrics",
+              "historical_eod_price_volume"
+            ]
+          },
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "profile_endpoint_succeeded": {
+          "const": true
+        },
+        "failed_endpoint_count": {
+          "const": 5
+        },
+        "twtr_comparison_endpoint_success_count": {
+          "const": 6
+        },
+        "twtr_success_refutes_universal_delisted_block": {
+          "const": true
+        },
+        "direct_paid_wall_conclusion_allowed": {
+          "const": false
+        },
+        "missing_data_default_allowed": {
+          "const": false
+        },
+        "open_hypotheses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/http402Hypothesis"
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "hypothesis_id": {
+                    "const": "basic_endpoint_family_entitlement"
+                  }
+                },
+                "required": [
+                  "hypothesis_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "hypothesis_id": {
+                    "const": "symbol_specific_receivership_bankruptcy_lifecycle"
+                  }
+                },
+                "required": [
+                  "hypothesis_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "hypothesis_id": {
+                    "const": "historical_or_delisted_data_paid_tier"
+                  }
+                },
+                "required": [
+                  "hypothesis_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "hypothesis_id": {
+                    "const": "transient_quota_or_provider_incident"
+                  }
+                },
+                "required": [
+                  "hypothesis_id"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "runner_error_body_capture_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "existing_behavior_before_this_slice",
+        "required_runner_change",
+        "live_reprobe_performed_by_this_slice",
+        "gitignored_raw_body_capture_required_for_future_reprobe",
+        "tracked_summary_body_text_allowed",
+        "tracked_summary_request_url_allowed",
+        "assert_no_secret_summary_must_remain",
+        "fake_non_json_402_regression_test_required"
+      ],
+      "properties": {
+        "existing_behavior_before_this_slice": {
+          "const": "existing_sivb_raw_wrappers_record_non_json_response_bytes_only"
+        },
+        "required_runner_change": {
+          "const": "preserve_non_json_http_error_body_text_in_gitignored_raw_wrapper"
+        },
+        "live_reprobe_performed_by_this_slice": {
+          "const": false
+        },
+        "gitignored_raw_body_capture_required_for_future_reprobe": {
+          "const": true
+        },
+        "tracked_summary_body_text_allowed": {
+          "const": false
+        },
+        "tracked_summary_request_url_allowed": {
+          "const": false
+        },
+        "assert_no_secret_summary_must_remain": {
+          "const": true
+        },
+        "fake_non_json_402_regression_test_required": {
+          "const": true
+        }
+      }
+    },
+    "future_reprobe_packet_shape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reprobe_authorized_by_this_artifact",
+        "requires_separate_reviewed_execution_packet",
+        "requires_user_execute_command",
+        "symbols",
+        "endpoint_families",
+        "max_total_endpoint_calls",
+        "retry_count_allowed",
+        "spend_usd",
+        "existing_fmp_key_only",
+        "capture_non_json_body_in_raw",
+        "tracked_summary_body_text_allowed",
+        "provider_selection_allowed",
+        "phase7c_allowed"
+      ],
+      "properties": {
+        "reprobe_authorized_by_this_artifact": {
+          "const": false
+        },
+        "requires_separate_reviewed_execution_packet": {
+          "const": true
+        },
+        "requires_user_execute_command": {
+          "const": true
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "const": "SIVB"
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "endpoint_families": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "income_statement",
+              "balance_sheet_statement",
+              "cash_flow_statement",
+              "financial_ratios_or_key_metrics",
+              "historical_eod_price_volume"
+            ]
+          },
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "max_total_endpoint_calls": {
+          "const": 5
+        },
+        "retry_count_allowed": {
+          "const": 0
+        },
+        "spend_usd": {
+          "const": 0
+        },
+        "existing_fmp_key_only": {
+          "const": true
+        },
+        "capture_non_json_body_in_raw": {
+          "const": true
+        },
+        "tracked_summary_body_text_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "phase7c_allowed": {
+          "const": false
+        }
+      }
+    },
+    "no_silent_default_policy": {
+      "$ref": "#/$defs/noSilentDefaultPolicy"
+    },
+    "go_no_go_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "go_for_docs_mapping_and_runner_capture_hardening",
+        "go_for_sivb_reprobe",
+        "go_for_split_dividend_endpoint_call",
+        "go_for_provider_selection",
+        "go_for_datahub_or_runner_consumption",
+        "go_for_phase7c",
+        "no_go_rationale"
+      ],
+      "properties": {
+        "go_for_docs_mapping_and_runner_capture_hardening": {
+          "const": true
+        },
+        "go_for_sivb_reprobe": {
+          "const": false
+        },
+        "go_for_split_dividend_endpoint_call": {
+          "const": false
+        },
+        "go_for_provider_selection": {
+          "const": false
+        },
+        "go_for_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "go_for_phase7c": {
+          "const": false
+        },
+        "no_go_rationale": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "docs_only_review",
+        "public_docs_web_review_performed",
+        "fmp_endpoint_call_allowed",
+        "sec_api_call_allowed",
+        "new_provider_data_fetch_allowed",
+        "sivb_reprobe_allowed",
+        "corporate_action_endpoint_call_allowed",
+        "existing_gitignored_error_wrapper_read_allowed",
+        "raw_payload_rows_parse_allowed",
+        "fixture_generation_allowed",
+        "return_calculation_allowed",
+        "corporate_action_reconciliation_allowed",
+        "field_mapping_implementation_allowed",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_fmp_entitlement_corporate_action_no_access_diagnostic"
+        },
+        "contract_status": {
+          "const": "diagnostic_only_no_new_provider_call_no_reprobe"
+        },
+        "docs_only_review": {
+          "const": true
+        },
+        "public_docs_web_review_performed": {
+          "const": true
+        },
+        "fmp_endpoint_call_allowed": {
+          "const": false
+        },
+        "sec_api_call_allowed": {
+          "const": false
+        },
+        "new_provider_data_fetch_allowed": {
+          "const": false
+        },
+        "sivb_reprobe_allowed": {
+          "const": false
+        },
+        "corporate_action_endpoint_call_allowed": {
+          "const": false
+        },
+        "existing_gitignored_error_wrapper_read_allowed": {
+          "const": true
+        },
+        "raw_payload_rows_parse_allowed": {
+          "const": false
+        },
+        "fixture_generation_allowed": {
+          "const": false
+        },
+        "return_calculation_allowed": {
+          "const": false
+        },
+        "corporate_action_reconciliation_allowed": {
+          "const": false
+        },
+        "field_mapping_implementation_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "source_type",
+        "url_or_path",
+        "review_date",
+        "evidence_note"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_type": {
+          "enum": [
+            "official_provider_docs",
+            "official_provider_pricing",
+            "official_provider_faq",
+            "tracked_summary",
+            "tracked_contract",
+            "gitignored_raw_wrapper_note"
+          ]
+        },
+        "url_or_path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "review_date": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "evidence_note": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "endpointTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "endpoint_family",
+        "stable_candidate_template",
+        "official_doc_source_ids",
+        "template_identified",
+        "sample_live_validated",
+        "planned_call_count_in_this_artifact",
+        "required_before_any_call",
+        "authorizes_endpoint_call",
+        "authorizes_corporate_action_reconciliation"
+      ],
+      "properties": {
+        "endpoint_family": {
+          "enum": [
+            "stock_split_candidate",
+            "dividend_or_distribution_candidate"
+          ]
+        },
+        "stable_candidate_template": {
+          "type": "string",
+          "pattern": "^https://financialmodelingprep.com/stable/"
+        },
+        "official_doc_source_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "minItems": 1
+        },
+        "template_identified": {
+          "const": true
+        },
+        "sample_live_validated": {
+          "const": false
+        },
+        "planned_call_count_in_this_artifact": {
+          "const": 0
+        },
+        "required_before_any_call": {
+          "$ref": "#/$defs/stringList"
+        },
+        "authorizes_endpoint_call": {
+          "const": false
+        },
+        "authorizes_corporate_action_reconciliation": {
+          "const": false
+        }
+      }
+    },
+    "entitlementFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "endpoint_family_or_plan_area",
+        "public_docs_signal",
+        "basic_entitlement_status",
+        "classification_use_allowed",
+        "required_confirmation"
+      ],
+      "properties": {
+        "endpoint_family_or_plan_area": {
+          "enum": [
+            "statements_and_key_metrics",
+            "historical_eod_price_volume",
+            "split_dividend_corporate_actions",
+            "inactive_delisted_or_delisted_companies",
+            "endpoint_specific_limited_access_modal"
+          ]
+        },
+        "public_docs_signal": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "basic_entitlement_status": {
+          "enum": [
+            "not_conclusive_from_public_docs",
+            "template_listed_but_plan_access_not_validated",
+            "public_docs_indicate_possible_symbol_or_history_limits"
+          ]
+        },
+        "classification_use_allowed": {
+          "const": false
+        },
+        "required_confirmation": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "http402Hypothesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hypothesis_id",
+        "status",
+        "meaning_if_true",
+        "evidence_needed_to_confirm",
+        "current_artifact_conclusion_allowed"
+      ],
+      "properties": {
+        "hypothesis_id": {
+          "enum": [
+            "basic_endpoint_family_entitlement",
+            "symbol_specific_receivership_bankruptcy_lifecycle",
+            "historical_or_delisted_data_paid_tier",
+            "transient_quota_or_provider_incident"
+          ]
+        },
+        "status": {
+          "const": "open_unconfirmed"
+        },
+        "meaning_if_true": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidence_needed_to_confirm": {
+          "$ref": "#/$defs/stringList"
+        },
+        "current_artifact_conclusion_allowed": {
+          "const": false
+        }
+      }
+    },
+    "noSilentDefaultPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "fmp_http_402_is_not_missing_data_default",
+        "non_json_error_body_absence_is_not_entitlement_classification",
+        "twtr_success_is_not_universe_coverage_proof",
+        "sivb_profile_success_is_not_inactive_delisted_coverage_proof",
+        "paid_wall_conclusion_without_body_or_plan_evidence_allowed",
+        "null_fill_allowed",
+        "zero_fill_allowed",
+        "drop_failed_inactive_symbols_allowed",
+        "latest_only_substitution_allowed",
+        "production_default_allowed",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "policy_expectations_only_no_provider_selection_no_reprobe"
+        },
+        "fmp_http_402_is_not_missing_data_default": {
+          "const": true
+        },
+        "non_json_error_body_absence_is_not_entitlement_classification": {
+          "const": true
+        },
+        "twtr_success_is_not_universe_coverage_proof": {
+          "const": true
+        },
+        "sivb_profile_success_is_not_inactive_delisted_coverage_proof": {
+          "const": true
+        },
+        "paid_wall_conclusion_without_body_or_plan_evidence_allowed": {
+          "const": false
+        },
+        "null_fill_allowed": {
+          "const": false
+        },
+        "zero_fill_allowed": {
+          "const": false
+        },
+        "drop_failed_inactive_symbols_allowed": {
+          "const": false
+        },
+        "latest_only_substitution_allowed": {
+          "const": false
+        },
+        "production_default_allowed": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_endpoint_call",
+        "sec_api_call",
+        "sivb_reprobe",
+        "split_dividend_endpoint_call",
+        "broader_provider_sample",
+        "raw_payload_rows_parse",
+        "fixture_generation",
+        "security_master_implementation",
+        "field_mapping_implementation",
+        "return_calculation",
+        "corporate_action_reconciliation",
+        "provider_selection",
+        "provider_ranking",
+        "new_token_or_trial",
+        "paid_access",
+        "provider_contact",
+        "yfinance_check",
+        "full_market_download",
+        "provider_adapter",
+        "datahub_table",
+        "production_runner_consumption",
+        "phase7c_authorization",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "fmp_endpoint_call": {
+          "const": false
+        },
+        "sec_api_call": {
+          "const": false
+        },
+        "sivb_reprobe": {
+          "const": false
+        },
+        "split_dividend_endpoint_call": {
+          "const": false
+        },
+        "broader_provider_sample": {
+          "const": false
+        },
+        "raw_payload_rows_parse": {
+          "const": false
+        },
+        "fixture_generation": {
+          "const": false
+        },
+        "security_master_implementation": {
+          "const": false
+        },
+        "field_mapping_implementation": {
+          "const": false
+        },
+        "return_calculation": {
+          "const": false
+        },
+        "corporate_action_reconciliation": {
+          "const": false
+        },
+        "provider_selection": {
+          "const": false
+        },
+        "provider_ranking": {
+          "const": false
+        },
+        "new_token_or_trial": {
+          "const": false
+        },
+        "paid_access": {
+          "const": false
+        },
+        "provider_contact": {
+          "const": false
+        },
+        "yfinance_check": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "provider_adapter": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "phase7c_authorization": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

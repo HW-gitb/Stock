@@ -2683,3 +2683,41 @@ git diff --check
 
 1. Claude review should verify this is a no-access plan that uses only the tracked validation summary and keeps `SR-PROVIDER-001` open.
 2. Any follow-up inactive / delisted call, raw-payload inspection, SEC historical CIK lookup, security-master source review, paid-access decision, alternate-provider review, DataHub work, or Phase 7c work requires separate explicit approval and reviewed packet / decision.
+
+## 2026-06-03 append: FMP entitlement / corporate-action no-access diagnostic
+
+**What changed**:
+
+- Added `schemas/provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic.schema.json`, a no-access schema for the FMP Basic entitlement / SIVB 402 / split-dividend endpoint-template diagnostic.
+- Added `docs/provider_evidence_p1_us_fmp_entitlement_corporate_action_no_access_diagnostic_20260603.json`, using official FMP public docs plus existing tracked validation evidence and existing gitignored SIVB 402 wrappers; no new provider call was made.
+- Updated `runners/us_egs_sample_validation.py` so future non-JSON HTTP error bodies are preserved inside gitignored raw wrappers, while tracked summaries still exclude response bodies, request URLs, and secrets.
+- Added schema and runner regression tests for scope locks, SIVB 402 hypothesis classification, split / dividend template candidates, no-silent-default policy, and non-JSON HTTP error body capture.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, and `docs/system_risk_register.md`; `SR-PROVIDER-001` remains open.
+
+**Why**:
+
+- The previous inactive / delisted plan correctly routed SIVB 402 but could not classify whether it was Basic entitlement, SIVB-specific lifecycle behavior, historical / delisted tiering, or transient / quota behavior.
+- FMP public docs identify current stable `splits` and `dividends` endpoint templates, so the split / dividend blocker is no longer "template unknown"; it is now "template identified, not called, not entitlement-cleared, not reconciled".
+- SIVB 402 is not converted into a paid-wall conclusion or a missing-data default. TWTR success refutes a universal "delisted symbols always unsupported" claim and narrows the problem to SIVB / endpoint-family behavior.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool schemas\provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic.schema.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\provider_evidence_p1_us_fmp_entitlement_corporate_action_no_access_diagnostic_20260603.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic_schema tests.provider.test_us_egs_sample_validation -v
+git diff --check
+```
+
+**Invalid conclusions**:
+
+- "SIVB 402 means paid wall" is unproven and prohibited as a direct conclusion.
+- "SIVB 402 can be treated as missing data / zero / drop symbol" is false.
+- "FMP split / dividend templates are identified, therefore corporate-action evidence is validated" is false; no split / dividend endpoint call, return calculation, or reconciliation was performed.
+- "This diagnostic authorizes SIVB re-probe, provider selection, DataHub, Phase 7c, production readiness, alpha evidence, or ship-gate evidence" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify the artifact uses only docs + existing evidence, keeps the SIVB 402 classification open, and leaves `SR-PROVIDER-001` open.
+2. A real SIVB re-probe requires a separate reviewed execution packet: SIVB only, the five failed endpoint families only, max 5 calls, zero retry, $0, existing FMP key, gitignored raw capture, tracked no-secret summary, then a later user `执行`.
+3. Any split / dividend endpoint call or corporate-action reconciliation also requires separate explicit approval and reviewed decision.

@@ -1,0 +1,369 @@
+{
+  "schema_name": "provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_fmp_entitlement_corporate_action_no_access_diagnostic",
+    "contract_status": "diagnostic_only_no_new_provider_call_no_reprobe",
+    "docs_only_review": true,
+    "public_docs_web_review_performed": true,
+    "fmp_endpoint_call_allowed": false,
+    "sec_api_call_allowed": false,
+    "new_provider_data_fetch_allowed": false,
+    "sivb_reprobe_allowed": false,
+    "corporate_action_endpoint_call_allowed": false,
+    "existing_gitignored_error_wrapper_read_allowed": true,
+    "raw_payload_rows_parse_allowed": false,
+    "fixture_generation_allowed": false,
+    "return_calculation_allowed": false,
+    "corporate_action_reconciliation_allowed": false,
+    "field_mapping_implementation_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "strategy_rule_change_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "ship_gate_relaxed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_refs": [
+    {
+      "source_id": "fmp_stable_docs_earnings_dividends_splits",
+      "source_type": "official_provider_docs",
+      "url_or_path": "https://site.financialmodelingprep.com/developer/docs",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public stable docs list Dividends Company at https://financialmodelingprep.com/stable/dividends?symbol=AAPL and Stock Split Details at https://financialmodelingprep.com/stable/splits?symbol=AAPL; this is template evidence only, not access validation."
+    },
+    {
+      "source_id": "fmp_splits_company_doc",
+      "source_type": "official_provider_docs",
+      "url_or_path": "https://site.financialmodelingprep.com/developer/docs/stable/splits-company",
+      "review_date": "2026-06-03",
+      "evidence_note": "Dedicated FMP Stock Split Details API page identifies the stable splits endpoint template and describes split date / ratio fields at a documentation level."
+    },
+    {
+      "source_id": "fmp_pricing_plans_public_page",
+      "source_type": "official_provider_pricing",
+      "url_or_path": "https://site.financialmodelingprep.com/pricing-plans",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public pricing page lists Basic as a testing / exploration plan with 250 calls per day, EOD historical data, profile/reference data, and 150+ endpoints; the comparison table also shows plan-specific history and feature differences. This does not classify SIVB HTTP 402 by itself."
+    },
+    {
+      "source_id": "fmp_faq_entitlement_and_data_range",
+      "source_type": "official_provider_faq",
+      "url_or_path": "https://site.financialmodelingprep.com/faqs?code=marketHours",
+      "review_date": "2026-06-03",
+      "evidence_note": "FMP FAQ states free/basic-style access is limited, some endpoints are paid-only, endpoint-specific details live in documentation Limited Access controls, and one request counts as one API call. This artifact does not use a signed-in dashboard or endpoint modal."
+    },
+    {
+      "source_id": "p1_validation_execution_summary_20260603",
+      "source_type": "tracked_summary",
+      "url_or_path": "docs/provider_evidence_p1_us_validation_execution_summary_20260603.json",
+      "review_date": "2026-06-03",
+      "evidence_note": "Tracked no-secret summary records TWTR 6/6 FMP stable success, SIVB profile success plus five HTTP 402 FMP endpoint errors, and split/dividend zero-call skips."
+    },
+    {
+      "source_id": "existing_sivb_http_402_raw_wrappers",
+      "source_type": "gitignored_raw_wrapper_note",
+      "url_or_path": "provider_samples/us_egs_validation_packet_20260603/raw/financial_modeling_prep/SIVB/",
+      "review_date": "2026-06-03",
+      "evidence_note": "Existing gitignored wrappers for SIVB's five failed FMP endpoint families record http_status 402 and payload.non_json_response_bytes = 215; they do not contain the provider error body text because the previous fetch primitive discarded non-JSON bodies."
+    },
+    {
+      "source_id": "p1_inactive_delisted_gap_plan_20260603",
+      "source_type": "tracked_contract",
+      "url_or_path": "docs/provider_evidence_p1_us_inactive_delisted_gap_resolution_plan_20260603.json",
+      "review_date": "2026-06-03",
+      "evidence_note": "No-access plan requires SIVB HTTP 402 classification, keeps FMP 402 from becoming a missing-data default, and treats TWTR success as a clue rather than universe coverage proof."
+    },
+    {
+      "source_id": "p1_fmp_current_endpoint_mapping_review_20260602",
+      "source_type": "tracked_contract",
+      "url_or_path": "docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json",
+      "review_date": "2026-06-03",
+      "evidence_note": "Prior docs-only mapping review pattern is reused without mutating the historical six-endpoint AAPL / MSFT stable-retry contract."
+    }
+  ],
+  "evidence_basis": {
+    "basis_type": "official_fmp_docs_plus_tracked_summary_plus_existing_error_wrappers_no_new_call",
+    "fmp_endpoint_calls_performed": false,
+    "sec_api_calls_performed": false,
+    "new_provider_data_fetch_performed": false,
+    "existing_gitignored_error_wrappers_read": true,
+    "raw_payload_rows_parsed": false,
+    "sivb_reprobe_performed": false,
+    "corporate_action_endpoint_calls_performed": false,
+    "provider_selection_allowed": false,
+    "uses_tracked_no_secret_summary": true,
+    "uses_official_public_fmp_docs": true,
+    "sivb_existing_raw_wrappers_body_text_available": false,
+    "sivb_existing_raw_wrappers_non_json_bytes": 215,
+    "twtr_success_refutes_universal_delisted_block": true,
+    "issue_narrowed_to_sivb_or_sivb_endpoint_families": true
+  },
+  "fmp_docs_mapping_review": {
+    "review_status": "split_dividend_stable_templates_identified_not_live_validated",
+    "docs_only_review": true,
+    "current_base_url": "https://financialmodelingprep.com/stable/",
+    "endpoint_templates": [
+      {
+        "endpoint_family": "stock_split_candidate",
+        "stable_candidate_template": "https://financialmodelingprep.com/stable/splits?symbol={symbol}",
+        "official_doc_source_ids": [
+          "fmp_stable_docs_earnings_dividends_splits",
+          "fmp_splits_company_doc"
+        ],
+        "template_identified": true,
+        "sample_live_validated": false,
+        "planned_call_count_in_this_artifact": 0,
+        "required_before_any_call": [
+          "Create a separate reviewed execution packet that fixes symbols, endpoint families, call budget, raw path, and no-secret summary fields.",
+          "Keep split-event payloads under gitignored provider_samples and keep tracked summaries to event counts, field presence, and reconciliation status.",
+          "Do not treat a listed endpoint template as evidence that Basic can access the endpoint or that split events reconcile to EOD rows."
+        ],
+        "authorizes_endpoint_call": false,
+        "authorizes_corporate_action_reconciliation": false
+      },
+      {
+        "endpoint_family": "dividend_or_distribution_candidate",
+        "stable_candidate_template": "https://financialmodelingprep.com/stable/dividends?symbol={symbol}",
+        "official_doc_source_ids": [
+          "fmp_stable_docs_earnings_dividends_splits"
+        ],
+        "template_identified": true,
+        "sample_live_validated": false,
+        "planned_call_count_in_this_artifact": 0,
+        "required_before_any_call": [
+          "Create a separate reviewed execution packet that fixes symbols with expected dividend events, endpoint families, call budget, raw path, and no-secret summary fields.",
+          "Keep dividend payloads under gitignored provider_samples and keep tracked summaries to event counts, field presence, and date-field availability.",
+          "Do not claim price-only or total-return treatment until dividends are reconciled to EOD rows in a later reviewed slice."
+        ],
+        "authorizes_endpoint_call": false,
+        "authorizes_corporate_action_reconciliation": false
+      }
+    ],
+    "mapping_verdict": "current_template_candidates_identified_not_access_validated_not_reconciled",
+    "sample_live_validated": false,
+    "endpoint_call_authorized_by_this_artifact": false
+  },
+  "basic_entitlement_docs_review": {
+    "plan_review_status": "public_docs_review_not_endpoint_level_entitlement_clearance",
+    "user_confirmed_account_plan": "FMP Basic",
+    "docs_review_date": "2026-06-03",
+    "public_docs_observations": [
+      "The public pricing page describes Basic as a free testing / exploration plan with 250 calls per day, EOD historical data, profile/reference data, and 150+ endpoints.",
+      "The public pricing comparison distinguishes Basic from paid Starter / Premium / Ultimate plans by rate, history depth, fundamentals/ratios, corporate calendars, and other feature groups.",
+      "The public FAQ says some endpoints are paid-only and endpoint-specific access should be checked through documentation Limited Access controls; this artifact does not use a signed-in dashboard or endpoint modal.",
+      "These public docs narrow the possibility of entitlement limits, but they do not prove whether SIVB 402 is endpoint-family, symbol-lifecycle, history-depth, quota, or transient-provider behavior."
+    ],
+    "endpoint_family_entitlement_findings": [
+      {
+        "endpoint_family_or_plan_area": "statements_and_key_metrics",
+        "public_docs_signal": "Statement and key-metrics templates are listed in stable docs; public pricing separates Basic from paid annual/full fundamentals and ratios features.",
+        "basic_entitlement_status": "not_conclusive_from_public_docs",
+        "classification_use_allowed": false,
+        "required_confirmation": "A later reviewed SIVB-only re-probe or signed-in endpoint access evidence must classify whether Basic permits these endpoint families for SIVB."
+      },
+      {
+        "endpoint_family_or_plan_area": "historical_eod_price_volume",
+        "public_docs_signal": "Historical EOD full endpoint is listed in stable docs; public pricing states Basic has EOD historical data and a 5-year historical data range in the comparison table.",
+        "basic_entitlement_status": "public_docs_indicate_possible_symbol_or_history_limits",
+        "classification_use_allowed": false,
+        "required_confirmation": "A later reviewed SIVB-only re-probe must show whether the failed historical EOD 402 is history-depth, delisted-symbol, endpoint-family, or transient behavior."
+      },
+      {
+        "endpoint_family_or_plan_area": "split_dividend_corporate_actions",
+        "public_docs_signal": "Stable split and dividend endpoint templates are listed in public docs, while Premium public plan text lists Corporate Calendars among paid features.",
+        "basic_entitlement_status": "template_listed_but_plan_access_not_validated",
+        "classification_use_allowed": false,
+        "required_confirmation": "A separate reviewed corporate-action packet is required before calling split/dividend endpoints or making event availability claims."
+      },
+      {
+        "endpoint_family_or_plan_area": "inactive_delisted_or_delisted_companies",
+        "public_docs_signal": "Public docs list a Delisted Companies endpoint and related reference surfaces, but the current project has not reviewed Basic access, symbol lifecycle coverage, or security-master suitability for that endpoint.",
+        "basic_entitlement_status": "template_listed_but_plan_access_not_validated",
+        "classification_use_allowed": false,
+        "required_confirmation": "A separate reviewed security-master / lifecycle-source decision is required before using any delisted endpoint for survivorship-safe universe construction."
+      },
+      {
+        "endpoint_family_or_plan_area": "endpoint_specific_limited_access_modal",
+        "public_docs_signal": "FMP FAQ routes endpoint-specific plan support to documentation Limited Access details; this artifact does not have a tracked endpoint-modal capture.",
+        "basic_entitlement_status": "not_conclusive_from_public_docs",
+        "classification_use_allowed": false,
+        "required_confirmation": "A future reviewed artifact must either capture endpoint-specific access evidence without secrets or obtain evidence through a bounded no-cost re-probe."
+      }
+    ],
+    "endpoint_level_basic_entitlement_cleared": false,
+    "sivb_402_paid_wall_conclusion_allowed": false,
+    "requires_limited_access_modal_or_reprobe_evidence": true,
+    "requires_no_cost_boundary": true
+  },
+  "sivb_http_402_classification": {
+    "classification_status": "open_hypothesis_set_not_conclusive",
+    "affected_symbol": "SIVB",
+    "http_status": 402,
+    "affected_endpoint_families": [
+      "income_statement",
+      "balance_sheet_statement",
+      "cash_flow_statement",
+      "financial_ratios_or_key_metrics",
+      "historical_eod_price_volume"
+    ],
+    "profile_endpoint_succeeded": true,
+    "failed_endpoint_count": 5,
+    "twtr_comparison_endpoint_success_count": 6,
+    "twtr_success_refutes_universal_delisted_block": true,
+    "direct_paid_wall_conclusion_allowed": false,
+    "missing_data_default_allowed": false,
+    "open_hypotheses": [
+      {
+        "hypothesis_id": "basic_endpoint_family_entitlement",
+        "status": "open_unconfirmed",
+        "meaning_if_true": "FMP Basic can authenticate and serve some stable endpoints, but the failed statement / key-metrics / EOD families are not available for this account or this endpoint class.",
+        "evidence_needed_to_confirm": [
+          "Future SIVB-only reviewed re-probe captures provider error body text under gitignored raw storage.",
+          "Endpoint-specific public or dashboard Limited Access evidence identifies the plan support for each failed family without exposing secrets.",
+          "Tracked summary records only endpoint family, HTTP status, response shape, and classification signal."
+        ],
+        "current_artifact_conclusion_allowed": false
+      },
+      {
+        "hypothesis_id": "symbol_specific_receivership_bankruptcy_lifecycle",
+        "status": "open_unconfirmed",
+        "meaning_if_true": "The 402 pattern is tied to SIVB's lifecycle or symbol treatment, not to all inactive / delisted names and not necessarily to all endpoint families.",
+        "evidence_needed_to_confirm": [
+          "Compare SIVB against a later reviewed set of lifecycle cases without broadening into full-market fetch.",
+          "Tie each candidate to a reviewed security-master or lifecycle source before interpreting coverage.",
+          "Preserve TWTR's successful result as a comparison clue, not as universe coverage proof."
+        ],
+        "current_artifact_conclusion_allowed": false
+      },
+      {
+        "hypothesis_id": "historical_or_delisted_data_paid_tier",
+        "status": "open_unconfirmed",
+        "meaning_if_true": "The failed SIVB families may require a paid tier, longer history access, delisted-company access, or another plan feature beyond Basic.",
+        "evidence_needed_to_confirm": [
+          "Provider error body or endpoint-specific access docs must explicitly identify plan / history / delisted restrictions.",
+          "A user decision is required before paid access, trial, provider contact, or alternate provider review.",
+          "No paid-wall conclusion can be made solely from HTTP 402 plus missing body text."
+        ],
+        "current_artifact_conclusion_allowed": false
+      },
+      {
+        "hypothesis_id": "transient_quota_or_provider_incident",
+        "status": "open_unconfirmed",
+        "meaning_if_true": "The 402 responses may be temporary, quota/bandwidth related, account-state related, or provider-side behavior not intrinsic to SIVB data coverage.",
+        "evidence_needed_to_confirm": [
+          "A later reviewed re-probe must keep retry_count_allowed=0 unless a separate incident packet authorizes retries.",
+          "If quota or account state is suspected, record it as an incident / entitlement signal rather than missing rows.",
+          "Do not use provider status polling or broad retry loops without separate approval."
+        ],
+        "current_artifact_conclusion_allowed": false
+      }
+    ]
+  },
+  "runner_error_body_capture_contract": {
+    "existing_behavior_before_this_slice": "existing_sivb_raw_wrappers_record_non_json_response_bytes_only",
+    "required_runner_change": "preserve_non_json_http_error_body_text_in_gitignored_raw_wrapper",
+    "live_reprobe_performed_by_this_slice": false,
+    "gitignored_raw_body_capture_required_for_future_reprobe": true,
+    "tracked_summary_body_text_allowed": false,
+    "tracked_summary_request_url_allowed": false,
+    "assert_no_secret_summary_must_remain": true,
+    "fake_non_json_402_regression_test_required": true
+  },
+  "future_reprobe_packet_shape": {
+    "reprobe_authorized_by_this_artifact": false,
+    "requires_separate_reviewed_execution_packet": true,
+    "requires_user_execute_command": true,
+    "symbols": [
+      "SIVB"
+    ],
+    "endpoint_families": [
+      "income_statement",
+      "balance_sheet_statement",
+      "cash_flow_statement",
+      "financial_ratios_or_key_metrics",
+      "historical_eod_price_volume"
+    ],
+    "max_total_endpoint_calls": 5,
+    "retry_count_allowed": 0,
+    "spend_usd": 0,
+    "existing_fmp_key_only": true,
+    "capture_non_json_body_in_raw": true,
+    "tracked_summary_body_text_allowed": false,
+    "provider_selection_allowed": false,
+    "phase7c_allowed": false
+  },
+  "no_silent_default_policy": {
+    "policy_status": "policy_expectations_only_no_provider_selection_no_reprobe",
+    "fmp_http_402_is_not_missing_data_default": true,
+    "non_json_error_body_absence_is_not_entitlement_classification": true,
+    "twtr_success_is_not_universe_coverage_proof": true,
+    "sivb_profile_success_is_not_inactive_delisted_coverage_proof": true,
+    "paid_wall_conclusion_without_body_or_plan_evidence_allowed": false,
+    "null_fill_allowed": false,
+    "zero_fill_allowed": false,
+    "drop_failed_inactive_symbols_allowed": false,
+    "latest_only_substitution_allowed": false,
+    "production_default_allowed": false,
+    "authorizes_datahub_or_runner_consumption": false
+  },
+  "go_no_go_summary": {
+    "go_for_docs_mapping_and_runner_capture_hardening": true,
+    "go_for_sivb_reprobe": false,
+    "go_for_split_dividend_endpoint_call": false,
+    "go_for_provider_selection": false,
+    "go_for_datahub_or_runner_consumption": false,
+    "go_for_phase7c": false,
+    "no_go_rationale": "The current slice turns endpoint-template and SIVB 402 ambiguity into reviewable contract evidence and hardens future raw-error capture. It does not execute a new provider call, classify entitlement conclusively, validate corporate actions, or authorize implementation."
+  },
+  "prohibited_actions": {
+    "fmp_endpoint_call": false,
+    "sec_api_call": false,
+    "sivb_reprobe": false,
+    "split_dividend_endpoint_call": false,
+    "broader_provider_sample": false,
+    "raw_payload_rows_parse": false,
+    "fixture_generation": false,
+    "security_master_implementation": false,
+    "field_mapping_implementation": false,
+    "return_calculation": false,
+    "corporate_action_reconciliation": false,
+    "provider_selection": false,
+    "provider_ranking": false,
+    "new_token_or_trial": false,
+    "paid_access": false,
+    "provider_contact": false,
+    "yfinance_check": false,
+    "full_market_download": false,
+    "provider_adapter": false,
+    "datahub_table": false,
+    "production_runner_consumption": false,
+    "phase7c_authorization": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "After review and commit, the next possible provider-access step is a separate reviewed SIVB-only re-probe packet for the five failed endpoint families, max five calls, zero retry, existing FMP key only, gitignored raw error-body capture, and tracked no-secret summary.",
+    "A split / dividend endpoint execution remains separate: it needs its own reviewed packet with known-action symbols, exact call budget, raw storage path, no-secret summary, and no return calculation or reconciliation unless separately approved.",
+    "Keep SIVB 402 as an open hypothesis set until provider error-body or endpoint-specific entitlement evidence is reviewed.",
+    "Keep SR-PROVIDER-001 open for inactive / delisted coverage, current terms, production storage, PIT, price adjustment, corporate actions, SEC parser / mapping, fallback, stability, provider selection, DataHub, Phase 7c, production readiness, alpha validation, and ship-gate evidence."
+  ],
+  "limitations": [
+    "This artifact performs no FMP endpoint calls, SEC API calls, SIVB re-probe, split / dividend endpoint calls, broader provider sample, fixture generation, security-master implementation, field mapping, return calculation, corporate-action reconciliation, provider contact, provider selection, adapter work, DataHub work, runner consumption, Phase 7c authorization, production-readiness claim, alpha evidence, or ship-gate claim.",
+    "Public FMP docs identify stable split and dividend endpoint templates, but endpoint templates do not prove Basic access, data availability, event correctness, adjustment math, or reconciliation suitability.",
+    "Existing SIVB raw wrappers lack error body text; this artifact can only classify the prior 402 result as unresolved, not as paid wall, missing data, entitlement proof, or transient proof.",
+    "TWTR's success refutes a universal inactive / delisted block but does not prove inactive / delisted universe coverage.",
+    "The runner hardening is a future-observability fix only; it does not change the already generated 2026-06-03 validation summary and does not re-run provider calls."
+  ]
+}
