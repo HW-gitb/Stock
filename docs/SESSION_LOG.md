@@ -8,6 +8,71 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (temporary US free-data working boundary wording — re-review) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. The USER-APPROVED softening is correctly applied. Ready for 提交.
+
+**Verified**: AGENTS #22 is reworded to "当前临时工作边界 … 非最终决定 / 不是永久承诺；用户可随时改为购买 / 接入专门源" with an explicit revisit trigger (US idea shows forward-live promise, or user decides). The "用户接受…的固化决策" attribution is gone. All durable guardrails are kept byte-intact: free-data US backtests reference-only; cannot prove alpha / unlock full-size / authorize provider selection / DataHub / Phase 7c / production / ship-gate; 35/65 not auto-rewritten; unvalidated US allocation stays US cash/paper/minimal with no silent transfer. Same temporary framing applied to `docs/CURRENT.md` (delta + P1 blocker + router), `docs/system_risk_register.md` (hot-queue note + accepted-calibration + required-next-action, both now adding "full-size US sizing" to the needs-approval list), the handoff append, and the in-place `docs/SESSION_LOG.md` decision entry (retitled "用户决策固化" → "当前临时工作边界"). Docs-only — no code / schema / provider call / data fetch; `SR-PROVIDER-001` open; CURRENT=149. No guardrail weakened, no new authorization.
+
+---
+
+## 2026-06-03 — Codex 修复 (temporary US free-data working boundary wording)
+
+**Scope**:
+- User approved the wording repair requested by Claude: downgrade #22 from a settled "用户接受" decision to a temporary / revisit-ready working boundary.
+- Docs-only wording change; no code, schema, runner, provider call, data fetch, or permission expansion.
+
+**Plain result**:
+- This is the current cost-saving posture, not a permanent promise.
+- User can later decide to buy / connect EODHD, Norgate, Sharadar, paid FMP, or another source.
+- Revisit trigger: when a US idea shows forward-live promise, or when the user asks.
+- Hard guardrails stay unchanged: free-data US backtests are reference-only; they cannot prove alpha, unlock full-size, authorize provider selection / DataHub / Phase 7c / production / ship gate, or silently move US allocation to A-shares.
+
+**Files updated**:
+- `AGENTS.md` fixed decision #22.
+- `docs/CURRENT.md`.
+- `docs/system_risk_register.md`.
+- `docs/SESSION_LOG.md`.
+- `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`.
+
+**Review state**:
+- Needs Claude re-review before commit.
+
+---
+
+## 2026-06-03 — Claude 审查 (US free-data exploratory boundary) — Pass (1 confirm-with-user)
+
+**Verdict**: Pass on technical/safety grounds — docs-only, no Required fix. One item the Final Approver should confirm before 提交 (see below). Not yet committed.
+
+**Verified**: only docs changed (`AGENTS.md` #22, `docs/CURRENT.md`, `docs/system_risk_register.md`, handoff) — no code / schema / provider call / data fetch. The policy is purely RESTRICTIVE and reinforces existing guardrails: free-data US = exploration / paper / minimal-size / forward-evidence only; free-data US backtests are reference-only and cannot prove alpha, unlock full-size, or authorize provider selection / DataHub / Phase 7c / production / ship-gate. 35/65 capital policy not auto-rewritten; unvalidated US allocation stays in US cash/paper/minimal and must not silently move to A-shares without an explicit manual transfer (consistent with cash non-fungibility). `SR-PROVIDER-001` stays open; CURRENT=149; only fixed decision #22 added (no earlier item modified). No over-claim, no new authorization.
+
+**Confirm-with-user (not a defect, the Final Approver's call)**: #22 records the user's "都太贵了 / 可以不补吗?" (a cost-lean + question) as a settled fixed decision titled "用户接受…边界". The CONTENT is safe (restrict-only), but it is a durable decision in the user's name attributed from a question, not an explicit confirmation. Before 提交, the user should consciously confirm they want #22 locked now, OR soften it to a "current working boundary, revisit when a US idea justifies cost" if they want to keep weighing EODHD / Norgate / forward-testing. If softening is wanted, that becomes a Required wording fix for Codex.
+
+**User disposition (2026-06-03)**: user chose 「改成临时」 → **Required (USER-APPROVED) wording fix for Codex**: reword #22 so it reads as a *current / temporary working boundary, to be revisited when a US idea justifies the data cost* — NOT a settled "用户接受…的边界" decision. Keep the durable guardrail content unchanged (free-data US backtests reference-only; cannot prove alpha / unlock full-size / authorize provider selection / DataHub / Phase 7c / ship-gate; unvalidated US allocation stays US cash/paper/minimal with no silent transfer). Apply the same temporary framing to the matching `docs/SESSION_LOG.md` 用户决策固化 entry, `docs/CURRENT.md` delta, the `docs/system_risk_register.md` note, and the handoff append. Codex command block handed to the user to relay; Claude re-reviews after.
+
+---
+
+## 2026-06-03 — 当前临时工作边界 (US free-data exploratory boundary)
+
+当前采用“不额外购买 / 不额外接入专门美股退市数据源”的临时成本边界。这不是永久承诺；用户可在任何时候改为购买 / 接入专门源。
+
+**Plain result**:
+- 可以暂时不补付费 / 专门美股数据源，但美股免费数据阶段只能做探索、paper、minimal-size、前向证据积累。
+- FMP Basic / SEC EDGAR 小样本和带缺口的美股历史回测不能证明 alpha，不能支持 full-size，不能授权 DataHub / Phase 7c / production / ship gate。
+- A 股 35% / 美股 65% 资金政策不自动改写；未验证的美股额度默认留在 US cash / paper / minimal bucket，不得 silent 转给 A 股。
+- 复议触发点：当某个美股想法在前向实盘里跑出苗头，或用户主动决定时，重新评估是否购买 / 接入专门数据源。
+
+**Docs updated**:
+- `AGENTS.md` fixed decision #22.
+- `docs/CURRENT.md` latest delta / P1 provider blocker / next-step router.
+- `docs/system_risk_register.md` hot queue and `SR-PROVIDER-001`.
+
+**Review state**:
+- Docs-only policy update; no runner / schema / provider call / data fetch.
+- Needs normal review before commit if the user asks to `提交`.
+
+---
+
 ## 2026-06-03 — Claude 审查 (FMP paid-tier / license public-docs review) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. No-access public-docs review; records what FMP's pages say, decides nothing, selects no provider.

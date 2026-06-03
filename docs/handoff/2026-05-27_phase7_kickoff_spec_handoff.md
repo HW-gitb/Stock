@@ -2839,3 +2839,24 @@ git diff --check
 
 1. Claude review should verify this slice is public-docs only, keeps all scope locks false, and leaves `SR-PROVIDER-001` open.
 2. Any paid upgrade, account change, provider contact, API call, raw parse, provider selection, DataHub, or Phase 7c work requires separate explicit approval and reviewed decision.
+
+## 2026-06-03 append: temporary US free-data working boundary
+
+**What changed**:
+
+- Current working posture is cost-saving and temporary: no buying / adding specialized US delisted data for now.
+- This is not a final provider or spending decision; the user may later buy / connect EODHD, Norgate, Sharadar, paid FMP, or another source.
+- Updated `AGENTS.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`.
+
+**Plain result**:
+
+- US work may continue with FMP Basic / SEC EDGAR only as exploration, paper, minimal-size, or live-normalized forward-evidence accumulation.
+- US historical backtests with inactive / delisted, PIT, price-adjustment, corporate-action, and license / storage gaps are reference-only.
+- They cannot prove alpha, support full-size manual use, authorize DataHub / Phase 7c / production readiness, or count as ship-gate evidence.
+- A-share 35% / US 65% capital policy remains unchanged. Unvalidated US allocation stays in US cash / paper / minimal buckets unless the user explicitly makes a manual transfer decision.
+- Revisit trigger: when a US idea shows forward-live promise, or when the user asks.
+
+**Next-step notes**:
+
+1. Future LLMs must not use free-data US historical backtests to justify full-size US sizing.
+2. Any paid data, specialized source, provider selection, DataHub, or Phase 7c work still requires separate explicit approval and reviewed decision.
