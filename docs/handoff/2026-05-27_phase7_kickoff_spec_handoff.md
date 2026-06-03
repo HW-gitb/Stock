@@ -2860,3 +2860,47 @@ git diff --check
 
 1. Future LLMs must not use free-data US historical backtests to justify full-size US sizing.
 2. Any paid data, specialized source, provider selection, DataHub, or Phase 7c work still requires separate explicit approval and reviewed decision.
+
+## 2026-06-03 append: Phase 7c-a DataHub job-spec runtime enforcement
+
+**What changed**:
+
+- Added `engine/datahub/job_spec_contract.py` as the code-level pre-execution validator for future DataHub / runner / report job specs.
+- Added `engine/datahub/__init__.py`.
+- Added `tests/schema/test_datahub_job_spec_contract.py`, covering the schema example, reviewed executable plans, heavy-run approval, resource-budget profile matching, market/lane mismatch, bounded date windows, blocking gates, scope-creep rejection, resource-budget lane-concurrency bounds, and non-mutation.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/datahub_design.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md` to route the helper.
+
+**Plain result**:
+
+- Future executable DataHub / runner / report jobs must call `validate_datahub_job_spec_contract` or `validate_datahub_job_spec_file` before running.
+- This closes the current `SR-RESOURCE-001` code-level enforcement gap.
+- It still does not fetch provider data, select a provider, create DataHub tables, implement adapters, change production runners, authorize Phase 7c broad implementation, prove local-machine capacity, or count as ship-gate evidence.
+- `SR-PROVIDER-001` remains open.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_datahub_job_spec_contract tests.schema.test_datahub_local_resource_budget_schema tests.schema.test_datahub_job_spec_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**Validation results**:
+
+- Python313 DataHub suite: 27 tests, all pass.
+- Python313 full unittest discover: 551 tests, all pass.
+- `docs/CURRENT.md` line count = 149.
+- `git diff --check` passed with only normal LF/CRLF working-copy warnings.
+
+**Invalid conclusions**:
+
+- "Phase 7c DataHub implementation is done" is false.
+- "US provider data can now feed DataHub / runner" is false.
+- "Full-market / all-lane / full-refresh local jobs are default-allowed" is false.
+- "This closes `SR-PROVIDER-001`" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify that the helper cannot be bypassed by future executable job specs in documented routing, and that the helper rejects provider calls, DataHub table implementation authorization, runner changes, production consumption, all-market / all-lane / full-refresh behavior, raw writes, and ship-gate claims.
+2. After review and commit, the natural next Phase 7c slice is still implementation-design for the shared layer / report contracts / reproducibility plumbing. It must consume this helper and cannot use unresolved US provider evidence as production input.

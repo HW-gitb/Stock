@@ -32,7 +32,7 @@ Use this routing table instead of guessing which file to read.
 | Phase 7 provider capability / field catalog schema contract | `schemas/provider_capability_catalog.schema.json` |
 | Capital allocation and liquidity policy | `docs/portfolio_allocation_policy.md` |
 | A-short screening threshold governance and preset/code parity | `presets/a_short.yaml`, `presets/a_short_screening_threshold_governance_20260602.json`, `schemas/a_short_screening_threshold_governance.schema.json` |
-| DataHub / provider / factor-layer guardrails and local resource budget / job-spec precondition before Phase 7c implementation | `docs/datahub_design.md`, `schemas/datahub_local_resource_budget.schema.json`, `docs/datahub_local_resource_budget_contract_20260602.json`, `schemas/datahub_job_spec.schema.json`, `schemas/examples/datahub_job_spec.example.json` |
+| DataHub / provider / factor-layer guardrails and local resource budget / job-spec enforcement before Phase 7c implementation | `docs/datahub_design.md`, `engine/datahub/job_spec_contract.py`, `schemas/datahub_local_resource_budget.schema.json`, `docs/datahub_local_resource_budget_contract_20260602.json`, `schemas/datahub_job_spec.schema.json`, `schemas/examples/datahub_job_spec.example.json` |
 | Phase-level historical context and validation records | `docs/handoff/README.md`, then the specific handoff named there / in `AGENTS.md` |
 | Historical source material not on the active reading path | `docs/archive/README.md` |
 

@@ -8,6 +8,49 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (Phase 7c-a DataHub job-spec runtime enforcement) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. First DataHub code; it is a pure pre-execution validator (no side effects), and the SR-RESOURCE-001 resolution is genuine + honestly bounded.
+
+**Plain result**: `engine/datahub/job_spec_contract.py` is a gatekeeper that any future DataHub / runner / report job must pass before it runs. It validates the job spec + the resource-budget contract and BLOCKS: wrong market/lane pairing, unbounded or inconsistent date windows, single_as_of that isn't one day, heavy profiles without a recorded approval_ref + heavy_run_approval gate, profile not matching the resource-budget contract, executable jobs with blocking gates, and any scope creep (provider calls / full-market / all-lane / raw-payload write / production consumption / ship-gate / DataHub-impl). It fetches nothing, calls no provider, builds no table, executes nothing, and does not mutate its input.
+
+**Verified (internal)**:
+- Read the validator in full: pure read-validate-raise; `validate_json_schema` hard-raises (not skips) if jsonschema is missing, so there is no silent-bypass at runtime. Adjunct checks (profile↔budget match, market/lane, window bounds, single_as_of, heavy approval, executable gates, scope-creep) cover exactly the SR-RESOURCE-001 required-next-action items.
+- Tests 27/27 under Python313+jsonschema (12 new contract tests + the 2 schema suites). The contract test is non-vacuous: positive executable-pass case, heavy-approval rejection, profile/resource-budget mismatch ("does not match resource budget"), market/lane + as_of-in-window + max-calendar-days ("spans 3 days") + single_as_of rejections, blocking-gate rejection, a 10+12+5-field scope-creep sweep, lane-concurrency bound, and a no-mutation assertion.
+- SR-RESOURCE-001 resolution is honest: closure cites the code + tests; the residual is explicitly stated in THREE places (register required-next-action, AGENTS #23, datahub_design.md) — "every future executable job MUST call this helper; bypassing it is a new risk." Hot-queue item 3 removed; Phase-table 7c marked "code-enforcement helper complete; shared-layer/report implementation not started" (does not falsely claim 7c done).
+- AGENTS #23 added + #16 updated to route the helper as enforcement-only (authorizes nothing); README + datahub_design accurate. Only `engine/datahub/` (new) + its test touched — no change to A-EGS / existing runners (no regression). `SR-PROVIDER-001` stays open; CURRENT=149.
+
+**Note**: this advances the independent (non-provider) track — it's the "code-level resource-budget enforcement" step (earlier flagged as Phase-7 step 3), and does not make US provider data usable (SR-PROVIDER-001 unchanged).
+
+---
+
+## 2026-06-03 — Codex 执行 (Phase 7c-a DataHub job-spec runtime enforcement)
+
+**Scope**:
+- Added the code-level pre-execution helper for future DataHub / runner / report job specs.
+- No provider call, no data fetch, no raw parse, no DataHub table, no adapter, no production runner consumption, and no ship-gate evidence.
+
+**Plain result**:
+- Future DataHub / runner jobs now have a required startup check: validate the job spec and local resource budget before running.
+- The check blocks wrong market/lane pairing, unbounded date windows, heavy jobs without explicit approval, provider calls, all-market / all-lane refreshes, raw payload writes, production claims, and ship-gate claims.
+- `SR-RESOURCE-001` is resolved for the current code-level enforcement gap, but any future job that bypasses this helper is a new risk.
+- `SR-PROVIDER-001` remains open; this does not make US data usable for production.
+
+**Files updated**:
+- `engine/datahub/job_spec_contract.py`
+- `engine/datahub/__init__.py`
+- `tests/schema/test_datahub_job_spec_contract.py`
+- `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/datahub_design.md`, `docs/system_risk_register.md`, and Phase 7 handoff routing.
+
+**Validation state**:
+- Targeted Python313 test passed: `tests.schema.test_datahub_job_spec_contract` ran 12 tests, all pass.
+- DataHub Python313 suite passed: `tests.schema.test_datahub_job_spec_contract`, `tests.schema.test_datahub_local_resource_budget_schema`, and `tests.schema.test_datahub_job_spec_schema` ran 27 tests, all pass.
+- Full Python313 `unittest discover -v` ran 551 tests, all pass.
+- `CURRENT.md` line count = 149; `git diff --check` passed with only normal LF/CRLF working-copy warnings.
+- Needs Claude review before commit.
+
+---
+
 ## 2026-06-03 — Claude 审查 (temporary US free-data working boundary wording — re-review) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. The USER-APPROVED softening is correctly applied. Ready for 提交.
