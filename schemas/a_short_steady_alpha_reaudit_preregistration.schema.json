@@ -1,0 +1,593 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_steady_alpha_reaudit_preregistration/1.0.0/schema.json",
+  "title": "A-Short Steady Alpha Reaudit Preregistration",
+  "description": "Schema-first preregistration for the A-share short steady-lane alpha re-audit. It freezes the same-anchor benchmark-excess question, 5d / 20d diagnostics, integrity checks, and decision labels before any outcome run. It does not run research, fetch data, rerun EGS, change runners, authorize production use, relax ship gates, or support full-size manual use.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "source_doc_refs",
+    "decisive_question",
+    "frozen_design",
+    "metric_plan",
+    "integrity_checks",
+    "decision_policy",
+    "planned_test_budget",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "a_short_steady_alpha_reaudit_preregistration"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "artifact_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_doc_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceDocRef"
+      },
+      "minItems": 6,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "docs/CURRENT.md"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "docs/system_risk_register.md"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "docs/phase7a_alpha_plausibility_audit.json"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ]
+    },
+    "decisive_question": {
+      "$ref": "#/$defs/decisiveQuestion"
+    },
+    "frozen_design": {
+      "$ref": "#/$defs/frozenDesign"
+    },
+    "metric_plan": {
+      "$ref": "#/$defs/metricPlan"
+    },
+    "integrity_checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/integrityCheck"
+      },
+      "minItems": 5
+    },
+    "decision_policy": {
+      "$ref": "#/$defs/decisionPolicy"
+    },
+    "planned_test_budget": {
+      "$ref": "#/$defs/plannedTestBudget"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "date8": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "registration_status",
+        "research_status",
+        "research_only",
+        "outcome_run_allowed_by_this_artifact",
+        "data_fetch_allowed",
+        "egs_rerun_allowed",
+        "cohort_regeneration_allowed",
+        "provider_call_allowed",
+        "datahub_allowed",
+        "runner_change_allowed",
+        "strategy_rule_change_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7a_alpha_validation"
+        },
+        "purpose": {
+          "const": "a_short_steady_alpha_reaudit_preregistration"
+        },
+        "lane_id": {
+          "const": "a_short_steady"
+        },
+        "market": {
+          "const": "A-share"
+        },
+        "registration_status": {
+          "const": "registered_not_run"
+        },
+        "research_status": {
+          "const": "research_only_not_run"
+        },
+        "research_only": {
+          "const": true
+        },
+        "outcome_run_allowed_by_this_artifact": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "egs_rerun_allowed": {
+          "const": false
+        },
+        "cohort_regeneration_allowed": {
+          "const": false
+        },
+        "provider_call_allowed": {
+          "const": false
+        },
+        "datahub_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "production_use_allowed": {
+          "const": false
+        },
+        "ship_gate_claim_allowed": {
+          "const": false
+        },
+        "full_size_manual_use_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        }
+      }
+    },
+    "sourceDocRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "role"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "decisiveQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_text",
+        "prior_signal_under_review",
+        "if_corrected_5d_signal_disappears",
+        "if_corrected_5d_signal_survives",
+        "full_size_claim_if_survives_allowed"
+      ],
+      "properties": {
+        "question_text": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "prior_signal_under_review": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "if_corrected_5d_signal_disappears": {
+          "const": "falsified_or_risk_filter_only"
+        },
+        "if_corrected_5d_signal_survives": {
+          "const": "candidate_alpha_only_requires_deep_validation_and_forward_live"
+        },
+        "full_size_claim_if_survives_allowed": {
+          "const": false
+        }
+      }
+    },
+    "frozenDesign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategy_ref",
+        "preset",
+        "production_version",
+        "cohort_window",
+        "universe_rule",
+        "entry_rule",
+        "exit_horizons_trading_days",
+        "cost_model",
+        "freeze_controls"
+      ],
+      "properties": {
+        "strategy_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "preset": {
+          "const": "a_short"
+        },
+        "production_version": {
+          "const": "v7.10"
+        },
+        "cohort_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "description",
+            "cohort_count",
+            "frequency"
+          ],
+          "properties": {
+            "description": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "cohort_count": {
+              "const": 24
+            },
+            "frequency": {
+              "const": "monthly"
+            }
+          }
+        },
+        "universe_rule": {
+          "$ref": "#/$defs/stringList"
+        },
+        "entry_rule": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "exit_horizons_trading_days": {
+          "type": "array",
+          "items": {
+            "enum": [
+              5,
+              20
+            ]
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "cost_model": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "freeze_controls": {
+          "$ref": "#/$defs/freezeControls"
+        }
+      }
+    },
+    "freezeControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hypothesis_frozen",
+        "parameters_frozen",
+        "universe_frozen",
+        "benchmark_frozen",
+        "holding_periods_frozen",
+        "entry_exit_rule_frozen",
+        "threshold_frozen",
+        "parameter_search_allowed",
+        "variant_search_allowed",
+        "benchmark_sweep_allowed",
+        "holding_period_sweep_allowed",
+        "new_data_fetch_allowed"
+      ],
+      "properties": {
+        "hypothesis_frozen": {
+          "const": true
+        },
+        "parameters_frozen": {
+          "const": true
+        },
+        "universe_frozen": {
+          "const": true
+        },
+        "benchmark_frozen": {
+          "const": true
+        },
+        "holding_periods_frozen": {
+          "const": true
+        },
+        "entry_exit_rule_frozen": {
+          "const": true
+        },
+        "threshold_frozen": {
+          "const": true
+        },
+        "parameter_search_allowed": {
+          "const": false
+        },
+        "variant_search_allowed": {
+          "const": false
+        },
+        "benchmark_sweep_allowed": {
+          "const": false
+        },
+        "holding_period_sweep_allowed": {
+          "const": false
+        },
+        "new_data_fetch_allowed": {
+          "const": false
+        }
+      }
+    },
+    "metricPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_metric",
+        "same_anchor_required",
+        "stock_leg",
+        "benchmark_leg",
+        "primary_benchmark",
+        "secondary_benchmark",
+        "horizons_trading_days",
+        "net_return_field",
+        "minimum_months_for_stat_claim",
+        "diagnostics"
+      ],
+      "properties": {
+        "primary_metric": {
+          "const": "same_anchor_benchmark_excess"
+        },
+        "same_anchor_required": {
+          "const": true
+        },
+        "stock_leg": {
+          "const": "stock_T_plus_1_open_to_exit_close"
+        },
+        "benchmark_leg": {
+          "const": "benchmark_T_plus_1_open_to_same_exit_close"
+        },
+        "primary_benchmark": {
+          "const": "CSI1000"
+        },
+        "secondary_benchmark": {
+          "const": "CSI300"
+        },
+        "horizons_trading_days": {
+          "type": "array",
+          "items": {
+            "enum": [
+              5,
+              20
+            ]
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "net_return_field": {
+          "const": "t1_net"
+        },
+        "minimum_months_for_stat_claim": {
+          "const": 12
+        },
+        "diagnostics": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "integrityCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check_id",
+        "required_before_conclusion",
+        "plan"
+      ],
+      "properties": {
+        "check_id": {
+          "enum": [
+            "multiple_testing_adjustment",
+            "time_cross_section_distribution_regime_slices",
+            "factor_exposure_check",
+            "veto_filter_effect_check",
+            "survivorship_pit_check"
+          ]
+        },
+        "required_before_conclusion": {
+          "const": true
+        },
+        "plan": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "decisionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_alpha_not_full_size",
+        "risk_filter_only",
+        "falsified",
+        "ship_gate_forward_live_months_required",
+        "backtest_can_authorize_full_size"
+      ],
+      "properties": {
+        "candidate_alpha_not_full_size": {
+          "$ref": "#/$defs/stringList"
+        },
+        "risk_filter_only": {
+          "$ref": "#/$defs/stringList"
+        },
+        "falsified": {
+          "$ref": "#/$defs/stringList"
+        },
+        "ship_gate_forward_live_months_required": {
+          "const": 12
+        },
+        "backtest_can_authorize_full_size": {
+          "const": false
+        }
+      }
+    },
+    "plannedTestBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ledger_ref",
+        "planned_test_id",
+        "test_budget_units",
+        "outcome_run_authorized_now",
+        "requires_claude_review_before_run",
+        "requires_user_execute_before_run"
+      ],
+      "properties": {
+        "ledger_ref": {
+          "const": "research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json"
+        },
+        "planned_test_id": {
+          "const": "a_short_steady_alpha_reaudit_20260603"
+        },
+        "test_budget_units": {
+          "const": 1
+        },
+        "outcome_run_authorized_now": {
+          "const": false
+        },
+        "requires_claude_review_before_run": {
+          "const": true
+        },
+        "requires_user_execute_before_run": {
+          "const": true
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validated_alpha",
+        "full_size_allowed",
+        "ship_gate_evidence",
+        "production_ready",
+        "datahub_authorized",
+        "provider_work_authorized",
+        "runner_change_authorized"
+      ],
+      "properties": {
+        "validated_alpha": {
+          "const": false
+        },
+        "full_size_allowed": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "datahub_authorized": {
+          "const": false
+        },
+        "provider_work_authorized": {
+          "const": false
+        },
+        "runner_change_authorized": {
+          "const": false
+        }
+      }
+    }
+  }
+}

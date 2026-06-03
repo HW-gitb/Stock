@@ -1,0 +1,191 @@
+{
+  "schema_name": "a_short_steady_alpha_reaudit_preregistration",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00Z",
+  "artifact_id": "a_short_steady_alpha_reaudit_preregistration_20260603",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_short_steady_alpha_reaudit_preregistration",
+    "lane_id": "a_short_steady",
+    "market": "A-share",
+    "registration_status": "registered_not_run",
+    "research_status": "research_only_not_run",
+    "research_only": true,
+    "outcome_run_allowed_by_this_artifact": false,
+    "data_fetch_allowed": false,
+    "egs_rerun_allowed": false,
+    "cohort_regeneration_allowed": false,
+    "provider_call_allowed": false,
+    "datahub_allowed": false,
+    "runner_change_allowed": false,
+    "strategy_rule_change_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_doc_refs": [
+    {
+      "path": "docs/CURRENT.md",
+      "role": "records the active A-short 5d CSI1000 clue as unvalidated and points the next high-value work to A-share alpha validation"
+    },
+    {
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "role": "owns alpha reality guardrails, measurement-basis lock, preregistration discipline, and ship-gate limits"
+    },
+    {
+      "path": "docs/system_risk_register.md",
+      "role": "confirms no open P0 overrides and keeps material findings out of chat-only state"
+    },
+    {
+      "path": "docs/phase7a_alpha_plausibility_audit.json",
+      "role": "records a_short_steady as risk-filter until stronger evidence proves otherwise"
+    },
+    {
+      "path": "runners/backtest_rank.py",
+      "role": "existing same-anchor benchmark-excess and Tier1 production diagnostics source"
+    },
+    {
+      "path": "research/README.md",
+      "role": "research-only artifact routing and blocked-preregistration discipline"
+    }
+  ],
+  "decisive_question": {
+    "question_text": "Does the prior A-short steady 5d CSI1000 excess signal survive same-anchor re-audit, or was it mainly a measurement-basis artifact?",
+    "prior_signal_under_review": "Existing 24-month v7.10 production Tier1 view showed 5d excess_csi1000 t-stat about +2.88, while 20d was not significant. The 5d clue is treated as unvalidated until same-anchor stock and benchmark entry anchors are audited.",
+    "if_corrected_5d_signal_disappears": "falsified_or_risk_filter_only",
+    "if_corrected_5d_signal_survives": "candidate_alpha_only_requires_deep_validation_and_forward_live",
+    "full_size_claim_if_survives_allowed": false
+  },
+  "frozen_design": {
+    "strategy_ref": "A-EGS/egs_main.py v7.10 production Tier1 steady-lane output, using existing 24 monthly backtest cohorts only",
+    "preset": "a_short",
+    "production_version": "v7.10",
+    "cohort_window": {
+      "description": "24 production monthly periods already used by the current A-short rank-backtest evidence surface; no rerun, refetch, or cohort regeneration in this preregistration slice.",
+      "cohort_count": 24,
+      "frequency": "monthly"
+    },
+    "universe_rule": [
+      "Use the existing production Tier1 steady-lane candidate surface only.",
+      "Keep current universe, ranking cap, entry eligibility, limit-up buyability handling, and veto definitions frozen.",
+      "Do not add Tier2 or full-universe rescue rows in this steady-lane re-audit."
+    ],
+    "entry_rule": "A-share stock entry is T+1 open after the screening as-of date; limit-up unbuyable entries must stay excluded or pending according to the existing production semantics.",
+    "exit_horizons_trading_days": [
+      5,
+      20
+    ],
+    "cost_model": "Use net T+1 return with existing A-share trading costs: commission, sell-side stamp tax, and slippage assumptions already used by the production rank-backtest evidence surface.",
+    "freeze_controls": {
+      "hypothesis_frozen": true,
+      "parameters_frozen": true,
+      "universe_frozen": true,
+      "benchmark_frozen": true,
+      "holding_periods_frozen": true,
+      "entry_exit_rule_frozen": true,
+      "threshold_frozen": true,
+      "parameter_search_allowed": false,
+      "variant_search_allowed": false,
+      "benchmark_sweep_allowed": false,
+      "holding_period_sweep_allowed": false,
+      "new_data_fetch_allowed": false
+    }
+  },
+  "metric_plan": {
+    "primary_metric": "same_anchor_benchmark_excess",
+    "same_anchor_required": true,
+    "stock_leg": "stock_T_plus_1_open_to_exit_close",
+    "benchmark_leg": "benchmark_T_plus_1_open_to_same_exit_close",
+    "primary_benchmark": "CSI1000",
+    "secondary_benchmark": "CSI300",
+    "horizons_trading_days": [
+      5,
+      20
+    ],
+    "net_return_field": "t1_net",
+    "minimum_months_for_stat_claim": 12,
+    "diagnostics": [
+      "Report 5d and 20d net benchmark excess for CSI1000 and CSI300.",
+      "Treat CSI1000 5d as the decisive clue under review; 20d and CSI300 are required diagnostics, not a new fishing sweep.",
+      "Use monthly clustered statistics and also show raw per-month results."
+    ]
+  },
+  "integrity_checks": [
+    {
+      "check_id": "multiple_testing_adjustment",
+      "required_before_conclusion": true,
+      "plan": "State the prior exploratory search surface and apply a conservative correction / discount before treating the 5d t-stat as evidence. Do not add new parameter scans."
+    },
+    {
+      "check_id": "time_cross_section_distribution_regime_slices",
+      "required_before_conclusion": true,
+      "plan": "Show monthly behavior, concentration by stock, mean versus tail contribution, and high / low momentum-std regime slices instead of relying only on aggregate t-stat."
+    },
+    {
+      "check_id": "factor_exposure_check",
+      "required_before_conclusion": true,
+      "plan": "Regress or proxy lane returns against CSI300 / CSI1000 and a size proxy to check whether the result is mostly market beta or small-cap exposure."
+    },
+    {
+      "check_id": "veto_filter_effect_check",
+      "required_before_conclusion": true,
+      "plan": "Compare with-filter versus without-filter views for OVERHEAT, Tier2 demotion, chasing-high, and related vetoes; separate real net-excess improvement from simply trading fewer names."
+    },
+    {
+      "check_id": "survivorship_pit_check",
+      "required_before_conclusion": true,
+      "plan": "Confirm the 24-month A-share universe uses the existing Tushare list / delist / suspend guards and does not silently back-delete failed names, suspended names, or limit-up buy failures."
+    }
+  ],
+  "decision_policy": {
+    "candidate_alpha_not_full_size": [
+      "Corrected same-anchor 5d CSI1000 net excess remains positive after multiple-testing discount.",
+      "20d and CSI300 diagnostics do not contradict the 5d result in a way that points to a measurement artifact.",
+      "Monthly, stock-level, distribution, and regime slices do not show that the result is only a few outliers or one month.",
+      "Factor exposure check does not reduce the result to benchmark beta or small-cap exposure.",
+      "Net cost-adjusted result remains positive.",
+      "Even if this label is reached, it is only a candidate alpha clue and still needs deeper validation plus at least 12 months live-normalized forward evidence before any ship-gate or full-size claim."
+    ],
+    "risk_filter_only": [
+      "Veto / filter checks reduce bad tickets, drawdown, or execution-quality failures, but corrected same-anchor excess does not prove independent picker alpha.",
+      "This keeps A-short steady useful as a risk-control and evidence loop, not as a full-size alpha lane."
+    ],
+    "falsified": [
+      "Corrected same-anchor 5d CSI1000 signal disappears or fails the adjusted significance / robustness checks.",
+      "The result is dominated by outliers, one regime, factor exposure, or measurement artifacts.",
+      "No production promotion, no silent rerun, and no parameter rescue without a new reviewed preregistration."
+    ],
+    "ship_gate_forward_live_months_required": 12,
+    "backtest_can_authorize_full_size": false
+  },
+  "planned_test_budget": {
+    "ledger_ref": "research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json",
+    "planned_test_id": "a_short_steady_alpha_reaudit_20260603",
+    "test_budget_units": 1,
+    "outcome_run_authorized_now": false,
+    "requires_claude_review_before_run": true,
+    "requires_user_execute_before_run": true
+  },
+  "prohibited_claims": {
+    "validated_alpha": false,
+    "full_size_allowed": false,
+    "ship_gate_evidence": false,
+    "production_ready": false,
+    "datahub_authorized": false,
+    "provider_work_authorized": false,
+    "runner_change_authorized": false
+  },
+  "next_steps": [
+    "Independent review must verify this preregistration before any outcome run.",
+    "After a clean review and an explicit user execute command, run only the frozen same-anchor re-audit on existing local evidence; do not fetch data or regenerate cohorts.",
+    "The future result must be written as a research-only evidence report and summarized in plain language: data usable as alpha evidence, risk-filter only, or falsified."
+  ],
+  "limitations": [
+    "This artifact records the plan only; it calculates no return, t-stat, Sharpe, drawdown, or alpha result.",
+    "This artifact does not prove that A-short steady has alpha.",
+    "This artifact does not authorize production, full-size manual use, Phase 7c, DataHub, provider access, runner changes, or broker / order automation.",
+    "A future positive backtest result is still not enough for full-size use; the fixed 12-month forward-live ship-gate requirement remains."
+  ]
+}

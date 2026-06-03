@@ -3002,3 +3002,52 @@ git diff --check
 **Plain result**: the current US model is active-only universe + live-normalized forward evidence only. US historical backtests are exploration / idea-only and never count as alpha, ship-gate, full-size, DataHub, or production evidence.
 
 **Boundary**: inactive / delisted historical coverage is user-accepted as scoped out for now, not proven solved. Forward universes must be frozen point-in-time at the forward start date, and real halt / delisting / merger / no-trade outcomes during forward validation must be captured. `SR-PROVIDER-001` remains open for license / storage, active PIT if fundamentals are used, active price / corporate-action semantics if used, SEC parser / mapping if used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness.
+
+## 2026-06-03 append: A-short steady alpha re-audit preregistration
+
+**What changed**:
+
+- Added `schemas/a_short_steady_alpha_reaudit_preregistration.schema.json`.
+- Added `research/preregistrations/a_short_steady_alpha_reaudit_20260603.json`.
+- Added `research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json`.
+- Extended `schemas/program_test_budget_ledger.schema.json` so `a_short_steady` can use a planned-test ledger with zero spent tests.
+- Added `tests/schema/test_a_short_steady_alpha_reaudit_preregistration_schema.py`.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/system_risk_register.md`, `research/README.md`, and `docs/SESSION_LOG.md`.
+
+**Plain result**:
+
+- A-short steady alpha is still not proven.
+- The next test is frozen: check whether the old 5d CSI1000 clue survives same-anchor correction.
+- The future run must also report 20d / CSI300 and check multiple testing, monthly / stock concentration, regime slices, factor exposure, veto/filter usefulness, and PIT / survivorship.
+- This slice does not run the result. It only registers the plan and planned-test budget.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_short_steady_alpha_reaudit_preregistration_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_short_steady_alpha_reaudit_preregistration_schema tests.schema.test_research_preregistration_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**Validation results**:
+
+- Python313 target test: 8 tests, all pass.
+- Python313 target + research regression: 33 tests, all pass.
+- Python313 full unittest discover: 570 tests, all pass.
+- `docs/CURRENT.md` line count = 148.
+- `git diff --check` passed with only normal LF/CRLF working-copy warnings.
+- New-file sensitive-pattern scan found no API key, request URL, secret, or credentials text.
+
+**Invalid conclusions**:
+
+- "A-short steady alpha is validated" is false.
+- "The outcome run has been authorized" is false.
+- "A-short steady can now be full-size" is false.
+- "This authorizes DataHub, provider work, runner changes, production use, or ship-gate evidence" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify the preregistration is scoped to A-short steady, not a hidden burst rescue or parameter search.
+2. If review passes and the user later gives `执行`, run only the frozen same-anchor re-audit on existing local evidence and write a research-only evidence report.

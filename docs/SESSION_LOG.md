@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (A-short steady alpha re-audit preregistration) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. This is the pivot to real alpha-validation work, and the preregistration is rigorous + honestly gated. It registers only; it runs nothing.
+
+**Verified (read artifact + new schema + test + the shared-doc diffs)**:
+- The preregistration faithfully + completely encodes the merged scope: decisive question = does the 5d CSI1000 signal survive same-anchor correction (disappears→falsified/risk-filter-only; survives→candidate-only, full_size_if_survives=false); same-anchor metric (stock T+1 open→exit close vs benchmark T+1 open→same exit close), 5d+20d, CSI1000 primary + CSI300 secondary, net t1_net; frozen 24×monthly v7.10 Tier1 cohorts.
+- Anti-p-hacking freeze is real: freeze_controls all true; parameter/variant/benchmark/holding sweeps + new_data_fetch all false. All 5 rigor checks present and required-before-conclusion: multiple-testing-discount, time/cross-section/distribution/regime slices, factor-exposure (the item Codex's summary had omitted — now included), veto/filter-effectiveness (Codex's add, merged), survivorship/PIT. Decision criteria frozen in advance (candidate-only / risk-filter-only / falsified) with ship_gate_forward_live_months=12 and backtest_can_authorize_full_size=false.
+- New dedicated schema is justified (re-audit-specific structure) and const-locks the no-run/freeze fields — proven by the test's scope-creep cases (flipping outcome_run/data_fetch/runner/ship_gate/parameter_search/benchmark-leg/validated_alpha all rejected) and a ledger scope-creep case (cardinality/review-gate/promotion-relevant rejected). Test 33/33 (with research_preregistration) under Python313+jsonschema.
+- Shared-doc changes safe: `program_test_budget_ledger.schema` adds `a_short_steady` lane + relaxes `test_spend_log` minItems 1→0 (to allow a planned-only ledger with 0 spent) — additive/justified, does not drop the burst ledger's existing records, tests pass. `ALPHA_VALIDATION_ACTION_GUIDE` §13 updated to point at this re-audit as the current next step; the guardrails themselves (survivorship/MTC/PIT/etc.) are untouched; provider routing relocated (not lost) to register/AGENTS.
+- Ledger: tests_spent_count=0, 1 planned (planned_not_reviewed / pending_user_approval). Double-gated: requires Claude review + later user execute before the outcome run. `SR-PROVIDER-001` open; CURRENT=148; research-only — no outcome computed, no egs_main change, no fetch, no production output.
+
+**Next real step**: after 提交 + an explicit user `执行`, run ONLY the frozen same-anchor re-audit on existing local 24-month cohorts → research-only evidence_report with a plain-language verdict (alpha-evidence / risk-filter-only / falsified). Honest expectation per current state (20d insignificant + 5d suspected-artifact + "more filter than picker"): likely risk-filter-only — and that is a valid, valuable result.
+
+---
+
+## 2026-06-03 — Codex 执行 (A-short steady alpha re-audit preregistration)
+
+**Scope**:
+- Registered the A-short steady alpha re-audit plan only.
+- No outcome run, no data fetch, no EGS rerun, no cohort regeneration, no provider call, no DataHub work, no runner change, no production output, and no ship-gate claim.
+
+**Plain result**:
+- We have not proven A-short alpha.
+- We froze the next test: check whether the old 5d CSI1000 signal survives same-anchor correction.
+- The future run must also check 20d / CSI300, multiple testing, monthly and stock concentration, regime slices, factor exposure, veto/filter usefulness, and PIT/survivorship.
+- If it fails, A-short steady stays risk-filter-only or falsified. If it passes, it is still only a candidate clue and still needs 12 months forward-live evidence before full-size use.
+
+**Worked on**:
+- [tracked] `schemas/a_short_steady_alpha_reaudit_preregistration.schema.json`
+- [tracked] `research/preregistrations/a_short_steady_alpha_reaudit_20260603.json`
+- [tracked] `research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json`
+- [tracked] `tests/schema/test_a_short_steady_alpha_reaudit_preregistration_schema.py`
+- [tracked] `schemas/program_test_budget_ledger.schema.json`
+- [tracked] `research/README.md`
+- [tracked] `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`
+- [tracked] `docs/README.md`
+- [tracked] `docs/CURRENT.md`
+- [tracked] `docs/system_risk_register.md`
+- [tracked] `AGENTS.md`
+- [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`
+- [tracked] `docs/SESSION_LOG.md`
+
+**Validation state**:
+- Target Python 3.13 schema/static test passed: `tests.schema.test_a_short_steady_alpha_reaudit_preregistration_schema` = 8/8.
+- Research regression passed: `tests.schema.test_a_short_steady_alpha_reaudit_preregistration_schema tests.schema.test_research_preregistration_schema` = 33/33.
+- Full Python313 unittest discover passed: 570/570.
+- Bundled Python static test also passed but skipped jsonschema-dependent cases because `jsonschema` is unavailable in that interpreter.
+- `docs/CURRENT.md` line count = 148.
+- `git diff --check` passed with only normal LF/CRLF working-copy warnings.
+- New-file sensitive-pattern scan found no `FMP_API_KEY`, `TUSHARE_TOKEN`, API key, request URL, secret, or credentials text.
+- Needs Claude review before commit.
+
+**Reviewer focus**:
+- Confirm the new preregistration is the right shape for A-short steady, not misusing the burst schema.
+- Confirm the planned-test ledger does not authorize the actual outcome run yet.
+- Confirm docs do not overclaim alpha, production readiness, Phase 7c authorization, ship-gate evidence, or full-size permission.
+- Confirm the existing burst artifacts remain blocked/failed and are not silently reopened.
+
+---
+
 ## 2026-06-03 — Claude 审查 (US active-only + forward-validation operating model) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. Docs-only, faithful to the user decision, narrows (not closes) the provider risk, and bakes in the pivot away from contracts.

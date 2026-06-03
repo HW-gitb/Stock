@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://stock.local/schemas/program_test_budget_ledger/1.0.0/schema.json",
   "title": "Program Test Budget Ledger",
-  "description": "Schema-first singleton ledger for promotion-relevant research test budgets. It records spent tests, planned tests, and the no-silent-rescue boundary before redesigned research can influence future research-continuation or production decisions. This schema does not authorize provider access, data fetch, DataHub implementation, production runner consumption, ship-gate evidence, live trading, or order automation.",
+  "description": "Schema-first singleton ledger for promotion-relevant research test budgets. It records spent tests, planned tests, and the no-silent-rescue boundary before redesigned or alpha-reaudit research can influence future research-continuation or production decisions. A new ledger may start with no spent tests when it only registers a planned test. This schema does not authorize provider access, data fetch, DataHub implementation, production runner consumption, ship-gate evidence, live trading, or order automation.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -45,12 +45,13 @@
     "family_id": {
       "$ref": "#/$defs/nonEmptyString"
     },
-    "lane_id": {
-      "enum": [
-        "a_share_burst_minimal_data",
-        "us_burst_minimal_data",
-        "a_short_variant_research",
-        "a_long_research",
+        "lane_id": {
+          "enum": [
+            "a_share_burst_minimal_data",
+            "a_short_steady",
+            "us_burst_minimal_data",
+            "a_short_variant_research",
+            "a_long_research",
         "us_long_research"
       ]
     },
@@ -68,7 +69,7 @@
       "items": {
         "$ref": "#/$defs/testSpendLogItem"
       },
-      "minItems": 1
+      "minItems": 0
     },
     "planned_tests": {
       "type": "array",
