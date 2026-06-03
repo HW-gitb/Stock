@@ -1,0 +1,729 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_validation_execution_packet/1.0.0/schema.json",
+  "title": "Provider P1 Validation Execution Packet",
+  "description": "Machine-checkable reviewed execution packet for the next bounded Phase 7b-2 US EGS provider validation run. It consumes the 2026-06-03 FMP Basic / existing-key plus SEC EDGAR public-API authorization, fixes the five-symbol sample, endpoint families, call budget, storage, pre-execution gates, and prohibited claims, but it does not itself execute provider calls, parse raw payloads, implement adapters, create DataHub tables, change runners, authorize Phase 7c, or support production-readiness / ship-gate claims.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "authorization_ref",
+    "scope",
+    "source_artifact_refs",
+    "sample_universe",
+    "endpoint_call_budget",
+    "endpoint_families",
+    "validation_tasks",
+    "environment_precheck",
+    "storage_and_secret_boundary",
+    "pre_execution_gates",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_validation_execution_packet"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "authorization_ref": {
+      "const": "docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 10,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_validation_authorization_packet_20260603"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_current_endpoint_mapping_review_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_stable_endpoint_retry_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_coverage_count_execution_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_price_corporate_action_semantics_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_sec_edgar_field_family_mapping_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "sample_universe": {
+      "$ref": "#/$defs/sampleUniverse"
+    },
+    "endpoint_call_budget": {
+      "$ref": "#/$defs/endpointCallBudget"
+    },
+    "endpoint_families": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/endpointFamily"
+      },
+      "minItems": 11,
+      "maxItems": 11
+    },
+    "validation_tasks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/validationTask"
+      },
+      "minItems": 8,
+      "maxItems": 8
+    },
+    "environment_precheck": {
+      "$ref": "#/$defs/environmentPrecheck"
+    },
+    "storage_and_secret_boundary": {
+      "$ref": "#/$defs/storageAndSecretBoundary"
+    },
+    "pre_execution_gates": {
+      "$ref": "#/$defs/preExecutionGates"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "packet_status",
+        "consumes_authorization_packet",
+        "provider_calls_executed_by_this_artifact",
+        "raw_payloads_read_by_this_artifact",
+        "ready_for_later_execution_after_independent_review",
+        "actual_provider_calls_require_post_review_execute_command",
+        "network_access_required_for_later_execution",
+        "fmp_existing_key_use_allowed",
+        "sec_edgar_public_api_allowed",
+        "raw_payload_parse_for_validation_allowed",
+        "provider_selection_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "manual_order_only",
+        "ship_gate_evidence_allowed",
+        "production_ready_claim_allowed",
+        "broker_or_order_automation_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_bounded_provider_validation_execution_packet"
+        },
+        "packet_status": {
+          "const": "execution_packet_recorded_for_review_not_executed"
+        },
+        "consumes_authorization_packet": {
+          "const": true
+        },
+        "provider_calls_executed_by_this_artifact": {
+          "const": false
+        },
+        "raw_payloads_read_by_this_artifact": {
+          "const": false
+        },
+        "ready_for_later_execution_after_independent_review": {
+          "const": true
+        },
+        "actual_provider_calls_require_post_review_execute_command": {
+          "const": true
+        },
+        "network_access_required_for_later_execution": {
+          "const": true
+        },
+        "fmp_existing_key_use_allowed": {
+          "const": true
+        },
+        "sec_edgar_public_api_allowed": {
+          "const": true
+        },
+        "raw_payload_parse_for_validation_allowed": {
+          "const": true
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sampleUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbols",
+        "max_symbols",
+        "active_symbols",
+        "inactive_or_delisted_candidate_symbols",
+        "inactive_or_delisted_candidates_are_best_effort",
+        "not_full_market_or_security_master",
+        "symbol_failures_block_readiness_claim_not_execution_summary"
+      ],
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "AAPL",
+              "MSFT",
+              "JPM",
+              "TWTR",
+              "SIVB"
+            ]
+          },
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "max_symbols": {
+          "const": 5
+        },
+        "active_symbols": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "AAPL",
+              "MSFT",
+              "JPM"
+            ]
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "inactive_or_delisted_candidate_symbols": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "TWTR",
+              "SIVB"
+            ]
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "inactive_or_delisted_candidates_are_best_effort": {
+          "const": true
+        },
+        "not_full_market_or_security_master": {
+          "const": true
+        },
+        "symbol_failures_block_readiness_claim_not_execution_summary": {
+          "const": true
+        }
+      }
+    },
+    "endpointCallBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_authorized_by_authorization_packet",
+        "max_total_endpoint_calls",
+        "fmp_planned_endpoint_calls",
+        "fmp_blocked_candidate_endpoint_calls",
+        "sec_endpoint_calls",
+        "retry_count_allowed",
+        "abort_if_budget_exceeded"
+      ],
+      "properties": {
+        "max_authorized_by_authorization_packet": {
+          "const": 60
+        },
+        "max_total_endpoint_calls": {
+          "const": 41
+        },
+        "fmp_planned_endpoint_calls": {
+          "const": 30
+        },
+        "fmp_blocked_candidate_endpoint_calls": {
+          "const": 0
+        },
+        "sec_endpoint_calls": {
+          "const": 11
+        },
+        "retry_count_allowed": {
+          "const": 0
+        },
+        "abort_if_budget_exceeded": {
+          "const": true
+        }
+      }
+    },
+    "endpointFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "endpoint_family",
+        "call_count",
+        "call_scope",
+        "endpoint_mapping_status",
+        "raw_parse_allowed_for_validation",
+        "authorizes_return_calculation",
+        "authorizes_corporate_action_reconciliation",
+        "authorizes_fixture_generation",
+        "authorizes_field_mapping_implementation",
+        "authorizes_parser_implementation",
+        "authorizes_datahub_or_runner",
+        "notes"
+      ],
+      "properties": {
+        "provider_id": {
+          "enum": [
+            "financial_modeling_prep",
+            "sec_edgar"
+          ]
+        },
+        "endpoint_family": {
+          "enum": [
+            "profile_or_company_metadata",
+            "income_statement",
+            "balance_sheet_statement",
+            "cash_flow_statement",
+            "financial_ratios_or_key_metrics",
+            "historical_eod_price_volume",
+            "stock_split_candidate",
+            "dividend_or_distribution_candidate",
+            "company_tickers_mapping",
+            "company_submissions",
+            "companyfacts"
+          ]
+        },
+        "call_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "call_scope": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "endpoint_mapping_status": {
+          "enum": [
+            "stable_template_reviewed_in_prior_mapping",
+            "public_family_from_prior_sample",
+            "blocked_pending_current_template_review"
+          ]
+        },
+        "raw_parse_allowed_for_validation": {
+          "type": "boolean"
+        },
+        "authorizes_return_calculation": {
+          "const": false
+        },
+        "authorizes_corporate_action_reconciliation": {
+          "const": false
+        },
+        "authorizes_fixture_generation": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_parser_implementation": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner": {
+          "const": false
+        },
+        "notes": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "validationTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "task_role",
+        "raw_parse_allowed_for_validation",
+        "implementation_allowed",
+        "readiness_or_scale_claim_allowed"
+      ],
+      "properties": {
+        "task_id": {
+          "enum": [
+            "fmp_pit_row_observed_date_validation",
+            "fmp_key_metrics_field_presence_validation",
+            "fmp_price_adjustment_field_presence_validation",
+            "fmp_corporate_action_endpoint_gap_validation",
+            "sec_company_identity_mapping_validation",
+            "sec_submissions_parser_feasibility_validation",
+            "sec_companyfacts_field_family_feasibility_validation",
+            "inactive_delisted_candidate_probe"
+          ]
+        },
+        "task_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "raw_parse_allowed_for_validation": {
+          "type": "boolean"
+        },
+        "implementation_allowed": {
+          "const": false
+        },
+        "readiness_or_scale_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "environmentPrecheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requires_fmp_api_key_presence",
+        "requires_sec_user_agent_presence",
+        "environment_values_must_not_be_logged",
+        "missing_environment_aborts_before_network",
+        "new_token_trial_paid_or_provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_fetch_allowed"
+      ],
+      "properties": {
+        "requires_fmp_api_key_presence": {
+          "const": true
+        },
+        "requires_sec_user_agent_presence": {
+          "const": true
+        },
+        "environment_values_must_not_be_logged": {
+          "const": true
+        },
+        "missing_environment_aborts_before_network": {
+          "const": true
+        },
+        "new_token_trial_paid_or_provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_fetch_allowed": {
+          "const": false
+        }
+      }
+    },
+    "storageAndSecretBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_sample_storage_path",
+        "raw_sample_storage_must_be_gitignored",
+        "tracked_summary_path",
+        "tracked_summary_must_exclude_raw_payloads",
+        "tracked_summary_must_exclude_request_urls",
+        "api_key_logging_allowed",
+        "authorization_header_logging_allowed",
+        "sec_user_agent_value_logging_allowed",
+        "secrets_in_repo_allowed",
+        "raw_retention_authorizes_production_storage"
+      ],
+      "properties": {
+        "raw_sample_storage_path": {
+          "const": "provider_samples/us_egs_validation_packet_20260603/"
+        },
+        "raw_sample_storage_must_be_gitignored": {
+          "const": true
+        },
+        "tracked_summary_path": {
+          "const": "docs/provider_evidence_p1_us_validation_execution_summary_20260603.json"
+        },
+        "tracked_summary_must_exclude_raw_payloads": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_request_urls": {
+          "const": true
+        },
+        "api_key_logging_allowed": {
+          "const": false
+        },
+        "authorization_header_logging_allowed": {
+          "const": false
+        },
+        "sec_user_agent_value_logging_allowed": {
+          "const": false
+        },
+        "secrets_in_repo_allowed": {
+          "const": false
+        },
+        "raw_retention_authorizes_production_storage": {
+          "const": false
+        }
+      }
+    },
+    "preExecutionGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independent_review_pass_required",
+        "post_review_execute_command_required",
+        "environment_precheck_required",
+        "exact_symbol_list_fixed",
+        "endpoint_family_list_fixed",
+        "corporate_action_endpoint_template_review_required_before_corporate_action_call",
+        "provider_samples_gitignore_check_required",
+        "no_secret_summary_scan_required",
+        "budget_precheck_required",
+        "abort_on_budget_or_scope_violation",
+        "sec_fair_access_user_agent_required",
+        "no_new_token_trial_paid_or_contact_precheck_required"
+      ],
+      "properties": {
+        "independent_review_pass_required": {
+          "const": true
+        },
+        "post_review_execute_command_required": {
+          "const": true
+        },
+        "environment_precheck_required": {
+          "const": true
+        },
+        "exact_symbol_list_fixed": {
+          "const": true
+        },
+        "endpoint_family_list_fixed": {
+          "const": true
+        },
+        "corporate_action_endpoint_template_review_required_before_corporate_action_call": {
+          "const": true
+        },
+        "provider_samples_gitignore_check_required": {
+          "const": true
+        },
+        "no_secret_summary_scan_required": {
+          "const": true
+        },
+        "budget_precheck_required": {
+          "const": true
+        },
+        "abort_on_budget_or_scope_violation": {
+          "const": true
+        },
+        "sec_fair_access_user_agent_required": {
+          "const": true
+        },
+        "no_new_token_trial_paid_or_contact_precheck_required": {
+          "const": true
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "provider_ranked",
+        "production_ready",
+        "datahub_consumable",
+        "runner_consumable",
+        "phase7c_authorized",
+        "ship_gate_evidence_claimed",
+        "alpha_evidence_claimed",
+        "current_terms_cleared",
+        "production_storage_rights_cleared",
+        "inactive_delisted_coverage_proven",
+        "pit_proven_at_scale",
+        "price_adjustment_proven_at_scale",
+        "corporate_actions_proven_at_scale",
+        "sec_parser_proven_at_scale",
+        "fmp_corporate_action_endpoint_template_proven"
+      ],
+      "properties": {
+        "provider_selected": {
+          "const": false
+        },
+        "provider_ranked": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "datahub_consumable": {
+          "const": false
+        },
+        "runner_consumable": {
+          "const": false
+        },
+        "phase7c_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence_claimed": {
+          "const": false
+        },
+        "alpha_evidence_claimed": {
+          "const": false
+        },
+        "current_terms_cleared": {
+          "const": false
+        },
+        "production_storage_rights_cleared": {
+          "const": false
+        },
+        "inactive_delisted_coverage_proven": {
+          "const": false
+        },
+        "pit_proven_at_scale": {
+          "const": false
+        },
+        "price_adjustment_proven_at_scale": {
+          "const": false
+        },
+        "corporate_actions_proven_at_scale": {
+          "const": false
+        },
+        "sec_parser_proven_at_scale": {
+          "const": false
+        },
+        "fmp_corporate_action_endpoint_template_proven": {
+          "const": false
+        }
+      }
+    }
+  }
+}

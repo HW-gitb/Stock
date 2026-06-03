@@ -8,6 +8,61 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (provider validation execution packet) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. Schema-first execution-packet contract; executes nothing and reads no raw payloads in this slice.
+
+**Scope reviewed** (base `e91a2a0`): new `schemas/provider_p1_validation_execution_packet.schema.json` + `docs/provider_evidence_p1_us_validation_execution_packet_20260603.json` + `tests/schema/test_provider_p1_validation_execution_packet_schema.py`; routing edits to `AGENTS.md` (new fixed decision #19), `docs/CURRENT.md`, `docs/README.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, phase7 handoff.
+
+**Independently verified (read schema + artifact + test in full + checked filesystem)**:
+- Executes nothing now: `scope.provider_calls_executed_by_this_artifact=const false`, `raw_payloads_read_by_this_artifact=const false`. Verified the raw dir `provider_samples/us_egs_validation_packet_20260603/` does NOT exist and `git status provider_samples/` shows no new untracked — nothing fetched/written, zero secret exposure this slice.
+- Double-gated execution: `actual_provider_calls_require_post_review_execute_command=const true` + `pre_execution_gates.independent_review_pass_required` + `post_review_execute_command_required` both const true. Actual fetch needs THIS review + a later user execute command.
+- Sample hard-locked: `symbols` enum-locked to exactly [AAPL, MSFT, JPM, TWTR, SIVB] (minItems/maxItems 5, uniqueItems); active [AAPL,MSFT,JPM], delisted [TWTR,SIVB] best-effort (failures block readiness claim, not the summary). A 6th symbol is schema-rejected (scope-creep test appends NVDA → fails).
+- Budget hard-bounded: const 41 total = 30 FMP (6 families × 5) + 11 SEC (1+5+5); ≤ authorization's 60; retry 0; per-family `call_count` max 5; abort-on-exceed.
+- Corporate-action fully blocked: `stock_split_candidate` + `dividend_or_distribution_candidate` families are call_count 0 + `raw_parse_allowed_for_validation` false + mapping `blocked_pending_current_template_review`; gate `corporate_action_endpoint_template_review_required_before_corporate_action_call=true`; `prohibited_claims.fmp_corporate_action_endpoint_template_proven=false`.
+- validation≠implementation: every endpoint family + validation task const-locks `authorizes_return_calculation / corporate_action_reconciliation / fixture_generation / field_mapping_implementation / parser_implementation / datahub_or_runner` (and task `implementation_allowed` / `readiness_or_scale_claim_allowed`) to false.
+- Secret/storage: raw path gitignored (`provider_samples/`), tracked summary excludes raw payloads + request URLs, all key/header/UA/secret logging const false; env precheck must verify key+UA present, never log them, abort-before-network if missing; no new-token/trial/paid/contact/yfinance/full-market.
+- Test (9) comprehensive + non-vacuous: asserts exact symbols/budget/families/tasks/gates/claims AND scope-creep rejection across executes-true / +NVDA / 61-calls / yfinance / key-logging / return-calc / datahub / task-impl / provider_selected. Re-ran execution + authorization modules under Python313+jsonschema → **17/17 pass**. (Codex's 2 corrected test-string assertions did not weaken coverage.)
+- `SR-PROVIDER-001` stays **open** (verified `Status: open`); register Hot Queue + entry (new evidence bullet + accepted-calibration + required-next-action) accurately bound the packet to review + execute command within fixed scope, explicitly list corporate-action endpoint templates as not-proven and split/dividend calls as still-blocked — no over-claim. AGENTS fixed-decision #19 accurate. CURRENT=149.
+
+**Note for Final Approver (not a defect)**: this review passing makes the packet *execution-ready*. The first real provider fetch (30 FMP + 11 SEC calls with the live key into gitignored `provider_samples/`, with validation-only raw parsing) happens ONLY when you issue an execute command — and that run is itself a separate step that should be reviewed (its tracked no-secret summary + raw-dir-gitignored + budget) before 提交.
+
+**Residual blockers unchanged (intentional)**: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open; aggregate full-size permission `not_evaluable` by the SR-EXEC-007 concurrency gate.
+
+---
+
+## 2026-06-03 — Codex 执行 (provider validation execution packet)
+
+**Commits**: none (pending independent review / submit; base `e91a2a0`)
+
+**Scope**:
+- User invoked `执行` after the provider validation authorization packet was committed.
+- This round records the reviewed execution-packet shape only. It does not run provider calls, access network data, read or parse raw payloads, write `provider_samples/`, change runners, implement adapters / DataHub, authorize Phase 7c, or make production / ship-gate claims.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_validation_execution_packet.schema.json`: new schema-first execution packet consuming the 2026-06-03 FMP Basic / existing-key + SEC EDGAR public-API authorization.
+2. [untracked] `docs/provider_evidence_p1_us_validation_execution_packet_20260603.json`: fixes the later execution packet to `AAPL` / `MSFT` / `JPM` / `TWTR` / `SIVB`, 41 planned calls, zero retries, gitignored raw path, tracked no-secret summary path, environment prechecks, and prohibited claims.
+3. [untracked] `tests/schema/test_provider_p1_validation_execution_packet_schema.py`: validates schema / artifact, exact sample, endpoint-family budget, zero-call split / dividend candidate families, feasibility-only parsing, pre-execution gates, prohibited claims, and scope-creep rejection.
+4. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `AGENTS.md`: route the execution packet through Phase 7b-2 and `SR-PROVIDER-001` while preserving provider / DataHub / Phase 7c blocks.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7 handoff for this slice.
+
+**Validation run/result**:
+- Initial Python313 schema regression run caught two overly narrow test-string assertions in the new test file; corrected the assertions without changing the schema / artifact boundary.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_validation_execution_packet_schema tests.schema.test_provider_p1_validation_authorization_packet_schema tests.schema.test_provider_p1_missing_key_metrics_resolution_plan_schema -v`: 26 tests, all pass after the test assertion correction.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool schemas\provider_p1_validation_execution_packet.schema.json`: parsed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\provider_evidence_p1_us_validation_execution_packet_20260603.json`: parsed.
+- `git diff --check`: exit 0; only normal LF/CRLF working-copy warnings were printed.
+- `(Get-Content -Encoding UTF8 docs\CURRENT.md).Count`: 149.
+- `Test-Path provider_samples\us_egs_validation_packet_20260603`: `False`.
+
+**Current review state**:
+- Needs independent review before `提交`.
+- `SR-PROVIDER-001` remains open. The execution packet may be run only after independent review and a later user execute command, and only within the fixed five-symbol / 41-call / zero-retry / FMP Basic existing-key / SEC public-API / gitignored raw / tracked no-secret-summary scope.
+- FMP split / dividend endpoint families remain zero-call blocked pending reviewed current endpoint-template mapping; no corporate-action endpoint call or reconciliation is authorized by this slice.
+- `SR-RESOURCE-001` remains open; this slice does not authorize Phase 7c or implementation.
+
+---
+
 ## 2026-06-03 — Claude 审查 (provider validation authorization packet) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. Schema-first user-authorization boundary; authorizes nothing to execute in this slice.

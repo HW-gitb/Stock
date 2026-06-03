@@ -2571,3 +2571,41 @@ git diff --check
 1. Claude review should verify that the new schema/artifact allows only the authorized future 5-10 symbol / max 60 call / FMP Basic existing-key / SEC public-API validation packet and does not silently authorize implementation.
 2. A future execution slice may consume this authorization only through a reviewed execution packet that fixes exact symbols, endpoints, call budget, raw storage subdir, no-secret summary fields, environment precheck, SEC fair-access handling, gitignore proof, and abort behavior.
 3. Any scope beyond this authorization still requires separate explicit approval and reviewed decision.
+
+## 2026-06-03 append: Provider validation execution packet
+
+**What changed**:
+
+- Added `schemas/provider_p1_validation_execution_packet.schema.json`, a schema-first execution-packet contract that consumes the 2026-06-03 provider validation authorization without executing it.
+- Added `docs/provider_evidence_p1_us_validation_execution_packet_20260603.json`, fixing the later packet to `AAPL`, `MSFT`, `JPM`, `TWTR`, and `SIVB`, 41 planned calls, zero retries, gitignored raw path `provider_samples/us_egs_validation_packet_20260603/`, tracked no-secret summary, environment precheck, and abort-on-scope-violation gates.
+- Added `tests/schema/test_provider_p1_validation_execution_packet_schema.py`, validating schema/artifact shape, exact sample, endpoint family boundaries, zero-call split/dividend candidate families, storage / secret gates, prohibited claims, and scope-creep rejection.
+- Updated `docs/provider_evidence_drift_monitor.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, and `AGENTS.md` to route the execution packet through `SR-PROVIDER-001`.
+
+**Why**:
+
+- The prior authorization packet allowed a future bounded validation run but intentionally did not fix the exact sample / endpoint families / call budget.
+- This slice records the execution packet for review before any provider call, preserving the project rule that provider work must be exact-scope, reviewed, no-secret, and manually approved.
+- The packet intentionally leaves FMP split / dividend endpoint families at zero calls because no reviewed current FMP corporate-action endpoint template exists in repo evidence; execution must record that blocker unless a later reviewed mapping resolves it.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool schemas\provider_p1_validation_execution_packet.schema.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\provider_evidence_p1_us_validation_execution_packet_20260603.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_validation_execution_packet_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_validation_authorization_packet_schema tests.schema.test_provider_p1_validation_execution_packet_schema tests.schema.test_provider_p1_missing_key_metrics_resolution_plan_schema -v
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**Invalid conclusions**:
+
+- "This slice executed FMP or SEC calls" is false; it records no provider calls and creates no `provider_samples/` files.
+- "Corporate actions are now validated" is false; split / dividend endpoint families are zero-call blocked pending reviewed template mapping.
+- "This authorizes provider selection, adapter, DataHub, runner consumption, Phase 7c, production readiness, alpha evidence, or ship-gate evidence" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify that the execution packet exactly consumes the authorization boundary and still requires a later execute command before network access.
+2. If review passes and the change is committed, a later `执行` may run only this exact five-symbol / 41-call packet after environment, gitignore, budget, no-secret, and fair-access prechecks.
+3. Any broader symbols, retries, FMP split / dividend endpoint call, implementation, DataHub, Phase 7c, or production claim requires separate explicit approval and reviewed decision.

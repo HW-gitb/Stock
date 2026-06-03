@@ -1,0 +1,404 @@
+{
+  "schema_name": "provider_p1_validation_execution_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+08:00",
+  "authorization_ref": "docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_bounded_provider_validation_execution_packet",
+    "packet_status": "execution_packet_recorded_for_review_not_executed",
+    "consumes_authorization_packet": true,
+    "provider_calls_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "ready_for_later_execution_after_independent_review": true,
+    "actual_provider_calls_require_post_review_execute_command": true,
+    "network_access_required_for_later_execution": true,
+    "fmp_existing_key_use_allowed": true,
+    "sec_edgar_public_api_allowed": true,
+    "raw_payload_parse_for_validation_allowed": true,
+    "provider_selection_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "manual_order_only": true,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false,
+    "broker_or_order_automation_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_validation_authorization_packet_20260603",
+      "path": "docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json",
+      "role": "User-confirmed FMP Basic / existing-key plus SEC EDGAR public-API zero-dollar authorization boundary for a future reviewed validation packet."
+    },
+    {
+      "artifact_id": "p1_fmp_current_endpoint_mapping_review_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_current_endpoint_mapping_review_20260602.json",
+      "role": "Maps the six failed FMP legacy endpoint families to current stable endpoint family candidates without corporate-action endpoint templates."
+    },
+    {
+      "artifact_id": "p1_fmp_stable_endpoint_retry_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+      "role": "Records AAPL / MSFT response-shape success for six FMP stable endpoint families."
+    },
+    {
+      "artifact_id": "p1_coverage_count_execution_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json",
+      "role": "Records the approved five-active-symbol FMP stable coverage smoke and the missing key-metrics fields."
+    },
+    {
+      "artifact_id": "p1_missing_key_metrics_resolution_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json",
+      "role": "Routes missing ratio / per-share fields toward later field-presence and derivation-lineage review."
+    },
+    {
+      "artifact_id": "p1_fmp_pit_observed_date_semantics_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_pit_observed_date_semantics_contract_20260602.json",
+      "role": "Defines FMP PIT / observed-date validation requirements and no-silent-default behavior."
+    },
+    {
+      "artifact_id": "p1_fmp_price_corporate_action_semantics_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_price_adjustment_corporate_action_semantics_contract_20260602.json",
+      "role": "Defines FMP price-adjustment, split, dividend, delisting, and missing-session blockers without endpoint-call authorization."
+    },
+    {
+      "artifact_id": "p1_sec_edgar_audit_parser_scope_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_sec_edgar_audit_parser_scope_contract_20260602.json",
+      "role": "Defines SEC EDGAR audit-only parser scope, lineage expectations, fair-access expectations, and artifact-retention gates."
+    },
+    {
+      "artifact_id": "p1_sec_edgar_field_family_mapping_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_sec_edgar_field_family_mapping_contract_20260602.json",
+      "role": "Defines SEC EDGAR audit field-family gates and explicitly blocks parser / field-mapping implementation."
+    },
+    {
+      "artifact_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Durable open provider-risk queue requiring reviewed exact symbols, endpoint families, budget, storage, and no-secret summary before any execution."
+    }
+  ],
+  "sample_universe": {
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM",
+      "TWTR",
+      "SIVB"
+    ],
+    "max_symbols": 5,
+    "active_symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM"
+    ],
+    "inactive_or_delisted_candidate_symbols": [
+      "TWTR",
+      "SIVB"
+    ],
+    "inactive_or_delisted_candidates_are_best_effort": true,
+    "not_full_market_or_security_master": true,
+    "symbol_failures_block_readiness_claim_not_execution_summary": true
+  },
+  "endpoint_call_budget": {
+    "max_authorized_by_authorization_packet": 60,
+    "max_total_endpoint_calls": 41,
+    "fmp_planned_endpoint_calls": 30,
+    "fmp_blocked_candidate_endpoint_calls": 0,
+    "sec_endpoint_calls": 11,
+    "retry_count_allowed": 0,
+    "abort_if_budget_exceeded": true
+  },
+  "endpoint_families": [
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "call_count": 5,
+      "call_scope": "one stable profile-family call per fixed sample symbol",
+      "endpoint_mapping_status": "stable_template_reviewed_in_prior_mapping",
+      "raw_parse_allowed_for_validation": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Metadata / active-status field presence may be summarized, but not used as a survivorship-safe security master."
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "income_statement",
+      "call_count": 5,
+      "call_scope": "one stable income-statement-family call per fixed sample symbol",
+      "endpoint_mapping_status": "stable_template_reviewed_in_prior_mapping",
+      "raw_parse_allowed_for_validation": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Parse only field presence and PIT row date fields such as filingDate / acceptedDate if present."
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "balance_sheet_statement",
+      "call_count": 5,
+      "call_scope": "one stable balance-sheet-family call per fixed sample symbol",
+      "endpoint_mapping_status": "stable_template_reviewed_in_prior_mapping",
+      "raw_parse_allowed_for_validation": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Parse only field presence and PIT row date fields; no normalized field mapping is authorized."
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "cash_flow_statement",
+      "call_count": 5,
+      "call_scope": "one stable cash-flow-family call per fixed sample symbol",
+      "endpoint_mapping_status": "stable_template_reviewed_in_prior_mapping",
+      "raw_parse_allowed_for_validation": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Parse only field presence and PIT row date fields; no derivation or field mapping is authorized."
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "call_count": 5,
+      "call_scope": "one stable key-metrics-family call per fixed sample symbol",
+      "endpoint_mapping_status": "stable_template_reviewed_in_prior_mapping",
+      "raw_parse_allowed_for_validation": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Parse only direct field presence / absence for missing key metrics; no derivation implementation is authorized."
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "historical_eod_price_volume",
+      "call_count": 5,
+      "call_scope": "one stable historical-EOD-family call per fixed sample symbol",
+      "endpoint_mapping_status": "stable_template_reviewed_in_prior_mapping",
+      "raw_parse_allowed_for_validation": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Parse only price / volume field presence and adjustment-indicator clues; no returns or adjusted-price conclusions are authorized."
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "stock_split_candidate",
+      "call_count": 0,
+      "call_scope": "no call in this packet because no current FMP split endpoint template is reviewed in repo evidence",
+      "endpoint_mapping_status": "blocked_pending_current_template_review",
+      "raw_parse_allowed_for_validation": false,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Execution summary must record split-event validation as blocked unless a separate reviewed endpoint-template mapping is added before any call."
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "dividend_or_distribution_candidate",
+      "call_count": 0,
+      "call_scope": "no call in this packet because no current FMP dividend endpoint template is reviewed in repo evidence",
+      "endpoint_mapping_status": "blocked_pending_current_template_review",
+      "raw_parse_allowed_for_validation": false,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Execution summary must record dividend-event validation as blocked unless a separate reviewed endpoint-template mapping is added before any call."
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_tickers_mapping",
+      "call_count": 1,
+      "call_scope": "one public SEC company-tickers mapping call for CIK / ticker identity lookup",
+      "endpoint_mapping_status": "public_family_from_prior_sample",
+      "raw_parse_allowed_for_validation": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Parse only enough identity metadata to route submissions / companyfacts checks; do not treat it as a historical security master."
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions",
+      "call_count": 5,
+      "call_scope": "one SEC submissions-family call per fixed sample symbol after CIK lookup",
+      "endpoint_mapping_status": "public_family_from_prior_sample",
+      "raw_parse_allowed_for_validation": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Parse only parser-feasibility metadata and filing lineage clues; no parser implementation or fixtures are authorized."
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "companyfacts",
+      "call_count": 5,
+      "call_scope": "one SEC companyfacts-family call per fixed sample symbol after CIK lookup",
+      "endpoint_mapping_status": "public_family_from_prior_sample",
+      "raw_parse_allowed_for_validation": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_parser_implementation": false,
+      "authorizes_datahub_or_runner": false,
+      "notes": "Parse only field-family feasibility and anomaly-audit coverage clues; no field mapping implementation or fixtures are authorized."
+    }
+  ],
+  "validation_tasks": [
+    {
+      "task_id": "fmp_pit_row_observed_date_validation",
+      "task_role": "Check whether sampled FMP statement rows expose observed-date / filing-date / accepted-date fields needed for PIT eligibility review.",
+      "raw_parse_allowed_for_validation": true,
+      "implementation_allowed": false,
+      "readiness_or_scale_claim_allowed": false
+    },
+    {
+      "task_id": "fmp_key_metrics_field_presence_validation",
+      "task_role": "Check direct presence or absence of missing ratio / per-share fields before any derivation lineage design.",
+      "raw_parse_allowed_for_validation": true,
+      "implementation_allowed": false,
+      "readiness_or_scale_claim_allowed": false
+    },
+    {
+      "task_id": "fmp_price_adjustment_field_presence_validation",
+      "task_role": "Check EOD price / volume row shape and any explicit adjustment fields or ambiguities without calculating returns.",
+      "raw_parse_allowed_for_validation": true,
+      "implementation_allowed": false,
+      "readiness_or_scale_claim_allowed": false
+    },
+    {
+      "task_id": "fmp_corporate_action_endpoint_gap_validation",
+      "task_role": "Record that split / dividend event validation remains blocked if no reviewed FMP corporate-action endpoint template exists before execution.",
+      "raw_parse_allowed_for_validation": false,
+      "implementation_allowed": false,
+      "readiness_or_scale_claim_allowed": false
+    },
+    {
+      "task_id": "sec_company_identity_mapping_validation",
+      "task_role": "Check whether fixed sample symbols can be linked to CIK identity through SEC company-tickers mapping without building a security master.",
+      "raw_parse_allowed_for_validation": true,
+      "implementation_allowed": false,
+      "readiness_or_scale_claim_allowed": false
+    },
+    {
+      "task_id": "sec_submissions_parser_feasibility_validation",
+      "task_role": "Check SEC submissions response shape and filing lineage fields for parser feasibility only.",
+      "raw_parse_allowed_for_validation": true,
+      "implementation_allowed": false,
+      "readiness_or_scale_claim_allowed": false
+    },
+    {
+      "task_id": "sec_companyfacts_field_family_feasibility_validation",
+      "task_role": "Check SEC companyfacts field-family availability and taxonomy-context clues for audit feasibility only.",
+      "raw_parse_allowed_for_validation": true,
+      "implementation_allowed": false,
+      "readiness_or_scale_claim_allowed": false
+    },
+    {
+      "task_id": "inactive_delisted_candidate_probe",
+      "task_role": "Best-effort TWTR / SIVB probe for inactive or delisted candidate behavior under the same fixed endpoint families; failures block readiness claims but not the no-secret summary.",
+      "raw_parse_allowed_for_validation": true,
+      "implementation_allowed": false,
+      "readiness_or_scale_claim_allowed": false
+    }
+  ],
+  "environment_precheck": {
+    "requires_fmp_api_key_presence": true,
+    "requires_sec_user_agent_presence": true,
+    "environment_values_must_not_be_logged": true,
+    "missing_environment_aborts_before_network": true,
+    "new_token_trial_paid_or_provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_fetch_allowed": false
+  },
+  "storage_and_secret_boundary": {
+    "raw_sample_storage_path": "provider_samples/us_egs_validation_packet_20260603/",
+    "raw_sample_storage_must_be_gitignored": true,
+    "tracked_summary_path": "docs/provider_evidence_p1_us_validation_execution_summary_20260603.json",
+    "tracked_summary_must_exclude_raw_payloads": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "api_key_logging_allowed": false,
+    "authorization_header_logging_allowed": false,
+    "sec_user_agent_value_logging_allowed": false,
+    "secrets_in_repo_allowed": false,
+    "raw_retention_authorizes_production_storage": false
+  },
+  "pre_execution_gates": {
+    "independent_review_pass_required": true,
+    "post_review_execute_command_required": true,
+    "environment_precheck_required": true,
+    "exact_symbol_list_fixed": true,
+    "endpoint_family_list_fixed": true,
+    "corporate_action_endpoint_template_review_required_before_corporate_action_call": true,
+    "provider_samples_gitignore_check_required": true,
+    "no_secret_summary_scan_required": true,
+    "budget_precheck_required": true,
+    "abort_on_budget_or_scope_violation": true,
+    "sec_fair_access_user_agent_required": true,
+    "no_new_token_trial_paid_or_contact_precheck_required": true
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "provider_ranked": false,
+    "production_ready": false,
+    "datahub_consumable": false,
+    "runner_consumable": false,
+    "phase7c_authorized": false,
+    "ship_gate_evidence_claimed": false,
+    "alpha_evidence_claimed": false,
+    "current_terms_cleared": false,
+    "production_storage_rights_cleared": false,
+    "inactive_delisted_coverage_proven": false,
+    "pit_proven_at_scale": false,
+    "price_adjustment_proven_at_scale": false,
+    "corporate_actions_proven_at_scale": false,
+    "sec_parser_proven_at_scale": false,
+    "fmp_corporate_action_endpoint_template_proven": false
+  },
+  "next_steps": [
+    "Independent review must verify this packet before any provider call can run.",
+    "After review and a later user execute command, the execution runner may use only the fixed five symbols, 30 planned FMP stable calls, 11 planned SEC public calls, zero retries, gitignored raw storage, and a tracked no-secret summary.",
+    "If the runner cannot confirm that provider_samples/ is ignored, FMP_API_KEY and SEC_USER_AGENT are present, or the no-new-token / no-paid / no-yfinance / no-full-market guard holds, it must abort before network access.",
+    "Because no current FMP split / dividend endpoint template is reviewed in repo evidence, corporate-action event validation must be recorded as blocked unless a separate reviewed endpoint-template mapping is added before any such call.",
+    "The execution summary must keep SR-PROVIDER-001 open unless later reviewed evidence separately resolves current terms, production storage, PIT, adjustment, corporate-action, SEC parser, fallback, stability, provider selection, DataHub, and Phase 7c blockers."
+  ],
+  "limitations": [
+    "This artifact is an execution packet for review only; it performs no provider call, SEC call, raw-payload parse, provider_samples write, runner change, or implementation.",
+    "The fixed five-symbol sample is not a full market, not a security master, and not proof of inactive / delisted coverage.",
+    "The six planned FMP stable endpoint families were reviewed previously for response-shape candidates; the split / dividend candidate families are intentionally zero-call because current templates are not reviewed in repo evidence.",
+    "The planned SEC calls support parser and field-family feasibility review only; they do not implement a parser, generate fixtures, or authorize DataHub / runner consumption.",
+    "Any broader symbols, retries, endpoint families, yfinance check, new token, trial, paid plan, provider contact, full-market fetch, field mapping, parser implementation, fixture generation, return calculation, corporate-action reconciliation, provider selection, DataHub, Phase 7c, production readiness, or ship-gate evidence requires separate explicit approval and reviewed decision."
+  ]
+}
