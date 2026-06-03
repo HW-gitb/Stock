@@ -1,0 +1,241 @@
+{
+  "schema_name": "datahub_data_quality_monitor_contract",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+08:00",
+  "scope": {
+    "phase": "7c_contract",
+    "purpose": "data_quality_monitor_boundaries",
+    "contract_status": "schema_first_no_monitor_implementation",
+    "schema_first_only": true,
+    "monitor_implementation_allowed": false,
+    "data_fetch_allowed": false,
+    "provider_call_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_implementation_authorized": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_refs": [
+    {
+      "artifact_id": "datahub_design",
+      "path": "docs/datahub_design.md",
+      "consumption_role": "owner_doc_for_data_quality_monitor_route"
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "consumption_role": "provider_drift_dimension_source"
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_schema",
+      "path": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "existing_provider_monitor_contract_source"
+    },
+    {
+      "artifact_id": "datahub_job_spec_enforcement_helper",
+      "path": "engine/datahub/job_spec_contract.py",
+      "consumption_role": "future_monitor_jobs_must_validate_before_running"
+    },
+    {
+      "artifact_id": "datahub_reproducibility_manifest_contract",
+      "path": "schemas/datahub_reproducibility_manifest.schema.json",
+      "consumption_role": "future_monitor_outputs_need_manifest_lineage"
+    }
+  ],
+  "monitor_dimensions": [
+    {
+      "dimension_id": "coverage",
+      "plain_role": "Check whether required rows or field families are present for the declared market, lane, and date window.",
+      "required_inputs": [
+        "job spec market/lane/date window",
+        "expected data-class inventory",
+        "row and field-count summary"
+      ],
+      "blocking_conditions": [
+        "required field family missing",
+        "coverage count below reviewed threshold",
+        "coverage source not tied to reviewed artifact"
+      ],
+      "default_action": "block_production_use",
+      "silent_pass_allowed": false,
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "dimension_id": "freshness",
+      "plain_role": "Check that cache or provider-backed rows are current enough for the declared as-of date.",
+      "required_inputs": [
+        "as_of_date",
+        "fetch_date or cache timestamp",
+        "freshness threshold"
+      ],
+      "blocking_conditions": [
+        "missing fetch timestamp",
+        "stale cache beyond reviewed threshold",
+        "freshness threshold not declared"
+      ],
+      "default_action": "manual_review",
+      "silent_pass_allowed": false,
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "dimension_id": "schema_drift",
+      "plain_role": "Check whether fields, types, or semantics changed relative to reviewed contracts.",
+      "required_inputs": [
+        "schema version refs",
+        "observed field summary",
+        "contract field inventory"
+      ],
+      "blocking_conditions": [
+        "required field missing",
+        "field type changed",
+        "new unreviewed field used by downstream output"
+      ],
+      "default_action": "block_production_use",
+      "silent_pass_allowed": false,
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "dimension_id": "pit_asof_integrity",
+      "plain_role": "Check that date-bearing rows were observable at or before the declared as-of date.",
+      "required_inputs": [
+        "as_of_date",
+        "ann_date or observed-date fields",
+        "source-window refs"
+      ],
+      "blocking_conditions": [
+        "ann_date after as_of_date",
+        "observed-date missing for historical evidence",
+        "latest-only historical fill"
+      ],
+      "default_action": "block_production_use",
+      "silent_pass_allowed": false,
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "dimension_id": "survivorship_security_master",
+      "plain_role": "Check whether the universe and lifecycle status are survivorship-safe for the declared evidence use.",
+      "required_inputs": [
+        "security master refs",
+        "active / inactive / delisted status summary",
+        "universe construction note"
+      ],
+      "blocking_conditions": [
+        "historical universe uses current-only list",
+        "delisted status missing where required",
+        "lifecycle source not reviewed"
+      ],
+      "default_action": "block_production_use",
+      "silent_pass_allowed": false,
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "dimension_id": "corporate_actions_revisions",
+      "plain_role": "Check adjusted prices, split / dividend events, restatements, and revised fundamentals limitations.",
+      "required_inputs": [
+        "adjustment policy refs",
+        "split / dividend refs when applicable",
+        "revision or restatement policy"
+      ],
+      "blocking_conditions": [
+        "adjustment basis unknown",
+        "corporate-action event unavailable where required",
+        "restatement limitation hidden from report"
+      ],
+      "default_action": "manual_review",
+      "silent_pass_allowed": false,
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "dimension_id": "calendar_timezone",
+      "plain_role": "Check date, session, holiday, and timezone alignment for market-specific rows.",
+      "required_inputs": [
+        "market calendar ref",
+        "trade_date list",
+        "timezone or session policy"
+      ],
+      "blocking_conditions": [
+        "missing trading session",
+        "mismatched market calendar",
+        "timezone policy missing for US data"
+      ],
+      "default_action": "manual_review",
+      "silent_pass_allowed": false,
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "dimension_id": "provider_incident_quota",
+      "plain_role": "Check provider incident, quota, authorization, and fallback status before relying on provider-backed rows.",
+      "required_inputs": [
+        "provider incident refs",
+        "quota or budget summary",
+        "fallback status"
+      ],
+      "blocking_conditions": [
+        "incident unresolved",
+        "quota exceeded",
+        "fallback path unreviewed"
+      ],
+      "default_action": "record_incident",
+      "silent_pass_allowed": false,
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "dimension_id": "outlier_revision_rate",
+      "plain_role": "Check unusual data outliers, unexpected revisions, and row churn before evidence is treated as stable.",
+      "required_inputs": [
+        "outlier thresholds",
+        "revision count summary",
+        "prior baseline comparison"
+      ],
+      "blocking_conditions": [
+        "outlier threshold exceeded without review",
+        "revision rate above reviewed threshold",
+        "baseline comparison missing"
+      ],
+      "default_action": "warn",
+      "silent_pass_allowed": false,
+      "implementation_status": "not_implemented_contract_only"
+    }
+  ],
+  "action_policy": {
+    "warn_allowed": true,
+    "manual_review_allowed": true,
+    "block_production_use_allowed": true,
+    "record_incident_allowed": true,
+    "freeze_latest_only_claims_allowed": true,
+    "silent_green_allowed": false,
+    "missing_monitor_result_blocks_production": true,
+    "monitor_failure_blocks_ship_gate_claim": true
+  },
+  "implementation_gates": {
+    "job_spec_helper_must_pass_before_monitor_run": true,
+    "reproducibility_manifest_required": true,
+    "provider_readiness_required_before_provider_backed_monitoring": true,
+    "sr_provider_001_must_be_closed_or_explicitly_accepted_for_us_provider_inputs": true,
+    "tracked_summary_must_be_no_secret": true,
+    "raw_payloads_must_remain_gitignored": true
+  },
+  "prohibited_claims": {
+    "monitor_implemented": false,
+    "monitor_run_executed": false,
+    "provider_called": false,
+    "datahub_table_created": false,
+    "runner_consumption_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false
+  },
+  "next_steps": [
+    "Future monitor implementation must be a separate reviewed slice with a job spec that passes engine.datahub.job_spec_contract.",
+    "Future provider-backed monitor inputs must not be used while SR-PROVIDER-001 remains open unless the residual risk is explicitly accepted.",
+    "Future monitor summaries must be tracked no-secret artifacts and must not hide missing monitor results."
+  ],
+  "limitations": [
+    "This artifact defines data-quality monitor boundaries only.",
+    "It does not implement or run a monitor.",
+    "It does not fetch or validate real provider data.",
+    "It does not authorize DataHub tables, production runner consumption, ship-gate evidence, or full-size use."
+  ]
+}

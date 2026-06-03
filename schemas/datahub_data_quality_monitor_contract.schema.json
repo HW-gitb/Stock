@@ -1,0 +1,374 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/datahub_data_quality_monitor_contract/1.0.0/schema.json",
+  "title": "DataHub Data Quality Monitor Contract",
+  "description": "Phase 7c schema-first contract for future DataHub data-quality monitoring. This artifact defines monitor dimensions, blocking actions, and implementation gates only; it does not run a monitor, fetch data, call providers, create DataHub tables, change runners, authorize production use, or provide ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_refs",
+    "monitor_dimensions",
+    "action_policy",
+    "implementation_gates",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "datahub_data_quality_monitor_contract"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 5,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_design"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_job_spec_enforcement_helper"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "monitor_dimensions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/monitorDimension"
+      },
+      "minItems": 9,
+      "allOf": [
+        {"contains": {"type": "object", "properties": {"dimension_id": {"const": "coverage"}}, "required": ["dimension_id"]}},
+        {"contains": {"type": "object", "properties": {"dimension_id": {"const": "freshness"}}, "required": ["dimension_id"]}},
+        {"contains": {"type": "object", "properties": {"dimension_id": {"const": "schema_drift"}}, "required": ["dimension_id"]}},
+        {"contains": {"type": "object", "properties": {"dimension_id": {"const": "pit_asof_integrity"}}, "required": ["dimension_id"]}},
+        {"contains": {"type": "object", "properties": {"dimension_id": {"const": "survivorship_security_master"}}, "required": ["dimension_id"]}},
+        {"contains": {"type": "object", "properties": {"dimension_id": {"const": "corporate_actions_revisions"}}, "required": ["dimension_id"]}},
+        {"contains": {"type": "object", "properties": {"dimension_id": {"const": "calendar_timezone"}}, "required": ["dimension_id"]}},
+        {"contains": {"type": "object", "properties": {"dimension_id": {"const": "provider_incident_quota"}}, "required": ["dimension_id"]}},
+        {"contains": {"type": "object", "properties": {"dimension_id": {"const": "outlier_revision_rate"}}, "required": ["dimension_id"]}}
+      ]
+    },
+    "action_policy": {
+      "$ref": "#/$defs/actionPolicy"
+    },
+    "implementation_gates": {
+      "$ref": "#/$defs/implementationGates"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "schema_first_only",
+        "monitor_implementation_allowed",
+        "data_fetch_allowed",
+        "provider_call_allowed",
+        "datahub_table_implementation_allowed",
+        "runner_change_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_implementation_authorized",
+        "ship_gate_evidence_allowed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7c_contract"
+        },
+        "purpose": {
+          "const": "data_quality_monitor_boundaries"
+        },
+        "contract_status": {
+          "const": "schema_first_no_monitor_implementation"
+        },
+        "schema_first_only": {
+          "const": true
+        },
+        "monitor_implementation_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_call_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_implementation_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "monitorDimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dimension_id",
+        "plain_role",
+        "required_inputs",
+        "blocking_conditions",
+        "default_action",
+        "silent_pass_allowed",
+        "implementation_status"
+      ],
+      "properties": {
+        "dimension_id": {
+          "enum": [
+            "coverage",
+            "freshness",
+            "schema_drift",
+            "pit_asof_integrity",
+            "survivorship_security_master",
+            "corporate_actions_revisions",
+            "calendar_timezone",
+            "provider_incident_quota",
+            "outlier_revision_rate"
+          ]
+        },
+        "plain_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required_inputs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "blocking_conditions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "default_action": {
+          "enum": [
+            "warn",
+            "manual_review",
+            "block_production_use",
+            "record_incident",
+            "freeze_latest_only_claims"
+          ]
+        },
+        "silent_pass_allowed": {
+          "const": false
+        },
+        "implementation_status": {
+          "const": "not_implemented_contract_only"
+        }
+      }
+    },
+    "actionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warn_allowed",
+        "manual_review_allowed",
+        "block_production_use_allowed",
+        "record_incident_allowed",
+        "freeze_latest_only_claims_allowed",
+        "silent_green_allowed",
+        "missing_monitor_result_blocks_production",
+        "monitor_failure_blocks_ship_gate_claim"
+      ],
+      "properties": {
+        "warn_allowed": {
+          "const": true
+        },
+        "manual_review_allowed": {
+          "const": true
+        },
+        "block_production_use_allowed": {
+          "const": true
+        },
+        "record_incident_allowed": {
+          "const": true
+        },
+        "freeze_latest_only_claims_allowed": {
+          "const": true
+        },
+        "silent_green_allowed": {
+          "const": false
+        },
+        "missing_monitor_result_blocks_production": {
+          "const": true
+        },
+        "monitor_failure_blocks_ship_gate_claim": {
+          "const": true
+        }
+      }
+    },
+    "implementationGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_spec_helper_must_pass_before_monitor_run",
+        "reproducibility_manifest_required",
+        "provider_readiness_required_before_provider_backed_monitoring",
+        "sr_provider_001_must_be_closed_or_explicitly_accepted_for_us_provider_inputs",
+        "tracked_summary_must_be_no_secret",
+        "raw_payloads_must_remain_gitignored"
+      ],
+      "properties": {
+        "job_spec_helper_must_pass_before_monitor_run": {
+          "const": true
+        },
+        "reproducibility_manifest_required": {
+          "const": true
+        },
+        "provider_readiness_required_before_provider_backed_monitoring": {
+          "const": true
+        },
+        "sr_provider_001_must_be_closed_or_explicitly_accepted_for_us_provider_inputs": {
+          "const": true
+        },
+        "tracked_summary_must_be_no_secret": {
+          "const": true
+        },
+        "raw_payloads_must_remain_gitignored": {
+          "const": true
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "monitor_implemented",
+        "monitor_run_executed",
+        "provider_called",
+        "datahub_table_created",
+        "runner_consumption_authorized",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed"
+      ],
+      "properties": {
+        "monitor_implemented": {
+          "const": false
+        },
+        "monitor_run_executed": {
+          "const": false
+        },
+        "provider_called": {
+          "const": false
+        },
+        "datahub_table_created": {
+          "const": false
+        },
+        "runner_consumption_authorized": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        },
+        "full_size_allowed": {
+          "const": false
+        }
+      }
+    }
+  }
+}

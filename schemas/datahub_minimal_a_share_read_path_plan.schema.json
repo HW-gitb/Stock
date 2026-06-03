@@ -1,0 +1,332 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/datahub_minimal_a_share_read_path_plan/1.0.0/schema.json",
+  "title": "DataHub Minimal A-Share Read Path Plan",
+  "description": "Phase 7c schema-first implementation-design packet for a future minimal A-share local-cache DataHub read path. This artifact defines the exact future implementation boundary only; it does not create DataHub tables, read provider data, call Tushare, change A-EGS or runners, execute a job, authorize Phase 7c implementation, or provide production / ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_refs",
+    "future_job_boundary",
+    "allowed_inputs",
+    "allowed_outputs",
+    "pre_execution_gates",
+    "forbidden_scope",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "datahub_minimal_a_share_read_path_plan"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 6,
+      "allOf": [
+        {"contains": {"type": "object", "properties": {"artifact_id": {"const": "datahub_shared_layer_contract"}}, "required": ["artifact_id"]}},
+        {"contains": {"type": "object", "properties": {"artifact_id": {"const": "datahub_job_spec_enforcement_helper"}}, "required": ["artifact_id"]}},
+        {"contains": {"type": "object", "properties": {"artifact_id": {"const": "datahub_reproducibility_manifest_contract"}}, "required": ["artifact_id"]}},
+        {"contains": {"type": "object", "properties": {"artifact_id": {"const": "datahub_data_quality_monitor_contract"}}, "required": ["artifact_id"]}}
+      ]
+    },
+    "future_job_boundary": {
+      "$ref": "#/$defs/futureJobBoundary"
+    },
+    "allowed_inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ioRef"
+      },
+      "minItems": 3
+    },
+    "allowed_outputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ioRef"
+      },
+      "minItems": 3
+    },
+    "pre_execution_gates": {
+      "$ref": "#/$defs/preExecutionGates"
+    },
+    "forbidden_scope": {
+      "$ref": "#/$defs/forbiddenScope"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dateKey": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "schema_first_only",
+        "implementation_allowed_by_this_artifact",
+        "job_execution_allowed",
+        "provider_call_allowed",
+        "tushare_call_allowed",
+        "datahub_table_creation_allowed",
+        "a_egs_change_allowed",
+        "runner_change_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_broad_implementation_authorized",
+        "ship_gate_evidence_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7c_contract"
+        },
+        "purpose": {
+          "const": "minimal_a_share_local_cache_read_path_plan"
+        },
+        "contract_status": {
+          "const": "implementation_design_only_no_code"
+        },
+        "schema_first_only": {
+          "const": true
+        },
+        "implementation_allowed_by_this_artifact": {
+          "const": false
+        },
+        "job_execution_allowed": {
+          "const": false
+        },
+        "provider_call_allowed": {
+          "const": false
+        },
+        "tushare_call_allowed": {
+          "const": false
+        },
+        "datahub_table_creation_allowed": {
+          "const": false
+        },
+        "a_egs_change_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_broad_implementation_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "futureJobBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "as_of_date_example",
+        "budget_profile",
+        "provider_family",
+        "read_mode",
+        "max_calendar_days",
+        "job_spec_required",
+        "job_spec_helper_required",
+        "manifest_required",
+        "data_quality_summary_required"
+      ],
+      "properties": {
+        "market": {
+          "const": "A"
+        },
+        "lane": {
+          "const": "a_short"
+        },
+        "as_of_date_example": {
+          "$ref": "#/$defs/dateKey"
+        },
+        "budget_profile": {
+          "const": "local_interactive_default"
+        },
+        "provider_family": {
+          "const": "local_cache"
+        },
+        "read_mode": {
+          "const": "read_existing_local_cache_or_fixture_only"
+        },
+        "max_calendar_days": {
+          "const": 1
+        },
+        "job_spec_required": {
+          "const": true
+        },
+        "job_spec_helper_required": {
+          "const": true
+        },
+        "manifest_required": {
+          "const": true
+        },
+        "data_quality_summary_required": {
+          "const": true
+        }
+      }
+    },
+    "ioRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref_id",
+        "path_or_family",
+        "plain_role",
+        "tracked",
+        "contains_secret_or_raw_payload"
+      ],
+      "properties": {
+        "ref_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path_or_family": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "plain_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "tracked": {
+          "type": "boolean"
+        },
+        "contains_secret_or_raw_payload": {
+          "const": false
+        }
+      }
+    },
+    "preExecutionGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "separate_user_execute_required",
+        "independent_review_pass_required",
+        "job_spec_reviewed_required",
+        "job_spec_helper_pass_required",
+        "no_live_provider_call_precheck_required",
+        "no_official_output_overwrite_required",
+        "manifest_writer_review_required",
+        "data_quality_monitor_review_required"
+      ],
+      "properties": {
+        "separate_user_execute_required": {
+          "const": true
+        },
+        "independent_review_pass_required": {
+          "const": true
+        },
+        "job_spec_reviewed_required": {
+          "const": true
+        },
+        "job_spec_helper_pass_required": {
+          "const": true
+        },
+        "no_live_provider_call_precheck_required": {
+          "const": true
+        },
+        "no_official_output_overwrite_required": {
+          "const": true
+        },
+        "manifest_writer_review_required": {
+          "const": true
+        },
+        "data_quality_monitor_review_required": {
+          "const": true
+        }
+      }
+    },
+    "forbiddenScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_call",
+        "tushare_call",
+        "fmp_or_sec_call",
+        "new_token_or_paid_access",
+        "full_market_download",
+        "all_lane_run",
+        "datahub_table_creation",
+        "a_egs_behavior_change",
+        "production_runner_consumption",
+        "official_output_overwrite",
+        "ship_gate_claim",
+        "full_size_claim"
+      ],
+      "properties": {
+        "provider_call": {"const": false},
+        "tushare_call": {"const": false},
+        "fmp_or_sec_call": {"const": false},
+        "new_token_or_paid_access": {"const": false},
+        "full_market_download": {"const": false},
+        "all_lane_run": {"const": false},
+        "datahub_table_creation": {"const": false},
+        "a_egs_behavior_change": {"const": false},
+        "production_runner_consumption": {"const": false},
+        "official_output_overwrite": {"const": false},
+        "ship_gate_claim": {"const": false},
+        "full_size_claim": {"const": false}
+      }
+    }
+  }
+}

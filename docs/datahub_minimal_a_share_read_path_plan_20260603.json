@@ -1,0 +1,147 @@
+{
+  "schema_name": "datahub_minimal_a_share_read_path_plan",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+08:00",
+  "scope": {
+    "phase": "7c_contract",
+    "purpose": "minimal_a_share_local_cache_read_path_plan",
+    "contract_status": "implementation_design_only_no_code",
+    "schema_first_only": true,
+    "implementation_allowed_by_this_artifact": false,
+    "job_execution_allowed": false,
+    "provider_call_allowed": false,
+    "tushare_call_allowed": false,
+    "datahub_table_creation_allowed": false,
+    "a_egs_change_allowed": false,
+    "runner_change_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_broad_implementation_authorized": false,
+    "ship_gate_evidence_allowed": false
+  },
+  "source_refs": [
+    {
+      "artifact_id": "datahub_design",
+      "path": "docs/datahub_design.md",
+      "consumption_role": "DataHub implementation guardrail owner"
+    },
+    {
+      "artifact_id": "datahub_shared_layer_contract",
+      "path": "schemas/datahub_shared_layer_contract.schema.json",
+      "consumption_role": "future read path must respect shared-layer boundaries"
+    },
+    {
+      "artifact_id": "datahub_job_spec_enforcement_helper",
+      "path": "engine/datahub/job_spec_contract.py",
+      "consumption_role": "future executable job must validate before running"
+    },
+    {
+      "artifact_id": "datahub_reproducibility_manifest_contract",
+      "path": "schemas/datahub_reproducibility_manifest.schema.json",
+      "consumption_role": "future executable job must record reproducibility manifest"
+    },
+    {
+      "artifact_id": "datahub_data_quality_monitor_contract",
+      "path": "schemas/datahub_data_quality_monitor_contract.schema.json",
+      "consumption_role": "future read path must produce data-quality summary"
+    },
+    {
+      "artifact_id": "a_short_threshold_governance",
+      "path": "presets/a_short_screening_threshold_governance_20260602.json",
+      "consumption_role": "A-short behavior must remain unchanged by future read path"
+    }
+  ],
+  "future_job_boundary": {
+    "market": "A",
+    "lane": "a_short",
+    "as_of_date_example": "20260603",
+    "budget_profile": "local_interactive_default",
+    "provider_family": "local_cache",
+    "read_mode": "read_existing_local_cache_or_fixture_only",
+    "max_calendar_days": 1,
+    "job_spec_required": true,
+    "job_spec_helper_required": true,
+    "manifest_required": true,
+    "data_quality_summary_required": true
+  },
+  "allowed_inputs": [
+    {
+      "ref_id": "local_validated_schema_or_fixture",
+      "path_or_family": "schemas/examples or future reviewed local fixture only",
+      "plain_role": "Safe input for proving read-path plumbing without provider calls.",
+      "tracked": true,
+      "contains_secret_or_raw_payload": false
+    },
+    {
+      "ref_id": "existing_a_short_result_summary",
+      "path_or_family": "result/a_short/<as_of>/tracked summaries only when separately reviewed",
+      "plain_role": "Optional local tracked summary input, not official output overwrite.",
+      "tracked": true,
+      "contains_secret_or_raw_payload": false
+    },
+    {
+      "ref_id": "local_cache_metadata",
+      "path_or_family": "future reviewed cache metadata summary",
+      "plain_role": "No-secret metadata describing cache availability and freshness.",
+      "tracked": true,
+      "contains_secret_or_raw_payload": false
+    }
+  ],
+  "allowed_outputs": [
+    {
+      "ref_id": "dwd_read_preview_summary",
+      "path_or_family": "future tracked no-secret summary under docs/ or tmp-reviewed path",
+      "plain_role": "Small preview summary proving field mapping shape.",
+      "tracked": true,
+      "contains_secret_or_raw_payload": false
+    },
+    {
+      "ref_id": "data_quality_summary",
+      "path_or_family": "future tracked no-secret data-quality summary",
+      "plain_role": "Monitor result for local read-path preview.",
+      "tracked": true,
+      "contains_secret_or_raw_payload": false
+    },
+    {
+      "ref_id": "reproducibility_manifest",
+      "path_or_family": "future tracked no-secret manifest",
+      "plain_role": "Reproducibility record for future executable read-path job.",
+      "tracked": true,
+      "contains_secret_or_raw_payload": false
+    }
+  ],
+  "pre_execution_gates": {
+    "separate_user_execute_required": true,
+    "independent_review_pass_required": true,
+    "job_spec_reviewed_required": true,
+    "job_spec_helper_pass_required": true,
+    "no_live_provider_call_precheck_required": true,
+    "no_official_output_overwrite_required": true,
+    "manifest_writer_review_required": true,
+    "data_quality_monitor_review_required": true
+  },
+  "forbidden_scope": {
+    "provider_call": false,
+    "tushare_call": false,
+    "fmp_or_sec_call": false,
+    "new_token_or_paid_access": false,
+    "full_market_download": false,
+    "all_lane_run": false,
+    "datahub_table_creation": false,
+    "a_egs_behavior_change": false,
+    "production_runner_consumption": false,
+    "official_output_overwrite": false,
+    "ship_gate_claim": false,
+    "full_size_claim": false
+  },
+  "next_steps": [
+    "Future implementation must create a reviewed executable job spec using market=A, lane=a_short, provider_family=local_cache, and max_calendar_days=1.",
+    "Future implementation must call validate_datahub_job_spec_file or validate_datahub_job_spec_contract before doing any read-path work.",
+    "Future implementation must not call Tushare or mutate A-EGS behavior unless a separate reviewed scope explicitly authorizes it."
+  ],
+  "limitations": [
+    "This artifact is an implementation-design plan only.",
+    "It does not implement a DataHub read path.",
+    "It does not read local cache, call Tushare, create tables, or change runner behavior.",
+    "It does not provide alpha evidence, production readiness, ship-gate evidence, or full-size permission."
+  ]
+}

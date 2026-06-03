@@ -2951,3 +2951,48 @@ git diff --check
 
 1. Claude review should treat this as one coherent batch: three schema-first DataHub contracts plus routing docs and tests.
 2. After review and commit, the next natural Phase 7c slice is data-quality monitor contract or a reviewed implementation-design packet for one minimal local A-share-only DataHub read path. Any executable implementation still needs a job spec and must not use unresolved US provider evidence.
+
+## 2026-06-03 append: Phase 7c data-quality monitor + minimal A-share read-path planning batch
+
+**What changed**:
+
+- Added `schemas/datahub_data_quality_monitor_contract.schema.json` and `docs/datahub_data_quality_monitor_contract_20260603.json`.
+- Added `schemas/datahub_minimal_a_share_read_path_plan.schema.json` and `docs/datahub_minimal_a_share_read_path_plan_20260603.json`.
+- Added `tests/schema/test_datahub_data_quality_and_minimal_read_path_contracts.py`.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/datahub_design.md`, and `docs/SESSION_LOG.md`.
+
+**Plain result**:
+
+- DataHub now has a schema-first quality gate: future outputs cannot silently pass if coverage, freshness, PIT/as-of, survivorship, corporate-action, calendar, incident, or outlier checks are missing or failing.
+- The first future read-path is intentionally small: A-share short lane, one as-of day, local cache / fixture only, reviewed job spec, job-spec helper pass, manifest, and data-quality summary.
+- This is still not a DataHub implementation. It does not run a monitor, read cache, call Tushare/FMP/SEC, create tables, change runners, authorize production use, or provide ship-gate evidence.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_datahub_data_quality_and_minimal_read_path_contracts -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_datahub_data_quality_and_minimal_read_path_contracts tests.schema.test_datahub_phase7c_contract_batch tests.schema.test_datahub_job_spec_contract tests.schema.test_datahub_local_resource_budget_schema tests.schema.test_datahub_job_spec_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**Validation results**:
+
+- Python313 target test: 5 tests, all pass.
+- Python313 DataHub suite: 38 tests, all pass.
+- Python313 full unittest discover: 562 tests, all pass.
+- `docs/CURRENT.md` line count = 149.
+- `git diff --check` passed with only normal LF/CRLF working-copy warnings; targeted secret scan found only no-secret field names and schema URLs.
+
+**Invalid conclusions**:
+
+- "DataHub quality monitor is implemented" is false.
+- "A-share local read-path has run" is false.
+- "Provider / Tushare data can now feed DataHub" is false.
+- "This authorizes production runner consumption, ship-gate evidence, or full-size sizing" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify all scope locks stay false and that the minimal read-path plan cannot become a provider/Tushare/full-market job by schema mutation.
+2. After review and commit, the next natural Phase 7c slice is a separate reviewed implementation packet for the minimal A-share local-cache read path. Any execution still needs a reviewed job spec and must pass `engine/datahub/job_spec_contract.py`.

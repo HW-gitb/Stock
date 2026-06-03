@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (Phase 7c data-quality monitor + minimal A-share read-path planning batch) — Pass (clean) + STRATEGIC stop-recommendation
+
+**Per-slice verdict**: Pass — no Required, no Optional. Both contracts are sound, authorize nothing, tests 5/5, AGENTS #25 accurate, secret-clean, SR-PROVIDER-001 open. data-quality monitor dimensions correctly encode the alpha guardrails (PIT/as-of, survivorship/security-master, corporate-actions, calendar, incident; `silent_pass_allowed`=false everywhere). minimal-read-path plan is genuinely minimal/safe (A-short, one date, local-cache/fixture only, no Tushare call, helper+manifest+quality-summary gated, `a_egs_behavior_change`/`official_output_overwrite`=false).
+
+**STRATEGIC finding (raised after the user challenged review leniency — this is the higher-level review I had not been doing)**:
+- This is the contract-proliferation pattern. The provider+DataHub corpus is now ~34 schema-first artifacts, and there is still ZERO DataHub code that reads real data.
+- Deeper issue — the 7c DataHub is **premature shared infrastructure**: a shared layer exists to serve MULTIPLE consumers, but the project has exactly ONE working lane (A-short), which already reads its data via `A-EGS` without any DataHub, plus three blocked/absent lanes (US blocked on data; long-lanes not started). The "7c-before-8" roadmap assumed four progressing consumers; that premise no longer holds, so the marginal value of more 7c scaffolding is low right now.
+- Credit where due: the minimal-read-path plan does turn toward the A-share (data-rich) track, and the data-quality monitor was a gate the prior shared-layer contract declared required. So this batch is less pure-scaffold than the previous one.
+- **Recommendation**: treat the minimal-read-path plan as the LAST contract layer. The highest-value AVAILABLE work is NOT more 7c contracts; it is (a) real A-share alpha-validation analysis (multiple-testing / regime / forward-evidence on data already held — needs no DataHub), or (b) the US data decision (pay / alternate source / accept active-only-forward). If the next slice is another schema-first contract rather than real analysis or the actual minimal read-path implementation, that is the proliferation continuing and should be pushed back on.
+
+This recommendation is the reviewer's strategic judgment for the Final Approver; it does not block 提交 of the (correct) artifacts.
+
+---
+
+## 2026-06-03 — Codex 执行 (Phase 7c data-quality monitor + minimal A-share read-path planning batch)
+
+**Scope**:
+- Batch execution approved by the user to reduce one-small-task review overhead.
+- Added two Phase 7c schema-first contracts in one DataHub batch: data-quality monitor boundaries and minimal A-share local-cache read-path planning.
+- No provider call, no Tushare / FMP / SEC call, no data fetch, no raw parse, no cache read, no DataHub table, no monitor implementation, no A-EGS / runner change, no production runner consumption, and no ship-gate evidence.
+
+**Plain result**:
+- DataHub now has a required future quality-check checklist: if coverage, freshness, PIT/as-of, survivorship, corporate-action, calendar, provider incident, or outlier checks are missing or fail, future outputs cannot quietly claim production or ship-gate readiness.
+- The first future executable read-path is deliberately tiny: A-share short lane, one date, local cache / fixture only, reviewed job spec, job-spec helper pass, manifest, and data-quality summary.
+- This still does not make DataHub implemented. It only defines the next implementation boundary.
+
+**Worked on**:
+- [untracked] `schemas/datahub_data_quality_monitor_contract.schema.json`
+- [untracked] `docs/datahub_data_quality_monitor_contract_20260603.json`
+- [untracked] `schemas/datahub_minimal_a_share_read_path_plan.schema.json`
+- [untracked] `docs/datahub_minimal_a_share_read_path_plan_20260603.json`
+- [untracked] `tests/schema/test_datahub_data_quality_and_minimal_read_path_contracts.py`
+- [tracked] `AGENTS.md`
+- [tracked] `docs/README.md`
+- [tracked] `docs/CURRENT.md`
+- [tracked] `docs/datahub_design.md`
+- [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`
+- [tracked] `docs/SESSION_LOG.md`
+
+**Validation state**:
+- Targeted Python313 test passed: `tests.schema.test_datahub_data_quality_and_minimal_read_path_contracts` ran 5 tests, all pass.
+- DataHub Python313 suite passed: new quality/read-path test plus existing Phase 7c contract, job-spec contract, resource-budget schema, and job-spec schema tests ran 38 tests, all pass.
+- Full Python313 `unittest discover -v` ran 562 tests, all pass.
+- `CURRENT.md` line count = 149.
+- `git diff --check` passed with only normal LF/CRLF working-copy warnings; targeted secret scan found only no-secret field names and schema URLs.
+- Needs Claude review before commit.
+
+**Invalid conclusions**:
+- "DataHub quality monitor is implemented" is false.
+- "A-share local read-path has run" is false.
+- "Tushare / FMP / SEC / provider data can now feed DataHub" is false.
+- "This authorizes DataHub table creation, runner consumption, production readiness, ship-gate evidence, or full-size sizing" is false.
+
+**Next-step notes**:
+
+1. Claude review should treat this as one coherent batch: two schema-first DataHub contracts plus routing docs and tests.
+2. After review and commit, the next natural Phase 7c slice is a separate reviewed implementation packet for the minimal A-share local-cache read path. It still must create a reviewed job spec and pass `engine/datahub/job_spec_contract.py` before any execution.
+
+---
+
 ## 2026-06-03 — Claude 审查 (Phase 7c shared-layer / report / reproducibility contract batch) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. Three schema-first Phase 7c contracts; all authorize nothing and reinforce existing guardrails. (User-approved batch of 3 cohesive same-pattern contracts — reasonable scope.)
