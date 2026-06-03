@@ -8,6 +8,62 @@
 
 ---
 
+## 2026-06-03 — 用户沟通规则固化 (plain-language conclusions)
+
+用户明确要求：以后输出结论要清晰、简单、明了；不要太专业；必须把专业内容翻译成容易理解的结果，而不是依赖当前对话框记忆。
+
+本规则已写入 `AGENTS.md §输出结论规则`：面向用户的结论先回答“能不能用 / 意味着什么 / 还缺什么 / 下一步做什么”，再给简短依据和边界。
+
+---
+
+## 2026-06-03 — Claude 审查 (SIVB-only FMP 402 re-probe execution summary) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交.
+
+**Plain result**: The re-probe captured FMP's actual 402 message (gitignored raw only): `"Special Endpoint: This value set for 'symbol' is not available under your current subscription ... upgrade your plan"`. Meaning: SIVB's data exists at FMP but is behind a **paid subscription, gated per symbol** (the same five endpoints succeed for AAPL/MSFT/JPM/TWTR). So FMP Basic can't cover SIVB; delisted/survivorship coverage on FMP would need a paid tier, an alternate source, or an accepted active-only scope. Nothing is "proven" beyond this; `SR-PROVIDER-001` stays open.
+
+**Verified (kept internal, summarized)**:
+- Secret hygiene airtight: real key in no tracked or raw file; all reprobe raw `apikey=` count 0 (body's `financialmodelingprep.com/` is FMP's upgrade URL, no key); tracked summary stores only category signal + booleans/counts (no body text, URL, or key); `assert_no_secret_summary` re-scanned post-write and passed. Runner test plants `UNIT_TEST_FMP_SECRET` and asserts it's in raw-only, never the summary.
+- Runner exactly packet-bound: `load_and_validate_execution_packet` checks every field of the committed contract (incl. each family's 14 fields) and raises on drift; double-confirm gate; FMP-key precheck w/ abort-before-network; budget 5 + final guard; SIVB-only / 5 families / 0 SEC / 0 retry. Result 5/5 → 5×402, 5/5 bodies captured.
+- Classification honest + accurate: weak `historical_or_delisted_paid_tier` for all 5 (best-fit of the 4 hypotheses for a symbol-keyed subscription gate), `confidence=weak`, `hypothesis_proven=false`, `paid_wall_proven=false`, body never copied to summary. Summary const-locks all over-claims false; `sr_provider_001_closed=false`.
+- Re-ran runner + 2 schema modules under Python313+jsonschema → 23/23 pass. SR-PROVIDER-001 open; no new AGENTS fixed decision (run is within packet item #20); CURRENT=149.
+
+---
+
+## 2026-06-03 — Codex 执行 (SIVB-only FMP 402 re-probe execution summary)
+
+**Commits**: none (pending independent review / submit; base `cac2437`)
+
+**Scope**:
+- User issued post-review `执行` after the SIVB-only execution packet was reviewed and committed.
+- This round implements the narrow runner / summary schema, executes only the reviewed SIVB-only FMP packet, and records the tracked no-secret execution summary.
+- No SEC call, yfinance, active symbol, full-market fetch, retry, split / dividend endpoint call, provider selection, adapter, DataHub, runner consumption, Phase 7c authorization, production-readiness claim, alpha evidence, ship-gate evidence, or broker / order automation was performed or authorized.
+
+**Worked on**:
+1. [untracked] `runners/us_egs_sivb_reprobe_packet.py`: validates the committed packet, review + execute confirmations, FMP-key precheck, gitignored raw root, exact SIVB / 5-family / 5-call / zero-retry boundary, then writes a no-secret summary.
+2. [untracked] `schemas/provider_p1_sivb_reprobe_execution_summary.schema.json`: const-locked summary schema for SIVB-only execution evidence and no-overclaim scope.
+3. [untracked] `docs/provider_evidence_p1_us_sivb_reprobe_execution_summary_20260603.json`: generated execution summary.
+4. [untracked] `tests/provider/test_us_egs_sivb_reprobe_packet.py` and `tests/schema/test_provider_p1_sivb_reprobe_execution_summary_schema.py`: fake-client runner tests, generated-summary schema validation, no-secret / no-body summary checks, and scope-creep rejection.
+5. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the result while keeping `SR-PROVIDER-001` open.
+
+**Execution result**:
+- Actual calls: 5/5 FMP stable calls, SIVB only, zero SEC calls, zero retries.
+- Endpoint outcomes: 0 successes, 5 HTTP 402 errors across `income_statement`, `balance_sheet_statement`, `cash_flow_statement`, `financial_ratios_or_key_metrics`, and `historical_eod_price_volume`.
+- Non-JSON body capture: 5/5 bodies captured only under gitignored `provider_samples/us_egs_sivb_reprobe_20260603/`; tracked summary contains no body text, request URL, raw rows, or secret.
+- Classification signal: weak `historical_or_delisted_paid_tier` category signal for all five endpoint families. This is not paid-wall proof, not inactive / delisted coverage proof, and not provider readiness.
+
+**Validation run/result**:
+- Python313 target tests before live run: 12 tests passed, with generated-summary test skipped before the summary existed.
+- Dry-run env: passed; no provider call and no summary write.
+- Live run: wrote `docs/provider_evidence_p1_us_sivb_reprobe_execution_summary_20260603.json`.
+- Python313 target tests after live run: 12/12 passed, including generated-summary schema validation and no-secret checks.
+
+**Current review state**:
+- Needs independent review before `提交`.
+- `SR-PROVIDER-001` remains open. Next provider work should not rerun SIVB silently; broader scope requires separate explicit approval and reviewed decision.
+
+---
+
 ## 2026-06-03 — Claude 审查 (SIVB-only FMP 402 re-probe execution packet) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. Execution-packet CONTRACT only; executes nothing, reads no raw, double-gated before any future call. Matches the drafted command block on every axis.

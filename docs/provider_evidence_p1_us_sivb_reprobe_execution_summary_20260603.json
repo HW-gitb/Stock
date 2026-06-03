@@ -1,0 +1,324 @@
+{
+  "schema_name": "provider_p1_sivb_reprobe_execution_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T06:29:49+00:00",
+  "execution_packet_ref": "docs/provider_evidence_p1_us_sivb_reprobe_execution_packet_20260603.json",
+  "authorization_ref": "docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json",
+  "schema_ref": "schemas/provider_p1_sivb_reprobe_execution_summary.schema.json",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_sivb_only_fmp_402_reprobe_execution_summary",
+    "validation_status": "completed_with_endpoint_errors",
+    "provider_reprobe_execution_performed": true,
+    "fmp_stable_endpoint_calls_performed": true,
+    "raw_payload_storage_performed": true,
+    "non_json_body_capture_supported": true,
+    "sec_edgar_public_api_calls_performed": false,
+    "retry_performed": false,
+    "fmp_split_or_dividend_endpoint_calls_performed": false,
+    "fixture_generation_performed": false,
+    "return_calculation_performed": false,
+    "corporate_action_reconciliation_performed": false,
+    "field_mapping_or_parser_implementation_performed": false,
+    "provider_selection_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_summary": false,
+    "manual_order_only": true,
+    "ship_gate_evidence_claimed": false,
+    "production_ready_claim_allowed": false,
+    "broker_or_order_automation_allowed": false
+  },
+  "pre_execution_checks": {
+    "independent_review_pass_confirmed": true,
+    "post_review_execute_command_confirmed": true,
+    "provider_samples_gitignore_confirmed": true,
+    "environment_precheck_passed": true,
+    "fmp_api_key_present": true,
+    "budget_precheck_passed": true,
+    "exact_symbol_and_family_fixed": true,
+    "no_new_token_trial_paid_or_contact_used": true,
+    "yfinance_not_used": true,
+    "full_market_fetch_not_used": true
+  },
+  "environment": {
+    "fmp_api_key_present": true,
+    "fmp_api_key_source": "process",
+    "environment_values_logged": false,
+    "secrets_logged": false
+  },
+  "storage": {
+    "raw_sample_storage_path": "provider_samples/us_egs_sivb_reprobe_20260603/",
+    "raw_samples_gitignored": true,
+    "tracked_summary_contains_raw_rows": false,
+    "response_body_text_in_summary": false,
+    "request_urls_in_summary": false,
+    "secrets_in_summary": false
+  },
+  "sample_universe": {
+    "symbols": [
+      "SIVB"
+    ],
+    "active_symbols": [],
+    "inactive_or_delisted_candidate_symbols": [
+      "SIVB"
+    ],
+    "universe_role": "sivb_only_reprobe_not_full_market_or_security_master"
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 5,
+    "planned_fmp_endpoint_calls": 5,
+    "planned_sec_endpoint_calls": 0,
+    "actual_total_endpoint_calls": 5,
+    "actual_fmp_endpoint_calls": 5,
+    "actual_sec_endpoint_calls": 0,
+    "retry_count_allowed": 0,
+    "retry_count_used": 0,
+    "within_budget": true
+  },
+  "endpoint_results": [
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "income_statement",
+      "symbol": "SIVB",
+      "status": "error",
+      "http_status": 402,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sivb_reprobe_20260603/raw/financial_modeling_prep/SIVB/income_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 3,
+        "row_count": null
+      },
+      "body_capture": {
+        "non_json_response_body_captured_in_raw": true,
+        "non_json_response_bytes": 215,
+        "body_text_in_summary": false,
+        "request_url_in_summary": false,
+        "raw_rows_in_summary": false
+      },
+      "classification_signal": {
+        "category": "historical_or_delisted_paid_tier",
+        "confidence": "weak",
+        "basis": "http_402_body_keyword_signal",
+        "captured_body_available": true,
+        "body_text_copied_to_summary": false,
+        "request_url_copied_to_summary": false,
+        "hypothesis_proven": false,
+        "paid_wall_proven": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "balance_sheet_statement",
+      "symbol": "SIVB",
+      "status": "error",
+      "http_status": 402,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sivb_reprobe_20260603/raw/financial_modeling_prep/SIVB/balance_sheet_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 3,
+        "row_count": null
+      },
+      "body_capture": {
+        "non_json_response_body_captured_in_raw": true,
+        "non_json_response_bytes": 215,
+        "body_text_in_summary": false,
+        "request_url_in_summary": false,
+        "raw_rows_in_summary": false
+      },
+      "classification_signal": {
+        "category": "historical_or_delisted_paid_tier",
+        "confidence": "weak",
+        "basis": "http_402_body_keyword_signal",
+        "captured_body_available": true,
+        "body_text_copied_to_summary": false,
+        "request_url_copied_to_summary": false,
+        "hypothesis_proven": false,
+        "paid_wall_proven": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "cash_flow_statement",
+      "symbol": "SIVB",
+      "status": "error",
+      "http_status": 402,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sivb_reprobe_20260603/raw/financial_modeling_prep/SIVB/cash_flow_statement.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 3,
+        "row_count": null
+      },
+      "body_capture": {
+        "non_json_response_body_captured_in_raw": true,
+        "non_json_response_bytes": 215,
+        "body_text_in_summary": false,
+        "request_url_in_summary": false,
+        "raw_rows_in_summary": false
+      },
+      "classification_signal": {
+        "category": "historical_or_delisted_paid_tier",
+        "confidence": "weak",
+        "basis": "http_402_body_keyword_signal",
+        "captured_body_available": true,
+        "body_text_copied_to_summary": false,
+        "request_url_copied_to_summary": false,
+        "hypothesis_proven": false,
+        "paid_wall_proven": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "symbol": "SIVB",
+      "status": "error",
+      "http_status": 402,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sivb_reprobe_20260603/raw/financial_modeling_prep/SIVB/financial_ratios_or_key_metrics.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 3,
+        "row_count": null
+      },
+      "body_capture": {
+        "non_json_response_body_captured_in_raw": true,
+        "non_json_response_bytes": 215,
+        "body_text_in_summary": false,
+        "request_url_in_summary": false,
+        "raw_rows_in_summary": false
+      },
+      "classification_signal": {
+        "category": "historical_or_delisted_paid_tier",
+        "confidence": "weak",
+        "basis": "http_402_body_keyword_signal",
+        "captured_body_available": true,
+        "body_text_copied_to_summary": false,
+        "request_url_copied_to_summary": false,
+        "hypothesis_proven": false,
+        "paid_wall_proven": false
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "historical_eod_price_volume",
+      "symbol": "SIVB",
+      "status": "error",
+      "http_status": 402,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_egs_sivb_reprobe_20260603/raw/financial_modeling_prep/SIVB/historical_eod_price_volume.json",
+      "raw_sample_ref_gitignored": true,
+      "fmp_endpoint_mode": "stable",
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 3,
+        "row_count": null
+      },
+      "body_capture": {
+        "non_json_response_body_captured_in_raw": true,
+        "non_json_response_bytes": 215,
+        "body_text_in_summary": false,
+        "request_url_in_summary": false,
+        "raw_rows_in_summary": false
+      },
+      "classification_signal": {
+        "category": "historical_or_delisted_paid_tier",
+        "confidence": "weak",
+        "basis": "http_402_body_keyword_signal",
+        "captured_body_available": true,
+        "body_text_copied_to_summary": false,
+        "request_url_copied_to_summary": false,
+        "hypothesis_proven": false,
+        "paid_wall_proven": false
+      }
+    }
+  ],
+  "aggregate_reprobe_metrics": {
+    "endpoint_success_count": 0,
+    "endpoint_error_count": 5,
+    "fmp_endpoint_success_count": 0,
+    "fmp_endpoint_error_count": 5,
+    "http_402_count": 5,
+    "non_json_body_captured_count": 5,
+    "classification_signal_counts": {
+      "endpoint_entitlement": 0,
+      "symbol_lifecycle": 0,
+      "historical_or_delisted_paid_tier": 5,
+      "transient_quota_or_provider_incident": 0,
+      "not_402_response": 0,
+      "no_clear_signal": 0
+    },
+    "retry_count_used": 0,
+    "sec_endpoint_call_count": 0,
+    "split_or_dividend_endpoint_call_count": 0
+  },
+  "classification_decision": {
+    "decision": "sivb_reprobe_completed_with_endpoint_errors_keep_sr_provider_001_open",
+    "sr_provider_001_closed": false,
+    "sivb_402_paid_wall_proven": false,
+    "inactive_delisted_coverage_proven": false,
+    "provider_selection_allowed": false,
+    "phase7c_allowed": false,
+    "rationale": "This execution classifies only SIVB HTTP-status and response-shape signals for five fixed FMP stable endpoint families. It does not prove paid-wall status, inactive / delisted coverage, current terms, production storage rights, PIT, price adjustment, corporate actions, provider selection, DataHub, Phase 7c, production readiness, alpha, or ship-gate evidence."
+  },
+  "no_silent_default_policy": {
+    "fmp_http_402_is_not_missing_data_default": true,
+    "twtr_success_is_not_inactive_delisted_coverage_proof": true,
+    "null_fill_allowed": false,
+    "zero_fill_allowed": false,
+    "drop_failed_symbol_allowed": false,
+    "latest_only_substitution_allowed": false,
+    "production_default_allowed": false
+  },
+  "prohibited_claims": {
+    "sivb_402_paid_wall_proven": false,
+    "endpoint_entitlement_proven": false,
+    "symbol_lifecycle_proven": false,
+    "historical_or_delisted_paid_tier_proven": false,
+    "transient_quota_or_provider_incident_proven": false,
+    "inactive_delisted_coverage_proven": false,
+    "provider_selected": false,
+    "provider_ranked": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "new_token_trial_or_provider_contact_used": false,
+    "raw_rows_in_tracked_summary": false,
+    "response_body_text_in_tracked_summary": false,
+    "request_urls_in_tracked_summary": false,
+    "fixture_generated": false,
+    "return_calculation_performed": false,
+    "corporate_action_reconciliation_performed": false,
+    "field_mapping_or_parser_implemented": false,
+    "provider_status_polled": false,
+    "fallback_executed": false,
+    "datahub_or_adapter_implemented": false,
+    "production_runner_consumption_authorized": false,
+    "phase7c_authorized": false,
+    "ship_gate_evidence_claimed": false,
+    "alpha_evidence_claimed": false,
+    "production_ready_claimed": false,
+    "broker_or_order_automation": false
+  },
+  "limitations": [
+    "This is a SIVB-only / five-FMP-family re-probe, not a coverage proof or security-master test.",
+    "Classification signals are category signals only and do not prove paid-wall status or any single hypothesis.",
+    "Tracked summary excludes response body text, request URLs, secrets, and raw rows; raw wrappers remain gitignored.",
+    "No SEC, yfinance, split / dividend endpoint, retry, provider selection, DataHub, Phase 7c, production, alpha, or ship-gate claim is made."
+  ],
+  "next_steps": [
+    "Independent review should verify the five-call boundary, raw/summary secret boundary, and no-silent-default policy before commit.",
+    "Use this result only to route SR-PROVIDER-001; any broader inactive / delisted follow-up, split / dividend call, provider selection, or Phase 7c work requires a separate reviewed decision."
+  ]
+}

@@ -2758,3 +2758,41 @@ git diff --check
 1. Claude review should verify this artifact is a contract only, with no provider call, no raw read, no runner implementation, and `SR-PROVIDER-001` still open.
 2. If review passes and this slice is committed, a later user `执行` may run only the fixed SIVB-only / five-FMP-family / five-call / zero-retry packet.
 3. Any broader provider work still requires separate explicit approval and reviewed decision.
+
+## 2026-06-03 append: SIVB-only FMP 402 re-probe execution summary
+
+**What changed**:
+
+- Added `runners/us_egs_sivb_reprobe_packet.py`, a narrow runner that consumes only the reviewed SIVB packet, validates the fixed symbol / endpoint / budget / storage / environment / no-secret boundary, requires explicit review + execute confirmations, and writes raw payloads only under gitignored `provider_samples/us_egs_sivb_reprobe_20260603/`.
+- Added `schemas/provider_p1_sivb_reprobe_execution_summary.schema.json` and `docs/provider_evidence_p1_us_sivb_reprobe_execution_summary_20260603.json` for the tracked no-secret execution summary.
+- Added `tests/provider/test_us_egs_sivb_reprobe_packet.py` and `tests/schema/test_provider_p1_sivb_reprobe_execution_summary_schema.py`, covering fake 402 body capture, summary body / URL / secret exclusion, exact SIVB-only URL scope, confirmation gates, missing-env abort-before-fetch, schema validation, and scope-creep rejection.
+- Executed the reviewed packet after the user's post-review `执行`; updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, and `docs/system_risk_register.md`; `SR-PROVIDER-001` remains open.
+
+**Execution result**:
+
+- Actual calls: 5/5 FMP stable calls, SIVB only, zero SEC calls, zero retries.
+- Endpoint outcomes: 0 successes, 5 HTTP 402 errors across the five fixed endpoint families.
+- Body capture: 5/5 non-JSON bodies captured only under gitignored raw wrappers; tracked summary contains no body text, request URL, raw rows, or secret.
+- Category signal: weak `historical_or_delisted_paid_tier` across the five endpoint families. This is not paid-wall proof, not inactive / delisted coverage proof, and not provider readiness.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool schemas\provider_p1_sivb_reprobe_execution_summary.schema.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\us_egs_sivb_reprobe_packet.py --dry-run-env
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\us_egs_sivb_reprobe_packet.py --confirm-independent-review-pass --confirm-post-review-execute
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\provider_evidence_p1_us_sivb_reprobe_execution_summary_20260603.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.provider.test_us_egs_sivb_reprobe_packet tests.schema.test_provider_p1_sivb_reprobe_execution_summary_schema -v
+```
+
+**Invalid conclusions**:
+
+- "SIVB 402 is now proven paid-wall" is false.
+- "Inactive / delisted coverage is proven" is false.
+- "This authorizes SEC calls, split / dividend calls, provider selection, DataHub, Phase 7c, production readiness, alpha evidence, or ship-gate evidence" is false.
+- "Tracked summary may store response body text or request URLs" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify the runner / summary schema / generated summary / docs preserve the five-call boundary, raw gitignore boundary, no-secret summary boundary, weak category-signal wording, and `SR-PROVIDER-001` open status.
+2. Future provider work should not rerun or broaden SIVB silently. Any broader inactive / delisted follow-up, FMP split / dividend endpoint call, current terms review, provider selection, DataHub, or Phase 7c work requires separate explicit approval and reviewed decision.
