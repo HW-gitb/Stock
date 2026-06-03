@@ -8,6 +8,68 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (provider validation execution summary) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. This is the FIRST real provider fetch of the project (live FMP key + SEC EDGAR); secret hygiene verified airtight, execution stayed within the reviewed packet, no over-claim.
+
+**Scope reviewed** (base `7ca9af6`): new `runners/us_egs_validation_packet.py` (executable that made the calls) + `schemas/provider_p1_validation_execution_summary.schema.json` + `docs/provider_evidence_p1_us_validation_execution_summary_20260603.json` (generated) + `tests/provider/test_us_egs_validation_packet.py` + `tests/schema/test_provider_p1_validation_execution_summary_schema.py`; doc routing.
+
+**Secret hygiene — independently verified airtight (highest stakes, real key used)**:
+- Live `FMP_API_KEY` never persisted to ANY file. Tracked summary/runner/schema/tests grep-clean (no `apikey=` / key value / `FMP_API_KEY` / `Bearer` / provider URL). Raw payloads grep-clean: `apikey=` count **0 across all raw files**; the only `financialmodelingprep.com/` hits are the benign profile `image` field (`/symbol/<SYM>.png`), not a request URL. `git check-ignore` confirms the raw dir is gitignored; `git status provider_samples/` shows nothing tracked.
+- Defense in depth in code: key read from env → passed only into `fmp_url()` to build the request URL → `fetch_and_store` stores the response **payload, not the URL** (so the apikey-bearing URL is never written); `env_summary` stores only `source`/`present` booleans; after writing, `assert_no_secret_summary` re-reads the summary and raises on any `apikey=` / URL fragment / env-name / literal key/UA value (it passed → clean); `main()` prints only counts. Summary self-flags `secrets_logged=false`, `secrets_in_summary=false`.
+
+**Runner boundary enforcement (read in full)**: `load_and_validate_execution_packet` hard-validates the on-disk packet matches the reviewed contract on every axis (symbols, 41/30/11 budget, FMP 6×5 + split/dividend 0 + SEC 1/5/5, env prechecks, storage locks, gates, prohibited claims) and raises on any drift — it cannot run a tampered packet. `validate_raw_root` confines raw to `provider_samples/us_egs_validation_packet_20260603/`; `provider_samples_gitignored()` aborts if the gitignore entry is gone; both `--confirm-independent-review-pass` and `--confirm-post-review-execute` required before any fetch; `assert_endpoint_budget_available` pre-checked before every call + a final `len > 41` guard; no code path calls split/dividend (recorded as skips). Reuses the proven-safe `us_egs_sample_validation` primitives.
+
+**Execution result — within budget, honest, no over-claim**: 37/41 calls (30 FMP + 7 SEC); 32 ok / 5 error (SIVB FMP HTTP 402 — FMP Basic gates the delisted symbol's data) / 6 skip (split+dividend zero-call + TWTR/SIVB SEC CIK-not-found). Numbers internally consistent (fmp_success 25=30−5, sec 7, cik_found 3 / missing 2, key_metrics_missing 17, corporate_action_calls 0). Summary const-locks all of provider_selected / phase7c / ship_gate / fixture / return-calc / corporate-action / inactive_delisted_coverage_proven / *_proven_at_scale = false; `sr_provider_001_closed=false`.
+
+**Tests**: re-ran the 3 modules under Python313+jsonschema → **20/20 pass**. Runner test is comprehensive + security-focused (non-vacuous): plants a fake `UNIT_TEST_FMP_SECRET` and asserts it is absent from the summary; asserts exactly 41/30/11 calls with no yfinance/TSLA/split/dividend URLs; confirmation gates raise with `client.calls==[]`; missing-env aborts before fetch (`client.calls==[]`); dry-run writes nothing; raw-root restriction raises; the no-CIK-for-inactive path yields 37 calls (the real run's scenario).
+
+**Useful feasibility findings produced (context, not defects)**: FMP Basic returns TWTR history but 402-gates SIVB → inactive/delisted coverage is partial on Basic; SEC company-tickers map omits delisted → no CIK path for TWTR/SIVB; `peRatio`/`revenuePerShare`/`netIncomePerShare` confirmed absent via direct field-presence. All recorded as routing evidence; none claimed as proven.
+
+**Docs**: `SR-PROVIDER-001` stays **open** (verified `Status: open`); register Hot Queue + new execution-summary evidence bullet + accepted-calibration accurately record the run and explicitly state it does NOT prove coverage/PIT/selection/Phase7c/ship-gate. No new AGENTS fixed decision (within item #19's authorization) — routing-only. CURRENT=149.
+
+**Residual blockers unchanged (intentional)**: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open; aggregate full-size permission `not_evaluable` by the SR-EXEC-007 concurrency gate.
+
+---
+
+## 2026-06-03 — Codex 执行 (provider validation execution summary)
+
+**Commits**: none (pending independent review / submit; base `7ca9af6`)
+
+**Scope**:
+- User invoked `执行` after the provider validation execution packet passed Claude review and was committed.
+- This round implements and runs only that fixed packet: `AAPL` / `MSFT` / `JPM` / `TWTR` / `SIVB`, max 41 endpoint calls, zero retry, FMP Basic existing key + SEC EDGAR public API, raw payloads under gitignored `provider_samples/us_egs_validation_packet_20260603/`, and tracked no-secret summary.
+- No provider selection, adapter, DataHub, production runner consumption, Phase 7c, parser / field-mapping implementation, fixture generation, return calculation, corporate-action reconciliation, production-readiness claim, alpha evidence, or ship-gate evidence is authorized or claimed.
+
+**Worked on**:
+1. [untracked] `runners/us_egs_validation_packet.py`: new narrow runner that validates the reviewed execution packet, requires explicit review + execute confirmations, enforces raw-root / gitignore / environment / budget / no-secret boundaries, and writes the tracked summary after execution.
+2. [untracked] `schemas/provider_p1_validation_execution_summary.schema.json`: new schema for the tracked no-secret validation execution summary.
+3. [untracked] `docs/provider_evidence_p1_us_validation_execution_summary_20260603.json`: generated summary from the real packet execution.
+4. [untracked] `tests/provider/test_us_egs_validation_packet.py`: fake-client runner tests for exact calls, no-secret summary, missing-env abort, confirmation gates, SEC CIK skips, and raw-root restrictions.
+5. [untracked] `tests/schema/test_provider_p1_validation_execution_summary_schema.py`: schema / generated-summary tests and scope-creep rejection.
+6. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: routed the executed summary and kept `SR-PROVIDER-001` open.
+
+**Execution result**:
+- Real network execution command used the reviewed runner with `--confirm-independent-review-pass --confirm-post-review-execute`.
+- Summary result: `validation_status = completed_with_skips_and_endpoint_errors`, `actual_total_endpoint_calls = 37`, `actual_fmp_endpoint_calls = 30`, `actual_sec_endpoint_calls = 7`, `endpoint_success_count = 32`, `endpoint_error_count = 5`, `skipped_endpoint_count = 6`, `retry_count_used = 0`, `secrets_logged = false`.
+- Errors: five FMP SIVB stable endpoint families returned HTTP 402 (`income_statement`, `balance_sheet_statement`, `cash_flow_statement`, `financial_ratios_or_key_metrics`, `historical_eod_price_volume`).
+- Skips: FMP split / dividend endpoint families remain zero-call blocked pending reviewed template mapping; TWTR / SIVB SEC submissions and companyfacts were skipped because SEC company-tickers mapping did not yield CIKs.
+- Raw payloads are ignored by Git under `provider_samples/`; tracked summary passed no-secret / no-request-URL scan.
+
+**Validation run/result**:
+- Bundled Python: `tests.provider.test_us_egs_validation_packet` ran 6 tests, all pass.
+- Python313 + jsonschema: `tests.schema.test_provider_p1_validation_execution_summary_schema tests.provider.test_us_egs_validation_packet tests.schema.test_provider_p1_validation_execution_packet_schema -v`: 20 tests, all pass.
+- Python313: `json.tool` parsed `docs/provider_evidence_p1_us_validation_execution_summary_20260603.json`.
+- PowerShell no-secret scan: passed for `apikey=`, provider URLs, uppercase env names, and bearer tokens.
+- `git status --short --ignored provider_samples/us_egs_validation_packet_20260603 ...` showed the tracked summary as untracked and `provider_samples/` ignored.
+
+**Current review state**:
+- Needs independent review before `提交`.
+- `SR-PROVIDER-001` remains open. Future provider work should route from the recorded SIVB FMP endpoint errors, TWTR / SIVB SEC CIK skips, direct key-metrics missing fields, and still-blocked split / dividend endpoint template review.
+- Any broader symbols, endpoint families, retries, current terms / legal review, FMP split / dividend endpoint call, fixture generation, derivation / field mapping / parser implementation, return calculation, corporate-action reconciliation, fallback execution, provider status polling, provider selection, adapter, DataHub, runner consumption, Phase 7c, production readiness, alpha evidence, or ship-gate evidence requires separate explicit approval and reviewed decision.
+
+---
+
 ## 2026-06-03 — Claude 审查 (provider validation execution packet) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. Schema-first execution-packet contract; executes nothing and reads no raw payloads in this slice.

@@ -2609,3 +2609,41 @@ git diff --check
 1. Claude review should verify that the execution packet exactly consumes the authorization boundary and still requires a later execute command before network access.
 2. If review passes and the change is committed, a later `执行` may run only this exact five-symbol / 41-call packet after environment, gitignore, budget, no-secret, and fair-access prechecks.
 3. Any broader symbols, retries, FMP split / dividend endpoint call, implementation, DataHub, Phase 7c, or production claim requires separate explicit approval and reviewed decision.
+
+## 2026-06-03 append: Provider validation execution summary
+
+**What changed**:
+
+- Added `runners/us_egs_validation_packet.py`, a narrow runner that consumes only the reviewed validation execution packet, validates the fixed symbol / endpoint / budget / storage / environment / no-secret boundary, requires explicit review + execute confirmations, and writes raw payloads only under gitignored `provider_samples/us_egs_validation_packet_20260603/`.
+- Added `schemas/provider_p1_validation_execution_summary.schema.json` and `tests/schema/test_provider_p1_validation_execution_summary_schema.py` for the tracked no-secret summary.
+- Added `tests/provider/test_us_egs_validation_packet.py`, covering fake-client FMP / SEC calls, no-secret summary, SEC CIK skip behavior, missing-env abort-before-fetch, live confirmation gates, and raw-root restriction.
+- Executed the reviewed packet after the user's post-review `执行`; generated `docs/provider_evidence_p1_us_validation_execution_summary_20260603.json`.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, and `docs/system_risk_register.md`; `SR-PROVIDER-001` remains open.
+
+**Execution result**:
+
+- Actual calls: 37/41 within budget; 30 FMP stable calls + 7 SEC public calls; zero retries.
+- Endpoint outcomes: 32 successes, 5 FMP SIVB HTTP 402 endpoint errors, 6 skips.
+- Skips: FMP split / dividend candidate families remain zero-call blocked pending current template review; TWTR / SIVB SEC submissions and companyfacts were skipped because SEC company-tickers mapping did not yield CIKs for those symbols.
+- Field-presence clues: active AAPL / MSFT / JPM had all six FMP stable families successful and SEC submissions / companyfacts successful; TWTR had all six FMP stable families successful but no SEC follow-up; SIVB had only FMP profile success and five FMP stable endpoint errors.
+- Tracked summary contains no secret, request URL, or raw rows; raw payloads stayed under gitignored `provider_samples/us_egs_validation_packet_20260603/`.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_validation_execution_summary_schema tests.provider.test_us_egs_validation_packet tests.schema.test_provider_p1_validation_execution_packet_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\provider_evidence_p1_us_validation_execution_summary_20260603.json
+git diff --check
+```
+
+**Invalid conclusions**:
+
+- "The provider validation packet is still unexecuted" is false after this slice.
+- "The validation summary selects FMP, authorizes DataHub / Phase 7c, proves inactive / delisted coverage, proves PIT / price adjustment / corporate actions at scale, or supports production / ship-gate evidence" is false.
+- "Corporate-action endpoint calls were made" is false; split / dividend families remain zero-call blocked.
+
+**Next-step notes**:
+
+1. Claude review should verify the runner / summary schema / generated summary / docs all preserve the fixed packet scope, no-secret boundary, raw gitignore boundary, and `SR-PROVIDER-001` open status.
+2. Future provider work should route from the recorded SIVB FMP endpoint errors, TWTR / SIVB SEC CIK gaps, missing key-metrics direct fields, and still-blocked split / dividend endpoint template review.
+3. Do not broaden symbols, endpoints, retries, yfinance, full-market fetches, current terms review, implementation, provider selection, DataHub, Phase 7c, production readiness, alpha evidence, or ship-gate evidence without separate explicit approval and reviewed decision.
