@@ -425,7 +425,7 @@ The audit must produce pass / fail / blocked findings for:
 
 If any hard check fails or lacks the required source, A-long stays blocked for signal backtests until the data route is repaired or a new reviewed audit plan is approved. A hard-check pass plus a declared usable window only allows a later reviewed signal-search preregistration; it does not prove alpha or authorize production / ship-gate / full-size use.
 
-Current blocked finding: the local cache-only audit passed all 6 planted-violation self-tests, but local A-short derived `financial_*.pkl` caches omit `ann_date` / `end_date`; raw PIT income / balancesheet / fina_indicator lineage, full PIT universe proof, dividend / total-return source, and terminal delisting return lineage are not present. Repair these data-route pieces before any A-long signal-search preregistration.
+Current blocked finding: the local cache-only audit passed all 6 planted-violation self-tests, but local A-short derived `financial_*.pkl` caches omit `ann_date` / `end_date`; raw PIT income / balancesheet / cashflow / fina_indicator lineage, full PIT universe proof, dividend / total-return source, and terminal delisting return lineage are not present. `docs/a_long_tushare_data_route_repair_plan_20260603.json` defines the next repair attempt as existing-account Tushare raw PIT route validation first. This route plan still authorizes no Tushare call, data fetch, audit rerun, signal search, DataHub work, production claim, ship-gate claim, or full-size use. Repair and re-audit these data-route pieces before any A-long signal-search preregistration.
 
 ### 11.11 Deferred A-Long Decisions
 

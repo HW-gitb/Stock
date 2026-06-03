@@ -57,7 +57,7 @@
   "planned_tests": [],
   "next_required_actions": [
     "Do not start A-long signal search from this blocked audit result.",
-    "Repair the data route: raw PIT fundamentals with ann_date/end_date lineage, full PIT universe, dividend/total-return handling, and terminal delisting return lineage are required.",
-    "After repair, create a new reviewed data-integrity audit plan or rerun only under a reviewed authorization."
+    "Use docs/a_long_tushare_data_route_repair_plan_20260603.json as the current route-repair owner: existing-account Tushare raw PIT route validation first, no A-short derived financial cache substitution.",
+    "After route validation and reviewed materialization, create a new reviewed data-integrity audit plan or rerun only under a reviewed authorization."
   ]
 }

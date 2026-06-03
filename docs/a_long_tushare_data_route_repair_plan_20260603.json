@@ -1,0 +1,351 @@
+{
+  "schema_name": "a_long_tushare_data_route_repair_plan",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+08:00",
+  "artifact_id": "a_long_tushare_data_route_repair_plan_20260603",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_data_route_repair_plan",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "contract_status": "route_plan_only_no_fetch_no_audit_no_signal",
+    "research_only": true,
+    "route_plan_only": true,
+    "existing_tushare_account_candidate_only": true,
+    "provider_call_allowed_by_this_artifact": false,
+    "tushare_call_allowed_by_this_artifact": false,
+    "data_fetch_allowed_by_this_artifact": false,
+    "audit_rerun_allowed_by_this_artifact": false,
+    "signal_search_allowed": false,
+    "alpha_backtest_allowed": false,
+    "new_data_purchase_allowed": false,
+    "provider_expansion_allowed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_refs": [
+    {
+      "artifact_id": "a_long_data_integrity_audit_report_20260603",
+      "path": "research/results/a_long_data_integrity_audit_20260603/audit_report.json",
+      "role": "blocked audit result that defines the missing data-route pieces"
+    },
+    {
+      "artifact_id": "a_long_data_integrity_audit_preregistration_20260603",
+      "path": "research/preregistrations/a_long_data_integrity_audit_20260603.json",
+      "role": "frozen hard checks and usable-window audit criteria"
+    },
+    {
+      "artifact_id": "a_long_data_integrity_audit_program_test_budget_ledger_20260603",
+      "path": "research/ledgers/a_long_data_integrity_audit_program_test_budget_ledger_20260603.json",
+      "role": "records the spent blocked audit and requires reviewed follow-up"
+    },
+    {
+      "artifact_id": "long_alpha_spec",
+      "path": "docs/long_alpha_spec.md",
+      "role": "A-long PIT, survivorship, return, benchmark, and factor-domain owner"
+    },
+    {
+      "artifact_id": "provider_data_requirements_audit",
+      "path": "docs/provider_data_requirements_audit.md",
+      "role": "A-share provider/data requirement owner"
+    },
+    {
+      "artifact_id": "system_risk_register",
+      "path": "docs/system_risk_register.md",
+      "role": "durable SR-ALONG-DATA-001 blocker owner"
+    },
+    {
+      "artifact_id": "egs_main_current_tushare_usage",
+      "path": "A-EGS/egs_main.py",
+      "role": "existing project evidence that Tushare is already the A-share account/API family in use; not an A-long proof"
+    }
+  ],
+  "plain_result": {
+    "simple_result": "A 股长线先走现有 Tushare 原始 PIT 数据路线；现在仍不能找 alpha。",
+    "data_can_be_used_now": false,
+    "why": "这份文件只是把缺什么、用什么补、怎么判定补成写清楚；它没有抓数据，也没有证明数据已经可用。",
+    "next_human_action": "交 Claude 审查；通过后下一步才是你批准一个小范围 Tushare route-validation 执行包。"
+  },
+  "route_decision": {
+    "selected_next_repair_attempt": "existing_tushare_raw_pit_route_validation_then_incremental_materialization",
+    "fallback_if_route_validation_fails": "If Tushare cannot provide required PIT fields, restatement lineage, total-return inputs, or terminal delisting lineage, A-long remains blocked until the user approves a different provider/data purchase decision or a narrower long-lane design.",
+    "a_short_derived_financial_cache_allowed": false,
+    "route_validation_required_before_new_audit": true,
+    "new_audit_required_before_signal_search": true,
+    "provider_selected_for_production": false
+  },
+  "required_route_components": [
+    {
+      "component_id": "calendar_schedule",
+      "plain_need": "Build the frozen monthly as-of schedule from real A-share open trading days.",
+      "candidate_api_families": [
+        "Tushare trade_cal"
+      ],
+      "minimum_required_fields": [
+        "cal_date",
+        "is_open",
+        "exchange"
+      ],
+      "storage_grain": "one schedule artifact for 2018-01-31 through 2025-12-31 monthly last open trading day",
+      "validation_gate": "Every registered as_of month must map to one open A-share trading day; missing months block the route.",
+      "if_missing": "Do not infer month-end trading days from calendar dates; A-long stays blocked.",
+      "blocks_signal_search_if_missing": true,
+      "no_silent_default_allowed": true,
+      "status_after_this_artifact": "route_defined_pending_reviewed_execution"
+    },
+    {
+      "component_id": "pit_universe_survivorship",
+      "plain_need": "Use a historical A-share universe that keeps names before delisting and excludes instruments not meant for A-long common-equity research.",
+      "candidate_api_families": [
+        "Tushare stock_basic",
+        "Tushare daily",
+        "Tushare daily_basic"
+      ],
+      "minimum_required_fields": [
+        "ts_code",
+        "name",
+        "exchange",
+        "market",
+        "list_status",
+        "list_date",
+        "delist_date",
+        "trade_date"
+      ],
+      "storage_grain": "raw stock_basic snapshots for list_status L/D/P plus per-as_of membership summary",
+      "validation_gate": "For every as_of, membership must use list_date <= as_of and delist_date empty or > as_of; later delisted names must remain before delist_date.",
+      "if_missing": "Do not use today's active list as history; A-long stays blocked.",
+      "blocks_signal_search_if_missing": true,
+      "no_silent_default_allowed": true,
+      "status_after_this_artifact": "route_defined_pending_reviewed_execution"
+    },
+    {
+      "component_id": "raw_pit_fundamentals",
+      "plain_need": "Store raw fundamentals with announcement dates before any long factor is derived.",
+      "candidate_api_families": [
+        "Tushare income",
+        "Tushare balancesheet",
+        "Tushare cashflow",
+        "Tushare fina_indicator"
+      ],
+      "minimum_required_fields": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "f_ann_date if available",
+        "report_type if available",
+        "net_profit or n_income_attr_p",
+        "revenue",
+        "total_assets",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int",
+        "n_cashflow_act",
+        "profit_dedt",
+        "roe"
+      ],
+      "storage_grain": "raw rows by api_family / period_or_ann_date_window / retrieval timestamp; duplicates preserved",
+      "validation_gate": "ann_date must exist for PIT-usable rows; ann_date > as_of is zero-tolerance look-ahead; missing or invalid ann_date rows are excluded and reported.",
+      "if_missing": "Do not substitute A-short financial_*.pkl derived values; A-long stays blocked.",
+      "blocks_signal_search_if_missing": true,
+      "no_silent_default_allowed": true,
+      "status_after_this_artifact": "route_defined_pending_reviewed_execution"
+    },
+    {
+      "component_id": "restatement_revision_lineage",
+      "plain_need": "Preserve enough raw rows to prove later restatements are not used before they were announced.",
+      "candidate_api_families": [
+        "Tushare income",
+        "Tushare balancesheet",
+        "Tushare cashflow",
+        "Tushare fina_indicator"
+      ],
+      "minimum_required_fields": [
+        "ts_code",
+        "end_date",
+        "ann_date",
+        "f_ann_date if available",
+        "report_type if available",
+        "all consumed factor input fields"
+      ],
+      "storage_grain": "all rows for each ts_code + end_date group, not post-deduped latest-only values",
+      "validation_gate": "For duplicate ts_code + end_date groups, the future audit must select only the latest ann_date <= as_of and flag any latest-only ambiguity.",
+      "if_missing": "Classify required factor fields as latest-only / not PIT-certified and keep A-long blocked or narrow the future factor set under review.",
+      "blocks_signal_search_if_missing": true,
+      "no_silent_default_allowed": true,
+      "status_after_this_artifact": "route_defined_pending_reviewed_execution"
+    },
+    {
+      "component_id": "industry_taxonomy_history",
+      "plain_need": "Support SW L2 normalization without replaying today's industry assignment into the past.",
+      "candidate_api_families": [
+        "Tushare index_classify",
+        "Tushare index_member",
+        "Tushare index_member_all"
+      ],
+      "minimum_required_fields": [
+        "index_code",
+        "industry_name or name",
+        "level",
+        "parent_code",
+        "con_code",
+        "in_date",
+        "out_date"
+      ],
+      "storage_grain": "SW L1/L2 classification plus historical membership rows with effective intervals",
+      "validation_gate": "Each symbol used for industry normalization must have an as-of-valid SW L2 or an explicit SW L1 fallback reason.",
+      "if_missing": "Do not run SW-normalized long factors; either use a reviewed fallback design or keep A-long signal search blocked.",
+      "blocks_signal_search_if_missing": true,
+      "no_silent_default_allowed": true,
+      "status_after_this_artifact": "route_defined_pending_reviewed_execution"
+    },
+    {
+      "component_id": "total_return_and_benchmark",
+      "plain_need": "Measure long returns and benchmark excess on the same anchors with reviewed total-return treatment.",
+      "candidate_api_families": [
+        "Tushare daily",
+        "Tushare adj_factor",
+        "Tushare dividend",
+        "Tushare index_daily",
+        "Tushare trade_cal"
+      ],
+      "minimum_required_fields": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close",
+        "adj_factor",
+        "dividend ex_date or equivalent",
+        "cash_dividend field if available",
+        "benchmark ts_code",
+        "benchmark open",
+        "benchmark close"
+      ],
+      "storage_grain": "daily stock price/adj rows, dividend rows, and benchmark open/close rows over the declared usable window",
+      "validation_gate": "Stock entry/exit and benchmark entry/exit must use the same anchors; qfq via adj_factor and dividend treatment must be documented without double-counting.",
+      "if_missing": "Do not call price-only adjusted returns total-return evidence; A-long stays blocked for alpha search.",
+      "blocks_signal_search_if_missing": true,
+      "no_silent_default_allowed": true,
+      "status_after_this_artifact": "route_defined_pending_reviewed_execution"
+    },
+    {
+      "component_id": "terminal_delisting_return",
+      "plain_need": "If a held name delists or stops trading during the holding window, the return leg must eat that outcome rather than dropping the row.",
+      "candidate_api_families": [
+        "Tushare stock_basic",
+        "Tushare daily",
+        "Tushare adj_factor",
+        "Tushare trade_cal"
+      ],
+      "minimum_required_fields": [
+        "ts_code",
+        "list_status",
+        "delist_date",
+        "last available trade_date",
+        "last available open",
+        "last available close",
+        "last available adj_factor",
+        "terminal outcome classification"
+      ],
+      "storage_grain": "per-held-symbol terminal-outcome record whenever membership or price rows end inside a holding window",
+      "validation_gate": "The future audit must fail if a delisting/no-trade terminal event is missing from survivorship or return measurement.",
+      "if_missing": "Do not drop the position or fill the missing terminal return with 0; A-long stays blocked.",
+      "blocks_signal_search_if_missing": true,
+      "no_silent_default_allowed": true,
+      "status_after_this_artifact": "route_defined_pending_reviewed_execution"
+    }
+  ],
+  "storage_plan": {
+    "raw_storage_root": "data/a_long/raw/tushare/",
+    "raw_storage_gitignored_required": true,
+    "tracked_summary_required": true,
+    "tracked_summary_may_contain_raw_rows": false,
+    "tracked_summary_may_contain_secret": false,
+    "manifest_required": true,
+    "lineage_fields_required": [
+      "api_family",
+      "request_shape_without_token",
+      "retrieved_at",
+      "date_or_period_window",
+      "row_count",
+      "columns",
+      "provider_family",
+      "adjustment_mode",
+      "known_limitations"
+    ],
+    "overwrite_policy": "append_or_versioned_snapshot_only_no_silent_overwrite"
+  },
+  "next_execution_packet_boundary": {
+    "packet_type": "a_long_tushare_route_validation_packet",
+    "requires_independent_review_pass": true,
+    "requires_user_execute_after_review": true,
+    "allowed_goal": "confirm field_presence_endpoint_behavior_and_storage_shape_only",
+    "allowed_provider_family": "existing_tushare_account",
+    "allowed_budget_shape": "Small fixed route-validation packet only: exact symbols, exact periods/date windows, exact api families, zero alpha calculation, and reviewed call budget must be written before execution.",
+    "allowed_raw_output_root": "data/a_long/raw/tushare/",
+    "forbidden_in_next_packet": [
+      "full 2018-2025 materialization",
+      "signal search",
+      "alpha backtest",
+      "production runner consumption",
+      "DataHub table creation",
+      "provider purchase",
+      "provider expansion",
+      "ship-gate evidence",
+      "full-size use",
+      "broker or order automation"
+    ]
+  },
+  "pass_fail_policy": {
+    "route_validation_pass_allows": "create_reviewed_incremental_materialization_packet_only",
+    "route_validation_fail_means": "a_long_stays_blocked_choose_repair_or_paid_specialized_provider_decision",
+    "full_materialization_pass_allows": "create_new_reviewed_data_integrity_audit_authorization_only",
+    "audit_pass_allows": "create_later_reviewed_signal_search_preregistration_limited_to_declared_usable_window",
+    "audit_fail_or_blocked_means": "no_signal_search_repair_data_route_again"
+  },
+  "no_silent_default_policy": {
+    "derived_a_short_cache_substitution_allowed": false,
+    "latest_only_fundamental_substitution_allowed": false,
+    "missing_ann_date_fill_allowed": false,
+    "zero_return_fill_allowed": false,
+    "drop_delisted_holding_allowed": false,
+    "close_to_close_benchmark_fallback_allowed": false,
+    "price_only_return_claims_total_return_allowed": false,
+    "current_active_list_as_history_allowed": false,
+    "akshare_substitution_allowed_without_review": false
+  },
+  "prohibited_actions": {
+    "provider_call": false,
+    "tushare_call": false,
+    "data_fetch": false,
+    "raw_data_parse": false,
+    "audit_rerun": false,
+    "signal_search": false,
+    "alpha_backtest": false,
+    "new_data_purchase": false,
+    "provider_expansion": false,
+    "datahub_table_creation": false,
+    "production_runner_consumption": false,
+    "phase7c_authorization": false,
+    "production_ready_claim": false,
+    "ship_gate_claim": false,
+    "full_size_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Independent review must verify this route plan before any Tushare route-validation packet is created.",
+    "After review and a user execute command, create a separate small Tushare route-validation execution packet that confirms field presence and raw storage shape only.",
+    "If route validation passes, create a separate reviewed incremental materialization packet before any full 2018-2025 data pull.",
+    "After materialized data exists, create a new reviewed data-integrity audit authorization; do not rerun the spent audit blindly.",
+    "Only if the new audit passes hard checks and declares a usable start year may A-long signal-search preregistration be created."
+  ],
+  "limitations": [
+    "This artifact defines the data route; it does not execute it.",
+    "This artifact does not call Tushare, read raw provider data, parse raw rows, create DataHub tables, change runners, or rerun the audit.",
+    "Tushare route feasibility is not proven until a reviewed route-validation packet executes and records a no-secret summary.",
+    "A pass of route validation would only allow data materialization planning, not alpha search.",
+    "A-long remains blocked for signal search until a new reviewed data-integrity audit passes."
+  ]
+}

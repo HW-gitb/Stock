@@ -1,5 +1,21 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-03 append: A-long Tushare data-route repair plan
+
+**Changed**:
+- Added `schemas/a_long_tushare_data_route_repair_plan.schema.json` and `docs/a_long_tushare_data_route_repair_plan_20260603.json`.
+- The route plan fixes the next A-long repair attempt as existing-account Tushare raw PIT route validation: schedule, PIT universe, raw fundamentals, restatement lineage, SW history, total return / same-anchor benchmark, and terminal delisting return.
+- Added `.gitignore` coverage for future raw A-long provider data under `data/a_long/raw/` and `data/a_long/audit_cache/`.
+
+**Plain result**:
+- A-long data still cannot be used for alpha.
+- The next concrete step is not signal search; it is a reviewed small Tushare route-validation packet.
+
+**Non-authorization**:
+- No Tushare call, no data fetch, no raw parse, no audit rerun, no signal search, no DataHub work, no production / ship-gate / full-size claim, and no broker or order automation.
+
+---
+
 ## 2026-06-01 append: SR-DATA-001 suspend daily completeness guard
 
 **Changed**:

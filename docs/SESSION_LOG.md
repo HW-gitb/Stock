@@ -8,6 +8,56 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (A-long Tushare data-route repair plan) — **PASS (可提交)**
+
+**Verdict**: Pass. Safe (authorizes no fetch/call/audit/signal — all scope + prohibited flags false), well-formed, and genuinely load-bearing (not ceremony). Tests 9/9. Safe to commit.
+
+**Verified**:
+- **Real content beyond the audit prereg**: exact Tushare api families + minimum fields per component; a NEW `industry_taxonomy_history` component (SW L2 via index_classify/index_member with in_date/out_date — no replaying today's industry into history); `no_silent_default_policy` rejects derived A-short cache, latest-only, missing-ann_date fill, zero-fill, drop-delisted, close-to-close fallback, price-only-as-total-return, current-list-as-history, AKShare-without-review.
+- **Secret/storage hygiene**: raw under `data/a_long/raw/tushare/` gitignored (.gitignore updated); tracked summary no-raw + no-secret; lineage uses `request_shape_without_token`; append/versioned no-overwrite.
+- **Honest**: SR-ALONG-DATA-001 stays open; fallback = Tushare-can't-provide → stays blocked until a user provider/purchase decision.
+- **Test non-vacuous**: 7 exact components + scope locks + shortcut rejections + storage hygiene + scope-creep rejection (8-field flip → schema rejects). 9/9 green.
+
+**Judgment (not a fix) — watch planning depth**: A-long is now ~4 layers deep (audit prereg → runner → blocked → this route plan) with ZERO real A-long data touched. This plan's value is real ONLY IF the next step executes. The next `a_long_tushare_route_validation_packet` MUST be the first real (small) Tushare call — field-presence on a few symbols/periods — NOT another pure-planning schema+artifact+test. If it returns as planning-only, that is the proliferation loop to stop. The gated sequence (validate → materialize → re-audit → signal) is protective and fine; the requirement is each gate moves forward by touching data, not spawns another plan.
+
+---
+
+## 2026-06-03 — Codex 执行 (A-long Tushare data-route repair plan)
+
+**Plain result**:
+- A-long data route is now defined, but the data still cannot be used for alpha.
+- The chosen next repair attempt is existing-account Tushare raw PIT route validation first.
+- This slice made no Tushare/API/provider call, fetched no data, parsed no raw rows, reran no audit, and searched no signal.
+- Next safe step after review: create a separate small Tushare route-validation execution packet; do not jump to full 2018-2025 materialization or signal search.
+
+**Worked on**:
+- [tracked] `.gitignore`, `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `research/ledgers/a_long_data_integrity_audit_program_test_budget_ledger_20260603.json`.
+- [untracked] `schemas/a_long_tushare_data_route_repair_plan.schema.json`, `docs/a_long_tushare_data_route_repair_plan_20260603.json`, `tests/schema/test_a_long_tushare_data_route_repair_plan_schema.py`.
+
+**What changed**:
+- Added a strict route-repair schema/artifact that locks the route as Tushare raw PIT validation only: schedule, PIT universe, raw fundamentals, restatement lineage, SW history, total return / same-anchor benchmark, and terminal delisting return.
+- Explicitly rejects A-short derived `financial_*.pkl`, latest-only fundamentals, today's active list as history, price-only total-return claims, close-to-close benchmark fallback, zero-fill, dropped delisting outcomes, and unreviewed AKShare substitution.
+- Added `.gitignore` coverage for future raw route data under `data/a_long/raw/` and `data/a_long/audit_cache/`.
+- Kept `SR-ALONG-DATA-001` open; the plan does not close the blocker.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_long_tushare_data_route_repair_plan_schema -v` passed 9/9.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_long_tushare_data_route_repair_plan_schema tests.schema.test_a_long_data_integrity_audit_preregistration_schema tests.test_a_long_data_integrity_audit_runner -v` passed 22/22.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 595/595.
+- `git diff --check` passed with only expected Windows LF-to-CRLF warnings.
+- `docs/CURRENT.md` line count is 149.
+- Sensitive scan on new schema/artifact/test had no token/API-key hit; matches were only no-secret/secret=false field names.
+
+**Non-authorization**:
+- No Tushare call, provider call, data fetch, raw parse, audit rerun, signal search, alpha backtest, new data purchase, provider expansion, DataHub table, production runner consumption, Phase 7c authorization, production-ready claim, ship-gate claim, full-size claim, or broker/order automation.
+
+**Reviewer focus**:
+- Verify the route plan is concrete enough to avoid an empty-contract loop while still not authorizing data access.
+- Verify it does not allow A-short derived financial caches, AKShare, current active lists, latest-only fundamentals, or price-only returns to bypass the blocked audit.
+- Verify the next step remains a small reviewed route-validation packet, not full materialization, audit rerun, or A-long signal search.
+
+---
+
 ## 2026-06-03 — Claude 审查 (A-long data-integrity audit runner + blocked result) — **PASS (可提交)**
 
 **Verdict**: Pass. The runner did only authorized work and the blocked result is honest. Protocol intact (prereg reviewed → user 执行 → ran). Safe to commit.

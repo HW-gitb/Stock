@@ -89,7 +89,7 @@ Known A-share constraints:
 - Tushare financial data may expose latest revised values rather than original disclosure versions; this must be recorded as a PIT limitation.
 - L3 concept data is not PIT-safe unless project snapshots exist; serious historical use must use snapshots or neutralized mode.
 - Intraday, dynamic stops, and some semantic research / policy fields are not solved by the current EOD provider surface.
-- A-long signal search is blocked by the executed data-integrity gate. `research/results/a_long_data_integrity_audit_20260603/audit_report.json` passed runner self-tests but found missing required sources: raw Tushare `income` / `balancesheet` / `fina_indicator` `ann_date` + `end_date` PIT lineage, full PIT universe proof, dividend + total-return treatment, and terminal delisting return lineage. Hard data findings are not alpha results; repair the data route before any A-long signal search.
+- A-long signal search is blocked by the executed data-integrity gate. `research/results/a_long_data_integrity_audit_20260603/audit_report.json` passed runner self-tests but found missing required sources: raw Tushare `income` / `balancesheet` / `cashflow` / `fina_indicator` `ann_date` + `end_date` PIT lineage, full PIT universe proof, dividend + total-return treatment, and terminal delisting return lineage. `docs/a_long_tushare_data_route_repair_plan_20260603.json` defines the next repair attempt as existing-account Tushare raw PIT route validation, but it is route-only and does not fetch data or prove readiness. Hard data findings are not alpha results; repair and re-audit the data route before any A-long signal search.
 
 ## 5. US Provider Requirements
 

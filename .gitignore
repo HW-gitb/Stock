@@ -49,6 +49,10 @@ result/*/backtest/cache/
 # Local provider sample payloads (raw vendor/public API rows; summaries may be tracked separately)
 provider_samples/
 
+# A-long raw provider data and audit caches (future reviewed route only; summaries stay tracked)
+data/a_long/raw/
+data/a_long/audit_cache/
+
 # --- L3 snapshots (regenerable, grows over time) ---
 state/*/l3_snapshots/
 state/l3_snapshots/
