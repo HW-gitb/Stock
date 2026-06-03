@@ -8,6 +8,54 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (FMP paid-tier / license public-docs review) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. No-access public-docs review; records what FMP's pages say, decides nothing, selects no provider.
+
+**Plain result (the facts it put on paper)**:
+- FMP paid prices (public personal-use cards, billed annually): Starter $22/mo, Premium $59/mo (adds Corporate Calendars + 30y history + full fundamentals/ratios), Ultimate $149/mo (global + bulk). Basic free / 250 calls per day.
+- A "Delisted Companies" endpoint exists in FMP docs + pricing comparison → paid FMP MIGHT cover delisted, but the page does NOT prove it (and SIVB 402'd on Basic). Every feature is marked `endpoint_access_verified=false` / `delisted_or_sivb_coverage_proven=false`.
+- Terms findings (the potential disqualifier): FMP grants a limited/revocable/account-scoped license; **requires deleting received/cached data after termination** (+ audit rights); display/redistribution needs a separate Data Display & Licensing Agreement; data is "informational/as-is". Every observation `clears_use=false` / `requires_user_or_legal_judgment=true`. So long-term local raw retention + a production DataHub on FMP data is NOT cleared.
+- 3 routes (continue-Basic-active-only / upgrade-paid-FMP / alternate-source) laid out with cost + what-it-might-unlock + still-unresolved; `summary_status=routes_compared_no_decision_made`, none selected.
+
+**Verified (internal)**: scope's 20 `*_allowed` const-false; `terms_cleared`/`license_approved`/`paid_tier_*_proven`/`provider_selected` all false; no_silent_default locks (marketing≠binding terms, feature-listed≠verified-for-delisted, terms-review≠legal-clearance); 12 prohibited_claims false. Re-ran the schema test under Python313+jsonschema → 10/10 pass incl. scope-creep rejection (so const-locks enforced). SR-PROVIDER-001 open; AGENTS fixed decision #21 added (records the pricing facts + terms-need-judgment, authorizes nothing); CURRENT=149; 3 new files secret-clean.
+
+---
+
+## 2026-06-03 — Codex 执行 (FMP paid-tier / license public-docs review)
+
+**Commits**: none (pending independent review / submit; base `69a0255`)
+
+**Scope**:
+- Public-docs-only review of FMP pricing plans, endpoint docs, and Terms / FAQ signals.
+- No API call, signup, purchase, trial, account change, provider contact, data fetch, raw read / parse, provider selection, DataHub, Phase 7c, production-readiness claim, legal-clearance claim, alpha evidence, or ship-gate evidence.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_fmp_paid_tier_license_public_docs_review.schema.json`: const-locked schema for the public-docs-only review.
+2. [untracked] `docs/provider_evidence_p1_us_fmp_paid_tier_license_public_docs_review_20260603.json`: records public FMP price / endpoint / Terms signals and three non-selected routes.
+3. [untracked] `tests/schema/test_provider_p1_fmp_paid_tier_license_public_docs_review_schema.py`: validates the artifact, no-overclaim locks, and scope-creep rejection.
+4. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the result while keeping `SR-PROVIDER-001` open.
+
+**Plain result**:
+- FMP Basic remains too narrow for SIVB / complete inactive-delisted coverage.
+- Paid FMP may help, but public pages do not prove SIVB access or inactive / delisted coverage.
+- Public Terms review does not clear local raw retention, DataHub storage, redistribution, or legal use.
+- No route was selected; this only puts the tradeoffs on paper.
+
+**Validation run/result**:
+- Python313 `json.tool` passed for the new schema and artifact.
+- Python313 targeted schema tests passed: 10/10.
+- New-file no-secret scan returned no matches for key-bearing URL / bearer / OpenAI-style key / fake FMP secret patterns.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings.
+- `docs/CURRENT.md` is 149 lines.
+- Full Python313 unittest discovery passed: 539/539.
+
+**Current review state**:
+- Needs independent review before `提交`.
+- `SR-PROVIDER-001` remains open. Any paid upgrade, account change, provider contact, API call, raw parse, provider selection, DataHub, or Phase 7c work requires separate explicit approval and reviewed decision.
+
+---
+
 ## 2026-06-03 — 用户沟通规则固化 (plain-language conclusions)
 
 用户明确要求：以后输出结论要清晰、简单、明了；不要太专业；必须把专业内容翻译成容易理解的结果，而不是依赖当前对话框记忆。

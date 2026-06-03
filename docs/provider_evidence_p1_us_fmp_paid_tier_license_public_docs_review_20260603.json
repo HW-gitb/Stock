@@ -1,0 +1,582 @@
+{
+  "schema_name": "provider_p1_fmp_paid_tier_license_public_docs_review",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+00:00",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "fmp_paid_tier_pricing_license_public_docs_review",
+    "contract_status": "public_docs_review_only_no_access",
+    "docs_only_public_web_review": true,
+    "fmp_public_web_pages_read": true,
+    "zero_usd_spend": true,
+    "data_fetch_allowed": false,
+    "api_call_allowed": false,
+    "signup_allowed": false,
+    "purchase_allowed": false,
+    "trial_allowed": false,
+    "account_change_allowed": false,
+    "provider_contact_allowed": false,
+    "raw_parse_allowed": false,
+    "raw_payload_read_allowed": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "datahub_allowed": false,
+    "runner_consumption_allowed": false,
+    "phase7c_authorized": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false,
+    "legal_advice_claimed": false
+  },
+  "source_refs": [
+    {
+      "source_id": "fmp_pricing_plans_public_page",
+      "source_type": "official_provider_pricing",
+      "source_url_or_path": "https://site.financialmodelingprep.com/pricing-plans",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public page lists Basic / Starter / Premium / Ultimate cards, call limits, history depth, and feature groups. It also says FMP data use is subject to Terms of Service and display or redistribution requires a specific display / licensing agreement."
+    },
+    {
+      "source_id": "fmp_terms_of_service_public_page",
+      "source_type": "official_provider_terms",
+      "source_url_or_path": "https://site.financialmodelingprep.com/developer/docs/terms-of-service",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public Terms page grants access during the subscription period for the account / order-form scope, lists license restrictions, includes confidentiality / retention language, and requires deletion of received / cached data after termination."
+    },
+    {
+      "source_id": "fmp_faq_public_page",
+      "source_type": "official_provider_faq",
+      "source_url_or_path": "https://site.financialmodelingprep.com/faqs",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public FAQ states one request counts as one API call and says FMP does not currently offer free trials; this artifact performs no trial, no signup, and no request."
+    },
+    {
+      "source_id": "fmp_stable_docs_root",
+      "source_type": "official_provider_docs",
+      "source_url_or_path": "https://site.financialmodelingprep.com/developer/docs",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public stable docs list endpoint templates for financial statements, ratios, key metrics, historical price, dividends, splits, and delisted companies. Listed template does not prove plan entitlement or data quality."
+    },
+    {
+      "source_id": "fmp_delisted_companies_doc",
+      "source_type": "official_provider_docs",
+      "source_url_or_path": "https://site.financialmodelingprep.com/developer/docs/stable/delisted-companies",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public docs list Delisted Companies API with endpoint https://financialmodelingprep.com/stable/delisted-companies?page=0&limit=100. This artifact does not call it and does not prove inactive / delisted universe coverage."
+    },
+    {
+      "source_id": "fmp_stock_split_details_doc",
+      "source_type": "official_provider_docs",
+      "source_url_or_path": "https://site.financialmodelingprep.com/developer/docs/stable/splits-company",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public docs list Stock Split Details API with endpoint https://financialmodelingprep.com/stable/splits?symbol=AAPL. This artifact does not call it and does not validate corporate-action events."
+    },
+    {
+      "source_id": "fmp_dividends_company_doc",
+      "source_type": "official_provider_docs",
+      "source_url_or_path": "https://site.financialmodelingprep.com/developer/docs/stable/dividends-company",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public docs list Dividends Company API with endpoint https://financialmodelingprep.com/stable/dividends?symbol=AAPL. This artifact does not call it and does not validate dividend fields or total-return treatment."
+    },
+    {
+      "source_id": "fmp_key_metrics_doc",
+      "source_type": "official_provider_docs",
+      "source_url_or_path": "https://site.financialmodelingprep.com/developer/docs/stable/key-metrics",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public docs list Key Metrics API with endpoint https://financialmodelingprep.com/stable/key-metrics?symbol=AAPL. This does not prove Basic access, SIVB access, or direct availability of every required metric."
+    },
+    {
+      "source_id": "fmp_financial_ratios_doc",
+      "source_type": "official_provider_docs",
+      "source_url_or_path": "https://site.financialmodelingprep.com/developer/docs/stable/metrics-ratios",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public docs list Financial Ratios API with endpoint https://financialmodelingprep.com/stable/ratios?symbol=AAPL. This does not prove Basic access or ratio lineage."
+    },
+    {
+      "source_id": "fmp_historical_eod_price_doc",
+      "source_type": "official_provider_docs",
+      "source_url_or_path": "https://site.financialmodelingprep.com/developer/docs/stable/historical-price-eod-full",
+      "review_date": "2026-06-03",
+      "evidence_note": "Public docs list historical EOD price / volume surfaces. This artifact does not call them and does not prove adjustment, delisting, or SIVB access."
+    },
+    {
+      "source_id": "p1_fmp_entitlement_corporate_action_diagnostic_20260603",
+      "source_type": "tracked_contract",
+      "source_url_or_path": "docs/provider_evidence_p1_us_fmp_entitlement_corporate_action_no_access_diagnostic_20260603.json",
+      "review_date": "2026-06-03",
+      "evidence_note": "Prior diagnostic identified split / dividend templates and kept SIVB HTTP 402 as an open hypothesis before the later re-probe."
+    },
+    {
+      "source_id": "p1_license_storage_retention_review_20260602",
+      "source_type": "tracked_contract",
+      "source_url_or_path": "docs/provider_evidence_p1_us_license_storage_retention_review_20260602.json",
+      "review_date": "2026-06-03",
+      "evidence_note": "Prior license / storage review intentionally used existing repo evidence only and did not refresh current public FMP terms; this artifact fills the public-docs review gap but still gives no legal conclusion."
+    },
+    {
+      "source_id": "p1_sivb_reprobe_execution_summary_20260603",
+      "source_type": "tracked_summary",
+      "source_url_or_path": "docs/provider_evidence_p1_us_sivb_reprobe_execution_summary_20260603.json",
+      "review_date": "2026-06-03",
+      "evidence_note": "Tracked summary records SIVB-only 5/5 HTTP 402 with weak historical_or_delisted_paid_tier category signal, no body text / URL / raw rows / secret, and no paid-wall or coverage proof."
+    },
+    {
+      "source_id": "p1_validation_authorization_packet_20260603",
+      "source_type": "tracked_contract",
+      "source_url_or_path": "docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json",
+      "review_date": "2026-06-03",
+      "evidence_note": "User-approved validation authorization records FMP Basic / existing-key / SEC public API / $0 small-sample boundary. This artifact does not broaden that authorization."
+    }
+  ],
+  "public_pricing_review": {
+    "review_date": "2026-06-03",
+    "review_status": "public_pricing_page_reviewed_not_entitlement_validation",
+    "pricing_page_is_binding_contract_terms": false,
+    "plans": [
+      {
+        "plan_id": "basic",
+        "public_page_price_summary": "Free on the public personal-use pricing card.",
+        "public_page_call_limit": "250 Calls / Day.",
+        "public_page_history_depth": "Comparison table lists 5 years; top card lists End of Day Historical Data.",
+        "public_page_coverage_or_timeframe": "End of Day timeframe; Individual usage; profile and reference data; 150+ endpoints.",
+        "listed_feature_signals": [
+          {
+            "feature_area": "historical_eod_ohlcv",
+            "public_page_signal": "Basic card lists End of Day Historical Data; comparison table lists 5 years.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "profile_reference",
+            "public_page_signal": "Basic card lists Profile and Reference Data.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "fundamentals_ratios_key_metrics",
+            "public_page_signal": "Pricing comparison lists many financial-statement / key-metrics / ratios rows, but public HTML includes limited-symbol signals and does not prove Basic entitlement for every required endpoint.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "inactive_delisted_companies",
+            "public_page_signal": "Pricing comparison includes Delisted Companies under Company Information, while the dedicated docs page lists a delisted-companies endpoint. Exact Basic access and SIVB-style behavior remain unverified.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "corporate_actions_split_dividend",
+            "public_page_signal": "Basic card does not list Corporate Calendars; separate endpoint docs list split and dividend templates. Premium card explicitly lists Corporate Calendars.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          }
+        ],
+        "feature_listed_is_verified_for_delisted": false,
+        "paid_tier_coverage_proven": false,
+        "source_url": "https://site.financialmodelingprep.com/pricing-plans"
+      },
+      {
+        "plan_id": "starter",
+        "public_page_price_summary": "$22.00/mo. billed annually on the public personal-use pricing card.",
+        "public_page_call_limit": "300 API Calls / Minute.",
+        "public_page_history_depth": "Up to 5 Years of Historical Data.",
+        "public_page_coverage_or_timeframe": "Real-time timeframe in comparison table; US Coverage; Annual Fundamentals and Ratios; Historical Stock Price Data.",
+        "listed_feature_signals": [
+          {
+            "feature_area": "historical_eod_ohlcv",
+            "public_page_signal": "Starter card lists Historical Stock Price Data and up to 5 years of historical data.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "fundamentals_ratios_key_metrics",
+            "public_page_signal": "Starter card lists Annual Fundamentals and Ratios.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "inactive_delisted_companies",
+            "public_page_signal": "Pricing and docs expose delisted-company surfaces, but this artifact does not validate Starter access or survivorship-safe coverage.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "corporate_actions_split_dividend",
+            "public_page_signal": "Split / dividend endpoint docs are public; Starter card does not clearly list Corporate Calendars.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          }
+        ],
+        "feature_listed_is_verified_for_delisted": false,
+        "paid_tier_coverage_proven": false,
+        "source_url": "https://site.financialmodelingprep.com/pricing-plans"
+      },
+      {
+        "plan_id": "premium",
+        "public_page_price_summary": "$59.00/mo. billed annually on the public personal-use pricing card.",
+        "public_page_call_limit": "750 API Calls / Minute.",
+        "public_page_history_depth": "Up to 30 Years of Historical Data.",
+        "public_page_coverage_or_timeframe": "Real-time timeframe in comparison table; UK and Canada Coverage; Full Fundamentals and Ratios; Corporate Calendars.",
+        "listed_feature_signals": [
+          {
+            "feature_area": "historical_eod_ohlcv",
+            "public_page_signal": "Premium card lists up to 30 years of historical data.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "fundamentals_ratios_key_metrics",
+            "public_page_signal": "Premium card lists Full Fundamentals and Ratios.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "corporate_actions_split_dividend",
+            "public_page_signal": "Premium card lists Corporate Calendars; split and dividend docs are listed separately.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "inactive_delisted_companies",
+            "public_page_signal": "Pricing and docs expose delisted-company surfaces, but this artifact does not validate Premium access or SIVB access.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          }
+        ],
+        "feature_listed_is_verified_for_delisted": false,
+        "paid_tier_coverage_proven": false,
+        "source_url": "https://site.financialmodelingprep.com/pricing-plans"
+      },
+      {
+        "plan_id": "ultimate",
+        "public_page_price_summary": "$149.00/mo. billed annually on the public personal-use pricing card.",
+        "public_page_call_limit": "3,000 API Calls / Min.",
+        "public_page_history_depth": "Full Historical Access on the top card; comparison table lists 30+ years.",
+        "public_page_coverage_or_timeframe": "Real-time timeframe in comparison table; Global Coverage; Bulk and Batch Delivery.",
+        "listed_feature_signals": [
+          {
+            "feature_area": "historical_eod_ohlcv",
+            "public_page_signal": "Ultimate card lists Full Historical Access.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "bulk_batch_delivery",
+            "public_page_signal": "Ultimate card lists Bulk and Batch Delivery.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "fundamentals_ratios_key_metrics",
+            "public_page_signal": "Ultimate includes Premium plus, so it inherits Premium's full fundamentals and ratios signal on the public page.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "inactive_delisted_companies",
+            "public_page_signal": "Ultimate lists Global Coverage and full historical access, but the public page still does not prove inactive / delisted universe coverage or SIVB access.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          },
+          {
+            "feature_area": "corporate_actions_split_dividend",
+            "public_page_signal": "Ultimate includes Premium plus, so it inherits the public Corporate Calendars signal; no endpoint call is made.",
+            "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+            "listed_or_described_on_public_page": true,
+            "feature_listed_is_not_access_validation": true,
+            "endpoint_access_verified": false,
+            "delisted_or_sivb_coverage_proven": false
+          }
+        ],
+        "feature_listed_is_verified_for_delisted": false,
+        "paid_tier_coverage_proven": false,
+        "source_url": "https://site.financialmodelingprep.com/pricing-plans"
+      }
+    ],
+    "pricing_page_limitations": [
+      "The public pricing page records marketing / plan-summary signals, not endpoint-level proof for SIVB or inactive / delisted coverage.",
+      "The page explicitly routes data use to Terms of Service and flags display / redistribution as needing a specific licensing agreement.",
+      "The public comparison table includes symbols, icons, and limited-coverage labels that require signed-in or endpoint-specific confirmation before implementation."
+    ]
+  },
+  "public_endpoint_docs_review": {
+    "review_status": "endpoint_templates_listed_not_called_not_entitled",
+    "endpoint_docs_listed_is_access_validation": false,
+    "endpoint_families": [
+      {
+        "family_id": "delisted_companies",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/stable/delisted-companies",
+        "endpoint_template": "https://financialmodelingprep.com/stable/delisted-companies?page=0&limit=100",
+        "public_docs_listed": true,
+        "access_verified": false,
+        "entitlement_verified": false,
+        "coverage_or_correctness_proven": false
+      },
+      {
+        "family_id": "stock_split_details",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/stable/splits-company",
+        "endpoint_template": "https://financialmodelingprep.com/stable/splits?symbol={symbol}",
+        "public_docs_listed": true,
+        "access_verified": false,
+        "entitlement_verified": false,
+        "coverage_or_correctness_proven": false
+      },
+      {
+        "family_id": "dividends_company",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/stable/dividends-company",
+        "endpoint_template": "https://financialmodelingprep.com/stable/dividends?symbol={symbol}",
+        "public_docs_listed": true,
+        "access_verified": false,
+        "entitlement_verified": false,
+        "coverage_or_correctness_proven": false
+      },
+      {
+        "family_id": "key_metrics",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/stable/key-metrics",
+        "endpoint_template": "https://financialmodelingprep.com/stable/key-metrics?symbol={symbol}",
+        "public_docs_listed": true,
+        "access_verified": false,
+        "entitlement_verified": false,
+        "coverage_or_correctness_proven": false
+      },
+      {
+        "family_id": "financial_ratios",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/stable/metrics-ratios",
+        "endpoint_template": "https://financialmodelingprep.com/stable/ratios?symbol={symbol}",
+        "public_docs_listed": true,
+        "access_verified": false,
+        "entitlement_verified": false,
+        "coverage_or_correctness_proven": false
+      },
+      {
+        "family_id": "historical_eod_price_volume",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/stable/historical-price-eod-full",
+        "endpoint_template": "https://financialmodelingprep.com/stable/historical-price-eod/full?symbol={symbol}",
+        "public_docs_listed": true,
+        "access_verified": false,
+        "entitlement_verified": false,
+        "coverage_or_correctness_proven": false
+      }
+    ]
+  },
+  "public_terms_storage_review": {
+    "review_date": "2026-06-03",
+    "review_status": "public_terms_review_only_needs_user_or_legal_decision",
+    "legal_advice_claimed": false,
+    "terms_cleared": false,
+    "license_approved": false,
+    "binding_terms_source_note": "Binding terms are governed by FMP's actual Terms / subscription / order-form / account terms and any licensing agreement. This artifact records public-page signals only and does not replace user or legal review.",
+    "observations": [
+      {
+        "topic": "license_scope",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/terms-of-service",
+        "public_text_summary": "Terms describe a limited, revocable, non-exclusive, non-transferable, non-sublicensable right to access specified Data and APIs during the subscription period.",
+        "plain_meaning_for_this_project": "FMP access is plan/account scoped. A pricing card alone is not enough to say our system may store or use all needed data.",
+        "requires_user_or_legal_judgment": true,
+        "clears_use": false
+      },
+      {
+        "topic": "internal_or_personal_use",
+        "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+        "public_text_summary": "The pricing comparison labels Basic / Starter / Premium / Ultimate usage as Individual and exposes Personal Use / Commercial Use tabs.",
+        "plain_meaning_for_this_project": "A personal/internal system may fit an individual-use path, but the repo cannot decide that classification for the user.",
+        "requires_user_or_legal_judgment": true,
+        "clears_use": false
+      },
+      {
+        "topic": "redistribution_or_display",
+        "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+        "public_text_summary": "Pricing page says display or redistribution of FMP-sourced data requires a specific Data Display and Licensing Agreement.",
+        "plain_meaning_for_this_project": "Tracked raw rows, public sharing, dashboards, redistribution, or display beyond private summaries need separate review.",
+        "requires_user_or_legal_judgment": true,
+        "clears_use": false
+      },
+      {
+        "topic": "local_long_term_raw_retention",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/terms-of-service",
+        "public_text_summary": "Terms include license restrictions, confidentiality language, and termination / deletion obligations for Data and cached data.",
+        "plain_meaning_for_this_project": "Long-term local raw caches and DataHub-normalized storage remain blocked until retention and deletion duties are judged.",
+        "requires_user_or_legal_judgment": true,
+        "clears_use": false
+      },
+      {
+        "topic": "data_retention_after_termination",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/terms-of-service",
+        "public_text_summary": "Terms state license rights terminate on termination and require ceasing use of services and Data / derived information.",
+        "plain_meaning_for_this_project": "The system must not assume FMP data can be kept forever after subscription/account changes.",
+        "requires_user_or_legal_judgment": true,
+        "clears_use": false
+      },
+      {
+        "topic": "data_deletion_and_audit",
+        "source_url": "https://site.financialmodelingprep.com/developer/docs/terms-of-service",
+        "public_text_summary": "Terms include a Data Deletion section requiring deletion of received data, including cached data, after termination and mention FMP audit rights if continued use is suspected.",
+        "plain_meaning_for_this_project": "Before broad local storage, we need a deletion / retention rule and user acceptance of operational burden.",
+        "requires_user_or_legal_judgment": true,
+        "clears_use": false
+      },
+      {
+        "topic": "accuracy_and_as_is_disclaimer",
+        "source_url": "https://site.financialmodelingprep.com/pricing-plans",
+        "public_text_summary": "Pricing page says data is informational only, errors or omissions may occur, and FMP disclaims liability for inaccuracies.",
+        "plain_meaning_for_this_project": "Provider data still needs PIT, reconciliation, fallback, and drift checks before use. A paid tier would not remove validation work.",
+        "requires_user_or_legal_judgment": true,
+        "clears_use": false
+      }
+    ]
+  },
+  "decision_routing_summary": {
+    "summary_status": "routes_compared_no_decision_made",
+    "provider_selected_by_this_artifact": false,
+    "routes": [
+      {
+        "route_id": "continue_basic_active_only",
+        "plain_result": "Cheapest and safest now, but it means the system cannot claim inactive / delisted coverage and SIVB remains unusable under Basic.",
+        "cost_or_effort": "$0 and no account change; restrict future validation to active symbols / already-successful Basic surfaces unless separately approved.",
+        "what_it_might_unlock_if_confirmed": [
+          "Continue active-symbol response-shape checks under reviewed small packets.",
+          "Keep FMP as an active-symbol candidate for parts of US EGS evidence."
+        ],
+        "still_unresolved": [
+          "No survivorship-safe inactive / delisted universe.",
+          "No SIVB data under current Basic evidence.",
+          "No production storage / license clearance.",
+          "No Phase 7c use."
+        ],
+        "selected_by_this_artifact": false,
+        "authorizes_provider_selection": false,
+        "authorizes_api_call": false,
+        "authorizes_phase7c": false
+      },
+      {
+        "route_id": "upgrade_fmp_paid_tier",
+        "plain_result": "May unlock longer history, more fundamentals, corporate calendars, and maybe SIVB-style blocked data, but the public page does not prove it.",
+        "cost_or_effort": "At least the public paid-tier prices shown for Starter / Premium / Ultimate, plus user approval, account change, and terms judgment.",
+        "what_it_might_unlock_if_confirmed": [
+          "More historical depth and higher call limits.",
+          "More fundamentals / ratios coverage.",
+          "Corporate-calendar access signals for Premium / Ultimate.",
+          "Potential resolution path for SIVB 402 if plan-level entitlement is the cause."
+        ],
+        "still_unresolved": [
+          "Paid tier delisted / SIVB coverage is not proven.",
+          "License / storage / retention is not cleared.",
+          "Corporate actions still need endpoint calls and reconciliation.",
+          "Provider selection and Phase 7c remain blocked."
+        ],
+        "selected_by_this_artifact": false,
+        "authorizes_provider_selection": false,
+        "authorizes_api_call": false,
+        "authorizes_phase7c": false
+      },
+      {
+        "route_id": "replace_or_add_specialized_source",
+        "plain_result": "Likely cleaner if complete inactive / delisted and security-master coverage is mandatory, but it requires new provider review and possibly cost.",
+        "cost_or_effort": "New provider evidence, pricing / terms review, sample packet, and user approval before any token, trial, or purchase.",
+        "what_it_might_unlock_if_confirmed": [
+          "A source designed for survivorship-safe inactive / delisted coverage.",
+          "A clearer security-master / lifecycle path.",
+          "Possible separation of price/corporate-action source from fundamentals source."
+        ],
+        "still_unresolved": [
+          "No alternate provider is selected.",
+          "Cost and license are unknown.",
+          "Sample validation and storage policy would need new reviewed artifacts.",
+          "DataHub / Phase 7c remains blocked until provider evidence is complete."
+        ],
+        "selected_by_this_artifact": false,
+        "authorizes_provider_selection": false,
+        "authorizes_api_call": false,
+        "authorizes_phase7c": false
+      }
+    ]
+  },
+  "no_silent_default_policy": {
+    "marketing_pricing_page_is_not_binding_contract_terms": true,
+    "feature_listed_is_not_verified_for_delisted": true,
+    "public_terms_review_is_not_legal_clearance": true,
+    "terms_cleared": false,
+    "license_approved": false,
+    "paid_tier_delisted_coverage_proven": false,
+    "paid_tier_sivb_access_proven": false,
+    "current_artifact_authorizes_paid_upgrade": false,
+    "current_artifact_authorizes_datahub": false
+  },
+  "prohibited_claims": {
+    "terms_cleared": false,
+    "license_approved": false,
+    "provider_selected": false,
+    "paid_tier_coverage_proven": false,
+    "paid_tier_delisted_coverage_proven": false,
+    "paid_tier_sivb_access_proven": false,
+    "phase7c_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "legal_clearance": false,
+    "fmp_paid_upgrade_authorized": false,
+    "api_call_authorized": false
+  },
+  "next_steps": [
+    "If the user wants full inactive / delisted coverage, decide between paid FMP review and alternate-provider review; either path still needs a separate explicit approval and reviewed packet.",
+    "If staying with Basic, record an accepted active-only scope or keep SR-PROVIDER-001 open for inactive / delisted coverage; do not silently drop failed inactive symbols.",
+    "Before any paid upgrade, trial, account change, or provider contact, create a separate decision artifact with cost ceiling, user approval, and terms / storage acceptance.",
+    "Before any Phase 7c use, close or explicitly accept license / storage / PIT / price-adjustment / corporate-action / coverage / fallback / stability blockers."
+  ],
+  "limitations": [
+    "This artifact only records what public FMP pages say. It is not legal advice, not a contract interpretation, and not user acceptance of FMP terms.",
+    "It performs no FMP API call, no SEC API call, no signup, no purchase, no trial, no account change, no provider contact, no raw read, no raw parse, no provider selection, no DataHub work, and no Phase 7c authorization.",
+    "Listed endpoint templates and listed plan features do not prove SIVB access, inactive / delisted coverage, corporate-action correctness, PIT safety, or storage rights.",
+    "The SIVB re-probe summary remains only a weak category signal; paid-wall status and paid-tier coverage remain unproven.",
+    "SR-PROVIDER-001 remains open."
+  ]
+}

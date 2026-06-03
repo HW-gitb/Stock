@@ -2796,3 +2796,46 @@ C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest te
 
 1. Claude review should verify the runner / summary schema / generated summary / docs preserve the five-call boundary, raw gitignore boundary, no-secret summary boundary, weak category-signal wording, and `SR-PROVIDER-001` open status.
 2. Future provider work should not rerun or broaden SIVB silently. Any broader inactive / delisted follow-up, FMP split / dividend endpoint call, current terms review, provider selection, DataHub, or Phase 7c work requires separate explicit approval and reviewed decision.
+
+## 2026-06-03 append: FMP paid-tier / license public-docs review
+
+**What changed**:
+
+- Added `schemas/provider_p1_fmp_paid_tier_license_public_docs_review.schema.json`, a const-locked schema for a public-docs-only FMP pricing / endpoint / license review.
+- Added `docs/provider_evidence_p1_us_fmp_paid_tier_license_public_docs_review_20260603.json`, recording FMP public pricing-plan, endpoint-doc, and Terms signals without API calls, signup, purchase, trial, account changes, provider contact, raw reads, provider selection, DataHub, Phase 7c, production-readiness, legal-clearance, or ship-gate claims.
+- Added `tests/schema/test_provider_p1_fmp_paid_tier_license_public_docs_review_schema.py`, covering schema validation, source refs, plan observations, endpoint-template observations, terms observations, no-route-selection boundaries, no-silent-default policy, prohibited claims, and scope-creep rejection.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, and `docs/system_risk_register.md`; `SR-PROVIDER-001` remains open.
+
+**Plain result**:
+
+- FMP Basic remains usable only for the narrow active-symbol evidence already proven; it does not cover SIVB or complete inactive / delisted needs.
+- Paid FMP may help because public pages show higher history / feature tiers, but public pages do not prove SIVB access or inactive / delisted coverage.
+- Public Terms review does not clear local raw retention, DataHub storage, redistribution, or legal use.
+- No provider route was selected.
+
+**Why**:
+
+- SIVB re-probe narrowed the gap to a subscription / historical-or-delisted signal, but not enough to decide provider or paid tier.
+- The earlier 2026-06-02 license-storage review did not perform a current public-terms web refresh; this fills that public-docs gap without replacing user / legal judgment.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool schemas\provider_p1_fmp_paid_tier_license_public_docs_review.schema.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\provider_evidence_p1_us_fmp_paid_tier_license_public_docs_review_20260603.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_fmp_paid_tier_license_public_docs_review_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v
+git diff --check
+```
+
+**Invalid conclusions**:
+
+- "Paid FMP is proven to fix SIVB" is false.
+- "Public pricing / endpoint docs prove inactive-delisted coverage" is false.
+- "Public Terms review clears storage / license / legal use" is false.
+- "This authorizes paid upgrade, API calls, provider selection, DataHub, Phase 7c, production readiness, alpha evidence, or ship-gate evidence" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify this slice is public-docs only, keeps all scope locks false, and leaves `SR-PROVIDER-001` open.
+2. Any paid upgrade, account change, provider contact, API call, raw parse, provider selection, DataHub, or Phase 7c work requires separate explicit approval and reviewed decision.
