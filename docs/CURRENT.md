@@ -1,6 +1,5 @@
 # Stock 项目 - 当前状态快照
-
-**最后更新**：2026-06-03（A-short steady alpha re-audit preregistration）
+**最后更新**：2026-06-03（A-short steady alpha re-audit outcome）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -16,15 +15,15 @@
 - `schemas/provider_p1_missing_key_metrics_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json` now route the three missing key-metrics fields as candidate derivations pending separate field-presence / lineage review; this performs no raw-payload parse, no new provider call, no derivation implementation, no DataHub / runner consumption, and no Phase 7c authorization.
 - Phase 7c now has schema-first contracts for local resource/job-spec enforcement, shared ODS/DWD/DWS/factor layers, report families, reproducibility manifests, data-quality monitor boundaries, and a minimal A-share local-cache read-path plan (`engine/datahub/job_spec_contract.py`, `schemas/datahub_shared_layer_contract.schema.json`, `schemas/datahub_report_contract.schema.json`, `schemas/datahub_reproducibility_manifest.schema.json`, `schemas/datahub_data_quality_monitor_contract.schema.json`, `schemas/datahub_minimal_a_share_read_path_plan.schema.json`). These still do not fetch provider data, read cache, create DataHub tables, change runners, authorize provider selection / full-size US / production claims, or provide ship-gate evidence.
 - `execution_aggregate_report` v1.1.4 now binds reviewed forward-live evidence to aggregate `capital_context`, validates source-window coverage for claimed months, and requires at least 12 monthly alpha / return observations before alpha t-stat or Sharpe metrics can pass; full-size remains blocked by the concurrency gate.
-- US operating model is fixed as active-only + forward-live validation; historical US backtests stay idea-only, not alpha / ship-gate / full-size evidence. `schemas/a_short_steady_alpha_reaudit_preregistration.schema.json`, `research/preregistrations/a_short_steady_alpha_reaudit_20260603.json`, and `research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json` now preregister the A-short steady same-anchor 5d / 20d re-audit; it authorizes no outcome run until independent review and a later user execute command.
+- US operating model is fixed as active-only + forward-live validation; historical US backtests stay idea-only, not alpha / ship-gate / full-size evidence. The repaired A-short steady same-anchor re-audit has now run on existing local `rank_samples.csv` plus local benchmark-open cache only. `research/results/a_short_steady_alpha_reaudit_20260603/evidence_report.json` records `decision = risk_filter_only`: true same-anchor 5d CSI1000 net excess is positive but not significant enough (`mean = 0.6158673222` pp, monthly t `1.7623850474`; old uncorrected t `2.8769227582`). It does not prove alpha and is not production / ship-gate / full-size evidence.
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：A-share alpha validation is the active priority; A-short steady same-anchor re-audit is preregistered but not run. Phase 7c implementation remains not started; do not add more DataHub contracts unless a concrete implementation need appears.
-- **当前 P0 / P1 目标**：review the A-short steady alpha re-audit preregistration before any outcome run；do not rerun or rescue the failed burst artifacts；keep US work active-only + forward-live。
+- **当前 Phase**：A-share alpha validation is the active priority; A-short steady same-anchor re-audit outcome is research-only and needs independent review before commit. Phase 7c implementation remains not started; do not add more DataHub contracts unless a concrete implementation need appears.
+- **当前 P0 / P1 目标**：review the executed A-short steady re-audit outcome；do not rerun or rescue it without a new reviewed preregistration；do not rerun or rescue the failed burst artifacts；keep US work active-only + forward-live。
 - **当前 P1 provider blocker**：US inactive / delisted historical coverage is user-accepted as scoped out for the current active-only forward model. `SR-PROVIDER-001` remains open for license / storage, active-symbol PIT if fundamentals are used, active price-adjustment / corporate actions if used, SEC parser / mapping if used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness. US forward universes must be PIT-frozen at start and must capture real delisting / halt / merger / no-trade outcomes during the forward window; the 12-month forward-live ship-gate requirement is unchanged.
-- **执行锁**：A-short steady alpha re-audit is `registered_not_run` and needs Claude review + later user `执行` before outcome run；原 burst prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 不得运行 outcome / excess；redesigned burst outcome 已失败。任何 material audit finding 必须修复或进入 risk register。
+- **执行锁**：A-short steady alpha re-audit has spent its one planned test and is `risk_filter_only`; no rerun / rescue / threshold change is authorized without a new reviewed preregistration + user approval。原 burst prereg 仍为 `BLOCKED_DO_NOT_RUN`；corrected-basis prereg 不得运行 outcome / excess；redesigned burst outcome 已失败。任何 material audit finding 必须修复或进入 risk register。
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
@@ -37,7 +36,7 @@
 - **Forward-live aggregate evidence hardening**（2026-06-02）：`runners/aggregate_execution_reports.py` / `schemas/execution_aggregate_report.schema.json` now reject cross-context forward-live evidence, reject insufficient source-window coverage, and prevent two-month alpha / Sharpe diagnostics from passing ship-gate metric checks.
 - **US EGS coverage-count / missing-field routing**（2026-06-02）：the approved FMP stable coverage smoke produced `docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json`; `schemas/provider_p1_missing_key_metrics_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json` route `peRatio`, `revenuePerShare`, and `netIncomePerShare` without authorizing raw parse or derivation; `SR-PROVIDER-001` stays open.
 - **DataHub Phase 7c contract batches**（2026-06-03）：`engine/datahub/job_spec_contract.py` enforces the resource-budget / job-spec contracts; `schemas/datahub_shared_layer_contract.schema.json`, `schemas/datahub_report_contract.schema.json`, `schemas/datahub_reproducibility_manifest.schema.json`, `schemas/datahub_data_quality_monitor_contract.schema.json`, and `schemas/datahub_minimal_a_share_read_path_plan.schema.json` define future shared-layer, report, manifest, quality-monitor, and minimal A-share read-path boundaries without implementation authorization.
-- **A-short steady alpha re-audit preregistration**（2026-06-03）：`schemas/a_short_steady_alpha_reaudit_preregistration.schema.json` / `research/preregistrations/a_short_steady_alpha_reaudit_20260603.json` / `research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json` freeze the same-anchor 5d / 20d CSI1000 / CSI300 review and require multiple-testing / slice / factor / veto / PIT checks; no outcome run or production claim is authorized yet.
+- **A-short steady alpha re-audit outcome repair**（2026-06-03）：`runners/a_short_steady_alpha_reaudit.py` now re-derives same-anchor benchmark returns from local `result/a_short/backtest/cache/forward_daily.pkl` and uses old CSV excess only as an uncorrected control. Plain result: old 5d CSI1000 clue fails the corrected statistical gate; A-short steady remains risk-filter-only / research reference.
 
 ---
 
@@ -46,11 +45,11 @@
 基于 24 月 v7.10 production、Tier1-only 主口径：
 
 - 工程链路健康；Phase 2 工程签收。
-- 20d benchmark excess 仍不显著：`t1_net t=1.60`、`excess_csi300 t=0.57`、`excess_csi1000 t=0.17`。
-- 5d `excess_csi1000 t=+2.88` 已降级为未校正、疑似 measurement-basis artifact 的线索；same-anchor corrected re-run 前不得当作 validated alpha。
-- 强负信号仍是重点风控证据：`entry_flag=追高风险，周一确认`、`OVERHEAT`、`Tier2`。
-- 当前 A-short steady 更像“过滤坏票”而不是“挑出好票”，不得当作 full-size alpha lane。
-- 24p findings 尚未完成 multiple-testing / survivorship / regime sensitivity 重审；Phase 7a-1 audit 已要求重新标注证据等级。
+- 5d CSI1000 true same-anchor net excess is positive but not enough: mean net excess `0.6158673222` pp, monthly clustered t `1.7623850474`, 14/23 positive months, Bonferroni-normal adjusted p `0.3120170532`。旧未校正 t `2.8769227582` was the measurement-basis artifact under review.
+- 20d benchmark excess 仍不显著：`excess_csi1000 monthly t=0.172873488`、`excess_csi300 monthly t=0.5714019896`；5d CSI300 也偏弱（monthly t `1.3934659699`）。
+- 直接 `momentum_std` regime 切片不可评估；size 只能用 CSI1000-CSI300 proxy，不能当完整 factor proof。
+- 强负信号仍是重点风控证据：`OVERHEAT` flagged subset 表现差；Tier1 相对 Tier2 更稳，但这不等于 full-size alpha。
+- 当前 A-short steady 只能保留为“风控 filter / research reference / evidence loop”，不得当作 production alpha 或 full-size lane。
 
 失效旧结论：12 月 Top5 显著、12 期突破型反向信号、旧 `_cc.md` 整体结论、v7.9 前 completeness_score 分组结论均不可继续引用。
 
@@ -64,7 +63,8 @@
 - `docs/system_risk_register.md` - durable open-risk queue；`执行` / `审查` 必读。
 - `docs/SESSION_LOG.md` - 最新 cross-LLM reasoning / review verdict；只读顶部 1-3 条。
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` - Phase 7a+ 最高行动指南。
-- `research/README.md` / `schemas/research_preregistration.schema.json` / `schemas/a_short_steady_alpha_reaudit_preregistration.schema.json` / `schemas/research_preflight_result.schema.json` / `schemas/program_test_budget_ledger.schema.json` / `schemas/evidence_report.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` / `research/preregistrations/a_short_steady_alpha_reaudit_20260603.json` / `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/monthly_stats.csv` / `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` / `research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json` - research-only preregistration, preflight, evidence, and ledger owner files。
+- `research/README.md` / `schemas/research_preregistration.schema.json` / `schemas/a_short_steady_alpha_reaudit_preregistration.schema.json` / `schemas/research_preflight_result.schema.json` / `schemas/program_test_budget_ledger.schema.json` / `schemas/evidence_report.schema.json` - research-only contract owners。
+- `research/preregistrations/a_short_steady_alpha_reaudit_20260603.json` / `research/results/a_short_steady_alpha_reaudit_20260603/evidence_report.json` / `research/results/a_short_steady_alpha_reaudit_20260603/diagnostics.json` / `research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json` / `runners/a_short_steady_alpha_reaudit.py` - A-short steady re-audit owner files and output.
 - `docs/provider_priority_benchmark_contract.md` - Phase 7a-3 provider evidence priority / provisional benchmark contract。
 - `docs/provider_evidence_drift_monitor.md` / `schemas/provider_evidence_drift_monitor.schema.json` - Phase 7b provider evidence / drift monitor contract。
 - `schemas/provider_p1_access_decision_plan.schema.json` / `docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json` / `schemas/provider_p1_sample_validation_access_approval.schema.json` / `docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json` / `runners/us_egs_sample_validation.py` / `schemas/provider_p1_us_egs_sample_validation_summary.schema.json` / `docs/provider_evidence_p1_us_sample_validation_summary_20260602.json` / `schemas/provider_p1_fmp_stable_endpoint_retry_summary.schema.json` / `docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json` / `schemas/provider_p1_remaining_blocker_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json` / `schemas/provider_p1_coverage_count_access_packet_plan.schema.json` / `docs/provider_evidence_p1_us_coverage_count_access_packet_plan_20260602.json` / `schemas/provider_p1_coverage_count_access_packet_approval.schema.json` / `docs/provider_evidence_p1_us_coverage_count_access_packet_approval_20260602.json` / `runners/us_egs_coverage_count_packet.py` / `schemas/provider_p1_coverage_count_execution_summary.schema.json` / `docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json` / `schemas/provider_p1_missing_key_metrics_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json` / `schemas/provider_p1_validation_authorization_packet.schema.json` / `docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json` / `schemas/provider_p1_validation_execution_packet.schema.json` / `docs/provider_evidence_p1_us_validation_execution_packet_20260603.json` / `runners/us_egs_validation_packet.py` / `schemas/provider_p1_validation_execution_summary.schema.json` / `docs/provider_evidence_p1_us_validation_execution_summary_20260603.json` / `schemas/provider_p1_inactive_delisted_gap_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_inactive_delisted_gap_resolution_plan_20260603.json` / `schemas/provider_p1_fmp_entitlement_corporate_action_no_access_diagnostic.schema.json` / `docs/provider_evidence_p1_us_fmp_entitlement_corporate_action_no_access_diagnostic_20260603.json` / `schemas/provider_p1_sivb_reprobe_execution_packet.schema.json` / `docs/provider_evidence_p1_us_sivb_reprobe_execution_packet_20260603.json` / `runners/us_egs_sivb_reprobe_packet.py` / `schemas/provider_p1_sivb_reprobe_execution_summary.schema.json` / `docs/provider_evidence_p1_us_sivb_reprobe_execution_summary_20260603.json` / `schemas/provider_p1_fmp_paid_tier_license_public_docs_review.schema.json` / `docs/provider_evidence_p1_us_fmp_paid_tier_license_public_docs_review_20260603.json` - Phase 7b-2 P1 access / sample / coverage-count / missing-field / validation / inactive-delisted / entitlement-corporate-action / SIVB re-probe / FMP paid-tier-license public-docs owner files。
@@ -88,7 +88,7 @@
 ### P0 / P1 - Post redesigned outcome boundary
 
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
-- The preregistration / ledger-planned-test slice passed review and was committed as `1a3e71e`; do not run the current corrected-basis artifact for outcome / excess calculation.
+- The A-short steady re-audit has spent its one planned test and is `risk_filter_only`; do not rerun / rescue it without a new reviewed preregistration and user approval.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
 - The full-universe redesigned outcome / excess slice has failed its registered thresholds; do not rerun EGS, change preregistered parameters, full-refresh forward_daily, or reinterpret it as production evidence.
 - Any further redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
@@ -97,7 +97,7 @@
 - Current US model is active-only universe + forward-live validation only. Historical US backtests are exploration / idea-only forever; they cannot prove alpha, support ship-gate, unlock full-size, or authorize DataHub / production.
 - Forward universe must be frozen point-in-time at the forward start date; real delisting / halt / merger / bankruptcy / no-trade outcomes during the forward window must be captured, not deleted.
 - No further inactive / delisted historical coverage work or paid / specialized US data purchase is required now. Remaining provider work is only license / storage, active-PIT if used, active price / corporate actions if used, SEC parser / mapping if used, fallback / stability, and production-readiness gates.
-- Next high-value work is review, then if approved run, the registered A-short steady same-anchor alpha re-audit on existing local evidence only. Do not add more Phase 7c contracts unless a concrete implementation need appears.
+- Next high-value work is Claude review of the repaired A-short steady re-audit outcome, then commit if clean. After that, do not rerun it; choose a new reviewed alpha-search preregistration if the user wants to keep looking for alpha.
 
 ### P2 - DataHub local resource boundary
 
@@ -107,6 +107,7 @@
 
 - 继续 weekly forward capture、comparison-track accumulator、forward evidence accumulation。
 - 12 期新增 forward 样本后再重新审查 score / ESP / veto overlap。
+- `SR-ALPHA-001` is no longer an active blocker for this clue because the corrected test failed before promotion; any new alpha search needs a new reviewed preregistration.
 
 ---
 

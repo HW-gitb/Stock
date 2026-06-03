@@ -197,7 +197,7 @@
         "hypothesis_text": "A-short steady remains a risk filter until forward evidence proves otherwise.",
         "registered_by_session_id": "phase7a_initial_audit",
         "data_window_at_registration": "24 production monthly periods through 2026-03-01",
-        "evidence_available_at_registration": "24p rank backtest, Phase 6a benchmark policy, provider requirements audit",
+        "evidence_available_at_registration": "24p rank backtest, Phase 6a benchmark policy, provider requirements audit; repaired 2026-06-03 same-anchor re-audit later found the 5d CSI1000 clue risk-filter-only, not alpha evidence",
         "source_doc_refs": [
           "docs/CURRENT.md",
           "docs/alpha_plausibility_audit.md",
@@ -206,11 +206,11 @@
       },
       "evidence_integrity": {
         "evidence_window_type": "in_sample",
-        "tests_performed_count": 15,
-        "multiple_testing_notes": "Existing t-stat findings are exploratory until adjusted.",
-        "adjustment_method": "forward_confirmation",
+        "tests_performed_count": 16,
+        "multiple_testing_notes": "Repaired 2026-06-03 same-anchor re-audit applied a fixed 5d/20d x CSI1000/CSI300 family adjustment; corrected 5d CSI1000 failed the statistical gate, while 20d / CSI300 remained weak.",
+        "adjustment_method": "bonferroni",
         "minimum_effective_sample_required": 12,
-        "current_effective_sample": 24,
+        "current_effective_sample": 23,
         "power_status": "preliminary"
       },
       "pit_survivorship_security_master": {
@@ -232,7 +232,7 @@
             "data_availability": "Project evidence exists but is short."
           }
         ],
-        "style_beta_or_factor_exposure_risk": "Likely exposed to small-cap and theme beta.",
+        "style_beta_or_factor_exposure_risk": "Still exposed to small-cap and theme beta; repaired 2026-06-03 proxy factor check cannot rescue the 5d clue because the corrected same-anchor statistical gate failed, and direct size / momentum_std regime columns are absent.",
         "factor_framework": "benchmark_only_proxy"
       },
       "cost_execution_feasibility": {
@@ -247,12 +247,12 @@
         "net_alpha_not_estimable_reason": null
       },
       "risk_filter_effectiveness_evidence": {
-        "with_filter_vs_without_filter_drawdown": "Requires replay with veto on/off comparison.",
-        "win_rate_comparison": "Existing exploratory evidence suggests bad-ticket filtering but needs forward confirmation.",
+        "with_filter_vs_without_filter_drawdown": "2026-06-03 re-audit shows Tier1 has stronger 5d CSI1000 monthly t than all rows or Tier2, but this is not production alpha proof.",
+        "win_rate_comparison": "Existing exploratory evidence plus the repaired re-audit support bad-ticket filtering only; the 5d candidate clue failed the corrected statistical gate.",
         "false_positive_comparison": "Must track candidates filtered out that later perform well.",
         "false_negative_risk": "Strong candidates may be killed by overheat or chasing-high vetoes.",
         "strong_candidate_kill_risk": "Medium until false-negative logs accumulate.",
-        "regime_sensitivity": "Must compare 2024 and 2025 regimes."
+        "regime_sensitivity": "Direct momentum_std regime slice is unavailable in existing rank_samples.csv; any future alpha-search candidate must freeze this check before running."
       },
       "capital_deployment_effect": {
         "capital_deployment_effect": "Risk-filter only; no full-size alpha claim.",
@@ -274,11 +274,14 @@
         "rationale": "Treat as risk-control contribution until live-normalized evidence accumulates."
       },
       "decision": "continue_as_risk_filter",
-      "decision_reason": "Existing evidence supports risk-filter utility but not push-alpha status.",
+      "decision_reason": "Repaired 2026-06-03 same-anchor re-audit records risk_filter_only: corrected 5d CSI1000 net excess mean 0.6158673222 pp, monthly t 1.7623850474; old uncorrected t 2.8769227582 was not same-anchor proof. 20d / CSI300 are weak, and full-size / ship-gate / production use remains blocked.",
       "source_refs": [
         "docs/CURRENT.md",
         "docs/strategy_design_synthesis.md",
-        "docs/phase7a_provider_status_snapshot.json"
+        "docs/phase7a_provider_status_snapshot.json",
+        "research/results/a_short_steady_alpha_reaudit_20260603/evidence_report.json",
+        "research/results/a_short_steady_alpha_reaudit_20260603/diagnostics.json",
+        "research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json"
       ]
     },
     {

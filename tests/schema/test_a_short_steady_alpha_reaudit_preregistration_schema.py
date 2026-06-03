@@ -122,11 +122,11 @@ class AShortSteadyAlphaReauditPreregistrationTest(unittest.TestCase):
         self.assertTrue(any("No production promotion" in item for item in decision["falsified"]))
         self.assertTrue(all(value is False for value in prohibited.values()))
 
-    def test_planned_budget_requires_review_and_later_execute(self) -> None:
+    def test_budget_records_reviewed_execution_as_spent(self) -> None:
         artifact = self._load_artifact()
         budget = artifact["planned_test_budget"]
         ledger = self._load_ledger()
-        planned = ledger["planned_tests"][0]
+        spent = ledger["test_spend_log"][0]
 
         self.assertEqual(budget["ledger_ref"], str(LEDGER_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(budget["planned_test_id"], "a_short_steady_alpha_reaudit_20260603")
@@ -135,14 +135,19 @@ class AShortSteadyAlphaReauditPreregistrationTest(unittest.TestCase):
         self.assertTrue(budget["requires_user_execute_before_run"])
 
         self.assertEqual(ledger["lane_id"], "a_short_steady")
-        self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
-        self.assertEqual(ledger["test_spend_log"], [])
-        self.assertEqual(len(ledger["planned_tests"]), 1)
-        self.assertEqual(planned["planned_status"], "planned_not_reviewed")
-        self.assertEqual(planned["approval_status"], "pending_user_approval")
-        self.assertEqual(planned["planned_preregistration_ref"], str(ARTIFACT_PATH).replace("\\", "/"))
-        self.assertEqual(planned["expected_tests_spent"], 1)
+        self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
+        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
+        self.assertEqual(ledger["budget_policy"]["tests_available_without_new_review"], 0)
+        self.assertEqual(ledger["planned_tests"], [])
+        self.assertEqual(len(ledger["test_spend_log"]), 1)
+        self.assertEqual(spent["test_id"], "a_short_steady_alpha_reaudit_20260603")
+        self.assertEqual(spent["preregistration_ref"], str(ARTIFACT_PATH).replace("\\", "/"))
+        self.assertEqual(spent["result_ref"], "research/results/a_short_steady_alpha_reaudit_20260603/evidence_report.json")
+        self.assertEqual(spent["status"], "spent_failed_outcome_threshold")
+        self.assertEqual(spent["tests_spent"], 1)
+        self.assertTrue(spent["promotion_relevant"])
+        self.assertIn("risk_filter_only", spent["result_summary"])
+        self.assertIn("no production", spent["allowed_followup"].lower())
 
     def test_scope_creep_is_rejected_when_jsonschema_available(self) -> None:
         try:
@@ -173,7 +178,7 @@ class AShortSteadyAlphaReauditPreregistrationTest(unittest.TestCase):
         invalid["budget_policy"]["ledger_cardinality"] = "per_hypothesis"
         invalid["budget_policy"]["next_test_requires_reviewed_preregistration"] = False
         invalid["budget_policy"]["next_test_requires_user_approval"] = False
-        invalid["planned_tests"][0]["promotion_relevant"] = False
+        invalid["test_spend_log"][0]["status"] = "spent_claimed_production"
 
         errors = list(Draft7Validator(self._load_ledger_schema()).iter_errors(invalid))
 

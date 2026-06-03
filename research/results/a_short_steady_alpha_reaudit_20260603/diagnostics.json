@@ -1,0 +1,2094 @@
+{
+  "schema_name": "a_short_steady_alpha_reaudit_diagnostics",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00Z",
+  "scope": {
+    "research_only": true,
+    "data_fetch_allowed": false,
+    "egs_rerun_allowed": false,
+    "production_output_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false
+  },
+  "input_summary": {
+    "rank_samples_path": "result/a_short/backtest/rank_samples.csv",
+    "total_rows": 360,
+    "tier1_rows": 305,
+    "first_trade_date": "20240131",
+    "last_trade_date": "20251231",
+    "trade_date_count": 23,
+    "missing_momentum_std_column": true,
+    "missing_direct_size_column": true,
+    "benchmark_cache_path": "result/a_short/backtest/cache/forward_daily.pkl"
+  },
+  "same_anchor_correction": {
+    "correction_applied": true,
+    "stock_leg": "rank_samples ret_*d_t1_net: stock T+1 open to exit close after costs",
+    "benchmark_leg": "forward_daily cache: benchmark entry_date open to same exit_date close",
+    "old_csv_excess_basis": "uncorrected control only: old rank_samples ret_*d_excess_* was gross stock T+1 minus close-to-close benchmark",
+    "benchmark_cache_meta": {
+      "start_date": "20240131",
+      "end_date": "20260228",
+      "adj": "qfq_via_adj_factor",
+      "benchmarks": [
+        "csi300",
+        "csi1000"
+      ],
+      "fetched_at": "2026-05-24T11:25:21",
+      "stock_rows": 2681523,
+      "stock_codes": 5564,
+      "limit_rows": 3513895,
+      "benchmark_return_basis": "benchmark_entry_open_to_exit_close",
+      "benchmark_open_patch": {
+        "schema_name": "forward_daily_benchmark_open_cache_patch",
+        "schema_version": "1.0.0",
+        "generated_at": "2026-06-01T03:57:10+00:00",
+        "update_method": "benchmark_only_index_daily_open_close_patch",
+        "api_families": [
+          "index_daily",
+          "tushare_provider"
+        ],
+        "date_range": {
+          "start_date": "20240131",
+          "end_date": "20260228"
+        },
+        "stock_daily_refetch_allowed": false,
+        "limit_refetch_allowed": false,
+        "benchmarks": [
+          {
+            "benchmark": "csi300",
+            "ts_code": "000300.SH",
+            "source": "tushare:index_daily/000300.SH",
+            "fields": [
+              "trade_date",
+              "open",
+              "close"
+            ],
+            "rows": 498,
+            "first_trade_date": "20240131",
+            "last_trade_date": "20260227"
+          },
+          {
+            "benchmark": "csi1000",
+            "ts_code": "000852.SH",
+            "source": "tushare:index_daily/000852.SH",
+            "fields": [
+              "trade_date",
+              "open",
+              "close"
+            ],
+            "rows": 498,
+            "first_trade_date": "20240131",
+            "last_trade_date": "20260227"
+          }
+        ]
+      }
+    },
+    "coverage": {
+      "5d_CSI1000": {
+        "status": "ok",
+        "ok_rows": 349,
+        "missing_rows": 0,
+        "benchmark_leg": "benchmark_entry_date_open_to_exit_date_close",
+        "stock_leg": "existing_ret_t1_net_entry_open_to_exit_close"
+      },
+      "5d_CSI300": {
+        "status": "ok",
+        "ok_rows": 349,
+        "missing_rows": 0,
+        "benchmark_leg": "benchmark_entry_date_open_to_exit_date_close",
+        "stock_leg": "existing_ret_t1_net_entry_open_to_exit_close"
+      },
+      "20d_CSI1000": {
+        "status": "ok",
+        "ok_rows": 349,
+        "missing_rows": 0,
+        "benchmark_leg": "benchmark_entry_date_open_to_exit_date_close",
+        "stock_leg": "existing_ret_t1_net_entry_open_to_exit_close"
+      },
+      "20d_CSI300": {
+        "status": "ok",
+        "ok_rows": 349,
+        "missing_rows": 0,
+        "benchmark_leg": "benchmark_entry_date_open_to_exit_date_close",
+        "stock_leg": "existing_ret_t1_net_entry_open_to_exit_close"
+      }
+    },
+    "primary_corrected_vs_uncorrected": {
+      "corrected_net_mean_pct": 0.6158673222,
+      "corrected_net_monthly_t": 1.7623850474,
+      "uncorrected_gross_mean_pct": 1.0357826417,
+      "uncorrected_gross_monthly_t": 2.8769227582,
+      "mean_anchor_only_delta_pct": -0.2599153195
+    }
+  },
+  "decision": {
+    "label": "risk_filter_only",
+    "plain_result": "True same-anchor correction made the 5d CSI1000 clue fail the frozen statistical gate; use A-short steady as risk filter / research reference, not alpha evidence.",
+    "data_usability": "usable_for_research_only_not_ship_gate_or_full_size",
+    "candidate_conditions": {
+      "same_anchor_5d_csi1000_positive": true,
+      "same_anchor_5d_csi1000_monthly_t_ge_2": false,
+      "bonferroni_adjusted_normal_p_lt_0_05": false,
+      "stock_top5_positive_contribution_share_lt_0_25": true,
+      "factor_intercept_proxy_positive": true,
+      "direct_momentum_std_regime_available": false,
+      "twenty_day_csi1000_not_significant": true
+    }
+  },
+  "metric_summaries": {
+    "5d_CSI1000": {
+      "horizon_days": 5,
+      "benchmark": "CSI1000",
+      "return_basis": "net_t1_minus_same_anchor_benchmark_entry_open_to_exit_close",
+      "sample_count": 305,
+      "monthly_observation_count": 23,
+      "mean_net_excess_pct": 0.6158673222,
+      "mean_gross_excess_pct": 0.7758673222,
+      "mean_uncorrected_gross_excess_pct": 1.0357826417,
+      "mean_anchor_only_delta_pct": -0.2599153195,
+      "median_net_excess_pct": -0.0572795057,
+      "winsorized_mean_net_excess_pct": 0.3196528386,
+      "sample_t_stat": 1.6068067328,
+      "monthly_clustered_t_stat": 1.7623850474,
+      "uncorrected_gross_monthly_clustered_t_stat": 2.8769227582,
+      "positive_month_count": 14,
+      "negative_month_count": 9,
+      "min_monthly_net_excess_pct": -2.96114679,
+      "max_monthly_net_excess_pct": 7.8587030175,
+      "max_additive_monthly_drawdown_pct": 2.96114679,
+      "top_positive_month_share": 0.2628094068,
+      "normal_approx_two_sided_p": 0.0780042633
+    },
+    "5d_CSI300": {
+      "horizon_days": 5,
+      "benchmark": "CSI300",
+      "return_basis": "net_t1_minus_same_anchor_benchmark_entry_open_to_exit_close",
+      "sample_count": 305,
+      "monthly_observation_count": 23,
+      "mean_net_excess_pct": 0.3693029193,
+      "mean_gross_excess_pct": 0.5293029193,
+      "mean_uncorrected_gross_excess_pct": 0.7252684272,
+      "mean_anchor_only_delta_pct": -0.1959655079,
+      "median_net_excess_pct": -0.5418241238,
+      "winsorized_mean_net_excess_pct": 0.097167051,
+      "sample_t_stat": 0.9225453913,
+      "monthly_clustered_t_stat": 0.9291247792,
+      "uncorrected_gross_monthly_clustered_t_stat": 1.3934659699,
+      "positive_month_count": 12,
+      "negative_month_count": 11,
+      "min_monthly_net_excess_pct": -6.4460217123,
+      "max_monthly_net_excess_pct": 6.0471931385,
+      "max_additive_monthly_drawdown_pct": 9.8779023493,
+      "top_positive_month_share": 0.1927203932,
+      "normal_approx_two_sided_p": 0.3528244242
+    },
+    "20d_CSI1000": {
+      "horizon_days": 20,
+      "benchmark": "CSI1000",
+      "return_basis": "net_t1_minus_same_anchor_benchmark_entry_open_to_exit_close",
+      "sample_count": 305,
+      "monthly_observation_count": 23,
+      "mean_net_excess_pct": -0.0756503275,
+      "mean_gross_excess_pct": 0.0843496725,
+      "mean_uncorrected_gross_excess_pct": 0.3130261028,
+      "mean_anchor_only_delta_pct": -0.2286764303,
+      "median_net_excess_pct": -2.0059168686,
+      "winsorized_mean_net_excess_pct": -0.8875802394,
+      "sample_t_stat": -0.1135953134,
+      "monthly_clustered_t_stat": -0.0994154668,
+      "uncorrected_gross_monthly_clustered_t_stat": 0.172873488,
+      "positive_month_count": 10,
+      "negative_month_count": 13,
+      "min_monthly_net_excess_pct": -11.7274460632,
+      "max_monthly_net_excess_pct": 9.3359454533,
+      "max_additive_monthly_drawdown_pct": 13.0074917012,
+      "top_positive_month_share": 0.2418181236,
+      "normal_approx_two_sided_p": 0.9208084028
+    },
+    "20d_CSI300": {
+      "horizon_days": 20,
+      "benchmark": "CSI300",
+      "return_basis": "net_t1_minus_same_anchor_benchmark_entry_open_to_exit_close",
+      "sample_count": 305,
+      "monthly_observation_count": 23,
+      "mean_net_excess_pct": 0.2915189861,
+      "mean_gross_excess_pct": 0.4515189861,
+      "mean_uncorrected_gross_excess_pct": 0.628196122,
+      "mean_anchor_only_delta_pct": -0.1766771359,
+      "median_net_excess_pct": -1.60764542,
+      "winsorized_mean_net_excess_pct": -0.615672232,
+      "sample_t_stat": 0.4403253742,
+      "monthly_clustered_t_stat": 0.3224114537,
+      "uncorrected_gross_monthly_clustered_t_stat": 0.5714019896,
+      "positive_month_count": 11,
+      "negative_month_count": 12,
+      "min_monthly_net_excess_pct": -6.372173013,
+      "max_monthly_net_excess_pct": 9.3500997161,
+      "max_additive_monthly_drawdown_pct": 17.2838930186,
+      "top_positive_month_share": 0.2120781292,
+      "normal_approx_two_sided_p": 0.7471410083
+    }
+  },
+  "multiple_testing": {
+    "family_test_count": 4,
+    "method": "Bonferroni on normal-approx two-sided p-values for the fixed 5d/20d x CSI1000/CSI300 family",
+    "primary_normal_approx_two_sided_p": 0.0780042633,
+    "primary_bonferroni_adjusted_p": 0.3120170532
+  },
+  "primary_return_means": {
+    "gross_return_pct": 0.7887054214,
+    "net_return_pct": 0.6287054214,
+    "benchmark_return_pct": 0.0128380993,
+    "net_excess_return_pct": 0.6158673222,
+    "uncorrected_gross_excess_return_pct": 1.0357826417
+  },
+  "stock_concentration": {
+    "stock_count": 243,
+    "top5_positive_contribution_share": 0.1612482358,
+    "top10_positive_contribution_share": 0.2863342637
+  },
+  "factor_exposure": {
+    "direct_size_columns_available": false,
+    "size_proxy_used": "CSI1000 minus CSI300 monthly benchmark return",
+    "single_factor_model_labels": [
+      "intercept",
+      "CSI1000"
+    ],
+    "single_factor_model": {
+      "beta": [
+        0.8653777661,
+        0.9664231189
+      ],
+      "standard_error": [
+        0.5020991021,
+        0.1307828275
+      ],
+      "t_stat": [
+        1.7235198441,
+        7.3895261103
+      ],
+      "r_squared": 0.7222409457,
+      "degrees_of_freedom": 21
+    },
+    "size_proxy_model_labels": [
+      "intercept",
+      "CSI1000",
+      "CSI1000_minus_CSI300"
+    ],
+    "size_proxy_model": {
+      "beta": [
+        0.755923488,
+        1.1314358728,
+        -0.376222201
+      ],
+      "standard_error": [
+        0.5100210157,
+        0.2001051631,
+        0.3463960341
+      ],
+      "t_stat": [
+        1.4821418428,
+        5.654206295,
+        -1.0861042388
+      ],
+      "r_squared": 0.7377110424,
+      "degrees_of_freedom": 20
+    },
+    "interpretation": "The 5d monthly intercept remains positive after CSI1000 and a CSI1000-minus-CSI300 proxy, but no per-stock market-cap column is available in rank_samples.csv."
+  },
+  "regime_slices": {
+    "direct_regime_status": "not_evaluable_missing_momentum_std_column",
+    "proxy_note": "rank_samples.csv has no momentum_std column; CSI1000 monthly return split is diagnostic only.",
+    "proxy_slices": [
+      {
+        "slice": "low_csi1000_return_proxy",
+        "month_count": 11,
+        "mean_5d_csi1000_excess_pct": 1.2742567306,
+        "monthly_clustered_t_stat": 2.1207592627,
+        "positive_month_count": 8
+      },
+      {
+        "slice": "high_csi1000_return_proxy",
+        "month_count": 12,
+        "mean_5d_csi1000_excess_pct": 0.4915646482,
+        "monthly_clustered_t_stat": 0.6357392443,
+        "positive_month_count": 6
+      }
+    ]
+  },
+  "veto_filter_effect": {
+    "interpretation": "Tier1 has stronger 5d CSI1000 monthly t than all rows or Tier2; this supports filter value but does not authorize production alpha.",
+    "rows": [
+      {
+        "subset": "all",
+        "row_count": 360,
+        "sample_count": 349,
+        "monthly_observation_count": 24,
+        "mean_5d_csi1000_excess_pct": 0.7917323548,
+        "monthly_clustered_t_stat": 1.9879997545,
+        "positive_month_count": 15
+      },
+      {
+        "subset": "tier1",
+        "row_count": 305,
+        "sample_count": 305,
+        "monthly_observation_count": 23,
+        "mean_5d_csi1000_excess_pct": 0.6158673222,
+        "monthly_clustered_t_stat": 1.7623850474,
+        "positive_month_count": 14
+      },
+      {
+        "subset": "tier2",
+        "row_count": 55,
+        "sample_count": 44,
+        "monthly_observation_count": 6,
+        "mean_5d_csi1000_excess_pct": 2.0107967855,
+        "monthly_clustered_t_stat": 1.5521171732,
+        "positive_month_count": 4
+      },
+      {
+        "subset": "tier1_veto_passed",
+        "row_count": 302,
+        "sample_count": 302,
+        "monthly_observation_count": 23,
+        "mean_5d_csi1000_excess_pct": 0.4980794884,
+        "monthly_clustered_t_stat": 1.5066313305,
+        "positive_month_count": 13
+      },
+      {
+        "subset": "overheat_flagged",
+        "row_count": 28,
+        "sample_count": 17,
+        "monthly_observation_count": 5,
+        "mean_5d_csi1000_excess_pct": -0.0104735998,
+        "monthly_clustered_t_stat": 0.2712897949,
+        "positive_month_count": 2
+      },
+      {
+        "subset": "chasing_high_flagged",
+        "row_count": 42,
+        "sample_count": 31,
+        "monthly_observation_count": 6,
+        "mean_5d_csi1000_excess_pct": 2.872714997,
+        "monthly_clustered_t_stat": 1.7073545739,
+        "positive_month_count": 4
+      }
+    ]
+  },
+  "pit_survivorship_check": {
+    "status": "not_recomputed_reliance_on_existing_pipeline_controls",
+    "checks_done_in_this_runner": [
+      "Used existing local rank_samples.csv only.",
+      "Did not fetch data, rerun EGS, regenerate cohorts, or fill missing returns.",
+      "Required trade_date / ts_code / status columns exist for the frozen local sample."
+    ],
+    "limitations": [
+      "This runner does not independently replay Tushare list/delist/suspend guards.",
+      "PIT/survivorship confidence relies on existing resolved pipeline controls and the frozen rank_samples surface."
+    ]
+  },
+  "stock_concentration_rows": [
+    {
+      "rank": 1,
+      "ts_code": "001380.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 28.0038709546,
+      "positive_contribution_share": 0.03770941
+    },
+    {
+      "rank": 2,
+      "ts_code": "600673.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 25.040089804,
+      "positive_contribution_share": 0.0337184461
+    },
+    {
+      "rank": 3,
+      "ts_code": "002510.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 23.1140163072,
+      "positive_contribution_share": 0.0311248369
+    },
+    {
+      "rank": 4,
+      "ts_code": "600490.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 22.9245024554,
+      "positive_contribution_share": 0.0308696417
+    },
+    {
+      "rank": 5,
+      "ts_code": "002779.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 20.6641510429,
+      "positive_contribution_share": 0.0278259011
+    },
+    {
+      "rank": 6,
+      "ts_code": "002131.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 20.5309165047,
+      "positive_contribution_share": 0.0276464903
+    },
+    {
+      "rank": 7,
+      "ts_code": "600881.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 18.7834014761,
+      "positive_contribution_share": 0.0252933242
+    },
+    {
+      "rank": 8,
+      "ts_code": "601138.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 18.0240564305,
+      "positive_contribution_share": 0.0242708065
+    },
+    {
+      "rank": 9,
+      "ts_code": "002961.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 18.0031887894,
+      "positive_contribution_share": 0.0242427066
+    },
+    {
+      "rank": 10,
+      "ts_code": "600941.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 17.5501841631,
+      "positive_contribution_share": 0.0236327003
+    },
+    {
+      "rank": 11,
+      "ts_code": "002663.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 17.241443601,
+      "positive_contribution_share": 0.0232169569
+    },
+    {
+      "rank": 12,
+      "ts_code": "000423.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 16.9071111932,
+      "positive_contribution_share": 0.0227667521
+    },
+    {
+      "rank": 13,
+      "ts_code": "000915.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 16.3954069507,
+      "positive_contribution_share": 0.0220777022
+    },
+    {
+      "rank": 14,
+      "ts_code": "001286.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 16.3847981754,
+      "positive_contribution_share": 0.0220634166
+    },
+    {
+      "rank": 15,
+      "ts_code": "603662.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 16.2958418463,
+      "positive_contribution_share": 0.0219436299
+    },
+    {
+      "rank": 16,
+      "ts_code": "603278.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 15.2090161571,
+      "positive_contribution_share": 0.0204801339
+    },
+    {
+      "rank": 17,
+      "ts_code": "002463.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 15.1418442756,
+      "positive_contribution_share": 0.0203896816
+    },
+    {
+      "rank": 18,
+      "ts_code": "600489.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 14.5773987584,
+      "positive_contribution_share": 0.0196296115
+    },
+    {
+      "rank": 19,
+      "ts_code": "603270.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 14.1868618001,
+      "positive_contribution_share": 0.0191037228
+    },
+    {
+      "rank": 20,
+      "ts_code": "603728.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 12.9958373139,
+      "positive_contribution_share": 0.0174999149
+    },
+    {
+      "rank": 21,
+      "ts_code": "601991.SH",
+      "event_count": 3,
+      "sum_5d_csi1000_excess_pct": 12.5235997737,
+      "positive_contribution_share": 0.0168640099
+    },
+    {
+      "rank": 22,
+      "ts_code": "002023.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 12.2322210706,
+      "positive_contribution_share": 0.0164716457
+    },
+    {
+      "rank": 23,
+      "ts_code": "002562.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 11.9586702497,
+      "positive_contribution_share": 0.016103288
+    },
+    {
+      "rank": 24,
+      "ts_code": "600219.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 11.7706308641,
+      "positive_contribution_share": 0.0158500782
+    },
+    {
+      "rank": 25,
+      "ts_code": "000807.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 10.5647097816,
+      "positive_contribution_share": 0.0142262108
+    },
+    {
+      "rank": 26,
+      "ts_code": "002225.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 10.4492491875,
+      "positive_contribution_share": 0.0140707341
+    },
+    {
+      "rank": 27,
+      "ts_code": "000993.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 10.2581735257,
+      "positive_contribution_share": 0.0138134357
+    },
+    {
+      "rank": 28,
+      "ts_code": "600961.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 10.0572135152,
+      "positive_contribution_share": 0.0135428273
+    },
+    {
+      "rank": 29,
+      "ts_code": "000338.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 10.032523784,
+      "positive_contribution_share": 0.0135095806
+    },
+    {
+      "rank": 30,
+      "ts_code": "600999.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 10.0322938308,
+      "positive_contribution_share": 0.013509271
+    },
+    {
+      "rank": 31,
+      "ts_code": "601766.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 9.9155116225,
+      "positive_contribution_share": 0.0133520146
+    },
+    {
+      "rank": 32,
+      "ts_code": "002085.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 9.3954904414,
+      "positive_contribution_share": 0.0126517652
+    },
+    {
+      "rank": 33,
+      "ts_code": "002683.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 9.2423575912,
+      "positive_contribution_share": 0.0124455598
+    },
+    {
+      "rank": 34,
+      "ts_code": "605118.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 9.2332086164,
+      "positive_contribution_share": 0.01243324
+    },
+    {
+      "rank": 35,
+      "ts_code": "600360.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 8.2043438144,
+      "positive_contribution_share": 0.0110477928
+    },
+    {
+      "rank": 36,
+      "ts_code": "000700.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 8.1381002518,
+      "positive_contribution_share": 0.0109585907
+    },
+    {
+      "rank": 37,
+      "ts_code": "600353.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 8.0858105905,
+      "positive_contribution_share": 0.0108881785
+    },
+    {
+      "rank": 38,
+      "ts_code": "002595.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 7.725049202,
+      "positive_contribution_share": 0.010402385
+    },
+    {
+      "rank": 39,
+      "ts_code": "600886.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 7.3646534056,
+      "positive_contribution_share": 0.0099170838
+    },
+    {
+      "rank": 40,
+      "ts_code": "601168.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 6.9908093483,
+      "positive_contribution_share": 0.0094136734
+    },
+    {
+      "rank": 41,
+      "ts_code": "600893.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 6.6057947568,
+      "positive_contribution_share": 0.0088952211
+    },
+    {
+      "rank": 42,
+      "ts_code": "000501.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 6.2882855804,
+      "positive_contribution_share": 0.00846767
+    },
+    {
+      "rank": 43,
+      "ts_code": "002565.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 6.180016231,
+      "positive_contribution_share": 0.0083218769
+    },
+    {
+      "rank": 44,
+      "ts_code": "600062.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 6.0982915912,
+      "positive_contribution_share": 0.0082118282
+    },
+    {
+      "rank": 45,
+      "ts_code": "603259.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 5.9790211647,
+      "positive_contribution_share": 0.0080512212
+    },
+    {
+      "rank": 46,
+      "ts_code": "600211.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 5.846841435,
+      "positive_contribution_share": 0.0078732309
+    },
+    {
+      "rank": 47,
+      "ts_code": "603508.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 5.6929593884,
+      "positive_contribution_share": 0.0076660166
+    },
+    {
+      "rank": 48,
+      "ts_code": "600875.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 5.2810872542,
+      "positive_contribution_share": 0.0071113984
+    },
+    {
+      "rank": 49,
+      "ts_code": "002772.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 5.2352514739,
+      "positive_contribution_share": 0.007049677
+    },
+    {
+      "rank": 50,
+      "ts_code": "603368.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 5.0829274794,
+      "positive_contribution_share": 0.0068445608
+    },
+    {
+      "rank": 51,
+      "ts_code": "002364.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 4.6991904398,
+      "positive_contribution_share": 0.0063278287
+    },
+    {
+      "rank": 52,
+      "ts_code": "000521.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 4.6971631916,
+      "positive_contribution_share": 0.0063250989
+    },
+    {
+      "rank": 53,
+      "ts_code": "601336.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 4.2126468608,
+      "positive_contribution_share": 0.0056726596
+    },
+    {
+      "rank": 54,
+      "ts_code": "002037.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 4.0061649467,
+      "positive_contribution_share": 0.0053946155
+    },
+    {
+      "rank": 55,
+      "ts_code": "000963.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 3.4545618262,
+      "positive_contribution_share": 0.0046518386
+    },
+    {
+      "rank": 56,
+      "ts_code": "600988.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.4301096193,
+      "positive_contribution_share": 0.0046189118
+    },
+    {
+      "rank": 57,
+      "ts_code": "601717.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.3552413575,
+      "positive_contribution_share": 0.0045180958
+    },
+    {
+      "rank": 58,
+      "ts_code": "002891.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.3306443743,
+      "positive_contribution_share": 0.004484974
+    },
+    {
+      "rank": 59,
+      "ts_code": "002765.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.3239564229,
+      "positive_contribution_share": 0.0044759682
+    },
+    {
+      "rank": 60,
+      "ts_code": "000737.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.246014973,
+      "positive_contribution_share": 0.0043710139
+    },
+    {
+      "rank": 61,
+      "ts_code": "603345.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.2375781743,
+      "positive_contribution_share": 0.0043596531
+    },
+    {
+      "rank": 62,
+      "ts_code": "603049.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.2284209137,
+      "positive_contribution_share": 0.0043473221
+    },
+    {
+      "rank": 63,
+      "ts_code": "600868.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.1066045295,
+      "positive_contribution_share": 0.0041832868
+    },
+    {
+      "rank": 64,
+      "ts_code": "600372.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.0896653636,
+      "positive_contribution_share": 0.0041604769
+    },
+    {
+      "rank": 65,
+      "ts_code": "002823.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.0860454333,
+      "positive_contribution_share": 0.0041556024
+    },
+    {
+      "rank": 66,
+      "ts_code": "601058.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 3.0342998476,
+      "positive_contribution_share": 0.0040859229
+    },
+    {
+      "rank": 67,
+      "ts_code": "600933.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.955999975,
+      "positive_contribution_share": 0.003980486
+    },
+    {
+      "rank": 68,
+      "ts_code": "600970.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.9430507985,
+      "positive_contribution_share": 0.0039630489
+    },
+    {
+      "rank": 69,
+      "ts_code": "000534.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.742316927,
+      "positive_contribution_share": 0.003692745
+    },
+    {
+      "rank": 70,
+      "ts_code": "000519.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.705562165,
+      "positive_contribution_share": 0.0036432518
+    },
+    {
+      "rank": 71,
+      "ts_code": "600027.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 2.6373465591,
+      "positive_contribution_share": 0.0035513941
+    },
+    {
+      "rank": 72,
+      "ts_code": "002714.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.5570874787,
+      "positive_contribution_share": 0.003443319
+    },
+    {
+      "rank": 73,
+      "ts_code": "603297.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.4155685151,
+      "positive_contribution_share": 0.0032527526
+    },
+    {
+      "rank": 74,
+      "ts_code": "603221.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.4154279664,
+      "positive_contribution_share": 0.0032525633
+    },
+    {
+      "rank": 75,
+      "ts_code": "000960.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.2871103391,
+      "positive_contribution_share": 0.0030797736
+    },
+    {
+      "rank": 76,
+      "ts_code": "000683.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.1254088134,
+      "positive_contribution_share": 0.0028620298
+    },
+    {
+      "rank": 77,
+      "ts_code": "601155.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.0807119902,
+      "positive_contribution_share": 0.002801842
+    },
+    {
+      "rank": 78,
+      "ts_code": "601958.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.0476225405,
+      "positive_contribution_share": 0.0027572844
+    },
+    {
+      "rank": 79,
+      "ts_code": "000751.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 2.0058975774,
+      "positive_contribution_share": 0.0027010985
+    },
+    {
+      "rank": 80,
+      "ts_code": "002601.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.9742388355,
+      "positive_contribution_share": 0.0026584675
+    },
+    {
+      "rank": 81,
+      "ts_code": "000543.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.9678100431,
+      "positive_contribution_share": 0.0026498107
+    },
+    {
+      "rank": 82,
+      "ts_code": "000876.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.9281275034,
+      "positive_contribution_share": 0.002596375
+    },
+    {
+      "rank": 83,
+      "ts_code": "601728.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.8925096886,
+      "positive_contribution_share": 0.0025484128
+    },
+    {
+      "rank": 84,
+      "ts_code": "002864.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.6317534187,
+      "positive_contribution_share": 0.002197284
+    },
+    {
+      "rank": 85,
+      "ts_code": "601601.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 1.5326911314,
+      "positive_contribution_share": 0.0020638889
+    },
+    {
+      "rank": 86,
+      "ts_code": "000066.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.5220619125,
+      "positive_contribution_share": 0.0020495758
+    },
+    {
+      "rank": 87,
+      "ts_code": "603993.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 1.4689598648,
+      "positive_contribution_share": 0.0019780697
+    },
+    {
+      "rank": 88,
+      "ts_code": "000600.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.3637713521,
+      "positive_contribution_share": 0.0018364252
+    },
+    {
+      "rank": 89,
+      "ts_code": "000969.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.2860407213,
+      "positive_contribution_share": 0.0017317548
+    },
+    {
+      "rank": 90,
+      "ts_code": "002030.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.2183462589,
+      "positive_contribution_share": 0.0016405989
+    },
+    {
+      "rank": 91,
+      "ts_code": "603166.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.174194541,
+      "positive_contribution_share": 0.0015811451
+    },
+    {
+      "rank": 92,
+      "ts_code": "600765.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 1.1060269365,
+      "positive_contribution_share": 0.0014893521
+    },
+    {
+      "rank": 93,
+      "ts_code": "600161.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 1.0804506282,
+      "positive_contribution_share": 0.0014549116
+    },
+    {
+      "rank": 94,
+      "ts_code": "600011.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 1.0239466361,
+      "positive_contribution_share": 0.0013788245
+    },
+    {
+      "rank": 95,
+      "ts_code": "600803.SH",
+      "event_count": 4,
+      "sum_5d_csi1000_excess_pct": 0.8850415117,
+      "positive_contribution_share": 0.0011917779
+    },
+    {
+      "rank": 96,
+      "ts_code": "601390.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.8393139984,
+      "positive_contribution_share": 0.0011302022
+    },
+    {
+      "rank": 97,
+      "ts_code": "000538.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.8381433198,
+      "positive_contribution_share": 0.0011286258
+    },
+    {
+      "rank": 98,
+      "ts_code": "000589.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.7878645568,
+      "positive_contribution_share": 0.0010609215
+    },
+    {
+      "rank": 99,
+      "ts_code": "002015.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.7853623808,
+      "positive_contribution_share": 0.0010575521
+    },
+    {
+      "rank": 100,
+      "ts_code": "600785.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.7439254452,
+      "positive_contribution_share": 0.001001754
+    },
+    {
+      "rank": 101,
+      "ts_code": "000999.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.6061174285,
+      "positive_contribution_share": 0.0008161847
+    },
+    {
+      "rank": 102,
+      "ts_code": "600436.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.6059454886,
+      "positive_contribution_share": 0.0008159532
+    },
+    {
+      "rank": 103,
+      "ts_code": "002551.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.5660835155,
+      "positive_contribution_share": 0.0007622759
+    },
+    {
+      "rank": 104,
+      "ts_code": "002213.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.5623167688,
+      "positive_contribution_share": 0.0007572037
+    },
+    {
+      "rank": 105,
+      "ts_code": "000883.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.5497267477,
+      "positive_contribution_share": 0.0007402502
+    },
+    {
+      "rank": 106,
+      "ts_code": "600841.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.5393431619,
+      "positive_contribution_share": 0.0007262679
+    },
+    {
+      "rank": 107,
+      "ts_code": "000612.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.5102841944,
+      "positive_contribution_share": 0.0006871377
+    },
+    {
+      "rank": 108,
+      "ts_code": "601319.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.4942119641,
+      "positive_contribution_share": 0.0006654952
+    },
+    {
+      "rank": 109,
+      "ts_code": "600023.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.4194875105,
+      "positive_contribution_share": 0.0005648729
+    },
+    {
+      "rank": 110,
+      "ts_code": "002532.SZ",
+      "event_count": 4,
+      "sum_5d_csi1000_excess_pct": 0.4138932189,
+      "positive_contribution_share": 0.0005573397
+    },
+    {
+      "rank": 111,
+      "ts_code": "600844.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.3263260253,
+      "positive_contribution_share": 0.0004394236
+    },
+    {
+      "rank": 112,
+      "ts_code": "601799.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.3230024529,
+      "positive_contribution_share": 0.0004349482
+    },
+    {
+      "rank": 113,
+      "ts_code": "000586.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.2387522759,
+      "positive_contribution_share": 0.0003214987
+    },
+    {
+      "rank": 114,
+      "ts_code": "600862.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 0.2289231879,
+      "positive_contribution_share": 0.000308263
+    },
+    {
+      "rank": 115,
+      "ts_code": "603179.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.1192010236,
+      "positive_contribution_share": 0.0001605135
+    },
+    {
+      "rank": 116,
+      "ts_code": "601608.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": 0.1094964276,
+      "positive_contribution_share": 0.0001474455
+    },
+    {
+      "rank": 117,
+      "ts_code": "002448.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": 0.0627413482,
+      "positive_contribution_share": 8.44861e-05
+    },
+    {
+      "rank": 118,
+      "ts_code": "601881.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.0233243243,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 119,
+      "ts_code": "600694.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.0572795057,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 120,
+      "ts_code": "002126.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.0949511608,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 121,
+      "ts_code": "002725.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.1005544545,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 122,
+      "ts_code": "601668.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.1095542949,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 123,
+      "ts_code": "002681.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.1480147431,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 124,
+      "ts_code": "000063.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.1647282222,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 125,
+      "ts_code": "601800.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.3544333996,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 126,
+      "ts_code": "002639.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.3875661619,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 127,
+      "ts_code": "002148.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.4074592203,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 128,
+      "ts_code": "002372.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.4713591289,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 129,
+      "ts_code": "601600.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -0.4844610801,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 130,
+      "ts_code": "601555.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -0.5411457224,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 131,
+      "ts_code": "601236.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.5607430526,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 132,
+      "ts_code": "000895.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.6363247363,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 133,
+      "ts_code": "002626.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.6633792633,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 134,
+      "ts_code": "000532.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -0.7156489418,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 135,
+      "ts_code": "003031.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.7433539949,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 136,
+      "ts_code": "002001.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.8134847052,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 137,
+      "ts_code": "603966.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.8638654474,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 138,
+      "ts_code": "002917.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -0.9312025032,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 139,
+      "ts_code": "601899.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.1302683389,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 140,
+      "ts_code": "601186.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.2089940708,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 141,
+      "ts_code": "000776.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.2861055264,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 142,
+      "ts_code": "600309.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.2925198905,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 143,
+      "ts_code": "002793.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.4249578134,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 144,
+      "ts_code": "002625.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.4394203634,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 145,
+      "ts_code": "002138.SZ",
+      "event_count": 4,
+      "sum_5d_csi1000_excess_pct": -1.4703221495,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 146,
+      "ts_code": "002688.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.587508752,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 147,
+      "ts_code": "603489.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.6173173214,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 148,
+      "ts_code": "601059.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.6733406921,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 149,
+      "ts_code": "002842.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.806040793,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 150,
+      "ts_code": "603917.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.8766711396,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 151,
+      "ts_code": "002909.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.8874827106,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 152,
+      "ts_code": "002241.SZ",
+      "event_count": 3,
+      "sum_5d_csi1000_excess_pct": -1.9312643276,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 153,
+      "ts_code": "000920.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -1.9451783315,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 154,
+      "ts_code": "000623.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.1038449217,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 155,
+      "ts_code": "002472.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.1145380407,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 156,
+      "ts_code": "002284.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -2.1194355751,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 157,
+      "ts_code": "600483.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.1258840618,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 158,
+      "ts_code": "000581.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.1637467213,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 159,
+      "ts_code": "603986.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -2.1859943643,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 160,
+      "ts_code": "600285.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.1946403501,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 161,
+      "ts_code": "002046.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.3948217424,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 162,
+      "ts_code": "600598.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.3986745977,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 163,
+      "ts_code": "002603.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.4358990003,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 164,
+      "ts_code": "603160.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -2.7427444405,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 165,
+      "ts_code": "600552.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.7605991873,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 166,
+      "ts_code": "000739.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.7778704306,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 167,
+      "ts_code": "605319.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.7801828504,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 168,
+      "ts_code": "600338.SH",
+      "event_count": 4,
+      "sum_5d_csi1000_excess_pct": -2.8322962823,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 169,
+      "ts_code": "000722.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.8681319476,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 170,
+      "ts_code": "601908.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -2.9979332518,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 171,
+      "ts_code": "002632.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.0963942369,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 172,
+      "ts_code": "600814.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.1257629504,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 173,
+      "ts_code": "001339.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.158456424,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 174,
+      "ts_code": "600362.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.2604609797,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 175,
+      "ts_code": "000833.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.2736739747,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 176,
+      "ts_code": "600998.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.3759986748,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 177,
+      "ts_code": "002395.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.431001131,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 178,
+      "ts_code": "002938.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.4798418194,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 179,
+      "ts_code": "000877.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.4861450852,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 180,
+      "ts_code": "002430.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -3.542994342,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 181,
+      "ts_code": "002009.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.7000892692,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 182,
+      "ts_code": "002482.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.7328519248,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 183,
+      "ts_code": "600487.SH",
+      "event_count": 3,
+      "sum_5d_csi1000_excess_pct": -3.7814456898,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 184,
+      "ts_code": "000901.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -3.8323380529,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 185,
+      "ts_code": "002273.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -3.8548262969,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 186,
+      "ts_code": "600578.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -3.9089404553,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 187,
+      "ts_code": "000791.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.059414876,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 188,
+      "ts_code": "002933.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.06406277,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 189,
+      "ts_code": "603306.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.1104555839,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 190,
+      "ts_code": "603131.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.2138578543,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 191,
+      "ts_code": "002861.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.3564794284,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 192,
+      "ts_code": "002648.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -4.3740038787,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 193,
+      "ts_code": "600499.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.5003171116,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 194,
+      "ts_code": "600038.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.5504547971,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 195,
+      "ts_code": "002397.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.6658128241,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 196,
+      "ts_code": "002324.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.6940612302,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 197,
+      "ts_code": "002837.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.699330477,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 198,
+      "ts_code": "000697.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.6999661751,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 199,
+      "ts_code": "002567.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -4.7072190389,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 200,
+      "ts_code": "002886.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.8061842399,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 201,
+      "ts_code": "002355.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.8716937766,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 202,
+      "ts_code": "002992.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.9329298665,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 203,
+      "ts_code": "002819.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -4.9897308645,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 204,
+      "ts_code": "001389.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -4.9940433193,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 205,
+      "ts_code": "002426.SZ",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -4.9987206175,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 206,
+      "ts_code": "600503.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -5.0436537874,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 207,
+      "ts_code": "000977.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -5.044251093,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 208,
+      "ts_code": "002897.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -5.0828247236,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 209,
+      "ts_code": "601231.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -5.2631796592,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 210,
+      "ts_code": "600866.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -5.4479747294,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 211,
+      "ts_code": "600325.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -5.5053623245,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 212,
+      "ts_code": "600111.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -5.562491017,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 213,
+      "ts_code": "000953.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -5.7312548546,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 214,
+      "ts_code": "600660.SH",
+      "event_count": 4,
+      "sum_5d_csi1000_excess_pct": -6.0815331505,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 215,
+      "ts_code": "000617.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -6.0899464518,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 216,
+      "ts_code": "603005.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -6.326210967,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 217,
+      "ts_code": "603013.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -6.4244676874,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 218,
+      "ts_code": "605589.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -6.5863075952,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 219,
+      "ts_code": "001979.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -6.6770734422,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 220,
+      "ts_code": "600363.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -6.7179674181,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 221,
+      "ts_code": "000887.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -7.0351749639,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 222,
+      "ts_code": "002703.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -7.2538602163,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 223,
+      "ts_code": "002916.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -7.3752368715,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 224,
+      "ts_code": "600744.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -7.8199654584,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 225,
+      "ts_code": "600025.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -7.9100127272,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 226,
+      "ts_code": "600160.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -8.4797398971,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 227,
+      "ts_code": "603379.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -8.8803555506,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 228,
+      "ts_code": "601377.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -8.9952378341,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 229,
+      "ts_code": "000025.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -9.4338954964,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 230,
+      "ts_code": "002115.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -9.4911750108,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 231,
+      "ts_code": "603501.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -9.5185025819,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 232,
+      "ts_code": "002769.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -9.7236670236,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 233,
+      "ts_code": "603809.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -9.8078790756,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 234,
+      "ts_code": "603766.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -9.8557581149,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 235,
+      "ts_code": "001359.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -10.1257810523,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 236,
+      "ts_code": "002371.SZ",
+      "event_count": 3,
+      "sum_5d_csi1000_excess_pct": -10.9611133438,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 237,
+      "ts_code": "603607.SH",
+      "event_count": 2,
+      "sum_5d_csi1000_excess_pct": -11.1552689149,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 238,
+      "ts_code": "002906.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -11.5249661867,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 239,
+      "ts_code": "600618.SH",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -11.968646814,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 240,
+      "ts_code": "000564.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -14.5402388494,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 241,
+      "ts_code": "002947.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -16.6228188291,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 242,
+      "ts_code": "002269.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -19.7069677284,
+      "positive_contribution_share": null
+    },
+    {
+      "rank": 243,
+      "ts_code": "002523.SZ",
+      "event_count": 1,
+      "sum_5d_csi1000_excess_pct": -20.8351693817,
+      "positive_contribution_share": null
+    }
+  ]
+}

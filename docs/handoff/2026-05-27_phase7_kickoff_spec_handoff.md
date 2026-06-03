@@ -3051,3 +3051,52 @@ git diff --check
 
 1. Claude review should verify the preregistration is scoped to A-short steady, not a hidden burst rescue or parameter search.
 2. If review passes and the user later gives `执行`, run only the frozen same-anchor re-audit on existing local evidence and write a research-only evidence report.
+
+## 2026-06-03 append: A-short steady alpha re-audit outcome repair
+
+**Plain result**:
+
+- The old 5d CSI1000 clue did not survive the repaired same-anchor statistical gate.
+- A-short steady remains risk-filter-only / research reference, not alpha evidence.
+- It cannot support full-size manual use or ship-gate evidence.
+
+**What changed**:
+
+- Added `runners/a_short_steady_alpha_reaudit.py`.
+- Added `tests/test_a_short_steady_alpha_reaudit_runner.py`.
+- Added `research/results/a_short_steady_alpha_reaudit_20260603/evidence_report.json`.
+- Added `research/results/a_short_steady_alpha_reaudit_20260603/diagnostics.json`.
+- Added `research/results/a_short_steady_alpha_reaudit_20260603/monthly_stats.csv`.
+- Added `research/results/a_short_steady_alpha_reaudit_20260603/metric_summary.csv`.
+- Added `research/results/a_short_steady_alpha_reaudit_20260603/stock_concentration.csv`.
+- Added `research/results/a_short_steady_alpha_reaudit_20260603/veto_filter_stats.csv`.
+- Updated `research/ledgers/a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603.json` from planned to spent.
+- Updated `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/system_risk_register.md`, `docs/phase7a_alpha_plausibility_audit.json`, `research/README.md`, and `docs/SESSION_LOG.md`.
+
+**Key numbers**:
+
+- 5d CSI1000 true same-anchor net excess mean: `0.6158673222` pp.
+- 5d CSI1000 monthly clustered t-stat: `1.7623850474`.
+- Old uncorrected 5d CSI1000 monthly t-stat: `2.8769227582`.
+- Positive months: 14/23.
+- Bonferroni-normal adjusted p: `0.3120170532`.
+- 20d CSI1000 monthly t-stat: `-0.0994154668`.
+- 5d CSI300 monthly t-stat: `0.9291247792`.
+
+**Important limitation**:
+
+- `runners/a_short_steady_alpha_reaudit.py` now re-derives benchmark entry-open to exit-close returns from local `forward_daily.pkl`; old `rank_samples.csv` excess columns are uncorrected controls only.
+- `SR-ALPHA-001` is resolved for this clue because the repaired test failed before promotion; any future candidate still needs preregistered regime / factor checks.
+
+**Invalid conclusions**:
+
+- "A-short steady alpha is proven" is false.
+- "The old uncorrected 5d t-stat can be treated as same-anchor evidence" is false.
+- "A-short steady can be full-size" is false.
+- "This is ship-gate evidence" is false.
+- "This authorizes DataHub, provider work, runner consumption, strategy rule changes, or parameter rescue" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify this repaired outcome used the local benchmark-open cache, did not fetch data, rerun EGS, alter production outputs, or overclaim sizing.
+2. After review and commit, do not rerun this result. Any new alpha search needs a new reviewed preregistration and user approval.

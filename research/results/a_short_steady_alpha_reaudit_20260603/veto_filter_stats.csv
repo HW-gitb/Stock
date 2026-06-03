@@ -1,0 +1,7 @@
+subset,row_count,sample_count,monthly_observation_count,mean_5d_csi1000_excess_pct,monthly_clustered_t_stat,positive_month_count
+all,360,349,24,0.7917323548,1.9879997545,15
+tier1,305,305,23,0.6158673222,1.7623850474,14
+tier2,55,44,6,2.0107967855,1.5521171732,4
+tier1_veto_passed,302,302,23,0.4980794884,1.5066313305,13
+overheat_flagged,28,17,5,-0.0104735998,0.2712897949,2
+chasing_high_flagged,42,31,6,2.872714997,1.7073545739,4

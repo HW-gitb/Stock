@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "generated_at": "2026-06-03T00:00:00Z",
   "artifact_id": "a_short_steady_alpha_reaudit_program_test_budget_ledger_20260603",
-  "ledger_status": "active_planned_test_pending_review",
+  "ledger_status": "active_no_new_test_authorized",
   "family_id": "a_short_steady_alpha_reaudit_v1",
   "lane_id": "a_short_steady",
   "singleton_scope": {
@@ -13,8 +13,8 @@
       "The frozen same-anchor 5d / 20d CSI1000 / CSI300 re-audit defined in research/preregistrations/a_short_steady_alpha_reaudit_20260603.json."
     ],
     "does_not_authorize": [
-      "No outcome run before independent review and explicit user execute command.",
-      "No EGS rerun, no new data fetch, no provider call, no DataHub work, no runner change, no production rule change, no ship-gate claim, and no full-size manual use."
+      "No further outcome run, parameter rescue, benchmark sweep, or changed-threshold rerun without a new reviewed preregistration and user approval.",
+      "No EGS rerun, no new data fetch, no provider call, no DataHub work, no production rule change, no ship-gate claim, and no full-size manual use."
     ]
   },
   "creation_reason": {
@@ -24,35 +24,29 @@
   },
   "budget_policy": {
     "ledger_cardinality": "singleton_program_level",
-    "tests_spent_count": 0,
+    "tests_spent_count": 1,
     "tests_available_without_new_review": 0,
     "next_test_requires_reviewed_preregistration": true,
     "next_test_requires_user_approval": true,
     "spend_rule": "The first same-anchor outcome run spends one planned test regardless of pass, risk-filter-only, or fail result.",
     "no_silent_rescue_rule": "If the result fails or becomes risk-filter-only, do not rerun with changed horizons, thresholds, universe, ranking cap, benchmark, cost model, or veto set without a new reviewed preregistration and ledger update."
   },
-  "test_spend_log": [],
-  "planned_tests": [
+  "test_spend_log": [
     {
       "test_id": "a_short_steady_alpha_reaudit_20260603",
-      "planned_status": "planned_not_reviewed",
-      "created_at": "2026-06-03T00:00:00Z",
-      "planned_preregistration_ref": "research/preregistrations/a_short_steady_alpha_reaudit_20260603.json",
-      "planned_result_ref": "research/results/a_short_steady_alpha_reaudit_20260603/evidence_report.json",
+      "preregistration_ref": "research/preregistrations/a_short_steady_alpha_reaudit_20260603.json",
+      "result_ref": "research/results/a_short_steady_alpha_reaudit_20260603/evidence_report.json",
+      "status": "spent_failed_outcome_threshold",
+      "tests_spent": 1,
       "promotion_relevant": true,
-      "expected_tests_spent": 1,
-      "approval_status": "pending_user_approval",
-      "design_summary": "One frozen same-anchor A-short steady re-audit: 5d / 20d net benchmark excess, CSI1000 primary, CSI300 secondary, production Tier1 v7.10 24-month cohort surface, with multiple-testing, slice, factor, veto, and PIT checks.",
-      "review_boundary": [
-        "Claude review must pass before any outcome run.",
-        "The user must issue a later execute command after review before any outcome run.",
-        "Run must use existing local evidence only and must not fetch data, rerun EGS, regenerate cohorts, alter parameters, or write production outputs."
-      ]
+      "result_summary": "decision=risk_filter_only; 5d CSI1000 same-anchor excess mean=0.615867 pp; monthly_t=1.762385; positive_months=14/23; 20d CSI1000 monthly_t=-0.099415; 5d CSI300 monthly_t=0.929125; old_uncorrected_5d_CSI1000_t=2.876923; direct_regime_status=not_evaluable_missing_momentum_std_column; full_size_allowed=false",
+      "allowed_followup": "Further work needs a new reviewed preregistration or live-normalized forward evidence; no production, ship-gate, full-size, or parameter-rescue path is authorized."
     }
   ],
+  "planned_tests": [],
   "next_required_actions": [
-    "Review the preregistration and this ledger together.",
-    "If review passes and the user later executes the outcome slice, update this planned test to spent with the research-only evidence report path.",
-    "Keep any result out of production and ship-gate evidence unless a later reviewed forward-live process satisfies the fixed ship-gate."
+    "Do not rerun or rescue this A-short steady re-audit without a new reviewed preregistration and ledger update.",
+    "Treat the result as risk-filter-only / research reference; it is not A-short steady alpha evidence.",
+    "If the user wants a new alpha search, create a new reviewed preregistration; do not silently rescue this failed clue."
   ]
 }
