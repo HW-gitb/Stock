@@ -2721,3 +2721,40 @@ git diff --check
 1. Claude review should verify the artifact uses only docs + existing evidence, keeps the SIVB 402 classification open, and leaves `SR-PROVIDER-001` open.
 2. A real SIVB re-probe requires a separate reviewed execution packet: SIVB only, the five failed endpoint families only, max 5 calls, zero retry, $0, existing FMP key, gitignored raw capture, tracked no-secret summary, then a later user `执行`.
 3. Any split / dividend endpoint call or corporate-action reconciliation also requires separate explicit approval and reviewed decision.
+
+## 2026-06-03 append: SIVB-only FMP 402 re-probe execution packet
+
+**What changed**:
+
+- Added `schemas/provider_p1_sivb_reprobe_execution_packet.schema.json`, a const-locked schema for a future SIVB-only FMP 402 re-probe execution packet.
+- Added `docs/provider_evidence_p1_us_sivb_reprobe_execution_packet_20260603.json`, fixing `SIVB` as the only symbol, the five previously failed FMP endpoint families only, max 5 endpoint calls, zero retry, `$0`, existing FMP key only, gitignored raw body capture, tracked no-secret summary, and review / execute gates.
+- Added `tests/schema/test_provider_p1_sivb_reprobe_execution_packet_schema.py`, covering schema validation, SIVB-only scope, exact endpoint families, budget / retry locks, raw / summary boundaries, classification strategy, no-silent-default policy, prohibited claims, and scope-creep rejection.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, and `docs/system_risk_register.md`; `SR-PROVIDER-001` remains open.
+
+**Why**:
+
+- The entitlement diagnostic established that SIVB 402 remains an open hypothesis set and that a useful re-probe must capture the provider's non-JSON error body in gitignored raw storage.
+- This packet turns that future call into a reviewable contract before any network access, avoiding silent broadening into active symbols, SEC calls, split / dividend calls, provider selection, DataHub, or Phase 7c.
+- The future summary is constrained to category signals only: endpoint entitlement, symbol lifecycle, historical / delisted paid tier, or transient quota / provider incident. It cannot copy body text, request URLs, raw rows, or secrets.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool schemas\provider_p1_sivb_reprobe_execution_packet.schema.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\provider_evidence_p1_us_sivb_reprobe_execution_packet_20260603.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_sivb_reprobe_execution_packet_schema -v
+git diff --check
+```
+
+**Invalid conclusions**:
+
+- "The SIVB re-probe has run" is false.
+- "This packet proves why SIVB returned HTTP 402" is false.
+- "This packet authorizes active symbols, SEC calls, split / dividend calls, provider selection, DataHub, Phase 7c, production readiness, alpha evidence, or ship-gate evidence" is false.
+- "The future summary may store response body text or request URLs" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify this artifact is a contract only, with no provider call, no raw read, no runner implementation, and `SR-PROVIDER-001` still open.
+2. If review passes and this slice is committed, a later user `执行` may run only the fixed SIVB-only / five-FMP-family / five-call / zero-retry packet.
+3. Any broader provider work still requires separate explicit approval and reviewed decision.

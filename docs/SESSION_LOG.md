@@ -8,6 +8,63 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (SIVB-only FMP 402 re-probe execution packet) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. Execution-packet CONTRACT only; executes nothing, reads no raw, double-gated before any future call. Matches the drafted command block on every axis.
+
+**Scope reviewed** (base `18c99af`): new `schemas/provider_p1_sivb_reprobe_execution_packet.schema.json` + `docs/..._sivb_reprobe_execution_packet_20260603.json` + its test; routing edits to `AGENTS.md` (new fixed decision #20), `docs/CURRENT.md`, `docs/README.md`, `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, phase7 handoff.
+
+**Independently verified (read artifact in full)**:
+- Contract-only / double-gated: `scope.provider_calls_executed_by_this_artifact`/`raw_payloads_read_by_this_artifact`/`runner_implemented_by_this_artifact` all false; `actual_provider_calls_require_post_review_execute_command=true` + `pre_execution_gates.independent_review_pass_required`/`post_review_execute_command_required` true. Confirmed the raw dir `provider_samples/us_egs_sivb_reprobe_20260603/` does NOT exist → nothing ran.
+- Sample/budget hard-locked: `symbols=["SIVB"]` (max 1, active []), exactly the 5 previously-402 FMP families enumerated (each call_count 1, previous_http_status 402), `max_total_endpoint_calls=5`, SEC 0, retry 0, abort-on-exceed.
+- The point of the re-probe is present: `capture_non_json_body_in_raw=true` (per family + storage). Secret boundary right: tracked summary `must_exclude_raw_payloads`/`error_body_text`/`request_urls` true, `api_key_logging_allowed`/`secrets_in_repo_allowed` false, `assert_no_secret_summary_must_remain=true`; per family `tracked_summary_body_text_allowed`/`request_url_allowed` false, `classification_signal_allowed` true. So the captured 402 body goes to gitignored raw ONLY; the tracked summary gets a category signal + status + shape.
+- Classification stays honest: `classification_output=category_signal_only_no_body_text_no_url`, `direct_paid_wall_conclusion_without_body_or_plan_evidence_allowed=false`; the 4-hypothesis map (endpoint_entitlement / symbol_lifecycle / historical_or_delisted_paid_tier / transient_quota) each `body_text_copied_to_summary=false` + `current_artifact_conclusion_allowed=false`; `no_silent_default_policy` locks 402≠missing-default, TWTR≠coverage, no null/zero/drop/latest-only/production-default; `prohibited_claims.sivb_402_paid_wall_proven` (+ the 4 hypothesis_proven, inactive_delisted_coverage_proven, provider_selected, phase7c, datahub, ship_gate, production_ready) all false.
+- env precheck (FMP key required before network, not logged, abort-if-missing, existing-key-only, no new-token/paid/contact/yfinance/full-market); raw path gitignored (`.gitignore:50`).
+- Schema const-locks enforced: 11/11 tests pass under Python313+jsonschema INCLUDING the scope-creep rejection test (which runs, not skips, under jsonschema) → flipping the no-execution/capture/paid-wall locks is rejected, so they are true const-locks not leaky type:boolean.
+- `SR-PROVIDER-001` stays **open**; AGENTS fixed decision #20 accurately records this as a future-execution contract (SIVB-only / 5 families / 5 calls / retry 0 / $0 / gitignored raw / no body-URL-secret in summary / double-gate / executes nothing); CURRENT=149; the 3 new files are secret-clean.
+
+**Note for Final Approver (not a defect)**: this packet is now review-ready. The actual SIVB re-probe RUN (the first call that captures the 402 body to classify it) happens ONLY after you commit this and issue an execute command — and that run is a SEPARATE slice (narrow runner + tracked summary) that I'll review before 提交.
+
+**Residual blockers unchanged (intentional)**: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open; aggregate full-size permission `not_evaluable` by the SR-EXEC-007 concurrency gate.
+
+---
+
+## 2026-06-03 — Codex 执行 (SIVB-only FMP 402 re-probe execution packet)
+
+**Commits**: none (pending independent review / submit; base `18c99af`)
+
+**Scope**:
+- User asked to create the reviewed execution-packet contract for a future SIVB-only FMP HTTP 402 re-probe, without executing it.
+- This round creates only schema + artifact + tests and routing docs. It performs no FMP call, SEC call, raw-payload read, raw write, execution-summary write, runner implementation, provider selection, adapter, DataHub work, Phase 7c authorization, production-readiness claim, alpha evidence, or ship-gate evidence.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_sivb_reprobe_execution_packet.schema.json`: const-locked schema for SIVB-only / five failed FMP endpoint families / max 5 calls / zero retry / $0 / existing FMP key packet.
+2. [untracked] `docs/provider_evidence_p1_us_sivb_reprobe_execution_packet_20260603.json`: packet artifact fixing symbol, endpoint families, budget, raw path, tracked summary path, pre-execution gates, classification strategy, no-silent-default policy, and prohibited claims.
+3. [untracked] `tests/schema/test_provider_p1_sivb_reprobe_execution_packet_schema.py`: schema / artifact validation, SIVB-only scope, budget / retry locks, summary no-body/no-url boundary, classification hypothesis map, and scope-creep rejection.
+4. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/system_risk_register.md`, `docs/CURRENT.md`, `docs/README.md`, `AGENTS.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the packet and keep `SR-PROVIDER-001` open.
+
+**Design decision**:
+- The packet is intentionally narrower than the earlier five-symbol validation run: `SIVB` only, FMP only, exactly the five endpoint families that returned 402 (`income_statement`, `balance_sheet_statement`, `cash_flow_statement`, `financial_ratios_or_key_metrics`, `historical_eod_price_volume`), max 5 calls, zero retries.
+- The future run must capture non-JSON body text in gitignored raw, but the tracked summary may record only endpoint family, HTTP status, payload shape, and category signal. It must not store response body text, request URL, API key, raw rows, or secrets.
+- Future classification is limited to category signals: endpoint entitlement, symbol lifecycle, historical / delisted paid tier, or transient quota / provider incident. Without explicit body or plan evidence, paid-wall remains unproven; HTTP 402 remains not-a-missing-data default; TWTR success remains not-coverage-proof.
+- This packet still requires independent review pass plus later user `执行` before any network access.
+
+**Validation run/result**:
+- Bundled Python: `json.tool` parsed the new schema and artifact.
+- Bundled Python: `tests.schema.test_provider_p1_sivb_reprobe_execution_packet_schema -v` ran 11 tests; 8 non-jsonschema checks passed and 3 jsonschema subtests skipped because bundled Python lacks `jsonschema`.
+- Python313 + jsonschema (elevated because sandbox denied direct Python313 execution): `tests.schema.test_provider_p1_sivb_reprobe_execution_packet_schema -v` ran 11 tests, all pass.
+- Python313 + jsonschema full discovery: `unittest discover -v` ran 517 tests, all pass.
+- `provider_samples/us_egs_sivb_reprobe_20260603/` is covered by `.gitignore`.
+- Sensitive-string scan over the new schema / artifact / test for `apikey=`, bearer tokens, env var names, fake unit-test key, and OpenAI-style key pattern returned no matches.
+- `docs/CURRENT.md` line count remains 149.
+- `git diff --check` exited 0 with only normal Windows LF/CRLF warnings.
+
+**Current review state**:
+- Needs independent review before `提交`.
+- `SR-PROVIDER-001` remains open. A later actual SIVB re-probe run is not authorized until this packet passes review and the user gives a post-review execute command.
+
+---
+
 ## 2026-06-03 — Claude 审查 (FMP entitlement + corporate-action no-access diagnostic) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. Executes the drafted diagnostic slice exactly: docs-only review + SIVB-402-as-open-hypotheses + runner error-body-capture hardening; no new provider call, nothing over-concluded.

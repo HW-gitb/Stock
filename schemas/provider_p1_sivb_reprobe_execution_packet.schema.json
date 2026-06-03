@@ -1,0 +1,826 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_sivb_reprobe_execution_packet/1.0.0/schema.json",
+  "title": "Provider P1 SIVB FMP 402 Re-Probe Execution Packet",
+  "description": "Machine-checkable reviewed execution packet contract for a future SIVB-only FMP HTTP 402 re-probe. It fixes the symbol, five failed endpoint families, call budget, raw / summary storage, pre-execution gates, classification strategy, and prohibited claims. This artifact does not execute provider calls, read raw payloads, implement a runner, select a provider, authorize DataHub / Phase 7c, or support production-readiness / ship-gate claims.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "authorization_ref",
+    "scope",
+    "source_artifact_refs",
+    "sample_universe",
+    "endpoint_call_budget",
+    "endpoint_families",
+    "environment_precheck",
+    "storage_and_secret_boundary",
+    "pre_execution_gates",
+    "classification_strategy",
+    "no_silent_default_policy",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_sivb_reprobe_execution_packet"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "authorization_ref": {
+      "const": "docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_validation_authorization_packet_20260603"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_validation_execution_summary_20260603"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_entitlement_corporate_action_diagnostic_20260603"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "sr_provider_001"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "sample_universe": {
+      "$ref": "#/$defs/sampleUniverse"
+    },
+    "endpoint_call_budget": {
+      "$ref": "#/$defs/endpointCallBudget"
+    },
+    "endpoint_families": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/endpointFamily"
+      },
+      "minItems": 5,
+      "maxItems": 5,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "endpoint_family": {
+                "const": "income_statement"
+              }
+            },
+            "required": [
+              "endpoint_family"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "endpoint_family": {
+                "const": "balance_sheet_statement"
+              }
+            },
+            "required": [
+              "endpoint_family"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "endpoint_family": {
+                "const": "cash_flow_statement"
+              }
+            },
+            "required": [
+              "endpoint_family"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "endpoint_family": {
+                "const": "financial_ratios_or_key_metrics"
+              }
+            },
+            "required": [
+              "endpoint_family"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "endpoint_family": {
+                "const": "historical_eod_price_volume"
+              }
+            },
+            "required": [
+              "endpoint_family"
+            ]
+          }
+        }
+      ]
+    },
+    "environment_precheck": {
+      "$ref": "#/$defs/environmentPrecheck"
+    },
+    "storage_and_secret_boundary": {
+      "$ref": "#/$defs/storageAndSecretBoundary"
+    },
+    "pre_execution_gates": {
+      "$ref": "#/$defs/preExecutionGates"
+    },
+    "classification_strategy": {
+      "$ref": "#/$defs/classificationStrategy"
+    },
+    "no_silent_default_policy": {
+      "$ref": "#/$defs/noSilentDefaultPolicy"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "packet_status",
+        "provider_calls_executed_by_this_artifact",
+        "raw_payloads_read_by_this_artifact",
+        "runner_implemented_by_this_artifact",
+        "ready_for_later_execution_after_independent_review",
+        "actual_provider_calls_require_post_review_execute_command",
+        "network_access_required_for_later_execution",
+        "fmp_existing_key_use_allowed",
+        "spend_usd",
+        "provider_selection_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "ship_gate_evidence_allowed",
+        "production_ready_claim_allowed",
+        "broker_or_order_automation_allowed",
+        "new_token_trial_paid_or_provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_sivb_only_fmp_402_reprobe_execution_packet"
+        },
+        "packet_status": {
+          "const": "execution_packet_contract_recorded_for_review_not_executed"
+        },
+        "provider_calls_executed_by_this_artifact": {
+          "const": false
+        },
+        "raw_payloads_read_by_this_artifact": {
+          "const": false
+        },
+        "runner_implemented_by_this_artifact": {
+          "const": false
+        },
+        "ready_for_later_execution_after_independent_review": {
+          "const": true
+        },
+        "actual_provider_calls_require_post_review_execute_command": {
+          "const": true
+        },
+        "network_access_required_for_later_execution": {
+          "const": true
+        },
+        "fmp_existing_key_use_allowed": {
+          "const": true
+        },
+        "spend_usd": {
+          "const": 0
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "new_token_trial_paid_or_provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sampleUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbols",
+        "max_symbols",
+        "active_symbols",
+        "inactive_or_delisted_candidate_symbols",
+        "not_full_market_or_security_master",
+        "security_master_implementation_allowed"
+      ],
+      "properties": {
+        "symbols": {
+          "const": [
+            "SIVB"
+          ]
+        },
+        "max_symbols": {
+          "const": 1
+        },
+        "active_symbols": {
+          "const": []
+        },
+        "inactive_or_delisted_candidate_symbols": {
+          "const": [
+            "SIVB"
+          ]
+        },
+        "not_full_market_or_security_master": {
+          "const": true
+        },
+        "security_master_implementation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "endpointCallBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_total_endpoint_calls",
+        "fmp_planned_endpoint_calls",
+        "sec_endpoint_calls",
+        "retry_count_allowed",
+        "abort_if_budget_exceeded",
+        "budget_precheck_required"
+      ],
+      "properties": {
+        "max_total_endpoint_calls": {
+          "const": 5
+        },
+        "fmp_planned_endpoint_calls": {
+          "const": 5
+        },
+        "sec_endpoint_calls": {
+          "const": 0
+        },
+        "retry_count_allowed": {
+          "const": 0
+        },
+        "abort_if_budget_exceeded": {
+          "const": true
+        },
+        "budget_precheck_required": {
+          "const": true
+        }
+      }
+    },
+    "endpointFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "symbol",
+        "endpoint_family",
+        "call_count",
+        "previous_http_status",
+        "capture_non_json_body_in_raw",
+        "tracked_summary_body_text_allowed",
+        "tracked_summary_request_url_allowed",
+        "classification_signal_allowed",
+        "authorizes_return_calculation",
+        "authorizes_corporate_action_reconciliation",
+        "authorizes_fixture_generation",
+        "authorizes_field_mapping_implementation",
+        "authorizes_provider_selection",
+        "authorizes_datahub_or_runner"
+      ],
+      "properties": {
+        "provider_id": {
+          "const": "financial_modeling_prep"
+        },
+        "symbol": {
+          "const": "SIVB"
+        },
+        "endpoint_family": {
+          "enum": [
+            "income_statement",
+            "balance_sheet_statement",
+            "cash_flow_statement",
+            "financial_ratios_or_key_metrics",
+            "historical_eod_price_volume"
+          ]
+        },
+        "call_count": {
+          "const": 1
+        },
+        "previous_http_status": {
+          "const": 402
+        },
+        "capture_non_json_body_in_raw": {
+          "const": true
+        },
+        "tracked_summary_body_text_allowed": {
+          "const": false
+        },
+        "tracked_summary_request_url_allowed": {
+          "const": false
+        },
+        "classification_signal_allowed": {
+          "const": true
+        },
+        "authorizes_return_calculation": {
+          "const": false
+        },
+        "authorizes_corporate_action_reconciliation": {
+          "const": false
+        },
+        "authorizes_fixture_generation": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_provider_selection": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner": {
+          "const": false
+        }
+      }
+    },
+    "environmentPrecheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_key_required_before_any_network_call",
+        "fmp_key_must_not_be_logged",
+        "abort_before_network_if_fmp_key_missing",
+        "existing_fmp_key_only",
+        "new_token_trial_paid_or_provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_fetch_allowed"
+      ],
+      "properties": {
+        "fmp_key_required_before_any_network_call": {
+          "const": true
+        },
+        "fmp_key_must_not_be_logged": {
+          "const": true
+        },
+        "abort_before_network_if_fmp_key_missing": {
+          "const": true
+        },
+        "existing_fmp_key_only": {
+          "const": true
+        },
+        "new_token_trial_paid_or_provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_fetch_allowed": {
+          "const": false
+        }
+      }
+    },
+    "storageAndSecretBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_sample_storage_path",
+        "tracked_summary_path",
+        "raw_sample_storage_must_be_gitignored",
+        "capture_non_json_body_in_raw",
+        "tracked_summary_must_exclude_raw_payloads",
+        "tracked_summary_must_exclude_error_body_text",
+        "tracked_summary_must_exclude_request_urls",
+        "api_key_logging_allowed",
+        "secrets_in_repo_allowed",
+        "assert_no_secret_summary_must_remain"
+      ],
+      "properties": {
+        "raw_sample_storage_path": {
+          "const": "provider_samples/us_egs_sivb_reprobe_20260603/"
+        },
+        "tracked_summary_path": {
+          "const": "docs/provider_evidence_p1_us_sivb_reprobe_execution_summary_20260603.json"
+        },
+        "raw_sample_storage_must_be_gitignored": {
+          "const": true
+        },
+        "capture_non_json_body_in_raw": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_raw_payloads": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_error_body_text": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_request_urls": {
+          "const": true
+        },
+        "api_key_logging_allowed": {
+          "const": false
+        },
+        "secrets_in_repo_allowed": {
+          "const": false
+        },
+        "assert_no_secret_summary_must_remain": {
+          "const": true
+        }
+      }
+    },
+    "preExecutionGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independent_review_pass_required",
+        "post_review_execute_command_required",
+        "environment_precheck_required",
+        "exact_symbol_and_family_fixed",
+        "provider_samples_gitignore_check_required",
+        "no_secret_summary_scan_required",
+        "budget_precheck_required",
+        "abort_on_budget_or_scope_violation",
+        "no_new_token_paid_or_contact_precheck"
+      ],
+      "properties": {
+        "independent_review_pass_required": {
+          "const": true
+        },
+        "post_review_execute_command_required": {
+          "const": true
+        },
+        "environment_precheck_required": {
+          "const": true
+        },
+        "exact_symbol_and_family_fixed": {
+          "const": true
+        },
+        "provider_samples_gitignore_check_required": {
+          "const": true
+        },
+        "no_secret_summary_scan_required": {
+          "const": true
+        },
+        "budget_precheck_required": {
+          "const": true
+        },
+        "abort_on_budget_or_scope_violation": {
+          "const": true
+        },
+        "no_new_token_paid_or_contact_precheck": {
+          "const": true
+        }
+      }
+    },
+    "classificationStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "read_captured_402_body_for_classification",
+        "classification_output",
+        "tracked_summary_body_text_allowed",
+        "tracked_summary_request_url_allowed",
+        "direct_paid_wall_conclusion_without_body_or_plan_evidence_allowed",
+        "hypothesis_map"
+      ],
+      "properties": {
+        "read_captured_402_body_for_classification": {
+          "const": true
+        },
+        "classification_output": {
+          "const": "category_signal_only_no_body_text_no_url"
+        },
+        "tracked_summary_body_text_allowed": {
+          "const": false
+        },
+        "tracked_summary_request_url_allowed": {
+          "const": false
+        },
+        "direct_paid_wall_conclusion_without_body_or_plan_evidence_allowed": {
+          "const": false
+        },
+        "hypothesis_map": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/classificationHypothesis"
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "hypothesis_id": {
+                    "const": "endpoint_entitlement"
+                  }
+                },
+                "required": [
+                  "hypothesis_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "hypothesis_id": {
+                    "const": "symbol_lifecycle"
+                  }
+                },
+                "required": [
+                  "hypothesis_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "hypothesis_id": {
+                    "const": "historical_or_delisted_paid_tier"
+                  }
+                },
+                "required": [
+                  "hypothesis_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "hypothesis_id": {
+                    "const": "transient_quota_or_provider_incident"
+                  }
+                },
+                "required": [
+                  "hypothesis_id"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "classificationHypothesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hypothesis_id",
+        "future_summary_signal",
+        "body_text_copied_to_summary",
+        "current_artifact_conclusion_allowed",
+        "evidence_required_to_confirm"
+      ],
+      "properties": {
+        "hypothesis_id": {
+          "enum": [
+            "endpoint_entitlement",
+            "symbol_lifecycle",
+            "historical_or_delisted_paid_tier",
+            "transient_quota_or_provider_incident"
+          ]
+        },
+        "future_summary_signal": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "body_text_copied_to_summary": {
+          "const": false
+        },
+        "current_artifact_conclusion_allowed": {
+          "const": false
+        },
+        "evidence_required_to_confirm": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "noSilentDefaultPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_http_402_is_not_missing_data_default",
+        "twtr_success_is_not_inactive_delisted_coverage_proof",
+        "null_fill_allowed",
+        "zero_fill_allowed",
+        "drop_failed_symbol_allowed",
+        "latest_only_substitution_allowed",
+        "production_default_allowed"
+      ],
+      "properties": {
+        "fmp_http_402_is_not_missing_data_default": {
+          "const": true
+        },
+        "twtr_success_is_not_inactive_delisted_coverage_proof": {
+          "const": true
+        },
+        "null_fill_allowed": {
+          "const": false
+        },
+        "zero_fill_allowed": {
+          "const": false
+        },
+        "drop_failed_symbol_allowed": {
+          "const": false
+        },
+        "latest_only_substitution_allowed": {
+          "const": false
+        },
+        "production_default_allowed": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sivb_402_paid_wall_proven",
+        "endpoint_entitlement_proven",
+        "symbol_lifecycle_proven",
+        "historical_or_delisted_paid_tier_proven",
+        "transient_quota_or_provider_incident_proven",
+        "inactive_delisted_coverage_proven",
+        "provider_selected",
+        "phase7c_authorized",
+        "datahub_authorized",
+        "ship_gate_evidence",
+        "production_ready",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "sivb_402_paid_wall_proven": {
+          "const": false
+        },
+        "endpoint_entitlement_proven": {
+          "const": false
+        },
+        "symbol_lifecycle_proven": {
+          "const": false
+        },
+        "historical_or_delisted_paid_tier_proven": {
+          "const": false
+        },
+        "transient_quota_or_provider_incident_proven": {
+          "const": false
+        },
+        "inactive_delisted_coverage_proven": {
+          "const": false
+        },
+        "provider_selected": {
+          "const": false
+        },
+        "phase7c_authorized": {
+          "const": false
+        },
+        "datahub_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

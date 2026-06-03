@@ -1,0 +1,279 @@
+{
+  "schema_name": "provider_p1_sivb_reprobe_execution_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+08:00",
+  "authorization_ref": "docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_sivb_only_fmp_402_reprobe_execution_packet",
+    "packet_status": "execution_packet_contract_recorded_for_review_not_executed",
+    "provider_calls_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "runner_implemented_by_this_artifact": false,
+    "ready_for_later_execution_after_independent_review": true,
+    "actual_provider_calls_require_post_review_execute_command": true,
+    "network_access_required_for_later_execution": true,
+    "fmp_existing_key_use_allowed": true,
+    "spend_usd": 0,
+    "provider_selection_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "new_token_trial_paid_or_provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_validation_authorization_packet_20260603",
+      "path": "docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json",
+      "role": "User-confirmed FMP Basic / existing-key plus SEC EDGAR public-API zero-dollar authorization boundary; this packet consumes only the existing FMP-key portion for a future SIVB-only re-probe."
+    },
+    {
+      "artifact_id": "p1_validation_execution_summary_20260603",
+      "path": "docs/provider_evidence_p1_us_validation_execution_summary_20260603.json",
+      "role": "Tracked no-secret summary records SIVB profile success plus five FMP HTTP 402 endpoint errors and TWTR six-endpoint success comparison."
+    },
+    {
+      "artifact_id": "p1_fmp_entitlement_corporate_action_diagnostic_20260603",
+      "path": "docs/provider_evidence_p1_us_fmp_entitlement_corporate_action_no_access_diagnostic_20260603.json",
+      "role": "Docs-only diagnostic keeps SIVB 402 as an open hypothesis set, identifies future raw error-body capture as necessary, and shapes a SIVB-only re-probe without authorizing it."
+    },
+    {
+      "artifact_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Durable open provider-risk queue requiring separate reviewed execution packet plus post-review user execute command before any provider call."
+    }
+  ],
+  "sample_universe": {
+    "symbols": [
+      "SIVB"
+    ],
+    "max_symbols": 1,
+    "active_symbols": [],
+    "inactive_or_delisted_candidate_symbols": [
+      "SIVB"
+    ],
+    "not_full_market_or_security_master": true,
+    "security_master_implementation_allowed": false
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 5,
+    "fmp_planned_endpoint_calls": 5,
+    "sec_endpoint_calls": 0,
+    "retry_count_allowed": 0,
+    "abort_if_budget_exceeded": true,
+    "budget_precheck_required": true
+  },
+  "endpoint_families": [
+    {
+      "provider_id": "financial_modeling_prep",
+      "symbol": "SIVB",
+      "endpoint_family": "income_statement",
+      "call_count": 1,
+      "previous_http_status": 402,
+      "capture_non_json_body_in_raw": true,
+      "tracked_summary_body_text_allowed": false,
+      "tracked_summary_request_url_allowed": false,
+      "classification_signal_allowed": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_provider_selection": false,
+      "authorizes_datahub_or_runner": false
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "symbol": "SIVB",
+      "endpoint_family": "balance_sheet_statement",
+      "call_count": 1,
+      "previous_http_status": 402,
+      "capture_non_json_body_in_raw": true,
+      "tracked_summary_body_text_allowed": false,
+      "tracked_summary_request_url_allowed": false,
+      "classification_signal_allowed": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_provider_selection": false,
+      "authorizes_datahub_or_runner": false
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "symbol": "SIVB",
+      "endpoint_family": "cash_flow_statement",
+      "call_count": 1,
+      "previous_http_status": 402,
+      "capture_non_json_body_in_raw": true,
+      "tracked_summary_body_text_allowed": false,
+      "tracked_summary_request_url_allowed": false,
+      "classification_signal_allowed": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_provider_selection": false,
+      "authorizes_datahub_or_runner": false
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "symbol": "SIVB",
+      "endpoint_family": "financial_ratios_or_key_metrics",
+      "call_count": 1,
+      "previous_http_status": 402,
+      "capture_non_json_body_in_raw": true,
+      "tracked_summary_body_text_allowed": false,
+      "tracked_summary_request_url_allowed": false,
+      "classification_signal_allowed": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_provider_selection": false,
+      "authorizes_datahub_or_runner": false
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "symbol": "SIVB",
+      "endpoint_family": "historical_eod_price_volume",
+      "call_count": 1,
+      "previous_http_status": 402,
+      "capture_non_json_body_in_raw": true,
+      "tracked_summary_body_text_allowed": false,
+      "tracked_summary_request_url_allowed": false,
+      "classification_signal_allowed": true,
+      "authorizes_return_calculation": false,
+      "authorizes_corporate_action_reconciliation": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_field_mapping_implementation": false,
+      "authorizes_provider_selection": false,
+      "authorizes_datahub_or_runner": false
+    }
+  ],
+  "environment_precheck": {
+    "fmp_key_required_before_any_network_call": true,
+    "fmp_key_must_not_be_logged": true,
+    "abort_before_network_if_fmp_key_missing": true,
+    "existing_fmp_key_only": true,
+    "new_token_trial_paid_or_provider_contact_allowed": false,
+    "yfinance_allowed": false,
+    "full_market_fetch_allowed": false
+  },
+  "storage_and_secret_boundary": {
+    "raw_sample_storage_path": "provider_samples/us_egs_sivb_reprobe_20260603/",
+    "tracked_summary_path": "docs/provider_evidence_p1_us_sivb_reprobe_execution_summary_20260603.json",
+    "raw_sample_storage_must_be_gitignored": true,
+    "capture_non_json_body_in_raw": true,
+    "tracked_summary_must_exclude_raw_payloads": true,
+    "tracked_summary_must_exclude_error_body_text": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "api_key_logging_allowed": false,
+    "secrets_in_repo_allowed": false,
+    "assert_no_secret_summary_must_remain": true
+  },
+  "pre_execution_gates": {
+    "independent_review_pass_required": true,
+    "post_review_execute_command_required": true,
+    "environment_precheck_required": true,
+    "exact_symbol_and_family_fixed": true,
+    "provider_samples_gitignore_check_required": true,
+    "no_secret_summary_scan_required": true,
+    "budget_precheck_required": true,
+    "abort_on_budget_or_scope_violation": true,
+    "no_new_token_paid_or_contact_precheck": true
+  },
+  "classification_strategy": {
+    "read_captured_402_body_for_classification": true,
+    "classification_output": "category_signal_only_no_body_text_no_url",
+    "tracked_summary_body_text_allowed": false,
+    "tracked_summary_request_url_allowed": false,
+    "direct_paid_wall_conclusion_without_body_or_plan_evidence_allowed": false,
+    "hypothesis_map": [
+      {
+        "hypothesis_id": "endpoint_entitlement",
+        "future_summary_signal": "provider_body_or_http_shape_suggests_endpoint_family_or_account entitlement limit",
+        "body_text_copied_to_summary": false,
+        "current_artifact_conclusion_allowed": false,
+        "evidence_required_to_confirm": [
+          "Future run captures provider error body under gitignored raw storage.",
+          "Tracked summary records only endpoint family, HTTP status, payload shape, and category signal.",
+          "Endpoint-specific access evidence exists without exposing secrets."
+        ]
+      },
+      {
+        "hypothesis_id": "symbol_lifecycle",
+        "future_summary_signal": "provider_body_or_http_shape_suggests SIVB-specific receivership / bankruptcy / lifecycle behavior",
+        "body_text_copied_to_summary": false,
+        "current_artifact_conclusion_allowed": false,
+        "evidence_required_to_confirm": [
+          "Future run captures provider error body under gitignored raw storage.",
+          "Tracked summary distinguishes symbol-lifecycle signal from universal delisted-symbol failure.",
+          "No security-master or inactive / delisted coverage claim is made."
+        ]
+      },
+      {
+        "hypothesis_id": "historical_or_delisted_paid_tier",
+        "future_summary_signal": "provider_body_or http shape suggests history-depth, delisted-data, or paid-tier restriction",
+        "body_text_copied_to_summary": false,
+        "current_artifact_conclusion_allowed": false,
+        "evidence_required_to_confirm": [
+          "Future run captures provider error body under gitignored raw storage.",
+          "Tracked summary records category signal only, not body text or request URL.",
+          "Any paid access, trial, or provider contact remains a separate user decision."
+        ]
+      },
+      {
+        "hypothesis_id": "transient_quota_or_provider_incident",
+        "future_summary_signal": "provider_body_or_http_shape suggests quota, account state, transient, or provider incident behavior",
+        "body_text_copied_to_summary": false,
+        "current_artifact_conclusion_allowed": false,
+        "evidence_required_to_confirm": [
+          "Future run captures provider error body under gitignored raw storage.",
+          "Retry count remains zero unless a separate reviewed incident packet authorizes retries.",
+          "No provider status polling or broad retry loop is authorized."
+        ]
+      }
+    ]
+  },
+  "no_silent_default_policy": {
+    "fmp_http_402_is_not_missing_data_default": true,
+    "twtr_success_is_not_inactive_delisted_coverage_proof": true,
+    "null_fill_allowed": false,
+    "zero_fill_allowed": false,
+    "drop_failed_symbol_allowed": false,
+    "latest_only_substitution_allowed": false,
+    "production_default_allowed": false
+  },
+  "prohibited_claims": {
+    "sivb_402_paid_wall_proven": false,
+    "endpoint_entitlement_proven": false,
+    "symbol_lifecycle_proven": false,
+    "historical_or_delisted_paid_tier_proven": false,
+    "transient_quota_or_provider_incident_proven": false,
+    "inactive_delisted_coverage_proven": false,
+    "provider_selected": false,
+    "phase7c_authorized": false,
+    "datahub_authorized": false,
+    "ship_gate_evidence": false,
+    "production_ready": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Independent review must verify this packet is SIVB-only, five failed FMP endpoint families only, max five calls, zero retry, existing FMP key only, and no execution in this artifact.",
+    "If independent review passes and the user later gives an execute command, a separate run step may implement or parameterize the narrow runner and write the tracked no-secret summary.",
+    "The future execution summary may store only endpoint family, HTTP status, payload shape, and category signal; it must not store response body text, request URL, API key, raw rows, or secrets.",
+    "Keep SR-PROVIDER-001 open after this packet and after any future execution unless a later reviewed decision explicitly resolves the remaining provider blockers."
+  ],
+  "limitations": [
+    "This packet performs no provider call, reads no raw payload, writes no raw sample, implements no runner, and creates no execution summary.",
+    "This packet authorizes no active symbols, full-market fetch, security-master construction, SEC API call, yfinance check, new token, trial, paid access, or provider contact.",
+    "This packet does not prove why SIVB returned HTTP 402, does not prove paid-wall status, does not prove inactive / delisted coverage, and does not prove provider readiness.",
+    "This packet authorizes no return calculation, corporate-action reconciliation, field mapping, fixture generation, provider selection, adapter, DataHub, runner consumption, Phase 7c, ship-gate evidence, production readiness, or broker / order automation."
+  ]
+}
