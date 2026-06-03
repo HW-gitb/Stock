@@ -1,0 +1,459 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_data_integrity_audit_report/1.0.0/schema.json",
+  "title": "A-long Data Integrity Audit Report",
+  "description": "Execution report for the frozen A-share long-lane data-integrity audit. It records runner self-tests, local cache-only audit checks, blocked/pass decisions, usable-window characterization, and explicit non-authorization of signal search, production use, ship-gate claims, full-size use, or broker automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "execution",
+    "decision",
+    "required_runner_self_tests",
+    "audit_as_of_schedule",
+    "schedule_cache_coverage",
+    "audit_checks",
+    "coverage_characterization",
+    "local_cache_inventory",
+    "prohibited_claims",
+    "source_refs",
+    "result_artifacts",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "a_long_data_integrity_audit_report"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "artifact_id": {
+      "const": "a_long_data_integrity_audit_report_20260603"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "execution": {
+      "$ref": "#/$defs/execution"
+    },
+    "decision": {
+      "$ref": "#/$defs/decision"
+    },
+    "required_runner_self_tests": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/$defs/selfTest"
+      },
+      "contains": {
+        "type": "object",
+        "required": ["fixture_id"],
+        "properties": {
+          "fixture_id": {
+            "const": "future_ann_date_hard_fail"
+          }
+        }
+      }
+    },
+    "audit_as_of_schedule": {
+      "$ref": "#/$defs/auditAsOfSchedule"
+    },
+    "schedule_cache_coverage": {
+      "$ref": "#/$defs/flexibleObject"
+    },
+    "audit_checks": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/auditCheck"
+      }
+    },
+    "coverage_characterization": {
+      "$ref": "#/$defs/coverage"
+    },
+    "local_cache_inventory": {
+      "$ref": "#/$defs/flexibleObject"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "source_refs": {
+      "$ref": "#/$defs/stringList"
+    },
+    "result_artifacts": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "flexibleObject": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "local_cache_read_only",
+        "provider_call_executed",
+        "data_fetch_executed",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7a_alpha_validation"
+        },
+        "purpose": {
+          "const": "a_long_data_integrity_audit_execution"
+        },
+        "lane_id": {
+          "const": "a_long"
+        },
+        "market": {
+          "const": "A-share"
+        },
+        "research_only": {
+          "const": true
+        },
+        "local_cache_read_only": {
+          "const": true
+        },
+        "provider_call_executed": {
+          "const": false
+        },
+        "data_fetch_executed": {
+          "const": false
+        },
+        "signal_search_executed": {
+          "const": false
+        },
+        "alpha_backtest_executed": {
+          "const": false
+        },
+        "production_use_allowed": {
+          "const": false
+        },
+        "ship_gate_claim_allowed": {
+          "const": false
+        },
+        "full_size_manual_use_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_id",
+        "preregistration_ref",
+        "ledger_ref",
+        "result_dir",
+        "code_version_ref",
+        "network_calls_executed",
+        "provider_calls_executed",
+        "self_tests_required",
+        "self_tests_passed"
+      ],
+      "properties": {
+        "test_id": {
+          "const": "a_long_data_integrity_audit_20260603"
+        },
+        "preregistration_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "ledger_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "result_dir": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "code_version_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "network_calls_executed": {
+          "const": 0
+        },
+        "provider_calls_executed": {
+          "const": 0
+        },
+        "self_tests_required": {
+          "const": 6
+        },
+        "self_tests_passed": {
+          "const": 6
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audit_status",
+        "hard_checks_pass",
+        "hard_blocked_checks",
+        "hard_failed_checks",
+        "usable_start_year",
+        "signal_search_allowed_by_this_report",
+        "alpha_found",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "audit_status": {
+          "enum": [
+            "pass_data_ready_for_signal_preregistration",
+            "fail_data_not_ready",
+            "blocked_missing_required_source"
+          ]
+        },
+        "hard_checks_pass": {
+          "type": "boolean"
+        },
+        "hard_blocked_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "hard_failed_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "usable_start_year": {
+          "type": ["integer", "null"]
+        },
+        "signal_search_allowed_by_this_report": {
+          "const": false
+        },
+        "alpha_found": {
+          "const": false
+        },
+        "plain_result": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "next_action": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "selfTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixture_id",
+        "status",
+        "detected_expected_violation",
+        "metrics"
+      ],
+      "properties": {
+        "fixture_id": {
+          "enum": [
+            "future_ann_date_hard_fail",
+            "restated_value_asof_fail",
+            "dropped_delisted_member_fail",
+            "missing_delisting_terminal_return_fail",
+            "benchmark_anchor_mismatch_fail",
+            "sparse_early_coverage_declares_usable_window"
+          ]
+        },
+        "status": {
+          "const": "pass"
+        },
+        "detected_expected_violation": {
+          "const": true
+        },
+        "metrics": {
+          "$ref": "#/$defs/flexibleObject"
+        }
+      }
+    },
+    "auditAsOfSchedule": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schedule_id",
+        "frequency",
+        "start_as_of",
+        "end_as_of"
+      ],
+      "properties": {
+        "schedule_id": {
+          "const": "a_long_monthly_last_trading_day_20180131_20251231"
+        },
+        "frequency": {
+          "const": "monthly"
+        },
+        "start_as_of": {
+          "const": "2018-01-31"
+        },
+        "end_as_of": {
+          "const": "2025-12-31"
+        }
+      }
+    },
+    "auditCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check_id",
+        "status",
+        "hard_check",
+        "blocks_signal_search",
+        "metrics",
+        "findings",
+        "allowed_followup"
+      ],
+      "properties": {
+        "check_id": {
+          "enum": [
+            "fundamental_pit",
+            "restatement_revision_asof",
+            "survivorship_pit_universe",
+            "return_benchmark_measurement_basis",
+            "temporal_coverage_bias"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail_data_not_ready",
+            "blocked_missing_required_source",
+            "coverage_characterized_usable_window_declared"
+          ]
+        },
+        "hard_check": {
+          "type": "boolean"
+        },
+        "blocks_signal_search": {
+          "type": "boolean"
+        },
+        "metrics": {
+          "$ref": "#/$defs/flexibleObject"
+        },
+        "findings": {
+          "$ref": "#/$defs/stringList"
+        },
+        "allowed_followup": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "usable_start_year",
+        "basis",
+        "threshold_pct",
+        "derived_cache_rows"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "blocked_missing_required_source",
+            "coverage_characterized_usable_window_declared"
+          ]
+        },
+        "usable_start_year": {
+          "type": ["integer", "null"]
+        },
+        "basis": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "threshold_pct": {
+          "const": 80
+        },
+        "derived_cache_rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/flexibleObject"
+          }
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_alpha_found",
+        "signal_search_authorized",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "provider_selected",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_alpha_found": {
+          "const": false
+        },
+        "signal_search_authorized": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        },
+        "full_size_allowed": {
+          "const": false
+        },
+        "provider_selected": {
+          "const": false
+        },
+        "datahub_authorized": {
+          "const": false
+        },
+        "broker_or_order_automation_authorized": {
+          "const": false
+        }
+      }
+    }
+  }
+}

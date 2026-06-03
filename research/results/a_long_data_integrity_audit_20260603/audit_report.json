@@ -1,0 +1,1195 @@
+{
+  "schema_name": "a_long_data_integrity_audit_report",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00Z",
+  "artifact_id": "a_long_data_integrity_audit_report_20260603",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_data_integrity_audit_execution",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "local_cache_read_only": true,
+    "provider_call_executed": false,
+    "data_fetch_executed": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "execution": {
+    "test_id": "a_long_data_integrity_audit_20260603",
+    "preregistration_ref": "research/preregistrations/a_long_data_integrity_audit_20260603.json",
+    "ledger_ref": "research/ledgers/a_long_data_integrity_audit_program_test_budget_ledger_20260603.json",
+    "result_dir": "research/results/a_long_data_integrity_audit_20260603",
+    "code_version_ref": "e43e560",
+    "network_calls_executed": 0,
+    "provider_calls_executed": 0,
+    "self_tests_required": 6,
+    "self_tests_passed": 6
+  },
+  "decision": {
+    "audit_status": "blocked_missing_required_source",
+    "hard_checks_pass": false,
+    "hard_blocked_checks": [
+      "fundamental_pit",
+      "restatement_revision_asof",
+      "survivorship_pit_universe",
+      "return_benchmark_measurement_basis"
+    ],
+    "hard_failed_checks": [],
+    "usable_start_year": null,
+    "signal_search_allowed_by_this_report": false,
+    "alpha_found": false,
+    "plain_result": "不能开始 A 股长线找 alpha；本地数据缺 raw PIT 三大表、完整 PIT universe、分红/退市收益链。",
+    "next_action": "先补 A-long 可审计数据路线，再重新预注册/运行数据审计；不得开始信号搜索。"
+  },
+  "required_runner_self_tests": [
+    {
+      "fixture_id": "future_ann_date_hard_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "valid_ann_date_rows": 1,
+        "future_ann_date_rows": 1,
+        "missing_or_invalid_ann_date_rows": 0,
+        "ann_date_future_lookahead_violation_rate": 1.0,
+        "ann_date_missing_or_invalid_exclusion_rate_pct": 0.0,
+        "hard_fail": true
+      }
+    },
+    {
+      "fixture_id": "restated_value_asof_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "duplicate_groups_checked": 1,
+        "restatement_or_latest_only_violation_groups": 1,
+        "hard_fail": true
+      }
+    },
+    {
+      "fixture_id": "dropped_delisted_member_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "membership_rows_checked": 1,
+        "survivorship_or_terminal_return_violation_rows": 1,
+        "hard_fail": true
+      }
+    },
+    {
+      "fixture_id": "missing_delisting_terminal_return_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "survivorship": {
+          "membership_rows_checked": 1,
+          "survivorship_or_terminal_return_violation_rows": 1,
+          "hard_fail": true
+        },
+        "return_measurement": {
+          "return_rows_checked": 1,
+          "return_or_benchmark_measurement_violation_rows": 1,
+          "hard_fail": true
+        }
+      }
+    },
+    {
+      "fixture_id": "benchmark_anchor_mismatch_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "return_rows_checked": 1,
+        "return_or_benchmark_measurement_violation_rows": 1,
+        "hard_fail": true
+      }
+    },
+    {
+      "fixture_id": "sparse_early_coverage_declares_usable_window",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "threshold_pct": 80.0,
+        "usable_start_year": 2020,
+        "thin_cell_count": 2,
+        "thin_cells": [
+          {
+            "year": 2018,
+            "table": "income",
+            "coverage_pct": 10.0
+          },
+          {
+            "year": 2019,
+            "table": "income",
+            "coverage_pct": 70.0
+          }
+        ],
+        "global_hard_fail": false
+      }
+    }
+  ],
+  "audit_as_of_schedule": {
+    "schedule_id": "a_long_monthly_last_trading_day_20180131_20251231",
+    "frequency": "monthly",
+    "start_as_of": "2018-01-31",
+    "end_as_of": "2025-12-31",
+    "calendar_source": "Tushare trade_cal",
+    "as_of_selection_rule": "last_open_A_share_trading_day_of_each_calendar_month",
+    "partial_period_policy": "exclude_partial_months_outside_start_end",
+    "timezone": "Asia/Shanghai"
+  },
+  "schedule_cache_coverage": {
+    "schedule_id": "a_long_monthly_last_trading_day_20180131_20251231",
+    "expected_month_count": 96,
+    "available_month_count": 24,
+    "first_expected_month": "201801",
+    "last_expected_month": "202512",
+    "first_available_month": "202401",
+    "last_available_month": "202605",
+    "missing_expected_month_count": 72,
+    "missing_expected_month_sample": [
+      "201801",
+      "201802",
+      "201803",
+      "201804",
+      "201805",
+      "201806",
+      "201807",
+      "201808",
+      "201809",
+      "201810",
+      "201811",
+      "201812"
+    ],
+    "exact_last_trading_day_schedule_verified": false,
+    "verification_limitation": "No raw trade_cal schedule artifact is present for the full frozen 2018-2025 schedule; local cache dates are diagnostic only."
+  },
+  "audit_checks": [
+    {
+      "check_id": "fundamental_pit",
+      "status": "blocked_missing_required_source",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "derived_financial_cache_files": 28,
+        "derived_financial_first_date": "20240131",
+        "derived_financial_last_date": "20260529",
+        "derived_financial_has_ann_date_column": false,
+        "derived_financial_has_end_date_column": false,
+        "missing_or_invalid_ann_date_rows_excluded": null,
+        "ann_date_future_lookahead_violation_rate": null
+      },
+      "findings": [
+        "No raw Tushare income cache was found.",
+        "No raw Tushare balancesheet cache was found.",
+        "No raw Tushare fina_indicator PIT cache with ann_date/end_date lineage was found.",
+        "Existing financial_*.pkl files are derived A-short caches and omit ann_date/end_date, so look-ahead and missing-ann_date rates cannot be certified."
+      ],
+      "allowed_followup": "repair_data_route_before_signal_search"
+    },
+    {
+      "check_id": "restatement_revision_asof",
+      "status": "blocked_missing_required_source",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "raw_duplicate_ann_date_groups_available": false,
+        "restatement_or_latest_only_violation_rate": null
+      },
+      "findings": [
+        "Derived financial caches keep already-selected values only.",
+        "No raw duplicate ts_code/end_date rows with multiple ann_date values are available to prove as-of restatement selection.",
+        "Latest-only or pre-filtered derived values cannot certify long-lane historical factor lineage."
+      ],
+      "allowed_followup": "repair_data_route_before_signal_search"
+    },
+    {
+      "check_id": "survivorship_pit_universe",
+      "status": "blocked_missing_required_source",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "stock_list_cache_files": 27,
+        "stock_list_first_date": "20240131",
+        "stock_list_last_date": "20260529",
+        "missing_expected_schedule_month_count": 72,
+        "terminal_delisting_return_artifact_available": false
+      },
+      "findings": [
+        "stock_list_*_v2 caches exist only for local cached as-of dates, not the full frozen 2018-2025 monthly schedule.",
+        "The local cache set cannot prove historical PIT universe coverage for missing years/months.",
+        "No terminal/delisting return artifact is available for held names that leave the universe during a holding window."
+      ],
+      "allowed_followup": "repair_data_route_before_signal_search"
+    },
+    {
+      "check_id": "return_benchmark_measurement_basis",
+      "status": "blocked_missing_required_source",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "daily_all_cache_files": 28,
+        "daily_basic_cache_files": 28,
+        "forward_daily_status": "ok",
+        "forward_daily_stock_has_adj_factor": true,
+        "dividend_or_total_return_source_available": false,
+        "terminal_delisting_return_source_available": false
+      },
+      "findings": [
+        "Local price caches provide some daily/adj_factor material, but not a reviewed A-long total-return chain.",
+        "No dividend/cash distribution source is present for long-lane total return.",
+        "No terminal/delisting return handling is present for long-lane held positions.",
+        "Benchmark open/close material exists in forward_daily only for the A-short backtest cache; it does not certify the frozen A-long 2018-2025 schedule."
+      ],
+      "allowed_followup": "repair_data_route_before_signal_search"
+    },
+    {
+      "check_id": "temporal_coverage_bias",
+      "status": "blocked_missing_required_source",
+      "hard_check": false,
+      "blocks_signal_search": true,
+      "metrics": {
+        "usable_start_year": null,
+        "coverage_characterization_basis": "diagnostic_derived_cache_inventory_only",
+        "derived_financial_cache_files": 28,
+        "expected_schedule_month_count": 96,
+        "available_cache_month_count": 24,
+        "missing_expected_schedule_month_count": 72
+      },
+      "findings": [
+        "Coverage cannot be certified because raw PIT fundamental tables and a full PIT eligible denominator are missing.",
+        "Derived financial cache dates can be listed, but they do not prove ann_date-valid PIT coverage."
+      ],
+      "allowed_followup": "repair_data_route_before_signal_search"
+    }
+  ],
+  "coverage_characterization": {
+    "status": "blocked_missing_required_source",
+    "usable_start_year": null,
+    "basis": "diagnostic_derived_cache_inventory_only_not_pit_certifying",
+    "threshold_pct": 80,
+    "derived_cache_rows": [
+      {
+        "year": 2024,
+        "as_of": "20240131",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20240229",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20240329",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20240430",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20240531",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20240628",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20240731",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20240830",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20240930",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20241031",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20241129",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2024,
+        "as_of": "20241231",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20250127",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20250228",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20250331",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20250430",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20250530",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20250630",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20250731",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20250829",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20250930",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20251031",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20251128",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2025,
+        "as_of": "20251231",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2026,
+        "as_of": "20260515",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2026,
+        "as_of": "20260521",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": false,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2026,
+        "as_of": "20260522",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      },
+      {
+        "year": 2026,
+        "as_of": "20260529",
+        "table": "derived_financial_cache",
+        "coverage_pct": null,
+        "pit_certifying": false,
+        "has_matching_stock_list_denominator": true,
+        "note": "Derived A-short financial cache omits ann_date/end_date and cannot certify A-long PIT fundamentals."
+      }
+    ]
+  },
+  "local_cache_inventory": {
+    "cache_dir": "A-EGS/Result/egs_cache",
+    "families": [
+      {
+        "family_id": "derived_financial",
+        "pattern": "financial_*.pkl",
+        "file_count": 28,
+        "date_count": 28,
+        "first_date": "20240131",
+        "last_date": "20260529",
+        "dates": [
+          "20240131",
+          "20240229",
+          "20240329",
+          "20240430",
+          "20240531",
+          "20240628",
+          "20240731",
+          "20240830",
+          "20240930",
+          "20241031",
+          "20241129",
+          "20241231",
+          "20250127",
+          "20250228",
+          "20250331",
+          "20250430",
+          "20250530",
+          "20250630",
+          "20250731",
+          "20250829",
+          "20250930",
+          "20251031",
+          "20251128",
+          "20251231",
+          "20260515",
+          "20260521",
+          "20260522",
+          "20260529"
+        ],
+        "columns_union_sample": [
+          "q0_dt_profit_ratio",
+          "q0_dt_yoy",
+          "q0_net_income",
+          "q0_profit_dedt",
+          "q1_dt_yoy",
+          "roe",
+          "ts_code",
+          "ttm_net_income",
+          "ttm_ocf_ratio",
+          "ttm_profit_dedt"
+        ],
+        "min_sample_row_count": 5347,
+        "max_sample_row_count": 5359,
+        "sample_files": [
+          {
+            "path": "A-EGS/Result/egs_cache/financial_20240131_5347.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 5347,
+            "columns": [
+              "ts_code",
+              "q0_dt_yoy",
+              "q0_profit_dedt",
+              "q0_dt_profit_ratio",
+              "roe",
+              "q1_dt_yoy",
+              "ttm_profit_dedt",
+              "ttm_net_income",
+              "q0_net_income",
+              "ttm_ocf_ratio"
+            ]
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/financial_20240229_5352.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 5352,
+            "columns": [
+              "ts_code",
+              "q0_dt_yoy",
+              "q0_profit_dedt",
+              "q0_dt_profit_ratio",
+              "roe",
+              "q1_dt_yoy",
+              "ttm_profit_dedt",
+              "ttm_net_income",
+              "q0_net_income",
+              "ttm_ocf_ratio"
+            ]
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/financial_20240329_5359.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 5359,
+            "columns": [
+              "ts_code",
+              "q0_dt_yoy",
+              "q0_profit_dedt",
+              "q0_dt_profit_ratio",
+              "roe",
+              "q1_dt_yoy",
+              "ttm_profit_dedt",
+              "ttm_net_income",
+              "q0_net_income",
+              "ttm_ocf_ratio"
+            ]
+          }
+        ]
+      },
+      {
+        "family_id": "stock_list",
+        "pattern": "stock_list_*_v2.pkl",
+        "file_count": 27,
+        "date_count": 27,
+        "first_date": "20240131",
+        "last_date": "20260529",
+        "dates": [
+          "20240131",
+          "20240229",
+          "20240329",
+          "20240430",
+          "20240531",
+          "20240628",
+          "20240731",
+          "20240830",
+          "20240930",
+          "20241031",
+          "20241129",
+          "20241231",
+          "20250127",
+          "20250228",
+          "20250331",
+          "20250430",
+          "20250530",
+          "20250630",
+          "20250731",
+          "20250829",
+          "20250930",
+          "20251031",
+          "20251128",
+          "20251231",
+          "20260515",
+          "20260522",
+          "20260529"
+        ],
+        "columns_union_sample": [
+          "delist_date",
+          "list_date",
+          "list_status",
+          "market",
+          "name",
+          "symbol",
+          "ts_code"
+        ],
+        "min_sample_row_count": 5347,
+        "max_sample_row_count": 5359,
+        "sample_files": [
+          {
+            "path": "A-EGS/Result/egs_cache/stock_list_20240131_v2.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 5347,
+            "columns": [
+              "ts_code",
+              "symbol",
+              "name",
+              "list_date",
+              "delist_date",
+              "market",
+              "list_status"
+            ]
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/stock_list_20240229_v2.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 5352,
+            "columns": [
+              "ts_code",
+              "symbol",
+              "name",
+              "list_date",
+              "delist_date",
+              "market",
+              "list_status"
+            ]
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/stock_list_20240329_v2.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 5359,
+            "columns": [
+              "ts_code",
+              "symbol",
+              "name",
+              "list_date",
+              "delist_date",
+              "market",
+              "list_status"
+            ]
+          }
+        ]
+      },
+      {
+        "family_id": "daily_all",
+        "pattern": "daily_all_*_60d.pkl",
+        "file_count": 28,
+        "date_count": 28,
+        "first_date": "20240131",
+        "last_date": "20260529",
+        "dates": [
+          "20240131",
+          "20240229",
+          "20240329",
+          "20240430",
+          "20240531",
+          "20240628",
+          "20240731",
+          "20240830",
+          "20240930",
+          "20241031",
+          "20241129",
+          "20241231",
+          "20250127",
+          "20250228",
+          "20250331",
+          "20250430",
+          "20250530",
+          "20250630",
+          "20250731",
+          "20250829",
+          "20250930",
+          "20251031",
+          "20251128",
+          "20251231",
+          "20260515",
+          "20260521",
+          "20260522",
+          "20260529"
+        ],
+        "columns_union_sample": [
+          "amount",
+          "close",
+          "high",
+          "low",
+          "open",
+          "pct_chg",
+          "pre_close",
+          "trade_date",
+          "ts_code",
+          "vol"
+        ],
+        "min_sample_row_count": 319365,
+        "max_sample_row_count": 320605,
+        "sample_files": [
+          {
+            "path": "A-EGS/Result/egs_cache/daily_all_20240131_60d.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 319365,
+            "columns": [
+              "ts_code",
+              "trade_date",
+              "open",
+              "high",
+              "low",
+              "close",
+              "pre_close",
+              "pct_chg",
+              "vol",
+              "amount"
+            ]
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/daily_all_20240229_60d.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 319972,
+            "columns": [
+              "ts_code",
+              "trade_date",
+              "open",
+              "high",
+              "low",
+              "close",
+              "pre_close",
+              "pct_chg",
+              "vol",
+              "amount"
+            ]
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/daily_all_20240329_60d.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 320605,
+            "columns": [
+              "ts_code",
+              "trade_date",
+              "open",
+              "high",
+              "low",
+              "close",
+              "pre_close",
+              "pct_chg",
+              "vol",
+              "amount"
+            ]
+          }
+        ]
+      },
+      {
+        "family_id": "daily_basic",
+        "pattern": "daily_basic_*.pkl",
+        "file_count": 28,
+        "date_count": 28,
+        "first_date": "20240131",
+        "last_date": "20260529",
+        "dates": [
+          "20240131",
+          "20240229",
+          "20240329",
+          "20240430",
+          "20240531",
+          "20240628",
+          "20240731",
+          "20240830",
+          "20240930",
+          "20241031",
+          "20241129",
+          "20241231",
+          "20250127",
+          "20250228",
+          "20250331",
+          "20250430",
+          "20250530",
+          "20250630",
+          "20250731",
+          "20250829",
+          "20250930",
+          "20251031",
+          "20251128",
+          "20251231",
+          "20260515",
+          "20260521",
+          "20260522",
+          "20260529"
+        ],
+        "columns_union_sample": [
+          "circ_mv",
+          "close",
+          "pb",
+          "pe",
+          "pe_ttm",
+          "total_mv",
+          "ts_code",
+          "turnover_rate"
+        ],
+        "min_sample_row_count": 5344,
+        "max_sample_row_count": 5356,
+        "sample_files": [
+          {
+            "path": "A-EGS/Result/egs_cache/daily_basic_20240131.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 5344,
+            "columns": [
+              "ts_code",
+              "close",
+              "pe",
+              "pe_ttm",
+              "pb",
+              "turnover_rate",
+              "total_mv",
+              "circ_mv"
+            ]
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/daily_basic_20240229.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 5347,
+            "columns": [
+              "ts_code",
+              "close",
+              "pe",
+              "pe_ttm",
+              "pb",
+              "turnover_rate",
+              "total_mv",
+              "circ_mv"
+            ]
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/daily_basic_20240329.pkl",
+            "status": "ok",
+            "object_type": "DataFrame",
+            "row_count": 5356,
+            "columns": [
+              "ts_code",
+              "close",
+              "pe",
+              "pe_ttm",
+              "pb",
+              "turnover_rate",
+              "total_mv",
+              "circ_mv"
+            ]
+          }
+        ]
+      },
+      {
+        "family_id": "trade_dates",
+        "pattern": "trade_dates_*.pkl",
+        "file_count": 28,
+        "date_count": 28,
+        "first_date": "20240131",
+        "last_date": "20260529",
+        "dates": [
+          "20240131",
+          "20240229",
+          "20240329",
+          "20240430",
+          "20240531",
+          "20240628",
+          "20240731",
+          "20240830",
+          "20240930",
+          "20241031",
+          "20241129",
+          "20241231",
+          "20250127",
+          "20250228",
+          "20250331",
+          "20250430",
+          "20250530",
+          "20250630",
+          "20250731",
+          "20250829",
+          "20250930",
+          "20251031",
+          "20251128",
+          "20251231",
+          "20260515",
+          "20260521",
+          "20260522",
+          "20260529"
+        ],
+        "columns_union_sample": [],
+        "min_sample_row_count": 66,
+        "max_sample_row_count": 70,
+        "sample_files": [
+          {
+            "path": "A-EGS/Result/egs_cache/trade_dates_20240131.pkl",
+            "status": "ok",
+            "object_type": "list",
+            "row_count": 70,
+            "columns": []
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/trade_dates_20240229.pkl",
+            "status": "ok",
+            "object_type": "list",
+            "row_count": 66,
+            "columns": []
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/trade_dates_20240329.pkl",
+            "status": "ok",
+            "object_type": "list",
+            "row_count": 66,
+            "columns": []
+          }
+        ]
+      },
+      {
+        "family_id": "csi300_return",
+        "pattern": "csi300_*.pkl",
+        "file_count": 28,
+        "date_count": 28,
+        "first_date": "20240131",
+        "last_date": "20260529",
+        "dates": [
+          "20240131",
+          "20240229",
+          "20240329",
+          "20240430",
+          "20240531",
+          "20240628",
+          "20240731",
+          "20240830",
+          "20240930",
+          "20241031",
+          "20241129",
+          "20241231",
+          "20250127",
+          "20250228",
+          "20250331",
+          "20250430",
+          "20250530",
+          "20250630",
+          "20250731",
+          "20250829",
+          "20250930",
+          "20251031",
+          "20251128",
+          "20251231",
+          "20260515",
+          "20260521",
+          "20260522",
+          "20260529"
+        ],
+        "columns_union_sample": [],
+        "min_sample_row_count": null,
+        "max_sample_row_count": null,
+        "sample_files": [
+          {
+            "path": "A-EGS/Result/egs_cache/csi300_20240131.pkl",
+            "status": "ok",
+            "object_type": "float",
+            "row_count": null,
+            "columns": []
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/csi300_20240229.pkl",
+            "status": "ok",
+            "object_type": "float",
+            "row_count": null,
+            "columns": []
+          },
+          {
+            "path": "A-EGS/Result/egs_cache/csi300_20240329.pkl",
+            "status": "ok",
+            "object_type": "float",
+            "row_count": null,
+            "columns": []
+          }
+        ]
+      }
+    ],
+    "forward_daily_cache": {
+      "path": "result/a_short/backtest/cache/forward_daily.pkl",
+      "status": "ok",
+      "meta": {
+        "start_date": "20240131",
+        "end_date": "20260228",
+        "adj": "qfq_via_adj_factor",
+        "benchmarks": [
+          "csi300",
+          "csi1000"
+        ],
+        "fetched_at": "2026-05-24T11:25:21",
+        "stock_rows": 2681523,
+        "stock_codes": 5564,
+        "limit_rows": 3513895,
+        "benchmark_return_basis": "benchmark_entry_open_to_exit_close",
+        "benchmark_open_patch": {
+          "schema_name": "forward_daily_benchmark_open_cache_patch",
+          "schema_version": "1.0.0",
+          "generated_at": "2026-06-01T03:57:10+00:00",
+          "update_method": "benchmark_only_index_daily_open_close_patch",
+          "api_families": [
+            "index_daily",
+            "tushare_provider"
+          ],
+          "date_range": {
+            "start_date": "20240131",
+            "end_date": "20260228"
+          },
+          "stock_daily_refetch_allowed": false,
+          "limit_refetch_allowed": false,
+          "benchmarks": [
+            {
+              "benchmark": "csi300",
+              "ts_code": "000300.SH",
+              "source": "tushare:index_daily/000300.SH",
+              "fields": [
+                "trade_date",
+                "open",
+                "close"
+              ],
+              "rows": 498,
+              "first_trade_date": "20240131",
+              "last_trade_date": "20260227"
+            },
+            {
+              "benchmark": "csi1000",
+              "ts_code": "000852.SH",
+              "source": "tushare:index_daily/000852.SH",
+              "fields": [
+                "trade_date",
+                "open",
+                "close"
+              ],
+              "rows": 498,
+              "first_trade_date": "20240131",
+              "last_trade_date": "20260227"
+            }
+          ]
+        }
+      },
+      "stocks": {
+        "row_count": 2681523,
+        "columns": [
+          "ts_code",
+          "trade_date",
+          "open",
+          "close",
+          "adj_factor"
+        ],
+        "has_adj_factor": true
+      },
+      "limits": {
+        "row_count": 3513895
+      },
+      "benchmarks": {
+        "csi300": {
+          "row_count": 498,
+          "columns": [
+            "trade_date",
+            "open",
+            "close"
+          ]
+        },
+        "csi1000": {
+          "row_count": 498,
+          "columns": [
+            "trade_date",
+            "open",
+            "close"
+          ]
+        }
+      }
+    }
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "signal_search_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "provider_selected": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "source_refs": [
+    "research/preregistrations/a_long_data_integrity_audit_20260603.json",
+    "research/ledgers/a_long_data_integrity_audit_program_test_budget_ledger_20260603.json",
+    "docs/SESSION_LOG.md",
+    "docs/system_risk_register.md"
+  ],
+  "result_artifacts": [
+    "research/results/a_long_data_integrity_audit_20260603/audit_report.json",
+    "research/results/a_long_data_integrity_audit_20260603/check_summary.csv",
+    "research/results/a_long_data_integrity_audit_20260603/coverage_by_year.csv"
+  ],
+  "limitations": [
+    "This run reads local cache files only; it does not call Tushare or any provider.",
+    "Existing financial_*.pkl files are derived A-short caches and cannot certify raw PIT fundamentals.",
+    "A blocked result is not an alpha result; it means the data route is not ready for A-long signal search.",
+    "This report does not authorize signal search, production use, ship-gate evidence, full-size manual use, or broker/order automation."
+  ]
+}

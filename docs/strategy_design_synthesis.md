@@ -178,7 +178,7 @@ Long alpha now requires an `expected_alpha_thesis` for each candidate before it 
 
 Phase 7a-1 audit status: all A-long and US-long sub-lanes are currently `defer_until_provider_ready`. They remain the intended push-alpha design, but no long lane should move into implementation or live sizing until PIT fundamentals, security-master / survivorship coverage, observed-date catalyst evidence, benchmark data, and fraud / accounting red-flag coverage are reviewed.
 
-Current active alpha-search route after the A-short 5d repair: only A-long is an active workstream, and it starts with data integrity, not signals. `research/preregistrations/a_long_data_integrity_audit_20260603.json` must use a frozen monthly as-of schedule and planted-violation self-tests, then pass hard checks for PIT fundamentals, restatement as-of logic, PIT universe / survivorship, held delisting returns, and total-return / same-anchor benchmark measurement. Time-varying coverage declares the usable signal-search window instead of globally failing the lane. A-short 5d stays forward-observation-only / no rescue; US stays active-only forward validation in the background.
+Current active alpha-search route after the A-short 5d repair: only A-long is an active workstream, but it is blocked at data integrity, not ready for signals. `research/results/a_long_data_integrity_audit_20260603/audit_report.json` passed 6 planted-violation self-tests, then returned `blocked_missing_required_source` because raw PIT fundamentals, full PIT universe, dividend / total-return treatment, and terminal delisting return lineage are missing. A-short 5d stays forward-observation-only / no rescue; US stays active-only forward validation in the background.
 
 ### 3.1 Two Long-Term Lanes
 

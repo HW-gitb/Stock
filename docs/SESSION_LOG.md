@@ -8,6 +8,57 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (A-long data-integrity audit runner + blocked result) — **PASS (可提交)**
+
+**Verdict**: Pass. The runner did only authorized work and the blocked result is honest. Protocol intact (prereg reviewed → user 执行 → ran). Safe to commit.
+
+**Verified**:
+- **0 network/provider** — imports = pandas + stdlib only (no tushare/requests/urllib); reads local pkl/json + globs local cache; report `network_calls_executed=0 / provider_calls_executed=0` matches the code (no network path exists).
+- **R1 self-tests genuinely implemented** — `run_required_self_tests` feeds planted violations to the actual check fns and asserts each `hard_fail`; `build_report` raises if any self-test fails → no report unless 6/6. Report shows 6/6 with per-fixture detection metrics.
+- **R4 split real** — `test_ann_date_missing_is_excluded_but_future_ann_date_hard_fails` proves future ann_date hard-fails while missing/invalid ann_date is excluded-and-reported (not a global fail).
+- **Honest blocked** — `blocked_missing_required_source` is driven by cache inventory (derived A-short `financial_*.pkl` lack `ann_date`/`end_date`; no raw PIT income/balancesheet/fina_indicator, no dividend/total-return, no terminal-delisting lineage). `derived_financial_has_ann_date_column=False` is the verifiable basis. signal_search/alpha both false; no scope creep; ledger `spent_voided_by_data_integrity_failure`; SR-ALONG-DATA-001 correctly stays open. Tests 13/13.
+
+**Optional note (non-blocking, record for the next step)**: `evaluate_real_audit` hardcodes the blocked status — the real-data path is inventory-based (it proves the raw data is ABSENT); the per-row checkers are exercised only by the self-tests, not by real rows (there are none). This is the SAFE direction (it cannot emit a false "data ready") and is disclosed + ledger-gated. **When raw PIT fundamentals are obtained, `evaluate_real_audit` must be rewritten to run the checkers on real rows under a new reviewed audit — it will NOT auto-flip to pass on a blind rerun.**
+
+---
+
+## 2026-06-03 — Codex 执行 (A-long data-integrity audit runner + blocked result)
+
+**Plain result**:
+- The frozen A-long data-integrity audit has now run, local-cache-only.
+- Result: `blocked_missing_required_source`.
+- Meaning in plain language: A 股长线现在还不能开始找 alpha；不是策略失败，而是数据地基不够。
+- The runner self-tests passed 6/6, so the checker can catch planted bad data.
+- Real local data is missing the required raw PIT fundamentals, complete PIT universe proof, dividend / total-return source, and terminal delisting return lineage.
+
+**Worked on**:
+- [tracked] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`.
+- [tracked] `research/ledgers/a_long_data_integrity_audit_program_test_budget_ledger_20260603.json`, `tests/schema/test_a_long_data_integrity_audit_preregistration_schema.py`.
+- [untracked] `runners/a_long_data_integrity_audit.py`, `schemas/a_long_data_integrity_audit_report.schema.json`, `tests/test_a_long_data_integrity_audit_runner.py`.
+- [untracked] `research/results/a_long_data_integrity_audit_20260603/audit_report.json`, `check_summary.csv`, `coverage_by_year.csv`.
+
+**Execution**:
+- Ran `runners/a_long_data_integrity_audit.py --code-version-ref e43e560`.
+- It executed 0 provider/network calls.
+- It wrote the report and spent the one A-long data-integrity gate in the ledger as `spent_voided_by_data_integrity_failure`.
+
+**Validation**:
+- `python -m unittest tests.schema.test_a_long_data_integrity_audit_preregistration_schema tests.test_a_long_data_integrity_audit_runner -v` passed 13/13.
+- `python -m unittest tests.schema.test_a_long_data_integrity_audit_preregistration_schema tests.test_a_long_data_integrity_audit_runner tests.schema.test_research_preregistration_schema tests.schema.test_a_short_steady_alpha_reaudit_preregistration_schema -v` passed 46/46.
+- `python -m unittest discover -v` passed 586/586.
+- Sensitive scan on the new runner/schema/tests/result/ledger found no hits.
+- `git diff --check` passed; `docs/CURRENT.md` remains 149 lines.
+
+**Non-authorization**:
+- No signal search, no alpha backtest, no provider call, no data fetch, no DataHub work, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the blocked conclusion is not overclaiming and does not treat derived A-short financial caches as PIT fundamentals.
+- Verify the runner self-tests are real, the report schema rejects scope creep, and ledger spending is correct.
+- Verify docs consistently say the next step is data-route repair, not A-long signal search or audit rerun.
+
+---
+
 ## 2026-06-03 — Claude 审查 (A-long data-integrity audit preregistration 修复) — **PASS (可提交)**
 
 **Verdict**: Pass. All 4 Required landed, const-locked in the schema (verified each lock individually, not just the bundled rejection test), and tested 10/10. O1 accepted. C1–C3 decided. Hygiene clean. Ready to commit; the audit RUNNER build+run is a separate reviewed step after user 执行.

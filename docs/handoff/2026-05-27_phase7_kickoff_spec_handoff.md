@@ -3130,12 +3130,36 @@ git diff --check
 **Invalid conclusions**:
 
 - "A-long alpha search is authorized" is false.
-- "The audit has run" is false.
+- This preregistration slice did not run the audit; see the later execution append below for the now-run blocked result.
 - "A-long data is proven clean" is false.
 - "This permits production / ship-gate / full-size use" is false.
 
 **Next-step notes**:
 
 1. Claude review should verify this is an executable hard-check + usable-window preregistration, not another descriptive contract.
-2. If review passes and the user later gives `执行`, run only the frozen data-integrity audit.
-3. If any hard check fails or blocks, repair the data route before any signal backtest. If hard checks pass, create a separate reviewed A-long signal-search preregistration limited to the declared usable window.
+2. Superseded by the later execution append below: the frozen data-integrity audit has now run and is blocked.
+3. If any hard check fails or blocks, repair the data route before any signal backtest. If hard checks pass in a future repaired audit, create a separate reviewed A-long signal-search preregistration limited to the declared usable window.
+
+## 2026-06-03 append: A-long data-integrity audit execution
+
+**Plain result**:
+
+- The frozen audit ran local-cache-only after Claude review and user `执行`.
+- `research/results/a_long_data_integrity_audit_20260603/audit_report.json` is `blocked_missing_required_source`.
+- Self-tests passed 6/6, so the runner can catch planted bad data.
+- Real local data is not enough: raw PIT fundamentals, full PIT universe, dividend / total-return handling, and terminal delisting return lineage are missing.
+- A-long signal search is still not authorized.
+
+**What changed**:
+
+- Added `runners/a_long_data_integrity_audit.py`.
+- Added `schemas/a_long_data_integrity_audit_report.schema.json`.
+- Added `tests/test_a_long_data_integrity_audit_runner.py`.
+- Wrote `research/results/a_long_data_integrity_audit_20260603/audit_report.json`, `check_summary.csv`, and `coverage_by_year.csv`.
+- Updated the A-long ledger to `active_no_new_test_authorized` with status `spent_voided_by_data_integrity_failure`.
+
+**Next-step notes**:
+
+1. Do not rerun the spent A-long data audit without a new reviewed authorization.
+2. Repair or replace the A-long data route first: raw PIT fundamentals with `ann_date` / `end_date`, full PIT universe, dividend / total-return treatment, and terminal delisting return lineage.
+3. Only after a repaired data route passes a new reviewed audit may A-long create a separate signal-search preregistration.

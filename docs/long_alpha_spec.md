@@ -412,7 +412,7 @@ Future A-long reports should expose:
 
 ### 11.10 A-Long Data Integrity Gate Before Signal Search
 
-A-long must not start signal search until a reviewed, executable data-integrity audit has passed its hard checks and declared a usable data window. The current preregistration is `research/preregistrations/a_long_data_integrity_audit_20260603.json`; it is a one-time data-readiness gate, not a signal test.
+A-long must not start signal search until a reviewed, executable data-integrity audit has passed its hard checks and declared a usable data window. The first reviewed audit execution is `research/results/a_long_data_integrity_audit_20260603/audit_report.json`; it is `blocked_missing_required_source`, not a pass and not an alpha result.
 
 The audit must produce pass / fail / blocked findings for:
 
@@ -424,6 +424,8 @@ The audit must produce pass / fail / blocked findings for:
 - Time-varying coverage: fundamentals coverage must be measured by time period on a PIT eligible universe so sparse early data declares the usable start year instead of making the whole lane fail.
 
 If any hard check fails or lacks the required source, A-long stays blocked for signal backtests until the data route is repaired or a new reviewed audit plan is approved. A hard-check pass plus a declared usable window only allows a later reviewed signal-search preregistration; it does not prove alpha or authorize production / ship-gate / full-size use.
+
+Current blocked finding: the local cache-only audit passed all 6 planted-violation self-tests, but local A-short derived `financial_*.pkl` caches omit `ann_date` / `end_date`; raw PIT income / balancesheet / fina_indicator lineage, full PIT universe proof, dividend / total-return source, and terminal delisting return lineage are not present. Repair these data-route pieces before any A-long signal-search preregistration.
 
 ### 11.11 Deferred A-Long Decisions
 

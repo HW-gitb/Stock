@@ -214,11 +214,10 @@ class ALongDataIntegrityAuditPreregistrationTest(unittest.TestCase):
         self.assertFalse(decision["backtest_can_authorize_full_size"])
         self.assertTrue(all(value is False for value in prohibited.values()))
 
-    def test_ledger_records_planned_data_gate_without_spent_alpha_budget(self) -> None:
+    def test_ledger_records_spent_blocked_data_gate_without_alpha_budget(self) -> None:
         artifact = self._load_artifact()
         budget = artifact["planned_test_budget"]
         ledger = self._load_ledger()
-        planned = ledger["planned_tests"][0]
 
         self.assertEqual(budget["ledger_ref"], str(LEDGER_ARTIFACT_PATH).replace("\\", "/"))
         self.assertEqual(budget["planned_test_id"], "a_long_data_integrity_audit_20260603")
@@ -229,16 +228,18 @@ class ALongDataIntegrityAuditPreregistrationTest(unittest.TestCase):
         self.assertTrue(budget["requires_user_execute_before_run"])
 
         self.assertEqual(ledger["lane_id"], "a_long_data_integrity")
-        self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
+        self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
+        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
         self.assertEqual(ledger["budget_policy"]["tests_available_without_new_review"], 0)
-        self.assertEqual(ledger["test_spend_log"], [])
-        self.assertEqual(planned["test_id"], "a_long_data_integrity_audit_20260603")
-        self.assertEqual(planned["planned_status"], "planned_not_reviewed")
-        self.assertTrue(planned["promotion_relevant"])
-        self.assertEqual(planned["approval_status"], "pending_user_approval")
+        self.assertEqual(ledger["planned_tests"], [])
+        self.assertEqual(len(ledger["test_spend_log"]), 1)
+        spent = ledger["test_spend_log"][0]
+        self.assertEqual(spent["test_id"], "a_long_data_integrity_audit_20260603")
+        self.assertEqual(spent["status"], "spent_voided_by_data_integrity_failure")
+        self.assertIn("blocked_missing_required_source", spent["result_summary"])
+        self.assertIn("signal_search_allowed=false", spent["result_summary"])
         self.assertIn("zero alpha-test budget", ledger["budget_policy"]["spend_rule"])
-        self.assertTrue(any("planted violations" in item for item in planned["review_boundary"]))
+        self.assertIn("Do not start A-long signal search", ledger["next_required_actions"][0])
 
     def test_scope_creep_and_threshold_changes_are_rejected_when_jsonschema_available(self) -> None:
         try:
@@ -276,7 +277,7 @@ class ALongDataIntegrityAuditPreregistrationTest(unittest.TestCase):
         invalid["budget_policy"]["ledger_cardinality"] = "per_hypothesis"
         invalid["budget_policy"]["next_test_requires_reviewed_preregistration"] = False
         invalid["budget_policy"]["next_test_requires_user_approval"] = False
-        invalid["planned_tests"][0]["approval_status"] = "reviewed_authorized"
+        invalid["test_spend_log"][0]["status"] = "spent_passed_research_continue_only"
 
         errors = list(Draft7Validator(self._load_ledger_schema()).iter_errors(invalid))
 

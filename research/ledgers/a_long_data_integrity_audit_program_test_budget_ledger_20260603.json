@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "generated_at": "2026-06-03T00:00:00Z",
   "artifact_id": "a_long_data_integrity_audit_program_test_budget_ledger_20260603",
-  "ledger_status": "active_planned_test_pending_review",
+  "ledger_status": "active_no_new_test_authorized",
   "family_id": "a_long_data_integrity_audit_v1",
   "lane_id": "a_long_data_integrity",
   "singleton_scope": {
@@ -35,37 +35,29 @@
   },
   "budget_policy": {
     "ledger_cardinality": "singleton_program_level",
-    "tests_spent_count": 0,
+    "tests_spent_count": 1,
     "tests_available_without_new_review": 0,
     "next_test_requires_reviewed_preregistration": true,
     "next_test_requires_user_approval": true,
     "spend_rule": "The first future audit run consumes one data-integrity gate unit when executed, regardless of pass, fail, blocked, or limited-usable-window result. It consumes zero alpha-test budget units because it is a data-readiness gate, not a signal-performance test.",
     "no_silent_rescue_rule": "Any failed or blocked hard audit check blocks A-long signal search until the data issue is repaired or a new reviewed audit plan changes the data route before execution. Coverage shortfalls declare the usable start year rather than globally failing the audit; missing/invalid ann_date rows are excluded and reported. Thresholds, tables, universe rules, return anchors, benchmark anchors, and the frozen as-of schedule must not be changed after the run to rescue a result."
   },
-  "test_spend_log": [],
-  "planned_tests": [
+  "test_spend_log": [
     {
       "test_id": "a_long_data_integrity_audit_20260603",
-      "planned_status": "planned_not_reviewed",
-      "created_at": "2026-06-03T00:00:00Z",
-      "planned_preregistration_ref": "research/preregistrations/a_long_data_integrity_audit_20260603.json",
-      "planned_result_ref": "research/results/a_long_data_integrity_audit_20260603/audit_report.json",
+      "preregistration_ref": "research/preregistrations/a_long_data_integrity_audit_20260603.json",
+      "result_ref": "research/results/a_long_data_integrity_audit_20260603/audit_report.json",
+      "status": "spent_voided_by_data_integrity_failure",
+      "tests_spent": 1,
       "promotion_relevant": true,
-      "expected_tests_spent": 1,
-      "approval_status": "pending_user_approval",
-      "design_summary": "One executable A-long data integrity audit only: fixed monthly as-of schedule, required planted-violation self-tests, PIT fundamentals, restatement as-of, survivorship/PIT universe, terminal delisting returns, total-return and benchmark measurement, and time-varying coverage. It must produce hard pass/fail/blocked findings plus any usable-window limitation before any A-long signal search can be registered.",
-      "review_boundary": [
-        "Claude independent review must pass before execution.",
-        "User must give a later execute command before the audit can run.",
-        "The audit may read only existing / already authorized A-share Tushare-access data.",
-        "The future runner must first prove planted violations are detected before using real audit output.",
-        "No signal search, alpha backtest, provider expansion, new data purchase, DataHub implementation, production runner change, ship-gate claim, full-size use, or broker/order automation is authorized."
-      ]
+      "result_summary": "decision=blocked_missing_required_source; self_tests=6/6; hard_checks_pass=false; usable_start_year=None; signal_search_allowed=false; blocked_reason=missing raw PIT fundamentals / complete PIT universe / dividend and terminal delisting return lineage",
+      "allowed_followup": "Repair or replace the A-long data route and create a new reviewed data-integrity audit plan before any signal search; no alpha backtest or production use is authorized."
     }
   ],
+  "planned_tests": [],
   "next_required_actions": [
-    "Review the preregistration, schema, ledger, and routing docs.",
-    "After clean review and explicit user execute command, implement/run only the frozen data-integrity audit once.",
-    "If all hard checks pass, create a separate reviewed A-long signal-search preregistration limited to the declared usable window. If any hard check fails or blocks, repair the data route first."
+    "Do not start A-long signal search from this blocked audit result.",
+    "Repair the data route: raw PIT fundamentals with ann_date/end_date lineage, full PIT universe, dividend/total-return handling, and terminal delisting return lineage are required.",
+    "After repair, create a new reviewed data-integrity audit plan or rerun only under a reviewed authorization."
   ]
 }
