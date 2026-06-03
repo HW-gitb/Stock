@@ -8,6 +8,55 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (US active-only + forward-validation operating model) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. Docs-only, faithful to the user decision, narrows (not closes) the provider risk, and bakes in the pivot away from contracts.
+
+**Verified**:
+- AGENTS #26 fixes the US operating model (active-only universe; forward-live-only validation; historical US backtests exploration/idea-only **forever**, never alpha/ship-gate/full-size/production evidence) and **explicitly supersedes #22's temporary wording**. All three disciplines I stated are present: (1) historical-never-evidence, (2) forward universe PIT-frozen at start + delisting/halt/merger/bankruptcy/no-trade captured as real events not back-deleted, (3) 12-month forward-live ship-gate unchanged. Not buying delisted/specialized data now; revisitable.
+- `SR-PROVIDER-001` stays **open** (verified) and is correctly NARROWED: inactive/delisted historical coverage recorded as user-accepted/scoped-out (explicitly "not solved, cannot support US historical alpha evidence"); license/storage, active-symbol PIT-if-used, active price/corporate-action-if-used, SEC parser/mapping-if-used, fallback/stability, provider selection, DataHub/runner consumption, production readiness all remain open. Register also closes the delisted-direction contract work ("no further inactive/delisted historical coverage work required unless user reopens") — consistent with the cross-cutting audit.
+- CURRENT records the pivot: "Default priority shifts away from more contracts toward A-share alpha validation," P1 section retitled "US active-only + forward; A-share alpha priority." CURRENT=148.
+- Docs-only (AGENTS/CURRENT/README/datahub_design/handoff/register) — no code/schema/runner, no provider call, no data fetch, no new contract artifact. No over-claim, no new authorization.
+
+**Note**: this concise decision-recording is the right shape (no new schema+artifact+test). The next real-work step is the A-share steady-lane alpha re-audit preregistration (first slice command block already drafted for the user) — actual validation, not more contracts.
+
+---
+
+## 2026-06-03 — Codex 执行 (US active-only + forward-validation operating model)
+
+**Scope**:
+- Docs-only update requested by the user.
+- No schema / artifact / runner added, no provider call, no data fetch, no provider selection, no DataHub implementation, and no production authorization.
+
+**Plain result**:
+- US route is now simple: active stocks only, verified only by forward-live evidence.
+- US historical backtests are only for ideas. They can never prove alpha, pass ship-gate, unlock full-size sizing, authorize DataHub / Phase 7c, or prove production readiness.
+- Inactive / delisted historical coverage is accepted as out of scope for now, not fixed. If a US idea becomes worth paying for, the user can reopen paid / specialized data.
+- Forward universes must be frozen at the forward start date. If a stock later halts, delists, merges, goes bankrupt, or cannot trade, that real outcome must be recorded rather than deleted.
+
+**Worked on**:
+- [tracked] `AGENTS.md`
+- [tracked] `docs/system_risk_register.md`
+- [tracked] `docs/CURRENT.md`
+- [tracked] `docs/README.md`
+- [tracked] `docs/datahub_design.md`
+- [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`
+- [tracked] `docs/SESSION_LOG.md`
+
+**Validation state**:
+- Docs-only; no Python tests run because no code, schema, artifact, or runner changed.
+- `docs/CURRENT.md` line count = 148.
+- `git diff --check` passed with only normal LF/CRLF working-copy warnings.
+- `git diff --name-only` shows only docs files changed.
+- Needs Claude review before commit.
+
+**Reviewer focus**:
+- Confirm `AGENTS.md` #26 clearly supersedes #22's temporary wording.
+- Confirm `SR-PROVIDER-001` stays open while inactive / delisted historical coverage is scoped out only for the active-only forward model.
+- Confirm remaining blockers still include license / storage, active-PIT-if-used, active price / corporate-action-if-used, SEC parser / mapping-if-used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness.
+
+---
+
 ## 2026-06-03 — Claude 审查 (Phase 7c data-quality monitor + minimal A-share read-path planning batch) — Pass (clean) + STRATEGIC stop-recommendation
 
 **Per-slice verdict**: Pass — no Required, no Optional. Both contracts are sound, authorize nothing, tests 5/5, AGENTS #25 accurate, secret-clean, SR-PROVIDER-001 open. data-quality monitor dimensions correctly encode the alpha guardrails (PIT/as-of, survivorship/security-master, corporate-actions, calendar, incident; `silent_pass_allowed`=false everywhere). minimal-read-path plan is genuinely minimal/safe (A-short, one date, local-cache/fixture only, no Tushare call, helper+manifest+quality-summary gated, `a_egs_behavior_change`/`official_output_overwrite`=false).

@@ -2996,3 +2996,9 @@ git diff --check
 
 1. Claude review should verify all scope locks stay false and that the minimal read-path plan cannot become a provider/Tushare/full-market job by schema mutation.
 2. After review and commit, the next natural Phase 7c slice is a separate reviewed implementation packet for the minimal A-share local-cache read path. Any execution still needs a reviewed job spec and must pass `engine/datahub/job_spec_contract.py`.
+
+## 2026-06-03 append: US active-only + forward-validation operating model
+
+**Plain result**: the current US model is active-only universe + live-normalized forward evidence only. US historical backtests are exploration / idea-only and never count as alpha, ship-gate, full-size, DataHub, or production evidence.
+
+**Boundary**: inactive / delisted historical coverage is user-accepted as scoped out for now, not proven solved. Forward universes must be frozen point-in-time at the forward start date, and real halt / delisting / merger / no-trade outcomes during forward validation must be captured. `SR-PROVIDER-001` remains open for license / storage, active PIT if fundamentals are used, active price / corporate-action semantics if used, SEC parser / mapping if used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness.
