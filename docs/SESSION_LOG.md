@@ -8,6 +8,56 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (provider validation authorization packet) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. Schema-first user-authorization boundary; authorizes nothing to execute in this slice.
+
+**Scope reviewed** (base `8204541`): new `schemas/provider_p1_validation_authorization_packet.schema.json` + `docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json` + `tests/schema/test_provider_p1_validation_authorization_packet_schema.py`; routing edits to `AGENTS.md` (new fixed decision #18), `docs/CURRENT.md`, `docs/README.md`, `docs/provider_evidence_drift_monitor.md` (§31), `docs/system_risk_register.md`, phase7 handoff.
+
+**Independently verified (read schema + artifact + test in full)**:
+- The artifact executes nothing now: `scope.artifact_executes_provider_calls=false`, `actual_execution_requires_reviewed_execution_packet=true`, `pre_execution_gates.reviewed_execution_packet_required=true`. Real execution still requires a separate reviewed execution packet.
+- Const-locks are airtight: every authorization/prohibition boolean is `const` (not just typed); `additionalProperties:false` on the schema and all `$defs`. `provider_selection / adapter / datahub / runner_consumption / phase7c / ship_gate_relaxed / ship_gate_evidence / production_ready / broker` all const false.
+- Boundary matches the user authorization exactly: `$0`, FMP plan const "Basic", existing-key-only, no new-token/trial/paid/contact, SEC public + fair-access, no yfinance, no full-market; sample 5–10 symbols / max 60 calls / retry 0 / abort-on-budget; exact symbol list deferred to the execution packet.
+- validation_permissions encode validation≠implementation: allowed = raw parse for PIT row / price-adjustment / corporate-action / SEC parser feasibility / SEC field-mapping feasibility / field-presence; forbidden = fixture / derivation / field-mapping / parser implementation / return calculation / provider selection / DataHub-runner consumption — all const.
+- Storage/secret bounds = the proven-safe pattern: `provider_samples/` gitignored, tracked summary excludes raw payloads + request URLs, all key/header/secret logging const false. `prohibited_claims` (15) all const false incl. every `*_proven_at_scale`, provider_selected, phase7c_authorized.
+- Test (8) is comprehensive + non-vacuous: asserts the full scope/access/sample/storage/permission/gate/claim boundary AND scope-creep rejection on paid/yfinance/symbols=11/calls=61/full_market/key-logging/fixture/provider_selected. Re-ran under Python313+jsonschema → **8/8 pass**.
+- `SR-PROVIDER-001` stays **open** (verified `Status: open`); register Hot Queue + entry (accepted-calibration + required-next-action) updated to bound the authorization to a future reviewed execution packet within exact scope; nothing claims coverage/PIT/price/parser proven. AGENTS fixed-decision #18 + drift §31 + CURRENT + README routing all accurate and block-preserving. CURRENT=149. New tracked artifact has no secret (pure boolean contract).
+
+**Governance note for Final Approver (not a defect)**: this is the FIRST artifact in the provider chain to set `raw_payload_parse_for_validation_allowed=true` — a real, dated, bounded exception to fixed-decision #14's default no-raw-parse, recorded as new fixed-decision #18. It authorizes only the *boundary*; the next slice would be the actual execution packet (exact symbols + the first real bounded raw-parse fetch), which should get its own explicit review/approval before running.
+
+**Residual blockers unchanged (intentional)**: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open; aggregate full-size permission `not_evaluable` by the SR-EXEC-007 concurrency gate.
+
+---
+
+## 2026-06-03 — Codex 执行 (provider validation authorization packet)
+
+**Commits**: none (pending independent review / submit; base `8204541`)
+
+**Scope**:
+- User confirmed FMP is Basic and asked to execute the recommended provider authorization next step.
+- This round records authorization boundaries only. It does not run provider calls, access network data, read or parse raw payloads, write `provider_samples/`, change runners, implement adapters / DataHub, authorize Phase 7c, or make production / ship-gate claims.
+
+**Worked on**:
+1. [tracked] `schemas/provider_p1_validation_authorization_packet.schema.json`: new schema-first authorization contract for a future reviewed 5-10 symbol / max 60 call validation packet using only existing FMP Basic key + SEC EDGAR public API under a $0 budget.
+2. [tracked] `docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json`: records the user authorization, allowed validation-only raw parsing scope (PIT row, price adjustment, corporate action, SEC parser / field mapping feasibility, field presence), storage / secret bounds, pre-execution gates, and prohibited claims.
+3. [tracked] `tests/schema/test_provider_p1_validation_authorization_packet_schema.py`: validates the new schema / artifact, boundary locks, validation permissions, pre-execution gates, prohibited claims, and scope-creep rejection.
+4. [tracked] `docs/provider_evidence_drift_monitor.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `AGENTS.md`: routes the new authorization packet into Phase 7b-2 / `SR-PROVIDER-001` without closing provider blockers.
+5. [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: appended the Phase 7 handoff for this slice.
+
+**Validation run/result**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool schemas\provider_p1_validation_authorization_packet.schema.json`: parsed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\provider_evidence_p1_us_validation_authorization_packet_20260603.json`: parsed.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_validation_authorization_packet_schema -v`: 8 tests, all pass.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_sample_validation_access_approval_schema tests.schema.test_provider_p1_coverage_count_access_packet_approval_schema tests.schema.test_provider_p1_coverage_count_execution_summary_schema tests.schema.test_provider_p1_missing_key_metrics_resolution_plan_schema tests.schema.test_provider_p1_validation_authorization_packet_schema -v`: 34 tests, all pass.
+- `(Get-Content -Encoding UTF8 docs\CURRENT.md).Count`: 149.
+
+**Current review state**:
+- Needs independent review before `提交`.
+- `SR-PROVIDER-001` remains open. A future execution packet may consume this authorization only within the exact FMP Basic existing-key / SEC public-API / $0 / 5-10 symbol / max 60 call / gitignored raw / tracked no-secret-summary scope.
+- `SR-RESOURCE-001` remains open; this slice does not authorize Phase 7c or implementation.
+
+---
+
 ## 2026-06-02 — Claude 审查 (P3 hygiene slice) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. This slice implements the 5 deferred P3 items from the Phase 6-to-now audit; all are correct, tested, and regression-free.

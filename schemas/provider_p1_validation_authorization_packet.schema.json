@@ -1,0 +1,734 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_validation_authorization_packet/1.0.0/schema.json",
+  "title": "Provider P1 Validation Authorization Packet",
+  "description": "Machine-checkable user authorization boundary for a later bounded Phase 7b-2 US EGS provider validation run. It records FMP Basic / existing-key and SEC EDGAR public-API approval under a zero-dollar budget, allows only tightly bounded raw-payload parsing for PIT row, price adjustment, corporate-action, and SEC parser / field-mapping feasibility checks, and does not itself execute provider calls, select a provider, implement adapters, create DataHub tables, change runners, authorize Phase 7c, or support production-readiness / ship-gate claims.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "approval_ref",
+    "scope",
+    "source_artifact_refs",
+    "access_boundary",
+    "sample_boundary",
+    "provider_roles",
+    "storage_and_secret_boundary",
+    "validation_permissions",
+    "pre_execution_gates",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_validation_authorization_packet"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "approval_ref": {
+      "const": "user_chat_20260603_fmp_basic_provider_validation_authorization"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 8,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_access_decision_plan_20260531"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_sample_validation_access_approval_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_sample_validation_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_stable_endpoint_retry_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_coverage_count_execution_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_missing_key_metrics_resolution_plan_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_remaining_blocker_plan_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "access_boundary": {
+      "$ref": "#/$defs/accessBoundary"
+    },
+    "sample_boundary": {
+      "$ref": "#/$defs/sampleBoundary"
+    },
+    "provider_roles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/providerRole"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "provider_id": {
+                "const": "financial_modeling_prep"
+              },
+              "allowed_in_validation_packet": {
+                "const": true
+              }
+            },
+            "required": [
+              "provider_id",
+              "allowed_in_validation_packet"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "provider_id": {
+                "const": "sec_edgar"
+              },
+              "allowed_in_validation_packet": {
+                "const": true
+              }
+            },
+            "required": [
+              "provider_id",
+              "allowed_in_validation_packet"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "provider_id": {
+                "const": "yfinance"
+              },
+              "allowed_in_validation_packet": {
+                "const": false
+              }
+            },
+            "required": [
+              "provider_id",
+              "allowed_in_validation_packet"
+            ]
+          }
+        }
+      ]
+    },
+    "storage_and_secret_boundary": {
+      "$ref": "#/$defs/storageAndSecretBoundary"
+    },
+    "validation_permissions": {
+      "$ref": "#/$defs/validationPermissions"
+    },
+    "pre_execution_gates": {
+      "$ref": "#/$defs/preExecutionGates"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "authorization_status",
+        "artifact_executes_provider_calls",
+        "authorizes_future_validation_run_within_scope",
+        "actual_execution_requires_reviewed_execution_packet",
+        "fmp_existing_key_use_allowed",
+        "sec_edgar_public_api_allowed",
+        "raw_payload_parse_for_validation_allowed",
+        "provider_selection_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "manual_order_only",
+        "ship_gate_relaxed",
+        "ship_gate_evidence_allowed",
+        "production_ready_claim_allowed",
+        "broker_or_order_automation_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_user_authorized_bounded_provider_validation_packet"
+        },
+        "authorization_status": {
+          "const": "user_approved_boundary_recorded_for_review_not_executed"
+        },
+        "artifact_executes_provider_calls": {
+          "const": false
+        },
+        "authorizes_future_validation_run_within_scope": {
+          "const": true
+        },
+        "actual_execution_requires_reviewed_execution_packet": {
+          "const": true
+        },
+        "fmp_existing_key_use_allowed": {
+          "const": true
+        },
+        "sec_edgar_public_api_allowed": {
+          "const": true
+        },
+        "raw_payload_parse_for_validation_allowed": {
+          "const": true
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "accessBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approved_spend_usd",
+        "fmp_account_plan_confirmed_by_user",
+        "existing_fmp_key_only",
+        "fmp_new_token_request_allowed",
+        "fmp_trial_request_allowed",
+        "fmp_paid_plan_or_upgrade_allowed",
+        "provider_contact_allowed",
+        "sec_public_api_allowed",
+        "sec_fair_access_required",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "current_terms_legal_review_completed",
+        "production_storage_rights_authorized"
+      ],
+      "properties": {
+        "approved_spend_usd": {
+          "const": 0
+        },
+        "fmp_account_plan_confirmed_by_user": {
+          "const": "Basic"
+        },
+        "existing_fmp_key_only": {
+          "const": true
+        },
+        "fmp_new_token_request_allowed": {
+          "const": false
+        },
+        "fmp_trial_request_allowed": {
+          "const": false
+        },
+        "fmp_paid_plan_or_upgrade_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "sec_public_api_allowed": {
+          "const": true
+        },
+        "sec_fair_access_required": {
+          "const": true
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "current_terms_legal_review_completed": {
+          "const": false
+        },
+        "production_storage_rights_authorized": {
+          "const": false
+        }
+      }
+    },
+    "sampleBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_size_range_min",
+        "sample_size_range_max",
+        "max_symbols",
+        "active_symbols_required",
+        "inactive_or_delisted_candidates_allowed_if_source_supports",
+        "inactive_or_delisted_candidates_required_if_source_supports",
+        "inactive_or_delisted_not_required_if_source_cannot_support",
+        "exact_symbol_list_fixed_by_this_artifact",
+        "exact_symbol_list_required_before_execution",
+        "full_market_or_broad_universe_allowed",
+        "max_total_endpoint_calls",
+        "retry_count_allowed",
+        "endpoint_families_required_before_execution",
+        "abort_if_budget_exceeded"
+      ],
+      "properties": {
+        "sample_size_range_min": {
+          "const": 5
+        },
+        "sample_size_range_max": {
+          "const": 10
+        },
+        "max_symbols": {
+          "const": 10
+        },
+        "active_symbols_required": {
+          "const": true
+        },
+        "inactive_or_delisted_candidates_allowed_if_source_supports": {
+          "const": true
+        },
+        "inactive_or_delisted_candidates_required_if_source_supports": {
+          "const": true
+        },
+        "inactive_or_delisted_not_required_if_source_cannot_support": {
+          "const": true
+        },
+        "exact_symbol_list_fixed_by_this_artifact": {
+          "const": false
+        },
+        "exact_symbol_list_required_before_execution": {
+          "const": true
+        },
+        "full_market_or_broad_universe_allowed": {
+          "const": false
+        },
+        "max_total_endpoint_calls": {
+          "const": 60
+        },
+        "retry_count_allowed": {
+          "const": 0
+        },
+        "endpoint_families_required_before_execution": {
+          "const": true
+        },
+        "abort_if_budget_exceeded": {
+          "const": true
+        }
+      }
+    },
+    "providerRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "role",
+        "allowed_in_validation_packet"
+      ],
+      "properties": {
+        "provider_id": {
+          "enum": [
+            "financial_modeling_prep",
+            "sec_edgar",
+            "yfinance"
+          ]
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "allowed_in_validation_packet": {
+          "type": "boolean"
+        }
+      }
+    },
+    "storageAndSecretBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_sample_storage_root",
+        "raw_payload_storage_must_be_gitignored",
+        "tracked_summary_allowed",
+        "tracked_summary_must_exclude_raw_payloads",
+        "tracked_summary_must_exclude_request_urls",
+        "api_key_logging_allowed",
+        "authorization_header_logging_allowed",
+        "sec_user_agent_value_logging_allowed",
+        "secrets_in_repo_allowed",
+        "raw_retention_authorizes_production_storage"
+      ],
+      "properties": {
+        "raw_sample_storage_root": {
+          "const": "provider_samples/"
+        },
+        "raw_payload_storage_must_be_gitignored": {
+          "const": true
+        },
+        "tracked_summary_allowed": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_raw_payloads": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_request_urls": {
+          "const": true
+        },
+        "api_key_logging_allowed": {
+          "const": false
+        },
+        "authorization_header_logging_allowed": {
+          "const": false
+        },
+        "sec_user_agent_value_logging_allowed": {
+          "const": false
+        },
+        "secrets_in_repo_allowed": {
+          "const": false
+        },
+        "raw_retention_authorizes_production_storage": {
+          "const": false
+        }
+      }
+    },
+    "validationPermissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_parse_for_validation_allowed",
+        "pit_row_validation_allowed",
+        "price_adjustment_validation_allowed",
+        "corporate_action_validation_allowed",
+        "sec_parser_feasibility_allowed",
+        "sec_field_mapping_feasibility_allowed",
+        "field_presence_review_allowed",
+        "fixture_generation_allowed",
+        "derivation_implementation_allowed",
+        "field_mapping_implementation_allowed",
+        "parser_implementation_allowed",
+        "return_calculation_allowed",
+        "provider_selection_allowed",
+        "datahub_or_runner_consumption_allowed"
+      ],
+      "properties": {
+        "raw_payload_parse_for_validation_allowed": {
+          "const": true
+        },
+        "pit_row_validation_allowed": {
+          "const": true
+        },
+        "price_adjustment_validation_allowed": {
+          "const": true
+        },
+        "corporate_action_validation_allowed": {
+          "const": true
+        },
+        "sec_parser_feasibility_allowed": {
+          "const": true
+        },
+        "sec_field_mapping_feasibility_allowed": {
+          "const": true
+        },
+        "field_presence_review_allowed": {
+          "const": true
+        },
+        "fixture_generation_allowed": {
+          "const": false
+        },
+        "derivation_implementation_allowed": {
+          "const": false
+        },
+        "field_mapping_implementation_allowed": {
+          "const": false
+        },
+        "parser_implementation_allowed": {
+          "const": false
+        },
+        "return_calculation_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "datahub_or_runner_consumption_allowed": {
+          "const": false
+        }
+      }
+    },
+    "preExecutionGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment_precheck_required",
+        "exact_symbol_list_required",
+        "endpoint_family_list_required",
+        "call_budget_must_be_within_packet_limit",
+        "provider_samples_gitignore_check_required",
+        "no_secret_summary_scan_required",
+        "no_full_market_guard_required",
+        "sec_fair_access_user_agent_required",
+        "no_new_token_trial_paid_precheck_required",
+        "reviewed_execution_packet_required"
+      ],
+      "properties": {
+        "environment_precheck_required": {
+          "const": true
+        },
+        "exact_symbol_list_required": {
+          "const": true
+        },
+        "endpoint_family_list_required": {
+          "const": true
+        },
+        "call_budget_must_be_within_packet_limit": {
+          "const": true
+        },
+        "provider_samples_gitignore_check_required": {
+          "const": true
+        },
+        "no_secret_summary_scan_required": {
+          "const": true
+        },
+        "no_full_market_guard_required": {
+          "const": true
+        },
+        "sec_fair_access_user_agent_required": {
+          "const": true
+        },
+        "no_new_token_trial_paid_precheck_required": {
+          "const": true
+        },
+        "reviewed_execution_packet_required": {
+          "const": true
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "provider_ranked",
+        "production_ready",
+        "datahub_consumable",
+        "runner_consumable",
+        "phase7c_authorized",
+        "ship_gate_evidence_claimed",
+        "alpha_evidence_claimed",
+        "current_terms_cleared",
+        "production_storage_rights_cleared",
+        "inactive_delisted_coverage_proven",
+        "pit_proven_at_scale",
+        "price_adjustment_proven_at_scale",
+        "corporate_actions_proven_at_scale",
+        "sec_parser_proven_at_scale"
+      ],
+      "properties": {
+        "provider_selected": {
+          "const": false
+        },
+        "provider_ranked": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "datahub_consumable": {
+          "const": false
+        },
+        "runner_consumable": {
+          "const": false
+        },
+        "phase7c_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence_claimed": {
+          "const": false
+        },
+        "alpha_evidence_claimed": {
+          "const": false
+        },
+        "current_terms_cleared": {
+          "const": false
+        },
+        "production_storage_rights_cleared": {
+          "const": false
+        },
+        "inactive_delisted_coverage_proven": {
+          "const": false
+        },
+        "pit_proven_at_scale": {
+          "const": false
+        },
+        "price_adjustment_proven_at_scale": {
+          "const": false
+        },
+        "corporate_actions_proven_at_scale": {
+          "const": false
+        },
+        "sec_parser_proven_at_scale": {
+          "const": false
+        }
+      }
+    }
+  }
+}

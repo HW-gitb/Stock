@@ -1,0 +1,187 @@
+{
+  "schema_name": "provider_p1_validation_authorization_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+08:00",
+  "approval_ref": "user_chat_20260603_fmp_basic_provider_validation_authorization",
+  "scope": {
+    "phase": "7b-2",
+    "purpose": "p1_user_authorized_bounded_provider_validation_packet",
+    "authorization_status": "user_approved_boundary_recorded_for_review_not_executed",
+    "artifact_executes_provider_calls": false,
+    "authorizes_future_validation_run_within_scope": true,
+    "actual_execution_requires_reviewed_execution_packet": true,
+    "fmp_existing_key_use_allowed": true,
+    "sec_edgar_public_api_allowed": true,
+    "raw_payload_parse_for_validation_allowed": true,
+    "provider_selection_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_authorized_by_this_artifact": false,
+    "manual_order_only": true,
+    "ship_gate_relaxed": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false,
+    "broker_or_order_automation_allowed": false
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "p1_access_decision_plan_20260531",
+      "path": "docs/provider_evidence_p1_us_access_decision_sample_validation_plan_20260531.json",
+      "role": "Defines the original P1 access / sample-validation gates and zero-dollar boundary."
+    },
+    {
+      "artifact_id": "p1_sample_validation_access_approval_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_access_approval_20260602.json",
+      "role": "Records the earlier AAPL / MSFT existing-key FMP + SEC EDGAR public-API sample approval."
+    },
+    {
+      "artifact_id": "p1_sample_validation_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_sample_validation_summary_20260602.json",
+      "role": "Records the SEC EDGAR success and FMP legacy-endpoint 403 findings from the approved small sample."
+    },
+    {
+      "artifact_id": "p1_fmp_stable_endpoint_retry_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_fmp_stable_endpoint_retry_summary_20260602.json",
+      "role": "Records the same-scope FMP stable retry response-shape success for AAPL / MSFT."
+    },
+    {
+      "artifact_id": "p1_coverage_count_execution_summary_20260602",
+      "path": "docs/provider_evidence_p1_us_coverage_count_execution_summary_20260602.json",
+      "role": "Records the approved five-active-symbol FMP stable coverage smoke and missing key-metrics fields."
+    },
+    {
+      "artifact_id": "p1_missing_key_metrics_resolution_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json",
+      "role": "Routes missing ratios / per-share metrics toward later field-presence and derivation-lineage review."
+    },
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "role": "Keeps current terms, production storage, PIT, price adjustment, SEC parser, fallback, stability, DataHub, Phase 7c, and production readiness blocked."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "role": "Owner routing document for provider evidence and drift-monitor boundaries."
+    }
+  ],
+  "access_boundary": {
+    "approved_spend_usd": 0,
+    "fmp_account_plan_confirmed_by_user": "Basic",
+    "existing_fmp_key_only": true,
+    "fmp_new_token_request_allowed": false,
+    "fmp_trial_request_allowed": false,
+    "fmp_paid_plan_or_upgrade_allowed": false,
+    "provider_contact_allowed": false,
+    "sec_public_api_allowed": true,
+    "sec_fair_access_required": true,
+    "yfinance_allowed": false,
+    "full_market_download_allowed": false,
+    "current_terms_legal_review_completed": false,
+    "production_storage_rights_authorized": false
+  },
+  "sample_boundary": {
+    "sample_size_range_min": 5,
+    "sample_size_range_max": 10,
+    "max_symbols": 10,
+    "active_symbols_required": true,
+    "inactive_or_delisted_candidates_allowed_if_source_supports": true,
+    "inactive_or_delisted_candidates_required_if_source_supports": true,
+    "inactive_or_delisted_not_required_if_source_cannot_support": true,
+    "exact_symbol_list_fixed_by_this_artifact": false,
+    "exact_symbol_list_required_before_execution": true,
+    "full_market_or_broad_universe_allowed": false,
+    "max_total_endpoint_calls": 60,
+    "retry_count_allowed": 0,
+    "endpoint_families_required_before_execution": true,
+    "abort_if_budget_exceeded": true
+  },
+  "provider_roles": [
+    {
+      "provider_id": "financial_modeling_prep",
+      "role": "Primary candidate for a bounded US EGS validation run using only the user's existing FMP Basic key under a zero-dollar budget.",
+      "allowed_in_validation_packet": true
+    },
+    {
+      "provider_id": "sec_edgar",
+      "role": "Public fundamentals audit source for SEC parser / field-mapping feasibility and FMP cross-check checks under fair-access behavior.",
+      "allowed_in_validation_packet": true
+    },
+    {
+      "provider_id": "yfinance",
+      "role": "Not authorized in this packet; cannot substitute for SEC EDGAR or FMP validation.",
+      "allowed_in_validation_packet": false
+    }
+  ],
+  "storage_and_secret_boundary": {
+    "raw_sample_storage_root": "provider_samples/",
+    "raw_payload_storage_must_be_gitignored": true,
+    "tracked_summary_allowed": true,
+    "tracked_summary_must_exclude_raw_payloads": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "api_key_logging_allowed": false,
+    "authorization_header_logging_allowed": false,
+    "sec_user_agent_value_logging_allowed": false,
+    "secrets_in_repo_allowed": false,
+    "raw_retention_authorizes_production_storage": false
+  },
+  "validation_permissions": {
+    "raw_payload_parse_for_validation_allowed": true,
+    "pit_row_validation_allowed": true,
+    "price_adjustment_validation_allowed": true,
+    "corporate_action_validation_allowed": true,
+    "sec_parser_feasibility_allowed": true,
+    "sec_field_mapping_feasibility_allowed": true,
+    "field_presence_review_allowed": true,
+    "fixture_generation_allowed": false,
+    "derivation_implementation_allowed": false,
+    "field_mapping_implementation_allowed": false,
+    "parser_implementation_allowed": false,
+    "return_calculation_allowed": false,
+    "provider_selection_allowed": false,
+    "datahub_or_runner_consumption_allowed": false
+  },
+  "pre_execution_gates": {
+    "environment_precheck_required": true,
+    "exact_symbol_list_required": true,
+    "endpoint_family_list_required": true,
+    "call_budget_must_be_within_packet_limit": true,
+    "provider_samples_gitignore_check_required": true,
+    "no_secret_summary_scan_required": true,
+    "no_full_market_guard_required": true,
+    "sec_fair_access_user_agent_required": true,
+    "no_new_token_trial_paid_precheck_required": true,
+    "reviewed_execution_packet_required": true
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "provider_ranked": false,
+    "production_ready": false,
+    "datahub_consumable": false,
+    "runner_consumable": false,
+    "phase7c_authorized": false,
+    "ship_gate_evidence_claimed": false,
+    "alpha_evidence_claimed": false,
+    "current_terms_cleared": false,
+    "production_storage_rights_cleared": false,
+    "inactive_delisted_coverage_proven": false,
+    "pit_proven_at_scale": false,
+    "price_adjustment_proven_at_scale": false,
+    "corporate_actions_proven_at_scale": false,
+    "sec_parser_proven_at_scale": false
+  },
+  "next_steps": [
+    "After independent review, a later execution packet may consume this authorization to define the exact 5-10 symbol list, endpoint families, raw storage subdirectory, and call budget within max_total_endpoint_calls = 60.",
+    "The later execution packet must include at least active symbols and must attempt a small inactive / delisted candidate check if FMP Basic or SEC EDGAR can support it without full-market fetch, paid access, new token, or provider contact.",
+    "The later execution packet may parse raw payloads only to validate PIT row, price adjustment, corporate-action, SEC parser feasibility, SEC field-mapping feasibility, and field-presence questions; it must write only a tracked no-secret summary.",
+    "Any expansion beyond this authorization, including paid access, yfinance, full-market fetch, provider selection, adapter, DataHub, runner consumption, fixture generation, implementation, Phase 7c, production readiness, or ship-gate evidence, requires separate explicit approval and reviewed decision."
+  ],
+  "limitations": [
+    "This artifact records user authorization and schema boundaries only; it performs no provider call, SEC call, raw-payload parse, file creation under provider_samples, runner change, or implementation.",
+    "FMP Basic is a user-confirmed account-plan boundary, not legal advice or proof of current production storage / non-display / derived-output rights.",
+    "A future 5-10 symbol validation can support only feasibility and blocker disposition, not provider selection, alpha validation, production readiness, DataHub consumption, Phase 7c, or ship-gate evidence.",
+    "Inactive / delisted candidate inclusion is required only if the approved sources can support it within the zero-dollar, no-full-market, no-new-token, no-paid-access boundary.",
+    "SR-PROVIDER-001 remains open until current terms, production storage, field-level PIT, price adjustment, corporate actions, SEC parser / field mapping, fallback, stability, and production-readiness evidence are reviewed or explicitly accepted."
+  ]
+}

@@ -2542,3 +2542,32 @@ git diff --check
 
 - "This changes provider authorization, Phase 7c, DataHub, production runner consumption, ship-gate policy, or full-size permission" is false.
 - "This closes `SR-PROVIDER-001` or `SR-RESOURCE-001`" is false; both remain open by design.
+
+## 2026-06-03 append: Provider validation authorization packet
+
+**What changed**:
+
+- `schemas/provider_p1_validation_authorization_packet.schema.json` defines the machine-checkable authorization boundary for a future bounded US EGS provider validation packet.
+- `docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json` records the user's FMP Basic confirmation and authorization for existing FMP key + SEC EDGAR public API, $0 spend, 5-10 symbols, max 60 calls, active symbols plus inactive / delisted candidates if supported, gitignored raw storage, tracked no-secret summary, and validation-only raw parsing for PIT row / price adjustment / corporate-action / SEC parser / SEC field-mapping / field-presence feasibility.
+- `tests/schema/test_provider_p1_validation_authorization_packet_schema.py` validates the new schema / artifact, boundary locks, validation-only permissions, pre-execution gates, prohibited claims, and scope-creep rejection.
+- `docs/provider_evidence_drift_monitor.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, and `AGENTS.md` now route the new packet as the active `SR-PROVIDER-001` authorization boundary for a later reviewed execution packet.
+
+**Validation results**:
+
+- Python313: `json.tool` parsed `schemas/provider_p1_validation_authorization_packet.schema.json` and `docs/provider_evidence_p1_us_validation_authorization_packet_20260603.json`.
+- Python313: `tests.schema.test_provider_p1_validation_authorization_packet_schema` ran 8 tests, all pass.
+- Python313: adjacent provider schema regression suite ran 34 tests, all pass: sample-validation approval, coverage-count approval / summary, missing key-metrics resolution plan, and the new validation authorization packet.
+- `docs/CURRENT.md` line count is 149.
+
+**Invalid conclusions**:
+
+- "This slice executed FMP or SEC calls" is false; it executed no provider calls and created no `provider_samples/` files.
+- "This authorizes provider selection, adapter, DataHub, runner consumption, Phase 7c, production readiness, alpha evidence, or ship-gate evidence" is false.
+- "FMP Basic is production license clearance" is false; it is only the user-confirmed plan boundary for a later bounded validation packet.
+- "SR-PROVIDER-001 is closed" is false; the authorization narrows one approval blocker but leaves current terms, production storage, PIT, price adjustment, corporate action, SEC parser / field mapping, fallback, stability, and production-readiness evidence open.
+
+**Next-step notes**:
+
+1. Claude review should verify that the new schema/artifact allows only the authorized future 5-10 symbol / max 60 call / FMP Basic existing-key / SEC public-API validation packet and does not silently authorize implementation.
+2. A future execution slice may consume this authorization only through a reviewed execution packet that fixes exact symbols, endpoints, call budget, raw storage subdir, no-secret summary fields, environment precheck, SEC fair-access handling, gitignore proof, and abort behavior.
+3. Any scope beyond this authorization still requires separate explicit approval and reviewed decision.
