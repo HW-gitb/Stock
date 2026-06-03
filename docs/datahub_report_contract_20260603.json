@@ -1,0 +1,204 @@
+{
+  "schema_name": "datahub_report_contract",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+08:00",
+  "scope": {
+    "phase": "7c_contract",
+    "purpose": "report_contract_boundaries",
+    "contract_status": "schema_first_no_report_generation",
+    "schema_first_only": true,
+    "report_generation_allowed": false,
+    "datahub_table_consumption_allowed": false,
+    "provider_call_allowed": false,
+    "runner_change_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_implementation_authorized": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_refs": [
+    {
+      "artifact_id": "datahub_design",
+      "path": "docs/datahub_design.md",
+      "consumption_role": "DataHub report owner routing"
+    },
+    {
+      "artifact_id": "evidence_report_schema_contract",
+      "path": "docs/evidence_report_schema_contract.md",
+      "consumption_role": "decision packet and evidence-report policy"
+    },
+    {
+      "artifact_id": "evidence_report_schema",
+      "path": "schemas/evidence_report.schema.json",
+      "consumption_role": "existing evidence-report schema baseline"
+    },
+    {
+      "artifact_id": "datahub_job_spec_enforcement_helper",
+      "path": "engine/datahub/job_spec_contract.py",
+      "consumption_role": "future report jobs must validate job specs"
+    },
+    {
+      "artifact_id": "evidence_capital_policy",
+      "path": "docs/evidence_capital_policy.md",
+      "consumption_role": "paper vs live-normalized evidence boundary"
+    }
+  ],
+  "report_families": [
+    {
+      "family_id": "screening_report",
+      "plain_role": "Human-readable lane screening output with data lineage and limitations visible.",
+      "required_inputs": [
+        "validated job spec",
+        "bounded screening output refs",
+        "datahub lineage refs when implemented"
+      ],
+      "required_output_sections": [
+        "plain result",
+        "candidate summary",
+        "data limitations",
+        "manual-only action boundary"
+      ],
+      "must_include_refs": [
+        "as_of_date",
+        "market",
+        "lane",
+        "input artifact refs",
+        "reproducibility manifest ref"
+      ],
+      "must_not_include": [
+        "raw provider rows",
+        "request URLs",
+        "secrets",
+        "full-size permission"
+      ],
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "family_id": "evidence_report",
+      "plain_role": "Evidence packet report for research, paper, or live-normalized evidence with honest limitations.",
+      "required_inputs": [
+        "evidence_report schema-valid artifact",
+        "capital context",
+        "benchmark refs",
+        "forward-live evidence refs when relevant"
+      ],
+      "required_output_sections": [
+        "decision",
+        "metric status",
+        "cost-adjusted return",
+        "cash drag",
+        "manual override log",
+        "limitations"
+      ],
+      "must_include_refs": [
+        "evidence artifact ref",
+        "schema version",
+        "review status",
+        "reproducibility manifest ref"
+      ],
+      "must_not_include": [
+        "ship-gate claim unless aggregate gate passed",
+        "paper evidence as live evidence",
+        "provider readiness overclaim"
+      ],
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "family_id": "provider_evidence_summary",
+      "plain_role": "Provider evidence and blocker summary for humans, not a provider selection result.",
+      "required_inputs": [
+        "provider evidence drift monitor refs",
+        "risk register refs",
+        "reviewed provider evidence artifacts"
+      ],
+      "required_output_sections": [
+        "plain result",
+        "usable evidence",
+        "known blocker",
+        "not authorized list"
+      ],
+      "must_include_refs": [
+        "SR-PROVIDER-001 status",
+        "source artifact refs",
+        "review status"
+      ],
+      "must_not_include": [
+        "provider selected",
+        "license cleared",
+        "production ready",
+        "new token or paid access authorization"
+      ],
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "family_id": "data_quality_report",
+      "plain_role": "Data quality / drift status report before provider-backed evidence is treated as stable.",
+      "required_inputs": [
+        "data quality monitor refs",
+        "provider drift refs",
+        "lineage refs"
+      ],
+      "required_output_sections": [
+        "coverage",
+        "freshness",
+        "schema drift",
+        "outlier flags",
+        "revision rate",
+        "incident status"
+      ],
+      "must_include_refs": [
+        "monitor artifact ref",
+        "as_of_date",
+        "market",
+        "lane"
+      ],
+      "must_not_include": [
+        "silent green status without monitor evidence",
+        "provider stability proof from docs only",
+        "production readiness claim"
+      ],
+      "implementation_status": "not_implemented_contract_only"
+    }
+  ],
+  "report_output_policy": {
+    "tracked_outputs_must_be_no_secret": true,
+    "tracked_outputs_must_exclude_raw_rows": true,
+    "tracked_outputs_must_exclude_request_urls": true,
+    "raw_payloads_must_remain_gitignored": true,
+    "human_readable_plain_result_required": true,
+    "machine_readable_contract_required": true,
+    "schema_version_required": true,
+    "input_artifact_refs_required": true,
+    "reproducibility_manifest_ref_required": true
+  },
+  "decision_evidence_policy": {
+    "paper_evidence_is_not_ship_gate": true,
+    "live_normalized_forward_evidence_required_for_ship_gate": true,
+    "full_size_claim_requires_aggregate_ship_gate": true,
+    "manual_override_must_be_recorded": true,
+    "cost_adjusted_return_required": true,
+    "cash_drag_required": true,
+    "provider_limitations_must_be_visible": true
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "datahub_implemented": false,
+    "runner_consumption_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "alpha_proven": false,
+    "license_cleared": false
+  },
+  "next_steps": [
+    "Future report generator work must be a reviewed implementation slice with a job spec that passes the DataHub job-spec helper.",
+    "Future report outputs must include plain-language conclusions without hiding provider or evidence limitations.",
+    "Future ship-gate language must remain blocked unless aggregate ship-gate evidence actually passes."
+  ],
+  "limitations": [
+    "This artifact defines report families and output policy only.",
+    "It does not generate reports or consume DataHub tables.",
+    "It does not make provider evidence production-ready.",
+    "It does not authorize full-size manual use."
+  ]
+}

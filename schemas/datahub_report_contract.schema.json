@@ -1,0 +1,397 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/datahub_report_contract/1.0.0/schema.json",
+  "title": "DataHub Report Contract",
+  "description": "Phase 7c schema-first contract for future DataHub-backed report families and report output boundaries. This artifact defines report contracts only; it does not generate reports, consume provider data, call providers, create DataHub tables, change runners, authorize production use, or provide ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_refs",
+    "report_families",
+    "report_output_policy",
+    "decision_evidence_policy",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "datahub_report_contract"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 5,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "evidence_report_schema_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_job_spec_enforcement_helper"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "report_families": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reportFamily"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "screening_report"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "evidence_report"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "provider_evidence_summary"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "family_id": {
+                "const": "data_quality_report"
+              }
+            },
+            "required": [
+              "family_id"
+            ]
+          }
+        }
+      ]
+    },
+    "report_output_policy": {
+      "$ref": "#/$defs/reportOutputPolicy"
+    },
+    "decision_evidence_policy": {
+      "$ref": "#/$defs/decisionEvidencePolicy"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "schema_first_only",
+        "report_generation_allowed",
+        "datahub_table_consumption_allowed",
+        "provider_call_allowed",
+        "runner_change_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_implementation_authorized",
+        "ship_gate_evidence_allowed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7c_contract"
+        },
+        "purpose": {
+          "const": "report_contract_boundaries"
+        },
+        "contract_status": {
+          "const": "schema_first_no_report_generation"
+        },
+        "schema_first_only": {
+          "const": true
+        },
+        "report_generation_allowed": {
+          "const": false
+        },
+        "datahub_table_consumption_allowed": {
+          "const": false
+        },
+        "provider_call_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_implementation_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "reportFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family_id",
+        "plain_role",
+        "required_inputs",
+        "required_output_sections",
+        "must_include_refs",
+        "must_not_include",
+        "implementation_status"
+      ],
+      "properties": {
+        "family_id": {
+          "enum": [
+            "screening_report",
+            "evidence_report",
+            "provider_evidence_summary",
+            "data_quality_report"
+          ]
+        },
+        "plain_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required_inputs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "required_output_sections": {
+          "$ref": "#/$defs/stringList"
+        },
+        "must_include_refs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "must_not_include": {
+          "$ref": "#/$defs/stringList"
+        },
+        "implementation_status": {
+          "const": "not_implemented_contract_only"
+        }
+      }
+    },
+    "reportOutputPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tracked_outputs_must_be_no_secret",
+        "tracked_outputs_must_exclude_raw_rows",
+        "tracked_outputs_must_exclude_request_urls",
+        "raw_payloads_must_remain_gitignored",
+        "human_readable_plain_result_required",
+        "machine_readable_contract_required",
+        "schema_version_required",
+        "input_artifact_refs_required",
+        "reproducibility_manifest_ref_required"
+      ],
+      "properties": {
+        "tracked_outputs_must_be_no_secret": {
+          "const": true
+        },
+        "tracked_outputs_must_exclude_raw_rows": {
+          "const": true
+        },
+        "tracked_outputs_must_exclude_request_urls": {
+          "const": true
+        },
+        "raw_payloads_must_remain_gitignored": {
+          "const": true
+        },
+        "human_readable_plain_result_required": {
+          "const": true
+        },
+        "machine_readable_contract_required": {
+          "const": true
+        },
+        "schema_version_required": {
+          "const": true
+        },
+        "input_artifact_refs_required": {
+          "const": true
+        },
+        "reproducibility_manifest_ref_required": {
+          "const": true
+        }
+      }
+    },
+    "decisionEvidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "paper_evidence_is_not_ship_gate",
+        "live_normalized_forward_evidence_required_for_ship_gate",
+        "full_size_claim_requires_aggregate_ship_gate",
+        "manual_override_must_be_recorded",
+        "cost_adjusted_return_required",
+        "cash_drag_required",
+        "provider_limitations_must_be_visible"
+      ],
+      "properties": {
+        "paper_evidence_is_not_ship_gate": {
+          "const": true
+        },
+        "live_normalized_forward_evidence_required_for_ship_gate": {
+          "const": true
+        },
+        "full_size_claim_requires_aggregate_ship_gate": {
+          "const": true
+        },
+        "manual_override_must_be_recorded": {
+          "const": true
+        },
+        "cost_adjusted_return_required": {
+          "const": true
+        },
+        "cash_drag_required": {
+          "const": true
+        },
+        "provider_limitations_must_be_visible": {
+          "const": true
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "datahub_implemented",
+        "runner_consumption_authorized",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "alpha_proven",
+        "license_cleared"
+      ],
+      "properties": {
+        "provider_selected": {
+          "const": false
+        },
+        "datahub_implemented": {
+          "const": false
+        },
+        "runner_consumption_authorized": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        },
+        "full_size_allowed": {
+          "const": false
+        },
+        "alpha_proven": {
+          "const": false
+        },
+        "license_cleared": {
+          "const": false
+        }
+      }
+    }
+  }
+}

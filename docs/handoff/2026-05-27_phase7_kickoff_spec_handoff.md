@@ -2904,3 +2904,50 @@ git diff --check
 
 1. Claude review should verify that the helper cannot be bypassed by future executable job specs in documented routing, and that the helper rejects provider calls, DataHub table implementation authorization, runner changes, production consumption, all-market / all-lane / full-refresh behavior, raw writes, and ship-gate claims.
 2. After review and commit, the natural next Phase 7c slice is still implementation-design for the shared layer / report contracts / reproducibility plumbing. It must consume this helper and cannot use unresolved US provider evidence as production input.
+
+## 2026-06-03 append: Phase 7c shared-layer / report / reproducibility contract batch
+
+**What changed**:
+
+- Added `schemas/datahub_shared_layer_contract.schema.json` and `docs/datahub_shared_layer_contract_20260603.json`.
+- Added `schemas/datahub_report_contract.schema.json` and `docs/datahub_report_contract_20260603.json`.
+- Added `schemas/datahub_reproducibility_manifest.schema.json` and `docs/datahub_reproducibility_manifest_contract_20260603.json`.
+- Added `tests/schema/test_datahub_phase7c_contract_batch.py`, validating all three schemas/artifacts, ODS / DWD / DWS / factor coverage, report-family coverage, reproducibility requirements, no-secret / no-raw policies, and scope-creep rejection.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, and `docs/datahub_design.md`.
+
+**Plain result**:
+
+- DataHub now has the next schema-first baseline: what shared layers are allowed to contain, what reports must say / must not say, and what a future reproducibility manifest must record.
+- This is still not a DataHub implementation. No table was created, no report generator was implemented, no manifest writer was implemented, no runner was changed, and no provider data was consumed.
+- Future executable DataHub / runner / report work must still create a reviewed job spec and pass `engine/datahub/job_spec_contract.py` before running.
+- `SR-PROVIDER-001` remains open; US provider data is still not production usable.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_datahub_phase7c_contract_batch -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_datahub_phase7c_contract_batch tests.schema.test_datahub_job_spec_contract tests.schema.test_datahub_local_resource_budget_schema tests.schema.test_datahub_job_spec_schema -v
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v
+(Get-Content -Encoding UTF8 docs\CURRENT.md).Count
+git diff --check
+```
+
+**Validation results**:
+
+- Python313 target test: 6 tests, all pass.
+- Python313 DataHub suite: 33 tests, all pass.
+- Python313 full unittest discover: 557 tests, all pass.
+- `docs/CURRENT.md` line count = 149.
+- `git diff --check` passed with only normal LF/CRLF working-copy warnings.
+
+**Invalid conclusions**:
+
+- "Phase 7c implementation is done" is false.
+- "DataHub tables / reports / manifest writer now exist" is false.
+- "US provider data can now feed DataHub or reports" is false.
+- "This authorizes production runner consumption, ship-gate evidence, or full-size sizing" is false.
+
+**Next-step notes**:
+
+1. Claude review should treat this as one coherent batch: three schema-first DataHub contracts plus routing docs and tests.
+2. After review and commit, the next natural Phase 7c slice is data-quality monitor contract or a reviewed implementation-design packet for one minimal local A-share-only DataHub read path. Any executable implementation still needs a job spec and must not use unresolved US provider evidence.

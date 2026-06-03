@@ -1,0 +1,101 @@
+{
+  "schema_name": "datahub_reproducibility_manifest",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+08:00",
+  "scope": {
+    "phase": "7c_contract",
+    "purpose": "reproducibility_manifest_contract",
+    "contract_status": "schema_first_no_manifest_writer",
+    "schema_first_only": true,
+    "manifest_writer_implemented": false,
+    "job_execution_allowed": false,
+    "provider_call_allowed": false,
+    "raw_payload_write_allowed": false,
+    "runner_change_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_implementation_authorized": false,
+    "ship_gate_evidence_allowed": false
+  },
+  "source_refs": [
+    {
+      "artifact_id": "datahub_design",
+      "path": "docs/datahub_design.md",
+      "consumption_role": "reproducibility plumbing owner routing"
+    },
+    {
+      "artifact_id": "datahub_job_spec_contract",
+      "path": "schemas/datahub_job_spec.schema.json",
+      "consumption_role": "required future job-spec ref"
+    },
+    {
+      "artifact_id": "datahub_job_spec_enforcement_helper",
+      "path": "engine/datahub/job_spec_contract.py",
+      "consumption_role": "required future job-spec validation result"
+    },
+    {
+      "artifact_id": "datahub_local_resource_budget_contract",
+      "path": "docs/datahub_local_resource_budget_contract_20260602.json",
+      "consumption_role": "resource-budget lineage"
+    }
+  ],
+  "manifest_requirements": {
+    "job_spec_ref_required": true,
+    "job_spec_validation_result_required": true,
+    "resource_budget_ref_required": true,
+    "code_version_ref_required": true,
+    "schema_version_refs_required": true,
+    "input_artifact_hashes_required": true,
+    "output_artifact_refs_required": true,
+    "environment_summary_required": true,
+    "dependency_snapshot_required": true,
+    "random_seed_or_determinism_note_required": true,
+    "checkpoint_ref_required_when_checkpointed": true,
+    "plain_result_required": true
+  },
+  "lineage_requirements": {
+    "provider_lineage_required": true,
+    "as_of_date_required": true,
+    "date_window_required": true,
+    "market_lane_required": true,
+    "cache_key_required": true,
+    "transform_version_required": true,
+    "data_quality_status_required": true,
+    "known_limitations_required": true
+  },
+  "secret_and_raw_policy": {
+    "tracked_manifest_must_be_no_secret": true,
+    "tracked_manifest_must_exclude_request_urls": true,
+    "tracked_manifest_must_exclude_raw_rows": true,
+    "tracked_manifest_must_exclude_raw_body_text": true,
+    "raw_payload_paths_must_be_gitignored": true,
+    "secret_scan_required_before_commit": true
+  },
+  "execution_gates": {
+    "job_spec_helper_must_pass_before_execution": true,
+    "manifest_writer_requires_reviewed_implementation": true,
+    "provider_calls_require_separate_approval": true,
+    "production_consumption_requires_separate_review": true,
+    "ship_gate_claim_requires_aggregate_gate": true
+  },
+  "prohibited_claims": {
+    "manifest_writer_implemented": false,
+    "job_executed": false,
+    "provider_called": false,
+    "datahub_table_created": false,
+    "runner_consumption_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false
+  },
+  "next_steps": [
+    "Future manifest writer implementation must be a separate reviewed slice.",
+    "Future executable jobs must write a manifest only after the job-spec helper passes.",
+    "Future tracked manifests must remain no-secret and must not include raw rows, raw body text, or request URLs."
+  ],
+  "limitations": [
+    "This artifact defines manifest requirements only.",
+    "It does not implement a manifest writer.",
+    "It does not execute any DataHub or runner job.",
+    "It does not authorize provider calls or production use."
+  ]
+}

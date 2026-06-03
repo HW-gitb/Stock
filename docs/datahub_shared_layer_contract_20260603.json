@@ -1,0 +1,206 @@
+{
+  "schema_name": "datahub_shared_layer_contract",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00+08:00",
+  "scope": {
+    "phase": "7c_contract",
+    "purpose": "shared_layer_boundaries",
+    "contract_status": "schema_first_no_table_implementation",
+    "schema_first_only": true,
+    "data_fetch_allowed": false,
+    "provider_call_allowed": false,
+    "provider_selection_allowed": false,
+    "datahub_table_implementation_allowed": false,
+    "runner_change_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "phase7c_implementation_authorized": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false
+  },
+  "source_refs": [
+    {
+      "artifact_id": "datahub_design",
+      "path": "docs/datahub_design.md",
+      "consumption_role": "owner_doc_for_layer_purpose_and_guardrails"
+    },
+    {
+      "artifact_id": "provider_data_requirements_audit",
+      "path": "docs/provider_data_requirements_audit.md",
+      "consumption_role": "four_lane_data_requirement_source"
+    },
+    {
+      "artifact_id": "datahub_job_spec_contract",
+      "path": "schemas/datahub_job_spec.schema.json",
+      "consumption_role": "future_executable_jobs_must_declare_scope"
+    },
+    {
+      "artifact_id": "datahub_job_spec_enforcement_helper",
+      "path": "engine/datahub/job_spec_contract.py",
+      "consumption_role": "future_executable_jobs_must_validate_before_running"
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "schemas/provider_evidence_drift_monitor.schema.json",
+      "consumption_role": "provider_readiness_and_drift_context"
+    }
+  ],
+  "layer_contracts": [
+    {
+      "layer_id": "ods",
+      "plain_role": "Raw source evidence layer. Keep provider payload shape and request metadata for audit, but do not infer, rescale, or fill values here.",
+      "allowed_inputs": [
+        "reviewed provider sample summaries",
+        "future provider raw payloads only when separately approved and gitignored"
+      ],
+      "allowed_outputs": [
+        "raw-layer audit references",
+        "no-secret tracked summaries"
+      ],
+      "required_metadata": [
+        "provider",
+        "api_family",
+        "request_parameters_without_secret",
+        "fetch_time",
+        "response_date_range",
+        "raw_storage_ref"
+      ],
+      "pit_policy": "ODS records fetch facts; historical usability depends on downstream as-of validation.",
+      "forbidden_defaults": [
+        "silent latest-only historical fill",
+        "tracked raw payload rows",
+        "request URL or token in tracked output"
+      ],
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "layer_id": "dwd",
+      "plain_role": "Standardized detail layer. Normalize code, date, unit, field names, and PIT semantics for one market/lane slice.",
+      "allowed_inputs": [
+        "reviewed ODS refs",
+        "local validated A-share cache refs",
+        "future provider-backed rows after provider readiness review"
+      ],
+      "allowed_outputs": [
+        "standardized daily rows",
+        "standardized fundamentals rows",
+        "standardized benchmark rows"
+      ],
+      "required_metadata": [
+        "schema_version",
+        "market",
+        "lane",
+        "as_of_date",
+        "field_units",
+        "provider_lineage",
+        "known_limitations"
+      ],
+      "pit_policy": "DWD date-bearing fields must prove they were observable at or before as_of_date.",
+      "forbidden_defaults": [
+        "market/lane mismatch",
+        "unit conversion without metadata",
+        "latest-only fundamentals in historical rows"
+      ],
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "layer_id": "dws",
+      "plain_role": "Reusable aggregate layer for screening, analysis, backtest, reports, and monitoring.",
+      "allowed_inputs": [
+        "reviewed DWD refs",
+        "reviewed benchmark refs",
+        "reviewed capital-context refs"
+      ],
+      "allowed_outputs": [
+        "lane-level derived views",
+        "bounded report input views"
+      ],
+      "required_metadata": [
+        "input_hashes",
+        "transform_version",
+        "as_of_date",
+        "date_window",
+        "cache_key",
+        "data_quality_status"
+      ],
+      "pit_policy": "DWS must inherit and expose PIT status from all inputs instead of hiding upstream limitations.",
+      "forbidden_defaults": [
+        "full-market refresh by default",
+        "paper evidence promoted to ship-gate evidence",
+        "provider limitation hidden from report"
+      ],
+      "implementation_status": "not_implemented_contract_only"
+    },
+    {
+      "layer_id": "factor",
+      "plain_role": "Versioned factor layer used by multiple lanes without changing definitions silently.",
+      "allowed_inputs": [
+        "reviewed DWD refs",
+        "reviewed DWS refs"
+      ],
+      "allowed_outputs": [
+        "factor values",
+        "factor diagnostics",
+        "factor lineage refs"
+      ],
+      "required_metadata": [
+        "factor_id",
+        "factor_version",
+        "lookback_window",
+        "input_layer_refs",
+        "as_of_date",
+        "pit_safe_flag"
+      ],
+      "pit_policy": "Factor values must mark PIT safety and must not consume future data for historical rows.",
+      "forbidden_defaults": [
+        "unversioned factor change",
+        "factor reused across markets without market-specific lineage",
+        "alpha claim from factor contract alone"
+      ],
+      "implementation_status": "not_implemented_contract_only"
+    }
+  ],
+  "shared_invariants": {
+    "date_key_format": "YYYYMMDD",
+    "as_of_cutoff_required": true,
+    "provider_lineage_required": true,
+    "schema_version_required": true,
+    "field_unit_required": true,
+    "revision_policy_required": true,
+    "no_silent_default": true,
+    "job_spec_validation_required": true,
+    "local_resource_budget_required": true
+  },
+  "implementation_gates": {
+    "job_spec_helper_must_run_before_execution": true,
+    "provider_readiness_must_be_reviewed": true,
+    "sr_provider_001_must_be_closed_or_explicitly_accepted": true,
+    "table_schema_must_be_reviewed_before_table_creation": true,
+    "runner_consumption_requires_separate_review": true,
+    "data_quality_monitor_contract_required": true,
+    "reproducibility_manifest_required": true
+  },
+  "prohibited_actions": {
+    "provider_call": false,
+    "provider_selection": false,
+    "paid_access": false,
+    "raw_payload_read": false,
+    "datahub_table_creation": false,
+    "adapter_or_runner_change": false,
+    "production_runner_consumption": false,
+    "full_market_download": false,
+    "all_lane_default_run": false,
+    "ship_gate_claim": false,
+    "alpha_claim": false
+  },
+  "next_steps": [
+    "Future table-schema implementation must create a reviewed job spec and pass engine.datahub.job_spec_contract before execution.",
+    "Future US-backed shared-layer work must not consume provider data until SR-PROVIDER-001 is closed or explicitly accepted.",
+    "Future implementation must add data-quality monitor and reproducibility manifest writer in separate reviewed slices."
+  ],
+  "limitations": [
+    "This artifact defines layer boundaries only.",
+    "It does not create DataHub tables or adapters.",
+    "It does not make US provider data production usable.",
+    "It does not prove alpha or allow full-size sizing."
+  ]
+}

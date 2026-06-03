@@ -8,6 +8,57 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (Phase 7c shared-layer / report / reproducibility contract batch) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. Three schema-first Phase 7c contracts; all authorize nothing and reinforce existing guardrails. (User-approved batch of 3 cohesive same-pattern contracts — reasonable scope.)
+
+**Verified (read all 3 artifacts + the test in full)**:
+- shared_layer: ODS/DWD/DWS/factor boundaries with correct PIT policy (date-bearing fields must be observable at/before as_of; factors must not consume future data; no latest-only historical fill), provider_lineage/no-silent-default invariants, and `implementation_gates` that explicitly require the job-spec helper to run AND `sr_provider_001_must_be_closed_or_explicitly_accepted` before any table implementation. All scope `*_allowed` / prohibited false; every layer `not_implemented_contract_only`.
+- report: screening / evidence / provider-summary / data-quality families with `must_not_include` lists that block raw rows / URLs / secrets / full-size / ship-gate-without-aggregate-gate / paper-as-live / provider-selected; `decision_evidence_policy` mirrors existing ship-gate + capital policy (paper≠ship-gate, live-normalized forward required, cost/cash-drag required, provider limitations visible); plain-result required (aligns with the new plain-language rule). All prohibited claims false.
+- reproducibility_manifest: requires job-spec ref + validation result, resource-budget ref, code/schema versions, input hashes, output refs, environment, dependency snapshot, determinism note, checkpoint, plain result + full lineage; no-secret / exclude-URL / exclude-raw / gitignored-raw / secret-scan-before-commit; execution gated behind the job-spec helper. Writer not implemented; all prohibited false.
+- Tests 6/6 under Python313+jsonschema: schemas strict (additionalProperties false), all 3 artifacts validate, per-contract content asserted, and a scope-creep sweep across all 3 rejected. Non-vacuous.
+- Pure schema/JSON + test — no executable code, no A-EGS / runner change (no regression). `SR-PROVIDER-001` stays open; AGENTS fixed decision #24 added (accurate, authorizes nothing); CURRENT=149; 6 new files secret-clean.
+
+**Note**: this completes the Phase 7c schema-first CONTRACT layer (boundaries future DataHub/report/manifest implementation must obey). No DataHub is built; implementation remains gated behind SR-PROVIDER-001 + the job-spec helper + separate review. Advances the independent (non-provider) track; US provider data still not usable.
+
+---
+
+## 2026-06-03 — Codex 执行 (Phase 7c shared-layer / report / reproducibility contract batch)
+
+**Scope**:
+- Batch execution approved by the user to reduce one-small-task review overhead.
+- Added three Phase 7c schema-first contracts in one coherent DataHub batch: shared-layer boundaries, report boundaries, and reproducibility manifest requirements.
+- No provider call, no data fetch, no raw parse, no DataHub table, no report generator, no manifest writer, no runner change, no production runner consumption, and no ship-gate evidence.
+
+**Plain result**:
+- Future DataHub work now has a clearer contract checklist: what ODS / DWD / DWS / factor layers may contain, what future reports must say / must not say, and what future jobs must record so they can be reproduced.
+- This does not make DataHub implemented. It only defines the boundaries that future implementation must obey.
+- `SR-PROVIDER-001` remains open; US provider data is still not production usable.
+
+**Worked on**:
+- [untracked] `schemas/datahub_shared_layer_contract.schema.json`
+- [untracked] `docs/datahub_shared_layer_contract_20260603.json`
+- [untracked] `schemas/datahub_report_contract.schema.json`
+- [untracked] `docs/datahub_report_contract_20260603.json`
+- [untracked] `schemas/datahub_reproducibility_manifest.schema.json`
+- [untracked] `docs/datahub_reproducibility_manifest_contract_20260603.json`
+- [untracked] `tests/schema/test_datahub_phase7c_contract_batch.py`
+- [tracked] `AGENTS.md`
+- [tracked] `docs/README.md`
+- [tracked] `docs/CURRENT.md`
+- [tracked] `docs/datahub_design.md`
+- [tracked] `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`
+- [tracked] `docs/SESSION_LOG.md`
+
+**Validation state**:
+- Targeted Python313 test passed: `tests.schema.test_datahub_phase7c_contract_batch` ran 6 tests, all pass.
+- DataHub Python313 suite passed: `tests.schema.test_datahub_phase7c_contract_batch`, `tests.schema.test_datahub_job_spec_contract`, `tests.schema.test_datahub_local_resource_budget_schema`, and `tests.schema.test_datahub_job_spec_schema` ran 33 tests, all pass.
+- Full Python313 `unittest discover -v` ran 557 tests, all pass.
+- `CURRENT.md` line count = 149; `git diff --check` passed with only normal LF/CRLF working-copy warnings.
+- Needs Claude review before commit.
+
+---
+
 ## 2026-06-03 — Claude 审查 (Phase 7c-a DataHub job-spec runtime enforcement) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. First DataHub code; it is a pure pre-execution validator (no side effects), and the SR-RESOURCE-001 resolution is genuine + honestly bounded.

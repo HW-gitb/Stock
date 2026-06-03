@@ -1,0 +1,378 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/datahub_reproducibility_manifest/1.0.0/schema.json",
+  "title": "DataHub Reproducibility Manifest Contract",
+  "description": "Phase 7c schema-first contract for future DataHub reproducibility manifests. This artifact defines the manifest shape and required lineage only; it does not run jobs, fetch data, call providers, write raw payloads, change runners, authorize production use, or provide ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_refs",
+    "manifest_requirements",
+    "lineage_requirements",
+    "secret_and_raw_policy",
+    "execution_gates",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "datahub_reproducibility_manifest"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_job_spec_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_job_spec_enforcement_helper"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "manifest_requirements": {
+      "$ref": "#/$defs/manifestRequirements"
+    },
+    "lineage_requirements": {
+      "$ref": "#/$defs/lineageRequirements"
+    },
+    "secret_and_raw_policy": {
+      "$ref": "#/$defs/secretAndRawPolicy"
+    },
+    "execution_gates": {
+      "$ref": "#/$defs/executionGates"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "schema_first_only",
+        "manifest_writer_implemented",
+        "job_execution_allowed",
+        "provider_call_allowed",
+        "raw_payload_write_allowed",
+        "runner_change_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_implementation_authorized",
+        "ship_gate_evidence_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7c_contract"
+        },
+        "purpose": {
+          "const": "reproducibility_manifest_contract"
+        },
+        "contract_status": {
+          "const": "schema_first_no_manifest_writer"
+        },
+        "schema_first_only": {
+          "const": true
+        },
+        "manifest_writer_implemented": {
+          "const": false
+        },
+        "job_execution_allowed": {
+          "const": false
+        },
+        "provider_call_allowed": {
+          "const": false
+        },
+        "raw_payload_write_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_implementation_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "manifestRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_spec_ref_required",
+        "job_spec_validation_result_required",
+        "resource_budget_ref_required",
+        "code_version_ref_required",
+        "schema_version_refs_required",
+        "input_artifact_hashes_required",
+        "output_artifact_refs_required",
+        "environment_summary_required",
+        "dependency_snapshot_required",
+        "random_seed_or_determinism_note_required",
+        "checkpoint_ref_required_when_checkpointed",
+        "plain_result_required"
+      ],
+      "properties": {
+        "job_spec_ref_required": {
+          "const": true
+        },
+        "job_spec_validation_result_required": {
+          "const": true
+        },
+        "resource_budget_ref_required": {
+          "const": true
+        },
+        "code_version_ref_required": {
+          "const": true
+        },
+        "schema_version_refs_required": {
+          "const": true
+        },
+        "input_artifact_hashes_required": {
+          "const": true
+        },
+        "output_artifact_refs_required": {
+          "const": true
+        },
+        "environment_summary_required": {
+          "const": true
+        },
+        "dependency_snapshot_required": {
+          "const": true
+        },
+        "random_seed_or_determinism_note_required": {
+          "const": true
+        },
+        "checkpoint_ref_required_when_checkpointed": {
+          "const": true
+        },
+        "plain_result_required": {
+          "const": true
+        }
+      }
+    },
+    "lineageRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_lineage_required",
+        "as_of_date_required",
+        "date_window_required",
+        "market_lane_required",
+        "cache_key_required",
+        "transform_version_required",
+        "data_quality_status_required",
+        "known_limitations_required"
+      ],
+      "properties": {
+        "provider_lineage_required": {
+          "const": true
+        },
+        "as_of_date_required": {
+          "const": true
+        },
+        "date_window_required": {
+          "const": true
+        },
+        "market_lane_required": {
+          "const": true
+        },
+        "cache_key_required": {
+          "const": true
+        },
+        "transform_version_required": {
+          "const": true
+        },
+        "data_quality_status_required": {
+          "const": true
+        },
+        "known_limitations_required": {
+          "const": true
+        }
+      }
+    },
+    "secretAndRawPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tracked_manifest_must_be_no_secret",
+        "tracked_manifest_must_exclude_request_urls",
+        "tracked_manifest_must_exclude_raw_rows",
+        "tracked_manifest_must_exclude_raw_body_text",
+        "raw_payload_paths_must_be_gitignored",
+        "secret_scan_required_before_commit"
+      ],
+      "properties": {
+        "tracked_manifest_must_be_no_secret": {
+          "const": true
+        },
+        "tracked_manifest_must_exclude_request_urls": {
+          "const": true
+        },
+        "tracked_manifest_must_exclude_raw_rows": {
+          "const": true
+        },
+        "tracked_manifest_must_exclude_raw_body_text": {
+          "const": true
+        },
+        "raw_payload_paths_must_be_gitignored": {
+          "const": true
+        },
+        "secret_scan_required_before_commit": {
+          "const": true
+        }
+      }
+    },
+    "executionGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_spec_helper_must_pass_before_execution",
+        "manifest_writer_requires_reviewed_implementation",
+        "provider_calls_require_separate_approval",
+        "production_consumption_requires_separate_review",
+        "ship_gate_claim_requires_aggregate_gate"
+      ],
+      "properties": {
+        "job_spec_helper_must_pass_before_execution": {
+          "const": true
+        },
+        "manifest_writer_requires_reviewed_implementation": {
+          "const": true
+        },
+        "provider_calls_require_separate_approval": {
+          "const": true
+        },
+        "production_consumption_requires_separate_review": {
+          "const": true
+        },
+        "ship_gate_claim_requires_aggregate_gate": {
+          "const": true
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_writer_implemented",
+        "job_executed",
+        "provider_called",
+        "datahub_table_created",
+        "runner_consumption_authorized",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed"
+      ],
+      "properties": {
+        "manifest_writer_implemented": {
+          "const": false
+        },
+        "job_executed": {
+          "const": false
+        },
+        "provider_called": {
+          "const": false
+        },
+        "datahub_table_created": {
+          "const": false
+        },
+        "runner_consumption_authorized": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        },
+        "full_size_allowed": {
+          "const": false
+        }
+      }
+    }
+  }
+}

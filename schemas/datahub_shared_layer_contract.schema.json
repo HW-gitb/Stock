@@ -1,0 +1,443 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/datahub_shared_layer_contract/1.0.0/schema.json",
+  "title": "DataHub Shared Layer Contract",
+  "description": "Phase 7c schema-first contract for the future DataHub shared ODS / DWD / DWS / factor layers. This artifact defines layer boundaries and implementation gates only; it does not fetch data, call providers, select providers, create DataHub tables, change runners, authorize Phase 7c implementation, prove production readiness, or provide ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_refs",
+    "layer_contracts",
+    "shared_invariants",
+    "implementation_gates",
+    "prohibited_actions",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "datahub_shared_layer_contract"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 5,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_design"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_data_requirements_audit"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_job_spec_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "datahub_job_spec_enforcement_helper"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "layer_contracts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/layerContract"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "layer_id": {
+                "const": "ods"
+              }
+            },
+            "required": [
+              "layer_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "layer_id": {
+                "const": "dwd"
+              }
+            },
+            "required": [
+              "layer_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "layer_id": {
+                "const": "dws"
+              }
+            },
+            "required": [
+              "layer_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "layer_id": {
+                "const": "factor"
+              }
+            },
+            "required": [
+              "layer_id"
+            ]
+          }
+        }
+      ]
+    },
+    "shared_invariants": {
+      "$ref": "#/$defs/sharedInvariants"
+    },
+    "implementation_gates": {
+      "$ref": "#/$defs/implementationGates"
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "schema_first_only",
+        "data_fetch_allowed",
+        "provider_call_allowed",
+        "provider_selection_allowed",
+        "datahub_table_implementation_allowed",
+        "runner_change_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_implementation_authorized",
+        "ship_gate_evidence_allowed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7c_contract"
+        },
+        "purpose": {
+          "const": "shared_layer_boundaries"
+        },
+        "contract_status": {
+          "const": "schema_first_no_table_implementation"
+        },
+        "schema_first_only": {
+          "const": true
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "provider_call_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "runner_change_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_implementation_authorized": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "layerContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layer_id",
+        "plain_role",
+        "allowed_inputs",
+        "allowed_outputs",
+        "required_metadata",
+        "pit_policy",
+        "forbidden_defaults",
+        "implementation_status"
+      ],
+      "properties": {
+        "layer_id": {
+          "enum": [
+            "ods",
+            "dwd",
+            "dws",
+            "factor"
+          ]
+        },
+        "plain_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "allowed_inputs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "allowed_outputs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "required_metadata": {
+          "$ref": "#/$defs/stringList"
+        },
+        "pit_policy": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "forbidden_defaults": {
+          "$ref": "#/$defs/stringList"
+        },
+        "implementation_status": {
+          "const": "not_implemented_contract_only"
+        }
+      }
+    },
+    "sharedInvariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "date_key_format",
+        "as_of_cutoff_required",
+        "provider_lineage_required",
+        "schema_version_required",
+        "field_unit_required",
+        "revision_policy_required",
+        "no_silent_default",
+        "job_spec_validation_required",
+        "local_resource_budget_required"
+      ],
+      "properties": {
+        "date_key_format": {
+          "const": "YYYYMMDD"
+        },
+        "as_of_cutoff_required": {
+          "const": true
+        },
+        "provider_lineage_required": {
+          "const": true
+        },
+        "schema_version_required": {
+          "const": true
+        },
+        "field_unit_required": {
+          "const": true
+        },
+        "revision_policy_required": {
+          "const": true
+        },
+        "no_silent_default": {
+          "const": true
+        },
+        "job_spec_validation_required": {
+          "const": true
+        },
+        "local_resource_budget_required": {
+          "const": true
+        }
+      }
+    },
+    "implementationGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_spec_helper_must_run_before_execution",
+        "provider_readiness_must_be_reviewed",
+        "sr_provider_001_must_be_closed_or_explicitly_accepted",
+        "table_schema_must_be_reviewed_before_table_creation",
+        "runner_consumption_requires_separate_review",
+        "data_quality_monitor_contract_required",
+        "reproducibility_manifest_required"
+      ],
+      "properties": {
+        "job_spec_helper_must_run_before_execution": {
+          "const": true
+        },
+        "provider_readiness_must_be_reviewed": {
+          "const": true
+        },
+        "sr_provider_001_must_be_closed_or_explicitly_accepted": {
+          "const": true
+        },
+        "table_schema_must_be_reviewed_before_table_creation": {
+          "const": true
+        },
+        "runner_consumption_requires_separate_review": {
+          "const": true
+        },
+        "data_quality_monitor_contract_required": {
+          "const": true
+        },
+        "reproducibility_manifest_required": {
+          "const": true
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_call",
+        "provider_selection",
+        "paid_access",
+        "raw_payload_read",
+        "datahub_table_creation",
+        "adapter_or_runner_change",
+        "production_runner_consumption",
+        "full_market_download",
+        "all_lane_default_run",
+        "ship_gate_claim",
+        "alpha_claim"
+      ],
+      "properties": {
+        "provider_call": {
+          "const": false
+        },
+        "provider_selection": {
+          "const": false
+        },
+        "paid_access": {
+          "const": false
+        },
+        "raw_payload_read": {
+          "const": false
+        },
+        "datahub_table_creation": {
+          "const": false
+        },
+        "adapter_or_runner_change": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "all_lane_default_run": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "alpha_claim": {
+          "const": false
+        }
+      }
+    }
+  }
+}
