@@ -2647,3 +2647,39 @@ git diff --check
 1. Claude review should verify the runner / summary schema / generated summary / docs all preserve the fixed packet scope, no-secret boundary, raw gitignore boundary, and `SR-PROVIDER-001` open status.
 2. Future provider work should route from the recorded SIVB FMP endpoint errors, TWTR / SIVB SEC CIK gaps, missing key-metrics direct fields, and still-blocked split / dividend endpoint template review.
 3. Do not broaden symbols, endpoints, retries, yfinance, full-market fetches, current terms review, implementation, provider selection, DataHub, Phase 7c, production readiness, alpha evidence, or ship-gate evidence without separate explicit approval and reviewed decision.
+
+## 2026-06-03 append: Inactive / delisted gap resolution plan
+
+**What changed**:
+
+- Added `schemas/provider_p1_inactive_delisted_gap_resolution_plan.schema.json`, a no-access schema for routing the TWTR / SIVB inactive-delisted coverage gap found by the provider validation execution summary.
+- Added `docs/provider_evidence_p1_us_inactive_delisted_gap_resolution_plan_20260603.json`, consuming only the tracked no-secret validation summary and existing reviewed contracts.
+- Added `tests/schema/test_provider_p1_inactive_delisted_gap_resolution_plan_schema.py`, covering schema / artifact validation, scope locks, exact TWTR / SIVB gap facts, no-silent-default rules, and scope-creep rejection.
+- Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/provider_evidence_drift_monitor.md`, and `docs/system_risk_register.md`; `SR-PROVIDER-001` remains open.
+
+**Why**:
+
+- The first real validation run showed mixed inactive-delisted behavior: TWTR returned all six FMP stable endpoint families but no SEC CIK follow-up; SIVB returned only FMP profile and five FMP HTTP 402 errors, also with no SEC CIK follow-up.
+- Those facts are useful, but they must not become a silent coverage pass. The plan splits the blocker into FMP Basic entitlement / endpoint behavior, SEC historical CIK or symbol lookup, security-master source review, alternate-provider or paid-access decision, and a future bounded follow-up packet if the user approves it.
+- This slice performs no FMP call, SEC call, raw-payload read / parse, fixture generation, security-master implementation, field mapping, provider selection, DataHub work, Phase 7c authorization, production-readiness claim, alpha evidence, or ship-gate claim.
+
+**Validation commands**:
+
+```powershell
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool schemas\provider_p1_inactive_delisted_gap_resolution_plan.schema.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\provider_evidence_p1_us_inactive_delisted_gap_resolution_plan_20260603.json
+C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_provider_p1_inactive_delisted_gap_resolution_plan_schema -v
+git diff --check
+```
+
+**Invalid conclusions**:
+
+- "TWTR FMP success proves inactive / delisted coverage" is false.
+- "SIVB HTTP 402 can be treated as ordinary missing rows or a safe default" is false.
+- "SEC company-tickers misses prove TWTR / SIVB do not exist or that SEC can be used as a historical security master" is false.
+- "This plan authorizes another provider call, raw-payload inspection, security-master implementation, provider selection, DataHub, Phase 7c, production readiness, or ship-gate evidence" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify this is a no-access plan that uses only the tracked validation summary and keeps `SR-PROVIDER-001` open.
+2. Any follow-up inactive / delisted call, raw-payload inspection, SEC historical CIK lookup, security-master source review, paid-access decision, alternate-provider review, DataHub work, or Phase 7c work requires separate explicit approval and reviewed packet / decision.

@@ -1,0 +1,848 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/provider_p1_inactive_delisted_gap_resolution_plan/1.0.0/schema.json",
+  "title": "Provider P1 Inactive / Delisted Gap Resolution Plan",
+  "description": "Phase 7b-2 no-access resolution plan for the inactive / delisted coverage gaps observed in the reviewed five-symbol FMP Basic + SEC EDGAR validation execution summary. This artifact uses only tracked no-secret summary evidence; it does not call FMP or SEC, read or parse raw payloads, implement a security master, select or rank a provider, implement DataHub, change runners, authorize Phase 7c, or claim production readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "source_artifact_refs",
+    "evidence_basis",
+    "gap_observations",
+    "resolution_tracks",
+    "minimum_future_packet_requirements",
+    "no_silent_default_policy",
+    "go_no_go_summary",
+    "prohibited_actions",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "provider_p1_inactive_delisted_gap_resolution_plan"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 6,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_validation_execution_summary_20260603"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_validation_execution_packet_20260603"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_coverage_count_execution_summary_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_fmp_price_adjustment_corporate_action_semantics_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "p1_sec_edgar_field_family_mapping_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_evidence_drift_monitor_contract"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "evidence_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_type",
+        "validation_summary_ref",
+        "fmp_endpoint_calls_performed",
+        "sec_api_calls_performed",
+        "raw_payload_read_or_parsed",
+        "security_master_implemented",
+        "uses_tracked_no_secret_summary_only",
+        "inactive_or_delisted_candidates_reviewed",
+        "fmp_success_by_symbol",
+        "fmp_error_by_symbol",
+        "fmp_http_402_symbols",
+        "sec_cik_missing_symbols",
+        "sec_cik_missing_count",
+        "inactive_delisted_coverage_proven",
+        "requires_later_security_master_review",
+        "requires_later_entitlement_or_alternate_source_review"
+      ],
+      "properties": {
+        "basis_type": {
+          "const": "tracked_validation_summary_only_no_raw_payload_parse_no_new_access"
+        },
+        "validation_summary_ref": {
+          "const": "docs/provider_evidence_p1_us_validation_execution_summary_20260603.json"
+        },
+        "fmp_endpoint_calls_performed": {
+          "const": false
+        },
+        "sec_api_calls_performed": {
+          "const": false
+        },
+        "raw_payload_read_or_parsed": {
+          "const": false
+        },
+        "security_master_implemented": {
+          "const": false
+        },
+        "uses_tracked_no_secret_summary_only": {
+          "const": true
+        },
+        "inactive_or_delisted_candidates_reviewed": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "TWTR",
+              "SIVB"
+            ]
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "fmp_success_by_symbol": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "TWTR",
+            "SIVB"
+          ],
+          "properties": {
+            "TWTR": {
+              "const": 6
+            },
+            "SIVB": {
+              "const": 1
+            }
+          }
+        },
+        "fmp_error_by_symbol": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "TWTR",
+            "SIVB"
+          ],
+          "properties": {
+            "TWTR": {
+              "const": 0
+            },
+            "SIVB": {
+              "const": 5
+            }
+          }
+        },
+        "fmp_http_402_symbols": {
+          "type": "array",
+          "items": {
+            "const": "SIVB"
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "sec_cik_missing_symbols": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "TWTR",
+              "SIVB"
+            ]
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "sec_cik_missing_count": {
+          "const": 2
+        },
+        "inactive_delisted_coverage_proven": {
+          "const": false
+        },
+        "requires_later_security_master_review": {
+          "const": true
+        },
+        "requires_later_entitlement_or_alternate_source_review": {
+          "const": true
+        }
+      }
+    },
+    "gap_observations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/gapObservation"
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "gap_id": {
+                "const": "fmp_basic_sivb_endpoint_entitlement_gap"
+              }
+            },
+            "required": [
+              "gap_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "gap_id": {
+                "const": "sec_current_company_tickers_not_historical_security_master"
+              }
+            },
+            "required": [
+              "gap_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "gap_id": {
+                "const": "fmp_twtr_partial_success_not_universe_coverage"
+              }
+            },
+            "required": [
+              "gap_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "gap_id": {
+                "const": "two_symbol_inactive_sample_not_representative_security_master"
+              }
+            },
+            "required": [
+              "gap_id"
+            ]
+          }
+        }
+      ]
+    },
+    "resolution_tracks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resolutionTrack"
+      },
+      "minItems": 6
+    },
+    "minimum_future_packet_requirements": {
+      "$ref": "#/$defs/minimumFuturePacketRequirements"
+    },
+    "no_silent_default_policy": {
+      "$ref": "#/$defs/noSilentDefaultPolicy"
+    },
+    "go_no_go_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "go_for_controlled_resolution_planning",
+        "go_for_raw_payload_parse",
+        "go_for_new_provider_call",
+        "go_for_security_master_implementation",
+        "go_for_provider_selection",
+        "go_for_datahub_or_runner_consumption",
+        "no_go_rationale"
+      ],
+      "properties": {
+        "go_for_controlled_resolution_planning": {
+          "const": true
+        },
+        "go_for_raw_payload_parse": {
+          "const": false
+        },
+        "go_for_new_provider_call": {
+          "const": false
+        },
+        "go_for_security_master_implementation": {
+          "const": false
+        },
+        "go_for_provider_selection": {
+          "const": false
+        },
+        "go_for_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "no_go_rationale": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "contract_status",
+        "fmp_endpoint_call_allowed",
+        "sec_api_call_allowed",
+        "broader_provider_sample_allowed",
+        "data_fetch_allowed",
+        "raw_payload_read_or_parse_allowed",
+        "fixture_generation_allowed",
+        "security_master_implementation_allowed",
+        "field_mapping_implementation_allowed",
+        "return_calculation_allowed",
+        "corporate_action_reconciliation_allowed",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "provider_contact_allowed",
+        "yfinance_allowed",
+        "full_market_download_allowed",
+        "provider_adapter_allowed",
+        "datahub_table_implementation_allowed",
+        "production_runner_consumption_allowed",
+        "phase7c_authorized_by_this_artifact",
+        "strategy_rule_change_allowed",
+        "broker_or_order_automation_allowed",
+        "ship_gate_relaxed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b-2"
+        },
+        "purpose": {
+          "const": "p1_inactive_delisted_gap_resolution_plan_after_validation_execution"
+        },
+        "contract_status": {
+          "const": "resolution_plan_only_no_access_no_raw_parse_no_security_master"
+        },
+        "fmp_endpoint_call_allowed": {
+          "const": false
+        },
+        "sec_api_call_allowed": {
+          "const": false
+        },
+        "broader_provider_sample_allowed": {
+          "const": false
+        },
+        "data_fetch_allowed": {
+          "const": false
+        },
+        "raw_payload_read_or_parse_allowed": {
+          "const": false
+        },
+        "fixture_generation_allowed": {
+          "const": false
+        },
+        "security_master_implementation_allowed": {
+          "const": false
+        },
+        "field_mapping_implementation_allowed": {
+          "const": false
+        },
+        "return_calculation_allowed": {
+          "const": false
+        },
+        "corporate_action_reconciliation_allowed": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_download_allowed": {
+          "const": false
+        },
+        "provider_adapter_allowed": {
+          "const": false
+        },
+        "datahub_table_implementation_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "phase7c_authorized_by_this_artifact": {
+          "const": false
+        },
+        "strategy_rule_change_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "ship_gate_relaxed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        }
+      }
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "contract_or_schema_ref",
+        "consumption_role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "contract_or_schema_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "gapObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gap_id",
+        "affected_provider",
+        "affected_symbols",
+        "evidence_summary",
+        "current_status",
+        "blocks_inactive_delisted_coverage_claim",
+        "blocks_security_master_claim",
+        "production_use_allowed",
+        "silent_default_allowed",
+        "required_resolution"
+      ],
+      "properties": {
+        "gap_id": {
+          "enum": [
+            "fmp_basic_sivb_endpoint_entitlement_gap",
+            "sec_current_company_tickers_not_historical_security_master",
+            "fmp_twtr_partial_success_not_universe_coverage",
+            "two_symbol_inactive_sample_not_representative_security_master",
+            "alternate_source_or_paid_access_decision_gap"
+          ]
+        },
+        "affected_provider": {
+          "enum": [
+            "financial_modeling_prep",
+            "sec_edgar",
+            "multi_source"
+          ]
+        },
+        "affected_symbols": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "TWTR",
+              "SIVB",
+              "not_symbol_specific"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "evidence_summary": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "current_status": {
+          "enum": [
+            "blocked",
+            "partial_evidence_not_sufficient_for_claim",
+            "pending_later_review"
+          ]
+        },
+        "blocks_inactive_delisted_coverage_claim": {
+          "const": true
+        },
+        "blocks_security_master_claim": {
+          "const": true
+        },
+        "production_use_allowed": {
+          "const": false
+        },
+        "silent_default_allowed": {
+          "const": false
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "resolutionTrack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "track_id",
+        "status",
+        "blocks_implementation",
+        "required_resolution",
+        "authorizes_data_fetch",
+        "authorizes_raw_payload_parse",
+        "authorizes_security_master_implementation",
+        "authorizes_field_mapping_implementation",
+        "authorizes_provider_selection",
+        "authorizes_datahub_or_runner_consumption",
+        "authorizes_phase7c"
+      ],
+      "properties": {
+        "track_id": {
+          "enum": [
+            "security_master_source_review",
+            "fmp_basic_inactive_delisted_entitlement_review",
+            "sec_historical_cik_or_symbol_lookup_review",
+            "alternate_provider_or_paid_access_decision",
+            "bounded_followup_packet_if_user_approved",
+            "phase7c_consumption_gate"
+          ]
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "pending_user_approval",
+            "pending_later_source_review",
+            "pending_later_entitlement_review",
+            "pending_later_access_packet"
+          ]
+        },
+        "blocks_implementation": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_raw_payload_parse": {
+          "const": false
+        },
+        "authorizes_security_master_implementation": {
+          "const": false
+        },
+        "authorizes_field_mapping_implementation": {
+          "const": false
+        },
+        "authorizes_provider_selection": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "authorizes_phase7c": {
+          "const": false
+        }
+      }
+    },
+    "minimumFuturePacketRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_required_before_any_more_calls_or_raw_parse",
+        "must_include_active_and_inactive_or_delisted_symbols",
+        "must_separate_entitlement_gap_from_security_master_gap",
+        "must_define_symbol_lifecycle_source",
+        "must_define_call_budget_and_no_retry_policy",
+        "must_define_no_secret_summary_and_gitignored_raw_storage",
+        "must_define_pass_fail_thresholds",
+        "must_keep_provider_selection_and_phase7c_false"
+      ],
+      "properties": {
+        "packet_required_before_any_more_calls_or_raw_parse": {
+          "const": true
+        },
+        "must_include_active_and_inactive_or_delisted_symbols": {
+          "const": true
+        },
+        "must_separate_entitlement_gap_from_security_master_gap": {
+          "const": true
+        },
+        "must_define_symbol_lifecycle_source": {
+          "const": true
+        },
+        "must_define_call_budget_and_no_retry_policy": {
+          "const": true
+        },
+        "must_define_no_secret_summary_and_gitignored_raw_storage": {
+          "const": true
+        },
+        "must_define_pass_fail_thresholds": {
+          "const": true
+        },
+        "must_keep_provider_selection_and_phase7c_false": {
+          "const": true
+        }
+      }
+    },
+    "noSilentDefaultPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "profile_success_is_not_inactive_delisted_coverage_proof",
+        "sec_cik_not_found_is_not_absence_of_issuer_proof",
+        "fmp_http_402_is_not_missing_data_default",
+        "current_ticker_file_allowed_as_historical_security_master",
+        "null_fill_allowed",
+        "zero_fill_allowed",
+        "drop_failed_inactive_symbols_allowed",
+        "latest_only_substitution_allowed",
+        "production_default_allowed",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "policy_expectations_only_no_security_master_or_provider_selection"
+        },
+        "profile_success_is_not_inactive_delisted_coverage_proof": {
+          "const": true
+        },
+        "sec_cik_not_found_is_not_absence_of_issuer_proof": {
+          "const": true
+        },
+        "fmp_http_402_is_not_missing_data_default": {
+          "const": true
+        },
+        "current_ticker_file_allowed_as_historical_security_master": {
+          "const": false
+        },
+        "null_fill_allowed": {
+          "const": false
+        },
+        "zero_fill_allowed": {
+          "const": false
+        },
+        "drop_failed_inactive_symbols_allowed": {
+          "const": false
+        },
+        "latest_only_substitution_allowed": {
+          "const": false
+        },
+        "production_default_allowed": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_endpoint_call",
+        "sec_api_call",
+        "broader_provider_sample",
+        "raw_payload_read_or_parse",
+        "fixture_generation",
+        "security_master_implementation",
+        "field_mapping_implementation",
+        "return_calculation",
+        "corporate_action_reconciliation",
+        "provider_selection",
+        "provider_ranking",
+        "new_token_or_trial",
+        "paid_access",
+        "provider_contact",
+        "yfinance_check",
+        "full_market_download",
+        "provider_adapter",
+        "datahub_table",
+        "production_runner_consumption",
+        "phase7c_authorization",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "fmp_endpoint_call": {
+          "const": false
+        },
+        "sec_api_call": {
+          "const": false
+        },
+        "broader_provider_sample": {
+          "const": false
+        },
+        "raw_payload_read_or_parse": {
+          "const": false
+        },
+        "fixture_generation": {
+          "const": false
+        },
+        "security_master_implementation": {
+          "const": false
+        },
+        "field_mapping_implementation": {
+          "const": false
+        },
+        "return_calculation": {
+          "const": false
+        },
+        "corporate_action_reconciliation": {
+          "const": false
+        },
+        "provider_selection": {
+          "const": false
+        },
+        "provider_ranking": {
+          "const": false
+        },
+        "new_token_or_trial": {
+          "const": false
+        },
+        "paid_access": {
+          "const": false
+        },
+        "provider_contact": {
+          "const": false
+        },
+        "yfinance_check": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "provider_adapter": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "production_runner_consumption": {
+          "const": false
+        },
+        "phase7c_authorization": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    }
+  }
+}

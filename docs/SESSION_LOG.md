@@ -8,6 +8,59 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (inactive / delisted gap resolution plan) — Pass (clean)
+
+**Verdict**: Pass — no Required, no Optional. Ready for 提交. No-access schema-first plan; uses only the tracked validation-summary evidence, authorizes nothing.
+
+**Scope reviewed** (base `60d76c0`): new `schemas/provider_p1_inactive_delisted_gap_resolution_plan.schema.json` + `docs/provider_evidence_p1_us_inactive_delisted_gap_resolution_plan_20260603.json` + `tests/schema/test_provider_p1_inactive_delisted_gap_resolution_plan_schema.py`; routing edits to `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/provider_evidence_drift_monitor.md` (§34), `docs/system_risk_register.md`, phase7 handoff.
+
+**Independently verified (read schema + artifact + test in full)**:
+- No-access const-locks: scope's 25 `*_allowed`/`authorized` fields all const false (fmp/sec call, data_fetch, raw parse, fixture, security-master impl, field mapping, return calc, corporate-action, provider selection/ranking, new-token/paid/contact, yfinance, full-market, adapter, datahub, runner, phase7c, strategy-rule, broker, ship-gate, production-ready); `additionalProperties:false` on schema + every `$def`; 22 prohibited_actions + 6 resolution-track `authorizes_*` all const false; go_no_go allows only `controlled_resolution_planning`.
+- Gap facts const-locked AND match the prior-verified execution summary exactly: `fmp_success {TWTR:6, SIVB:1}`, `fmp_error {TWTR:0, SIVB:5}`, `fmp_http_402_symbols:[SIVB]`, `sec_cik_missing:[TWTR,SIVB] count 2`, `inactive_delisted_coverage_proven:false`, and `fmp/sec_calls_performed`/`raw_payload_read_or_parsed`/`security_master_implemented` all false — so the plan cannot drift from or over-state the recorded outcome.
+- no_silent_default_policy is correct and const-locked (the data-integrity crux): `fmp_http_402_is_not_missing_data_default:true`, `sec_cik_not_found_is_not_absence_of_issuer_proof:true`, `profile_success_is_not_inactive_delisted_coverage_proof:true`; `current_ticker_file_allowed_as_historical_security_master`/`null_fill`/`zero_fill`/`drop_failed_inactive_symbols`/`latest_only_substitution`/`production_default` all false. Survivorship/PIT-safe: a 402 is not a missing default, a current-ticker miss is not issuer absence, a single delisted success (TWTR) is not coverage proof.
+- Gap analysis is sound: SIVB 402 must be classified (entitlement vs endpoint vs lifecycle vs transient) before any claim; SEC current-tickers ≠ historical security master (separate current-miss from delisting/merger/rename/CIK-reuse); TWTR partial success = clue only; 2-symbol sample not representative; alternate/paid is a pending user decision. Six tracks all block implementation; any follow-up call requires a separate reviewed packet.
+- Test (9) comprehensive + non-vacuous: asserts the no-access scope/prohibited locks, the exact gap facts, the 5 gap-observations + 6 tracks, the no-silent-default policy, and scope-creep rejection across fmp-call/security-master/raw-parse/coverage-proven/silent-default/phase7c/drop-failed/provider-selection. Re-ran under Python313+jsonschema → **9/9 pass**.
+- `SR-PROVIDER-001` stays **open** (verified `Status: open`); no new AGENTS fixed decision (routing-only within the existing provider scope); CURRENT=149; the 3 new tracked files are secret-clean (no fetch performed).
+
+**Residual blockers unchanged (intentional)**: `SR-PROVIDER-001` open; `SR-RESOURCE-001` open; aggregate full-size permission `not_evaluable` by the SR-EXEC-007 concurrency gate.
+
+---
+
+## 2026-06-03 — Codex 执行 (inactive / delisted gap resolution plan)
+
+**Commits**: none (pending independent review / submit; base `60d76c0`)
+
+**Scope**:
+- User asked to fill provider gaps step by step and to do inactive / delisted gap resolution plan first.
+- This round creates a schema-first no-access plan for the TWTR / SIVB inactive-delisted gap observed in the reviewed provider validation execution summary.
+- No FMP endpoint call, SEC API call, raw-payload read / parse, fixture generation, security-master implementation, field mapping, return calculation, corporate-action reconciliation, provider contact, provider selection, adapter, DataHub work, runner change, Phase 7c authorization, production-readiness claim, alpha evidence, or ship-gate evidence is performed or authorized.
+
+**Worked on**:
+1. [untracked] `schemas/provider_p1_inactive_delisted_gap_resolution_plan.schema.json`: new no-access schema for the inactive / delisted gap plan.
+2. [untracked] `docs/provider_evidence_p1_us_inactive_delisted_gap_resolution_plan_20260603.json`: new plan artifact using only tracked validation-summary evidence.
+3. [untracked] `tests/schema/test_provider_p1_inactive_delisted_gap_resolution_plan_schema.py`: schema / artifact tests, exact TWTR / SIVB gap facts, no-silent-default policy, and scope-creep rejection.
+4. [tracked] `docs/provider_evidence_drift_monitor.md`: added §34 as the owner route for the plan and moved Next Use to §35.
+5. [tracked] `docs/system_risk_register.md`: kept `SR-PROVIDER-001` open and added the plan as durable routing evidence.
+6. [tracked] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: routed the plan through project startup, current snapshot, README, and Phase 7 handoff.
+
+**Design decision**:
+- The plan splits the inactive-delisted blocker into separate tracks: FMP Basic SIVB HTTP 402 entitlement / endpoint / lifecycle classification, SEC historical CIK or symbol lookup review, historical security-master source review, alternate-provider / paid-access decision, and a future bounded follow-up packet if the user approves.
+- TWTR's six FMP stable successes are treated as a useful clue only, not coverage proof. SIVB HTTP 402 is not converted into a safe missing-data default. SEC current company-tickers misses for TWTR / SIVB are not treated as issuer absence and cannot serve as a historical security master.
+
+**Validation run/result**:
+- Bundled Python: `json.tool` parsed `schemas/provider_p1_inactive_delisted_gap_resolution_plan.schema.json` and `docs/provider_evidence_p1_us_inactive_delisted_gap_resolution_plan_20260603.json`.
+- Bundled Python: `tests.schema.test_provider_p1_inactive_delisted_gap_resolution_plan_schema tests.schema.test_provider_p1_validation_execution_summary_schema tests.schema.test_provider_p1_validation_execution_packet_schema -v` ran 23 tests, all non-jsonschema checks pass; 10 jsonschema subtests skipped because bundled Python lacks `jsonschema`.
+- Python313 + jsonschema (elevated because sandbox denied direct Python313 execution): same 3 modules ran 23 tests, all pass.
+- Sensitive-string scan over new schema / artifact / test for `apikey=`, provider URLs, env var names, and bearer tokens returned no matches.
+- `docs/CURRENT.md` line count remains 149.
+- `git diff --check` exited 0 with only normal Windows LF/CRLF warnings.
+
+**Current review state**:
+- Needs independent review before `提交`.
+- `SR-PROVIDER-001` remains open. Future inactive / delisted follow-up still requires separate explicit approval and reviewed packet / decision before any provider call, raw-payload inspection, SEC historical CIK lookup, security-master source review, paid access, alternate provider review, provider selection, DataHub, Phase 7c, production readiness, alpha evidence, or ship-gate evidence.
+
+---
+
 ## 2026-06-03 — Claude 审查 (provider validation execution summary) — Pass (clean)
 
 **Verdict**: Pass — no Required, no Optional. Ready for 提交. This is the FIRST real provider fetch of the project (live FMP key + SEC EDGAR); secret hygiene verified airtight, execution stayed within the reviewed packet, no over-claim.
