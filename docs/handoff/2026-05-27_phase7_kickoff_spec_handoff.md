@@ -3100,3 +3100,42 @@ git diff --check
 
 1. Claude review should verify this repaired outcome used the local benchmark-open cache, did not fetch data, rerun EGS, alter production outputs, or overclaim sizing.
 2. After review and commit, do not rerun this result. Any new alpha search needs a new reviewed preregistration and user approval.
+
+## 2026-06-03 append: A-long data-integrity audit preregistration
+
+**Plain result**:
+
+- Current active alpha-search route is A-long only.
+- A-short 5d is not rescued; it remains risk-filter-only / forward-observation-only after the repaired same-anchor test failed its statistical gate.
+- A-long must pass hard data-integrity checks and declare a usable signal-search window before any signal-search preregistration can be created.
+
+**What changed**:
+
+- Added `schemas/a_long_data_integrity_audit_preregistration.schema.json`.
+- Added `research/preregistrations/a_long_data_integrity_audit_20260603.json`.
+- Added `research/ledgers/a_long_data_integrity_audit_program_test_budget_ledger_20260603.json`.
+- Extended `schemas/program_test_budget_ledger.schema.json` with `a_long_data_integrity`.
+- Added `tests/schema/test_a_long_data_integrity_audit_preregistration_schema.py`.
+- Updated `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/system_risk_register.md`, `research/README.md`, and `docs/SESSION_LOG.md`.
+
+**Frozen audit checks**:
+
+1. Frozen schedule + runner self-tests: monthly last A-share trading day `2018-01-31..2025-12-31`; future runner must prove planted violations fire before trusting real output.
+2. PIT fundamentals: Tushare `income`, `balancesheet`, `fina_indicator`; `ann_date > as_of` tolerance = 0 hard fail; missing / invalid `ann_date` is excluded and reported, not a global hard fail.
+3. Restatement / revision as-of: same `ts_code + end_date` may use only the version known at the as-of date.
+4. PIT universe / survivorship: no replaying today's active list / constituents into history; later delisted or suspended names must not be silently removed from eligible historical periods, and held delisting terminal returns must be captured.
+5. Return / benchmark measurement: dividend + `adj_factor` total return, frozen qfq/hfq treatment, same entry/exit anchors, same-anchor benchmark excess, terminal delisting returns, no silent zero fill.
+6. Temporal coverage: yearly required fundamental-table coverage is characterized to declare the usable start year; sparse early years do not globally fail the lane.
+
+**Invalid conclusions**:
+
+- "A-long alpha search is authorized" is false.
+- "The audit has run" is false.
+- "A-long data is proven clean" is false.
+- "This permits production / ship-gate / full-size use" is false.
+
+**Next-step notes**:
+
+1. Claude review should verify this is an executable hard-check + usable-window preregistration, not another descriptive contract.
+2. If review passes and the user later gives `执行`, run only the frozen data-integrity audit.
+3. If any hard check fails or blocks, repair the data route before any signal backtest. If hard checks pass, create a separate reviewed A-long signal-search preregistration limited to the declared usable window.

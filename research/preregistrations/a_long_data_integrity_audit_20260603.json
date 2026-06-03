@@ -1,0 +1,356 @@
+{
+  "schema_name": "a_long_data_integrity_audit_preregistration",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-03T00:00:00Z",
+  "artifact_id": "a_long_data_integrity_audit_preregistration_20260603",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_data_integrity_audit_preregistration",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "registration_status": "registered_not_run",
+    "research_status": "data_integrity_gate_registered_not_run",
+    "research_only": true,
+    "audit_run_allowed_by_this_artifact": false,
+    "signal_search_allowed": false,
+    "alpha_backtest_allowed": false,
+    "new_data_purchase_allowed": false,
+    "provider_expansion_allowed": false,
+    "provider_call_allowed_by_this_artifact": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_doc_refs": [
+    {
+      "path": "AGENTS.md",
+      "role": "records the active route: A-long data integrity first, A-short 5d no rescue, one active alpha workstream"
+    },
+    {
+      "path": "docs/CURRENT.md",
+      "role": "records the current next step and P0/P1 execution locks"
+    },
+    {
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "role": "owns alpha reality guardrails, preregistration discipline, PIT, survivorship, and measurement-basis locks"
+    },
+    {
+      "path": "docs/long_alpha_spec.md",
+      "role": "owns A-long factor, PIT, universe, benchmark, and data-readiness design"
+    },
+    {
+      "path": "docs/provider_data_requirements_audit.md",
+      "role": "lists A-long fundamentals, benchmark, PIT, survivorship, and Tushare requirement surfaces"
+    },
+    {
+      "path": "docs/system_risk_register.md",
+      "role": "keeps data-integrity and execution blockers out of chat-only state"
+    },
+    {
+      "path": "research/README.md",
+      "role": "routes research-only preregistration, ledger, and future result artifacts"
+    }
+  ],
+  "active_alpha_search_route": {
+    "active_workstream": "a_long_data_integrity_first_then_signal_search",
+    "a_short_5d_disposition": "forward_observation_only_no_rescue",
+    "us_work_disposition": "background_active_only_forward_validation",
+    "parallel_active_alpha_search_allowed": false,
+    "rationale": "A-short 5d failed the repaired same-anchor gate and must not be rescued by slicing. US stays active-only forward background. The only active alpha-search workstream is A-long, but A-long must first prove PIT, survivorship, return, benchmark, and coverage integrity before any signal search."
+  },
+  "audit_as_of_schedule": {
+    "schedule_id": "a_long_monthly_last_trading_day_20180131_20251231",
+    "frequency": "monthly",
+    "start_as_of": "2018-01-31",
+    "end_as_of": "2025-12-31",
+    "calendar_source": "Tushare trade_cal",
+    "as_of_selection_rule": "last_open_A_share_trading_day_of_each_calendar_month",
+    "partial_period_policy": "exclude_partial_months_outside_start_end",
+    "timezone": "Asia/Shanghai"
+  },
+  "universe_definition": {
+    "universe_id": "a_long_a_share_listed_common_equity_research_universe",
+    "universe_status": "defined_for_audit_not_for_signal_search",
+    "candidate_source": [
+      "Tushare stock_basic for A-share common-equity listing state: ts_code, name, list_date, delist_date, list_status, market, exchange.",
+      "Tushare index_weight or reviewed equivalent for PIT benchmark / index membership if any index-member universe or benchmark membership audit is used.",
+      "Exclude funds, ETFs, bonds, preferred-like instruments, B-shares, and non-common-equity rows unless a later reviewed plan explicitly adds them."
+    ],
+    "pit_membership_source_required": true,
+    "current_constituents_as_historical_universe_allowed": false,
+    "missing_pit_membership_source_is_finding": true,
+    "listing_state_source": [
+      "stock_basic.list_date",
+      "stock_basic.delist_date",
+      "stock_basic.list_status",
+      "daily or daily_basic trading rows only as supporting evidence, not as sole listing-state proof"
+    ],
+    "minimum_history_window_years": 5
+  },
+  "audit_checks": [
+    {
+      "check_id": "fundamental_pit",
+      "required_before_signal_search": true,
+      "blocking_effect": "hard_block_signal_search_if_failed",
+      "data_sources": [
+        "Tushare income",
+        "Tushare balancesheet",
+        "Tushare fina_indicator"
+      ],
+      "field_requirements": [
+        "Each record considered by any future A-long backtest must include ts_code, end_date, and the factor input fields consumed by that test.",
+        "Rows with missing or invalid ann_date must be excluded from PIT-eligible factor inputs and reported by table/year; they are not a global audit hard-fail by themselves.",
+        "Rows with valid ann_date are eligible only when ann_date <= as_of; after-close announcements must be eligible only at the next A-share decision date.",
+        "Rows with ann_date > as_of are look-ahead violations and have 0 tolerance."
+      ],
+      "denominator": "All income, balancesheet, and fina_indicator records with valid ann_date that would be eligible inputs for the frozen A-long audit universe across the frozen audit_as_of_schedule.",
+      "violation_numerator": "Records with valid ann_date where ann_date > as_of at the point where the record would be used.",
+      "violation_rate_formula": "ann_date_future_lookahead_violation_rate = violation_numerator / denominator; ann_date_missing_or_invalid_exclusion_rate is computed separately from excluded rows and does not enter the hard-fail numerator.",
+      "pass_threshold": {
+        "metric": "ann_date_future_lookahead_violation_rate",
+        "operator": "<=",
+        "value": 0,
+        "unit": "fraction"
+      },
+      "non_blocking_tolerance": {
+        "metric": "ann_date_missing_or_invalid_exclusion_rate",
+        "operator": "<=",
+        "value": 5,
+        "unit": "percent",
+        "action_if_exceeded": "exclude_and_report_affects_usable_window_not_global_fail"
+      },
+      "finding_if_unavailable": "If any required table cannot be read from the existing reviewed Tushare-access path during the future audit run, record blocked_missing_required_source. If ann_date is absent as a field for a table, that table cannot support PIT factor inputs until repaired or replaced.",
+      "failure_action": "block_signal_search_until_data_repaired_or_new_reviewed_audit_plan"
+    },
+    {
+      "check_id": "restatement_revision_asof",
+      "required_before_signal_search": true,
+      "blocking_effect": "hard_block_signal_search_if_failed",
+      "data_sources": [
+        "Tushare income",
+        "Tushare balancesheet",
+        "Tushare fina_indicator"
+      ],
+      "field_requirements": [
+        "For duplicate ts_code + end_date records with multiple ann_date values, the as-of record selection must use the latest ann_date <= as_of and must not use a later revised value.",
+        "If Tushare exposes only latest revised values for a table/field without pre-restatement lineage, that table/field must be classified latest_only for historical automation.",
+        "f_ann_date may be recorded when available, but ann_date controls public availability unless a later reviewed contract proves a stricter rule."
+      ],
+      "denominator": "All duplicate ts_code + end_date groups in the audited fundamental tables that have more than one ann_date, plus all groups where provider lineage is needed to distinguish original and revised values.",
+      "violation_numerator": "Groups where the selected as-of value uses an ann_date after as_of, silently overwrites earlier values with later restatement values, or lacks enough lineage to prove the as-of version.",
+      "violation_rate_formula": "violation_numerator / denominator, with any latest-only required factor field treated as a blocking finding even if the numeric rate cannot be computed.",
+      "pass_threshold": {
+        "metric": "restatement_or_latest_only_violation_rate",
+        "operator": "<=",
+        "value": 0,
+        "unit": "fraction"
+      },
+      "non_blocking_tolerance": null,
+      "finding_if_unavailable": "If original-versus-revised lineage cannot be proven for a required factor field, record blocked_missing_required_source or fail_data_not_ready before signal search.",
+      "failure_action": "block_signal_search_until_data_repaired_or_new_reviewed_audit_plan"
+    },
+    {
+      "check_id": "survivorship_pit_universe",
+      "required_before_signal_search": true,
+      "blocking_effect": "hard_block_signal_search_if_failed",
+      "data_sources": [
+        "Tushare stock_basic",
+        "Tushare daily or daily_basic as supporting tradability evidence",
+        "Tushare index_weight or reviewed equivalent for any PIT index / benchmark membership audit"
+      ],
+      "field_requirements": [
+        "stock_basic must provide ts_code, list_date, delist_date, list_status, market or exchange, and enough fields to exclude non-common-equity instruments.",
+        "For each as_of, eligible symbols must satisfy list_date <= as_of and either delist_date is empty or delist_date > as_of; later delisted names must remain in historical periods before delisting.",
+        "If a held symbol delists, suspends into no-trade termination, or otherwise leaves the investable universe during a holding window, the terminal / delisting return must be captured in the future return leg rather than dropping the position before the loss.",
+        "Using today's index constituents or today's active list as a historical universe is prohibited.",
+        "If an index-member universe is used, index_weight or reviewed equivalent must provide historical membership dates rather than today's components."
+      ],
+      "denominator": "All as_of x symbol membership decisions for the frozen A-long audit universe and any benchmark/index membership sensitivity set.",
+      "violation_numerator": "Membership decisions that use today's active/constituent list for historical dates, drop later delisted symbols before delisting, include symbols before list_date, include symbols after delist_date, lack a PIT membership source, or drop held delisting events before the terminal return is measured.",
+      "violation_rate_formula": "violation_numerator / denominator; if the PIT membership source is absent, the check fails regardless of numeric rate.",
+      "pass_threshold": {
+        "metric": "survivorship_or_missing_pit_membership_violation_rate",
+        "operator": "<=",
+        "value": 0,
+        "unit": "fraction"
+      },
+      "non_blocking_tolerance": null,
+      "finding_if_unavailable": "No PIT universe / membership source is itself the first audit finding and blocks signal search.",
+      "failure_action": "block_signal_search_until_data_repaired_or_new_reviewed_audit_plan"
+    },
+    {
+      "check_id": "return_benchmark_measurement_basis",
+      "required_before_signal_search": true,
+      "blocking_effect": "hard_block_signal_search_if_failed",
+      "data_sources": [
+        "Tushare daily",
+        "Tushare adj_factor",
+        "Tushare dividend or reviewed dividend/corporate-action source",
+        "Tushare trade_cal",
+        "Tushare index_daily for CSI300 and secondary benchmark candidates"
+      ],
+      "field_requirements": [
+        "Long-lane stock total return must use adjusted price return plus cash dividend treatment or a reviewed total-return equivalent; adjustment mode qfq/hfq must be declared before any outcome is computed.",
+        "Stock entry and exit anchors must be frozen before the future audit run; the default audit basis is next-trading-day open entry to same-horizon close exit.",
+        "Benchmark excess must use the same entry and exit anchors as the stock leg; CSI300 is the provisional primary benchmark for A-long, with broad A-share / CSI500 / CSI1000 sensitivity only if data supports it.",
+        "If a held symbol delists or reaches a terminal no-trade outcome during the holding window, the terminal / delisting return must be included in total return rather than treating the position as missing or cleanly exited before delisting.",
+        "Missing stock, dividend, adj_factor, or benchmark rows must not be filled with 0.0; missing rows are findings or exclusions under a predeclared rule."
+      ],
+      "denominator": "All stock-return and benchmark-return observations that a future A-long signal backtest would need under the frozen universe and as_of schedule.",
+      "violation_numerator": "Observations with missing adjustment data, missing dividend/corporate-action handling, mismatched stock/benchmark anchors, close-to-close benchmark fallback for an open-entry stock leg, missing terminal / delisting return for held names, or silent zero-fill.",
+      "violation_rate_formula": "violation_numerator / denominator",
+      "pass_threshold": {
+        "metric": "return_or_benchmark_measurement_violation_rate",
+        "operator": "<=",
+        "value": 0,
+        "unit": "fraction"
+      },
+      "non_blocking_tolerance": null,
+      "finding_if_unavailable": "If dividend or total-return treatment cannot be proven, the audit may not certify A-long return measurement for signal search.",
+      "failure_action": "block_signal_search_until_data_repaired_or_new_reviewed_audit_plan"
+    },
+    {
+      "check_id": "temporal_coverage_bias",
+      "required_before_signal_search": true,
+      "blocking_effect": "characterize_and_limit_usable_window_not_global_block",
+      "data_sources": [
+        "Tushare income",
+        "Tushare balancesheet",
+        "Tushare fina_indicator",
+        "Tushare stock_basic for eligible denominator by date"
+      ],
+      "field_requirements": [
+        "Coverage must be reported by calendar year and by fundamental table for the frozen A-long universe.",
+        "Coverage denominator must use PIT eligible listed symbols, not today's surviving active list.",
+        "A record counts as covered only if the required field exists, ann_date is valid, and ann_date <= the as_of date used by the frozen audit_as_of_schedule.",
+        "Low early-year coverage must declare the earliest usable signal-search start year rather than failing the whole A-long audit."
+      ],
+      "denominator": "For each audit year and table, PIT eligible listed symbols that have aged beyond their first full fiscal year after listing.",
+      "violation_numerator": "Year/table cells where eligible PIT coverage falls below the frozen usable-window threshold or where the denominator is not PIT eligible.",
+      "violation_rate_formula": "For each year/table, coverage_pct = covered_symbols / eligible_symbols * 100. The usable_start_year is the first year from which every required table meets the threshold through end_as_of; earlier thin years are excluded from signal-search windows rather than treated as a global hard fail.",
+      "pass_threshold": {
+        "metric": "minimum_yearly_required_fundamental_table_coverage_pct",
+        "operator": ">=",
+        "value": 80,
+        "unit": "percent"
+      },
+      "non_blocking_tolerance": null,
+      "finding_if_unavailable": "If coverage cannot be measured from PIT eligible symbols, record blocked_missing_required_source for coverage characterization; do not silently treat missing early data as a clean backtest window.",
+      "failure_action": "characterize_coverage_and_declare_usable_start_year"
+    }
+  ],
+  "required_runner_self_tests": [
+    {
+      "fixture_id": "future_ann_date_hard_fail",
+      "target_check_ids": [
+        "fundamental_pit"
+      ],
+      "planted_violation": "Insert or synthesize one otherwise eligible fundamental row with ann_date after the fixture as_of date.",
+      "expected_audit_response": "fundamental_pit must flag ann_date_future_lookahead_violation_rate > 0 and produce a hard fail before any real audit result can be trusted.",
+      "required_before_audit_execution": true,
+      "artifact_or_test_output_required": true
+    },
+    {
+      "fixture_id": "restated_value_asof_fail",
+      "target_check_ids": [
+        "restatement_revision_asof"
+      ],
+      "planted_violation": "Provide duplicate ts_code + end_date rows where the runner would incorrectly select a later ann_date / revised value not known at as_of.",
+      "expected_audit_response": "restatement_revision_asof must flag the later-value selection as a hard fail.",
+      "required_before_audit_execution": true,
+      "artifact_or_test_output_required": true
+    },
+    {
+      "fixture_id": "dropped_delisted_member_fail",
+      "target_check_ids": [
+        "survivorship_pit_universe"
+      ],
+      "planted_violation": "Include a symbol that is listed and eligible at the fixture as_of but later delisted, then remove it from the historical universe as if today's active list were used.",
+      "expected_audit_response": "survivorship_pit_universe must flag the dropped eligible delisted member as a hard fail.",
+      "required_before_audit_execution": true,
+      "artifact_or_test_output_required": true
+    },
+    {
+      "fixture_id": "missing_delisting_terminal_return_fail",
+      "target_check_ids": [
+        "survivorship_pit_universe",
+        "return_benchmark_measurement_basis"
+      ],
+      "planted_violation": "Create a held symbol that delists or reaches a terminal no-trade outcome during the holding window, then omit the terminal / delisting return from measured returns.",
+      "expected_audit_response": "survivorship and return checks must flag the missing terminal return as a hard fail.",
+      "required_before_audit_execution": true,
+      "artifact_or_test_output_required": true
+    },
+    {
+      "fixture_id": "benchmark_anchor_mismatch_fail",
+      "target_check_ids": [
+        "return_benchmark_measurement_basis"
+      ],
+      "planted_violation": "Use stock next-trading-day open to exit close but benchmark close-to-close for the same observation.",
+      "expected_audit_response": "return_benchmark_measurement_basis must flag the anchor mismatch as a hard fail.",
+      "required_before_audit_execution": true,
+      "artifact_or_test_output_required": true
+    },
+    {
+      "fixture_id": "sparse_early_coverage_declares_usable_window",
+      "target_check_ids": [
+        "temporal_coverage_bias"
+      ],
+      "planted_violation": "Create early years below the 80 percent required-table coverage threshold followed by later years at or above threshold.",
+      "expected_audit_response": "temporal_coverage_bias must declare a later usable_start_year and must not globally fail A-long signal search if later years meet coverage.",
+      "required_before_audit_execution": true,
+      "artifact_or_test_output_required": true
+    }
+  ],
+  "decision_policy": {
+    "all_checks_pass": "may_create_next_reviewed_a_long_signal_search_preregistration",
+    "any_check_fails": "repair_data_or_revise_provider_route_before_any_signal_backtest",
+    "hard_checks_pass_and_usable_window_declared": "may_create_next_reviewed_a_long_signal_search_preregistration_limited_to_declared_usable_window",
+    "hard_check_fails": "repair_data_or_revise_provider_route_before_any_signal_backtest",
+    "coverage_characterization_result": "declare_usable_start_year_not_global_fail",
+    "missing_or_invalid_ann_date_result": "exclude_and_report_not_global_fail_unless_required_table_has_no_pit_usable_ann_date_field",
+    "audit_result_labels": [
+      "pass_data_ready_for_signal_preregistration",
+      "pass_hard_checks_with_limited_usable_window",
+      "fail_data_not_ready",
+      "blocked_missing_required_source",
+      "coverage_characterized_usable_window_declared",
+      "excluded_dirty_ann_date_rows_reported"
+    ],
+    "signal_search_after_pass_requires_new_preregistration": true,
+    "backtest_can_authorize_full_size": false
+  },
+  "planned_test_budget": {
+    "ledger_ref": "research/ledgers/a_long_data_integrity_audit_program_test_budget_ledger_20260603.json",
+    "planned_test_id": "a_long_data_integrity_audit_20260603",
+    "data_integrity_gate_units": 1,
+    "alpha_test_budget_units_consumed": 0,
+    "audit_run_authorized_now": false,
+    "requires_claude_review_before_run": true,
+    "requires_user_execute_before_run": true
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "signal_search_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "provider_selected": false,
+    "datahub_authorized": false,
+    "runner_change_authorized": false
+  },
+  "next_steps": [
+    "Independent review must verify this preregistration before any audit runner or audit execution is created.",
+    "After a clean review and explicit user execute command, create and run only the frozen A-long data integrity audit; do not run signal search.",
+    "If all hard checks pass and temporal coverage declares a usable start year, the next step is a separate reviewed A-long signal-search preregistration limited to that usable window. If any hard check fails, repair data or revise the provider route first."
+  ],
+  "limitations": [
+    "This artifact is executable in intent but does not run the audit by itself.",
+    "This artifact does not fetch data, buy data, expand providers, implement DataHub, change production runners, search signals, or calculate alpha.",
+    "The future audit may read only existing / already authorized A-share Tushare-access data under a later reviewed execution step.",
+    "A pass would mean data is ready for a signal-search preregistration only; it would not prove alpha, authorize production, or relax the fixed 12-month forward-live ship gate."
+  ]
+}

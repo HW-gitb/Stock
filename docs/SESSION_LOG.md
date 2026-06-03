@@ -8,6 +8,98 @@
 
 ---
 
+## 2026-06-03 — Claude 审查 (A-long data-integrity audit preregistration 修复) — **PASS (可提交)**
+
+**Verdict**: Pass. All 4 Required landed, const-locked in the schema (verified each lock individually, not just the bundled rejection test), and tested 10/10. O1 accepted. C1–C3 decided. Hygiene clean. Ready to commit; the audit RUNNER build+run is a separate reviewed step after user 执行.
+
+**R1–R4 verified against the schema $defs**:
+- R1 `required_runner_self_tests`: 6 fixtures (all 5 checks + delisting-terminal). Schema `minItems/maxItems=6` + 6 `contains` fixture_id locks → dropping a self-test is schema-rejected.
+- R2/C1 `audit_as_of_schedule`: every field const-locked (monthly, 2018-01-31..2025-12-31, last trading day) → schedule change rejected.
+- R3/C2 `temporal_coverage_bias`: blocking_effect + failure_action const-locked to characterize-and-declare-usable-start-year (not global block) → reverting to global block rejected.
+- R4/C3 `fundamental_pit`: split into lookahead metric const `<=0` hard-fail + missing-ann_date `non_blocking_tolerance` const `<=5%` exclude-and-report → either threshold change rejected.
+
+**O1 accepted**: terminal/delisting return required in both survivorship + return checks + a dedicated self-test fixture.
+**O2 (failure→remediation map)**: not explicitly dispositioned; per-check `failure_action` + `finding_if_unavailable` + ledger `no_silent_rescue_rule` already give the failure direction. Non-blocking — fine to leave.
+
+**Hygiene clean**: scope all const-false (audit_run/signal/provider/datahub/production/ship-gate/full-size), requires Claude-review + user-执行; ledger zero alpha-budget + pending_user_approval; test 10/10 (scope-creep + threshold-change + self-test-drop + coverage-revert all in the rejection batch); 5 routing docs (AGENTS #28 / CURRENT / long_alpha_spec §11.10 / risk-register / research README) consistent; new `SR-ALONG-DATA-001` (P1, open) registers the blocker durably; CURRENT.md 149 lines; no secrets.
+
+**Next**: commit. The audit runner build+run is the next reviewed slice (after user 执行) and must ship the 6 planted-violation self-tests proving each check actually fires.
+
+---
+
+## 2026-06-03 — Codex 修复 (A-long data-integrity audit preregistration Required)
+
+**Scope**:
+- Folded Claude's 4 Required changes plus the survivorship/return fold-in into the A-long data-integrity preregistration contract.
+- Updated `schemas/a_long_data_integrity_audit_preregistration.schema.json`, `research/preregistrations/a_long_data_integrity_audit_20260603.json`, `research/ledgers/a_long_data_integrity_audit_program_test_budget_ledger_20260603.json`, `tests/schema/test_a_long_data_integrity_audit_preregistration_schema.py`, and routing docs.
+
+**Plain result**:
+- The future audit now has a fixed monthly as-of schedule: `2018-01-31..2025-12-31`, last open A-share trading day of each month.
+- The future runner must first prove planted bad samples are caught: future `ann_date`, restated value, dropped delisted name, missing terminal delisting return, benchmark anchor mismatch, and sparse early coverage.
+- `ann_date > as_of` stays 0-tolerance hard fail. Missing / invalid `ann_date` is now excluded and reported, not an automatic global fail.
+- Early sparse coverage now declares the usable start year. It no longer kills all A-long signal search if later years are usable.
+- Held names that delist must include the terminal / delisting return; dropping them before the loss is a hard failure.
+
+**Non-authorization**:
+- Still no audit runner, no audit run, no Tushare/provider call, no signal search, no alpha backtest, no production runner change, no DataHub work, no provider expansion, no data purchase, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the schema remains reusable and rejects scope creep, schedule changes, threshold changes, missing self-tests, and turning coverage back into a global hard fail.
+- Verify docs no longer say every coverage shortfall or dirty `ann_date` row blocks the entire A-long lane.
+
+---
+
+## 2026-06-03 — Claude 审查 (A-long data-integrity audit preregistration) — 方向 Pass,执行前需 4 处改动
+
+**Verdict**: The audit-first design is sound and the artifact authorizes nothing (scope locks airtight; `audit_run_allowed_by_this_artifact=false`, no fetch/signal/purchase/provider/datahub/production/ship-gate/full-size). Approve the direction. But 4 changes are required to the preregistration before any audit runner is built/run, or the audit will be untrustworthy / fail-on-technicality.
+
+**Credit (genuinely not empty ceremony)**: `return_benchmark_measurement_basis` correctly encodes the 5d-bug lesson — close-to-close benchmark fallback for an open-entry stock leg = violation; same-anchor required; qfq/hfq declared pre-outcome; no zero-fill. PIT universe membership (no today's-constituents, missing-source-is-finding), coverage with PIT-eligible denominator, and zero alpha-test-budget consumption are all correct.
+
+**Required fixes (R1–R4 — all block 执行)**:
+- **R1 Self-test fixtures**: the future audit runner must prove each check FIRES on a planted violation — inject ann_date>as_of, a restated value, a dropped-delisted name, an anchor mismatch; confirm each is flagged. Direct lesson from the re-audit FAIL: a silently-broken audit reports a false "pass." Currently absent.
+- **R2 Freeze the audit as_of schedule** in the preregistration (cadence choice = C1). Every check's denominator depends on "the as_of schedule," but it is never defined — an unfrozen free parameter defeats preregistration.
+- **R3 `temporal_coverage_bias` must NOT be a binary all-or-nothing blocker** (usage choice = C2). Thin early-year coverage doesn't make data unsafe — it sets the usable backtest START year. Reclassify from `block_signal_search` to characterize-and-bound. Requires relaxing the schema `failure_action` const + updating the test.
+- **R4 Split `fundamental_pit` 0-tolerance** (tolerance choice = C3): ann_date>as_of (look-ahead) stays 0-tolerance hard-fail; missing/invalid ann_date = exclude-and-report under a separate tolerance, not a total FAIL. As written, a few null ann_dates (near-certain on real Tushare) fail the whole audit on a technicality. Requires splitting the schema metric const + updating the test.
+
+**Optional fixes (O1–O2 — Codex may accept/reject with rationale)**:
+- **O1**: survivorship+return checks should also require terminal/delisting returns are captured (a held name that delists must eat the delisting loss), not only that delisted names exist pre-delisting.
+- **O2**: pre-map failure→remediation per check so a FAIL is actionable, not an open stall.
+
+**Options to decide (C1–C3 — Codex propose + pick, or surface for user)**:
+- **C1** (from R2): which as_of cadence + window — e.g. monthly vs quarterly, from list+1 full fiscal year through latest.
+- **C2** (from R3): coverage auto-sets the usable start-year, OR coverage is only reported and the start-year is chosen in the later signal preregistration.
+- **C3** (from R4): the missing-ann_date exclusion tolerance — e.g. exclude-and-pass when missing-rate ≤ X%, fail above.
+
+**Meta-guardrail**: keep this ONE audit schema reusable for all future A-long re-audits; do not spawn a new schema per audit (avoid the 7:1 wrapper:evidence relapse).
+
+**Hygiene axis already clean — do NOT over-fix**: schema const-locks thresholds + scope, and `tests/schema/test_a_long_data_integrity_audit_preregistration_schema.py` (8/8 green) asserts schema+ledger validate, scope-creep rejection, threshold-change rejection, scope-lock, no-rescue-of-5d, and fail-blocks-signal. Ledger has zero alpha-budget + Claude-review/user-execute gates. New files carry no secret/URL/raw payload; CURRENT.md = 149 lines (<150); `git diff --check` clean. The ONLY open work is the 4 design changes above (note: changes #3/#4 require RELAXING the schema's coverage `failure_action` const and splitting the `fundamental_pit` 0-tolerance metric, plus updating the test) + re-verifying doc-routing consistency across AGENTS / CURRENT / system_risk_register / research README after the rework.
+
+**Not yet executable.** Fold the 4 required changes into the preregistration; then it can go to user 执行 for the audit-runner build+run (separately reviewed).
+
+---
+
+## 2026-06-03 — Codex 执行 (A-long data-integrity audit preregistration)
+
+**Scope**:
+- Registered the current alpha-search route: A-short 5d is forward-observation-only / no rescue; US stays active-only forward background; the only active alpha-search workstream is A-long.
+- Added `schemas/a_long_data_integrity_audit_preregistration.schema.json`, `research/preregistrations/a_long_data_integrity_audit_20260603.json`, and `research/ledgers/a_long_data_integrity_audit_program_test_budget_ledger_20260603.json`.
+- Updated `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/strategy_design_synthesis.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/system_risk_register.md`, `research/README.md`, and the Phase 7 handoff routing.
+
+**Plain result**:
+- This is not another empty contract. The preregistration freezes one future executable data audit with real pass/fail/blocked checks before any A-long signal search.
+- Frozen checks: Tushare `income` / `balancesheet` / `fina_indicator` PIT `ann_date`; restatement as-of selection; PIT universe / survivorship; dividend + `adj_factor` total return and same-anchor benchmark excess; yearly fundamentals coverage threshold.
+- If any hard check fails or lacks a required source, A-long signal backtests stay blocked until data is repaired. If hard checks pass, the next step is still a separate reviewed signal-search preregistration limited to the declared usable data window.
+
+**Non-authorization**:
+- No audit run, no Tushare/provider call, no signal search, no alpha backtest, no runner / A-EGS production change, no DataHub implementation, no provider expansion, no data purchase, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the schema rejects threshold changes and scope creep.
+- Verify the ledger records this as a data-readiness gate with zero alpha-test budget consumption.
+- Verify docs now make A-long data-integrity-first the active route and do not invite rescue-by-slicing of the failed A-short 5d clue.
+
+---
+
 ## 2026-06-03 — Codex 修复 (A-short steady re-audit Optional mean-weighting hygiene)
 
 **Optional disposition**:

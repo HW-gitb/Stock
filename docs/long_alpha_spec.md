@@ -410,7 +410,22 @@ Future A-long reports should expose:
 - Exit / review triggers tied to the written thesis.
 - Ship-gate status: research, paper, minimal, preliminary, or full-size eligible.
 
-### 11.10 Deferred A-Long Decisions
+### 11.10 A-Long Data Integrity Gate Before Signal Search
+
+A-long must not start signal search until a reviewed, executable data-integrity audit has passed its hard checks and declared a usable data window. The current preregistration is `research/preregistrations/a_long_data_integrity_audit_20260603.json`; it is a one-time data-readiness gate, not a signal test.
+
+The audit must produce pass / fail / blocked findings for:
+
+- Frozen schedule and self-tests: the future runner must use the registered monthly as-of schedule and prove planted violations are detected before trusting real audit output.
+- PIT fundamentals: Tushare `income`, `balancesheet`, and `fina_indicator` rows with `ann_date > as_of` are hard look-ahead failures. Missing / invalid `ann_date` rows must be excluded and reported, not treated as an automatic global audit failure.
+- Restatement / revision as-of logic: when the same `ts_code + end_date` has multiple `ann_date` values, a future backtest may use only the version known at the as-of date.
+- PIT universe / survivorship: historical universe construction must keep names that later delist or suspend when they were eligible; today's constituents or today's active list cannot be replayed as a historical universe; held delisting / terminal no-trade outcomes must feed the return leg.
+- Return / benchmark measurement: A-long return measurement must lock total-return treatment, dividend / `adj_factor` handling, terminal delisting returns, entry and exit anchors, and same-anchor benchmark excess before any signal result is computed.
+- Time-varying coverage: fundamentals coverage must be measured by time period on a PIT eligible universe so sparse early data declares the usable start year instead of making the whole lane fail.
+
+If any hard check fails or lacks the required source, A-long stays blocked for signal backtests until the data route is repaired or a new reviewed audit plan is approved. A hard-check pass plus a declared usable window only allows a later reviewed signal-search preregistration; it does not prove alpha or authorize production / ship-gate / full-size use.
+
+### 11.11 Deferred A-Long Decisions
 
 These remain open until later Phase 6d / 6e work:
 

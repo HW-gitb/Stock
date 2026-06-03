@@ -49,6 +49,7 @@
           "enum": [
             "a_share_burst_minimal_data",
             "a_short_steady",
+            "a_long_data_integrity",
             "us_burst_minimal_data",
             "a_short_variant_research",
             "a_long_research",
