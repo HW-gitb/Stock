@@ -1,0 +1,285 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_materialized_thin_slice_data_integrity_audit_report/1.0.0/schema.json",
+  "title": "A-long Materialized Thin-slice Data Integrity Audit Report",
+  "description": "Local-only audit report for the A-long 2022-2023 materialized raw thin slice. It reads gitignored raw payloads and records PIT, survivorship, return-input, benchmark-input, and coverage checks without raw rows. A pass proves only thin-slice data-integrity mechanics, not alpha readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "source_refs",
+    "scope",
+    "execution",
+    "thin_slice_boundary",
+    "required_runner_self_tests",
+    "check_results",
+    "coverage_by_year",
+    "decision",
+    "prohibited_claims",
+    "result_artifacts",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_materialized_thin_slice_data_integrity_audit_report"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_materialized_thin_slice_data_integrity_audit_report_20260604"},
+    "source_refs": {"$ref": "#/$defs/stringList"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "thin_slice_boundary": {"$ref": "#/$defs/thinSliceBoundary"},
+    "required_runner_self_tests": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": {"$ref": "#/$defs/selfTest"}
+    },
+    "check_results": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/checkResult"}
+    },
+    "coverage_by_year": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/coverageRow"},
+      "minItems": 1
+    },
+    "decision": {"$ref": "#/$defs/decision"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "result_artifacts": {"$ref": "#/$defs/stringList"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "flexibleObject": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "materialized_raw_read_only",
+        "provider_call_executed",
+        "data_fetch_executed",
+        "raw_rows_in_tracked_report",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_materialized_thin_slice_data_integrity_audit"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "materialized_raw_read_only": {"const": true},
+        "provider_call_executed": {"const": false},
+        "data_fetch_executed": {"const": false},
+        "raw_rows_in_tracked_report": {"const": false},
+        "signal_search_executed": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "materialization_summary_ref",
+        "raw_root",
+        "raw_payload_count",
+        "network_calls_executed",
+        "provider_calls_executed",
+        "self_tests_required",
+        "self_tests_passed",
+        "tracked_report_contains_raw_records",
+        "tracked_report_contains_secret",
+        "tracked_report_contains_request_url"
+      ],
+      "properties": {
+        "materialization_summary_ref": {"const": "docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json"},
+        "raw_root": {"const": "data/a_long/raw/tushare/materialization_thin_slice_20260604/"},
+        "raw_payload_count": {"type": "integer", "minimum": 0},
+        "network_calls_executed": {"const": 0},
+        "provider_calls_executed": {"const": 0},
+        "self_tests_required": {"const": 11},
+        "self_tests_passed": {"const": 11},
+        "tracked_report_contains_raw_records": {"const": false},
+        "tracked_report_contains_secret": {"const": false},
+        "tracked_report_contains_request_url": {"const": false}
+      }
+    },
+    "thinSliceBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slice_id", "start_date", "end_date", "symbols", "benchmark_indices", "not_full_market", "not_full_2018_2025"],
+      "properties": {
+        "slice_id": {"const": "a_long_tushare_thin_slice_2022_2023"},
+        "start_date": {"const": "20220101"},
+        "end_date": {"const": "20231231"},
+        "symbols": {
+          "type": "array",
+          "items": {"enum": ["000001.SZ", "600519.SH", "000666.SZ"]},
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "benchmark_indices": {
+          "type": "array",
+          "items": {"enum": ["000300.SH", "000852.SH"]},
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "not_full_market": {"const": true},
+        "not_full_2018_2025": {"const": true}
+      }
+    },
+    "selfTest": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["fixture_id", "checker_origin", "status", "detected_expected_violation"],
+      "properties": {
+        "fixture_id": {
+          "enum": [
+            "future_ann_date_hard_fail",
+            "restated_value_asof_fail",
+            "dropped_delisted_member_fail",
+            "missing_delisting_terminal_return_fail",
+            "benchmark_anchor_mismatch_fail",
+            "sparse_early_coverage_declares_usable_window",
+            "materialized_fundamental_missing_ann_date_column_blocks",
+            "materialized_restatement_same_ann_date_conflict_fails",
+            "materialized_survivorship_missing_terminal_return_fails",
+            "materialized_return_benchmark_missing_open_fails",
+            "materialized_temporal_coverage_below_threshold_detected"
+          ]
+        },
+        "checker_origin": {"enum": ["legacy_preregistration_base_audit", "materialized_thin_slice_runner"]},
+        "status": {"const": "pass"},
+        "detected_expected_violation": {"const": true}
+      }
+    },
+    "checkResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["check_id", "status", "hard_check", "blocks_signal_search", "metrics", "findings", "allowed_followup"],
+      "properties": {
+        "check_id": {
+          "enum": [
+            "fundamental_pit",
+            "restatement_revision_asof",
+            "survivorship_pit_universe",
+            "return_benchmark_measurement_basis",
+            "temporal_coverage_bias"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass_thin_slice",
+            "fail_data_not_ready",
+            "blocked_missing_required_source",
+            "coverage_characterized_thin_slice"
+          ]
+        },
+        "hard_check": {"type": "boolean"},
+        "blocks_signal_search": {"type": "boolean"},
+        "metrics": {"$ref": "#/$defs/flexibleObject"},
+        "findings": {"$ref": "#/$defs/stringList"},
+        "allowed_followup": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "coverageRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["year", "table_id", "eligible_symbol_count", "covered_symbol_count", "coverage_pct", "status"],
+      "properties": {
+        "year": {"type": "integer"},
+        "table_id": {"$ref": "#/$defs/nonEmptyString"},
+        "eligible_symbol_count": {"type": "integer", "minimum": 0},
+        "covered_symbol_count": {"type": "integer", "minimum": 0},
+        "coverage_pct": {"type": "number", "minimum": 0, "maximum": 100},
+        "status": {"enum": ["pass_thin_slice", "thin_slice_below_threshold"]}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audit_status",
+        "thin_slice_checks_pass",
+        "data_can_be_used_for_alpha_now",
+        "full_materialization_authorized_by_this_report",
+        "signal_search_authorized_by_this_report",
+        "alpha_found",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "audit_status": {
+          "enum": [
+            "passed_thin_slice_data_integrity_not_alpha_ready",
+            "fail_data_not_ready",
+            "blocked_missing_required_source"
+          ]
+        },
+        "thin_slice_checks_pass": {"type": "boolean"},
+        "data_can_be_used_for_alpha_now": {"const": false},
+        "full_materialization_authorized_by_this_report": {"const": false},
+        "signal_search_authorized_by_this_report": {"const": false},
+        "alpha_found": {"const": false},
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"},
+        "next_action": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_data_ready",
+        "a_long_alpha_found",
+        "signal_search_authorized",
+        "full_materialization_done",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "provider_selected",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_data_ready": {"const": false},
+        "a_long_alpha_found": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "full_materialization_done": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "provider_selected": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

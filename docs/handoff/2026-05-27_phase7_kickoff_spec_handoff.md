@@ -1,5 +1,33 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long materialized thin-slice data-integrity audit
+
+**Changed**:
+- Added `schemas/a_long_materialized_thin_slice_data_integrity_audit_report.schema.json`.
+- Added `runners/a_long_materialized_thin_slice_data_integrity_audit.py`.
+- Added `research/results/a_long_materialized_thin_slice_data_integrity_audit_20260604/audit_report.json`, plus `check_summary.csv` and `coverage_by_year.csv`.
+
+**Plain result**:
+- 小切片审计通过。
+- 这还不能用来找 alpha。
+- 它只证明 2022-2023 三股票小切片上的 PIT / 退市样本 / 收益输入 / 基准输入 / 覆盖率刻画机制能跑通。
+- Claude 提出的两个 full-audit 前必修项已处理：PIT 指标不再声称死的 look-ahead counter；self-tests 增至 11/11，其中 5 个直接打当前 runner 自己的 check 函数。
+
+**Boundaries**:
+- The audit reads only existing gitignored raw payloads under `data/a_long/raw/tushare/materialization_thin_slice_20260604/`.
+- No provider call, no data fetch, no raw rows in tracked report, no signal search, no alpha backtest, no DataHub, no production claim, no ship-gate claim, no full-size use.
+
+**Verification**:
+- `python -m unittest tests.test_a_long_data_integrity_audit_runner tests.test_a_long_materialized_thin_slice_data_integrity_audit tests.schema.test_a_long_data_integrity_audit_preregistration_schema tests.schema.test_a_long_materialized_thin_slice_data_integrity_audit_schema -v` passed 23/23.
+- The actual report validates against `schemas/a_long_materialized_thin_slice_data_integrity_audit_report.schema.json`.
+
+**Next**:
+- Independent review of this slice.
+- If review passes, commit.
+- Next `执行`: create a reviewed broader A-long materialization packet. Do not start signal search from the thin slice.
+
+---
+
 ## 2026-06-04 append: A-long thin-slice materialization execution
 
 **Changed**:

@@ -1,0 +1,9 @@
+year,table_id,eligible_symbol_count,covered_symbol_count,coverage_pct,status
+2022,income,3,3,100.0,pass_thin_slice
+2022,balancesheet,3,3,100.0,pass_thin_slice
+2022,cashflow,3,3,100.0,pass_thin_slice
+2022,fina_indicator,3,3,100.0,pass_thin_slice
+2023,income,3,3,100.0,pass_thin_slice
+2023,balancesheet,3,3,100.0,pass_thin_slice
+2023,cashflow,3,3,100.0,pass_thin_slice
+2023,fina_indicator,3,3,100.0,pass_thin_slice

@@ -1,0 +1,6 @@
+check_id,status,hard_check,blocks_signal_search,finding_count
+fundamental_pit,pass_thin_slice,True,True,2
+restatement_revision_asof,pass_thin_slice,True,True,2
+survivorship_pit_universe,pass_thin_slice,True,True,3
+return_benchmark_measurement_basis,pass_thin_slice,True,True,2
+temporal_coverage_bias,coverage_characterized_thin_slice,False,True,2

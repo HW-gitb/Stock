@@ -8,6 +8,118 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long thin-slice audit R1/R2 修复) — **PASS (可提交)**
+
+**Verdict**: Pass. Both USER-APPROVED required fixes are genuinely closed — verified in the runner code AND the committed report. Commit the corrected thin-slice audit (not the prior dead-counter / wrong-self-test version).
+
+- **R1 closed**: `check_fundamental_pit`'s dead look-ahead counter removed; the real-data metric is now `ann_date_asof_gating_feasible` (true on real data), and findings honestly state it proves ann_date-gating feasibility and that the future signal backtest must enforce `ann_date<=as_of`. No tautological "0 look-ahead violations" remains in the real-data path (the only `future_lookahead` value left is inside a legacy base-audit self-test fixture, where rate 1.0 correctly shows that checker firing).
+- **R2 closed**: `run_materialized_runner_self_tests` adds 5 planted-violation fixtures that call THIS runner's own check functions and assert each detects its violation — missing-ann_date-column→blocked, same-ann_date conflict→fail, delisted-terminal-gap→fail, benchmark-missing-open→fail, coverage-below-threshold→detected. Report shows 11/11 self-tests tagged by `checker_origin` (6 `legacy_preregistration_base_audit` + 5 `materialized_thin_slice_runner`), all `detected_expected_violation: true`.
+- Report still honest + clean: `audit_status=passed_thin_slice_data_integrity_not_alpha_ready`, `alpha_found=false`; grep found no `records`/token/URL. Tests 10/10 (638/638 full per Codex).
+
+**Net**: the thin-slice pipeline is proven end-to-end (materialize → audit → pass) with the audit's "pass" now backed by self-tests on the ACTUAL code path. Next is scale-up (broader/full materialization + full audit), where this self-test discipline + honest gating language carry the trust.
+
+---
+
+## 2026-06-04 — Codex 修复 (A-long materialized thin-slice data-integrity audit R1/R2)
+
+**Plain result**:
+- 修复完成。
+- 小切片审计仍然通过。
+- 但现在仍不能找 alpha。
+- 这次只把审计工具本身补严：它不再夸大 PIT 结论，且自检现在能打到本 runner 自己的检查函数。
+
+**Approved Required fixes handled**:
+1. **R1 fixed**: removed the dead look-ahead counter from `check_fundamental_pit`. The report now says this thin-slice audit proves `ann_date <= as_of` gating feasibility, not a full future signal-backtest look-ahead guarantee. Future A-long signal tests must enforce the same `ann_date <= as_of` gate before any alpha claim.
+2. **R2 fixed**: added five planted-violation self-tests for this materialized runner's own checks: `fundamental_pit`, `restatement_revision_asof`, `survivorship_pit_universe`, `return_benchmark_measurement_basis`, and `temporal_coverage_bias`.
+
+**Worked on**:
+- [tracked modified] `AGENTS.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `docs/SESSION_LOG.md`.
+- [untracked new / updated] `runners/a_long_materialized_thin_slice_data_integrity_audit.py`, `schemas/a_long_materialized_thin_slice_data_integrity_audit_report.schema.json`, `tests/test_a_long_materialized_thin_slice_data_integrity_audit.py`, `tests/schema/test_a_long_materialized_thin_slice_data_integrity_audit_schema.py`, `research/results/a_long_materialized_thin_slice_data_integrity_audit_20260604/audit_report.json`, `research/results/a_long_materialized_thin_slice_data_integrity_audit_20260604/check_summary.csv`, `research/results/a_long_materialized_thin_slice_data_integrity_audit_20260604/coverage_by_year.csv`.
+
+**Execution**:
+- Re-ran `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\a_long_materialized_thin_slice_data_integrity_audit.py`.
+- Output remains `audit_status = passed_thin_slice_data_integrity_not_alpha_ready`.
+- Report self-tests are now 11/11: six legacy preregistration fixtures plus five current-runner fixtures with `checker_origin = materialized_thin_slice_runner`.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_materialized_thin_slice_data_integrity_audit tests.schema.test_a_long_materialized_thin_slice_data_integrity_audit_schema -v` passed 9/9.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_data_integrity_audit_runner tests.test_a_long_materialized_thin_slice_data_integrity_audit tests.schema.test_a_long_data_integrity_audit_preregistration_schema tests.schema.test_a_long_materialized_thin_slice_data_integrity_audit_schema -v` passed 23/23.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 638/638.
+- `git diff --check` passed with normal Windows LF/CRLF warnings only.
+- Sensitive scan of the tracked audit report found no raw `records`, token, URL, or secret.
+- `docs/CURRENT.md` line count is 149.
+
+**Non-authorization**:
+- No provider call, no data fetch, no new raw read beyond existing gitignored materialized payloads, no signal search, no alpha backtest, no DataHub, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify R1/R2 are actually closed.
+- Verify `audit_report.json` records 11/11 self-tests and five `materialized_thin_slice_runner` fixtures.
+- Verify the report still says thin-slice only, not alpha-ready, and contains no raw rows / secret / URL.
+
+**Optional disposition**:
+- Latest Claude review had no Optional suggestions; only the two approved Required fixes were applied.
+
+---
+
+## 2026-06-04 — Claude 审查 (A-long materialized thin-slice data-integrity audit) — **PASS (可提交;2 项 full-audit 前必修)**
+
+**Verdict**: Pass for the thin-slice commit. The rewritten audit genuinely reads real materialized rows (not hardcoded), the result is honestly caveated (`passed_thin_slice_data_integrity_not_alpha_ready`, not-alpha-ready, thin-slice-only), hygiene clean, no leak. But 2 real rigor findings must be fixed before the FULL-scale audit's pass can be trusted.
+
+**Verified genuine + safe**:
+- No network (imports stdlib + `base_audit` only; reads gitignored raw payloads via validated refs). `network/provider_calls_executed=0`.
+- Real checks on real rows — I read each: restatement (same-ann_date conflicting-duplicate detection), survivorship (3 symbols' status + delisted terminal daily/adj within 90d of delist), return/benchmark (daily∩adj overlap + dividend ann_date + benchmark open/close overlap), coverage (eligible vs ann_date-covered per year). They do real work and can fail on bad data.
+- Tracked report = counts/dates/codes/rates only; grep found no `records`/token/URL. `audit_status`/`data_can_be_used_for_alpha_now=false`/`alpha_found=false` confirmed. Tests 9/9.
+
+**Required fixes — USER-APPROVED (`批准修改` received 2026-06-04); Codex to apply both to THIS audit runner + re-review, before this thin-slice audit is committed**:
+1. **R1 — `check_fundamental_pit` look-ahead counter is dead**: `eligible_dates=[d for d in unique if d<=as_of]` then `if selected>as_of` is structurally always 0. It proves ann_date-gating-FEASIBILITY (fields present, missing-rate ≤5%), NOT look-ahead-tested. Fix: either make it a genuine test (feed a planted ann_date>as_of row through THIS runner's selection and assert it is flagged) OR rename the metric to reflect "ann_date-gating-feasible" and document that the real look-ahead guarantee is enforced at the future signal backtest (gate ann_date<=as_of). Status: **USER-APPROVED**.
+2. **R2 — self-tests validate the WRONG code path**: the runner calls `base_audit.run_required_self_tests` (tests base_audit's checkers — report line 66 shows the planted fixture firing rate 1.0), but the real audit uses THIS runner's reimplemented checks (line 155 = the dead 0 counter). So "6/6 self-tests pass" does NOT prove THIS runner's checks can fail. Fix: add planted-violation fixtures for THIS runner's own check functions (fundamental_pit / restatement / survivorship / return-benchmark / coverage) proving each can FAIL. Status: **USER-APPROVED**.
+
+**Disposition (2026-06-04)**: user issued `批准修改`. Both fixes are approved; apply them to `runners/a_long_materialized_thin_slice_data_integrity_audit.py` (+ tests), re-run, then this thin-slice audit slice is committed with the corrected runner (do not commit the dead-counter / wrong-self-test version). The thin-slice data RESULT itself stands (genuine checks, honest caveats); these fixes harden the audit's self-trust before it scales.
+
+**Net**: thin-slice pipeline proven end-to-end (materialize → audit → pass) on 3 symbols; the data has the fields for PIT. Before scaling to the full universe, fix the two above so the full audit's "pass" is genuinely earned, not self-confirmed.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long materialized thin-slice data-integrity audit)
+
+**Plain result**:
+- 小切片审计通过。
+- 但现在仍不能找 alpha。
+- 这只说明 2022-2023 三只股票的小切片可以通过 PIT / 退市样本 / 收益输入 / 基准输入 / 覆盖率检查。
+- 下一步不是搜信号，而是做 reviewed broader materialization packet，然后跑完整数据审计。
+
+**Worked on**:
+- [tracked modified] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `docs/SESSION_LOG.md`.
+- [untracked new] `schemas/a_long_materialized_thin_slice_data_integrity_audit_report.schema.json`, `runners/a_long_materialized_thin_slice_data_integrity_audit.py`, `tests/test_a_long_materialized_thin_slice_data_integrity_audit.py`, `tests/schema/test_a_long_materialized_thin_slice_data_integrity_audit_schema.py`, `research/results/a_long_materialized_thin_slice_data_integrity_audit_20260604/audit_report.json`, `research/results/a_long_materialized_thin_slice_data_integrity_audit_20260604/check_summary.csv`, `research/results/a_long_materialized_thin_slice_data_integrity_audit_20260604/coverage_by_year.csv`.
+
+**Execution**:
+- Command run: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\a_long_materialized_thin_slice_data_integrity_audit.py`.
+- Output summary: `audit_status = passed_thin_slice_data_integrity_not_alpha_ready`, report path `research/results/a_long_materialized_thin_slice_data_integrity_audit_20260604/audit_report.json`.
+- The runner reads only the already-materialized gitignored raw payloads under `data/a_long/raw/tushare/materialization_thin_slice_20260604/`.
+- It performs no Tushare/API/provider call, no data fetch, no signal search, no alpha backtest, no DataHub, and writes no raw records into the tracked report.
+
+**Key decisions**:
+- A raw row with `ann_date` after the slice end is not automatically a look-ahead bug; it is safe only if excluded from all earlier `as_of` selections. The new runner reports those future-announcement rows as excluded, while keeping `ann_date > as_of` look-ahead at zero tolerance.
+- Temporal coverage is characterized into usable-window evidence; it is not a global hard-fail by itself.
+- This audit does not consume or reopen the old spent A-long audit ledger. It is a local-only audit of the materialized thin slice.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_materialized_thin_slice_data_integrity_audit tests.schema.test_a_long_materialized_thin_slice_data_integrity_audit_schema -v` passed 8/8.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_data_integrity_audit_runner tests.test_a_long_materialized_thin_slice_data_integrity_audit tests.schema.test_a_long_data_integrity_audit_preregistration_schema tests.schema.test_a_long_materialized_thin_slice_data_integrity_audit_schema -v` passed 21/21.
+- The actual report validates against `schemas/a_long_materialized_thin_slice_data_integrity_audit_report.schema.json`.
+
+**Non-authorization**:
+- No full 2018-2025 materialization, no full-market pull, no signal search, no alpha backtest, no DataHub, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the runner truly reads existing materialized raw rows and does not call providers.
+- Verify tracked report has no raw `records`, token, request URL, or secret.
+- Verify the PIT correction is right: future `ann_date` rows are excluded from earlier `as_of` use, not treated as raw-data failure.
+- Verify docs consistently say “thin-slice passed, still no alpha; next broader materialization + full audit.”
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long thin-slice materialization execution) — **PASS (可提交)**
 
 **Verdict**: Pass. Thin slice ran via the reviewed double-gate (29/29 calls). The runner was code-reviewed last round and is unchanged, so this round verifies the one new tracked artifact — the execution summary. Hygiene clean; result honest. Safe to commit.
