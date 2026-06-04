@@ -1,5 +1,26 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long thin-slice materialization packet
+
+**Changed**:
+- Added `schemas/a_long_tushare_incremental_materialization_packet.schema.json`, `docs/a_long_tushare_incremental_materialization_packet_20260604.json`, `runners/a_long_tushare_incremental_materialization_packet.py`, `schemas/a_long_tushare_incremental_materialization_execution_summary.schema.json`, and tests.
+- The packet fixes a 2022-2023 three-symbol thin slice (`000001.SZ`, `600519.SH`, `000666.SZ`), CSI300 / CSI1000, 29 planned calls / max 32, gitignored raw storage, tracked no-secret summary, and checkpoint resume.
+
+**Plain result**:
+- The packet is ready for independent review, but it has not executed.
+- A-long data is still not ready for alpha.
+- The runner requires Claude Pass + a later user `执行` confirmation before live Tushare calls.
+
+**Validation**:
+- Targeted packet/schema tests passed 17/17 on Python313.
+
+**Next**:
+- Claude should review the packet and runner before any live materialization.
+- After a clean review and user `执行`, run only this thin slice; then create a new reviewed data-integrity audit authorization.
+- Do not full-materialize 2018-2025, rerun the spent audit, start signal search, DataHub, production, ship-gate, or full-size from this packet.
+
+---
+
 ## 2026-06-04 append: A-long Tushare route-gap repair execution
 
 **Changed**:

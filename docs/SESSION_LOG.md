@@ -8,6 +8,59 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long thin-slice materialization packet) — **PASS (可提交)**
+
+**Verdict**: Pass. Real, executable thin-slice packet (2022-2023, 3 symbols) that is NOT yet run — double-gated for review-before-run. Followed both prior recommendations (thin-slice-first + review-the-network-runner-before-it-calls). Hygiene safe-when-run; honest scope; no overclaim. Safe to commit.
+
+**Verified (code reviewed before any live call — the right discipline for a network runner)**:
+- Double-gate: `require_live_execution_confirmations` raises without BOTH `--confirm-independent-review-pass` and `--confirm-post-review-execute`; no-token→no-call; tests use fake clients. No live call until reviewed + user-executed.
+- Thin slice locked: 2022-2023, symbols [000001.SZ, 600519.SH, 000666.SZ], CSI300+CSI1000; `load_and_validate_packet` asserts exact boundary + `not_full_market`/`not_full_2018_2025`; call plan locked to 29 ≤ 32, retry 0, abort-on-exceed.
+- Hygiene (when run): reuses reviewed `route_base` primitives (token env-only, redact, normalize); raw→gitignored hard-guard; tracked summary excludes `records`/token/URL; checkpoint reuse reads existing raw and does NOT overwrite (resumable, no clobber).
+- Chaining guard: `validate_route_gap_repair_pass` requires the prior gap-repair pass + still data-not-usable.
+- Packet honesty: every table sets authorizes_return_calculation/factor_derivation/audit_rerun/signal_search=false; prohibited_claims all false; `pass_does_not_make_data_alpha_ready=true`; next = thin run → new reviewed audit → (if pass) signal prereg.
+
+**Note (honest, not a defect)**: the 3-symbol thin slice proves materialization MECHANICS (storage, lineage, checkpoint, audit-input shape), NOT data integrity at scale (restatement/coverage/survivorship patterns emerge only across the full universe). The packet discloses this. So: thin run proves the pipeline; the full pull + full audit prove integrity.
+
+Tests 17/17 (628/628 full per Codex).
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long thin-slice materialization packet)
+
+**Plain result**:
+- 下一步小切片数据包已经写好，但还没有跑真实 Tushare。
+- A 股长线现在仍不能找 alpha。
+- 这个 packet 只允许后续在 Claude 审查通过 + 用户再次 `执行` 后，跑 2022-2023 三个样本（`000001.SZ` / `600519.SH` / `000666.SZ`）的薄切片 materialization。
+- 跑完也不能直接找 alpha；下一步仍必须是新的 data-integrity audit。
+
+**Worked on**:
+- [tracked docs modified] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `docs/SESSION_LOG.md`.
+- [untracked new artifacts] `schemas/a_long_tushare_incremental_materialization_packet.schema.json`, `docs/a_long_tushare_incremental_materialization_packet_20260604.json`, `schemas/a_long_tushare_incremental_materialization_execution_summary.schema.json`, `runners/a_long_tushare_incremental_materialization_packet.py`, `tests/schema/test_a_long_tushare_incremental_materialization_packet_schema.py`, `tests/test_a_long_tushare_incremental_materialization_packet.py`.
+
+**What changed**:
+- Added a strict execution packet for bounded materialization: 2022-2023 only, two active symbols plus one older delisted symbol, CSI300 / CSI1000, 29 planned calls / max 32, zero retry, exact raw root `data/a_long/raw/tushare/materialization_thin_slice_20260604/`, no-secret tracked summary, and checkpoint resume.
+- Added a future execution-summary schema and runner. The runner refuses live execution unless the caller supplies `--confirm-independent-review-pass` and `--confirm-post-review-execute`; tests use only fake clients.
+- The runner reuses existing raw payload files as checkpoints instead of refetching, and tracked summaries exclude raw `records`.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_incremental_materialization_packet tests.schema.test_a_long_tushare_incremental_materialization_packet_schema -v` passed 17/17.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 628/628.
+- `git diff --check` passed with expected Windows LF-to-CRLF warnings only.
+- `docs/CURRENT.md` line count is 149.
+- `git check-ignore -v data\a_long\raw\tushare\materialization_thin_slice_20260604\dummy.json` confirms `.gitignore:53 data/a_long/raw/`.
+- Sensitive scan on the new schema/artifact/runner/tests found only field names, env-var checks, and runner raw-write code; tracked packet has no token value, request URL, or raw `records`.
+
+**Non-authorization**:
+- No live Tushare call, no data fetch, no raw read from the real packet path, no future execution summary written, no full 2018-2025 materialization, no audit rerun, no signal search, no alpha backtest, no DataHub, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify this is a real executable thin-slice packet, not another empty plan, while still not executing provider calls in this slice.
+- Verify scope locks prevent full-market / full-period materialization and prevent audit / signal / DataHub / production overclaims.
+- Verify checkpoint reuse cannot silently overwrite raw payloads and tracked summary cannot contain `records`, request URL, or secret.
+- Verify next step is review -> user `执行` -> run only this thin slice -> new reviewed audit authorization.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long Tushare route-gap repair packet) — **PASS (可提交)**
 
 **Verdict**: Pass. Both route gaps from the prior validation are resolved, confirming the diagnosis (SW = field-naming; delisted-daily = symbol-choice artifact). Same airtight hygiene; honest; no overclaim. Safe to commit.

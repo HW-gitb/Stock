@@ -1,0 +1,276 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_tushare_incremental_materialization_execution_summary/1.0.0/schema.json",
+  "title": "A-Long Tushare Incremental Materialization Execution Summary",
+  "description": "Tracked no-secret summary for the bounded A-long Tushare thin-slice materialization run. It records endpoint shape, counts, checkpoint reuse, and raw refs only; raw rows stay under gitignored data/a_long/raw/. It does not authorize audit rerun, signal search, alpha, DataHub, production, ship-gate, full-size use, or broker/order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "packet_ref",
+    "scope",
+    "execution",
+    "thin_slice_boundary",
+    "endpoint_results",
+    "table_rollup",
+    "decision",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_tushare_incremental_materialization_execution_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_tushare_incremental_materialization_execution_summary_20260604"},
+    "packet_ref": {"const": "docs/a_long_tushare_incremental_materialization_packet_20260604.json"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "thin_slice_boundary": {"$ref": "#/$defs/thinSliceBoundary"},
+    "endpoint_results": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/endpointResult"}
+    },
+    "table_rollup": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/tableRollup"},
+      "minItems": 11,
+      "maxItems": 11
+    },
+    "decision": {"$ref": "#/$defs/decision"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "dateKey": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "provider_family",
+        "provider_call_executed",
+        "tushare_call_executed",
+        "data_fetch_executed",
+        "raw_payload_written_to_gitignored_path",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_secret",
+        "full_2018_2025_materialization_executed",
+        "audit_rerun_executed",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_tushare_thin_slice_incremental_materialization_execution"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "provider_family": {"const": "tushare_existing_account"},
+        "provider_call_executed": {"type": "boolean"},
+        "tushare_call_executed": {"type": "boolean"},
+        "data_fetch_executed": {"type": "boolean"},
+        "raw_payload_written_to_gitignored_path": {"type": "boolean"},
+        "tracked_summary_contains_raw_rows": {"const": false},
+        "tracked_summary_contains_secret": {"const": false},
+        "full_2018_2025_materialization_executed": {"const": false},
+        "audit_rerun_executed": {"const": false},
+        "signal_search_executed": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary_path",
+        "raw_output_root",
+        "raw_output_root_is_gitignored",
+        "max_total_endpoint_calls",
+        "planned_total_endpoint_calls",
+        "endpoint_results_count",
+        "new_network_call_count",
+        "reused_raw_payload_count",
+        "budget_exceeded",
+        "network_call_attempted",
+        "environment_precheck_passed",
+        "independent_review_confirmed",
+        "post_review_execute_confirmed",
+        "token_logged",
+        "request_url_logged"
+      ],
+      "properties": {
+        "summary_path": {"const": "docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json"},
+        "raw_output_root": {"const": "data/a_long/raw/tushare/materialization_thin_slice_20260604/"},
+        "raw_output_root_is_gitignored": {"const": true},
+        "max_total_endpoint_calls": {"const": 32},
+        "planned_total_endpoint_calls": {"const": 29},
+        "endpoint_results_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "new_network_call_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "reused_raw_payload_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "budget_exceeded": {"const": false},
+        "network_call_attempted": {"type": "boolean"},
+        "environment_precheck_passed": {"type": "boolean"},
+        "independent_review_confirmed": {"type": "boolean"},
+        "post_review_execute_confirmed": {"type": "boolean"},
+        "token_logged": {"const": false},
+        "request_url_logged": {"const": false}
+      }
+    },
+    "thinSliceBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slice_id", "start_date", "end_date", "active_symbols", "delisted_symbols", "benchmark_indices", "not_full_market", "not_full_2018_2025"],
+      "properties": {
+        "slice_id": {"const": "a_long_tushare_thin_slice_2022_2023"},
+        "start_date": {"const": "20220101"},
+        "end_date": {"const": "20231231"},
+        "active_symbols": {
+          "type": "array",
+          "items": {"enum": ["000001.SZ", "600519.SH"]},
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "delisted_symbols": {
+          "type": "array",
+          "items": {"const": "000666.SZ"},
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "benchmark_indices": {
+          "type": "array",
+          "items": {"enum": ["000300.SH", "000852.SH"]},
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "not_full_market": {"const": true},
+        "not_full_2018_2025": {"const": true}
+      }
+    },
+    "endpointResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "table_id",
+        "api_family",
+        "request_shape_without_token",
+        "call_status",
+        "row_count",
+        "columns",
+        "minimum_fields_present",
+        "minimum_fields_missing",
+        "raw_payload_ref",
+        "checkpoint_status",
+        "tracked_summary_excludes_raw_rows",
+        "error_class",
+        "error_message_redacted"
+      ],
+      "properties": {
+        "call_id": {"$ref": "#/$defs/nonEmptyString"},
+        "table_id": {"$ref": "#/$defs/nonEmptyString"},
+        "api_family": {"$ref": "#/$defs/nonEmptyString"},
+        "request_shape_without_token": {
+          "type": "object",
+          "additionalProperties": {"type": ["string", "number", "boolean", "null"]}
+        },
+        "call_status": {"enum": ["success", "empty", "error", "skipped"]},
+        "row_count": {"type": ["integer", "null"], "minimum": 0},
+        "columns": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonEmptyString"}
+        },
+        "minimum_fields_present": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonEmptyString"}
+        },
+        "minimum_fields_missing": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonEmptyString"}
+        },
+        "raw_payload_ref": {"$ref": "#/$defs/nonEmptyString"},
+        "checkpoint_status": {"enum": ["written_new_raw", "reused_existing_raw", "not_written"]},
+        "tracked_summary_excludes_raw_rows": {"const": true},
+        "error_class": {"type": ["string", "null"]},
+        "error_message_redacted": {"type": ["string", "null"]}
+      }
+    },
+    "tableRollup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["table_id", "status", "calls_total", "calls_success", "missing_minimum_fields", "plain_result"],
+      "properties": {
+        "table_id": {"$ref": "#/$defs/nonEmptyString"},
+        "status": {"enum": ["passed_thin_slice_shape", "partial_or_failed_thin_slice_shape", "not_tested"]},
+        "calls_total": {"type": "integer", "minimum": 0},
+        "calls_success": {"type": "integer", "minimum": 0},
+        "missing_minimum_fields": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonEmptyString"}
+        },
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "materialization_status",
+        "data_can_be_used_for_alpha_now",
+        "audit_rerun_authorized_by_this_summary",
+        "signal_search_authorized_by_this_summary",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "materialization_status": {"enum": ["passed_thin_slice_materialization_shape", "partial_or_failed_thin_slice_materialization", "not_executed_environment_missing"]},
+        "data_can_be_used_for_alpha_now": {"const": false},
+        "audit_rerun_authorized_by_this_summary": {"const": false},
+        "signal_search_authorized_by_this_summary": {"const": false},
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"},
+        "next_action": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a_long_data_ready", "a_long_alpha_found", "audit_passed", "signal_search_authorized", "full_materialization_done", "production_ready", "ship_gate_evidence", "full_size_allowed", "datahub_authorized", "broker_or_order_automation_authorized"],
+      "properties": {
+        "a_long_data_ready": {"const": false},
+        "a_long_alpha_found": {"const": false},
+        "audit_passed": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "full_materialization_done": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}
