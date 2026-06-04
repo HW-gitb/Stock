@@ -1,0 +1,1131 @@
+{
+  "schema_name": "a_long_tushare_incremental_materialization_execution_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-04T06:26:44+00:00",
+  "artifact_id": "a_long_tushare_incremental_materialization_execution_summary_20260604",
+  "packet_ref": "docs/a_long_tushare_incremental_materialization_packet_20260604.json",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_tushare_thin_slice_incremental_materialization_execution",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_call_executed": true,
+    "tushare_call_executed": true,
+    "data_fetch_executed": true,
+    "raw_payload_written_to_gitignored_path": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_secret": false,
+    "full_2018_2025_materialization_executed": false,
+    "audit_rerun_executed": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "execution": {
+    "summary_path": "docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json",
+    "raw_output_root": "data/a_long/raw/tushare/materialization_thin_slice_20260604/",
+    "raw_output_root_is_gitignored": true,
+    "max_total_endpoint_calls": 32,
+    "planned_total_endpoint_calls": 29,
+    "endpoint_results_count": 29,
+    "new_network_call_count": 29,
+    "reused_raw_payload_count": 0,
+    "budget_exceeded": false,
+    "network_call_attempted": true,
+    "environment_precheck_passed": true,
+    "independent_review_confirmed": true,
+    "post_review_execute_confirmed": true,
+    "token_logged": false,
+    "request_url_logged": false
+  },
+  "thin_slice_boundary": {
+    "slice_id": "a_long_tushare_thin_slice_2022_2023",
+    "start_date": "20220101",
+    "end_date": "20231231",
+    "active_symbols": [
+      "000001.SZ",
+      "600519.SH"
+    ],
+    "delisted_symbols": [
+      "000666.SZ"
+    ],
+    "benchmark_indices": [
+      "000300.SH",
+      "000852.SH"
+    ],
+    "not_full_market": true,
+    "not_full_2018_2025": true
+  },
+  "endpoint_results": [
+    {
+      "call_id": "trade_calendar_2022_2023",
+      "table_id": "trade_calendar",
+      "api_family": "trade_cal",
+      "request_shape_without_token": {
+        "exchange": "SSE",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "is_open": "1",
+        "fields": "cal_date,is_open,exchange"
+      },
+      "call_status": "success",
+      "row_count": 484,
+      "columns": [
+        "cal_date",
+        "is_open",
+        "exchange"
+      ],
+      "minimum_fields_present": [
+        "cal_date",
+        "is_open",
+        "exchange"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/trade_calendar_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "stock_basic_active_L",
+      "table_id": "stock_basic_active",
+      "api_family": "stock_basic",
+      "request_shape_without_token": {
+        "exchange": "",
+        "list_status": "L",
+        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date"
+      },
+      "call_status": "success",
+      "row_count": 5524,
+      "columns": [
+        "ts_code",
+        "symbol",
+        "name",
+        "exchange",
+        "market",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "name",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/stock_basic_active_L.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "stock_basic_delisted_D",
+      "table_id": "stock_basic_delisted",
+      "api_family": "stock_basic",
+      "request_shape_without_token": {
+        "exchange": "",
+        "list_status": "D",
+        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date"
+      },
+      "call_status": "success",
+      "row_count": 326,
+      "columns": [
+        "ts_code",
+        "symbol",
+        "name",
+        "exchange",
+        "market",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "name",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/stock_basic_delisted_D.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "income_000001_SZ_2022_2023",
+      "table_id": "income",
+      "api_family": "income",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,revenue,n_income_attr_p"
+      },
+      "call_status": "success",
+      "row_count": 11,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "revenue",
+        "n_income_attr_p"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "revenue",
+        "n_income_attr_p"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/income_000001_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "income_600519_SH_2022_2023",
+      "table_id": "income",
+      "api_family": "income",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,revenue,n_income_attr_p"
+      },
+      "call_status": "success",
+      "row_count": 11,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "revenue",
+        "n_income_attr_p"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "revenue",
+        "n_income_attr_p"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/income_600519_SH_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "income_000666_SZ_2022_2023",
+      "table_id": "income",
+      "api_family": "income",
+      "request_shape_without_token": {
+        "ts_code": "000666.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,revenue,n_income_attr_p"
+      },
+      "call_status": "success",
+      "row_count": 9,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "revenue",
+        "n_income_attr_p"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "revenue",
+        "n_income_attr_p"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/income_000666_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "balancesheet_000001_SZ_2022_2023",
+      "table_id": "balancesheet",
+      "api_family": "balancesheet",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,total_assets,total_liab,total_hldr_eqy_exc_min_int"
+      },
+      "call_status": "success",
+      "row_count": 12,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "total_assets",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "total_assets",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/balancesheet_000001_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "balancesheet_600519_SH_2022_2023",
+      "table_id": "balancesheet",
+      "api_family": "balancesheet",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,total_assets,total_liab,total_hldr_eqy_exc_min_int"
+      },
+      "call_status": "success",
+      "row_count": 10,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "total_assets",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "total_assets",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/balancesheet_600519_SH_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "balancesheet_000666_SZ_2022_2023",
+      "table_id": "balancesheet",
+      "api_family": "balancesheet",
+      "request_shape_without_token": {
+        "ts_code": "000666.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,total_assets,total_liab,total_hldr_eqy_exc_min_int"
+      },
+      "call_status": "success",
+      "row_count": 7,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "total_assets",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "total_assets",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/balancesheet_000666_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "cashflow_000001_SZ_2022_2023",
+      "table_id": "cashflow",
+      "api_family": "cashflow",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,n_cashflow_act"
+      },
+      "call_status": "success",
+      "row_count": 11,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "n_cashflow_act"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "n_cashflow_act"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/cashflow_000001_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "cashflow_600519_SH_2022_2023",
+      "table_id": "cashflow",
+      "api_family": "cashflow",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,n_cashflow_act"
+      },
+      "call_status": "success",
+      "row_count": 11,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "n_cashflow_act"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "n_cashflow_act"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/cashflow_600519_SH_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "cashflow_000666_SZ_2022_2023",
+      "table_id": "cashflow",
+      "api_family": "cashflow",
+      "request_shape_without_token": {
+        "ts_code": "000666.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,n_cashflow_act"
+      },
+      "call_status": "success",
+      "row_count": 10,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "n_cashflow_act"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "n_cashflow_act"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/cashflow_000666_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "fina_indicator_000001_SZ_2022_2023",
+      "table_id": "fina_indicator",
+      "api_family": "fina_indicator",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,end_date,roe,profit_dedt"
+      },
+      "call_status": "success",
+      "row_count": 13,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "roe",
+        "profit_dedt"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "roe",
+        "profit_dedt"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/fina_indicator_000001_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "fina_indicator_600519_SH_2022_2023",
+      "table_id": "fina_indicator",
+      "api_family": "fina_indicator",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,end_date,roe,profit_dedt"
+      },
+      "call_status": "success",
+      "row_count": 14,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "roe",
+        "profit_dedt"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "roe",
+        "profit_dedt"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/fina_indicator_600519_SH_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "fina_indicator_000666_SZ_2022_2023",
+      "table_id": "fina_indicator",
+      "api_family": "fina_indicator",
+      "request_shape_without_token": {
+        "ts_code": "000666.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,ann_date,end_date,roe,profit_dedt"
+      },
+      "call_status": "success",
+      "row_count": 10,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "roe",
+        "profit_dedt"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "roe",
+        "profit_dedt"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/fina_indicator_000666_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_classify_sw_L1",
+      "table_id": "industry_classification",
+      "api_family": "index_classify",
+      "request_shape_without_token": {
+        "level": "L1",
+        "fields": "index_code,industry_name,level,parent_code"
+      },
+      "call_status": "success",
+      "row_count": 28,
+      "columns": [
+        "index_code",
+        "industry_name",
+        "level",
+        "parent_code"
+      ],
+      "minimum_fields_present": [
+        "index_code",
+        "industry_name",
+        "level",
+        "parent_code"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/index_classify_sw_L1.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_classify_sw_L2",
+      "table_id": "industry_classification",
+      "api_family": "index_classify",
+      "request_shape_without_token": {
+        "level": "L2",
+        "fields": "index_code,industry_name,level,parent_code"
+      },
+      "call_status": "success",
+      "row_count": 104,
+      "columns": [
+        "index_code",
+        "industry_name",
+        "level",
+        "parent_code"
+      ],
+      "minimum_fields_present": [
+        "index_code",
+        "industry_name",
+        "level",
+        "parent_code"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/index_classify_sw_L2.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_member_all_sw_membership",
+      "table_id": "industry_membership",
+      "api_family": "index_member_all",
+      "request_shape_without_token": {
+        "fields": "ts_code,name,l1_code,l1_name,l2_code,l2_name,in_date,out_date,is_new"
+      },
+      "call_status": "success",
+      "row_count": 3000,
+      "columns": [
+        "ts_code",
+        "name",
+        "l1_code",
+        "l1_name",
+        "l2_code",
+        "l2_name",
+        "in_date",
+        "out_date",
+        "is_new"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "l2_code",
+        "l2_name",
+        "in_date",
+        "out_date"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/index_member_all_sw_membership.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_000001_SZ_2022_2023",
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "daily",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,trade_date,open,close,vol,amount"
+      },
+      "call_status": "success",
+      "row_count": 484,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close",
+        "vol",
+        "amount"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/daily_000001_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "adj_factor_000001_SZ_2022_2023",
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "adj_factor",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,trade_date,adj_factor"
+      },
+      "call_status": "success",
+      "row_count": 484,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/adj_factor_000001_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "dividend_000001_SZ",
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "dividend",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "fields": "ts_code,ann_date,record_date,ex_date,pay_date,stk_div,cash_div_tax"
+      },
+      "call_status": "success",
+      "row_count": 52,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "record_date",
+        "ex_date",
+        "pay_date",
+        "stk_div",
+        "cash_div_tax"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "ex_date"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/dividend_000001_SZ.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_600519_SH_2022_2023",
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "daily",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,trade_date,open,close,vol,amount"
+      },
+      "call_status": "success",
+      "row_count": 484,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close",
+        "vol",
+        "amount"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/daily_600519_SH_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "adj_factor_600519_SH_2022_2023",
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "adj_factor",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,trade_date,adj_factor"
+      },
+      "call_status": "success",
+      "row_count": 484,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/adj_factor_600519_SH_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "dividend_600519_SH",
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "dividend",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "fields": "ts_code,ann_date,record_date,ex_date,pay_date,stk_div,cash_div_tax"
+      },
+      "call_status": "success",
+      "row_count": 58,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "record_date",
+        "ex_date",
+        "pay_date",
+        "stk_div",
+        "cash_div_tax"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "ex_date"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/dividend_600519_SH.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_000666_SZ_2022_2023",
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "daily",
+      "request_shape_without_token": {
+        "ts_code": "000666.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,trade_date,open,close,vol,amount"
+      },
+      "call_status": "success",
+      "row_count": 402,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close",
+        "vol",
+        "amount"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/daily_000666_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "adj_factor_000666_SZ_2022_2023",
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "adj_factor",
+      "request_shape_without_token": {
+        "ts_code": "000666.SZ",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,trade_date,adj_factor"
+      },
+      "call_status": "success",
+      "row_count": 437,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/adj_factor_000666_SZ_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "dividend_000666_SZ",
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "dividend",
+      "request_shape_without_token": {
+        "ts_code": "000666.SZ",
+        "fields": "ts_code,ann_date,record_date,ex_date,pay_date,stk_div,cash_div_tax"
+      },
+      "call_status": "success",
+      "row_count": 39,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "record_date",
+        "ex_date",
+        "pay_date",
+        "stk_div",
+        "cash_div_tax"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "ann_date",
+        "ex_date"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/dividend_000666_SZ.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_daily_000300_SH_2022_2023",
+      "table_id": "benchmark_index_daily",
+      "api_family": "index_daily",
+      "request_shape_without_token": {
+        "ts_code": "000300.SH",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,trade_date,open,close"
+      },
+      "call_status": "success",
+      "row_count": 484,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/index_daily_000300_SH_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_daily_000852_SH_2022_2023",
+      "table_id": "benchmark_index_daily",
+      "api_family": "index_daily",
+      "request_shape_without_token": {
+        "ts_code": "000852.SH",
+        "start_date": "20220101",
+        "end_date": "20231231",
+        "fields": "ts_code,trade_date,open,close"
+      },
+      "call_status": "success",
+      "row_count": 484,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_thin_slice_20260604/index_daily_000852_SH_2022_2023.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    }
+  ],
+  "table_rollup": [
+    {
+      "table_id": "trade_calendar",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 1,
+      "calls_success": 1,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "stock_basic_active",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 1,
+      "calls_success": 1,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "stock_basic_delisted",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 1,
+      "calls_success": 1,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "income",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 3,
+      "calls_success": 3,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "balancesheet",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 3,
+      "calls_success": 3,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "cashflow",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 3,
+      "calls_success": 3,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "fina_indicator",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 3,
+      "calls_success": 3,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "industry_classification",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 2,
+      "calls_success": 2,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "industry_membership",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 1,
+      "calls_success": 1,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "daily_price_adj_factor_dividend",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 9,
+      "calls_success": 9,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    },
+    {
+      "table_id": "benchmark_index_daily",
+      "status": "passed_thin_slice_shape",
+      "calls_total": 2,
+      "calls_success": 2,
+      "missing_minimum_fields": [],
+      "plain_result": "Thin-slice materialization shape is present for this table."
+    }
+  ],
+  "decision": {
+    "materialization_status": "passed_thin_slice_materialization_shape",
+    "data_can_be_used_for_alpha_now": false,
+    "audit_rerun_authorized_by_this_summary": false,
+    "signal_search_authorized_by_this_summary": false,
+    "plain_result": "薄切片数据已落地，但还不能用来找 alpha。",
+    "next_action": "下一步是另起 reviewed data-integrity audit；audit 通过后才允许信号搜索预注册。"
+  },
+  "prohibited_claims": {
+    "a_long_data_ready": false,
+    "a_long_alpha_found": false,
+    "audit_passed": false,
+    "signal_search_authorized": false,
+    "full_materialization_done": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This summary records thin-slice materialization shape and raw refs only; raw rows stay under gitignored data/a_long/raw/.",
+    "A pass does not make A-long data ready and does not authorize signal search.",
+    "A new reviewed data-integrity audit is required before any A-long signal-search preregistration.",
+    "No full 2018-2025 pull, full-market materialization, DataHub, production, ship-gate, full-size use, or broker/order automation is authorized."
+  ]
+}

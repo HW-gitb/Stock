@@ -8,6 +8,58 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long thin-slice materialization execution) — **PASS (可提交)**
+
+**Verdict**: Pass. Thin slice ran via the reviewed double-gate (29/29 calls). The runner was code-reviewed last round and is unchanged, so this round verifies the one new tracked artifact — the execution summary. Hygiene clean; result honest. Safe to commit.
+
+**Verified**:
+- No leak: grep for `"records"` / token / `http` / long-hex → 0 matches. Tracked summary holds only field names + counts + `request_shape_without_token` + raw_payload_refs. 29 raw payloads under gitignored `data/a_long/raw/` (absent from git status). `token_logged/request_url_logged=false`.
+- Gates honored: `independent_review_confirmed=true` + `post_review_execute_confirmed=true` — the double-gate fired.
+- Honest result: `materialization_status=passed_thin_slice_materialization_shape`; `data_can_be_used_for_alpha_now=false`; `audit_passed=false`; `signal_search_authorized=false`; `a_long_alpha_found=false`. 11/11 tables passed thin-slice field-shape, 0 missing minimum fields.
+
+**Next**: the reviewed data-integrity AUDIT on this materialized slice — and that audit's `evaluate_real_audit` must be REWRITTEN to run the per-row checks on the real materialized rows (it currently hardcodes `blocked`). That rewrite is the real PIT-integrity test; flagged at the audit-runner review, due now.
+
+Tests 17/17; 628/628 full per Codex.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long thin-slice materialization execution)
+
+**Plain result**:
+- 小切片数据已经成功落地。
+- 29/29 个 Tushare 调用成功，11 类表的薄切片字段形状都通过。
+- 这还不能用来找 alpha；它只证明数据落地机制可行。
+- 下一步必须先让 Claude 审查本 summary，然后另起 reviewed data-integrity audit；audit 通过后才可能做 signal-search preregistration。
+
+**Worked on**:
+- [tracked modified] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `docs/SESSION_LOG.md`.
+- [untracked new] `docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json`.
+- [gitignored raw] `data/a_long/raw/tushare/materialization_thin_slice_20260604/` contains 29 raw payload JSON files.
+
+**Execution**:
+- Command run with the reviewed double gate: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\a_long_tushare_incremental_materialization_packet.py --confirm-independent-review-pass --confirm-post-review-execute`.
+- Output summary: `materialization_status = passed_thin_slice_materialization_shape`, `new_network_call_count = 29`, `reused_raw_payload_count = 0`, summary path `docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json`.
+- Table rollup: trade calendar, stock_basic active, stock_basic delisted, income, balancesheet, cashflow, fina_indicator, industry_classification, industry_membership, daily/adj_factor/dividend, and benchmark_index_daily all passed thin-slice shape checks with no missing minimum fields.
+
+**Validation**:
+- Actual summary validated against `schemas/a_long_tushare_incremental_materialization_execution_summary.schema.json`: PASS.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_incremental_materialization_packet tests.schema.test_a_long_tushare_incremental_materialization_packet_schema -v` passed 17/17.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 628/628.
+- `git check-ignore -v data\a_long\raw\tushare\materialization_thin_slice_20260604\trade_calendar_2022_2023.json` confirms `.gitignore:53 data/a_long/raw/`.
+- Sensitive scan of the tracked summary found only no-secret field names (`tracked_summary_contains_secret`, `token_logged`, `request_shape_without_token`, `request_url_logged`) and no token value, request URL, or raw `records`.
+- `git diff --check` passed with normal Windows LF/CRLF warnings only.
+- `docs/CURRENT.md` line count is 149.
+
+**Non-authorization**:
+- No full 2018-2025 materialization, no full-market pull, no audit rerun, no signal search, no alpha backtest, no DataHub, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the tracked summary has no raw rows / request URL / secret and matches the schema.
+- Verify docs no longer say the thin slice is unexecuted, while still saying A-long cannot search for alpha.
+- Verify the next step is a separate reviewed data-integrity audit authorization, not direct audit rerun / signal search / full materialization.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long thin-slice materialization packet) — **PASS (可提交)**
 
 **Verdict**: Pass. Real, executable thin-slice packet (2022-2023, 3 symbols) that is NOT yet run — double-gated for review-before-run. Followed both prior recommendations (thin-slice-first + review-the-network-runner-before-it-calls). Hygiene safe-when-run; honest scope; no overclaim. Safe to commit.

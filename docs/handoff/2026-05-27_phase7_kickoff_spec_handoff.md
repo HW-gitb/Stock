@@ -1,5 +1,24 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long thin-slice materialization execution
+
+**Changed**:
+- Added tracked summary `docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json`.
+- Executed only the reviewed 2022-2023 three-symbol thin-slice packet through `runners/a_long_tushare_incremental_materialization_packet.py`: `000001.SZ`, `600519.SH`, `000666.SZ`, CSI300 / CSI1000, 29 planned calls / max 32, zero retry.
+- Raw rows are only under gitignored `data/a_long/raw/tushare/materialization_thin_slice_20260604/`; tracked summary contains no raw rows, request URL, or secret.
+
+**Plain result**:
+- 小切片数据已经成功落地。
+- 这还不能用来找 alpha。
+- 它只证明 materialization 机制、字段形状和 raw lineage 可以落地。
+
+**Next**:
+- Review this execution summary.
+- Then create a separate reviewed data-integrity audit authorization.
+- Do not full-materialize 2018-2025, rerun the spent audit, start signal search, DataHub, production, ship-gate, or full-size from this summary.
+
+---
+
 ## 2026-06-04 append: A-long thin-slice materialization packet
 
 **Changed**:
