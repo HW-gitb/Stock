@@ -151,11 +151,18 @@ class ALong000666SwMembershipSupplementPacketSchemaTest(unittest.TestCase):
         summary = json.loads(ACTUAL_SUMMARY_PATH.read_text(encoding="utf-8"))
 
         self.assertEqual(self._validate_summary(summary), [])
-        self.assertEqual(summary["decision"]["supplement_status"], "partial_or_failed_supplement_probe")
+        self.assertEqual(summary["decision"]["supplement_status"], "no_candidate_sw_membership_source_found")
         self.assertFalse(summary["decision"]["candidate_sw_membership_source_found"])
         self.assertFalse(summary["decision"]["data_can_be_used_for_alpha_now"])
         self.assertFalse(summary["decision"]["audit_rerun_authorized_by_this_summary"])
         self.assertFalse(summary["decision"]["signal_search_authorized_by_this_summary"])
+        self.assertEqual(summary["execution"]["actual_call_count"], 4)
+        stock_basic = [
+            item
+            for item in summary["endpoint_results"]
+            if item["call_id"] == "stock_basic_000666_delisted_context"
+        ][0]
+        self.assertEqual(stock_basic["target_value_flags"], {"industry": False, "area": False})
 
     def test_packet_scope_creep_is_rejected_when_jsonschema_available(self) -> None:
         invalid = copy.deepcopy(self._load_packet())

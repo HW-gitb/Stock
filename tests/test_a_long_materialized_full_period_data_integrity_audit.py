@@ -44,10 +44,12 @@ class ALongMaterializedFullPeriodDataIntegrityAuditTest(unittest.TestCase):
         drop_ann_date_column: bool = False,
         missing_benchmark_open: bool = False,
         missing_terminal_return: bool = False,
+        drop_industry_membership_symbols: list[str] | None = None,
         omit_raw: bool = False,
     ) -> tuple[Path, Path]:
         raw_root = tmp_path / "raw"
         endpoint_results: list[dict[str, object]] = []
+        drop_industry_membership_symbols = drop_industry_membership_symbols or []
 
         def add(call_id: str, table_id: str, api_family: str, columns: list[str], rows: list[dict[str, object]]) -> None:
             raw_ref = self.write_payload(
@@ -159,7 +161,11 @@ class ALongMaterializedFullPeriodDataIntegrityAuditTest(unittest.TestCase):
             "industry_membership",
             "index_member_all",
             ["ts_code", "l2_code", "l2_name", "in_date", "out_date"],
-            [{"ts_code": symbol, "l2_code": "L2", "l2_name": "Industry", "in_date": "20100101", "out_date": None} for symbol in runner.SYMBOLS],
+            [
+                {"ts_code": symbol, "l2_code": "L2", "l2_name": "Industry", "in_date": "20100101", "out_date": None}
+                for symbol in runner.SYMBOLS
+                if symbol not in drop_industry_membership_symbols
+            ],
         )
 
         price_rows = [{"trade_date": f"{year}1231", "open": 10.0, "close": 10.5} for year in range(2018, 2026)]
@@ -382,6 +388,68 @@ class ALongMaterializedFullPeriodDataIntegrityAuditTest(unittest.TestCase):
                         generated_at="2026-06-04T00:00:00Z",
                     )
                 )
+
+    def test_reviewed_delisted_missing_industry_exception_keeps_returns_and_excludes_only_industry_neutralization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            summary_path, raw_root = self.build_fixture(
+                tmp_path,
+                drop_industry_membership_symbols=["000666.SZ"],
+            )
+
+            report = runner.run(
+                argparse.Namespace(
+                    materialization_summary=summary_path,
+                    raw_root=raw_root,
+                    output_dir=tmp_path / "out",
+                    generated_at="2026-06-04T00:00:00Z",
+                )
+            )
+
+            checks = {item["check_id"]: item for item in report["check_results"]}
+            survivorship = checks["survivorship_pit_universe"]
+            metrics = survivorship["metrics"]
+            policy = metrics["industry_normalization_policy"]
+
+            self.assertEqual(survivorship["status"], "pass_fixed_panel")
+            self.assertEqual(metrics["sw_membership_missing_symbols"], ["000666.SZ"])
+            self.assertEqual(metrics["sw_membership_missing_non_exception_symbols"], [])
+            self.assertEqual(metrics["delisted_industry_missing_exception_symbols"], ["000666.SZ"])
+            self.assertTrue(metrics["delisted_industry_missing_exception_source_valid"])
+            self.assertTrue(metrics["delisted_industry_missing_exception_threshold_passed"])
+            self.assertEqual(metrics["industry_normalization_exclusion_symbols"], ["000666.SZ"])
+            self.assertIn("000666.SZ", metrics["delisted_symbols_kept_for_returns_and_risk"])
+            self.assertFalse(policy["silent_industry_fill_allowed"])
+            self.assertFalse(policy["drop_missing_industry_delisted_from_universe_allowed"])
+            self.assertTrue(policy["keep_delisted_symbol_in_returns_and_risk"])
+            self.assertTrue(policy["exclude_exception_symbols_from_industry_neutral_denominators"])
+            self.assertEqual(report["decision"]["audit_status"], "passed_fixed_panel_data_integrity_for_signal_preregistration")
+
+    def test_missing_industry_for_active_symbol_still_fails_survivorship(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            summary_path, raw_root = self.build_fixture(
+                tmp_path,
+                drop_industry_membership_symbols=["000001.SZ"],
+            )
+
+            report = runner.run(
+                argparse.Namespace(
+                    materialization_summary=summary_path,
+                    raw_root=raw_root,
+                    output_dir=tmp_path / "out",
+                    generated_at="2026-06-04T00:00:00Z",
+                )
+            )
+
+            checks = {item["check_id"]: item for item in report["check_results"]}
+            survivorship = checks["survivorship_pit_universe"]
+            metrics = survivorship["metrics"]
+
+            self.assertEqual(report["decision"]["audit_status"], "fail_data_not_ready")
+            self.assertEqual(survivorship["status"], "fail_data_not_ready")
+            self.assertEqual(metrics["sw_membership_missing_non_exception_symbols"], ["000001.SZ"])
+            self.assertEqual(metrics["delisted_industry_missing_exception_symbols"], [])
 
     def test_missing_terminal_delisting_return_fails_survivorship(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

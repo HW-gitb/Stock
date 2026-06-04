@@ -1,5 +1,52 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long delisted missing-industry boundary
+
+**Changed**:
+- Implemented the user-approved design boundary for reviewed already-delisted names with no recoverable SW membership / coarse industry in the current Tushare route.
+- `runners/a_long_materialized_full_period_data_integrity_audit.py` now validates `docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json` before allowing the `000666.SZ` exception.
+- The exception is bounded: max 1 symbol and max 12.5% of the fixed panel.
+- The symbol stays in PIT universe, terminal delisting return, returns, risk, drawdown, and coverage reporting.
+- The symbol is excluded only from industry-neutralization / industry-normalized scoring denominators.
+
+**Why**:
+- The corrected 4-call supplement proved the current Tushare route has no usable `000666.SZ` SW membership source.
+- Continuing to search the same source path would not fix the data route, and dropping the delisted stock would create survivorship bias.
+
+**Guardrails**:
+- Active-symbol missing industry still fails.
+- Silent industry fill, default industry, zero industry, or dropping a delisted symbol from returns/risk is forbidden.
+- This does not authorize signal search, alpha, production, ship-gate, full-size use, DataHub, or broker/order automation.
+
+**Next**:
+- After review, prepare a main-board-only A-long fixed-panel replacement (`300750.SZ` out, `600887.SH` in) and rerun the data-integrity path under review.
+
+## 2026-06-04 append: A-long corrected 000666 supplement execution
+
+**Changed**:
+- After commit `a248ec1`, ran `runners/a_long_000666_sw_membership_supplement_packet.py` with both confirmation flags.
+- Updated `docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json` to the corrected 4-call execution result.
+- Updated routing/status docs to record that the corrected Tushare route still did not find a usable `000666.SZ` SW membership source.
+
+**Plain result**:
+- The corrected probe ran.
+- It still did not find a usable SW membership source for `000666.SZ`.
+- `stock_basic` found the target row, but `industry` and `area` are both absent for that target.
+- `index_classify` L2 returned rows.
+- `index_member_all` found no `000666.SZ` row, both in targeted and unfiltered checks.
+- A-long still cannot search for alpha.
+
+**Boundaries**:
+- Raw rows are only under gitignored `data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/`.
+- The tracked summary contains no raw rows, request URL, or secret.
+- This execution authorizes no audit repair, audit rerun, signal search, alpha backtest, DataHub, production claim, ship-gate claim, full-size use, or broker/order automation.
+
+**Next**:
+- Reviewed decision on the `000666.SZ` delisted-name industry gap: explicit design boundary or another historical-industry source route.
+- Then rebuild the main-board-only A-long fixed panel and rerun data integrity under review.
+
+---
+
 ## 2026-06-04 append: A-long 000666 corrected supplement packet
 
 **Changed**:

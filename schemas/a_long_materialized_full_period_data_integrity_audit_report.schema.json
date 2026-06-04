@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://stock.local/schemas/a_long_materialized_full_period_data_integrity_audit_report/1.0.0/schema.json",
   "title": "A-long Materialized Full-period Data Integrity Audit Report",
-  "description": "Local-only audit report for the bounded A-long 2018-2025 fixed raw panel. It reads gitignored raw payloads and records PIT, survivorship, return-input, benchmark-input, and coverage checks without raw rows. A pass permits only the next reviewed signal-search preregistration step; it does not prove alpha or authorize signal execution.",
+  "description": "Local-only audit report for the bounded A-long 2018-2025 fixed raw panel. It reads gitignored raw payloads and records PIT, survivorship, return-input, benchmark-input, and coverage checks without raw rows. A reviewed no-source delisted-name industry exception may exclude only that symbol from industry-neutralization denominators; it must not drop the symbol from returns or risk. A pass permits only the next reviewed signal-search preregistration step; it does not prove alpha or authorize signal execution.",
   "type": "object",
   "additionalProperties": false,
   "required": [

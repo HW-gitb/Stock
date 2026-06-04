@@ -27,6 +27,9 @@ OUTPUT_DIR = ROOT / "research" / "results" / "a_long_materialized_full_period_da
 REPORT_PATH = OUTPUT_DIR / "audit_report.json"
 SCHEMA_PATH = ROOT / "schemas" / "a_long_materialized_full_period_data_integrity_audit_report.schema.json"
 PREREGISTRATION_PATH = ROOT / "research" / "preregistrations" / "a_long_data_integrity_audit_20260603.json"
+DELISTED_INDUSTRY_EXCEPTION_SOURCE_PATH = (
+    ROOT / "docs" / "a_long_000666_sw_membership_supplement_execution_summary_20260604.json"
+)
 
 START_DATE = "20180101"
 END_DATE = "20251231"
@@ -55,6 +58,9 @@ CHECK_IDS = [
 HARD_CHECK_IDS = set(CHECK_IDS) - {"temporal_coverage_bias"}
 FULL_PERIOD_SUFFIX = "2018_2025"
 TEMPORAL_COVERAGE_THRESHOLD_PCT = 80.0
+DELISTED_INDUSTRY_MISSING_EXCEPTION_SYMBOLS = {"000666.SZ"}
+MAX_DELISTED_INDUSTRY_MISSING_EXCEPTION_COUNT = 1
+MAX_DELISTED_INDUSTRY_MISSING_EXCEPTION_RATE_PCT = 12.5
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -472,6 +478,56 @@ def membership_rows(payloads: dict[str, dict[str, Any]]) -> dict[str, list[dict[
     return out
 
 
+def validate_000666_no_industry_source_summary(path: Path = DELISTED_INDUSTRY_EXCEPTION_SOURCE_PATH) -> tuple[bool, str | None]:
+    try:
+        summary = read_json(path)
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        return False, f"exception source unreadable: {exc.__class__.__name__}"
+
+    if summary.get("schema_name") != "a_long_000666_sw_membership_supplement_execution_summary":
+        return False, "exception source schema_name mismatch"
+    if ((summary.get("scope") or {}).get("target_symbol")) != "000666.SZ":
+        return False, "exception source target mismatch"
+
+    execution = summary.get("execution") or {}
+    if execution.get("actual_call_count") != 4 or execution.get("budget_exceeded") is not False:
+        return False, "exception source did not complete the fixed 4-call no-budget-overrun probe"
+    if execution.get("token_logged") is not False or execution.get("request_url_logged") is not False:
+        return False, "exception source logged a token or request URL"
+
+    decision = summary.get("decision") or {}
+    if decision.get("supplement_status") != "no_candidate_sw_membership_source_found":
+        return False, "exception source did not record no-candidate status"
+    if decision.get("candidate_sw_membership_source_found") is not False:
+        return False, "exception source did not reject candidate membership source"
+    if decision.get("audit_rerun_authorized_by_this_summary") is not False:
+        return False, "exception source must not authorize audit rerun"
+    if decision.get("signal_search_authorized_by_this_summary") is not False:
+        return False, "exception source must not authorize signal search"
+
+    endpoint_results = {
+        str(item.get("call_id")): item
+        for item in summary.get("endpoint_results", [])
+        if isinstance(item, dict)
+    }
+    stock_basic = endpoint_results.get("stock_basic_000666_delisted_context") or {}
+    if stock_basic.get("call_status") != "success" or stock_basic.get("target_match_count") != 1:
+        return False, "stock_basic did not confirm the delisted target row"
+    value_flags = stock_basic.get("target_value_flags") or {}
+    if value_flags.get("industry") is not False or value_flags.get("area") is not False:
+        return False, "stock_basic still has a usable industry or area value"
+
+    targeted = endpoint_results.get("index_member_all_000666_ts_code_filter") or {}
+    if targeted.get("target_match_count") != 0 or targeted.get("row_count") != 0:
+        return False, "targeted index_member_all probe found rows"
+
+    crosscheck = endpoint_results.get("index_member_all_current_universe_crosscheck") or {}
+    if crosscheck.get("call_status") != "success" or crosscheck.get("target_match_count") != 0:
+        return False, "unfiltered index_member_all crosscheck found the target"
+
+    return True, None
+
+
 def check_survivorship(payloads: dict[str, dict[str, Any]], as_ofs: list[str]) -> dict[str, Any]:
     listings = listing_rows(payloads)
     missing_symbols = [symbol for symbol in SYMBOLS if symbol not in listings]
@@ -530,6 +586,24 @@ def check_survivorship(payloads: dict[str, dict[str, Any]], as_ofs: list[str]) -
 
     memberships = membership_rows(payloads)
     membership_missing = [symbol for symbol, rows in memberships.items() if not rows]
+    exception_source_valid, exception_source_error = validate_000666_no_industry_source_summary()
+    delisted_industry_missing_exceptions = [
+        symbol
+        for symbol in membership_missing
+        if symbol in DELISTED_SYMBOLS
+        and symbol in DELISTED_INDUSTRY_MISSING_EXCEPTION_SYMBOLS
+        and exception_source_valid
+    ]
+    membership_missing_non_exception = [
+        symbol for symbol in membership_missing if symbol not in delisted_industry_missing_exceptions
+    ]
+    exception_rate_pct = (
+        len(delisted_industry_missing_exceptions) / len(SYMBOLS) * 100.0 if SYMBOLS else 0.0
+    )
+    exception_threshold_passed = (
+        len(delisted_industry_missing_exceptions) <= MAX_DELISTED_INDUSTRY_MISSING_EXCEPTION_COUNT
+        and exception_rate_pct <= MAX_DELISTED_INDUSTRY_MISSING_EXCEPTION_RATE_PCT
+    )
     membership_has_dates = []
     for symbol, rows in memberships.items():
         ok = any(normalize_yyyymmdd(row.get("in_date")) and "l2_code" in row for row in rows)
@@ -543,9 +617,19 @@ def check_survivorship(payloads: dict[str, dict[str, Any]], as_ofs: list[str]) -
         and not delisted_status_failures
         and invalid_listing_date_rows == 0
         and not terminal_failures
-        and not membership_missing
+        and not membership_missing_non_exception
+        and exception_threshold_passed
         else "fail_data_not_ready"
     )
+    findings = [
+        "The fixed active and delisted sample symbols are visible in stock_basic with list/delist dates.",
+        "The delisted sample keeps terminal daily/adj_factor inputs near delisting instead of back-deleting the loss window.",
+        "This is a bounded fixed-panel universe audit, not a full-market historical universe proof.",
+    ]
+    if delisted_industry_missing_exceptions:
+        findings.append(
+            "Reviewed no-source evidence allows the delisted missing-industry exception only for industry-neutralization denominators; returns and risk still keep the delisted symbol."
+        )
     return make_check(
         "survivorship_pit_universe",
         status,
@@ -560,14 +644,30 @@ def check_survivorship(payloads: dict[str, dict[str, Any]], as_ofs: list[str]) -
             "post_delist_exclusion_count": post_delist_exclusion_count,
             "sw_membership_symbols_with_rows": sorted(membership_has_dates),
             "sw_membership_missing_symbols": membership_missing,
+            "sw_membership_missing_non_exception_symbols": membership_missing_non_exception,
+            "delisted_industry_missing_exception_symbols": delisted_industry_missing_exceptions,
+            "delisted_industry_missing_exception_source_ref": display_path(DELISTED_INDUSTRY_EXCEPTION_SOURCE_PATH),
+            "delisted_industry_missing_exception_source_valid": exception_source_valid,
+            "delisted_industry_missing_exception_source_error": exception_source_error,
+            "delisted_industry_missing_exception_count": len(delisted_industry_missing_exceptions),
+            "delisted_industry_missing_exception_rate_pct": round(exception_rate_pct, 6),
+            "delisted_industry_missing_exception_max_count": MAX_DELISTED_INDUSTRY_MISSING_EXCEPTION_COUNT,
+            "delisted_industry_missing_exception_max_rate_pct": MAX_DELISTED_INDUSTRY_MISSING_EXCEPTION_RATE_PCT,
+            "delisted_industry_missing_exception_threshold_passed": exception_threshold_passed,
+            "industry_normalization_policy": {
+                "silent_industry_fill_allowed": False,
+                "drop_missing_industry_delisted_from_universe_allowed": False,
+                "keep_delisted_symbol_in_returns_and_risk": True,
+                "exclude_exception_symbols_from_industry_neutral_denominators": True,
+                "exception_requires_reviewed_no_source_summary": True,
+                "exception_applies_to_signal_score_only": True,
+            },
+            "industry_normalization_exclusion_symbols": delisted_industry_missing_exceptions,
+            "delisted_symbols_kept_for_returns_and_risk": list(DELISTED_SYMBOLS),
             "delisted_terminal_return_inputs": terminal_metrics,
             "terminal_return_input_failed_symbols": terminal_failures,
         },
-        [
-            "The fixed active and delisted sample symbols are visible in stock_basic with list/delist dates.",
-            "The delisted sample keeps terminal daily/adj_factor inputs near delisting instead of back-deleting the loss window.",
-            "This is a bounded fixed-panel universe audit, not a full-market historical universe proof.",
-        ],
+        findings,
     )
 
 

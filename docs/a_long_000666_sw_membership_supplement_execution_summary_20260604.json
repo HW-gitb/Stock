@@ -1,7 +1,7 @@
 {
   "schema_name": "a_long_000666_sw_membership_supplement_execution_summary",
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-04T13:17:16+00:00",
+  "generated_at": "2026-06-04T14:01:46+00:00",
   "artifact_id": "a_long_000666_sw_membership_supplement_execution_summary_20260604",
   "packet_ref": "docs/a_long_000666_sw_membership_supplement_packet_20260604.json",
   "scope": {
@@ -34,8 +34,8 @@
     "raw_output_root": "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/",
     "raw_output_root_is_gitignored": true,
     "max_total_calls": 4,
-    "planned_call_count": 3,
-    "actual_call_count": 3,
+    "planned_call_count": 4,
+    "actual_call_count": 4,
     "budget_exceeded": false,
     "network_call_attempted": true,
     "environment_precheck_passed": true,
@@ -55,7 +55,7 @@
       "request_shape_without_token": {
         "exchange": "",
         "list_status": "D",
-        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date"
+        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date,industry,area"
       },
       "call_status": "success",
       "row_count": 326,
@@ -67,49 +67,63 @@
         "market",
         "list_status",
         "list_date",
-        "delist_date"
+        "delist_date",
+        "industry",
+        "area"
       ],
       "required_fields_present": [
         "ts_code",
         "name",
         "list_status",
         "list_date",
-        "delist_date"
+        "delist_date",
+        "industry",
+        "area"
       ],
       "required_fields_missing": [],
       "target_symbol": "000666.SZ",
       "target_match_field": "ts_code",
       "target_match_count": 1,
+      "target_value_flags": {
+        "industry": false,
+        "area": false
+      },
       "raw_payload_ref": "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/stock_basic_000666_delisted_context.json",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
     },
     {
-      "call_id": "index_member_000666_ts_code_filter",
-      "component_id": "sw_membership_candidate",
-      "api_family": "index_member",
+      "call_id": "index_classify_sw_l2_context",
+      "component_id": "sw_classification_context",
+      "api_family": "index_classify",
       "request_shape_without_token": {
-        "ts_code": "000666.SZ",
-        "fields": "index_code,con_code,in_date,out_date,is_new"
+        "level": "L2",
+        "fields": "index_code,industry_name,level,parent_code"
       },
-      "call_status": "error",
-      "row_count": null,
-      "columns": [],
-      "required_fields_present": [],
-      "required_fields_missing": [
+      "call_status": "success",
+      "row_count": 104,
+      "columns": [
         "index_code",
-        "con_code",
-        "in_date",
-        "out_date"
+        "industry_name",
+        "level",
+        "parent_code"
       ],
+      "required_fields_present": [
+        "index_code",
+        "industry_name",
+        "level",
+        "parent_code"
+      ],
+      "required_fields_missing": [],
       "target_symbol": "000666.SZ",
-      "target_match_field": "con_code",
+      "target_match_field": "none",
       "target_match_count": 0,
-      "raw_payload_ref": "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/index_member_000666_ts_code_filter.json",
+      "target_value_flags": {},
+      "raw_payload_ref": "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/index_classify_sw_l2_context.json",
       "tracked_summary_excludes_raw_rows": true,
-      "error_class": "Exception",
-      "error_message_redacted": "请指定正确的接口名"
+      "error_class": null,
+      "error_message_redacted": null
     },
     {
       "call_id": "index_member_all_000666_ts_code_filter",
@@ -143,20 +157,58 @@
       "target_symbol": "000666.SZ",
       "target_match_field": "ts_code",
       "target_match_count": 0,
+      "target_value_flags": {},
       "raw_payload_ref": "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/index_member_all_000666_ts_code_filter.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_member_all_current_universe_crosscheck",
+      "component_id": "sw_membership_candidate",
+      "api_family": "index_member_all",
+      "request_shape_without_token": {
+        "fields": "ts_code,name,l1_code,l1_name,l2_code,l2_name,in_date,out_date,is_new"
+      },
+      "call_status": "success",
+      "row_count": 3000,
+      "columns": [
+        "ts_code",
+        "name",
+        "l1_code",
+        "l1_name",
+        "l2_code",
+        "l2_name",
+        "in_date",
+        "out_date",
+        "is_new"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "l2_code",
+        "l2_name",
+        "in_date",
+        "out_date"
+      ],
+      "required_fields_missing": [],
+      "target_symbol": "000666.SZ",
+      "target_match_field": "ts_code",
+      "target_match_count": 0,
+      "target_value_flags": {},
+      "raw_payload_ref": "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/index_member_all_current_universe_crosscheck.json",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
     }
   ],
   "decision": {
-    "supplement_status": "partial_or_failed_supplement_probe",
+    "supplement_status": "no_candidate_sw_membership_source_found",
     "candidate_sw_membership_source_found": false,
     "data_can_be_used_for_alpha_now": false,
     "audit_rerun_authorized_by_this_summary": false,
     "signal_search_authorized_by_this_summary": false,
-    "plain_result": "The first 000666.SZ SW membership supplement probe was inconclusive; A-long still cannot search for alpha.",
-    "next_action": "Run the corrected reviewed 4-call supplement only after independent review and a separate user execute command."
+    "plain_result": "No SW membership source for 000666.SZ was found; A-long still cannot search for alpha.",
+    "next_action": "Use another reviewed data source or explicitly keep delisted-name industry normalization blocked."
   },
   "prohibited_claims": {
     "a_long_data_ready": false,
@@ -173,7 +225,6 @@
   },
   "limitations": [
     "This is a single-symbol supplement probe for 000666.SZ only.",
-    "Later review found this first probe inconclusive because stock_basic omitted industry/area and index_member errored on interface name.",
     "Tracked summary stores shape and counts only; raw rows stay under gitignored data/a_long/raw/.",
     "A found candidate source still requires a separate reviewed audit repair and full-period audit rerun.",
     "No signal search, alpha backtest, production use, ship-gate claim, full-size use, or broker/order automation is authorized."
