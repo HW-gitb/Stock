@@ -1,0 +1,286 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_tushare_route_gap_repair_execution_summary/1.0.0/schema.json",
+  "title": "A-Long Tushare Route Gap Repair Execution Summary",
+  "description": "Tracked no-secret summary for the narrow A-long Tushare route-gap repair execution. It checks only SW industry membership field mapping and older delisted terminal price coverage; it does not authorize full materialization, audit rerun, signal search, alpha backtest, DataHub use, production readiness, ship-gate claims, full-size use, or broker/order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "execution",
+    "repair_targets",
+    "endpoint_results",
+    "component_rollup",
+    "decision",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_tushare_route_gap_repair_execution_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_tushare_route_gap_repair_execution_summary_20260604"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "repair_targets": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/componentId"},
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "contains": {"const": "industry_taxonomy_history"}
+    },
+    "endpoint_results": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/endpointResult"}
+    },
+    "component_rollup": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/componentRollup"},
+      "minItems": 2,
+      "maxItems": 2,
+      "allOf": [
+        {"contains": {"type": "object", "properties": {"component_id": {"const": "industry_taxonomy_history"}}, "required": ["component_id"]}},
+        {"contains": {"type": "object", "properties": {"component_id": {"const": "terminal_delisting_return"}}, "required": ["component_id"]}}
+      ]
+    },
+    "decision": {"$ref": "#/$defs/decision"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "componentId": {
+      "enum": ["industry_taxonomy_history", "terminal_delisting_return"]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "route_gap_repair_only",
+        "field_presence_only",
+        "provider_family",
+        "provider_call_executed",
+        "tushare_call_executed",
+        "data_fetch_executed",
+        "raw_payload_written_to_gitignored_path",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_secret",
+        "full_materialization_executed",
+        "audit_rerun_executed",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_tushare_route_gap_repair_execution"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "route_gap_repair_only": {"const": true},
+        "field_presence_only": {"const": true},
+        "provider_family": {"const": "tushare_existing_account"},
+        "provider_call_executed": {"type": "boolean"},
+        "tushare_call_executed": {"type": "boolean"},
+        "data_fetch_executed": {"type": "boolean"},
+        "raw_payload_written_to_gitignored_path": {"type": "boolean"},
+        "tracked_summary_contains_raw_rows": {"const": false},
+        "tracked_summary_contains_secret": {"const": false},
+        "full_materialization_executed": {"const": false},
+        "audit_rerun_executed": {"const": false},
+        "signal_search_executed": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prior_summary_ref",
+        "summary_path",
+        "raw_output_root",
+        "raw_output_root_is_gitignored",
+        "max_total_calls",
+        "planned_call_count",
+        "actual_call_count",
+        "budget_exceeded",
+        "network_call_attempted",
+        "environment_precheck_passed",
+        "token_logged",
+        "request_url_logged"
+      ],
+      "properties": {
+        "prior_summary_ref": {"const": "docs/a_long_tushare_route_validation_execution_summary_20260604.json"},
+        "summary_path": {"const": "docs/a_long_tushare_route_gap_repair_execution_summary_20260604.json"},
+        "raw_output_root": {"const": "data/a_long/raw/tushare/route_gap_repair_20260604/"},
+        "raw_output_root_is_gitignored": {"const": true},
+        "max_total_calls": {"type": "integer", "minimum": 1, "maximum": 8},
+        "planned_call_count": {"type": "integer", "minimum": 0, "maximum": 8},
+        "actual_call_count": {"type": "integer", "minimum": 0, "maximum": 8},
+        "budget_exceeded": {"const": false},
+        "network_call_attempted": {"type": "boolean"},
+        "environment_precheck_passed": {"type": "boolean"},
+        "token_logged": {"const": false},
+        "request_url_logged": {"const": false}
+      }
+    },
+    "endpointResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "component_id",
+        "api_family",
+        "request_shape_without_token",
+        "call_status",
+        "row_count",
+        "columns",
+        "required_fields_present",
+        "required_fields_missing",
+        "mapped_field_roles",
+        "raw_payload_ref",
+        "tracked_summary_excludes_raw_rows",
+        "error_class",
+        "error_message_redacted"
+      ],
+      "properties": {
+        "call_id": {"$ref": "#/$defs/nonEmptyString"},
+        "component_id": {"$ref": "#/$defs/componentId"},
+        "api_family": {"$ref": "#/$defs/nonEmptyString"},
+        "request_shape_without_token": {
+          "type": "object",
+          "additionalProperties": {"type": ["string", "number", "boolean", "null"]}
+        },
+        "call_status": {"enum": ["success", "empty", "error", "skipped"]},
+        "row_count": {"type": ["integer", "null"], "minimum": 0},
+        "columns": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonEmptyString"}
+        },
+        "required_fields_present": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonEmptyString"}
+        },
+        "required_fields_missing": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonEmptyString"}
+        },
+        "mapped_field_roles": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        },
+        "raw_payload_ref": {"$ref": "#/$defs/nonEmptyString"},
+        "tracked_summary_excludes_raw_rows": {"const": true},
+        "error_class": {"type": ["string", "null"]},
+        "error_message_redacted": {"type": ["string", "null"]}
+      }
+    },
+    "componentRollup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component_id",
+        "status",
+        "calls_total",
+        "calls_success",
+        "missing_required_fields",
+        "plain_result"
+      ],
+      "properties": {
+        "component_id": {"$ref": "#/$defs/componentId"},
+        "status": {"enum": ["passed_field_presence", "partial_or_failed_field_presence", "not_tested"]},
+        "calls_total": {"type": "integer", "minimum": 0},
+        "calls_success": {"type": "integer", "minimum": 0},
+        "missing_required_fields": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonEmptyString"}
+        },
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gap_repair_status",
+        "data_can_be_used_now",
+        "materialization_allowed_by_this_summary",
+        "signal_search_allowed_by_this_summary",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "gap_repair_status": {
+          "enum": [
+            "passed_route_gap_field_presence_only",
+            "partial_or_failed_route_gap_repair",
+            "not_executed_environment_missing"
+          ]
+        },
+        "data_can_be_used_now": {"const": false},
+        "materialization_allowed_by_this_summary": {"const": false},
+        "signal_search_allowed_by_this_summary": {"const": false},
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"},
+        "next_action": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_data_ready",
+        "a_long_alpha_found",
+        "route_fully_validated_for_materialization",
+        "signal_search_authorized",
+        "full_materialization_authorized",
+        "audit_rerun_authorized",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "provider_selected",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_data_ready": {"const": false},
+        "a_long_alpha_found": {"const": false},
+        "route_fully_validated_for_materialization": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "full_materialization_authorized": {"const": false},
+        "audit_rerun_authorized": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "provider_selected": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

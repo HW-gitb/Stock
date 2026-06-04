@@ -1,0 +1,257 @@
+{
+  "schema_name": "a_long_tushare_route_gap_repair_execution_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-04T00:00:00+08:00",
+  "artifact_id": "a_long_tushare_route_gap_repair_execution_summary_20260604",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_tushare_route_gap_repair_execution",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "route_gap_repair_only": true,
+    "field_presence_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_call_executed": true,
+    "tushare_call_executed": true,
+    "data_fetch_executed": true,
+    "raw_payload_written_to_gitignored_path": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_secret": false,
+    "full_materialization_executed": false,
+    "audit_rerun_executed": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "execution": {
+    "prior_summary_ref": "docs/a_long_tushare_route_validation_execution_summary_20260604.json",
+    "summary_path": "docs/a_long_tushare_route_gap_repair_execution_summary_20260604.json",
+    "raw_output_root": "data/a_long/raw/tushare/route_gap_repair_20260604/",
+    "raw_output_root_is_gitignored": true,
+    "max_total_calls": 8,
+    "planned_call_count": 5,
+    "actual_call_count": 5,
+    "budget_exceeded": false,
+    "network_call_attempted": true,
+    "environment_precheck_passed": true,
+    "token_logged": false,
+    "request_url_logged": false
+  },
+  "repair_targets": [
+    "industry_taxonomy_history",
+    "terminal_delisting_return"
+  ],
+  "endpoint_results": [
+    {
+      "call_id": "index_classify_sw_L2_repair_context",
+      "component_id": "industry_taxonomy_history",
+      "api_family": "index_classify",
+      "request_shape_without_token": {
+        "level": "L2",
+        "fields": "index_code,industry_name,level,parent_code"
+      },
+      "call_status": "success",
+      "row_count": 104,
+      "columns": [
+        "index_code",
+        "industry_name",
+        "level",
+        "parent_code"
+      ],
+      "required_fields_present": [
+        "index_code",
+        "level"
+      ],
+      "required_fields_missing": [],
+      "mapped_field_roles": {},
+      "raw_payload_ref": "data/a_long/raw/tushare/route_gap_repair_20260604/index_classify_sw_L2_repair_context.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_member_all_current_field_mapping",
+      "component_id": "industry_taxonomy_history",
+      "api_family": "index_member_all",
+      "request_shape_without_token": {
+        "fields": "ts_code,name,l1_code,l1_name,l2_code,l2_name,in_date,out_date,is_new"
+      },
+      "call_status": "success",
+      "row_count": 3000,
+      "columns": [
+        "ts_code",
+        "name",
+        "l1_code",
+        "l1_name",
+        "l2_code",
+        "l2_name",
+        "in_date",
+        "out_date",
+        "is_new"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "l2_code",
+        "in_date",
+        "out_date"
+      ],
+      "required_fields_missing": [],
+      "mapped_field_roles": {
+        "member_symbol": "ts_code",
+        "industry_code": "l2_code",
+        "industry_name": "l2_name",
+        "effective_start": "in_date",
+        "effective_end": "out_date"
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/route_gap_repair_20260604/index_member_all_current_field_mapping.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "stock_basic_delisted_D_older_sample_selector",
+      "component_id": "terminal_delisting_return",
+      "api_family": "stock_basic",
+      "request_shape_without_token": {
+        "exchange": "",
+        "list_status": "D",
+        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date"
+      },
+      "call_status": "success",
+      "row_count": 326,
+      "columns": [
+        "ts_code",
+        "symbol",
+        "name",
+        "exchange",
+        "market",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "list_status",
+        "delist_date"
+      ],
+      "required_fields_missing": [],
+      "mapped_field_roles": {},
+      "raw_payload_ref": "data/a_long/raw/tushare/route_gap_repair_20260604/stock_basic_delisted_D_older_sample_selector.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_older_delisted_terminal_window",
+      "component_id": "terminal_delisting_return",
+      "api_family": "daily",
+      "request_shape_without_token": {
+        "ts_code": "000666.SZ",
+        "start_date": "20230728",
+        "end_date": "20231026",
+        "fields": "ts_code,trade_date,open,close"
+      },
+      "call_status": "success",
+      "row_count": 23,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_missing": [],
+      "mapped_field_roles": {},
+      "raw_payload_ref": "data/a_long/raw/tushare/route_gap_repair_20260604/daily_older_delisted_terminal_window.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "adj_factor_older_delisted_terminal_window",
+      "component_id": "terminal_delisting_return",
+      "api_family": "adj_factor",
+      "request_shape_without_token": {
+        "ts_code": "000666.SZ",
+        "start_date": "20230728",
+        "end_date": "20231026",
+        "fields": "ts_code,trade_date,adj_factor"
+      },
+      "call_status": "success",
+      "row_count": 58,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "required_fields_missing": [],
+      "mapped_field_roles": {},
+      "raw_payload_ref": "data/a_long/raw/tushare/route_gap_repair_20260604/adj_factor_older_delisted_terminal_window.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    }
+  ],
+  "component_rollup": [
+    {
+      "component_id": "industry_taxonomy_history",
+      "status": "passed_field_presence",
+      "calls_total": 2,
+      "calls_success": 2,
+      "missing_required_fields": [],
+      "plain_result": "Small repair sample fields are present."
+    },
+    {
+      "component_id": "terminal_delisting_return",
+      "status": "passed_field_presence",
+      "calls_total": 3,
+      "calls_success": 3,
+      "missing_required_fields": [],
+      "plain_result": "Small repair sample fields are present."
+    }
+  ],
+  "decision": {
+    "gap_repair_status": "passed_route_gap_field_presence_only",
+    "data_can_be_used_now": false,
+    "materialization_allowed_by_this_summary": false,
+    "signal_search_allowed_by_this_summary": false,
+    "plain_result": "两个路线缺口的小样本修复验证通过，但 A 股长线数据仍不能直接用来找 alpha。",
+    "next_action": "下一步才是 reviewed incremental materialization packet；之后还要重新跑数据完整性 audit。"
+  },
+  "prohibited_claims": {
+    "a_long_data_ready": false,
+    "a_long_alpha_found": false,
+    "route_fully_validated_for_materialization": false,
+    "signal_search_authorized": false,
+    "full_materialization_authorized": false,
+    "audit_rerun_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "provider_selected": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This repairs only two route-validation gaps with tiny samples.",
+    "Tracked summary records endpoint shape and field presence only; raw rows stay under gitignored data/a_long/raw/.",
+    "A pass only allows the next reviewed materialization packet to be designed; it does not make A-long data ready.",
+    "No signal search, alpha backtest, audit rerun, production use, ship-gate claim, full-size use, or broker/order automation is authorized."
+  ]
+}

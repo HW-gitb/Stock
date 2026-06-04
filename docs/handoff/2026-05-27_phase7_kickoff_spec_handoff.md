@@ -1,5 +1,23 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long Tushare route-gap repair execution
+
+**Changed**:
+- Added `runners/a_long_tushare_route_gap_repair_packet.py`, `schemas/a_long_tushare_route_gap_repair_execution_summary.schema.json`, and `docs/a_long_tushare_route_gap_repair_execution_summary_20260604.json`.
+- Executed a fixed 5-call existing-account Tushare route-gap repair packet. Raw rows are only under gitignored `data/a_long/raw/tushare/route_gap_repair_20260604/`; the tracked summary contains no raw rows, request URL, or secret.
+
+**Plain result**:
+- The two prior route gaps passed tiny-sample field checks.
+- SW membership mapping now uses current `index_member_all` fields: `ts_code` / `l2_code` / `l2_name` / `in_date` / `out_date`.
+- Older delisted sample `000666.SZ` returned terminal-window daily open/close rows and adj_factor rows.
+- This still does not make A-long data usable for alpha.
+
+**Next**:
+- Next step is a reviewed incremental materialization packet, then a new data-integrity audit.
+- Do not full-materialize, rerun the spent audit, start signal search, DataHub, production, ship-gate, or full-size from this route-gap repair result.
+
+---
+
 ## 2026-06-04 append: A-long Tushare route validation execution
 
 **Changed**:

@@ -8,6 +8,59 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long Tushare route-gap repair packet) — **PASS (可提交)**
+
+**Verdict**: Pass. Both route gaps from the prior validation are resolved, confirming the diagnosis (SW = field-naming; delisted-daily = symbol-choice artifact). Same airtight hygiene; honest; no overclaim. Safe to commit.
+
+**Hygiene (real-network slice — re-verified)**: runner reuses the reviewed base packet's primitives (`base.get_tushare_client` token-env-only, `base.normalize_records`, `base.redact_error`) + same hard raw-root guard (refuses non-gitignored) + tracked summary excludes `records`. Raw under gitignored route_gap_repair dir; token/URL not logged; budget 8 / 5 calls; no-token→no-call; `validate_prior_summary` gates the run to the exact 2 failed targets.
+
+**Both gaps resolved honestly**:
+- SW industry: `index_member_all` real fields are `ts_code,l1_code,l1_name,l2_code,l2_name,in_date,out_date,is_new`. Summary records explicit `mapped_field_roles` (member_symbol=ts_code, industry_code=l2_code, industry_name=l2_name) — does NOT pretend old `index_code/con_code` exist. Prior gap was a field-naming mismatch.
+- Terminal delisting: older delisted `000666.SZ` (delist 2023-10), window 20230728..20231026, returned daily 23 rows + adj_factor 58 rows. Prior empty was the just-delisted-symbol artifact; selector now constrains delist_date to 2020-2023.
+
+Tests 8/8 (16/16 A-long network modules per Codex). Decision honest: `passed_route_gap_field_presence_only`, `data_can_be_used_now=false`, `route_fully_validated_for_materialization=false`.
+
+**Net (strategic)**: A-long's data route is now field-validated end-to-end on the EXISTING Tushare account — all 7 components confirmed available, no data purchase needed. The lane moved from "blocked, feasibility unknown" to "feasible, needs materialization." Next: reviewed incremental materialization (2018-2025) → re-run the data-integrity audit → only if it passes, a signal-search preregistration.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long Tushare route-gap repair packet)
+
+**Plain result**:
+- A 股长线现在还是不能找 alpha。
+- 但刚才两个数据路线缺口的小样本修复验证通过了。
+- SW 行业成员：`index_member_all` 当前字段可用，映射为 `ts_code` = 股票、`l2_code` / `l2_name` = SW L2、`in_date` / `out_date` = 生效区间。
+- 退市终态收益：较早退市样本 `000666.SZ` 在 `20230728..20231026` 终态窗口拿到了 daily open/close 和 adj_factor。
+- 下一步不是信号搜索；是 reviewed incremental materialization packet，然后重新跑数据完整性 audit。
+
+**Worked on**:
+- [tracked docs] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`.
+- [new tracked artifacts] `schemas/a_long_tushare_route_gap_repair_execution_summary.schema.json`, `runners/a_long_tushare_route_gap_repair_packet.py`, `docs/a_long_tushare_route_gap_repair_execution_summary_20260604.json`, `tests/schema/test_a_long_tushare_route_gap_repair_execution_summary_schema.py`, `tests/test_a_long_tushare_route_gap_repair_packet.py`.
+- [ignored raw] `data/a_long/raw/tushare/route_gap_repair_20260604/`.
+
+**Execution**:
+- Ran `runners/a_long_tushare_route_gap_repair_packet.py --generated-at 2026-06-04T00:00:00+08:00`.
+- The runner used the existing Tushare environment only; max calls was 8, planned / actual calls were 5.
+- Raw payloads were written only under gitignored `data/a_long/raw/tushare/route_gap_repair_20260604/`; tracked summary contains no raw rows, request URL, or secret.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_route_gap_repair_packet tests.schema.test_a_long_tushare_route_gap_repair_execution_summary_schema tests.test_a_long_tushare_route_validation_packet tests.schema.test_a_long_tushare_route_validation_execution_summary_schema -v` passed 16/16.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 611/611.
+- `git diff --check` passed with expected Windows LF-to-CRLF warnings only.
+- `docs/CURRENT.md` line count is 113.
+- `git check-ignore -v data\a_long\raw\tushare\route_gap_repair_20260604\index_member_all_current_field_mapping.json` confirms `.gitignore:53 data/a_long/raw/`.
+- Sensitive scan on the tracked summary/schema/runner/tests found only field names and runner raw-write code; tracked summary has no raw `records`, request URL, or token value.
+
+**Non-authorization**:
+- No full materialization, no audit rerun, no signal search, no alpha backtest, no DataHub table, no production runner consumption, no production-ready claim, no ship-gate evidence, no full-size manual use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify this is only tiny route-shape evidence and does not silently authorize materialization or signal search.
+- Verify the SW field mapping is explicit (`ts_code` / `l2_code`) rather than pretending old `index_code` / `con_code` existed.
+- Verify the next step is reviewed incremental materialization, followed by a new data-integrity audit.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long Tushare route-validation packet) — **PASS (可提交)**
 
 **Verdict**: Pass. First REAL A-long data touch (23 Tushare calls, capped 24) with airtight secret/raw containment and an honest partial result. Correctly moves the lane from planning to data. Safe to commit.
