@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -19,6 +20,7 @@ from runners import a_long_tushare_route_validation_packet as route_base
 
 PACKET_PATH = ROOT / "docs" / "a_long_tushare_broader_materialization_packet_20260604.json"
 THIN_AUDIT_REPORT_PATH = ROOT / "research" / "results" / "a_long_materialized_thin_slice_data_integrity_audit_20260604" / "audit_report.json"
+DAILY_ROUTE_DIAGNOSTIC_SUMMARY_PATH = ROOT / "docs" / "a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json"
 SUMMARY_PATH = ROOT / "docs" / "a_long_tushare_broader_materialization_execution_summary_20260604.json"
 RAW_ROOT_REL = Path("data/a_long/raw/tushare/materialization_full_period_panel_20260604")
 RAW_ROOT = ROOT / RAW_ROOT_REL
@@ -40,6 +42,8 @@ SYMBOLS = ACTIVE_SYMBOLS + DELISTED_SYMBOLS
 BENCHMARK_INDICES = ["000300.SH", "000852.SH"]
 MAX_TOTAL_ENDPOINT_CALLS = 80
 PLANNED_TOTAL_ENDPOINT_CALLS = 71
+DEFAULT_MIN_SECONDS_BETWEEN_NETWORK_CALLS = 1.25
+PACED_REFETCH_SUFFIX = "paced_refetch"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -69,6 +73,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Validate packet, gitignore, and environment boundary without Tushare calls.",
     )
+    parser.add_argument(
+        "--min-seconds-between-network-calls",
+        type=float,
+        default=DEFAULT_MIN_SECONDS_BETWEEN_NETWORK_CALLS,
+        help="Minimum start-to-start delay for live Tushare calls. Unit tests may pass 0.",
+    )
     return parser.parse_args(argv)
 
 
@@ -88,6 +98,13 @@ def load_and_validate_packet(path: Path = PACKET_PATH) -> dict[str, Any]:
     packet = read_json(path)
     if packet.get("schema_name") != "a_long_tushare_broader_materialization_packet":
         raise ValueError("A-long broader materialization packet schema_name mismatch")
+
+    source_refs = packet.get("source_artifact_refs") or []
+    if not any(
+        ref.get("artifact_id") == "a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604"
+        for ref in source_refs
+    ):
+        raise ValueError("packet must reference the daily-route diagnostic summary before paced daily repair")
 
     scope = packet.get("scope") or {}
     required_true = [
@@ -188,6 +205,19 @@ def validate_thin_slice_audit_pass(path: Path = THIN_AUDIT_REPORT_PATH) -> None:
     execution = report.get("execution") or {}
     if execution.get("self_tests_required") != 11 or execution.get("self_tests_passed") != 11:
         raise ValueError("thin-slice audit must retain 11/11 self-test evidence")
+
+
+def validate_daily_route_diagnostic_supports_pacing(path: Path = DAILY_ROUTE_DIAGNOSTIC_SUMMARY_PATH) -> None:
+    summary = read_json(path)
+    if summary.get("schema_name") != "a_long_tushare_daily_price_route_diagnostic_execution_summary":
+        raise ValueError("daily-route diagnostic summary schema_name mismatch")
+    decision = summary.get("decision") or {}
+    if decision.get("price_route_diagnostic_status") != "eight_year_isolated_returned_rows":
+        raise ValueError("daily-route diagnostic does not support pacing repair")
+    if decision.get("data_can_be_used_for_alpha_now") is not False:
+        raise ValueError("daily-route diagnostic must not claim data is alpha-ready")
+    if decision.get("signal_search_authorized_by_this_summary") is not False:
+        raise ValueError("daily-route diagnostic must not authorize signal search")
 
 
 def path_is_gitignored_by_policy(raw_root: Path) -> bool:
@@ -382,6 +412,137 @@ def materialization_call_plan() -> list[dict[str, Any]]:
     return calls
 
 
+class NetworkPacer:
+    def __init__(self, min_seconds_between_network_calls: float) -> None:
+        if min_seconds_between_network_calls < 0:
+            raise ValueError("min_seconds_between_network_calls must be non-negative")
+        self.min_seconds_between_network_calls = min_seconds_between_network_calls
+        self._last_network_start: float | None = None
+
+    def before_network_call(self) -> None:
+        if self.min_seconds_between_network_calls <= 0:
+            self._last_network_start = time.monotonic()
+            return
+        now = time.monotonic()
+        if self._last_network_start is not None:
+            remaining = self.min_seconds_between_network_calls - (now - self._last_network_start)
+            if remaining > 0:
+                time.sleep(remaining)
+        self._last_network_start = time.monotonic()
+
+
+def paced_refetch_raw_id(call_id: str) -> str:
+    return f"{call_id}_{PACED_REFETCH_SUFFIX}"
+
+
+def is_empty_daily_payload(call: dict[str, Any], payload: dict[str, Any]) -> bool:
+    return (
+        call.get("api_family") == "daily"
+        and payload.get("call_status") == "empty"
+        and payload.get("row_count") == 0
+    )
+
+
+def execute_network_call(
+    pro: Any,
+    call: dict[str, Any],
+    raw_root: Path,
+    *,
+    checkpoint_status: str,
+    pacer: NetworkPacer,
+    raw_file_id: str | None = None,
+) -> tuple[dict[str, Any], bool]:
+    request_shape_without_token = dict(call["kwargs"])
+    file_id = raw_file_id or call["call_id"]
+    pacer.before_network_call()
+    try:
+        value = getattr(pro, call["method"])(**call["kwargs"])
+        columns, row_count, records = thin_runner.normalize_records(value)
+        status = "success" if row_count and row_count > 0 else "empty"
+        raw_ref = thin_runner.write_raw_payload(
+            raw_root,
+            file_id,
+            {
+                "call_id": call["call_id"],
+                "table_id": call["table_id"],
+                "api_family": call["api_family"],
+                "request_shape_without_token": request_shape_without_token,
+                "call_status": status,
+                "row_count": row_count,
+                "columns": columns,
+                "records": records,
+            },
+        )
+        payload = {
+            "call_status": status,
+            "row_count": row_count,
+            "columns": columns,
+            "error_class": None,
+            "error_message_redacted": None,
+        }
+    except Exception as exc:
+        raw_ref = thin_runner.write_raw_payload(
+            raw_root,
+            file_id,
+            {
+                "call_id": call["call_id"],
+                "table_id": call["table_id"],
+                "api_family": call["api_family"],
+                "request_shape_without_token": request_shape_without_token,
+                "call_status": "error",
+                "error_class": type(exc).__name__,
+                "error_message_redacted": route_base.redact_error(exc),
+            },
+        )
+        payload = {
+            "call_status": "error",
+            "row_count": None,
+            "columns": [],
+            "error_class": type(exc).__name__,
+            "error_message_redacted": route_base.redact_error(exc),
+        }
+    return thin_runner.result_from_raw_payload(call, payload, raw_ref, checkpoint_status), True
+
+
+def execute_call_with_pacing(
+    pro: Any,
+    call: dict[str, Any],
+    raw_root: Path,
+    *,
+    pacer: NetworkPacer,
+) -> tuple[dict[str, Any], bool]:
+    existing = thin_runner.load_existing_raw_payload(raw_root, call["call_id"])
+    if existing is not None:
+        payload, raw_ref = existing
+        if not is_empty_daily_payload(call, payload):
+            return thin_runner.result_from_raw_payload(call, payload, raw_ref, "reused_existing_raw"), False
+
+        refetch_id = paced_refetch_raw_id(call["call_id"])
+        refetched = thin_runner.load_existing_raw_payload(raw_root, refetch_id)
+        if refetched is not None:
+            refetched_payload, refetched_raw_ref = refetched
+            return (
+                thin_runner.result_from_raw_payload(call, refetched_payload, refetched_raw_ref, "reused_paced_refetch_raw"),
+                False,
+            )
+        return execute_network_call(
+            pro,
+            call,
+            raw_root,
+            checkpoint_status="written_paced_refetch_raw",
+            pacer=pacer,
+            raw_file_id=refetch_id,
+        )
+
+    return execute_network_call(
+        pro,
+        call,
+        raw_root,
+        checkpoint_status="written_new_raw",
+        pacer=pacer,
+    )
+
+
 def table_rollup(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     expected_tables = [row["table_id"] for row in read_json(PACKET_PATH)["materialization_tables"]]
@@ -426,9 +587,15 @@ def build_summary(
     post_review_execute_confirmed: bool,
     new_network_call_count: int,
     reused_raw_payload_count: int,
+    min_seconds_between_network_calls: float,
 ) -> dict[str, Any]:
     rollup = table_rollup(results)
     passed = all(item["status"] == "passed_full_period_panel_shape" for item in rollup)
+    daily_empty_raw_refetch_count = sum(
+        1
+        for item in results
+        if item.get("checkpoint_status") in {"written_paced_refetch_raw", "reused_paced_refetch_raw"}
+    )
     if not environment_precheck_passed:
         status = "not_executed_environment_missing"
         plain_result = "没有跑数据：缺 Tushare 环境。"
@@ -482,6 +649,8 @@ def build_summary(
             "endpoint_results_count": len(results),
             "new_network_call_count": new_network_call_count,
             "reused_raw_payload_count": reused_raw_payload_count,
+            "min_seconds_between_network_calls": min_seconds_between_network_calls,
+            "daily_empty_raw_refetch_count": daily_empty_raw_refetch_count,
             "budget_exceeded": False,
             "network_call_attempted": new_network_call_count > 0,
             "environment_precheck_passed": environment_precheck_passed,
@@ -541,9 +710,11 @@ def execute_broader_materialization(
     dry_run_env: bool = False,
     confirm_independent_review_pass: bool = False,
     confirm_post_review_execute: bool = False,
+    min_seconds_between_network_calls: float = 0.0,
 ) -> dict[str, Any]:
     load_and_validate_packet(packet_path)
     validate_thin_slice_audit_pass()
+    validate_daily_route_diagnostic_supports_pacing()
     validate_raw_root(raw_root)
     require_live_execution_confirmations(
         dry_run_env=dry_run_env,
@@ -564,6 +735,7 @@ def execute_broader_materialization(
             post_review_execute_confirmed=confirm_post_review_execute,
             new_network_call_count=0,
             reused_raw_payload_count=0,
+            min_seconds_between_network_calls=min_seconds_between_network_calls,
         )
         write_json_atomic(summary, summary_path)
         return summary
@@ -577,16 +749,18 @@ def execute_broader_materialization(
             post_review_execute_confirmed=confirm_post_review_execute,
             new_network_call_count=0,
             reused_raw_payload_count=0,
+            min_seconds_between_network_calls=min_seconds_between_network_calls,
         )
         write_json_atomic(summary, summary_path)
         return summary
 
     pro = pro_factory()
+    pacer = NetworkPacer(min_seconds_between_network_calls)
     results: list[dict[str, Any]] = []
     new_network_call_count = 0
     reused_raw_payload_count = 0
     for call in calls:
-        result, used_network = thin_runner.execute_call(pro, call, raw_root)
+        result, used_network = execute_call_with_pacing(pro, call, raw_root, pacer=pacer)
         results.append(result)
         if used_network:
             new_network_call_count += 1
@@ -603,6 +777,7 @@ def execute_broader_materialization(
         post_review_execute_confirmed=confirm_post_review_execute,
         new_network_call_count=new_network_call_count,
         reused_raw_payload_count=reused_raw_payload_count,
+        min_seconds_between_network_calls=min_seconds_between_network_calls,
     )
     write_json_atomic(summary, summary_path)
     return summary
@@ -618,6 +793,7 @@ def main(argv: list[str] | None = None) -> int:
         dry_run_env=args.dry_run_env,
         confirm_independent_review_pass=args.confirm_independent_review_pass,
         confirm_post_review_execute=args.confirm_post_review_execute,
+        min_seconds_between_network_calls=args.min_seconds_between_network_calls,
     )
     decision = summary["decision"]
     print(
@@ -628,6 +804,8 @@ def main(argv: list[str] | None = None) -> int:
                 "next_action": decision["next_action"],
                 "new_network_call_count": summary["execution"]["new_network_call_count"],
                 "reused_raw_payload_count": summary["execution"]["reused_raw_payload_count"],
+                "daily_empty_raw_refetch_count": summary["execution"]["daily_empty_raw_refetch_count"],
+                "min_seconds_between_network_calls": summary["execution"]["min_seconds_between_network_calls"],
                 "summary_path": summary["execution"]["summary_path"],
             },
             ensure_ascii=False,

@@ -149,10 +149,27 @@ class ALongTushareBroaderMaterializationPacketSchemaTest(unittest.TestCase):
         self.assertTrue(storage["existing_raw_payload_reuse_allowed"])
         self.assertFalse(storage["overwrite_existing_raw_without_resume_allowed"])
         self.assertFalse(storage["raw_retention_authorizes_production_storage"])
+        source_ids = {row["artifact_id"] for row in artifact["source_artifact_refs"]}
+        self.assertIn("a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604", source_ids)
         for field, value in artifact["pre_execution_gates"].items():
             self.assertTrue(value, field)
         for field, value in artifact["prohibited_claims"].items():
             self.assertFalse(value, field)
+
+    def test_summary_schema_records_pacing_repair_metadata(self) -> None:
+        execution = self._load_summary_schema()["$defs"]["execution"]
+        endpoint = self._load_summary_schema()["$defs"]["endpointResult"]
+
+        self.assertIn("min_seconds_between_network_calls", execution["required"])
+        self.assertIn("daily_empty_raw_refetch_count", execution["required"])
+        self.assertIn(
+            "written_paced_refetch_raw",
+            endpoint["properties"]["checkpoint_status"]["enum"],
+        )
+        self.assertIn(
+            "reused_paced_refetch_raw",
+            endpoint["properties"]["checkpoint_status"]["enum"],
+        )
 
     def test_scope_creep_is_rejected_when_jsonschema_available(self) -> None:
         invalid = copy.deepcopy(self._load_packet())

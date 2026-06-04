@@ -53,6 +53,11 @@
       "role": "Passed thin-slice audit that justifies one bounded scale-up step but does not authorize signal search."
     },
     {
+      "artifact_id": "a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604",
+      "path": "docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json",
+      "role": "Two-call diagnostic that showed the 2018-2025 daily route returns rows in isolation, so only old empty daily raw refs may be retried with pacing."
+    },
+    {
       "artifact_id": "a_long_materialized_thin_slice_data_integrity_audit_schema",
       "path": "schemas/a_long_materialized_thin_slice_data_integrity_audit_report.schema.json",
       "role": "Locks the prior audit's no-alpha, no-provider-call, and self-test evidence boundary."
@@ -286,13 +291,14 @@
   },
   "next_steps": [
     "Independent review must verify this packet and runner before any live Tushare execution.",
-    "After review and a separate user execute command, run only this fixed 2018-2025 nine-symbol panel materialization packet.",
+    "After review and a separate user execute command, run only this fixed 2018-2025 nine-symbol panel materialization packet; if prior daily raw refs are empty, retry only those daily calls with pacing and versioned raw refs.",
     "If the broader panel materialization passes, create a separate reviewed full-period panel data-integrity audit that consumes the materialized raw rows.",
     "Only after a later reviewed audit proves a signal-search-ready universe may A-long create a separate signal-search preregistration."
   ],
   "limitations": [
     "This packet itself performs no Tushare call, reads no raw rows, and writes no execution summary.",
     "The later run is a fixed full-period panel, not full-market or full-universe materialization.",
+    "The pacing repair is limited to old empty daily raw refs after the diagnostic; successful existing raw refs remain checkpoint-reused and no raw file is overwritten.",
     "A pass would prove broader materialization mechanics and raw lineage shape only; it would not prove data integrity, alpha, production readiness, ship-gate evidence, or full-size use.",
     "No DataHub table, production runner consumption, audit rerun, signal search, return calculation, factor derivation, full-universe pull, or broker/order automation is authorized by this artifact."
   ]

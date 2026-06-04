@@ -122,6 +122,8 @@
         "endpoint_results_count",
         "new_network_call_count",
         "reused_raw_payload_count",
+        "min_seconds_between_network_calls",
+        "daily_empty_raw_refetch_count",
         "budget_exceeded",
         "network_call_attempted",
         "environment_precheck_passed",
@@ -139,6 +141,8 @@
         "endpoint_results_count": {"type": "integer", "minimum": 0, "maximum": 80},
         "new_network_call_count": {"type": "integer", "minimum": 0, "maximum": 80},
         "reused_raw_payload_count": {"type": "integer", "minimum": 0, "maximum": 80},
+        "min_seconds_between_network_calls": {"type": "number", "minimum": 0},
+        "daily_empty_raw_refetch_count": {"type": "integer", "minimum": 0, "maximum": 9},
         "budget_exceeded": {"const": false},
         "network_call_attempted": {"type": "boolean"},
         "environment_precheck_passed": {"type": "boolean"},
@@ -222,7 +226,7 @@
           "items": {"type": "string"}
         },
         "raw_payload_ref": {"$ref": "#/$defs/nonEmptyString"},
-        "checkpoint_status": {"enum": ["written_new_raw", "reused_existing_raw"]},
+        "checkpoint_status": {"enum": ["written_new_raw", "reused_existing_raw", "written_paced_refetch_raw", "reused_paced_refetch_raw"]},
         "tracked_summary_excludes_raw_rows": {"const": true},
         "error_class": {"$ref": "#/$defs/nullableString"},
         "error_message_redacted": {"$ref": "#/$defs/nullableString"}

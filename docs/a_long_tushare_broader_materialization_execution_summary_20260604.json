@@ -1,7 +1,7 @@
 {
   "schema_name": "a_long_tushare_broader_materialization_execution_summary",
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-04T09:26:03+00:00",
+  "generated_at": "2026-06-04T11:44:07+00:00",
   "artifact_id": "a_long_tushare_broader_materialization_execution_summary_20260604",
   "packet_ref": "docs/a_long_tushare_broader_materialization_packet_20260604.json",
   "scope": {
@@ -36,8 +36,10 @@
     "max_total_endpoint_calls": 80,
     "planned_total_endpoint_calls": 71,
     "endpoint_results_count": 71,
-    "new_network_call_count": 71,
-    "reused_raw_payload_count": 0,
+    "new_network_call_count": 9,
+    "reused_raw_payload_count": 62,
+    "min_seconds_between_network_calls": 1.25,
+    "daily_empty_raw_refetch_count": 9,
     "budget_exceeded": false,
     "network_call_attempted": true,
     "environment_precheck_passed": true,
@@ -96,7 +98,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/trade_calendar_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -131,7 +133,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/stock_basic_active_L.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -166,7 +168,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/stock_basic_delisted_D.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -201,7 +203,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/income_000001_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -236,7 +238,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/income_600519_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -271,7 +273,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/income_300750_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -306,7 +308,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/income_601318_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -341,7 +343,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/income_600036_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -376,7 +378,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/income_000651_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -411,7 +413,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/income_002415_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -446,7 +448,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/income_600276_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -481,7 +483,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/income_000666_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -518,7 +520,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/balancesheet_000001_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -555,7 +557,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/balancesheet_600519_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -592,7 +594,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/balancesheet_300750_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -629,7 +631,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/balancesheet_601318_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -666,7 +668,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/balancesheet_600036_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -703,7 +705,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/balancesheet_000651_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -740,7 +742,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/balancesheet_002415_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -777,7 +779,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/balancesheet_600276_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -814,7 +816,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/balancesheet_000666_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -847,7 +849,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/cashflow_000001_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -880,7 +882,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/cashflow_600519_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -913,7 +915,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/cashflow_300750_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -946,7 +948,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/cashflow_601318_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -979,7 +981,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/cashflow_600036_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1012,7 +1014,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/cashflow_000651_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1045,7 +1047,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/cashflow_002415_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1078,7 +1080,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/cashflow_600276_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1111,7 +1113,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/cashflow_000666_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1144,7 +1146,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/fina_indicator_000001_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1177,7 +1179,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/fina_indicator_600519_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1210,7 +1212,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/fina_indicator_300750_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1243,7 +1245,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/fina_indicator_601318_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1276,7 +1278,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/fina_indicator_600036_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1309,7 +1311,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/fina_indicator_000651_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1342,7 +1344,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/fina_indicator_002415_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1375,7 +1377,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/fina_indicator_600276_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1408,7 +1410,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/fina_indicator_000666_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1437,7 +1439,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/index_classify_sw_L1.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1466,7 +1468,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/index_classify_sw_L2.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1500,7 +1502,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/index_member_all_sw_membership.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1515,8 +1517,8 @@
         "end_date": "20251231",
         "fields": "ts_code,trade_date,open,close,vol,amount"
       },
-      "call_status": "empty",
-      "row_count": 0,
+      "call_status": "success",
+      "row_count": 1942,
       "columns": [
         "ts_code",
         "trade_date",
@@ -1532,8 +1534,8 @@
         "close"
       ],
       "minimum_fields_missing": [],
-      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_000001_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_000001_SZ_2018_2025_paced_refetch.json",
+      "checkpoint_status": "written_paced_refetch_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1562,7 +1564,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/adj_factor_000001_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1593,7 +1595,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/dividend_000001_SZ.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1608,8 +1610,8 @@
         "end_date": "20251231",
         "fields": "ts_code,trade_date,open,close,vol,amount"
       },
-      "call_status": "empty",
-      "row_count": 0,
+      "call_status": "success",
+      "row_count": 1942,
       "columns": [
         "ts_code",
         "trade_date",
@@ -1625,8 +1627,8 @@
         "close"
       ],
       "minimum_fields_missing": [],
-      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_600519_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_600519_SH_2018_2025_paced_refetch.json",
+      "checkpoint_status": "written_paced_refetch_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1655,7 +1657,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/adj_factor_600519_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1686,7 +1688,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/dividend_600519_SH.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1701,8 +1703,8 @@
         "end_date": "20251231",
         "fields": "ts_code,trade_date,open,close,vol,amount"
       },
-      "call_status": "empty",
-      "row_count": 0,
+      "call_status": "success",
+      "row_count": 1837,
       "columns": [
         "ts_code",
         "trade_date",
@@ -1718,8 +1720,8 @@
         "close"
       ],
       "minimum_fields_missing": [],
-      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_300750_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_300750_SZ_2018_2025_paced_refetch.json",
+      "checkpoint_status": "written_paced_refetch_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1748,7 +1750,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/adj_factor_300750_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1779,7 +1781,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/dividend_300750_SZ.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1794,8 +1796,8 @@
         "end_date": "20251231",
         "fields": "ts_code,trade_date,open,close,vol,amount"
       },
-      "call_status": "empty",
-      "row_count": 0,
+      "call_status": "success",
+      "row_count": 1942,
       "columns": [
         "ts_code",
         "trade_date",
@@ -1811,8 +1813,8 @@
         "close"
       ],
       "minimum_fields_missing": [],
-      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_601318_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_601318_SH_2018_2025_paced_refetch.json",
+      "checkpoint_status": "written_paced_refetch_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1841,7 +1843,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/adj_factor_601318_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1872,7 +1874,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/dividend_601318_SH.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1887,8 +1889,8 @@
         "end_date": "20251231",
         "fields": "ts_code,trade_date,open,close,vol,amount"
       },
-      "call_status": "empty",
-      "row_count": 0,
+      "call_status": "success",
+      "row_count": 1942,
       "columns": [
         "ts_code",
         "trade_date",
@@ -1904,8 +1906,8 @@
         "close"
       ],
       "minimum_fields_missing": [],
-      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_600036_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_600036_SH_2018_2025_paced_refetch.json",
+      "checkpoint_status": "written_paced_refetch_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1934,7 +1936,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/adj_factor_600036_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1965,7 +1967,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/dividend_600036_SH.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -1980,8 +1982,8 @@
         "end_date": "20251231",
         "fields": "ts_code,trade_date,open,close,vol,amount"
       },
-      "call_status": "empty",
-      "row_count": 0,
+      "call_status": "success",
+      "row_count": 1936,
       "columns": [
         "ts_code",
         "trade_date",
@@ -1997,8 +1999,8 @@
         "close"
       ],
       "minimum_fields_missing": [],
-      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_000651_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_000651_SZ_2018_2025_paced_refetch.json",
+      "checkpoint_status": "written_paced_refetch_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2027,7 +2029,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/adj_factor_000651_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2058,7 +2060,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/dividend_000651_SZ.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2073,8 +2075,8 @@
         "end_date": "20251231",
         "fields": "ts_code,trade_date,open,close,vol,amount"
       },
-      "call_status": "empty",
-      "row_count": 0,
+      "call_status": "success",
+      "row_count": 1940,
       "columns": [
         "ts_code",
         "trade_date",
@@ -2090,8 +2092,8 @@
         "close"
       ],
       "minimum_fields_missing": [],
-      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_002415_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_002415_SZ_2018_2025_paced_refetch.json",
+      "checkpoint_status": "written_paced_refetch_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2120,7 +2122,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/adj_factor_002415_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2151,7 +2153,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/dividend_002415_SZ.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2166,8 +2168,8 @@
         "end_date": "20251231",
         "fields": "ts_code,trade_date,open,close,vol,amount"
       },
-      "call_status": "empty",
-      "row_count": 0,
+      "call_status": "success",
+      "row_count": 1942,
       "columns": [
         "ts_code",
         "trade_date",
@@ -2183,8 +2185,8 @@
         "close"
       ],
       "minimum_fields_missing": [],
-      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_600276_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_600276_SH_2018_2025_paced_refetch.json",
+      "checkpoint_status": "written_paced_refetch_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2213,7 +2215,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/adj_factor_600276_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2244,7 +2246,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/dividend_600276_SH.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2259,8 +2261,8 @@
         "end_date": "20251231",
         "fields": "ts_code,trade_date,open,close,vol,amount"
       },
-      "call_status": "empty",
-      "row_count": 0,
+      "call_status": "success",
+      "row_count": 1211,
       "columns": [
         "ts_code",
         "trade_date",
@@ -2276,8 +2278,8 @@
         "close"
       ],
       "minimum_fields_missing": [],
-      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_000666_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/daily_000666_SZ_2018_2025_paced_refetch.json",
+      "checkpoint_status": "written_paced_refetch_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2306,7 +2308,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/adj_factor_000666_SZ_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2337,7 +2339,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/dividend_000666_SZ.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2368,7 +2370,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/index_daily_000300_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2399,7 +2401,7 @@
       ],
       "minimum_fields_missing": [],
       "raw_payload_ref": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/index_daily_000852_SH_2018_2025.json",
-      "checkpoint_status": "written_new_raw",
+      "checkpoint_status": "reused_existing_raw",
       "tracked_summary_excludes_raw_rows": true,
       "error_class": null,
       "error_message_redacted": null
@@ -2480,11 +2482,11 @@
     },
     {
       "table_id": "daily_price_adj_factor_dividend",
-      "status": "partial_or_failed_full_period_panel_shape",
+      "status": "passed_full_period_panel_shape",
       "calls_total": 27,
-      "calls_success": 18,
+      "calls_success": 27,
       "missing_minimum_fields": [],
-      "plain_result": "Full-period panel materialization shape is incomplete for this table."
+      "plain_result": "Full-period panel materialization shape is present for this table."
     },
     {
       "table_id": "benchmark_index_daily",
@@ -2496,12 +2498,12 @@
     }
   ],
   "decision": {
-    "materialization_status": "partial_or_failed_full_period_panel_materialization",
+    "materialization_status": "passed_full_period_panel_materialization_shape",
     "data_can_be_used_for_alpha_now": false,
     "audit_rerun_authorized_by_this_summary": false,
     "signal_search_authorized_by_this_summary": false,
-    "plain_result": "固定样本池数据落地不完整；A 股长线仍不能找 alpha。",
-    "next_action": "先修失败的数据表或字段；不要全市场放大、重跑 audit 或开始 signal search。"
+    "plain_result": "2018-2025 固定样本池数据已落地，但还不能用来找 alpha。",
+    "next_action": "下一步是另起 reviewed full-period panel data-integrity audit；audit 通过后仍需判断是否足够进入信号搜索预注册。"
   },
   "prohibited_claims": {
     "a_long_data_ready": false,

@@ -223,8 +223,6 @@ def validate_prior_broader_summary(path: Path = PRIOR_BROADER_SUMMARY_PATH) -> d
     if summary.get("schema_name") != "a_long_tushare_broader_materialization_execution_summary":
         raise ValueError("prior broader materialization summary schema_name mismatch")
     decision = summary.get("decision") or {}
-    if decision.get("materialization_status") != "partial_or_failed_full_period_panel_materialization":
-        raise ValueError("prior broader summary must be the partial materialization result")
     if decision.get("signal_search_authorized_by_this_summary") is not False:
         raise ValueError("prior broader summary must not authorize signal search")
 
@@ -235,8 +233,19 @@ def validate_prior_broader_summary(path: Path = PRIOR_BROADER_SUMMARY_PATH) -> d
     ]
     if len(daily_results) != 9:
         raise ValueError("prior broader summary must contain the 9 fixed-panel daily calls")
-    if not all(item.get("call_status") == "empty" and item.get("row_count") == 0 for item in daily_results):
-        raise ValueError("prior broader daily calls must all be empty before this diagnostic")
+    status = decision.get("materialization_status")
+    if status == "partial_or_failed_full_period_panel_materialization":
+        if not all(item.get("call_status") == "empty" and item.get("row_count") == 0 for item in daily_results):
+            raise ValueError("prior broader daily calls must all be empty before this diagnostic")
+    elif status == "passed_full_period_panel_materialization_shape":
+        if not all(
+            item.get("call_status") == "success"
+            and item.get("checkpoint_status") in {"written_paced_refetch_raw", "reused_paced_refetch_raw"}
+            for item in daily_results
+        ):
+            raise ValueError("repaired broader daily calls must all be successful paced refetch results")
+    else:
+        raise ValueError("prior broader summary must be either the partial or repaired materialization result")
     return summary
 
 

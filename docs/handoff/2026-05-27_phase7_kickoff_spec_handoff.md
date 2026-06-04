@@ -1,5 +1,25 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long paced fixed-panel rerun
+
+**Changed**:
+- `runners/a_long_tushare_broader_materialization_packet.py` now validates the daily-route diagnostic summary before treating old empty `daily` raw refs as repair candidates.
+- Successful existing raw payloads are still checkpoint-reused.
+- Only old empty `daily` raw refs are re-fetched with pacing and written to versioned `_paced_refetch` raw files under gitignored `data/a_long/raw/tushare/materialization_full_period_panel_20260604/`; old raw files are not overwritten.
+- `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json` now records 9 paced `daily` refetches, 62 reused raw payloads, 11/11 table rollups passed, and `passed_full_period_panel_materialization_shape`.
+
+**Plain result**:
+- The fixed 2018-2025 sample panel is downloaded.
+- It is still not alpha-ready.
+- The next step is a full-period panel data-integrity audit, not signal search.
+
+**Boundaries**:
+- Raw rows are only under gitignored `data/a_long/raw/tushare/materialization_full_period_panel_20260604/`.
+- The tracked summary contains no raw rows, request URL, or secret.
+- This execution authorizes no signal search, alpha backtest, DataHub, production claim, ship-gate claim, full-size use, or broker/order automation.
+
+---
+
 ## 2026-06-04 append: A-long daily price route diagnostic execution
 
 **Changed**:

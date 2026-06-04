@@ -266,12 +266,28 @@ class ALongTushareDailyPriceRouteDiagnosticPacketTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.load_and_validate_packet(packet_path)
 
-    def test_prior_summary_must_have_nine_empty_daily_calls(self) -> None:
+    def test_partial_prior_summary_must_have_nine_empty_daily_calls(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             prior = runner.read_json(runner.PRIOR_BROADER_SUMMARY_PATH)
+            prior["decision"]["materialization_status"] = "partial_or_failed_full_period_panel_materialization"
             for item in prior["endpoint_results"]:
                 if item.get("api_family") == "daily":
                     item["call_status"] = "success"
+                    item["row_count"] = 1
+                    break
+            prior_path = Path(tmp) / "prior.json"
+            prior_path.write_text(json.dumps(prior), encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                runner.validate_prior_broader_summary(prior_path)
+
+    def test_repaired_prior_summary_requires_paced_daily_success(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prior = runner.read_json(runner.PRIOR_BROADER_SUMMARY_PATH)
+            prior["decision"]["materialization_status"] = "passed_full_period_panel_materialization_shape"
+            for item in prior["endpoint_results"]:
+                if item.get("api_family") == "daily":
+                    item["checkpoint_status"] = "reused_existing_raw"
                     break
             prior_path = Path(tmp) / "prior.json"
             prior_path.write_text(json.dumps(prior), encoding="utf-8")

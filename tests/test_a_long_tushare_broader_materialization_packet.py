@@ -201,6 +201,11 @@ class FailingTusharePro:
         raise AssertionError(f"unexpected network call during checkpoint reuse: {name}")
 
 
+class EmptyDailyTusharePro(FakeTusharePro):
+    def daily(self, **kwargs):
+        return pd.DataFrame(columns=["ts_code", "trade_date", "open", "close", "vol", "amount"])
+
+
 class ALongTushareBroaderMaterializationPacketTest(unittest.TestCase):
     def setUp(self) -> None:
         self.raw_root = runner.RAW_ROOT / "unit_test"
@@ -229,6 +234,8 @@ class ALongTushareBroaderMaterializationPacketTest(unittest.TestCase):
             self.assertFalse(summary["decision"]["audit_rerun_authorized_by_this_summary"])
             self.assertEqual(summary["execution"]["new_network_call_count"], runner.PLANNED_TOTAL_ENDPOINT_CALLS)
             self.assertEqual(summary["execution"]["reused_raw_payload_count"], 0)
+            self.assertEqual(summary["execution"]["daily_empty_raw_refetch_count"], 0)
+            self.assertEqual(summary["execution"]["min_seconds_between_network_calls"], 0.0)
             self.assertFalse(self._contains_key(summary, "records"))
 
             raw_refs = [Path(item["raw_payload_ref"]) for item in summary["endpoint_results"]]
@@ -289,8 +296,44 @@ class ALongTushareBroaderMaterializationPacketTest(unittest.TestCase):
             self.assertEqual(summary["decision"]["materialization_status"], "passed_full_period_panel_materialization_shape")
             self.assertEqual(summary["execution"]["new_network_call_count"], 0)
             self.assertEqual(summary["execution"]["reused_raw_payload_count"], runner.PLANNED_TOTAL_ENDPOINT_CALLS)
+            self.assertEqual(summary["execution"]["daily_empty_raw_refetch_count"], 0)
             self.assertFalse(summary["execution"]["network_call_attempted"])
             self.assertTrue(all(item["checkpoint_status"] == "reused_existing_raw" for item in summary["endpoint_results"]))
+
+    def test_empty_daily_raw_is_refetched_with_versioned_paced_raw_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            first_summary_path = Path(tmp) / "first.json"
+            second_summary_path = Path(tmp) / "second.json"
+            first = runner.execute_broader_materialization(
+                pro_factory=lambda: EmptyDailyTusharePro(),
+                raw_root=self.raw_root,
+                summary_path=first_summary_path,
+                generated_at="2026-06-04T00:00:00+00:00",
+                confirm_independent_review_pass=True,
+                confirm_post_review_execute=True,
+            )
+            self.assertEqual(
+                first["decision"]["materialization_status"],
+                "partial_or_failed_full_period_panel_materialization",
+            )
+
+            summary = runner.execute_broader_materialization(
+                pro_factory=lambda: FakeTusharePro(),
+                raw_root=self.raw_root,
+                summary_path=second_summary_path,
+                generated_at="2026-06-04T00:00:01+00:00",
+                confirm_independent_review_pass=True,
+                confirm_post_review_execute=True,
+            )
+
+            self.assertEqual(summary["decision"]["materialization_status"], "passed_full_period_panel_materialization_shape")
+            self.assertEqual(summary["execution"]["new_network_call_count"], len(runner.SYMBOLS))
+            self.assertEqual(summary["execution"]["reused_raw_payload_count"], runner.PLANNED_TOTAL_ENDPOINT_CALLS - len(runner.SYMBOLS))
+            self.assertEqual(summary["execution"]["daily_empty_raw_refetch_count"], len(runner.SYMBOLS))
+            daily_results = [item for item in summary["endpoint_results"] if item["api_family"] == "daily"]
+            self.assertEqual({item["checkpoint_status"] for item in daily_results}, {"written_paced_refetch_raw"})
+            self.assertTrue(all(item["raw_payload_ref"].endswith("_paced_refetch.json") for item in daily_results))
+            self.assertTrue(all(item["call_status"] == "success" for item in daily_results))
 
     def test_missing_token_records_no_execution_without_network(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

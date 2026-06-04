@@ -8,6 +8,72 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long paced fixed-panel rerun) — **PASS (可提交)**
+
+**Verdict**: Pass. The pacing repair is correct, evidence-gated, and hygiene-clean; the paced rerun materialized all 11 tables (9 empty-daily refetched at 1.25s pacing, 62 reused). Confirms the diagnosis (rate, not window). Honest (shape-passed, not alpha/audit). Safe to commit.
+
+**Verified (read the runner diff line-by-line)**:
+- **Evidence-gated pacing**: new `validate_daily_route_diagnostic_supports_pacing` requires the diagnostic summary `price_route_diagnostic_status=eight_year_isolated_returned_rows` (+ not-alpha / not-signal) before any paced refetch — pacing is authorized only because the diagnostic proved it is rate.
+- **Narrow + non-destructive**: only `is_empty_daily_payload` (daily + empty + 0 rows) triggers refetch; the 9 refetches write to NEW `_paced_refetch` files (old empty raw NOT overwritten); the other 62 payloads checkpoint-reused; `NetworkPacer` enforces 1.25s start-to-start.
+- **Hygiene inherited**: `execute_network_call` reuses `thin_runner.write_raw_payload` (records→gitignored) + `result_from_raw_payload` (tracked-no-records) + `route_base.redact_error`; token env-only; double-gate + budget guards intact. Summary: token/url false, grep no records/URL; `new=9 / reused=62 / refetch=9 / pacing=1.25s`.
+- **Honest result**: `materialization_status=passed_full_period_panel_materialization_shape`; `data_can_be_used_for_alpha_now=false`; `signal_search_authorized=false`. Shape only, not integrity.
+- **Diagnostic-runner relaxation sound**: `validate_prior_broader_summary` now accepts EITHER the old partial-9-empty state OR the repaired passed-9-paced-success state, and still rejects ambiguous/unauthorized states — a maintenance fix to keep it valid after the broader summary changed, not a loophole.
+
+Tests 32/32 (679/679 full per Codex).
+
+**Net**: the diagnosis (rate→pacing) is confirmed — pacing made all 9 daily return data; the 9-symbol/2018-2025 panel is now materialized (shape). Next: the full-period data-integrity AUDIT on this panel (the genuine-checks + self-tests audit, like the thin-slice one) — where integrity is actually tested.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long paced fixed-panel rerun)
+
+**Plain result**:
+- 跑完了。
+- 固定 2018-2025 样本池数据已经拉下来。
+- 9 个之前全空的 `daily` 价格调用，用 1.25s pacing 全部重拉成功。
+- 其余 62 个已成功 raw payload 直接复用。
+- 11/11 个 table rollup 全部通过 materialization shape。
+- 但这还不能找 alpha：它只证明“数据面板落地了”，下一步必须跑完整 data-integrity audit。
+
+**Execution**:
+- Updated `runners/a_long_tushare_broader_materialization_packet.py` so paced refetch is allowed only after the daily-route diagnostic summary records `eight_year_isolated_returned_rows`.
+- Existing successful raw payloads remain checkpoint-reused.
+- Old empty `daily` raw refs are not overwritten; new raw refs are versioned with `_paced_refetch` under gitignored `data/a_long/raw/tushare/materialization_full_period_panel_20260604/`.
+- Ran `runners/a_long_tushare_broader_materialization_packet.py --confirm-independent-review-pass --confirm-post-review-execute`.
+- Rewrote tracked summary `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json`.
+- Summary decision: `passed_full_period_panel_materialization_shape`.
+- `new_network_call_count = 9`; `reused_raw_payload_count = 62`; `daily_empty_raw_refetch_count = 9`; `min_seconds_between_network_calls = 1.25`.
+
+**Worked on**:
+- [tracked modified] `runners/a_long_tushare_broader_materialization_packet.py`, `schemas/a_long_tushare_broader_materialization_execution_summary.schema.json`, `docs/a_long_tushare_broader_materialization_packet_20260604.json`, `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json`, `tests/test_a_long_tushare_broader_materialization_packet.py`, `tests/schema/test_a_long_tushare_broader_materialization_packet_schema.py`.
+- [tracked modified] `runners/a_long_tushare_daily_price_route_diagnostic_packet.py`, `tests/test_a_long_tushare_daily_price_route_diagnostic_packet.py` to keep the historical diagnostic runner compatible after the broader summary is repaired: it now accepts either the old partial/empty-daily state or the repaired paced-daily-success state, while still rejecting ambiguous states.
+- [tracked modified] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `research/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `docs/SESSION_LOG.md`.
+- [gitignored raw] `data/a_long/raw/tushare/materialization_full_period_panel_20260604/*_paced_refetch.json`.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_broader_materialization_packet tests.schema.test_a_long_tushare_broader_materialization_packet_schema -v` passed 19/19.
+- Real summary validates against `schemas/a_long_tushare_broader_materialization_execution_summary.schema.json`: `schema_errors = 0`.
+- First full discover exposed the diagnostic-runner prior-summary assumption after the broader summary changed from partial to passed; fixed in-round.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_broader_materialization_packet tests.schema.test_a_long_tushare_broader_materialization_packet_schema tests.test_a_long_tushare_daily_price_route_diagnostic_packet tests.schema.test_a_long_tushare_daily_price_route_diagnostic_packet_schema -v` passed 41/41.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 679/679.
+- `git diff --check` passed with normal LF/CRLF warnings only.
+- `docs/CURRENT.md` line count = 75.
+- No-secret/raw-row scan on tracked summary: `records` key false, token/request URL false, `TUSHARE_TOKEN` / `api_key` / URL literals false, tracked summary flags secret/raw rows false.
+- `git check-ignore -v data\a_long\raw\tushare\materialization_full_period_panel_20260604\daily_000001_SZ_2018_2025_paced_refetch.json` confirms raw output is ignored by `.gitignore`.
+
+**Non-authorization**:
+- No full-period data-integrity audit was run.
+- No signal search, alpha backtest, DataHub, production readiness, ship-gate evidence, full-size use, or broker/order automation is authorized.
+
+**Next route**:
+- Claude should review this combined package.
+- If Claude passes and the user commits, the next execution step is a reviewed full-period panel data-integrity audit consuming the materialized raw panel.
+- Do not start signal search from materialization shape alone.
+
+**Ready for Claude review**: Yes.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long daily-route diagnostic execution) — **PASS (可提交)**
 
 **Verdict**: Pass. Clean real-network execution (2 calls via the double-gate). The 2-call probe conclusively resolved the daily-empty cause — it is burst-rate / throttle, NOT window-size — and routed the next fix correctly to pacing (not chunk). Safe to commit.

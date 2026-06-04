@@ -1,5 +1,5 @@
 # Stock 项目 - 当前状态快照
-**最后更新**：2026-06-04（A-long daily price route diagnostic executed）
+**最后更新**：2026-06-04（A-long paced fixed-panel materialization passed shape）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -15,13 +15,13 @@
 - `schemas/provider_p1_missing_key_metrics_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json` now route the three missing key-metrics fields as candidate derivations pending separate field-presence / lineage review; this performs no raw-payload parse, no new provider call, no derivation implementation, no DataHub / runner consumption, and no Phase 7c authorization.
 - Phase 7c now has schema-first contracts for local resource/job-spec enforcement, shared ODS/DWD/DWS/factor layers, report families, reproducibility manifests, data-quality monitor boundaries, and a minimal A-share local-cache read-path plan (`engine/datahub/job_spec_contract.py`, `schemas/datahub_shared_layer_contract.schema.json`, `schemas/datahub_report_contract.schema.json`, `schemas/datahub_reproducibility_manifest.schema.json`, `schemas/datahub_data_quality_monitor_contract.schema.json`, `schemas/datahub_minimal_a_share_read_path_plan.schema.json`). These still do not fetch provider data, read cache, create DataHub tables, change runners, authorize provider selection / full-size US / production claims, or provide ship-gate evidence.
 - `execution_aggregate_report` v1.1.4 now binds reviewed forward-live evidence to aggregate `capital_context`, validates source-window coverage for claimed months, and requires at least 12 monthly alpha / return observations before alpha t-stat or Sharpe metrics can pass; full-size remains blocked by the concurrency gate.
-- US operating model is active-only + forward-live validation; historical US backtests stay idea-only. A-short steady is `risk_filter_only`. A-long daily price route diagnostic executed 2/2 fixed Tushare `daily` calls and wrote `docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json`: the 2018-2025 isolated probe returned 1,942 rows and the 2022 control returned 242 rows. Simple result: the old all-empty `daily` failure is likely burst-rate / pacing, not an 8-year window problem. A-long still cannot audit or search for alpha until the price route is repaired and a full reviewed audit passes.
+- US operating model is active-only + forward-live validation; historical US backtests stay idea-only. A-short steady is `risk_filter_only`. A-long paced fixed-panel rerun passed materialization shape: `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json` records 9/9 old-empty `daily` calls repaired by paced refetch, 62 cached raw payloads reused, and 11/11 table rollups passed. Simple result: the fixed 2018-2025 sample panel is now downloaded, but A-long still cannot search for alpha until a full reviewed data-integrity audit passes.
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：A-share alpha validation is the active priority; A-long broader materialization failed under burst execution, while the isolated daily diagnostic returned rows. Signal search and full audit remain blocked. Phase 7c implementation remains not started.
-- **当前 P0 / P1 目标**：create one reviewed combined pacing repair + 2018-2025 fixed-panel rerun packet, with throttled / paced `daily` calls, tracked summary, tests, and docs. Do not run full audit or signal search from the diagnostic.
+- **当前 Phase**：A-share alpha validation is the active priority; A-long fixed 2018-2025 panel has passed materialization shape after paced `daily` refetch. Signal search remains blocked until a full-period panel data-integrity audit passes. Phase 7c implementation remains not started.
+- **当前 P0 / P1 目标**：create and run the reviewed full-period panel data-integrity audit that consumes the materialized 2018-2025 raw panel. Do not start signal search from materialization shape alone.
 - **当前 P1 provider blocker**：US inactive / delisted historical coverage is user-accepted as scoped out for the current active-only forward model. `SR-PROVIDER-001` remains open for license / storage, active-symbol PIT if fundamentals are used, active price-adjustment / corporate actions if used, SEC parser / mapping if used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness. US forward universes must be PIT-frozen at start and must capture real delisting / halt / merger / no-trade outcomes during the forward window; the 12-month forward-live ship-gate requirement is unchanged.
 - **执行锁**：A-long signal search remains blocked because the passed audit is only a three-symbol thin slice, not full-period / full-universe data readiness. A-short steady is `risk_filter_only` and spent；burst paths remain blocked/failed. Material audit findings must be fixed or entered in the risk register.
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
@@ -40,8 +40,8 @@
 - **A-long Tushare route validation**（2026-06-04）：`runners/a_long_tushare_route_validation_packet.py` executed 23 fixed Tushare calls and wrote `docs/a_long_tushare_route_validation_execution_summary_20260604.json`; result is partial, not usable for alpha.
 - **A-long Tushare route-gap repair**（2026-06-04）：`runners/a_long_tushare_route_gap_repair_packet.py` executed 5 fixed Tushare calls and wrote `docs/a_long_tushare_route_gap_repair_execution_summary_20260604.json`; the two failed route pieces passed small-sample field checks, but this still does not authorize alpha search.
 - **A-long thin-slice materialization execution**（2026-06-04）：`runners/a_long_tushare_incremental_materialization_packet.py` executed the reviewed 2022-2023 three-symbol packet and wrote `docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json`; 29/29 calls succeeded, raw rows stayed under gitignored `data/a_long/raw/tushare/materialization_thin_slice_20260604/`, but no data is ready for alpha.
-- **A-long broader materialization execution**（2026-06-04）：`runners/a_long_tushare_broader_materialization_packet.py` ran the fixed 2018-2025 nine-symbol packet and wrote `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json`; fundamentals, universe, industry, and benchmarks passed shape checks, but all 9 `daily` price calls returned 0 rows, so the panel is incomplete and still not usable for alpha.
-- **A-long daily price route diagnostic execution**（2026-06-04）：`runners/a_long_tushare_daily_price_route_diagnostic_packet.py` ran only the fixed two-call diagnostic and wrote `docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json`; both probes returned rows, so the next repair route is pacing / rate-limit, not chunking. It still does not authorize audit rerun or signal search.
+- **A-long broader materialization execution**（2026-06-04）：the original fixed 2018-2025 nine-symbol run failed only on the 9 `daily` price calls; `runners/a_long_tushare_daily_price_route_diagnostic_packet.py` then proved the 8-year `daily` route works in isolation, so the failure was pacing / rate-limit, not window size.
+- **A-long paced fixed-panel rerun**（2026-06-04）：`runners/a_long_tushare_broader_materialization_packet.py` refetched only the 9 old-empty `daily` raw refs with 1.25s pacing and `_paced_refetch` versioned raw files, reused the other 62 raw payloads, and rewrote `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json` with `passed_full_period_panel_materialization_shape`. It still does not authorize audit rerun by itself or signal search.
 ---
 
 ## 3. 当前有效策略结论
@@ -92,7 +92,7 @@
 ### P0 / P1 - Post redesigned outcome boundary
 
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
-- The current active alpha-search route is A-long, but signal search is still blocked. The daily diagnostic shows the 8-year `daily` call works in isolation, so the next step is a single reviewed combined packet: pacing / rate-limit repair plus a fixed 2018-2025 panel rerun and no-secret summary. Do not run full audit or signal search from the diagnostic.
+- The current active alpha-search route is A-long, but signal search is still blocked. The fixed 2018-2025 panel has now passed materialization shape after paced `daily` refetch. The next step is a reviewed full-period panel data-integrity audit that consumes the materialized raw rows. Do not start signal search from materialization shape alone.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
 - The full-universe redesigned outcome / excess slice has failed its registered thresholds; do not rerun EGS, change preregistered parameters, full-refresh forward_daily, or reinterpret it as production evidence.
 - Any further redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
@@ -101,7 +101,7 @@
 - Current US model is active-only universe + forward-live validation only. Historical US backtests are exploration / idea-only forever; they cannot prove alpha, support ship-gate, unlock full-size, or authorize DataHub / production.
 - Forward universe must be frozen point-in-time at the forward start date; real delisting / halt / merger / bankruptcy / no-trade outcomes during the forward window must be captured, not deleted.
 - No further inactive / delisted historical coverage work or paid / specialized US data purchase is required now. Remaining provider work is only license / storage, active-PIT if used, active price / corporate actions if used, SEC parser / mapping if used, fallback / stability, and production-readiness gates.
-- Next high-value work is the combined pacing repair + 2018-2025 panel rerun packet. Until fixed price data exists and a full reviewed audit passes, A-long cannot search for alpha.
+- Next high-value work is the full-period panel data-integrity audit. Until that audit passes, A-long cannot search for alpha.
 
 ### P2 - DataHub local resource boundary
 
