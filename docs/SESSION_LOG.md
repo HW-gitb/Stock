@@ -8,6 +8,49 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long main-board audit pass + signal-search preregistration) — **PASS (可提交)**
+
+**Verdict**: Pass. The re-materialized main-board (600887) panel genuinely passed the data-integrity audit, and the first A-long signal-search preregistration is exemplary — it freezes the correct measurement basis and the anti-self-deception discipline the project earned the hard way. Safe to commit.
+
+**Audit pass is GENUINE (verified, not a false pass)**:
+- `audit_status=passed_fixed_panel_data_integrity_for_signal_preregistration`, `hard_checks_pass=true`, usable_start_year 2018, 11/11 self-tests, `data_can_be_used_for_alpha_now=false`, `alpha_found=false` (honest — data-integrity pass ≠ alpha).
+- Delisted exception correctly applied: real-data survivorship shows `sw_membership_missing_non_exception=[]` (no active name excepted), `delisted_industry_missing_exception_symbols=[000666.SZ]`, source_valid=true, count 1 / 11.11% ≤ caps (1 / 12.5%), threshold_passed. Survivorship passes ONLY because the one missing is the approved evidence-gated 000666 within cap.
+
+**Signal-search preregistration is exemplary**:
+- SAME-ANCHOR on BOTH legs (stock next-day-open→exit-close total-return; benchmark next-day-open→same-exit-close) — the exact SR-MEASURE-001 lesson from the A-short FAIL, frozen from the start. Costs required.
+- Anti-p-hacking: frozen family list (quality/cash-conversion/balance-sheet/earnings-stability), no parameter sweep, no post-result rescue-slicing, BH-FDR/Bonferroni correction, ≥48 monthly cohorts; report ALL families not just the winner; no zero/latest fill.
+- Universe guard: `must_not_use_fixed_9_symbol_panel_as_alpha_proof=true`, `requires_reviewed_main_board_candidate_universe=true`, main-board-only, ST/STAR/BSE/ChiNext excluded, PIT list/delist + delisting-return required.
+- Decision policy: candidate-alpha is research-only + needs the unchanged 12-month forward-live ship gate; backtest can't authorize full-size; falsified = no param/threshold/benchmark/fixed-panel rescue without a new prereg. Approved 000666 exception wired in (industry denominators only). Scope: registered_not_run, no signal/fetch/full-market/production/ship-gate. Ledger 1 unit, requires review + execute. Schema test 9/9 (incl. scope-creep + frozen-families).
+
+**Honest framing**: the audit passed on a 9-symbol panel — proves the DATA ROUTE works, NOT full-universe cleanliness or any alpha. The prereg says so (fixed_panel_route_proof_only, full_main_board_universe_ready=false). Next per the prereg = a reviewed main-board candidate-universe expansion + signal runner + run; the 9 symbols are NOT the alpha universe.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long main-board fixed-panel audit pass + signal-search preregistration)
+
+**Commits**:
+- `70900ff Implement A-long delisted industry exception` committed the prior Claude PASS / user-approved delisted missing-industry boundary.
+
+**Plain result**:
+- 主板-only A-long 2018-2025 固定 panel 已落地。
+- 数据完整性 audit 通过。
+- 这只说明数据路线能继续往前走；还没有找到 alpha。
+- 9 股票固定 panel 只是路线证明，不是全市场证明，也不能当 alpha 证据。
+
+**Executed**:
+1. Ran `runners/a_long_tushare_broader_materialization_packet.py` with both review / execute confirmations. `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json` now records `passed_full_period_panel_materialization_shape`, 7 new network calls, 64 reused raw payloads, 8 daily empty-raw refetches, and no secret / request URL in tracked summary.
+2. Ran `runners/a_long_materialized_full_period_data_integrity_audit.py` locally only. `research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json` records `passed_fixed_panel_data_integrity_for_signal_preregistration`, hard checks pass, usable start year 2018, and 11/11 self-tests.
+3. Added `schemas/a_long_signal_search_preregistration.schema.json`, `research/preregistrations/a_long_signal_search_preregistration_20260604.json`, `research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json`, and schema tests.
+
+**Boundaries**:
+- The signal-search preregistration runs no signal, fetches no data, and authorizes no alpha, production, ship-gate evidence, full-size use, DataHub, provider expansion, or broker/order automation.
+- The future signal search must not use the fixed 9-symbol panel as alpha proof; it needs a reviewed main-board candidate-universe execution package.
+- `SR-ALONG-DATA-001` stays open pending Claude review + commit of this big package.
+
+**Next natural step**:
+1. Claude should review this whole big package.
+2. After clean review and explicit user execute, the next big package can combine main-board candidate-universe expansion, signal-search runner implementation, full-period signal run, summary, tests, and docs.
+
 ## 2026-06-04 — Claude 审查 (A-long delisted missing-industry boundary) — **实现 PASS;authorization 为 PENDING(Codex 误标 user-approved)**
 
 **Implementation verdict**: Pass — the bounded delisted-industry exception is well-built and is NOT a silent audit-weakening:

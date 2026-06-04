@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+import copy
+import json
+import unittest
+from pathlib import Path
+
+
+SCHEMA_PATH = Path("schemas/a_long_signal_search_preregistration.schema.json")
+ARTIFACT_PATH = Path("research/preregistrations/a_long_signal_search_preregistration_20260604.json")
+LEDGER_SCHEMA_PATH = Path("schemas/program_test_budget_ledger.schema.json")
+LEDGER_ARTIFACT_PATH = Path("research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json")
+
+
+class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
+    def _load_json(self, path: Path) -> dict:
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def _load_schema(self) -> dict:
+        return self._load_json(SCHEMA_PATH)
+
+    def _load_artifact(self) -> dict:
+        return self._load_json(ARTIFACT_PATH)
+
+    def _load_ledger(self) -> dict:
+        return self._load_json(LEDGER_ARTIFACT_PATH)
+
+    def _validate(self, payload: dict) -> list:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = self._load_schema()
+        Draft7Validator.check_schema(schema)
+        return list(Draft7Validator(schema).iter_errors(payload))
+
+    def test_schema_artifact_and_ledger_validate_when_jsonschema_available(self) -> None:
+        try:
+            from jsonschema import Draft7Validator
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
+
+        schema = self._load_schema()
+        artifact = self._load_artifact()
+        ledger_schema = self._load_json(LEDGER_SCHEMA_PATH)
+        ledger = self._load_ledger()
+
+        Draft7Validator.check_schema(schema)
+        Draft7Validator.check_schema(ledger_schema)
+        self.assertEqual(list(Draft7Validator(schema).iter_errors(artifact)), [])
+        self.assertEqual(list(Draft7Validator(ledger_schema).iter_errors(ledger)), [])
+
+    def test_scope_blocks_signal_run_data_fetch_provider_datahub_and_ship_gate(self) -> None:
+        scope = self._load_artifact()["scope"]
+
+        self.assertTrue(scope["research_only"])
+        self.assertTrue(scope["manual_order_only"])
+        self.assertEqual(scope["lane_id"], "a_long")
+        for field_name in [
+            "signal_search_executed_by_this_artifact",
+            "signal_search_authorized_by_this_artifact",
+            "data_fetch_allowed_by_this_artifact",
+            "provider_call_allowed_by_this_artifact",
+            "full_market_or_full_universe_run_authorized_by_this_artifact",
+            "datahub_allowed",
+            "production_use_allowed",
+            "ship_gate_claim_allowed",
+            "full_size_manual_use_allowed",
+            "broker_or_order_automation_allowed",
+        ]:
+            with self.subTest(field_name=field_name):
+                self.assertFalse(scope[field_name])
+
+    def test_data_gate_keeps_fixed_panel_as_route_proof_only(self) -> None:
+        data_gate = self._load_artifact()["data_gate"]
+        prohibited = self._load_artifact()["prohibited_claims"]
+
+        self.assertEqual(data_gate["required_audit_status"], "passed_fixed_panel_data_integrity_for_signal_preregistration")
+        self.assertTrue(data_gate["observed_hard_checks_pass"])
+        self.assertEqual(data_gate["observed_self_tests_passed"], 11)
+        self.assertEqual(data_gate["usable_start_year"], 2018)
+        self.assertTrue(data_gate["fixed_panel_route_proof_only"])
+        self.assertEqual(data_gate["fixed_panel_symbol_count"], 9)
+        self.assertTrue(data_gate["fixed_panel_not_full_market"])
+        self.assertTrue(data_gate["fixed_panel_not_full_universe"])
+        self.assertFalse(data_gate["full_main_board_universe_ready"])
+        self.assertFalse(data_gate["signal_runner_ready"])
+        self.assertFalse(prohibited["fixed_panel_proves_alpha"])
+        self.assertFalse(prohibited["full_universe_ready"])
+        self.assertFalse(prohibited["signal_search_authorized"])
+
+    def test_future_universe_requires_main_board_pit_and_delisting_returns(self) -> None:
+        universe = self._load_artifact()["search_design"]["candidate_universe_rule"]
+
+        self.assertEqual(universe["board_scope"], "main_board_only")
+        self.assertTrue(universe["future_execution_must_not_use_fixed_9_symbol_panel_as_alpha_proof"])
+        self.assertTrue(universe["future_execution_requires_reviewed_main_board_candidate_universe"])
+        self.assertTrue(universe["pit_list_delist_required"])
+        self.assertTrue(universe["delisting_return_required"])
+        self.assertTrue(universe["st_star_bse_chinext_excluded"])
+
+    def test_signal_families_are_frozen_and_unvalidated_valuation_is_blocked(self) -> None:
+        design = self._load_artifact()["search_design"]
+
+        self.assertEqual(
+            set(design["allowed_signal_families"]),
+            {"profitability_quality", "cash_conversion", "balance_sheet_strength", "earnings_stability"},
+        )
+        self.assertIn("valuation_without_share_count_or_market_cap_lineage", design["blocked_signal_families"])
+        self.assertFalse(design["multiple_testing_policy"]["parameter_sweep_allowed"])
+        self.assertFalse(design["multiple_testing_policy"]["post_result_rescue_slicing_allowed"])
+        self.assertGreaterEqual(design["multiple_testing_policy"]["minimum_monthly_cohorts"], 48)
+
+    def test_measurement_basis_locks_same_anchor_total_return_and_benchmarks(self) -> None:
+        design = self._load_artifact()["search_design"]
+        measurement = design["entry_exit_measurement_rule"]
+        benchmark = design["benchmark_rule"]
+
+        self.assertEqual(measurement["entry_rule"], "next_trading_day_open_after_as_of")
+        self.assertEqual(measurement["exit_horizons_trading_days"], [252, 504])
+        self.assertEqual(measurement["stock_return_basis"], "total_return_with_adj_factor_and_dividend_lineage")
+        self.assertTrue(measurement["same_anchor_required"])
+        self.assertTrue(measurement["dividend_and_adj_factor_required"])
+        self.assertEqual(benchmark["primary_benchmark"], "CSI300")
+        self.assertEqual(benchmark["secondary_benchmark"], "CSI1000")
+        self.assertTrue(benchmark["same_anchor_required"])
+
+    def test_industry_exception_retains_delisted_returns_and_blocks_silent_fill(self) -> None:
+        industry = self._load_artifact()["search_design"]["industry_policy"]
+
+        self.assertEqual(industry["exception_symbols"], ["000666.SZ"])
+        self.assertTrue(industry["reviewed_delisted_missing_industry_exception_allowed"])
+        self.assertTrue(industry["active_missing_industry_hard_fail"])
+        self.assertTrue(industry["exception_retained_in_returns_and_risk"])
+        self.assertTrue(industry["exception_excluded_only_from_industry_denominators"])
+        self.assertFalse(industry["silent_industry_fill_allowed"])
+
+    def test_scope_creep_is_rejected_by_schema(self) -> None:
+        payload = copy.deepcopy(self._load_artifact())
+        payload["scope"]["signal_search_authorized_by_this_artifact"] = True
+        payload["prohibited_claims"]["validated_alpha"] = True
+
+        errors = self._validate(payload)
+
+        self.assertGreaterEqual(len(errors), 2)
+
+    def test_ledger_registers_one_pending_test_without_authorizing_run(self) -> None:
+        artifact = self._load_artifact()
+        ledger = self._load_ledger()
+
+        self.assertEqual(artifact["planned_test_budget"]["ledger_ref"], str(LEDGER_ARTIFACT_PATH).replace("\\", "/"))
+        self.assertFalse(artifact["planned_test_budget"]["signal_search_run_authorized_now"])
+        self.assertEqual(ledger["lane_id"], "a_long_research")
+        self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
+        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
+        self.assertEqual(ledger["budget_policy"]["tests_available_without_new_review"], 0)
+        self.assertEqual(ledger["test_spend_log"], [])
+        self.assertEqual(len(ledger["planned_tests"]), 1)
+        planned = ledger["planned_tests"][0]
+        self.assertEqual(planned["planned_status"], "planned_not_reviewed")
+        self.assertEqual(planned["approval_status"], "pending_user_approval")
+        self.assertIn("fixed 9-symbol panel is route proof only", planned["review_boundary"][0])
+
+
+if __name__ == "__main__":
+    unittest.main()

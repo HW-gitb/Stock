@@ -1,7 +1,7 @@
 {
   "schema_name": "a_long_materialized_full_period_data_integrity_audit_report",
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-04T12:42:31+00:00",
+  "generated_at": "2026-06-04T14:34:23+00:00",
   "artifact_id": "a_long_materialized_full_period_data_integrity_audit_report_20260604",
   "source_refs": [
     "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json",
@@ -45,7 +45,7 @@
     "active_symbols": [
       "000001.SZ",
       "600519.SH",
-      "300750.SZ",
+      "600887.SH",
       "601318.SH",
       "600036.SH",
       "000651.SZ",
@@ -224,10 +224,10 @@
           "000651.SZ",
           "000666.SZ",
           "002415.SZ",
-          "300750.SZ",
           "600036.SH",
           "600276.SH",
           "600519.SH",
+          "600887.SH",
           "601318.SH"
         ],
         "missing_fixed_symbols": [],
@@ -242,13 +242,35 @@
           "000651.SZ",
           "000666.SZ",
           "002415.SZ",
-          "300750.SZ",
           "600036.SH",
           "600276.SH",
           "600519.SH",
+          "600887.SH",
           "601318.SH"
         ],
         "sw_membership_missing_symbols": [],
+        "sw_membership_missing_non_exception_symbols": [],
+        "delisted_industry_missing_exception_symbols": [],
+        "delisted_industry_missing_exception_source_ref": "docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json",
+        "delisted_industry_missing_exception_source_valid": true,
+        "delisted_industry_missing_exception_source_error": null,
+        "delisted_industry_missing_exception_count": 0,
+        "delisted_industry_missing_exception_rate_pct": 0.0,
+        "delisted_industry_missing_exception_max_count": 1,
+        "delisted_industry_missing_exception_max_rate_pct": 12.5,
+        "delisted_industry_missing_exception_threshold_passed": true,
+        "industry_normalization_policy": {
+          "silent_industry_fill_allowed": false,
+          "drop_missing_industry_delisted_from_universe_allowed": false,
+          "keep_delisted_symbol_in_returns_and_risk": true,
+          "exclude_exception_symbols_from_industry_neutral_denominators": true,
+          "exception_requires_reviewed_no_source_summary": true,
+          "exception_applies_to_signal_score_only": true
+        },
+        "industry_normalization_exclusion_symbols": [],
+        "delisted_symbols_kept_for_returns_and_risk": [
+          "000666.SZ"
+        ],
         "delisted_terminal_return_inputs": [
           {
             "symbol": "000666.SZ",
@@ -292,7 +314,7 @@
             "return_input_shape_ok": true
           },
           {
-            "symbol": "300750.SZ",
+            "symbol": "600887.SH",
             "daily_row_count": 8,
             "adj_factor_row_count": 8,
             "daily_adj_overlap_count": 8,
@@ -408,14 +430,14 @@
       "hard_check": true,
       "blocks_signal_search": true,
       "metrics": {
-        "rows_checked": 1673,
-        "valid_ann_date_rows": 1665,
+        "rows_checked": 1663,
+        "valid_ann_date_rows": 1655,
         "missing_or_invalid_ann_date_rows": 0,
         "missing_or_invalid_ann_date_exclusion_rate_pct": 0.0,
         "future_ann_date_rows_after_panel_end": 8,
         "future_ann_date_rows_excluded_by_asof_gate": 8,
         "ann_date_asof_gating_feasible": true,
-        "asof_selection_events_checked": 55461,
+        "asof_selection_events_checked": 54546,
         "covered_symbol_count": 9,
         "covered_table_count": 4,
         "missing_required_columns": []
@@ -432,17 +454,28 @@
       "hard_check": true,
       "blocks_signal_search": true,
       "metrics": {
-        "period_groups_checked": 1113,
+        "period_groups_checked": 1103,
         "groups_with_multiple_ann_dates": 0,
         "same_ann_date_conflicting_duplicate_groups": 0,
         "same_ann_date_conflict_examples": [],
-        "same_ann_date_duplicate_groups_resolved_by_non_null_preference": 6,
+        "same_ann_date_duplicate_groups_resolved_by_non_null_preference": 7,
         "same_ann_date_duplicate_resolution_examples": [
           {
             "table": "fina_indicator",
             "symbol": "000001.SZ",
             "end_date": "20240630",
             "ann_date": "20240816",
+            "row_count": 2,
+            "resolution_rule": "prefer_single_non_null_value_when_only_allowed_fields_differ",
+            "resolved_fields": [
+              "profit_dedt"
+            ]
+          },
+          {
+            "table": "fina_indicator",
+            "symbol": "600887.SH",
+            "end_date": "20240331",
+            "ann_date": "20240430",
             "row_count": 2,
             "resolution_rule": "prefer_single_non_null_value_when_only_allowed_fields_differ",
             "resolved_fields": [
@@ -506,7 +539,7 @@
           }
         ],
         "same_ann_date_duplicate_resolution_rule": "If duplicated rows share ts_code/end_date/ann_date and differ only in allowed nullable fields with exactly one non-null value, the audit treats the duplicate as source-complementary and records a deterministic non-null preference. Any other same-ann-date difference remains a hard failure.",
-        "asof_latest_known_selection_events_checked": 55461,
+        "asof_latest_known_selection_events_checked": 54546,
         "tables_with_f_ann_date_column": [
           "balancesheet",
           "cashflow",
@@ -521,7 +554,7 @@
     },
     {
       "check_id": "survivorship_pit_universe",
-      "status": "fail_data_not_ready",
+      "status": "pass_fixed_panel",
       "hard_check": true,
       "blocks_signal_search": true,
       "metrics": {
@@ -530,30 +563,56 @@
           "000651.SZ",
           "000666.SZ",
           "002415.SZ",
-          "300750.SZ",
           "600036.SH",
           "600276.SH",
           "600519.SH",
+          "600887.SH",
           "601318.SH"
         ],
         "missing_fixed_symbols": [],
         "active_status_failures": [],
         "delisted_status_failures": [],
-        "pit_membership_decisions_checked": 832,
+        "pit_membership_decisions_checked": 837,
         "invalid_membership_decisions": 0,
-        "pre_list_exclusion_count": 5,
+        "pre_list_exclusion_count": 0,
         "post_delist_exclusion_count": 27,
         "sw_membership_symbols_with_rows": [
           "000001.SZ",
           "000651.SZ",
           "002415.SZ",
-          "300750.SZ",
           "600036.SH",
           "600276.SH",
           "600519.SH",
+          "600887.SH",
           "601318.SH"
         ],
         "sw_membership_missing_symbols": [
+          "000666.SZ"
+        ],
+        "sw_membership_missing_non_exception_symbols": [],
+        "delisted_industry_missing_exception_symbols": [
+          "000666.SZ"
+        ],
+        "delisted_industry_missing_exception_source_ref": "docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json",
+        "delisted_industry_missing_exception_source_valid": true,
+        "delisted_industry_missing_exception_source_error": null,
+        "delisted_industry_missing_exception_count": 1,
+        "delisted_industry_missing_exception_rate_pct": 11.111111,
+        "delisted_industry_missing_exception_max_count": 1,
+        "delisted_industry_missing_exception_max_rate_pct": 12.5,
+        "delisted_industry_missing_exception_threshold_passed": true,
+        "industry_normalization_policy": {
+          "silent_industry_fill_allowed": false,
+          "drop_missing_industry_delisted_from_universe_allowed": false,
+          "keep_delisted_symbol_in_returns_and_risk": true,
+          "exclude_exception_symbols_from_industry_neutral_denominators": true,
+          "exception_requires_reviewed_no_source_summary": true,
+          "exception_applies_to_signal_score_only": true
+        },
+        "industry_normalization_exclusion_symbols": [
+          "000666.SZ"
+        ],
+        "delisted_symbols_kept_for_returns_and_risk": [
           "000666.SZ"
         ],
         "delisted_terminal_return_inputs": [
@@ -571,7 +630,8 @@
       "findings": [
         "The fixed active and delisted sample symbols are visible in stock_basic with list/delist dates.",
         "The delisted sample keeps terminal daily/adj_factor inputs near delisting instead of back-deleting the loss window.",
-        "This is a bounded fixed-panel universe audit, not a full-market historical universe proof."
+        "This is a bounded fixed-panel universe audit, not a full-market historical universe proof.",
+        "Reviewed no-source evidence allows the delisted missing-industry exception only for industry-neutralization denominators; returns and risk still keep the delisted symbol."
       ],
       "allowed_followup": "If the fixed-panel audit passes, create a separate reviewed signal-search preregistration. Do not run signal search or claim alpha from this audit report."
     },
@@ -601,12 +661,12 @@
             "return_input_shape_ok": true
           },
           {
-            "symbol": "300750.SZ",
-            "daily_row_count": 1837,
-            "adj_factor_row_count": 1837,
-            "daily_adj_overlap_count": 1837,
-            "dividend_row_count": 37,
-            "valid_dividend_ex_date_count": 10,
+            "symbol": "600887.SH",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 58,
+            "valid_dividend_ex_date_count": 30,
             "return_input_shape_ok": true
           },
           {
@@ -966,15 +1026,15 @@
     }
   ],
   "decision": {
-    "audit_status": "fail_data_not_ready",
-    "hard_checks_pass": false,
+    "audit_status": "passed_fixed_panel_data_integrity_for_signal_preregistration",
+    "hard_checks_pass": true,
     "usable_start_year": 2018,
     "data_can_be_used_for_alpha_now": false,
-    "signal_search_preregistration_may_be_created": false,
+    "signal_search_preregistration_may_be_created": true,
     "signal_search_authorized_by_this_report": false,
     "alpha_found": false,
-    "plain_result": "全周期固定 panel 只剩一个硬缺口：退市样本 000666.SZ 没有 SW 行业成员记录。不能找 alpha。",
-    "next_action": "先补可审的退市股 SW 行业来源；补不到就必须继续阻塞 A-long 行业归一化信号搜索。"
+    "plain_result": "全周期固定 panel 数据审计通过。可以进入下一步：写信号搜索预注册。",
+    "next_action": "下一步是单独写 A-long 信号搜索预注册；还不能直接跑信号、声称 alpha 或实盘。"
   },
   "prohibited_claims": {
     "a_long_alpha_found": false,

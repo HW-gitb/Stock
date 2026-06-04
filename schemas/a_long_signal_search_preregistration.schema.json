@@ -1,0 +1,414 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_signal_search_preregistration/1.0.0/schema.json",
+  "title": "A-long Signal Search Preregistration",
+  "description": "Research-only preregistration for the first A-share long-lane signal-search design after the fixed-panel data-integrity audit passed. It freezes the allowed signal families, data gates, universe expansion requirement, benchmark anchors, test-budget boundary, and prohibited claims. It does not run signal search, fetch data, authorize production use, or prove alpha.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "source_doc_refs",
+    "data_gate",
+    "search_design",
+    "decision_policy",
+    "planned_test_budget",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_signal_search_preregistration"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_signal_search_preregistration_20260604"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "source_doc_refs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sourceDocRef"},
+      "minItems": 6,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "docs/long_alpha_spec.md"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md"}},
+            "required": ["path"]
+          }
+        }
+      ]
+    },
+    "data_gate": {"$ref": "#/$defs/dataGate"},
+    "search_design": {"$ref": "#/$defs/searchDesign"},
+    "decision_policy": {"$ref": "#/$defs/decisionPolicy"},
+    "planned_test_budget": {"$ref": "#/$defs/plannedTestBudget"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "next_steps": {"$ref": "#/$defs/stringList"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "date8": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "positiveInteger": {"type": "integer", "minimum": 1},
+    "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "registration_status",
+        "research_status",
+        "research_only",
+        "signal_search_executed_by_this_artifact",
+        "signal_search_authorized_by_this_artifact",
+        "data_fetch_allowed_by_this_artifact",
+        "provider_call_allowed_by_this_artifact",
+        "full_market_or_full_universe_run_authorized_by_this_artifact",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_signal_search_preregistration"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "registration_status": {"const": "registered_not_run"},
+        "research_status": {"const": "signal_search_design_registered_not_run"},
+        "research_only": {"const": true},
+        "signal_search_executed_by_this_artifact": {"const": false},
+        "signal_search_authorized_by_this_artifact": {"const": false},
+        "data_fetch_allowed_by_this_artifact": {"const": false},
+        "provider_call_allowed_by_this_artifact": {"const": false},
+        "full_market_or_full_universe_run_authorized_by_this_artifact": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "sourceDocRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role"],
+      "properties": {
+        "path": {"$ref": "#/$defs/nonEmptyString"},
+        "role": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "dataGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audit_report_ref",
+        "required_audit_status",
+        "hard_checks_pass_required",
+        "observed_hard_checks_pass",
+        "required_self_tests_passed",
+        "observed_self_tests_passed",
+        "usable_start_year",
+        "fixed_panel_route_proof_only",
+        "fixed_panel_symbol_count",
+        "fixed_panel_not_full_market",
+        "fixed_panel_not_full_universe",
+        "full_main_board_universe_ready",
+        "signal_runner_ready",
+        "plain_result"
+      ],
+      "properties": {
+        "audit_report_ref": {"const": "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json"},
+        "required_audit_status": {"const": "passed_fixed_panel_data_integrity_for_signal_preregistration"},
+        "hard_checks_pass_required": {"const": true},
+        "observed_hard_checks_pass": {"const": true},
+        "required_self_tests_passed": {"const": 11},
+        "observed_self_tests_passed": {"const": 11},
+        "usable_start_year": {"type": "integer", "minimum": 2018},
+        "fixed_panel_route_proof_only": {"const": true},
+        "fixed_panel_symbol_count": {"type": "integer", "minimum": 9, "maximum": 9},
+        "fixed_panel_not_full_market": {"const": true},
+        "fixed_panel_not_full_universe": {"const": true},
+        "full_main_board_universe_ready": {"const": false},
+        "signal_runner_ready": {"const": false},
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "searchDesign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "design_id",
+        "goal",
+        "candidate_universe_rule",
+        "data_window",
+        "as_of_rule",
+        "entry_exit_measurement_rule",
+        "benchmark_rule",
+        "allowed_signal_families",
+        "blocked_signal_families",
+        "industry_policy",
+        "multiple_testing_policy",
+        "required_output_diagnostics"
+      ],
+      "properties": {
+        "design_id": {"const": "a_long_quality_cashflow_signal_search_v1"},
+        "goal": {"$ref": "#/$defs/nonEmptyString"},
+        "candidate_universe_rule": {"$ref": "#/$defs/candidateUniverseRule"},
+        "data_window": {"$ref": "#/$defs/dataWindow"},
+        "as_of_rule": {"$ref": "#/$defs/asOfRule"},
+        "entry_exit_measurement_rule": {"$ref": "#/$defs/measurementRule"},
+        "benchmark_rule": {"$ref": "#/$defs/benchmarkRule"},
+        "allowed_signal_families": {
+          "type": "array",
+          "items": {"enum": ["profitability_quality", "cash_conversion", "balance_sheet_strength", "earnings_stability"]},
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "blocked_signal_families": {
+          "type": "array",
+          "items": {"enum": ["valuation_without_share_count_or_market_cap_lineage", "news_or_llm_semantic_signal", "short_term_momentum", "intraday_or_microstructure", "us_provider_fields"]},
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "industry_policy": {"$ref": "#/$defs/industryPolicy"},
+        "multiple_testing_policy": {"$ref": "#/$defs/multipleTestingPolicy"},
+        "required_output_diagnostics": {"$ref": "#/$defs/stringList"}
+      }
+    },
+    "candidateUniverseRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market_scope",
+        "board_scope",
+        "future_execution_must_not_use_fixed_9_symbol_panel_as_alpha_proof",
+        "future_execution_requires_reviewed_main_board_candidate_universe",
+        "pit_list_delist_required",
+        "delisting_return_required",
+        "st_star_bse_chinext_excluded"
+      ],
+      "properties": {
+        "market_scope": {"const": "A-share"},
+        "board_scope": {"const": "main_board_only"},
+        "future_execution_must_not_use_fixed_9_symbol_panel_as_alpha_proof": {"const": true},
+        "future_execution_requires_reviewed_main_board_candidate_universe": {"const": true},
+        "pit_list_delist_required": {"const": true},
+        "delisting_return_required": {"const": true},
+        "st_star_bse_chinext_excluded": {"const": true}
+      }
+    },
+    "dataWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date", "usable_start_year"],
+      "properties": {
+        "start_date": {"const": "20180101"},
+        "end_date": {"const": "20251231"},
+        "usable_start_year": {"type": "integer", "minimum": 2018}
+      }
+    },
+    "asOfRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frequency", "calendar_source", "selection_rule", "timezone"],
+      "properties": {
+        "frequency": {"const": "monthly"},
+        "calendar_source": {"const": "Tushare trade_cal"},
+        "selection_rule": {"const": "last_open_A_share_trading_day_of_each_calendar_month"},
+        "timezone": {"const": "Asia/Shanghai"}
+      }
+    },
+    "measurementRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_rule",
+        "exit_horizons_trading_days",
+        "stock_return_basis",
+        "dividend_and_adj_factor_required",
+        "same_anchor_required",
+        "costs_required",
+        "cost_model"
+      ],
+      "properties": {
+        "entry_rule": {"const": "next_trading_day_open_after_as_of"},
+        "exit_horizons_trading_days": {
+          "type": "array",
+          "items": {"enum": [252, 504]},
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "stock_return_basis": {"const": "total_return_with_adj_factor_and_dividend_lineage"},
+        "dividend_and_adj_factor_required": {"const": true},
+        "same_anchor_required": {"const": true},
+        "costs_required": {"const": true},
+        "cost_model": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "benchmarkRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_benchmark",
+        "secondary_benchmark",
+        "benchmark_return_basis",
+        "same_anchor_required"
+      ],
+      "properties": {
+        "primary_benchmark": {"const": "CSI300"},
+        "secondary_benchmark": {"const": "CSI1000"},
+        "benchmark_return_basis": {"const": "benchmark_next_trading_day_open_to_same_exit_close"},
+        "same_anchor_required": {"const": true}
+      }
+    },
+    "industryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "normalization_basis",
+        "reviewed_delisted_missing_industry_exception_allowed",
+        "exception_symbols",
+        "active_missing_industry_hard_fail",
+        "exception_retained_in_returns_and_risk",
+        "exception_excluded_only_from_industry_denominators",
+        "silent_industry_fill_allowed"
+      ],
+      "properties": {
+        "normalization_basis": {"const": "SW_L2_then_SW_L1_if_sample_lt_20"},
+        "reviewed_delisted_missing_industry_exception_allowed": {"const": true},
+        "exception_symbols": {
+          "type": "array",
+          "items": {"const": "000666.SZ"},
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "active_missing_industry_hard_fail": {"const": true},
+        "exception_retained_in_returns_and_risk": {"const": true},
+        "exception_excluded_only_from_industry_denominators": {"const": true},
+        "silent_industry_fill_allowed": {"const": false}
+      }
+    },
+    "multipleTestingPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family_list_frozen",
+        "parameter_sweep_allowed",
+        "post_result_rescue_slicing_allowed",
+        "correction_required",
+        "minimum_monthly_cohorts"
+      ],
+      "properties": {
+        "family_list_frozen": {"const": true},
+        "parameter_sweep_allowed": {"const": false},
+        "post_result_rescue_slicing_allowed": {"const": false},
+        "correction_required": {"enum": ["benjamini_hochberg_fdr_or_bonferroni"]},
+        "minimum_monthly_cohorts": {"type": "integer", "minimum": 48}
+      }
+    },
+    "decisionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_alpha_research_only",
+        "risk_filter_or_no_alpha",
+        "falsified",
+        "minimum_forward_live_months_for_ship_gate",
+        "backtest_can_authorize_full_size"
+      ],
+      "properties": {
+        "candidate_alpha_research_only": {"$ref": "#/$defs/stringList"},
+        "risk_filter_or_no_alpha": {"$ref": "#/$defs/stringList"},
+        "falsified": {"$ref": "#/$defs/stringList"},
+        "minimum_forward_live_months_for_ship_gate": {"const": 12},
+        "backtest_can_authorize_full_size": {"const": false}
+      }
+    },
+    "plannedTestBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ledger_ref",
+        "planned_test_id",
+        "test_budget_units",
+        "signal_search_run_authorized_now",
+        "requires_claude_review_before_run",
+        "requires_user_execute_before_run"
+      ],
+      "properties": {
+        "ledger_ref": {"const": "research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json"},
+        "planned_test_id": {"const": "a_long_signal_search_preregistration_20260604"},
+        "test_budget_units": {"const": 1},
+        "signal_search_run_authorized_now": {"const": false},
+        "requires_claude_review_before_run": {"const": true},
+        "requires_user_execute_before_run": {"const": true}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validated_alpha",
+        "fixed_panel_proves_alpha",
+        "full_universe_ready",
+        "signal_search_authorized",
+        "full_size_allowed",
+        "ship_gate_evidence",
+        "production_ready",
+        "datahub_authorized",
+        "provider_work_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "validated_alpha": {"const": false},
+        "fixed_panel_proves_alpha": {"const": false},
+        "full_universe_ready": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "full_size_allowed": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "production_ready": {"const": false},
+        "datahub_authorized": {"const": false},
+        "provider_work_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

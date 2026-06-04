@@ -1,0 +1,195 @@
+{
+  "schema_name": "a_long_signal_search_preregistration",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-04T00:00:00Z",
+  "artifact_id": "a_long_signal_search_preregistration_20260604",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_signal_search_preregistration",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "registration_status": "registered_not_run",
+    "research_status": "signal_search_design_registered_not_run",
+    "research_only": true,
+    "signal_search_executed_by_this_artifact": false,
+    "signal_search_authorized_by_this_artifact": false,
+    "data_fetch_allowed_by_this_artifact": false,
+    "provider_call_allowed_by_this_artifact": false,
+    "full_market_or_full_universe_run_authorized_by_this_artifact": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_doc_refs": [
+    {
+      "path": "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json",
+      "role": "records the fixed-panel data-integrity audit pass that permits only the next preregistration step"
+    },
+    {
+      "path": "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json",
+      "role": "records the main-board-only 2018-2025 fixed-panel materialization shape and no-secret tracked summary"
+    },
+    {
+      "path": "docs/long_alpha_spec.md",
+      "role": "owns A-long quality / compounding and industry-normalized long-lane design intent"
+    },
+    {
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "role": "owns alpha reality guardrails, preregistration discipline, measurement basis, and ship-gate limits"
+    },
+    {
+      "path": "docs/system_risk_register.md",
+      "role": "keeps A-long data and signal-search blockers out of chat-only state"
+    },
+    {
+      "path": "research/README.md",
+      "role": "routes research-only preregistrations, ledgers, and result artifacts"
+    }
+  ],
+  "data_gate": {
+    "audit_report_ref": "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json",
+    "required_audit_status": "passed_fixed_panel_data_integrity_for_signal_preregistration",
+    "hard_checks_pass_required": true,
+    "observed_hard_checks_pass": true,
+    "required_self_tests_passed": 11,
+    "observed_self_tests_passed": 11,
+    "usable_start_year": 2018,
+    "fixed_panel_route_proof_only": true,
+    "fixed_panel_symbol_count": 9,
+    "fixed_panel_not_full_market": true,
+    "fixed_panel_not_full_universe": true,
+    "full_main_board_universe_ready": false,
+    "signal_runner_ready": false,
+    "plain_result": "The A-long data route passed on a fixed 9-symbol main-board panel. That is enough to write this preregistration, but not enough to prove alpha or run full-universe signal search."
+  },
+  "search_design": {
+    "design_id": "a_long_quality_cashflow_signal_search_v1",
+    "goal": "Test whether PIT quality, cash-conversion, balance-sheet, and earnings-stability signals can produce cost-adjusted same-anchor benchmark excess in the A-share main-board long lane.",
+    "candidate_universe_rule": {
+      "market_scope": "A-share",
+      "board_scope": "main_board_only",
+      "future_execution_must_not_use_fixed_9_symbol_panel_as_alpha_proof": true,
+      "future_execution_requires_reviewed_main_board_candidate_universe": true,
+      "pit_list_delist_required": true,
+      "delisting_return_required": true,
+      "st_star_bse_chinext_excluded": true
+    },
+    "data_window": {
+      "start_date": "20180101",
+      "end_date": "20251231",
+      "usable_start_year": 2018
+    },
+    "as_of_rule": {
+      "frequency": "monthly",
+      "calendar_source": "Tushare trade_cal",
+      "selection_rule": "last_open_A_share_trading_day_of_each_calendar_month",
+      "timezone": "Asia/Shanghai"
+    },
+    "entry_exit_measurement_rule": {
+      "entry_rule": "next_trading_day_open_after_as_of",
+      "exit_horizons_trading_days": [
+        252,
+        504
+      ],
+      "stock_return_basis": "total_return_with_adj_factor_and_dividend_lineage",
+      "dividend_and_adj_factor_required": true,
+      "same_anchor_required": true,
+      "costs_required": true,
+      "cost_model": "A-share long-lane net return must include commission, sell-side stamp tax where applicable, and a documented conservative slippage assumption."
+    },
+    "benchmark_rule": {
+      "primary_benchmark": "CSI300",
+      "secondary_benchmark": "CSI1000",
+      "benchmark_return_basis": "benchmark_next_trading_day_open_to_same_exit_close",
+      "same_anchor_required": true
+    },
+    "allowed_signal_families": [
+      "profitability_quality",
+      "cash_conversion",
+      "balance_sheet_strength",
+      "earnings_stability"
+    ],
+    "blocked_signal_families": [
+      "valuation_without_share_count_or_market_cap_lineage",
+      "news_or_llm_semantic_signal",
+      "short_term_momentum",
+      "intraday_or_microstructure",
+      "us_provider_fields"
+    ],
+    "industry_policy": {
+      "normalization_basis": "SW_L2_then_SW_L1_if_sample_lt_20",
+      "reviewed_delisted_missing_industry_exception_allowed": true,
+      "exception_symbols": [
+        "000666.SZ"
+      ],
+      "active_missing_industry_hard_fail": true,
+      "exception_retained_in_returns_and_risk": true,
+      "exception_excluded_only_from_industry_denominators": true,
+      "silent_industry_fill_allowed": false
+    },
+    "multiple_testing_policy": {
+      "family_list_frozen": true,
+      "parameter_sweep_allowed": false,
+      "post_result_rescue_slicing_allowed": false,
+      "correction_required": "benjamini_hochberg_fdr_or_bonferroni",
+      "minimum_monthly_cohorts": 48
+    },
+    "required_output_diagnostics": [
+      "Report every frozen signal family, not only the winner.",
+      "Report monthly and yearly clustered benchmark excess, stock concentration, tail contribution, and drawdown.",
+      "Report industry-neutral and non-neutral views separately, with 000666.SZ retained in returns and risk.",
+      "Report failed / missing-data exclusions and do not fill missing fundamentals with zero or latest values.",
+      "Report a plain-language verdict: usable alpha clue, risk-filter-only, or no alpha."
+    ]
+  },
+  "decision_policy": {
+    "candidate_alpha_research_only": [
+      "A future reviewed run may label a family as a candidate alpha clue only if it beats the frozen same-anchor CSI300 primary benchmark after multiple-testing correction, remains positive net of costs, is not dominated by a tiny number of names or one year, and keeps drawdown within the registered research threshold.",
+      "This label would still be research-only and would not allow full-size use without the unchanged 12-month forward-live ship gate."
+    ],
+    "risk_filter_or_no_alpha": [
+      "If the families only reduce bad cases or drawdown without positive corrected benchmark excess, keep A-long as a risk-filter or research reference.",
+      "Do not relabel a failed family as alpha by slicing after the result."
+    ],
+    "falsified": [
+      "If corrected benchmark excess is not positive after costs and correction, mark the frozen family as failed for this preregistration.",
+      "No parameter rescue, new threshold, new benchmark, or fixed-panel alpha claim is allowed without a new reviewed preregistration."
+    ],
+    "minimum_forward_live_months_for_ship_gate": 12,
+    "backtest_can_authorize_full_size": false
+  },
+  "planned_test_budget": {
+    "ledger_ref": "research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json",
+    "planned_test_id": "a_long_signal_search_preregistration_20260604",
+    "test_budget_units": 1,
+    "signal_search_run_authorized_now": false,
+    "requires_claude_review_before_run": true,
+    "requires_user_execute_before_run": true
+  },
+  "prohibited_claims": {
+    "validated_alpha": false,
+    "fixed_panel_proves_alpha": false,
+    "full_universe_ready": false,
+    "signal_search_authorized": false,
+    "full_size_allowed": false,
+    "ship_gate_evidence": false,
+    "production_ready": false,
+    "datahub_authorized": false,
+    "provider_work_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Independent review must verify this preregistration before any signal-search runner or full-universe data execution.",
+    "After clean review and explicit user execute, the next execution package may combine main-board candidate-universe expansion, runner implementation, full-period signal run, summary, tests, and docs in one reviewed big package.",
+    "The future run must not use the fixed 9-symbol panel as alpha proof; it is only the data-route proof that justified this preregistration."
+  ],
+  "limitations": [
+    "This artifact runs no signal, computes no alpha, and fetches no data.",
+    "The passed audit covers a fixed 9-symbol panel, not the full A-share main-board universe.",
+    "This artifact does not authorize production, DataHub, provider expansion, ship-gate evidence, full-size manual use, or broker / order automation.",
+    "Any future positive backtest remains insufficient for full-size use until the project ship gate, including at least 12 months of forward-live evidence, is satisfied."
+  ]
+}

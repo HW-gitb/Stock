@@ -70,18 +70,35 @@ class ALongTushareDailyPriceRouteDiagnosticPacketTest(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.raw_root, ignore_errors=True)
 
+    def _partial_prior_summary_patch(self, tmp: str):
+        prior = runner.read_json(runner.PRIOR_BROADER_SUMMARY_PATH)
+        prior["decision"]["materialization_status"] = "partial_or_failed_full_period_panel_materialization"
+        for item in prior["endpoint_results"]:
+            if item.get("api_family") == "daily" and item.get("table_id") == "daily_price_adj_factor_dividend":
+                item["call_status"] = "empty"
+                item["row_count"] = 0
+        prior_path = Path(tmp) / "partial_prior.json"
+        prior_path.write_text(json.dumps(prior), encoding="utf-8")
+        original_validate = runner.validate_prior_broader_summary
+        return mock.patch.object(
+            runner,
+            "validate_prior_broader_summary",
+            side_effect=lambda path=prior_path: original_validate(prior_path),
+        )
+
     def test_fake_client_writes_burst_rate_classification_and_raw_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             summary_path = Path(tmp) / "summary.json"
 
-            summary = runner.execute_daily_price_route_diagnostic(
-                pro_factory=lambda: FakeDailyRowsPro(),
-                raw_root=self.raw_root,
-                summary_path=summary_path,
-                generated_at="2026-06-04T00:00:00+00:00",
-                confirm_independent_review_pass=True,
-                confirm_post_review_execute=True,
-            )
+            with self._partial_prior_summary_patch(tmp):
+                summary = runner.execute_daily_price_route_diagnostic(
+                    pro_factory=lambda: FakeDailyRowsPro(),
+                    raw_root=self.raw_root,
+                    summary_path=summary_path,
+                    generated_at="2026-06-04T00:00:00+00:00",
+                    confirm_independent_review_pass=True,
+                    confirm_post_review_execute=True,
+                )
 
             persisted = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(summary, persisted)
@@ -116,14 +133,15 @@ class ALongTushareDailyPriceRouteDiagnosticPacketTest(unittest.TestCase):
             raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
 
         with tempfile.TemporaryDirectory() as tmp:
-            summary = runner.execute_daily_price_route_diagnostic(
-                pro_factory=lambda: FakeDailyRowsPro(),
-                raw_root=self.raw_root,
-                summary_path=Path(tmp) / "summary.json",
-                generated_at="2026-06-04T00:00:00+00:00",
-                confirm_independent_review_pass=True,
-                confirm_post_review_execute=True,
-            )
+            with self._partial_prior_summary_patch(tmp):
+                summary = runner.execute_daily_price_route_diagnostic(
+                    pro_factory=lambda: FakeDailyRowsPro(),
+                    raw_root=self.raw_root,
+                    summary_path=Path(tmp) / "summary.json",
+                    generated_at="2026-06-04T00:00:00+00:00",
+                    confirm_independent_review_pass=True,
+                    confirm_post_review_execute=True,
+                )
 
         schema = json.loads(
             Path("schemas/a_long_tushare_daily_price_route_diagnostic_execution_summary.schema.json").read_text(
@@ -134,14 +152,15 @@ class ALongTushareDailyPriceRouteDiagnosticPacketTest(unittest.TestCase):
 
     def test_window_limit_classification_keeps_alpha_blocked(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            summary = runner.execute_daily_price_route_diagnostic(
-                pro_factory=lambda: FakeWindowLimitPro(),
-                raw_root=self.raw_root,
-                summary_path=Path(tmp) / "summary.json",
-                generated_at="2026-06-04T00:00:00+00:00",
-                confirm_independent_review_pass=True,
-                confirm_post_review_execute=True,
-            )
+            with self._partial_prior_summary_patch(tmp):
+                summary = runner.execute_daily_price_route_diagnostic(
+                    pro_factory=lambda: FakeWindowLimitPro(),
+                    raw_root=self.raw_root,
+                    summary_path=Path(tmp) / "summary.json",
+                    generated_at="2026-06-04T00:00:00+00:00",
+                    confirm_independent_review_pass=True,
+                    confirm_post_review_execute=True,
+                )
 
             self.assertEqual(summary["decision"]["price_route_diagnostic_status"], "eight_year_empty_control_returned_rows")
             self.assertIn("chunked-daily", summary["decision"]["next_action"])
@@ -151,14 +170,15 @@ class ALongTushareDailyPriceRouteDiagnosticPacketTest(unittest.TestCase):
 
     def test_both_empty_keeps_endpoint_or_account_blocked(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            summary = runner.execute_daily_price_route_diagnostic(
-                pro_factory=lambda: FakeEmptyDailyPro(),
-                raw_root=self.raw_root,
-                summary_path=Path(tmp) / "summary.json",
-                generated_at="2026-06-04T00:00:00+00:00",
-                confirm_independent_review_pass=True,
-                confirm_post_review_execute=True,
-            )
+            with self._partial_prior_summary_patch(tmp):
+                summary = runner.execute_daily_price_route_diagnostic(
+                    pro_factory=lambda: FakeEmptyDailyPro(),
+                    raw_root=self.raw_root,
+                    summary_path=Path(tmp) / "summary.json",
+                    generated_at="2026-06-04T00:00:00+00:00",
+                    confirm_independent_review_pass=True,
+                    confirm_post_review_execute=True,
+                )
 
             self.assertEqual(summary["decision"]["price_route_diagnostic_status"], "both_windows_empty")
             self.assertFalse(summary["decision"]["data_can_be_used_for_alpha_now"])
@@ -167,14 +187,15 @@ class ALongTushareDailyPriceRouteDiagnosticPacketTest(unittest.TestCase):
     def test_error_daily_result_is_redacted_and_keeps_alpha_blocked(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.dict(os.environ, {"TUSHARE_TOKEN": "TOKEN_FIXTURE_VALUE"}):
-                summary = runner.execute_daily_price_route_diagnostic(
-                    pro_factory=lambda: FakeErrorDailyPro(),
-                    raw_root=self.raw_root,
-                    summary_path=Path(tmp) / "summary.json",
-                    generated_at="2026-06-04T00:00:00+00:00",
-                    confirm_independent_review_pass=True,
-                    confirm_post_review_execute=True,
-                )
+                with self._partial_prior_summary_patch(tmp):
+                    summary = runner.execute_daily_price_route_diagnostic(
+                        pro_factory=lambda: FakeErrorDailyPro(),
+                        raw_root=self.raw_root,
+                        summary_path=Path(tmp) / "summary.json",
+                        generated_at="2026-06-04T00:00:00+00:00",
+                        confirm_independent_review_pass=True,
+                        confirm_post_review_execute=True,
+                    )
 
             result = summary["endpoint_results"][0]
             self.assertEqual(summary["decision"]["price_route_diagnostic_status"], "daily_probe_error")
@@ -186,23 +207,24 @@ class ALongTushareDailyPriceRouteDiagnosticPacketTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             first_summary_path = Path(tmp) / "first.json"
             second_summary_path = Path(tmp) / "second.json"
-            runner.execute_daily_price_route_diagnostic(
-                pro_factory=lambda: FakeDailyRowsPro(),
-                raw_root=self.raw_root,
-                summary_path=first_summary_path,
-                generated_at="2026-06-04T00:00:00+00:00",
-                confirm_independent_review_pass=True,
-                confirm_post_review_execute=True,
-            )
+            with self._partial_prior_summary_patch(tmp):
+                runner.execute_daily_price_route_diagnostic(
+                    pro_factory=lambda: FakeDailyRowsPro(),
+                    raw_root=self.raw_root,
+                    summary_path=first_summary_path,
+                    generated_at="2026-06-04T00:00:00+00:00",
+                    confirm_independent_review_pass=True,
+                    confirm_post_review_execute=True,
+                )
 
-            summary = runner.execute_daily_price_route_diagnostic(
-                pro_factory=lambda: FailingTusharePro(),
-                raw_root=self.raw_root,
-                summary_path=second_summary_path,
-                generated_at="2026-06-04T00:00:01+00:00",
-                confirm_independent_review_pass=True,
-                confirm_post_review_execute=True,
-            )
+                summary = runner.execute_daily_price_route_diagnostic(
+                    pro_factory=lambda: FailingTusharePro(),
+                    raw_root=self.raw_root,
+                    summary_path=second_summary_path,
+                    generated_at="2026-06-04T00:00:01+00:00",
+                    confirm_independent_review_pass=True,
+                    confirm_post_review_execute=True,
+                )
 
             self.assertEqual(summary["decision"]["price_route_diagnostic_status"], "eight_year_isolated_returned_rows")
             self.assertEqual(summary["execution"]["new_network_call_count"], 0)
@@ -213,24 +235,26 @@ class ALongTushareDailyPriceRouteDiagnosticPacketTest(unittest.TestCase):
     def test_live_execution_requires_review_and_execute_confirmations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(RuntimeError):
-                runner.execute_daily_price_route_diagnostic(
-                    pro_factory=lambda: FakeDailyRowsPro(),
-                    raw_root=self.raw_root,
-                    summary_path=Path(tmp) / "summary.json",
-                    generated_at="2026-06-04T00:00:00+00:00",
-                )
+                with self._partial_prior_summary_patch(tmp):
+                    runner.execute_daily_price_route_diagnostic(
+                        pro_factory=lambda: FakeDailyRowsPro(),
+                        raw_root=self.raw_root,
+                        summary_path=Path(tmp) / "summary.json",
+                        generated_at="2026-06-04T00:00:00+00:00",
+                    )
 
     def test_missing_token_records_no_execution_without_network(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             summary_path = Path(tmp) / "summary.json"
             with mock.patch.dict(os.environ, {}, clear=True):
-                summary = runner.execute_daily_price_route_diagnostic(
-                    raw_root=self.raw_root,
-                    summary_path=summary_path,
-                    generated_at="2026-06-04T00:00:00+00:00",
-                    confirm_independent_review_pass=True,
-                    confirm_post_review_execute=True,
-                )
+                with self._partial_prior_summary_patch(tmp):
+                    summary = runner.execute_daily_price_route_diagnostic(
+                        raw_root=self.raw_root,
+                        summary_path=summary_path,
+                        generated_at="2026-06-04T00:00:00+00:00",
+                        confirm_independent_review_pass=True,
+                        confirm_post_review_execute=True,
+                    )
 
             self.assertEqual(summary["decision"]["price_route_diagnostic_status"], "not_executed_environment_missing")
             self.assertFalse(summary["scope"]["provider_call_executed"])
@@ -242,14 +266,15 @@ class ALongTushareDailyPriceRouteDiagnosticPacketTest(unittest.TestCase):
     def test_raw_root_must_stay_under_gitignored_diagnostic_root(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
-                runner.execute_daily_price_route_diagnostic(
-                    pro_factory=lambda: FakeDailyRowsPro(),
-                    raw_root=Path(tmp) / "raw",
-                    summary_path=Path(tmp) / "summary.json",
-                    generated_at="2026-06-04T00:00:00+00:00",
-                    confirm_independent_review_pass=True,
-                    confirm_post_review_execute=True,
-                )
+                with self._partial_prior_summary_patch(tmp):
+                    runner.execute_daily_price_route_diagnostic(
+                        pro_factory=lambda: FakeDailyRowsPro(),
+                        raw_root=Path(tmp) / "raw",
+                        summary_path=Path(tmp) / "summary.json",
+                        generated_at="2026-06-04T00:00:00+00:00",
+                        confirm_independent_review_pass=True,
+                        confirm_post_review_execute=True,
+                    )
 
     def test_packet_loader_rejects_scope_creep(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

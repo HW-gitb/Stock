@@ -36,6 +36,8 @@ The first formal audit (`docs/phase7a_alpha_plausibility_audit.json`) marks all 
 
 This verdict does not demote long alpha as a design objective. It blocks implementation until provider/PIT evidence can make expected-alpha theses reproducible and cost-adjusted.
 
+2026-06-04 update: the A-long Tushare route has passed a main-board-only fixed-panel data-integrity audit (`research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json`) and may now support a reviewed signal-search preregistration. The fixed panel is only a 9-symbol route proof, not alpha evidence or full-universe proof. The registered next design is `research/preregistrations/a_long_signal_search_preregistration_20260604.json`; it runs no signal and does not authorize production, ship-gate evidence, or full-size use.
+
 ## 2. Candidate Lifecycle
 
 Each long candidate should move through the same conceptual lifecycle:

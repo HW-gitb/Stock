@@ -1,5 +1,28 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long main-board fixed-panel audit pass and signal-search preregistration
+
+**Changed**:
+- Committed the prior reviewed delisted missing-industry boundary as `70900ff Implement A-long delisted industry exception`.
+- Executed the main-board-only A-long broader materialization packet after the boundary: `600887.SH` replaces old ChiNext `300750.SZ`; active symbols are main-board only; raw payloads stay under gitignored `data/a_long/raw/tushare/materialization_full_period_panel_20260604/`.
+- `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json` now records `passed_full_period_panel_materialization_shape`, 7 new network calls, 64 reused raw payloads, 8 daily empty-raw refetches, and no secret / request URL in the tracked summary.
+- Ran `runners/a_long_materialized_full_period_data_integrity_audit.py` locally only; `research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json` records `passed_fixed_panel_data_integrity_for_signal_preregistration`, hard checks pass, 11/11 self-tests, and usable start year 2018.
+- Added `schemas/a_long_signal_search_preregistration.schema.json`, `research/preregistrations/a_long_signal_search_preregistration_20260604.json`, `research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json`, and schema tests.
+
+**Plain result**:
+- A-long data route is now good enough to write the first signal-search preregistration.
+- It still has not found alpha.
+- The fixed 9-symbol panel is only route proof, not full-universe proof.
+
+**Guardrails**:
+- The preregistration runs no signal, fetches no data, and authorizes no alpha, production, ship-gate evidence, full-size use, DataHub, provider expansion, or broker/order automation.
+- `000666.SZ` remains in returns/risk/coverage and is excluded only from industry-normalization denominators under the reviewed bounded exception.
+- Active-symbol missing industry still fails.
+
+**Next**:
+- Claude should review this whole big package.
+- After clean review and explicit user execute, the next package may combine main-board candidate-universe expansion, signal-search runner implementation, full-period signal run, summary, tests, and docs. Do not use the 9-symbol fixed panel as alpha proof.
+
 ## 2026-06-04 append: A-long delisted missing-industry boundary
 
 **Changed**:
