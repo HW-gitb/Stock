@@ -1,0 +1,161 @@
+{
+  "schema_name": "a_long_tushare_daily_price_route_diagnostic_execution_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-04T11:16:07+00:00",
+  "artifact_id": "a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604",
+  "packet_ref": "docs/a_long_tushare_daily_price_route_diagnostic_packet_20260604.json",
+  "prior_summary_ref": "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_tushare_daily_price_route_diagnostic_execution",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_call_executed": true,
+    "tushare_call_executed": true,
+    "data_fetch_executed": true,
+    "raw_payload_written_to_gitignored_path": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_secret": false,
+    "daily_price_route_repair_executed": false,
+    "broader_materialization_rerun_executed": false,
+    "full_market_materialization_executed": false,
+    "full_universe_materialization_executed": false,
+    "audit_rerun_executed": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "execution": {
+    "summary_path": "docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json",
+    "raw_output_root": "data/a_long/raw/tushare/daily_price_route_diagnostic_20260604/",
+    "raw_output_root_is_gitignored": true,
+    "max_total_endpoint_calls": 2,
+    "planned_total_endpoint_calls": 2,
+    "endpoint_results_count": 2,
+    "new_network_call_count": 2,
+    "reused_raw_payload_count": 0,
+    "budget_exceeded": false,
+    "network_call_attempted": true,
+    "environment_precheck_passed": true,
+    "independent_review_confirmed": true,
+    "post_review_execute_confirmed": true,
+    "token_logged": false,
+    "request_url_logged": false
+  },
+  "diagnostic_boundary": {
+    "diagnostic_id": "a_long_daily_isolated_window_probe_000001_2018_2025_plus_2022_control",
+    "fixed_symbol": "000001.SZ",
+    "eight_year_window_start_date": "20180101",
+    "eight_year_window_end_date": "20251231",
+    "control_window_start_date": "20220101",
+    "control_window_end_date": "20221231",
+    "not_full_market": true,
+    "not_full_universe": true,
+    "not_broader_panel_rerun": true
+  },
+  "endpoint_results": [
+    {
+      "call_id": "daily_000001_SZ_2018_2025_isolated_probe",
+      "table_id": "daily_price_eight_year_isolated_probe",
+      "api_family": "daily",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "start_date": "20180101",
+        "end_date": "20251231",
+        "fields": "ts_code,trade_date,open,close,vol,amount"
+      },
+      "call_status": "success",
+      "row_count": 1942,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close",
+        "vol",
+        "amount"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/daily_price_route_diagnostic_20260604/daily_000001_SZ_2018_2025_isolated_probe.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_000001_SZ_2022_control_probe",
+      "table_id": "daily_price_one_year_control_probe",
+      "api_family": "daily",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "start_date": "20220101",
+        "end_date": "20221231",
+        "fields": "ts_code,trade_date,open,close,vol,amount"
+      },
+      "call_status": "success",
+      "row_count": 242,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close",
+        "vol",
+        "amount"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "minimum_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/daily_price_route_diagnostic_20260604/daily_000001_SZ_2022_control_probe.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    }
+  ],
+  "decision": {
+    "price_route_diagnostic_status": "eight_year_isolated_returned_rows",
+    "data_can_be_used_for_alpha_now": false,
+    "price_route_repair_authorized_by_this_summary": false,
+    "broader_materialization_rerun_authorized_by_this_summary": false,
+    "audit_rerun_authorized_by_this_summary": false,
+    "signal_search_authorized_by_this_summary": false,
+    "plain_result": "The 2018-2025 daily probe returned rows in isolation. The old failure is likely a burst-rate / pacing problem, not a window-size problem.",
+    "next_action": "Create a separate reviewed pacing / rate-limit repair packet before any broader materialization rerun."
+  },
+  "prohibited_claims": {
+    "a_long_data_ready": false,
+    "a_long_alpha_found": false,
+    "daily_route_repaired": false,
+    "broader_materialization_rerun_authorized": false,
+    "audit_passed": false,
+    "signal_search_authorized": false,
+    "full_universe_materialization_done": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This summary records only two fixed daily diagnostic calls.",
+    "Raw rows stay under gitignored data/a_long/raw/ and are not included in the tracked summary.",
+    "The result only narrows the failure mode; it does not repair data or authorize a broader rerun.",
+    "No full audit, signal search, alpha backtest, DataHub, production, ship-gate, full-size use, or broker/order automation is authorized."
+  ]
+}

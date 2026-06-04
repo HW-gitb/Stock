@@ -1,5 +1,29 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long daily price route diagnostic execution
+
+**Changed**:
+- Added `docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json`.
+- Updated routing/status docs to record the diagnostic result and next pacing repair route.
+
+**Plain result**:
+- The two-call diagnostic ran.
+- Both fixed `daily` probes returned rows.
+- The 2018-2025 isolated probe returned 1,942 rows; the 2022 control returned 242 rows.
+- The old 71-call broader failure is therefore likely a burst-rate / pacing problem, not an 8-year window problem.
+- A-long data is still not usable for audit or alpha search.
+
+**Boundaries**:
+- Raw rows are only under gitignored `data/a_long/raw/tushare/daily_price_route_diagnostic_20260604/`.
+- The tracked summary contains no raw rows, request URL, or secret.
+- This execution authorizes no daily repair, broader materialization rerun, full audit, signal search, alpha backtest, DataHub, production claim, ship-gate claim, full-size use, or broker/order automation.
+
+**Next**:
+- Per user preference, combine the next work into one reviewed package: pacing / rate-limit price-route repair + fixed 2018-2025 panel rerun + summary + tests + docs.
+- Do not route the next repair to chunking unless new evidence contradicts this diagnostic.
+
+---
+
 ## 2026-06-04 append: A-long daily price route diagnostic packet
 
 **Changed**:

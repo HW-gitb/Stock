@@ -8,6 +8,55 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long daily-route diagnostic execution) — **PASS (可提交)**
+
+**Verdict**: Pass. Clean real-network execution (2 calls via the double-gate). The 2-call probe conclusively resolved the daily-empty cause — it is burst-rate / throttle, NOT window-size — and routed the next fix correctly to pacing (not chunk). Safe to commit.
+
+**Verified**:
+- Hygiene: tracked summary `token_logged/request_url_logged=false`; grep found no `records`/URL/token; raw under gitignored diagnostic dir.
+- Result: 8-year isolated `daily` 000001.SZ 2018-2025 returned **1,942 rows** (≈8yr × ~242 trading days ✓); 2022 control **242 rows**. Decision `eight_year_isolated_returned_rows`; `data_can_be_used_for_alpha_now=false`; `signal_search_authorized=false`; `next_action` = pacing / rate-limit repair (NOT chunk).
+- This is exactly why the 2-call design mattered: the original 1-year-only probe would have returned rows and (per the old logic) concluded "window→chunk" — wrong, since the 8-year works fine in isolation. The decisive isolated 8-year call proved it is rate, not width.
+
+**Next (user steered to consolidate)**: per the note, the next work is ONE combined reviewed package — pacing/rate-limit daily repair + 2018-2025 panel rerun + summary + tests + docs — not another tiny slice. Reasonable: the careful probing found the real cause; now do the fix + rerun in one reviewed package. Must not default to chunked-daily.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long daily price route diagnostic execution)
+
+**Plain result**:
+- 跑完了。
+- 两个 `daily` 探针都返回数据。
+- 2018-2025 八年隔离探针返回 1,942 行；2022 对照探针返回 242 行。
+- 这说明之前 broader run 里 `daily` 全空，主要像是突发调用 / 限速 / 节流问题，不是 8 年窗口太大。
+- A-long 现在仍不能审计、不能找 alpha。
+
+**Execution**:
+- Ran `runners/a_long_tushare_daily_price_route_diagnostic_packet.py --confirm-independent-review-pass --confirm-post-review-execute`.
+- Wrote tracked summary `docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json`.
+- Raw payloads were written only under gitignored `data/a_long/raw/tushare/daily_price_route_diagnostic_20260604/`.
+- New network calls: 2; reused raw payloads: 0; retries: 0.
+- Summary decision: `eight_year_isolated_returned_rows`.
+
+**Worked on**:
+- [tracked modified] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `docs/SESSION_LOG.md`.
+- [untracked new] `docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json`.
+
+**Next route**:
+- User requested fewer small slices. The next work should be one combined reviewed package: pacing / rate-limit price-route repair + fixed 2018-2025 panel rerun + summary + tests + docs.
+- Do not default to chunked-daily repair from the old all-empty run; the decisive isolated 8-year call returned rows.
+
+**Non-authorization**:
+- No price-route repair, no broader materialization rerun, no full audit, no signal search, no alpha backtest, no DataHub, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the tracked summary has no raw rows, request URL, or secret.
+- Verify the result correctly routes next work to pacing / rate-limit rather than chunking.
+- Verify docs keep A-long signal search blocked until a later full reviewed audit passes.
+
+**Ready for Claude review**: Yes.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long daily-route diagnostic packet 修复) — **PASS (可提交)**
 
 **Verdict**: Pass. The USER-APPROVED diagnostic-design fix is genuinely closed — the probe now disambiguates window-limit vs burst-rate-limit and the routing logic is correct. Commit the corrected packet.
