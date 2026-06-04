@@ -1,0 +1,834 @@
+{
+  "schema_name": "a_long_tushare_route_validation_execution_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-04T00:00:00+08:00",
+  "artifact_id": "a_long_tushare_route_validation_execution_summary_20260604",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_tushare_route_validation_execution",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "route_validation_only": true,
+    "field_presence_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_call_executed": true,
+    "tushare_call_executed": true,
+    "data_fetch_executed": true,
+    "raw_payload_written_to_gitignored_path": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_secret": false,
+    "full_materialization_executed": false,
+    "audit_rerun_executed": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "execution": {
+    "route_plan_ref": "docs/a_long_tushare_data_route_repair_plan_20260603.json",
+    "summary_path": "docs/a_long_tushare_route_validation_execution_summary_20260604.json",
+    "raw_output_root": "data/a_long/raw/tushare/route_validation_20260604/",
+    "raw_output_root_is_gitignored": true,
+    "max_total_calls": 24,
+    "planned_call_count": 23,
+    "actual_call_count": 23,
+    "budget_exceeded": false,
+    "network_call_attempted": true,
+    "environment_precheck_passed": true,
+    "token_logged": false,
+    "request_url_logged": false
+  },
+  "sample_boundary": {
+    "active_symbols": [
+      "000001.SZ",
+      "600519.SH"
+    ],
+    "fundamental_period": "20231231",
+    "price_window": {
+      "start_date": "20240102",
+      "end_date": "20240105"
+    },
+    "benchmark_index": "000300.SH",
+    "sw_index_member_selection_rule": "index_member_all_endpoint_for_membership_shape_only",
+    "full_market_materialization_allowed": false,
+    "signal_universe_build_allowed": false
+  },
+  "endpoint_results": [
+    {
+      "call_id": "calendar_trade_cal_201801",
+      "component_id": "calendar_schedule",
+      "api_family": "trade_cal",
+      "request_shape_without_token": {
+        "exchange": "SSE",
+        "start_date": "20180101",
+        "end_date": "20180131",
+        "is_open": "1",
+        "fields": "cal_date,is_open,exchange"
+      },
+      "call_status": "success",
+      "row_count": 22,
+      "columns": [
+        "cal_date",
+        "is_open",
+        "exchange"
+      ],
+      "required_fields_present": [
+        "cal_date",
+        "is_open"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/calendar_trade_cal_201801.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "stock_basic_active_L",
+      "component_id": "pit_universe_survivorship",
+      "api_family": "stock_basic",
+      "request_shape_without_token": {
+        "exchange": "",
+        "list_status": "L",
+        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date"
+      },
+      "call_status": "success",
+      "row_count": 5524,
+      "columns": [
+        "ts_code",
+        "symbol",
+        "name",
+        "exchange",
+        "market",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "name",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/stock_basic_active_L.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "stock_basic_delisted_D",
+      "component_id": "terminal_delisting_return",
+      "api_family": "stock_basic",
+      "request_shape_without_token": {
+        "exchange": "",
+        "list_status": "D",
+        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date"
+      },
+      "call_status": "success",
+      "row_count": 326,
+      "columns": [
+        "ts_code",
+        "symbol",
+        "name",
+        "exchange",
+        "market",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "name",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/stock_basic_delisted_D.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_classify_sw_L1",
+      "component_id": "industry_taxonomy_history",
+      "api_family": "index_classify",
+      "request_shape_without_token": {
+        "level": "L1",
+        "fields": "index_code,industry_name,level,parent_code"
+      },
+      "call_status": "success",
+      "row_count": 28,
+      "columns": [
+        "index_code",
+        "industry_name",
+        "level",
+        "parent_code"
+      ],
+      "required_fields_present": [
+        "index_code",
+        "level"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/index_classify_sw_L1.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_classify_sw_L2",
+      "component_id": "industry_taxonomy_history",
+      "api_family": "index_classify",
+      "request_shape_without_token": {
+        "level": "L2",
+        "fields": "index_code,industry_name,level,parent_code"
+      },
+      "call_status": "success",
+      "row_count": 104,
+      "columns": [
+        "index_code",
+        "industry_name",
+        "level",
+        "parent_code"
+      ],
+      "required_fields_present": [
+        "index_code",
+        "level",
+        "parent_code"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/index_classify_sw_L2.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "income_000001.SZ_20231231",
+      "component_id": "raw_pit_fundamentals",
+      "api_family": "income",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "period": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,revenue,n_income_attr_p"
+      },
+      "call_status": "success",
+      "row_count": 1,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "revenue",
+        "n_income_attr_p"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/income_000001.SZ_20231231.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "balancesheet_000001.SZ_20231231",
+      "component_id": "raw_pit_fundamentals",
+      "api_family": "balancesheet",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "period": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,total_assets,total_liab,total_hldr_eqy_exc_min_int"
+      },
+      "call_status": "success",
+      "row_count": 2,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "total_assets",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/balancesheet_000001.SZ_20231231.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "cashflow_000001.SZ_20231231",
+      "component_id": "raw_pit_fundamentals",
+      "api_family": "cashflow",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "period": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,n_cashflow_act"
+      },
+      "call_status": "success",
+      "row_count": 2,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "n_cashflow_act"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/cashflow_000001.SZ_20231231.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "fina_indicator_000001.SZ_20231231",
+      "component_id": "raw_pit_fundamentals",
+      "api_family": "fina_indicator",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "period": "20231231",
+        "fields": "ts_code,ann_date,end_date,roe,profit_dedt"
+      },
+      "call_status": "success",
+      "row_count": 1,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "roe",
+        "profit_dedt"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/fina_indicator_000001.SZ_20231231.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_000001.SZ_20240102_20240105",
+      "component_id": "total_return_and_benchmark",
+      "api_family": "daily",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "fields": "ts_code,trade_date,open,close",
+        "start_date": "20240102",
+        "end_date": "20240105"
+      },
+      "call_status": "success",
+      "row_count": 4,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/daily_000001.SZ_20240102_20240105.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "adj_factor_000001.SZ_20240102_20240105",
+      "component_id": "total_return_and_benchmark",
+      "api_family": "adj_factor",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "fields": "ts_code,trade_date,adj_factor",
+        "start_date": "20240102",
+        "end_date": "20240105"
+      },
+      "call_status": "success",
+      "row_count": 4,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/adj_factor_000001.SZ_20240102_20240105.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "dividend_000001.SZ_20240102_20240105",
+      "component_id": "total_return_and_benchmark",
+      "api_family": "dividend",
+      "request_shape_without_token": {
+        "ts_code": "000001.SZ",
+        "fields": "ts_code,end_date,ann_date,record_date,ex_date,pay_date,cash_div,cash_div_tax"
+      },
+      "call_status": "success",
+      "row_count": 52,
+      "columns": [
+        "ts_code",
+        "end_date",
+        "ann_date",
+        "record_date",
+        "ex_date",
+        "pay_date",
+        "cash_div",
+        "cash_div_tax"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/dividend_000001.SZ_20240102_20240105.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "income_600519.SH_20231231",
+      "component_id": "raw_pit_fundamentals",
+      "api_family": "income",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "period": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,revenue,n_income_attr_p"
+      },
+      "call_status": "success",
+      "row_count": 1,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "revenue",
+        "n_income_attr_p"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/income_600519.SH_20231231.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "balancesheet_600519.SH_20231231",
+      "component_id": "raw_pit_fundamentals",
+      "api_family": "balancesheet",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "period": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,total_assets,total_liab,total_hldr_eqy_exc_min_int"
+      },
+      "call_status": "success",
+      "row_count": 2,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "total_assets",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/balancesheet_600519.SH_20231231.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "cashflow_600519.SH_20231231",
+      "component_id": "raw_pit_fundamentals",
+      "api_family": "cashflow",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "period": "20231231",
+        "fields": "ts_code,ann_date,f_ann_date,end_date,report_type,n_cashflow_act"
+      },
+      "call_status": "success",
+      "row_count": 1,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "n_cashflow_act"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/cashflow_600519.SH_20231231.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "fina_indicator_600519.SH_20231231",
+      "component_id": "raw_pit_fundamentals",
+      "api_family": "fina_indicator",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "period": "20231231",
+        "fields": "ts_code,ann_date,end_date,roe,profit_dedt"
+      },
+      "call_status": "success",
+      "row_count": 1,
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "roe",
+        "profit_dedt"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date",
+        "end_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/fina_indicator_600519.SH_20231231.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_600519.SH_20240102_20240105",
+      "component_id": "total_return_and_benchmark",
+      "api_family": "daily",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "fields": "ts_code,trade_date,open,close",
+        "start_date": "20240102",
+        "end_date": "20240105"
+      },
+      "call_status": "success",
+      "row_count": 4,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/daily_600519.SH_20240102_20240105.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "adj_factor_600519.SH_20240102_20240105",
+      "component_id": "total_return_and_benchmark",
+      "api_family": "adj_factor",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "fields": "ts_code,trade_date,adj_factor",
+        "start_date": "20240102",
+        "end_date": "20240105"
+      },
+      "call_status": "success",
+      "row_count": 4,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/adj_factor_600519.SH_20240102_20240105.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "dividend_600519.SH_20240102_20240105",
+      "component_id": "total_return_and_benchmark",
+      "api_family": "dividend",
+      "request_shape_without_token": {
+        "ts_code": "600519.SH",
+        "fields": "ts_code,end_date,ann_date,record_date,ex_date,pay_date,cash_div,cash_div_tax"
+      },
+      "call_status": "success",
+      "row_count": 58,
+      "columns": [
+        "ts_code",
+        "end_date",
+        "ann_date",
+        "record_date",
+        "ex_date",
+        "pay_date",
+        "cash_div",
+        "cash_div_tax"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "ann_date"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/dividend_600519.SH_20240102_20240105.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_daily_000300.SH_20240102_20240105",
+      "component_id": "total_return_and_benchmark",
+      "api_family": "index_daily",
+      "request_shape_without_token": {
+        "ts_code": "000300.SH",
+        "start_date": "20240102",
+        "end_date": "20240105",
+        "fields": "ts_code,trade_date,open,close"
+      },
+      "call_status": "success",
+      "row_count": 4,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/index_daily_000300.SH_20240102_20240105.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_first_delisted_terminal_window",
+      "component_id": "terminal_delisting_return",
+      "api_family": "daily",
+      "request_shape_without_token": {
+        "fields": "ts_code,trade_date,open,close",
+        "ts_code": "000638.SZ",
+        "start_date": "20260504",
+        "end_date": "20260603"
+      },
+      "call_status": "empty",
+      "row_count": 0,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/daily_first_delisted_terminal_window.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "adj_factor_first_delisted_terminal_window",
+      "component_id": "terminal_delisting_return",
+      "api_family": "adj_factor",
+      "request_shape_without_token": {
+        "fields": "ts_code,trade_date,adj_factor",
+        "ts_code": "000638.SZ",
+        "start_date": "20260504",
+        "end_date": "20260603"
+      },
+      "call_status": "success",
+      "row_count": 21,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "required_fields_present": [
+        "ts_code",
+        "trade_date",
+        "adj_factor"
+      ],
+      "required_fields_missing": [],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/adj_factor_first_delisted_terminal_window.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "index_member_all_sw_shape",
+      "component_id": "industry_taxonomy_history",
+      "api_family": "index_member_all",
+      "request_shape_without_token": {
+        "fields": "index_code,con_code,in_date,out_date"
+      },
+      "call_status": "success",
+      "row_count": 3000,
+      "columns": [
+        "in_date",
+        "out_date"
+      ],
+      "required_fields_present": [
+        "in_date",
+        "out_date"
+      ],
+      "required_fields_missing": [
+        "index_code",
+        "con_code"
+      ],
+      "raw_payload_ref": "data/a_long/raw/tushare/route_validation_20260604/index_member_all_sw_shape.json",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    }
+  ],
+  "component_rollup": [
+    {
+      "component_id": "calendar_schedule",
+      "status": "passed_field_presence",
+      "calls_total": 1,
+      "calls_success": 1,
+      "missing_required_fields": [],
+      "plain_result": "小样本字段存在。"
+    },
+    {
+      "component_id": "pit_universe_survivorship",
+      "status": "passed_field_presence",
+      "calls_total": 2,
+      "calls_success": 2,
+      "missing_required_fields": [],
+      "plain_result": "小样本字段存在。"
+    },
+    {
+      "component_id": "raw_pit_fundamentals",
+      "status": "passed_field_presence",
+      "calls_total": 8,
+      "calls_success": 8,
+      "missing_required_fields": [],
+      "plain_result": "小样本字段存在。"
+    },
+    {
+      "component_id": "restatement_revision_lineage",
+      "status": "passed_field_presence",
+      "calls_total": 8,
+      "calls_success": 8,
+      "missing_required_fields": [],
+      "plain_result": "小样本字段存在。"
+    },
+    {
+      "component_id": "industry_taxonomy_history",
+      "status": "partial_or_failed_field_presence",
+      "calls_total": 3,
+      "calls_success": 3,
+      "missing_required_fields": [
+        "con_code",
+        "index_code"
+      ],
+      "plain_result": "小样本字段不完整或接口失败，不能继续放大。"
+    },
+    {
+      "component_id": "total_return_and_benchmark",
+      "status": "passed_field_presence",
+      "calls_total": 7,
+      "calls_success": 7,
+      "missing_required_fields": [],
+      "plain_result": "小样本字段存在。"
+    },
+    {
+      "component_id": "terminal_delisting_return",
+      "status": "partial_or_failed_field_presence",
+      "calls_total": 3,
+      "calls_success": 2,
+      "missing_required_fields": [],
+      "plain_result": "小样本字段不完整或接口失败，不能继续放大。"
+    }
+  ],
+  "decision": {
+    "route_validation_status": "partial_or_failed_field_presence",
+    "data_can_be_used_now": false,
+    "signal_search_allowed_by_this_summary": false,
+    "full_materialization_allowed_by_this_summary": false,
+    "plain_result": "小范围 Tushare 字段验证不完整；A 股长线仍不能找 alpha。",
+    "next_action": "先修 route 或决定是否换/补数据源；不要放大抓取或重跑审计。"
+  },
+  "prohibited_claims": {
+    "a_long_data_ready": false,
+    "a_long_alpha_found": false,
+    "signal_search_authorized": false,
+    "full_materialization_authorized": false,
+    "audit_rerun_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "provider_selected": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This is a tiny route-validation execution, not 2018-2025 materialization.",
+    "Tracked summary records endpoint shape and field presence only; raw rows stay under gitignored data/a_long/raw/.",
+    "A pass only means the next reviewed materialization packet can be designed; it does not make A-long data ready.",
+    "No signal search, alpha backtest, audit rerun, production use, ship-gate claim, full-size use, or broker/order automation is authorized."
+  ]
+}

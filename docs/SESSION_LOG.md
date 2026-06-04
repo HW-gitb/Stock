@@ -8,6 +8,63 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long Tushare route-validation packet) — **PASS (可提交)**
+
+**Verdict**: Pass. First REAL A-long data touch (23 Tushare calls, capped 24) with airtight secret/raw containment and an honest partial result. Correctly moves the lane from planning to data. Safe to commit.
+
+**Secret/raw hygiene — airtight (critical for a real-network slice)**:
+- Token env-only (`os.environ["TUSHARE_TOKEN"]`), never persisted; `redact_error` strips token from error messages; summary `token_logged/request_url_logged=false`.
+- Raw `records` written ONLY under gitignored `data/a_long/raw/tushare/route_validation_20260604/`; `validate_raw_root` HARD-REFUSES a non-gitignored raw root (test proves the raise). Raw dir absent from git status.
+- Tracked summary read in full: only field NAMES + row COUNTS + `request_shape_without_token` + a `raw_payload_ref` path — NO raw values. Test recursively asserts no `records` key anywhere.
+- Budget 23≤24 capped; no-token→no-call (test); field-presence only, no materialization/signal/alpha.
+
+**Honest partial** (`partial_or_failed_field_presence`, `data_can_be_used_now=false`): 5/7 components pass (calendar, universe, raw PIT fundamentals incl. ann_date/end_date, restatement lineage, total-return+benchmark). 2 fail: industry_taxonomy_history (`index_member_all` returned only in_date/out_date — missing index_code/con_code) + terminal_delisting_return (delisted 000638.SZ daily = 0 rows). No overclaim. Tests 8/8 (30/30 A-long modules per Codex).
+
+**Findings analysis (next narrow fix, not defects in this slice)**:
+- SW membership gap likely an endpoint/param or points-tier issue: index_classify L1/L2 returned index_code fine; only `index_member_all` dropped index_code/con_code. Try per-index `index_member` (already stubbed) or check points tier.
+- Delisted-daily gap is partly a TEST-DESIGN artifact: the runner picked the LATEST-delisted symbol (delist_date ≈ today), whose terminal daily bars aren't settled. Re-test with an OLDER delisted name (e.g. 2022) before concluding `daily` can't serve delisted prices — adj_factor returned 21 rows for the same window.
+
+**Optional / process note (non-blocking)**: this runner made REAL network calls before independent review (route plan specified review-before-run). Its own guards (refuse-non-gitignored-raw, token-redact, structural-no-records) make a leak very unlikely and it came back clean — no harm. But for network runners a leak/over-fetch is irreversible once run, so code-review-before-first-call has more value than for local runners; consider pre-reviewing future network runners.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long Tushare route-validation packet)
+
+**Plain result**:
+- A 股长线数据还不能用来找 alpha。
+- 这次真的跑了现有 Tushare 小样本：23 次固定调用，写入 `docs/a_long_tushare_route_validation_execution_summary_20260604.json`。
+- 通过的小样本字段：交易日历、活跃+退市 `stock_basic` 形状、raw PIT fundamentals 的 `ann_date` / `end_date`、重述 lineage 基础字段、日线 / 复权因子 / 分红、CSI300 benchmark。
+- 没通过的两块：SW 行业成员缺 `index_code` / `con_code`；退市样本终态 daily price 为空。结论是 `partial_or_failed_field_presence`。
+- 下一步不是全量抓取、不是重跑 audit、不是信号搜索；只能先修这两个 route 缺口。
+
+**Worked on**:
+- [tracked docs] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`.
+- [new tracked artifacts] `schemas/a_long_tushare_route_validation_execution_summary.schema.json`, `runners/a_long_tushare_route_validation_packet.py`, `docs/a_long_tushare_route_validation_execution_summary_20260604.json`, `tests/schema/test_a_long_tushare_route_validation_execution_summary_schema.py`, `tests/test_a_long_tushare_route_validation_packet.py`.
+- [ignored raw] `data/a_long/raw/tushare/route_validation_20260604/`.
+
+**Execution**:
+- Ran `runners/a_long_tushare_route_validation_packet.py --generated-at 2026-06-04T00:00:00+08:00`.
+- The runner used the existing Tushare environment only; max calls was 24, actual calls were 23.
+- Raw payloads were written only under gitignored `data/a_long/raw/tushare/route_validation_20260604/`; tracked summary contains no raw rows, request URL, or secret.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_route_validation_packet tests.schema.test_a_long_tushare_route_validation_execution_summary_schema tests.schema.test_a_long_tushare_data_route_repair_plan_schema tests.schema.test_a_long_data_integrity_audit_preregistration_schema tests.test_a_long_data_integrity_audit_runner -v` passed 30/30.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 603/603.
+- `git diff --check` passed with expected Windows LF-to-CRLF warnings only.
+- `docs/CURRENT.md` line count is 112.
+- `git check-ignore -v data\a_long\raw\tushare\route_validation_20260604\index_member_all_sw_shape.json` confirms `.gitignore:53 data/a_long/raw/`.
+- Sensitive scan on the tracked summary/schema/runner/tests found only field names and runner raw-write code; tracked summary has no raw `records`, request URL, or token value.
+
+**Non-authorization**:
+- No full 2018-2025 materialization, no audit rerun, no signal search, no alpha backtest, no DataHub table, no production runner consumption, no production-ready claim, no ship-gate evidence, no full-size manual use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the actual summary honestly stays partial and does not overclaim from the passed field families.
+- Verify raw rows are excluded from tracked summary and remain under gitignored `data/a_long/raw/`.
+- Verify the next action is only a narrow repair of SW industry membership field mapping / endpoint behavior and terminal delisting return coverage.
+
+---
+
 ## 2026-06-03 — Claude 审查 (A-long Tushare data-route repair plan) — **PASS (可提交)**
 
 **Verdict**: Pass. Safe (authorizes no fetch/call/audit/signal — all scope + prohibited flags false), well-formed, and genuinely load-bearing (not ceremony). Tests 9/9. Safe to commit.

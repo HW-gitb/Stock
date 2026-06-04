@@ -1,0 +1,501 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_tushare_route_validation_execution_summary/1.0.0/schema.json",
+  "title": "A-Long Tushare Route Validation Execution Summary",
+  "description": "Tracked no-secret summary for the small A-long Tushare route-validation execution. This summary records field-presence and storage-shape evidence only; it does not authorize signal search, alpha backtest, full materialization, DataHub consumption, production readiness, ship-gate claims, full-size use, or broker/order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "execution",
+    "sample_boundary",
+    "endpoint_results",
+    "component_rollup",
+    "decision",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "a_long_tushare_route_validation_execution_summary"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "artifact_id": {
+      "const": "a_long_tushare_route_validation_execution_summary_20260604"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "execution": {
+      "$ref": "#/$defs/execution"
+    },
+    "sample_boundary": {
+      "$ref": "#/$defs/sampleBoundary"
+    },
+    "endpoint_results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/endpointResult"
+      },
+      "minItems": 0
+    },
+    "component_rollup": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/componentRollup"
+      },
+      "minItems": 7,
+      "maxItems": 7,
+      "allOf": [
+        {"contains": {"type": "object", "properties": {"component_id": {"const": "calendar_schedule"}}, "required": ["component_id"]}},
+        {"contains": {"type": "object", "properties": {"component_id": {"const": "pit_universe_survivorship"}}, "required": ["component_id"]}},
+        {"contains": {"type": "object", "properties": {"component_id": {"const": "raw_pit_fundamentals"}}, "required": ["component_id"]}},
+        {"contains": {"type": "object", "properties": {"component_id": {"const": "restatement_revision_lineage"}}, "required": ["component_id"]}},
+        {"contains": {"type": "object", "properties": {"component_id": {"const": "industry_taxonomy_history"}}, "required": ["component_id"]}},
+        {"contains": {"type": "object", "properties": {"component_id": {"const": "total_return_and_benchmark"}}, "required": ["component_id"]}},
+        {"contains": {"type": "object", "properties": {"component_id": {"const": "terminal_delisting_return"}}, "required": ["component_id"]}}
+      ]
+    },
+    "decision": {
+      "$ref": "#/$defs/decision"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "dateKey": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "componentId": {
+      "enum": [
+        "calendar_schedule",
+        "pit_universe_survivorship",
+        "raw_pit_fundamentals",
+        "restatement_revision_lineage",
+        "industry_taxonomy_history",
+        "total_return_and_benchmark",
+        "terminal_delisting_return"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "route_validation_only",
+        "field_presence_only",
+        "provider_family",
+        "provider_call_executed",
+        "tushare_call_executed",
+        "data_fetch_executed",
+        "raw_payload_written_to_gitignored_path",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_secret",
+        "full_materialization_executed",
+        "audit_rerun_executed",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7a_alpha_validation"
+        },
+        "purpose": {
+          "const": "a_long_tushare_route_validation_execution"
+        },
+        "lane_id": {
+          "const": "a_long"
+        },
+        "market": {
+          "const": "A-share"
+        },
+        "research_only": {
+          "const": true
+        },
+        "route_validation_only": {
+          "const": true
+        },
+        "field_presence_only": {
+          "const": true
+        },
+        "provider_family": {
+          "const": "tushare_existing_account"
+        },
+        "provider_call_executed": {
+          "type": "boolean"
+        },
+        "tushare_call_executed": {
+          "type": "boolean"
+        },
+        "data_fetch_executed": {
+          "type": "boolean"
+        },
+        "raw_payload_written_to_gitignored_path": {
+          "type": "boolean"
+        },
+        "tracked_summary_contains_raw_rows": {
+          "const": false
+        },
+        "tracked_summary_contains_secret": {
+          "const": false
+        },
+        "full_materialization_executed": {
+          "const": false
+        },
+        "audit_rerun_executed": {
+          "const": false
+        },
+        "signal_search_executed": {
+          "const": false
+        },
+        "alpha_backtest_executed": {
+          "const": false
+        },
+        "datahub_allowed": {
+          "const": false
+        },
+        "production_use_allowed": {
+          "const": false
+        },
+        "ship_gate_claim_allowed": {
+          "const": false
+        },
+        "full_size_manual_use_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route_plan_ref",
+        "summary_path",
+        "raw_output_root",
+        "raw_output_root_is_gitignored",
+        "max_total_calls",
+        "planned_call_count",
+        "actual_call_count",
+        "budget_exceeded",
+        "network_call_attempted",
+        "environment_precheck_passed",
+        "token_logged",
+        "request_url_logged"
+      ],
+      "properties": {
+        "route_plan_ref": {
+          "const": "docs/a_long_tushare_data_route_repair_plan_20260603.json"
+        },
+        "summary_path": {
+          "const": "docs/a_long_tushare_route_validation_execution_summary_20260604.json"
+        },
+        "raw_output_root": {
+          "const": "data/a_long/raw/tushare/route_validation_20260604/"
+        },
+        "raw_output_root_is_gitignored": {
+          "const": true
+        },
+        "max_total_calls": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "planned_call_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "actual_call_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "budget_exceeded": {
+          "const": false
+        },
+        "network_call_attempted": {
+          "type": "boolean"
+        },
+        "environment_precheck_passed": {
+          "type": "boolean"
+        },
+        "token_logged": {
+          "const": false
+        },
+        "request_url_logged": {
+          "const": false
+        }
+      }
+    },
+    "sampleBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_symbols",
+        "fundamental_period",
+        "price_window",
+        "benchmark_index",
+        "sw_index_member_selection_rule",
+        "full_market_materialization_allowed",
+        "signal_universe_build_allowed"
+      ],
+      "properties": {
+        "active_symbols": {
+          "type": "array",
+          "items": {
+            "enum": ["000001.SZ", "600519.SH"]
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "fundamental_period": {
+          "const": "20231231"
+        },
+        "price_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start_date", "end_date"],
+          "properties": {
+            "start_date": {
+              "const": "20240102"
+            },
+            "end_date": {
+              "const": "20240105"
+            }
+          }
+        },
+        "benchmark_index": {
+          "const": "000300.SH"
+        },
+        "sw_index_member_selection_rule": {
+          "const": "index_member_all_endpoint_for_membership_shape_only"
+        },
+        "full_market_materialization_allowed": {
+          "const": false
+        },
+        "signal_universe_build_allowed": {
+          "const": false
+        }
+      }
+    },
+    "endpointResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "component_id",
+        "api_family",
+        "request_shape_without_token",
+        "call_status",
+        "row_count",
+        "columns",
+        "required_fields_present",
+        "required_fields_missing",
+        "raw_payload_ref",
+        "tracked_summary_excludes_raw_rows",
+        "error_class",
+        "error_message_redacted"
+      ],
+      "properties": {
+        "call_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "component_id": {
+          "$ref": "#/$defs/componentId"
+        },
+        "api_family": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "request_shape_without_token": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean", "null"]
+          }
+        },
+        "call_status": {
+          "enum": ["success", "empty", "error", "skipped"]
+        },
+        "row_count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "required_fields_present": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "required_fields_missing": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "raw_payload_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "tracked_summary_excludes_raw_rows": {
+          "const": true
+        },
+        "error_class": {
+          "type": ["string", "null"]
+        },
+        "error_message_redacted": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "componentRollup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component_id",
+        "status",
+        "calls_total",
+        "calls_success",
+        "missing_required_fields",
+        "plain_result"
+      ],
+      "properties": {
+        "component_id": {
+          "$ref": "#/$defs/componentId"
+        },
+        "status": {
+          "enum": ["passed_field_presence", "partial_or_failed_field_presence", "not_tested"]
+        },
+        "calls_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "calls_success": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_required_fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "plain_result": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route_validation_status",
+        "data_can_be_used_now",
+        "signal_search_allowed_by_this_summary",
+        "full_materialization_allowed_by_this_summary",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "route_validation_status": {
+          "enum": [
+            "passed_field_presence_only",
+            "partial_or_failed_field_presence",
+            "not_executed_environment_missing"
+          ]
+        },
+        "data_can_be_used_now": {
+          "const": false
+        },
+        "signal_search_allowed_by_this_summary": {
+          "const": false
+        },
+        "full_materialization_allowed_by_this_summary": {
+          "const": false
+        },
+        "plain_result": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "next_action": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_data_ready",
+        "a_long_alpha_found",
+        "signal_search_authorized",
+        "full_materialization_authorized",
+        "audit_rerun_authorized",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "provider_selected",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_data_ready": {"const": false},
+        "a_long_alpha_found": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "full_materialization_authorized": {"const": false},
+        "audit_rerun_authorized": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "provider_selected": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

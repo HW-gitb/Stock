@@ -1,5 +1,22 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long Tushare route validation execution
+
+**Changed**:
+- Added `runners/a_long_tushare_route_validation_packet.py`, `schemas/a_long_tushare_route_validation_execution_summary.schema.json`, and `docs/a_long_tushare_route_validation_execution_summary_20260604.json`.
+- Executed a fixed 23-call existing-account Tushare route-validation packet. Raw rows are only under gitignored `data/a_long/raw/tushare/route_validation_20260604/`; the tracked summary contains no raw rows, request URL, or secret.
+
+**Plain result**:
+- Partial, not usable for alpha.
+- Calendar, PIT universe shape, raw PIT fundamentals fields, restatement-lineage fields, price / adj_factor / dividend, and CSI300 benchmark fields passed the small field-presence check.
+- Remaining blockers: SW industry membership fields (`index_member_all` returned rows but not required `index_code` / `con_code`) and terminal delisting return coverage (selected recent delisted sample had empty terminal daily price rows).
+
+**Next**:
+- A-long still cannot search for alpha.
+- Next step is a narrow repair packet for those two route gaps, not full materialization, audit rerun, signal search, DataHub, production, ship-gate, or full-size.
+
+---
+
 ## 2026-06-03 append: A-long Tushare data-route repair plan
 
 **Changed**:
