@@ -8,6 +8,70 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long broader materialization packet) — **PASS (可提交)**
+
+**Verdict**: Pass. Real, executable, bounded scale-up packet (2018-2025, 9 symbols) that is NOT yet run — double-gated. Safe-when-run; honestly scoped; no overclaim. Safe to commit.
+
+**Verified**:
+- Not-yet-run + double-gate delegated to the reviewed `thin_runner.require_live_execution_confirmations` (no live call without both `--confirm` flags; no-token→no-call).
+- Hygiene inherited from reviewed code: raw-write/checkpoint/execute via `thin_runner.execute_call` (line 589 — records→gitignored only, tracked excludes records, no-overwrite checkpoint, redact); own broader gitignored raw root guarded by `validate_raw_root`; token env-only.
+- Bounded: `materialization_call_plan()` locked to 71 ≤ 80, retry 0, abort-on-exceed; `not_full_market`/`not_full_universe` asserted; every table authorizes_return/factor/audit/signal=false; prohibited_claims incl. `full_universe_materialization_authorized=false`.
+- Honest chain: pass proves full-PERIOD (2018-2025) + multi-year mechanics on 9 symbols only; "only after a later reviewed audit proves a signal-search-ready universe may A-long create a signal prereg" — so this 9-symbol panel cannot be used for a signal test.
+
+Tests 17/17 (655/655 full per Codex).
+
+**Strategic note**: this is a careful intermediate (3→9 symbols, 2yr→full-period), proving plumbing — NOT a tradeable universe. The expensive, still-entirely-ahead step is materializing a REAL universe (hundreds of names), where the actual Tushare-call / rate-limit / storage cost lives. "Broader panel passes" ≠ "close to alpha."
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long broader materialization packet)
+
+**Plain result**:
+- 更大的 A 股长线数据落地 packet 已写好。
+- 还没有跑数据。
+- 现在仍不能找 alpha。
+- 下一步是 Claude 审查；审查通过后，用户再输入 `执行` 才能跑固定样本池。
+
+**Scope chosen**:
+- Fixed 2018-2025 full-period panel, not full market and not full universe.
+- Symbols: 8 active symbols (`000001.SZ`, `600519.SH`, `300750.SZ`, `601318.SH`, `600036.SH`, `000651.SZ`, `002415.SZ`, `600276.SH`) plus delisted sample `000666.SZ`.
+- Benchmarks: CSI300 `000300.SH` and CSI1000 `000852.SH`.
+- Planned Tushare calls: 71; max calls: 80; retry count: 0.
+- Raw root for the later run: gitignored `data/a_long/raw/tushare/materialization_full_period_panel_20260604/`.
+
+**Worked on**:
+- [tracked modified] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `docs/SESSION_LOG.md`.
+- [untracked new] `schemas/a_long_tushare_broader_materialization_packet.schema.json`, `docs/a_long_tushare_broader_materialization_packet_20260604.json`, `runners/a_long_tushare_broader_materialization_packet.py`, `schemas/a_long_tushare_broader_materialization_execution_summary.schema.json`, `tests/test_a_long_tushare_broader_materialization_packet.py`, `tests/schema/test_a_long_tushare_broader_materialization_packet_schema.py`.
+
+**Implementation**:
+- Added a reviewed execution packet contract for the broader A-long materialization step.
+- Added a future runner that requires both `--confirm-independent-review-pass` and `--confirm-post-review-execute` before live execution.
+- Added checkpoint reuse: existing raw payload files can be reused without a network call.
+- Added a no-secret execution summary schema for the future run.
+- This round executed no Tushare/API/provider call and wrote no execution summary.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_broader_materialization_packet tests.schema.test_a_long_tushare_broader_materialization_packet_schema -v` passed 17/17.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_broader_materialization_packet tests.schema.test_a_long_tushare_broader_materialization_packet_schema tests.test_a_long_tushare_incremental_materialization_packet tests.schema.test_a_long_tushare_incremental_materialization_packet_schema tests.test_a_long_materialized_thin_slice_data_integrity_audit tests.schema.test_a_long_materialized_thin_slice_data_integrity_audit_schema -v` passed 44/44.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 655/655.
+- `git diff --check` passed with normal Windows LF/CRLF warnings only.
+- `docs/CURRENT.md` line count is 149.
+- Secret scan found no token / bearer / API key; only schema `$id` / `$schema` URLs and no-secret field names.
+
+**Non-authorization**:
+- No provider call, no data fetch, no raw read, no raw row in tracked files, no audit rerun, no signal search, no alpha backtest, no DataHub, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify this is only a packet + future runner, not execution.
+- Verify the scope is genuinely bounded and not full-market / full-universe.
+- Verify call budget and planned call count match the runner plan: 71 planned / max 80.
+- Verify no raw rows, request URLs, token, or secret can enter the tracked summary.
+- Verify docs consistently say A-long still cannot search for alpha.
+
+**Ready for Claude review**: Yes.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long thin-slice audit R1/R2 修复) — **PASS (可提交)**
 
 **Verdict**: Pass. Both USER-APPROVED required fixes are genuinely closed — verified in the runner code AND the committed report. Commit the corrected thin-slice audit (not the prior dead-counter / wrong-self-test version).

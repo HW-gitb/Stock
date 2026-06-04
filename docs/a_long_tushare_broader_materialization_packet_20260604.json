@@ -1,0 +1,299 @@
+{
+  "schema_name": "a_long_tushare_broader_materialization_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-04T00:00:00+08:00",
+  "artifact_id": "a_long_tushare_broader_materialization_packet_20260604",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_tushare_full_period_panel_materialization_packet",
+    "packet_status": "execution_packet_recorded_for_review_not_executed",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_calls_executed_by_this_artifact": false,
+    "tushare_calls_executed_by_this_artifact": false,
+    "data_fetch_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "ready_for_later_execution_after_independent_review": true,
+    "actual_tushare_calls_require_post_review_execute_command": true,
+    "network_access_required_for_later_execution": true,
+    "full_period_panel_materialization_allowed_after_gates": true,
+    "full_universe_materialization_allowed": false,
+    "full_market_materialization_allowed": false,
+    "audit_rerun_allowed_by_this_artifact": false,
+    "signal_search_allowed": false,
+    "alpha_backtest_allowed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "a_long_data_integrity_audit_report_20260603",
+      "path": "research/results/a_long_data_integrity_audit_20260603/audit_report.json",
+      "role": "Original blocked A-long data-integrity audit that keeps signal search locked until raw PIT data is materialized and re-audited."
+    },
+    {
+      "artifact_id": "a_long_tushare_route_gap_repair_execution_summary_20260604",
+      "path": "docs/a_long_tushare_route_gap_repair_execution_summary_20260604.json",
+      "role": "Small route-gap repair result proving current SW membership mapping and an older delisted terminal price route at field-presence level."
+    },
+    {
+      "artifact_id": "a_long_tushare_incremental_materialization_execution_summary_20260604",
+      "path": "docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json",
+      "role": "Executed 2022-2023 three-symbol materialization summary; proved thin-slice materialization mechanics only."
+    },
+    {
+      "artifact_id": "a_long_materialized_thin_slice_data_integrity_audit_report_20260604",
+      "path": "research/results/a_long_materialized_thin_slice_data_integrity_audit_20260604/audit_report.json",
+      "role": "Passed thin-slice audit that justifies one bounded scale-up step but does not authorize signal search."
+    },
+    {
+      "artifact_id": "a_long_materialized_thin_slice_data_integrity_audit_schema",
+      "path": "schemas/a_long_materialized_thin_slice_data_integrity_audit_report.schema.json",
+      "role": "Locks the prior audit's no-alpha, no-provider-call, and self-test evidence boundary."
+    },
+    {
+      "artifact_id": "sr_along_data_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Durable blocker requiring broader materialization plus a full data-integrity audit before A-long signal search."
+    }
+  ],
+  "broader_materialization_boundary": {
+    "materialization_id": "a_long_tushare_full_period_panel_2018_2025",
+    "start_date": "20180101",
+    "end_date": "20251231",
+    "as_of_schedule_rule": "monthly_last_open_trading_day_from_trade_cal_within_period",
+    "active_symbols": [
+      "000001.SZ",
+      "600519.SH",
+      "300750.SZ",
+      "601318.SH",
+      "600036.SH",
+      "000651.SZ",
+      "002415.SZ",
+      "600276.SH"
+    ],
+    "delisted_symbols": [
+      "000666.SZ"
+    ],
+    "max_symbols": 9,
+    "benchmark_indices": [
+      "000300.SH",
+      "000852.SH"
+    ],
+    "full_period_panel": true,
+    "not_full_market": true,
+    "not_full_universe": true,
+    "previous_thin_slice_audit_pass_required": true,
+    "purpose": "scale from the passed 2022-2023 three-symbol thin slice to a bounded 2018-2025 panel before any full-universe materialization or signal search",
+    "pass_does_not_make_data_alpha_ready": true
+  },
+  "materialization_tables": [
+    {
+      "table_id": "trade_calendar",
+      "api_family": "trade_cal",
+      "planned_calls": 1,
+      "grain": "SSE open-calendar rows for 2018-2025",
+      "minimum_fields": ["cal_date", "is_open", "exchange"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Used only to materialize full-period monthly as-of anchors for a later reviewed audit."
+    },
+    {
+      "table_id": "stock_basic_active",
+      "api_family": "stock_basic",
+      "planned_calls": 1,
+      "grain": "active A-share listing rows",
+      "minimum_fields": ["ts_code", "name", "list_status", "list_date", "delist_date"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Shape evidence for future PIT universe audit; this packet still does not materialize full-market fundamentals or prices."
+    },
+    {
+      "table_id": "stock_basic_delisted",
+      "api_family": "stock_basic",
+      "planned_calls": 1,
+      "grain": "delisted A-share listing rows",
+      "minimum_fields": ["ts_code", "name", "list_status", "list_date", "delist_date"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Keeps later-delisted names visible for audit; this is not full delisted price/fundamental coverage."
+    },
+    {
+      "table_id": "income",
+      "api_family": "income",
+      "planned_calls": 9,
+      "grain": "one 2018-2025 ann_date-window call per fixed panel symbol",
+      "minimum_fields": ["ts_code", "ann_date", "end_date", "revenue", "n_income_attr_p"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Preserves raw PIT income rows for a later panel audit; no latest-only factor derivation."
+    },
+    {
+      "table_id": "balancesheet",
+      "api_family": "balancesheet",
+      "planned_calls": 9,
+      "grain": "one 2018-2025 ann_date-window call per fixed panel symbol",
+      "minimum_fields": ["ts_code", "ann_date", "end_date", "total_assets", "total_liab", "total_hldr_eqy_exc_min_int"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Preserves raw PIT balance-sheet rows for a later panel audit; no accounting signal is calculated."
+    },
+    {
+      "table_id": "cashflow",
+      "api_family": "cashflow",
+      "planned_calls": 9,
+      "grain": "one 2018-2025 ann_date-window call per fixed panel symbol",
+      "minimum_fields": ["ts_code", "ann_date", "end_date", "n_cashflow_act"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Preserves raw PIT cash-flow rows for a later panel audit; no factor derivation."
+    },
+    {
+      "table_id": "fina_indicator",
+      "api_family": "fina_indicator",
+      "planned_calls": 9,
+      "grain": "one 2018-2025 ann_date-window call per fixed panel symbol",
+      "minimum_fields": ["ts_code", "ann_date", "end_date", "roe", "profit_dedt"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Preserves raw PIT indicator rows for a later panel audit; no quality factor is calculated."
+    },
+    {
+      "table_id": "industry_classification",
+      "api_family": "index_classify",
+      "planned_calls": 2,
+      "grain": "SW L1 and L2 classification rows",
+      "minimum_fields": ["index_code", "industry_name", "level", "parent_code"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Supports future SW normalization audit; no factors are derived."
+    },
+    {
+      "table_id": "industry_membership",
+      "api_family": "index_member_all",
+      "planned_calls": 1,
+      "grain": "SW membership rows with effective interval fields",
+      "minimum_fields": ["ts_code", "l2_code", "l2_name", "in_date", "out_date"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Uses the repaired field mapping: ts_code member, l2_code/l2_name industry, in_date/out_date effective interval."
+    },
+    {
+      "table_id": "daily_price_adj_factor_dividend",
+      "api_family": "daily + adj_factor + dividend",
+      "planned_calls": 27,
+      "grain": "three calls per fixed panel symbol",
+      "minimum_fields": ["ts_code", "trade_date", "open", "close", "adj_factor", "ex_date"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Stores raw inputs needed for a later return audit; it does not calculate total return."
+    },
+    {
+      "table_id": "benchmark_index_daily",
+      "api_family": "index_daily",
+      "planned_calls": 2,
+      "grain": "CSI300 and CSI1000 daily benchmark rows for 2018-2025",
+      "minimum_fields": ["ts_code", "trade_date", "open", "close"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false,
+      "notes": "Stores raw benchmark anchors; it does not compute same-anchor excess."
+    }
+  ],
+  "call_budget": {
+    "max_total_endpoint_calls": 80,
+    "planned_total_endpoint_calls": 71,
+    "retry_count_allowed": 0,
+    "abort_if_budget_exceeded": true
+  },
+  "storage_and_checkpoint_boundary": {
+    "raw_output_root": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/",
+    "raw_output_root_must_be_gitignored": true,
+    "tracked_summary_path": "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json",
+    "tracked_summary_must_exclude_raw_rows": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "tracked_summary_must_exclude_secret": true,
+    "checkpoint_resume_allowed": true,
+    "existing_raw_payload_reuse_allowed": true,
+    "overwrite_existing_raw_without_resume_allowed": false,
+    "append_or_versioned_only": true,
+    "raw_retention_authorizes_production_storage": false
+  },
+  "pre_execution_gates": {
+    "independent_review_pass_required": true,
+    "post_review_execute_command_required": true,
+    "environment_precheck_required": true,
+    "tushare_token_presence_required": true,
+    "environment_values_must_not_be_logged": true,
+    "raw_root_gitignore_check_required": true,
+    "exact_panel_boundary_required": true,
+    "budget_precheck_required": true,
+    "abort_on_budget_or_scope_violation": true,
+    "thin_slice_audit_pass_required": true,
+    "no_secret_summary_scan_required": true,
+    "checkpoint_resume_policy_required": true,
+    "no_full_market_precheck_required": true
+  },
+  "prohibited_claims": {
+    "a_long_data_ready": false,
+    "a_long_alpha_found": false,
+    "audit_passed": false,
+    "signal_search_authorized": false,
+    "full_universe_materialization_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Independent review must verify this packet and runner before any live Tushare execution.",
+    "After review and a separate user execute command, run only this fixed 2018-2025 nine-symbol panel materialization packet.",
+    "If the broader panel materialization passes, create a separate reviewed full-period panel data-integrity audit that consumes the materialized raw rows.",
+    "Only after a later reviewed audit proves a signal-search-ready universe may A-long create a separate signal-search preregistration."
+  ],
+  "limitations": [
+    "This packet itself performs no Tushare call, reads no raw rows, and writes no execution summary.",
+    "The later run is a fixed full-period panel, not full-market or full-universe materialization.",
+    "A pass would prove broader materialization mechanics and raw lineage shape only; it would not prove data integrity, alpha, production readiness, ship-gate evidence, or full-size use.",
+    "No DataHub table, production runner consumption, audit rerun, signal search, return calculation, factor derivation, full-universe pull, or broker/order automation is authorized by this artifact."
+  ]
+}

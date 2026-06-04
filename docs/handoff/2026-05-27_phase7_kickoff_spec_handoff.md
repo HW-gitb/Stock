@@ -1,5 +1,36 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long broader materialization packet
+
+**Changed**:
+- Added `schemas/a_long_tushare_broader_materialization_packet.schema.json`.
+- Added `docs/a_long_tushare_broader_materialization_packet_20260604.json`.
+- Added `runners/a_long_tushare_broader_materialization_packet.py`.
+- Added `schemas/a_long_tushare_broader_materialization_execution_summary.schema.json`.
+
+**Plain result**:
+- 更大的 A 股长线数据落地 packet 已写好。
+- 还没有跑数据。
+- 现在仍不能找 alpha。
+- 它只允许在 Claude 审查通过 + 用户再次 `执行` 后，跑固定 2018-2025 九股票样本池：8 只活跃股 + `000666.SZ` 退市样本，CSI300 / CSI1000，71 planned calls / max 80。
+
+**Boundaries**:
+- Not full-market and not full-universe.
+- Raw rows for the later run must stay under gitignored `data/a_long/raw/tushare/materialization_full_period_panel_20260604/`.
+- The tracked summary must contain no raw rows, request URL, or secret.
+- No provider call is executed by this packet artifact.
+- No audit rerun, signal search, alpha backtest, DataHub, production claim, ship-gate claim, full-size use, or broker/order automation is authorized.
+
+**Verification**:
+- `python -m unittest tests.test_a_long_tushare_broader_materialization_packet tests.schema.test_a_long_tushare_broader_materialization_packet_schema -v` passed 17/17.
+
+**Next**:
+- Independent review of this packet and runner.
+- If review passes, user may issue `执行` to run only the fixed panel packet with confirmation flags.
+- After execution, create a separate reviewed full-period panel data-integrity audit. Do not start signal search from the packet or execution summary.
+
+---
+
 ## 2026-06-04 append: A-long materialized thin-slice data-integrity audit
 
 **Changed**:

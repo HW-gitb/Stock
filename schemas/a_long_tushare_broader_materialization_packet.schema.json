@@ -1,0 +1,312 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_tushare_broader_materialization_packet/1.0.0/schema.json",
+  "title": "A-Long Tushare Broader Materialization Packet",
+  "description": "Reviewed execution packet for a bounded A-long Tushare full-period panel materialization. It records a fixed 2018-2025 panel, call budget, raw storage, checkpoint/resume rules, and pre-execution gates. This artifact itself performs no Tushare call, reads no raw payload, and does not authorize signal search, alpha backtest, DataHub, production, ship-gate evidence, full-size use, or broker/order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "source_artifact_refs",
+    "broader_materialization_boundary",
+    "materialization_tables",
+    "call_budget",
+    "storage_and_checkpoint_boundary",
+    "pre_execution_gates",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_tushare_broader_materialization_packet"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_tushare_broader_materialization_packet_20260604"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sourceArtifactRef"},
+      "minItems": 6,
+      "allOf": [
+        {"contains": {"type": "object", "properties": {"artifact_id": {"const": "a_long_materialized_thin_slice_data_integrity_audit_report_20260604"}}, "required": ["artifact_id"]}},
+        {"contains": {"type": "object", "properties": {"artifact_id": {"const": "a_long_tushare_incremental_materialization_execution_summary_20260604"}}, "required": ["artifact_id"]}},
+        {"contains": {"type": "object", "properties": {"artifact_id": {"const": "sr_along_data_001"}}, "required": ["artifact_id"]}}
+      ]
+    },
+    "broader_materialization_boundary": {"$ref": "#/$defs/broaderMaterializationBoundary"},
+    "materialization_tables": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/materializationTable"},
+      "minItems": 11,
+      "maxItems": 11
+    },
+    "call_budget": {"$ref": "#/$defs/callBudget"},
+    "storage_and_checkpoint_boundary": {"$ref": "#/$defs/storageBoundary"},
+    "pre_execution_gates": {"$ref": "#/$defs/preExecutionGates"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "next_steps": {"$ref": "#/$defs/stringList"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "dateKey": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "path", "role"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/nonEmptyString"},
+        "path": {"$ref": "#/$defs/nonEmptyString"},
+        "role": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "packet_status",
+        "lane_id",
+        "market",
+        "research_only",
+        "provider_family",
+        "provider_calls_executed_by_this_artifact",
+        "tushare_calls_executed_by_this_artifact",
+        "data_fetch_executed_by_this_artifact",
+        "raw_payloads_read_by_this_artifact",
+        "ready_for_later_execution_after_independent_review",
+        "actual_tushare_calls_require_post_review_execute_command",
+        "network_access_required_for_later_execution",
+        "full_period_panel_materialization_allowed_after_gates",
+        "full_universe_materialization_allowed",
+        "full_market_materialization_allowed",
+        "audit_rerun_allowed_by_this_artifact",
+        "signal_search_allowed",
+        "alpha_backtest_allowed",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_tushare_full_period_panel_materialization_packet"},
+        "packet_status": {"const": "execution_packet_recorded_for_review_not_executed"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "provider_family": {"const": "tushare_existing_account"},
+        "provider_calls_executed_by_this_artifact": {"const": false},
+        "tushare_calls_executed_by_this_artifact": {"const": false},
+        "data_fetch_executed_by_this_artifact": {"const": false},
+        "raw_payloads_read_by_this_artifact": {"const": false},
+        "ready_for_later_execution_after_independent_review": {"const": true},
+        "actual_tushare_calls_require_post_review_execute_command": {"const": true},
+        "network_access_required_for_later_execution": {"const": true},
+        "full_period_panel_materialization_allowed_after_gates": {"const": true},
+        "full_universe_materialization_allowed": {"const": false},
+        "full_market_materialization_allowed": {"const": false},
+        "audit_rerun_allowed_by_this_artifact": {"const": false},
+        "signal_search_allowed": {"const": false},
+        "alpha_backtest_allowed": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "broaderMaterializationBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "materialization_id",
+        "start_date",
+        "end_date",
+        "as_of_schedule_rule",
+        "active_symbols",
+        "delisted_symbols",
+        "max_symbols",
+        "benchmark_indices",
+        "full_period_panel",
+        "not_full_market",
+        "not_full_universe",
+        "previous_thin_slice_audit_pass_required",
+        "purpose",
+        "pass_does_not_make_data_alpha_ready"
+      ],
+      "properties": {
+        "materialization_id": {"const": "a_long_tushare_full_period_panel_2018_2025"},
+        "start_date": {"const": "20180101"},
+        "end_date": {"const": "20251231"},
+        "as_of_schedule_rule": {"const": "monthly_last_open_trading_day_from_trade_cal_within_period"},
+        "active_symbols": {
+          "type": "array",
+          "items": {"enum": ["000001.SZ", "600519.SH", "300750.SZ", "601318.SH", "600036.SH", "000651.SZ", "002415.SZ", "600276.SH"]},
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "delisted_symbols": {
+          "type": "array",
+          "items": {"const": "000666.SZ"},
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "max_symbols": {"const": 9},
+        "benchmark_indices": {
+          "type": "array",
+          "items": {"enum": ["000300.SH", "000852.SH"]},
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "full_period_panel": {"const": true},
+        "not_full_market": {"const": true},
+        "not_full_universe": {"const": true},
+        "previous_thin_slice_audit_pass_required": {"const": true},
+        "purpose": {"const": "scale from the passed 2022-2023 three-symbol thin slice to a bounded 2018-2025 panel before any full-universe materialization or signal search"},
+        "pass_does_not_make_data_alpha_ready": {"const": true}
+      }
+    },
+    "materializationTable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "table_id",
+        "api_family",
+        "planned_calls",
+        "grain",
+        "minimum_fields",
+        "raw_parse_allowed_for_summary_shape_only",
+        "authorizes_return_calculation",
+        "authorizes_factor_derivation",
+        "authorizes_audit_rerun",
+        "authorizes_signal_search",
+        "notes"
+      ],
+      "properties": {
+        "table_id": {"enum": ["trade_calendar", "stock_basic_active", "stock_basic_delisted", "income", "balancesheet", "cashflow", "fina_indicator", "industry_classification", "industry_membership", "daily_price_adj_factor_dividend", "benchmark_index_daily"]},
+        "api_family": {"$ref": "#/$defs/nonEmptyString"},
+        "planned_calls": {"type": "integer", "minimum": 1, "maximum": 36},
+        "grain": {"$ref": "#/$defs/nonEmptyString"},
+        "minimum_fields": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonEmptyString"},
+          "minItems": 1
+        },
+        "raw_parse_allowed_for_summary_shape_only": {"const": true},
+        "authorizes_return_calculation": {"const": false},
+        "authorizes_factor_derivation": {"const": false},
+        "authorizes_audit_rerun": {"const": false},
+        "authorizes_signal_search": {"const": false},
+        "notes": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "callBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_total_endpoint_calls", "planned_total_endpoint_calls", "retry_count_allowed", "abort_if_budget_exceeded"],
+      "properties": {
+        "max_total_endpoint_calls": {"const": 80},
+        "planned_total_endpoint_calls": {"const": 71},
+        "retry_count_allowed": {"const": 0},
+        "abort_if_budget_exceeded": {"const": true}
+      }
+    },
+    "storageBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_output_root",
+        "raw_output_root_must_be_gitignored",
+        "tracked_summary_path",
+        "tracked_summary_must_exclude_raw_rows",
+        "tracked_summary_must_exclude_request_urls",
+        "tracked_summary_must_exclude_secret",
+        "checkpoint_resume_allowed",
+        "existing_raw_payload_reuse_allowed",
+        "overwrite_existing_raw_without_resume_allowed",
+        "append_or_versioned_only",
+        "raw_retention_authorizes_production_storage"
+      ],
+      "properties": {
+        "raw_output_root": {"const": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/"},
+        "raw_output_root_must_be_gitignored": {"const": true},
+        "tracked_summary_path": {"const": "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json"},
+        "tracked_summary_must_exclude_raw_rows": {"const": true},
+        "tracked_summary_must_exclude_request_urls": {"const": true},
+        "tracked_summary_must_exclude_secret": {"const": true},
+        "checkpoint_resume_allowed": {"const": true},
+        "existing_raw_payload_reuse_allowed": {"const": true},
+        "overwrite_existing_raw_without_resume_allowed": {"const": false},
+        "append_or_versioned_only": {"const": true},
+        "raw_retention_authorizes_production_storage": {"const": false}
+      }
+    },
+    "preExecutionGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independent_review_pass_required",
+        "post_review_execute_command_required",
+        "environment_precheck_required",
+        "tushare_token_presence_required",
+        "environment_values_must_not_be_logged",
+        "raw_root_gitignore_check_required",
+        "exact_panel_boundary_required",
+        "budget_precheck_required",
+        "abort_on_budget_or_scope_violation",
+        "thin_slice_audit_pass_required",
+        "no_secret_summary_scan_required",
+        "checkpoint_resume_policy_required",
+        "no_full_market_precheck_required"
+      ],
+      "properties": {
+        "independent_review_pass_required": {"const": true},
+        "post_review_execute_command_required": {"const": true},
+        "environment_precheck_required": {"const": true},
+        "tushare_token_presence_required": {"const": true},
+        "environment_values_must_not_be_logged": {"const": true},
+        "raw_root_gitignore_check_required": {"const": true},
+        "exact_panel_boundary_required": {"const": true},
+        "budget_precheck_required": {"const": true},
+        "abort_on_budget_or_scope_violation": {"const": true},
+        "thin_slice_audit_pass_required": {"const": true},
+        "no_secret_summary_scan_required": {"const": true},
+        "checkpoint_resume_policy_required": {"const": true},
+        "no_full_market_precheck_required": {"const": true}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a_long_data_ready", "a_long_alpha_found", "audit_passed", "signal_search_authorized", "full_universe_materialization_authorized", "production_ready", "ship_gate_evidence", "full_size_allowed", "datahub_authorized", "broker_or_order_automation_authorized"],
+      "properties": {
+        "a_long_data_ready": {"const": false},
+        "a_long_alpha_found": {"const": false},
+        "audit_passed": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "full_universe_materialization_authorized": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}
