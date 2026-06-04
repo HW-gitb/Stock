@@ -1,5 +1,35 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long daily price route diagnostic packet
+
+**Changed**:
+- Added `schemas/a_long_tushare_daily_price_route_diagnostic_packet.schema.json`.
+- Added `docs/a_long_tushare_daily_price_route_diagnostic_packet_20260604.json`.
+- Added `runners/a_long_tushare_daily_price_route_diagnostic_packet.py`.
+- Added `schemas/a_long_tushare_daily_price_route_diagnostic_execution_summary.schema.json`.
+
+**Plain result**:
+- The next A-long price-data diagnostic is now fixed for review.
+- No Tushare call ran in this slice.
+- A-long data is still not usable for audit or alpha search.
+- The later run, if Claude passes and the user executes again, is exactly two `daily` calls for `000001.SZ`: `20180101..20251231` isolated retest plus `20220101..20221231` control, max 2 calls, retry 0.
+
+**Boundaries**:
+- Raw rows for the later run must stay under gitignored `data/a_long/raw/tushare/daily_price_route_diagnostic_20260604/`.
+- The tracked summary must contain no raw rows, request URL, or secret.
+- No daily repair, broader materialization rerun, full audit, signal search, alpha backtest, DataHub, production claim, ship-gate claim, full-size use, or broker/order automation is authorized.
+
+**Verification**:
+- `python -m unittest tests.test_a_long_tushare_daily_price_route_diagnostic_packet tests.schema.test_a_long_tushare_daily_price_route_diagnostic_packet_schema -v` passed 21/21 after the two-call repair.
+- `python -m unittest discover -v` passed 676/676.
+
+**Next**:
+- Independent review of this packet and runner.
+- If review passes, user may issue `执行` to run only the fixed two-call diagnostic with confirmation flags.
+- If the 8-year isolated probe returns rows, design a separate reviewed pacing / rate-limit repair packet. If the 8-year probe is empty but the 2022 control returns rows, design a separate reviewed chunked-daily repair packet. If both are empty or either errors, fix endpoint parameters / account route / error handling first.
+
+---
+
 ## 2026-06-04 append: A-long broader materialization execution
 
 **Changed**:

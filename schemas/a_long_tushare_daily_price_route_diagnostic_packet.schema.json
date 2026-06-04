@@ -1,0 +1,339 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_tushare_daily_price_route_diagnostic_packet/1.0.0/schema.json",
+  "title": "A-Long Tushare Daily Price Route Diagnostic Packet",
+  "description": "No-access execution packet for two reviewed A-long Tushare daily probes: one isolated 2018-2025 retest and one 2022 control. It does not execute the calls, repair data, authorize audit rerun, signal search, alpha backtest, DataHub use, production readiness, ship-gate claims, full-size use, or broker/order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "source_artifact_refs",
+    "diagnostic_boundary",
+    "diagnostic_calls",
+    "call_budget",
+    "storage_and_checkpoint_boundary",
+    "pre_execution_gates",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_tushare_daily_price_route_diagnostic_packet"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_tushare_daily_price_route_diagnostic_packet_20260604"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sourceRef"},
+      "minItems": 2
+    },
+    "diagnostic_boundary": {"$ref": "#/$defs/diagnosticBoundary"},
+    "diagnostic_calls": {"$ref": "#/$defs/diagnosticCalls"},
+    "call_budget": {"$ref": "#/$defs/callBudget"},
+    "storage_and_checkpoint_boundary": {"$ref": "#/$defs/storageBoundary"},
+    "pre_execution_gates": {"$ref": "#/$defs/allTrueObject"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "next_steps": {"$ref": "#/$defs/stringList"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "path", "role"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/nonEmptyString"},
+        "path": {"$ref": "#/$defs/nonEmptyString"},
+        "role": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "packet_status",
+        "lane_id",
+        "market",
+        "research_only",
+        "provider_family",
+        "provider_calls_executed_by_this_artifact",
+        "tushare_calls_executed_by_this_artifact",
+        "data_fetch_executed_by_this_artifact",
+        "raw_payloads_read_by_this_artifact",
+        "ready_for_later_execution_after_independent_review",
+        "actual_tushare_calls_require_post_review_execute_command",
+        "network_access_required_for_later_execution",
+        "daily_price_route_diagnostic_allowed_after_gates",
+        "daily_price_route_repair_allowed_by_this_artifact",
+        "broader_materialization_rerun_allowed_by_this_artifact",
+        "full_universe_materialization_allowed",
+        "full_market_materialization_allowed",
+        "audit_rerun_allowed_by_this_artifact",
+        "signal_search_allowed",
+        "alpha_backtest_allowed",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_tushare_daily_price_route_diagnostic_packet"},
+        "packet_status": {"const": "execution_packet_recorded_for_review_not_executed"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "provider_family": {"const": "tushare_existing_account"},
+        "provider_calls_executed_by_this_artifact": {"const": false},
+        "tushare_calls_executed_by_this_artifact": {"const": false},
+        "data_fetch_executed_by_this_artifact": {"const": false},
+        "raw_payloads_read_by_this_artifact": {"const": false},
+        "ready_for_later_execution_after_independent_review": {"const": true},
+        "actual_tushare_calls_require_post_review_execute_command": {"const": true},
+        "network_access_required_for_later_execution": {"const": true},
+        "daily_price_route_diagnostic_allowed_after_gates": {"const": true},
+        "daily_price_route_repair_allowed_by_this_artifact": {"const": false},
+        "broader_materialization_rerun_allowed_by_this_artifact": {"const": false},
+        "full_universe_materialization_allowed": {"const": false},
+        "full_market_materialization_allowed": {"const": false},
+        "audit_rerun_allowed_by_this_artifact": {"const": false},
+        "signal_search_allowed": {"const": false},
+        "alpha_backtest_allowed": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "diagnosticBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_id",
+        "failed_prior_table_id",
+        "failed_prior_call_count",
+        "fixed_symbol",
+        "eight_year_window_start_date",
+        "eight_year_window_end_date",
+        "control_window_start_date",
+        "control_window_end_date",
+        "not_full_market",
+        "not_full_universe",
+        "not_broader_panel_rerun",
+        "purpose",
+        "pass_does_not_make_data_alpha_ready"
+      ],
+      "properties": {
+        "diagnostic_id": {"const": "a_long_daily_isolated_window_probe_000001_2018_2025_plus_2022_control"},
+        "failed_prior_table_id": {"const": "daily_price_adj_factor_dividend"},
+        "failed_prior_call_count": {"const": 9},
+        "fixed_symbol": {"const": "000001.SZ"},
+        "eight_year_window_start_date": {"const": "20180101"},
+        "eight_year_window_end_date": {"const": "20251231"},
+        "control_window_start_date": {"const": "20220101"},
+        "control_window_end_date": {"const": "20221231"},
+        "not_full_market": {"const": true},
+        "not_full_universe": {"const": true},
+        "not_broader_panel_rerun": {"const": true},
+        "purpose": {"$ref": "#/$defs/nonEmptyString"},
+        "pass_does_not_make_data_alpha_ready": {"const": true}
+      }
+    },
+    "diagnosticCalls": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {"$ref": "#/$defs/eightYearDiagnosticCall"},
+        {"$ref": "#/$defs/controlDiagnosticCall"}
+      ],
+      "additionalItems": false
+    },
+    "minimumFields": {
+      "type": "array",
+      "items": {"enum": ["ts_code", "trade_date", "open", "close"]},
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true
+    },
+    "eightYearDiagnosticCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "table_id",
+        "api_family",
+        "method",
+        "kwargs",
+        "minimum_fields",
+        "raw_parse_allowed_for_summary_shape_only",
+        "authorizes_price_route_repair",
+        "authorizes_return_calculation",
+        "authorizes_factor_derivation",
+        "authorizes_audit_rerun",
+        "authorizes_signal_search"
+      ],
+      "properties": {
+        "call_id": {"const": "daily_000001_SZ_2018_2025_isolated_probe"},
+        "table_id": {"const": "daily_price_eight_year_isolated_probe"},
+        "api_family": {"const": "daily"},
+        "method": {"const": "daily"},
+        "kwargs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ts_code", "start_date", "end_date", "fields"],
+          "properties": {
+            "ts_code": {"const": "000001.SZ"},
+            "start_date": {"const": "20180101"},
+            "end_date": {"const": "20251231"},
+            "fields": {"const": "ts_code,trade_date,open,close,vol,amount"}
+          }
+        },
+        "minimum_fields": {"$ref": "#/$defs/minimumFields"},
+        "raw_parse_allowed_for_summary_shape_only": {"const": true},
+        "authorizes_price_route_repair": {"const": false},
+        "authorizes_return_calculation": {"const": false},
+        "authorizes_factor_derivation": {"const": false},
+        "authorizes_audit_rerun": {"const": false},
+        "authorizes_signal_search": {"const": false}
+      }
+    },
+    "controlDiagnosticCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "table_id",
+        "api_family",
+        "method",
+        "kwargs",
+        "minimum_fields",
+        "raw_parse_allowed_for_summary_shape_only",
+        "authorizes_price_route_repair",
+        "authorizes_return_calculation",
+        "authorizes_factor_derivation",
+        "authorizes_audit_rerun",
+        "authorizes_signal_search"
+      ],
+      "properties": {
+        "call_id": {"const": "daily_000001_SZ_2022_control_probe"},
+        "table_id": {"const": "daily_price_one_year_control_probe"},
+        "api_family": {"const": "daily"},
+        "method": {"const": "daily"},
+        "kwargs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ts_code", "start_date", "end_date", "fields"],
+          "properties": {
+            "ts_code": {"const": "000001.SZ"},
+            "start_date": {"const": "20220101"},
+            "end_date": {"const": "20221231"},
+            "fields": {"const": "ts_code,trade_date,open,close,vol,amount"}
+          }
+        },
+        "minimum_fields": {"$ref": "#/$defs/minimumFields"},
+        "raw_parse_allowed_for_summary_shape_only": {"const": true},
+        "authorizes_price_route_repair": {"const": false},
+        "authorizes_return_calculation": {"const": false},
+        "authorizes_factor_derivation": {"const": false},
+        "authorizes_audit_rerun": {"const": false},
+        "authorizes_signal_search": {"const": false}
+      }
+    },
+    "callBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_total_endpoint_calls", "planned_total_endpoint_calls", "retry_count_allowed", "abort_if_budget_exceeded"],
+      "properties": {
+        "max_total_endpoint_calls": {"const": 2},
+        "planned_total_endpoint_calls": {"const": 2},
+        "retry_count_allowed": {"const": 0},
+        "abort_if_budget_exceeded": {"const": true}
+      }
+    },
+    "storageBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_output_root",
+        "raw_output_root_must_be_gitignored",
+        "tracked_summary_path",
+        "tracked_summary_must_exclude_raw_rows",
+        "tracked_summary_must_exclude_request_urls",
+        "tracked_summary_must_exclude_secret",
+        "checkpoint_resume_allowed",
+        "existing_raw_payload_reuse_allowed",
+        "overwrite_existing_raw_without_resume_allowed",
+        "append_or_versioned_only",
+        "raw_retention_authorizes_production_storage"
+      ],
+      "properties": {
+        "raw_output_root": {"const": "data/a_long/raw/tushare/daily_price_route_diagnostic_20260604/"},
+        "raw_output_root_must_be_gitignored": {"const": true},
+        "tracked_summary_path": {"const": "docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json"},
+        "tracked_summary_must_exclude_raw_rows": {"const": true},
+        "tracked_summary_must_exclude_request_urls": {"const": true},
+        "tracked_summary_must_exclude_secret": {"const": true},
+        "checkpoint_resume_allowed": {"const": true},
+        "existing_raw_payload_reuse_allowed": {"const": true},
+        "overwrite_existing_raw_without_resume_allowed": {"const": false},
+        "append_or_versioned_only": {"const": true},
+        "raw_retention_authorizes_production_storage": {"const": false}
+      }
+    },
+    "allTrueObject": {
+      "type": "object",
+      "additionalProperties": {"const": true},
+      "minProperties": 1
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_data_ready",
+        "a_long_alpha_found",
+        "daily_route_repaired",
+        "broader_materialization_rerun_authorized",
+        "audit_passed",
+        "signal_search_authorized",
+        "full_universe_materialization_authorized",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_data_ready": {"const": false},
+        "a_long_alpha_found": {"const": false},
+        "daily_route_repaired": {"const": false},
+        "broader_materialization_rerun_authorized": {"const": false},
+        "audit_passed": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "full_universe_materialization_authorized": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

@@ -8,6 +8,112 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long daily-route diagnostic packet 修复) — **PASS (可提交)**
+
+**Verdict**: Pass. The USER-APPROVED diagnostic-design fix is genuinely closed — the probe now disambiguates window-limit vs burst-rate-limit and the routing logic is correct. Commit the corrected packet.
+
+- **Probe fixed**: `diagnostic_calls` = 2 — (a) 8-year isolated `daily` 000001.SZ 2018-2025 (decisive re-test of the call that failed in the burst) + (b) 2022 1-year control; `call_budget` max/planned = 2, retry 0; validate-packet asserts the new `diagnostic_id` + 2-call budget, so the old single-probe shape is rejected.
+- **Routing correct** (runner 303-319): 8yr returns rows → "burst-rate / pacing, not window" → next = pacing repair (NOT chunk); 8yr empty + control rows → window/row limit → next = chunked-daily; both empty → endpoint/account; any error → fix endpoint. Exactly the required disambiguation — the "chunk when it might be rate" trap is closed.
+- Safety/hygiene unchanged from the reviewed version (double-gate delegated to `thin_runner`, raw→gitignored guard, reuses `thin_runner.execute_call`, max 2, no downstream authorization). Tests 21/21.
+
+**Net**: commit the corrected packet; then user `执行` runs the 2-call probe, whose result deterministically routes the next repair to pacing vs chunking vs endpoint — no guessing.
+
+---
+
+## 2026-06-04 — Codex 修复 (A-long daily-price route diagnostic packet)
+
+**Plain result**:
+- 已把旧的“1 次 2022 短窗口探针”修成“两次固定探针”。
+- 现在下一次若 Claude 复审通过且用户再输入 `执行`，只能跑 `000001.SZ` 的两次 `daily`：2018-2025 八年隔离重测 + 2022 一年对照，max 2 calls，retry 0。
+- 这次没有跑 Tushare，没有写 execution summary，没有修好价格路线；A-long 仍不能审计、不能找 alpha。
+
+**Required disposition**:
+- Accepted the Claude Required fix. The packet, schema, runner, summary schema, tests, route docs, risk register, and handoff now distinguish:
+  - 8-year isolated probe returns rows -> likely burst-rate / pacing issue -> next repair should be pacing / rate-limit.
+  - 8-year isolated probe empty + 2022 control returns rows -> likely window / row-limit issue -> next repair should be chunked-daily.
+  - both empty or any error -> daily endpoint / account / parameter / error route still broken.
+- No Optional items were present in the review.
+
+**Worked on**:
+- Updated `docs/a_long_tushare_daily_price_route_diagnostic_packet_20260604.json`, `schemas/a_long_tushare_daily_price_route_diagnostic_packet.schema.json`, `runners/a_long_tushare_daily_price_route_diagnostic_packet.py`, `schemas/a_long_tushare_daily_price_route_diagnostic_execution_summary.schema.json`.
+- Updated regression tests: `tests/test_a_long_tushare_daily_price_route_diagnostic_packet.py`, `tests/schema/test_a_long_tushare_daily_price_route_diagnostic_packet_schema.py`.
+- Updated routing/status docs: `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `docs/SESSION_LOG.md`.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_daily_price_route_diagnostic_packet tests.schema.test_a_long_tushare_daily_price_route_diagnostic_packet_schema -v` passed 21/21.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 676/676.
+- `git diff --check` passed with normal Windows LF/CRLF warnings only.
+- `docs/CURRENT.md` line count is 74.
+- `docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json` does not exist; no real diagnostic execution summary was written.
+- `git check-ignore -v data\a_long\raw\tushare\daily_price_route_diagnostic_20260604\probe.json` confirms the future raw path is ignored by `.gitignore`.
+
+**Non-authorization**:
+- No Tushare call, no raw read, no price-route repair, no broader materialization rerun, no full audit, no signal search, no alpha backtest, no DataHub, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the packet now has exactly two calls and max 2 budget.
+- Verify the runner loops both fixed calls and summary decisions route to pacing vs chunking vs endpoint/account repair correctly.
+- Verify the old single-probe shape is rejected and no downstream authorization was added.
+
+**Ready for Claude review**: Yes.
+
+---
+
+## 2026-06-04 — Claude 审查 (A-long daily-price route diagnostic packet) — **PASS on safety; 1 项 Required diagnostic-design fix before 执行**
+
+**Verdict**: The packet is safe, bounded, double-gated, hygiene-clean (commit-safe). BUT as a DIAGNOSTIC it is mis-scoped — the single probe it runs cannot answer the question it exists to answer. Required design fix before it is executed.
+
+**Safe/clean (verified)**: 1 daily call max (000001.SZ, 2022), retry 0; double-gate delegated to reviewed `thin_runner`; `validate_raw_root` gitignored guard; reuses `thin_runner.execute_call` (records→gitignored, tracked-no-records); token env-only; authorizes nothing downstream; honest (pass = classify failure mode only). Tests 19/19.
+
+**Required (diagnostic design) before 执行**:
+- The probe runs only 000001.SZ over **2022 (1-year)**, and the packet's next-step logic says "rows → window issue → chunked-daily repair." This does NOT disambiguate window-limit vs burst-rate-limit:
+  - The thin slice ALREADY proved short-window daily works (2022-2023, 2yr, in a 29-call run) — so a 1-year probe returning rows tells us nothing new.
+  - The 8-year `daily` failed in the **71-call burst**; the probe never re-tests the 8-year window in isolation. So "1-year works" is equally consistent with (a) a width/row limit OR (b) the 71-burst rate-limiting `daily`.
+  - If the real cause is RATE, concluding "window → chunk" is WRONG — chunking daily into many MORE calls would aggravate a rate problem.
+- Decisive fix: the probe must test the **8-year window (2018-2025) in ISOLATION** (the actual failing case), optionally plus the 1-year control (max 2 calls). Then: 8yr-isolated returns rows → it was burst-rate → fix = pacing (not chunk); 8yr-isolated empty + 1yr rows → genuine width/row limit → fix = chunk; both empty → daily broken / account.
+
+**Net**: commit-safe, but do NOT `执行` the probe as-is — it re-confirms the already-known and could send the repair toward chunking when the cause might be rate. Swap the probe to the 8-year-isolated test (+1yr control) first.
+
+**Disposition — USER-APPROVED (`批准修改` received 2026-06-04)**: Codex to change the diagnostic probe from the single 2022 1-year call to **two isolated calls (max 2)**: (a) `daily` 000001.SZ 2018-2025 (the 8-year window that failed in the burst — the decisive isolated re-test) + (b) `daily` 000001.SZ 2022 (1-year control). Update packet `diagnostic_call`(s) + `call_budget` (max 2), runner, summary schema, and tests; keep the same scope-locks / double-gate / gitignored-raw / no-records hygiene. The summary's next-step logic must read: 8yr-isolated rows → burst-rate-limit → fix=pacing; 8yr-isolated empty + 1yr rows → width/row limit → fix=chunk; both empty → daily endpoint/account. Re-review before commit/执行. Status: **USER-APPROVED**.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long daily price route diagnostic packet)
+
+**Plain result**:
+- 这次没有跑 Tushare 数据。
+- 我只把下一次小诊断写死了。
+- 下一次若 Claude 审查通过且用户再输入 `执行`，只能跑 1 次 `daily`：`000001.SZ`，`20220101..20221231`，max 1 call，retry 0。
+- A-long 现在仍不能审计、不能找 alpha。
+
+**Why**:
+- 上一次 broader materialization 里，财报、股票池、行业、基准 shape 都过了，但 9 个 8 年跨度 `daily` 调用全是 0 行。
+- 这个 packet 先判断问题是不是“8 年单次 daily 窗口太大 / route 参数问题”，不直接重拉全量。
+
+**Worked on**:
+- [tracked modified] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `docs/SESSION_LOG.md`.
+- [untracked new] `schemas/a_long_tushare_daily_price_route_diagnostic_packet.schema.json`, `docs/a_long_tushare_daily_price_route_diagnostic_packet_20260604.json`, `runners/a_long_tushare_daily_price_route_diagnostic_packet.py`, `schemas/a_long_tushare_daily_price_route_diagnostic_execution_summary.schema.json`, `tests/test_a_long_tushare_daily_price_route_diagnostic_packet.py`, `tests/schema/test_a_long_tushare_daily_price_route_diagnostic_packet_schema.py`.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_daily_price_route_diagnostic_packet tests.schema.test_a_long_tushare_daily_price_route_diagnostic_packet_schema -v` passed 19/19.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 674/674.
+- `git diff --check` passed with normal Windows LF/CRLF warnings only.
+- `docs/CURRENT.md` line count is 74.
+- `docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json` does not exist; no real diagnostic execution summary was written.
+- `git check-ignore -v data\a_long\raw\tushare\daily_price_route_diagnostic_20260604\probe.json` confirms the future raw path is ignored by `.gitignore`.
+
+**Non-authorization**:
+- No Tushare call, no raw read, no data repair, no broader materialization rerun, no full audit, no signal search, no alpha backtest, no DataHub, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the packet really executes no call in this slice and requires both `--confirm-independent-review-pass` and `--confirm-post-review-execute` before live execution.
+- Verify the future call is exactly one fixed short-window `daily` probe and cannot widen to full-market / full-universe / broader panel.
+- Verify summary/schema/tests keep data unusable for alpha and do not authorize repair, audit rerun, or signal search.
+
+**Ready for Claude review**: Yes.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long broader materialization execution) — **PASS (可提交)**
 
 **Verdict**: Pass. Honest, clean real-network execution (71/71 via the double-gate) that correctly surfaced a real, narrow data-route failure at scale. Result honestly classified as partial / not-usable. Safe to commit.

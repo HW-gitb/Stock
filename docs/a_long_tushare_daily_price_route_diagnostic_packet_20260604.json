@@ -1,0 +1,170 @@
+{
+  "schema_name": "a_long_tushare_daily_price_route_diagnostic_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-04T00:00:00+08:00",
+  "artifact_id": "a_long_tushare_daily_price_route_diagnostic_packet_20260604",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_tushare_daily_price_route_diagnostic_packet",
+    "packet_status": "execution_packet_recorded_for_review_not_executed",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_calls_executed_by_this_artifact": false,
+    "tushare_calls_executed_by_this_artifact": false,
+    "data_fetch_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "ready_for_later_execution_after_independent_review": true,
+    "actual_tushare_calls_require_post_review_execute_command": true,
+    "network_access_required_for_later_execution": true,
+    "daily_price_route_diagnostic_allowed_after_gates": true,
+    "daily_price_route_repair_allowed_by_this_artifact": false,
+    "broader_materialization_rerun_allowed_by_this_artifact": false,
+    "full_universe_materialization_allowed": false,
+    "full_market_materialization_allowed": false,
+    "audit_rerun_allowed_by_this_artifact": false,
+    "signal_search_allowed": false,
+    "alpha_backtest_allowed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "a_long_tushare_broader_materialization_execution_summary_20260604",
+      "path": "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json",
+      "role": "Prior fixed-panel execution result: 71/71 calls ran, but all 9 daily price calls returned 0 rows."
+    },
+    {
+      "artifact_id": "a_long_tushare_incremental_materialization_execution_summary_20260604",
+      "path": "docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json",
+      "role": "Prior thin-slice materialization result proving daily worked on the same route for a shorter 2022-2023 window."
+    },
+    {
+      "artifact_id": "sr_along_data_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Durable blocker requiring daily price route repair before any full audit or A-long signal search."
+    }
+  ],
+  "diagnostic_boundary": {
+    "diagnostic_id": "a_long_daily_isolated_window_probe_000001_2018_2025_plus_2022_control",
+    "failed_prior_table_id": "daily_price_adj_factor_dividend",
+    "failed_prior_call_count": 9,
+    "fixed_symbol": "000001.SZ",
+    "eight_year_window_start_date": "20180101",
+    "eight_year_window_end_date": "20251231",
+    "control_window_start_date": "20220101",
+    "control_window_end_date": "20221231",
+    "not_full_market": true,
+    "not_full_universe": true,
+    "not_broader_panel_rerun": true,
+    "purpose": "Test the previously failing eight-year daily window in isolation plus a one-year control to distinguish burst-rate failure from genuine window / row-limit failure.",
+    "pass_does_not_make_data_alpha_ready": true
+  },
+  "diagnostic_calls": [
+    {
+      "call_id": "daily_000001_SZ_2018_2025_isolated_probe",
+      "table_id": "daily_price_eight_year_isolated_probe",
+      "api_family": "daily",
+      "method": "daily",
+      "kwargs": {
+        "ts_code": "000001.SZ",
+        "start_date": "20180101",
+        "end_date": "20251231",
+        "fields": "ts_code,trade_date,open,close,vol,amount"
+      },
+      "minimum_fields": ["ts_code", "trade_date", "open", "close"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_price_route_repair": false,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false
+    },
+    {
+      "call_id": "daily_000001_SZ_2022_control_probe",
+      "table_id": "daily_price_one_year_control_probe",
+      "api_family": "daily",
+      "method": "daily",
+      "kwargs": {
+        "ts_code": "000001.SZ",
+        "start_date": "20220101",
+        "end_date": "20221231",
+        "fields": "ts_code,trade_date,open,close,vol,amount"
+      },
+      "minimum_fields": ["ts_code", "trade_date", "open", "close"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_price_route_repair": false,
+      "authorizes_return_calculation": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false
+    }
+  ],
+  "call_budget": {
+    "max_total_endpoint_calls": 2,
+    "planned_total_endpoint_calls": 2,
+    "retry_count_allowed": 0,
+    "abort_if_budget_exceeded": true
+  },
+  "storage_and_checkpoint_boundary": {
+    "raw_output_root": "data/a_long/raw/tushare/daily_price_route_diagnostic_20260604/",
+    "raw_output_root_must_be_gitignored": true,
+    "tracked_summary_path": "docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json",
+    "tracked_summary_must_exclude_raw_rows": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "tracked_summary_must_exclude_secret": true,
+    "checkpoint_resume_allowed": true,
+    "existing_raw_payload_reuse_allowed": true,
+    "overwrite_existing_raw_without_resume_allowed": false,
+    "append_or_versioned_only": true,
+    "raw_retention_authorizes_production_storage": false
+  },
+  "pre_execution_gates": {
+    "independent_review_pass_required": true,
+    "post_review_execute_command_required": true,
+    "environment_precheck_required": true,
+    "tushare_token_presence_required": true,
+    "environment_values_must_not_be_logged": true,
+    "raw_root_gitignore_check_required": true,
+    "exact_symbol_and_window_required": true,
+    "budget_precheck_required": true,
+    "abort_on_budget_or_scope_violation": true,
+    "broader_execution_failure_required": true,
+    "no_secret_summary_scan_required": true,
+    "checkpoint_resume_policy_required": true,
+    "no_full_market_precheck_required": true
+  },
+  "prohibited_claims": {
+    "a_long_data_ready": false,
+    "a_long_alpha_found": false,
+    "daily_route_repaired": false,
+    "broader_materialization_rerun_authorized": false,
+    "audit_passed": false,
+    "signal_search_authorized": false,
+    "full_universe_materialization_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Independent review must verify this packet and runner before any live Tushare execution.",
+    "After review and a separate user execute command, run only these two fixed daily probes: the 2018-2025 isolated retest and the 2022 one-year control.",
+    "If the 8-year isolated probe returns rows, classify the prior failure as likely burst-rate / pacing, then create a separate reviewed pacing repair packet before any broader materialization rerun.",
+    "If the 8-year isolated probe is empty but the 1-year control returns rows, classify it as likely window / row limit, then create a separate reviewed chunked-daily repair packet before any broader materialization rerun.",
+    "If both probes are empty or either probe errors, repair endpoint parameters / account route / error handling before any broader materialization rerun.",
+    "Do not run full audit or signal search from this packet or from the diagnostic summary."
+  ],
+  "limitations": [
+    "This packet itself performs no Tushare call, reads no raw rows, and writes no execution summary.",
+    "The later run is two fixed daily probes for one symbol, not a price-route repair and not a broader panel rerun.",
+    "A pass would only classify the likely daily failure mode; it would not make data complete or alpha-ready.",
+    "No full-market pull, full-universe materialization, audit rerun, signal search, return calculation, factor derivation, DataHub, production, ship-gate, full-size use, or broker/order automation is authorized by this artifact."
+  ]
+}

@@ -1,0 +1,358 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_tushare_daily_price_route_diagnostic_execution_summary/1.0.0/schema.json",
+  "title": "A-Long Tushare Daily Price Route Diagnostic Execution Summary",
+  "description": "Tracked no-secret execution summary for the bounded two-call A-long Tushare daily diagnostic: an isolated 2018-2025 retest and a 2022 control. Raw rows stay under gitignored data/a_long/raw/ and are not written into this summary. The result classifies the likely price-route failure mode only; it does not repair price data, authorize broader materialization, rerun audit, search alpha, authorize production, or support ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "packet_ref",
+    "prior_summary_ref",
+    "scope",
+    "execution",
+    "diagnostic_boundary",
+    "endpoint_results",
+    "decision",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_tushare_daily_price_route_diagnostic_execution_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604"},
+    "packet_ref": {"const": "docs/a_long_tushare_daily_price_route_diagnostic_packet_20260604.json"},
+    "prior_summary_ref": {"const": "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "diagnostic_boundary": {"$ref": "#/$defs/diagnosticBoundary"},
+    "endpoint_results": {
+      "type": "array",
+      "items": {"oneOf": [{"$ref": "#/$defs/eightYearEndpointResult"}, {"$ref": "#/$defs/controlEndpointResult"}]},
+      "maxItems": 2
+    },
+    "decision": {"$ref": "#/$defs/decision"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "nullableString": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "provider_family",
+        "provider_call_executed",
+        "tushare_call_executed",
+        "data_fetch_executed",
+        "raw_payload_written_to_gitignored_path",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_secret",
+        "daily_price_route_repair_executed",
+        "broader_materialization_rerun_executed",
+        "full_market_materialization_executed",
+        "full_universe_materialization_executed",
+        "audit_rerun_executed",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_tushare_daily_price_route_diagnostic_execution"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "provider_family": {"const": "tushare_existing_account"},
+        "provider_call_executed": {"type": "boolean"},
+        "tushare_call_executed": {"type": "boolean"},
+        "data_fetch_executed": {"type": "boolean"},
+        "raw_payload_written_to_gitignored_path": {"type": "boolean"},
+        "tracked_summary_contains_raw_rows": {"const": false},
+        "tracked_summary_contains_secret": {"const": false},
+        "daily_price_route_repair_executed": {"const": false},
+        "broader_materialization_rerun_executed": {"const": false},
+        "full_market_materialization_executed": {"const": false},
+        "full_universe_materialization_executed": {"const": false},
+        "audit_rerun_executed": {"const": false},
+        "signal_search_executed": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary_path",
+        "raw_output_root",
+        "raw_output_root_is_gitignored",
+        "max_total_endpoint_calls",
+        "planned_total_endpoint_calls",
+        "endpoint_results_count",
+        "new_network_call_count",
+        "reused_raw_payload_count",
+        "budget_exceeded",
+        "network_call_attempted",
+        "environment_precheck_passed",
+        "independent_review_confirmed",
+        "post_review_execute_confirmed",
+        "token_logged",
+        "request_url_logged"
+      ],
+      "properties": {
+        "summary_path": {"const": "docs/a_long_tushare_daily_price_route_diagnostic_execution_summary_20260604.json"},
+        "raw_output_root": {"const": "data/a_long/raw/tushare/daily_price_route_diagnostic_20260604/"},
+        "raw_output_root_is_gitignored": {"const": true},
+        "max_total_endpoint_calls": {"const": 2},
+        "planned_total_endpoint_calls": {"const": 2},
+        "endpoint_results_count": {"type": "integer", "minimum": 0, "maximum": 2},
+        "new_network_call_count": {"type": "integer", "minimum": 0, "maximum": 2},
+        "reused_raw_payload_count": {"type": "integer", "minimum": 0, "maximum": 2},
+        "budget_exceeded": {"const": false},
+        "network_call_attempted": {"type": "boolean"},
+        "environment_precheck_passed": {"type": "boolean"},
+        "independent_review_confirmed": {"type": "boolean"},
+        "post_review_execute_confirmed": {"type": "boolean"},
+        "token_logged": {"const": false},
+        "request_url_logged": {"const": false}
+      }
+    },
+    "diagnosticBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_id",
+        "fixed_symbol",
+        "eight_year_window_start_date",
+        "eight_year_window_end_date",
+        "control_window_start_date",
+        "control_window_end_date",
+        "not_full_market",
+        "not_full_universe",
+        "not_broader_panel_rerun"
+      ],
+      "properties": {
+        "diagnostic_id": {"const": "a_long_daily_isolated_window_probe_000001_2018_2025_plus_2022_control"},
+        "fixed_symbol": {"const": "000001.SZ"},
+        "eight_year_window_start_date": {"const": "20180101"},
+        "eight_year_window_end_date": {"const": "20251231"},
+        "control_window_start_date": {"const": "20220101"},
+        "control_window_end_date": {"const": "20221231"},
+        "not_full_market": {"const": true},
+        "not_full_universe": {"const": true},
+        "not_broader_panel_rerun": {"const": true}
+      }
+    },
+    "endpointResultCommon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "table_id",
+        "api_family",
+        "request_shape_without_token",
+        "call_status",
+        "row_count",
+        "columns",
+        "minimum_fields_present",
+        "minimum_fields_missing",
+        "raw_payload_ref",
+        "checkpoint_status",
+        "tracked_summary_excludes_raw_rows",
+        "error_class",
+        "error_message_redacted"
+      ]
+    },
+    "eightYearEndpointResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "table_id",
+        "api_family",
+        "request_shape_without_token",
+        "call_status",
+        "row_count",
+        "columns",
+        "minimum_fields_present",
+        "minimum_fields_missing",
+        "raw_payload_ref",
+        "checkpoint_status",
+        "tracked_summary_excludes_raw_rows",
+        "error_class",
+        "error_message_redacted"
+      ],
+      "properties": {
+        "call_id": {"const": "daily_000001_SZ_2018_2025_isolated_probe"},
+        "table_id": {"const": "daily_price_eight_year_isolated_probe"},
+        "api_family": {"const": "daily"},
+        "request_shape_without_token": {"$ref": "#/$defs/eightYearRequestShape"},
+        "call_status": {"enum": ["success", "empty", "error"]},
+        "row_count": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "columns": {"type": "array", "items": {"type": "string"}},
+        "minimum_fields_present": {"type": "array", "items": {"type": "string"}},
+        "minimum_fields_missing": {"type": "array", "items": {"type": "string"}},
+        "raw_payload_ref": {"$ref": "#/$defs/nonEmptyString"},
+        "checkpoint_status": {"enum": ["written_new_raw", "reused_existing_raw"]},
+        "tracked_summary_excludes_raw_rows": {"const": true},
+        "error_class": {"$ref": "#/$defs/nullableString"},
+        "error_message_redacted": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "controlEndpointResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "table_id",
+        "api_family",
+        "request_shape_without_token",
+        "call_status",
+        "row_count",
+        "columns",
+        "minimum_fields_present",
+        "minimum_fields_missing",
+        "raw_payload_ref",
+        "checkpoint_status",
+        "tracked_summary_excludes_raw_rows",
+        "error_class",
+        "error_message_redacted"
+      ],
+      "properties": {
+        "call_id": {"const": "daily_000001_SZ_2022_control_probe"},
+        "table_id": {"const": "daily_price_one_year_control_probe"},
+        "api_family": {"const": "daily"},
+        "request_shape_without_token": {"$ref": "#/$defs/controlRequestShape"},
+        "call_status": {"enum": ["success", "empty", "error"]},
+        "row_count": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "columns": {"type": "array", "items": {"type": "string"}},
+        "minimum_fields_present": {"type": "array", "items": {"type": "string"}},
+        "minimum_fields_missing": {"type": "array", "items": {"type": "string"}},
+        "raw_payload_ref": {"$ref": "#/$defs/nonEmptyString"},
+        "checkpoint_status": {"enum": ["written_new_raw", "reused_existing_raw"]},
+        "tracked_summary_excludes_raw_rows": {"const": true},
+        "error_class": {"$ref": "#/$defs/nullableString"},
+        "error_message_redacted": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "eightYearRequestShape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts_code", "start_date", "end_date", "fields"],
+      "properties": {
+        "ts_code": {"const": "000001.SZ"},
+        "start_date": {"const": "20180101"},
+        "end_date": {"const": "20251231"},
+        "fields": {"const": "ts_code,trade_date,open,close,vol,amount"}
+      }
+    },
+    "controlRequestShape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts_code", "start_date", "end_date", "fields"],
+      "properties": {
+        "ts_code": {"const": "000001.SZ"},
+        "start_date": {"const": "20220101"},
+        "end_date": {"const": "20221231"},
+        "fields": {"const": "ts_code,trade_date,open,close,vol,amount"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "price_route_diagnostic_status",
+        "data_can_be_used_for_alpha_now",
+        "price_route_repair_authorized_by_this_summary",
+        "broader_materialization_rerun_authorized_by_this_summary",
+        "audit_rerun_authorized_by_this_summary",
+        "signal_search_authorized_by_this_summary",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "price_route_diagnostic_status": {
+          "enum": [
+            "not_executed_environment_missing",
+            "not_executed_environment_check_only",
+            "eight_year_isolated_returned_rows",
+            "eight_year_empty_control_returned_rows",
+            "both_windows_empty",
+            "daily_probe_error",
+            "partial_probe_incomplete"
+          ]
+        },
+        "data_can_be_used_for_alpha_now": {"const": false},
+        "price_route_repair_authorized_by_this_summary": {"const": false},
+        "broader_materialization_rerun_authorized_by_this_summary": {"const": false},
+        "audit_rerun_authorized_by_this_summary": {"const": false},
+        "signal_search_authorized_by_this_summary": {"const": false},
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"},
+        "next_action": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_data_ready",
+        "a_long_alpha_found",
+        "daily_route_repaired",
+        "broader_materialization_rerun_authorized",
+        "audit_passed",
+        "signal_search_authorized",
+        "full_universe_materialization_done",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_data_ready": {"const": false},
+        "a_long_alpha_found": {"const": false},
+        "daily_route_repaired": {"const": false},
+        "broader_materialization_rerun_authorized": {"const": false},
+        "audit_passed": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "full_universe_materialization_done": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}
