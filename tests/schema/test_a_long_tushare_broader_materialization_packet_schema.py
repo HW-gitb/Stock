@@ -94,7 +94,7 @@ class ALongTushareBroaderMaterializationPacketSchemaTest(unittest.TestCase):
         self.assertEqual(boundary["end_date"], "20251231")
         self.assertEqual(
             boundary["active_symbols"],
-            ["000001.SZ", "600519.SH", "300750.SZ", "601318.SH", "600036.SH", "000651.SZ", "002415.SZ", "600276.SH"],
+            ["000001.SZ", "600519.SH", "600887.SH", "601318.SH", "600036.SH", "000651.SZ", "002415.SZ", "600276.SH"],
         )
         self.assertEqual(boundary["delisted_symbols"], ["000666.SZ"])
         self.assertEqual(boundary["benchmark_indices"], ["000300.SH", "000852.SH"])
@@ -181,6 +181,21 @@ class ALongTushareBroaderMaterializationPacketSchemaTest(unittest.TestCase):
         invalid["storage_and_checkpoint_boundary"]["overwrite_existing_raw_without_resume_allowed"] = True
         invalid["materialization_tables"][0]["authorizes_audit_rerun"] = True
         invalid["prohibited_claims"]["a_long_data_ready"] = True
+
+        self.assertNotEqual(self._validate_packet(invalid), [])
+
+    def test_packet_schema_rejects_non_main_board_active_symbol(self) -> None:
+        invalid = copy.deepcopy(self._load_packet())
+        invalid["broader_materialization_boundary"]["active_symbols"] = [
+            "000001.SZ",
+            "600519.SH",
+            "300750.SZ",
+            "601318.SH",
+            "600036.SH",
+            "000651.SZ",
+            "002415.SZ",
+            "600276.SH",
+        ]
 
         self.assertNotEqual(self._validate_packet(invalid), [])
 

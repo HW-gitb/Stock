@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 
 from runners import a_long_tushare_incremental_materialization_packet as thin_runner
 from runners import a_long_tushare_route_validation_packet as route_base
+from engine.data.a_share_board_scope import assert_main_board_only
 
 
 PACKET_PATH = ROOT / "docs" / "a_long_tushare_broader_materialization_packet_20260604.json"
@@ -30,7 +31,7 @@ END_DATE = "20251231"
 ACTIVE_SYMBOLS = [
     "000001.SZ",
     "600519.SH",
-    "300750.SZ",
+    "600887.SH",
     "601318.SH",
     "600036.SH",
     "000651.SZ",
@@ -143,6 +144,8 @@ def load_and_validate_packet(path: Path = PACKET_PATH) -> dict[str, Any]:
         raise ValueError("packet materialization_id mismatch")
     if boundary.get("start_date") != START_DATE or boundary.get("end_date") != END_DATE:
         raise ValueError("packet date boundary mismatch")
+    assert_main_board_only(boundary.get("active_symbols") or [], context="A-long broader materialization packet active_symbols")
+    assert_main_board_only(ACTIVE_SYMBOLS, context="A-long broader materialization runner active_symbols")
     if boundary.get("active_symbols") != ACTIVE_SYMBOLS:
         raise ValueError("packet active symbols must stay fixed")
     if boundary.get("delisted_symbols") != DELISTED_SYMBOLS:

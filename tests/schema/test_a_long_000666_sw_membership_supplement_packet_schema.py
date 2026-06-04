@@ -13,6 +13,7 @@ from tests.test_a_long_000666_sw_membership_supplement_packet import FakeFoundMe
 PACKET_SCHEMA_PATH = Path("schemas/a_long_000666_sw_membership_supplement_packet.schema.json")
 PACKET_PATH = Path("docs/a_long_000666_sw_membership_supplement_packet_20260604.json")
 SUMMARY_SCHEMA_PATH = Path("schemas/a_long_000666_sw_membership_supplement_execution_summary.schema.json")
+ACTUAL_SUMMARY_PATH = Path("docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json")
 
 
 class ALong000666SwMembershipSupplementPacketSchemaTest(unittest.TestCase):
@@ -104,10 +105,14 @@ class ALong000666SwMembershipSupplementPacketSchemaTest(unittest.TestCase):
     def test_call_plan_budget_and_storage_are_fixed(self) -> None:
         artifact = self._load_packet()
 
-        self.assertEqual(artifact["call_budget"]["planned_total_endpoint_calls"], 3)
+        self.assertEqual(artifact["call_budget"]["planned_total_endpoint_calls"], 4)
         self.assertEqual(artifact["call_budget"]["max_total_endpoint_calls"], 4)
         self.assertEqual(artifact["call_budget"]["retry_count_allowed"], 0)
         self.assertEqual(artifact["call_plan"], runner.supplement_call_plan())
+        self.assertIn("industry", artifact["call_plan"][0]["kwargs"]["fields"])
+        self.assertIn("area", artifact["call_plan"][0]["kwargs"]["fields"])
+        self.assertEqual(artifact["call_plan"][1]["method"], "index_classify")
+        self.assertNotIn("index_member", {call["method"] for call in artifact["call_plan"]})
         self.assertEqual(
             artifact["storage"]["raw_output_root"],
             "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/",
@@ -139,6 +144,18 @@ class ALong000666SwMembershipSupplementPacketSchemaTest(unittest.TestCase):
                 import shutil
 
                 shutil.rmtree(raw_root)
+
+    def test_actual_execution_summary_validates_when_present(self) -> None:
+        if not ACTUAL_SUMMARY_PATH.exists():
+            raise unittest.SkipTest("actual supplement execution summary has not been generated")
+        summary = json.loads(ACTUAL_SUMMARY_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(self._validate_summary(summary), [])
+        self.assertEqual(summary["decision"]["supplement_status"], "partial_or_failed_supplement_probe")
+        self.assertFalse(summary["decision"]["candidate_sw_membership_source_found"])
+        self.assertFalse(summary["decision"]["data_can_be_used_for_alpha_now"])
+        self.assertFalse(summary["decision"]["audit_rerun_authorized_by_this_summary"])
+        self.assertFalse(summary["decision"]["signal_search_authorized_by_this_summary"])
 
     def test_packet_scope_creep_is_rejected_when_jsonschema_available(self) -> None:
         invalid = copy.deepcopy(self._load_packet())

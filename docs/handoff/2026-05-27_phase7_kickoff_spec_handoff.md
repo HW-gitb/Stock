@@ -1,5 +1,25 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long 000666 corrected supplement packet
+
+**Changed**:
+- `runners/a_long_000666_sw_membership_supplement_packet.py` now uses a corrected 4-call packet.
+- `stock_basic_000666_delisted_context` requests `industry` and `area`, and the tracked summary records only whether those values exist.
+- The invalid `index_member` leg was removed from the current packet and replaced with `index_classify_sw_l2_context`, `index_member_all_000666_ts_code_filter`, and `index_member_all_current_universe_crosscheck`.
+- Packet/schema/docs/tests now classify the first 000666 supplement execution as historical/inconclusive, not a reliable no-source finding.
+
+**Plain result**:
+- No data call ran in this repair.
+- The old 000666 result cannot be used to decide "Tushare has no source".
+- A-long still cannot search for alpha.
+- The corrected supplement probe still needs Claude review and a separate user `执行`.
+
+**Boundaries**:
+- No Tushare call, raw read, audit rerun, signal search, alpha backtest, DataHub, production claim, ship-gate claim, full-size use, or broker/order automation was authorized in this repair.
+- If later executed, the corrected probe is limited to `000666.SZ`, four calls, zero retry, gitignored raw, and tracked no-secret summary.
+
+---
+
 ## 2026-06-04 append: A-long paced fixed-panel rerun
 
 **Changed**:
@@ -3485,3 +3505,47 @@ git diff --check
 1. Do not run the supplement until independent review passes and the user gives a separate `执行`.
 2. If the supplement finds a candidate source, wire it into a reviewed audit repair and rerun the full-period audit.
 3. Do not start A-long signal search until the repaired audit passes.
+
+## 2026-06-04 append: A-long 000666 SW membership supplement execution
+
+**Plain result**:
+
+- The reviewed 3-call supplement ran.
+- Later review reclassified this result as inconclusive, not a reliable no-source finding.
+- Therefore the combined "supplement + audit repair + audit rerun + alpha prereg" package correctly stopped at the first gate, but the source gap needs a corrected probe before any no-source/design decision.
+- A-long still cannot search for alpha.
+
+**Result details**:
+
+- `stock_basic` succeeded and confirmed `000666.SZ` exists in the delisted list, but it did not request `industry` / `area`.
+- `index_member` returned an interface-name error, so that leg did not test data.
+- `index_member_all(ts_code=000666.SZ)` returned zero rows.
+- `docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json` records `partial_or_failed_supplement_probe`.
+
+**Next-step notes**:
+
+1. Do not patch audit or rerun it from this inconclusive supplement.
+2. Next route is the corrected reviewed 4-call supplement packet; only after that result can a source/design decision be made.
+3. Do not start A-long signal search until a repaired audit passes.
+
+## 2026-06-04 append: A-share main-board-only scope guard
+
+**Plain result**:
+
+- User confirmed A-share trading access is main-board only.
+- A-short already excludes ChiNext / STAR / BSE before analysis.
+- A-long current path now enforces the same main-board-only boundary.
+- The old A-long 2018-2025 panel included `300750.SZ` (ChiNext), so it is historical-only and cannot be used for current audit rerun, alpha search, production, ship-gate, or full-size evidence.
+
+**Changed boundary**:
+
+- `engine/data/a_share_board_scope.py` defines the shared A-share board classifier.
+- `runners/a_long_tushare_broader_materialization_packet.py` now uses `600887.SH` instead of `300750.SZ` in the active fixed panel.
+- `runners/a_long_materialized_full_period_data_integrity_audit.py` rejects any materialization summary whose active symbols include non-main-board names.
+- `002` / `003` Shenzhen names remain allowed as main-board names; `300/301`, `688/689`, `.BJ`, `920`, `8`, and `4` are rejected for the current A-share scope.
+
+**Next route**:
+
+1. Do not start A-long signal search from the old `300750.SZ` panel.
+2. After review and commit, the next data step is a reviewed main-board-only fixed-panel replacement, then a repaired data-integrity audit path.
+3. No provider call, data fetch, audit rerun, or alpha search was executed in this guard slice.

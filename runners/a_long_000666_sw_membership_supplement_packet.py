@@ -24,7 +24,7 @@ SCHEMA_PATH = ROOT / "schemas" / "a_long_000666_sw_membership_supplement_packet.
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "a_long_000666_sw_membership_supplement_execution_summary.schema.json"
 TARGET_SYMBOL = "000666.SZ"
 MAX_TOTAL_CALLS = 4
-PLANNED_CALLS = 3
+PLANNED_CALLS = 4
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -118,22 +118,23 @@ def supplement_call_plan() -> list[dict[str, Any]]:
             "kwargs": {
                 "exchange": "",
                 "list_status": "D",
-                "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date",
+                "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date,industry,area",
             },
-            "required_fields": ["ts_code", "name", "list_status", "list_date", "delist_date"],
+            "required_fields": ["ts_code", "name", "list_status", "list_date", "delist_date", "industry", "area"],
             "target_match_field": "ts_code",
+            "target_value_fields": ["industry", "area"],
         },
         {
-            "call_id": "index_member_000666_ts_code_filter",
-            "component_id": "sw_membership_candidate",
-            "api_family": "index_member",
-            "method": "index_member",
+            "call_id": "index_classify_sw_l2_context",
+            "component_id": "sw_classification_context",
+            "api_family": "index_classify",
+            "method": "index_classify",
             "kwargs": {
-                "ts_code": TARGET_SYMBOL,
-                "fields": "index_code,con_code,in_date,out_date,is_new",
+                "level": "L2",
+                "fields": "index_code,industry_name,level,parent_code",
             },
-            "required_fields": ["index_code", "con_code", "in_date", "out_date"],
-            "target_match_field": "con_code",
+            "required_fields": ["index_code", "industry_name", "level", "parent_code"],
+            "target_match_field": "none",
         },
         {
             "call_id": "index_member_all_000666_ts_code_filter",
@@ -142,6 +143,17 @@ def supplement_call_plan() -> list[dict[str, Any]]:
             "method": "index_member_all",
             "kwargs": {
                 "ts_code": TARGET_SYMBOL,
+                "fields": "ts_code,name,l1_code,l1_name,l2_code,l2_name,in_date,out_date,is_new",
+            },
+            "required_fields": ["ts_code", "l2_code", "l2_name", "in_date", "out_date"],
+            "target_match_field": "ts_code",
+        },
+        {
+            "call_id": "index_member_all_current_universe_crosscheck",
+            "component_id": "sw_membership_candidate",
+            "api_family": "index_member_all",
+            "method": "index_member_all",
+            "kwargs": {
                 "fields": "ts_code,name,l1_code,l1_name,l2_code,l2_name,in_date,out_date,is_new",
             },
             "required_fields": ["ts_code", "l2_code", "l2_name", "in_date", "out_date"],
@@ -208,7 +220,19 @@ def call_status(row_count: int | None) -> str:
 
 
 def count_target_matches(records: list[dict[str, Any]], target_match_field: str) -> int:
+    if target_match_field == "none":
+        return 0
     return sum(1 for row in records if str(row.get(target_match_field)) == TARGET_SYMBOL)
+
+
+def target_value_flags(records: list[dict[str, Any]], target_match_field: str, value_fields: list[str]) -> dict[str, bool]:
+    if target_match_field == "none":
+        return {field: False for field in value_fields}
+    matched = [row for row in records if str(row.get(target_match_field)) == TARGET_SYMBOL]
+    flags: dict[str, bool] = {}
+    for field in value_fields:
+        flags[field] = any(row.get(field) not in (None, "", "nan", "NaN") for row in matched)
+    return flags
 
 
 def execute_call(pro: Any, call: dict[str, Any], raw_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -219,6 +243,7 @@ def execute_call(pro: Any, call: dict[str, Any], raw_root: Path) -> tuple[dict[s
         present = [field for field in call["required_fields"] if field in columns]
         missing = [field for field in call["required_fields"] if field not in columns]
         target_match_count = count_target_matches(records, call["target_match_field"])
+        value_flags = target_value_flags(records, call["target_match_field"], call.get("target_value_fields", []))
         raw_ref = write_raw_payload(
             raw_root,
             call["call_id"],
@@ -246,6 +271,7 @@ def execute_call(pro: Any, call: dict[str, Any], raw_root: Path) -> tuple[dict[s
                 "target_symbol": TARGET_SYMBOL,
                 "target_match_field": call["target_match_field"],
                 "target_match_count": target_match_count,
+                "target_value_flags": value_flags,
                 "raw_payload_ref": raw_ref,
                 "tracked_summary_excludes_raw_rows": True,
                 "error_class": None,
@@ -280,6 +306,7 @@ def execute_call(pro: Any, call: dict[str, Any], raw_root: Path) -> tuple[dict[s
                 "target_symbol": TARGET_SYMBOL,
                 "target_match_field": call["target_match_field"],
                 "target_match_count": 0,
+                "target_value_flags": {field: False for field in call.get("target_value_fields", [])},
                 "raw_payload_ref": raw_ref,
                 "tracked_summary_excludes_raw_rows": True,
                 "error_class": type(exc).__name__,
@@ -297,6 +324,8 @@ def build_summary(
     network_call_attempted: bool,
 ) -> dict[str, Any]:
     membership_results = [item for item in results if item["component_id"] == "sw_membership_candidate"]
+    stock_basic_result = next((item for item in results if item["call_id"] == "stock_basic_000666_delisted_context"), None)
+    stock_basic_industry_present = bool((stock_basic_result or {}).get("target_value_flags", {}).get("industry"))
     candidate_found = any(
         item["call_status"] == "success"
         and item["target_match_count"] > 0
@@ -320,12 +349,16 @@ def build_summary(
         next_action = "Next, wire the reviewed raw source into an audit repair and rerun the full-period data-integrity audit."
     elif any_errors or any_missing_required:
         status = "partial_or_failed_supplement_probe"
-        plain = "The 000666.SZ SW membership supplement probe did not produce usable evidence; A-long still cannot search for alpha."
-        next_action = "Decide whether to try a different reviewed Tushare endpoint/parameter set or keep industry-normalized A-long signal search blocked."
+        plain = "The corrected 000666.SZ supplement probe was incomplete or errored; A-long still cannot search for alpha."
+        next_action = "Fix the failed corrected probe before making a no-source or design-decision call."
     else:
         status = "no_candidate_sw_membership_source_found"
-        plain = "No SW membership source for 000666.SZ was found; A-long still cannot search for alpha."
-        next_action = "Use another reviewed data source or explicitly keep delisted-name industry normalization blocked."
+        if stock_basic_industry_present:
+            plain = "stock_basic has a coarse industry value for 000666.SZ, but no SW membership row source was found; A-long still cannot search for alpha."
+            next_action = "Treat stock_basic industry as design evidence only; a separate reviewed audit repair or explicit design decision is still required."
+        else:
+            plain = "No SW membership source for 000666.SZ was found; A-long still cannot search for alpha."
+            next_action = "Use another reviewed data source or explicitly keep delisted-name industry normalization blocked."
 
     return {
         "schema_name": "a_long_000666_sw_membership_supplement_execution_summary",

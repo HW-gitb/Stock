@@ -155,7 +155,7 @@
         "as_of_schedule_rule": {"const": "monthly_last_open_trading_day_from_trade_cal_within_period"},
         "active_symbols": {
           "type": "array",
-          "items": {"enum": ["000001.SZ", "600519.SH", "300750.SZ", "601318.SH", "600036.SH", "000651.SZ", "002415.SZ", "600276.SH"]},
+          "items": {"enum": ["000001.SZ", "600519.SH", "600887.SH", "601318.SH", "600036.SH", "000651.SZ", "002415.SZ", "600276.SH"]},
           "minItems": 8,
           "maxItems": 8,
           "uniqueItems": true

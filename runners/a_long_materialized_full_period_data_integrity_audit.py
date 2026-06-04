@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners import a_long_data_integrity_audit as base_audit
+from engine.data.a_share_board_scope import assert_main_board_only
 
 
 SUMMARY_PATH = ROOT / "docs" / "a_long_tushare_broader_materialization_execution_summary_20260604.json"
@@ -32,7 +33,7 @@ END_DATE = "20251231"
 ACTIVE_SYMBOLS = [
     "000001.SZ",
     "600519.SH",
-    "300750.SZ",
+    "600887.SH",
     "601318.SH",
     "600036.SH",
     "000651.SZ",
@@ -152,6 +153,8 @@ def validate_materialization_summary(summary: dict[str, Any]) -> None:
         raise ValueError("full-period materialization id mismatch")
     if boundary.get("start_date") != START_DATE or boundary.get("end_date") != END_DATE:
         raise ValueError("full-period date boundary mismatch")
+    assert_main_board_only(boundary.get("active_symbols") or [], context="A-long full-period audit summary active_symbols")
+    assert_main_board_only(ACTIVE_SYMBOLS, context="A-long full-period audit runner active_symbols")
     if boundary.get("active_symbols") != ACTIVE_SYMBOLS or boundary.get("delisted_symbols") != DELISTED_SYMBOLS:
         raise ValueError("full-period symbols mismatch")
     if boundary.get("benchmark_indices") != BENCHMARKS:

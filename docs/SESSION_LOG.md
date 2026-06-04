@@ -8,6 +8,126 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long 000666 corrected probe + A-share main-board scope guard) — **PASS (可提交)**
+
+**Verdict**: Pass on both pieces currently in the working tree. Safe to commit (two separable scopes).
+
+**(1) 000666 corrected supplement probe — the USER-APPROVED R1/R2 fixes are genuinely closed**:
+- R1: `stock_basic` call now requests `industry,area` (was missing); `target_value_fields=[industry,area]`; summary records value-PRESENCE only (not the raw value) — within the no-raw-value discipline.
+- R2: the erroring `index_member` leg removed; replaced with valid `index_classify` L2 + `index_member_all` (ts_code-filtered) + `index_member_all` (unfiltered full-universe crosscheck for 000666). 4-call, retry 0, double-gated, raw→gitignored, honest `decision_policy` (candidate_found_does_NOT_close_audit / no_candidate_keeps_blocked / no_silent_industry_default / no_drop_delisted). Old 000666 execution summary correctly downgraded to inconclusive (no longer "no source found"). Tests 18/18. NOT yet run (needs user 执行).
+
+**(2) Main-board-only scope guard — correct; answers the user's question**:
+- INDEPENDENTLY VERIFIED A-short is main-board-only: `filter_l0` (egs_main.py §4, the FIRST filter) lines 2113-2115 drop `.BJ` / `300/301` / `688/689` / `920` + ST; all per-stock heavy work (fina_indicator/SW/valuation/concept in `build_master` §5+) runs post-L0 = main-board. Only the per-date BULK daily/stats pull touches all boards (no per-stock waste). So A-short analysis is NOT wasted on other boards — Codex's claim holds.
+- A-long now gated: new `engine/data/a_share_board_scope.py` (correct classifier — 300/301 chinext, 688/689 star, .BJ/920/8/4 bj, else main); `300750.SZ` (CATL, 创业板) → `600887.SH`; `assert_main_board_only` on both runners' packet/summary `active_symbols` AND hardcoded list. Board test 2/2; A-long tests 20/20.
+
+**Carry-forward (not defects)**:
+1. A-long must RE-MATERIALIZE (600887) + RE-AUDIT — the committed 300750-based materialization summary + audit report are superseded/historical (now inconsistent with the 600887 runner). A-long data-integrity status is not current until re-run.
+2. On that re-run, the 000666 SW-membership blocker is re-tested via the corrected probe (run it first); profit_dedt dedup already resolved.
+
+---
+
+## 2026-06-04 — Codex 修复 (A-long 000666 corrected supplement packet)
+
+**Plain result**:
+- 旧 `000666.SZ` 补探不能再被当成“无 SW 行业来源”的结论。
+- 原因很简单：它没向 `stock_basic` 要 `industry` / `area`，而且 `index_member` 这个接口腿本身报错。
+- 本轮已把后续补探包修成 4-call：`stock_basic` 要 `industry/area`，增加 `index_classify` L2 上下文，并用有效的 `index_member_all` 探针替代旧 `index_member`。
+- 本轮没有发 Tushare 调用、没有读 raw、没有重跑 audit、没有找 alpha。
+- A-long 仍不能找 alpha；修正版补探还要 Claude 审查 + 用户再次 `执行` 才能跑。
+
+**Worked on**:
+- [tracked] `runners/a_long_000666_sw_membership_supplement_packet.py`：修正 call plan；summary 只记录 `industry/area` 是否有值，不记录原始字段值。
+- [tracked] `schemas/a_long_000666_sw_membership_supplement_packet.schema.json`, `docs/a_long_000666_sw_membership_supplement_packet_20260604.json`：packet 改为固定 4-call corrected no-access boundary。
+- [tracked] `schemas/a_long_000666_sw_membership_supplement_execution_summary.schema.json`：兼容旧历史 summary，同时允许新 summary 记录字段值存在性。
+- [tracked] `tests/test_a_long_000666_sw_membership_supplement_packet.py`, `tests/schema/test_a_long_000666_sw_membership_supplement_packet_schema.py`：增加修正版 call plan、scope、schema、no-secret / no-alpha 回归。
+- [tracked-intended] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `research/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`：同步“旧补探不可靠；修正版待审后才能执行”状态。
+
+**Validation so far**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_000666_sw_membership_supplement_packet tests.schema.test_a_long_000666_sw_membership_supplement_packet_schema -v` passed 18/18.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_share_board_scope tests.test_a_long_tushare_broader_materialization_packet tests.schema.test_a_long_tushare_broader_materialization_packet_schema tests.test_a_long_materialized_full_period_data_integrity_audit tests.schema.test_a_long_materialized_full_period_data_integrity_audit_schema tests.schema.test_a_long_000666_sw_membership_supplement_packet_schema tests.test_a_long_000666_sw_membership_supplement_packet -v` passed 54/54.
+- After downgrading the old execution summary text to inconclusive, the 000666 packet/schema tests passed again 18/18.
+- `git diff --check` passed (CRLF warnings only).
+- Targeted no-secret scan found only fixture token strings in tests and schema lock fields; no tracked raw rows / request URL / real secret in the corrected packet.
+
+**Current review state**:
+- Ready for Claude review after final docs/test sweep.
+- Reviewer should verify the old execution summary remains usable as a historical record, but no longer supports a no-source/design decision.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-share main-board-only scope guard)
+
+**Plain result**:
+- A 股短线：分析候选本来就会排除创业板 / 科创板 / 北交所。
+- A 股长线：发现旧 full-period panel 含 `300750.SZ`（创业板），不符合用户只开主板的边界。
+- 本轮已把当前 A 长 materialization / audit 路径改成主板-only：`300750.SZ` 换成 `600887.SH`，并加代码门禁。
+- 没有抓数据、没有跑 audit、没有找 alpha。
+- 旧含 `300750.SZ` 的 materialization summary / audit report 只保留为历史记录，不能继续作为当前 A-long 数据就绪、audit rerun、signal search、production、ship-gate 或 full-size 依据。
+
+**Worked on**:
+- [tracked] `engine/data/a_share_board_scope.py`：新增 A 股主板判断；`000/001/002/003`、`600/601/603/605` 等保留为主板；`300/301`、`688/689`、`.BJ`、`920`、`8`、`4` 判为非主板。
+- [tracked] `runners/a_long_tushare_broader_materialization_packet.py`, `runners/a_long_materialized_full_period_data_integrity_audit.py`：A 长 active symbols 改为主板-only，并在 packet / summary validation 前拒绝非主板。
+- [tracked] `schemas/a_long_tushare_broader_materialization_packet.schema.json`, `docs/a_long_tushare_broader_materialization_packet_20260604.json`：当前 reviewed packet active symbol list 用 `600887.SH` 替换 `300750.SZ`。
+- [tracked] `tests/test_a_share_board_scope.py`, `tests/test_a_long_tushare_broader_materialization_packet.py`, `tests/test_a_long_materialized_full_period_data_integrity_audit.py`, `tests/schema/test_a_long_tushare_broader_materialization_packet_schema.py`：增加主板-only 回归测试。
+- [tracked-intended] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `research/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`：同步主板-only 状态。
+
+**Current review state**:
+- Ready for Claude review after tests.
+- Reviewer should verify old `300750.SZ` artifacts are not falsified, but current executable A-long path rejects non-main-board symbols and cannot use the old panel as alpha/data-readiness evidence.
+
+---
+
+## 2026-06-04 — Claude 审查 (A-long 000666 supplement run) — **执行 PASS;但 Codex 的 next-step 过早/不合理(探针有缺陷)**
+
+**Execution verdict**: Pass on safety/honesty. Real 3-call probe; hygiene clean (token/url false, no records/URL leak, redacted error); correctly STOPPED the combined package (no audit repair / rerun / preregistration from failed data); no overclaim. Commit-safe AS A RECORD.
+
+**But the "no SW source found" conclusion is NOT reliable — 2 of 3 probe legs were defective**, so treating it as "source doesn't exist → block / design-decision" is premature:
+1. **`stock_basic` did NOT request the `industry` field** — fields were `ts_code,symbol,name,exchange,market,list_status,list_date,delist_date` (no `industry`). Tushare `stock_basic` HAS a documented `industry` field, and 000666 IS in the returned rows (`target_match_count=1`). So the probe proved 000666 exists but never fetched its industry because it didn't ask — the most obvious candidate source was skipped.
+2. **`index_member` ERRORED** with `请指定正确的接口名` ("specify the correct interface name") — the method name is invalid for this client; the call never ran against data. INCONCLUSIVE (call-name bug), not a valid "no data".
+3. Only **`index_member_all`** genuinely tested (empty for 000666 → consistent with current-members-only). One valid negative.
+
+**So: 1 valid negative + 2 untested/skipped → "no source" is premature.** Reasonable next-step (NOT yet a block/redesign decision): a corrected small re-probe — (a) re-query `stock_basic` for 000666 WITH `industry` (+`area`); (b) fix the `index_member` call (correct endpoint name, or pull SW L2 `index_code` from `index_classify` then query membership by index_code). Only after a CORRECT probe finds nothing should A-long fall to the design decision (industry-neutralize active names only / last-known industry for delisted holds).
+
+**Expectation note**: even if `stock_basic.industry` has 000666's industry, it is a coarse/last-known Tushare-taxonomy industry, not SW-L2-with-in_date/out_date — so it may inform the design decision more than fully satisfy the audit's membership-interval bar. But the probe must CHECK it, not skip it.
+
+**Disposition — USER-APPROVED (`批准修复` received 2026-06-04)**: do NOT treat the supplement as "no source found"; fix the two defective probe legs and re-run the corrected probe before any block/design-decision:
+- **R1**: add `industry` (and `area`) to the `stock_basic` call's `fields` for 000666 and report whether the delisted target actually carries an industry value.
+- **R2**: fix the `index_member` leg — use a valid Tushare interface/params (e.g. pull SW L2 `index_code`s from `index_classify`, then query membership by `index_code`; or the correct method name), so the leg validly tests rather than erroring on `请指定正确的接口名`.
+- Keep the same no-access discipline (double-gate, gitignored raw, tracked-no-records, tiny fixed budget, no audit-rerun/signal/alpha authorization). Only if the CORRECTED probe still finds no usable industry does A-long fall to the explicit design decision. Status: **USER-APPROVED**.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long 000666 supplement run + combined package gate)
+
+**Plain result**:
+- 已提交 Claude PASS 的补探 packet：`8917dcc Add A-long 000666 SW supplement packet`。
+- 已执行固定 3-call `000666.SZ` SW membership supplement。
+- 结果：没找到可用 SW 行业来源。
+- 所以用户要求的大包在第一道数据门停止：没有 audit repair、没有 full-period audit rerun、没有 alpha-search preregistration。
+- A-long 现在仍不能找 alpha。
+
+**Execution result**:
+- `docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json` records `supplement_status = partial_or_failed_supplement_probe`.
+- `stock_basic_000666_delisted_context`: success, 326 delisted rows, `target_match_count = 1`.
+- `index_member_000666_ts_code_filter`: error, redacted message = `请指定正确的接口名`.
+- `index_member_all_000666_ts_code_filter`: empty, required columns present, `target_match_count = 0`.
+- `candidate_sw_membership_source_found = false`; `data_can_be_used_for_alpha_now = false`; `audit_rerun_authorized_by_this_summary = false`; `signal_search_authorized_by_this_summary = false`.
+
+**Worked on**:
+- [tracked] `docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json`：记录补探执行结果；summary 不含 raw rows / request URL / secret。
+- [tracked] `tests/schema/test_a_long_000666_sw_membership_supplement_packet_schema.py`：新增实际 execution summary schema 验证和 no-alpha/no-audit assertions。
+- [tracked] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `research/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`：同步“补探失败；大包停止；A-long 仍不能找 alpha”。
+- [gitignored raw] `data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/`：3 个 raw payload wrapper，仅本地保留。
+
+**Validation so far**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m json.tool docs\a_long_000666_sw_membership_supplement_execution_summary_20260604.json` passed.
+
+**Current review state**:
+- Ready for Claude review after final tests.
+- Reviewer should verify the combined package stopped correctly because the supplement found no source, and that no audit rerun / alpha preregistration was created from failed data.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long 000666 SW membership supplement packet) — **PASS (可提交)**
 
 **Verdict**: Pass. Safe, bounded, honest no-access probe packet (not yet run) for blocker #2. Probe-first is the right call here — whether Tushare carries a delisted name's historical SW industry is unknown, so probe before choosing fix-vs-design-decision. Safe to commit.

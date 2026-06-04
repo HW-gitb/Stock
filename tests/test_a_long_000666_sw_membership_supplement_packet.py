@@ -23,31 +23,46 @@ class FakeFoundMembershipPro:
                 "list_status": "D",
                 "list_date": "19961210",
                 "delist_date": "20231026",
+                "industry": "textile fixture",
+                "area": "Beijing",
             }
         ]
 
-    def index_member(self, **kwargs):
+    def index_classify(self, **kwargs):
         return [
             {
                 "index_code": "801000.SI",
-                "con_code": "000666.SZ",
+                "industry_name": "textile fixture",
+                "level": "L2",
+                "parent_code": "800000.SI",
+            }
+        ]
+
+    def index_member_all(self, **kwargs):
+        return [
+            {
+                "ts_code": "000666.SZ",
+                "name": "Jingwei Textile",
+                "l1_code": "800000.SI",
+                "l1_name": "fixture L1",
+                "l2_code": "801000.SI",
+                "l2_name": "textile fixture",
                 "in_date": "20100101",
                 "out_date": "20231026",
                 "is_new": "N",
             }
         ]
 
+
+class FakeNoMembershipPro(FakeFoundMembershipPro):
     def index_member_all(self, **kwargs):
         return []
 
 
-class FakeNoMembershipPro(FakeFoundMembershipPro):
-    def index_member(self, **kwargs):
-        return []
-
-
 class FakeErrorMembershipPro(FakeFoundMembershipPro):
-    def index_member(self, **kwargs):
+    def index_member_all(self, **kwargs):
+        if kwargs.get("ts_code") == "000666.SZ":
+            return []
         raise RuntimeError("fixture failure token=TOKEN_FIXTURE_VALUE")
 
 
@@ -77,11 +92,14 @@ class ALong000666SwMembershipSupplementPacketTest(unittest.TestCase):
         self.assertFalse(summary["decision"]["data_can_be_used_for_alpha_now"])
         self.assertFalse(summary["decision"]["audit_rerun_authorized_by_this_summary"])
         self.assertFalse(summary["decision"]["signal_search_authorized_by_this_summary"])
-        self.assertEqual(summary["execution"]["actual_call_count"], 3)
+        self.assertEqual(summary["execution"]["actual_call_count"], 4)
         self.assertTrue(summary["execution"]["network_call_attempted"])
         self.assertFalse(self._contains_key(summary, "records"))
 
-        membership = [item for item in summary["endpoint_results"] if item["call_id"] == "index_member_000666_ts_code_filter"][0]
+        stock_basic = [item for item in summary["endpoint_results"] if item["call_id"] == "stock_basic_000666_delisted_context"][0]
+        self.assertEqual(stock_basic["target_value_flags"], {"industry": True, "area": True})
+
+        membership = [item for item in summary["endpoint_results"] if item["call_id"] == "index_member_all_000666_ts_code_filter"][0]
         self.assertEqual(membership["target_match_count"], 1)
         self.assertEqual(membership["required_fields_missing"], [])
         for result in summary["endpoint_results"]:
@@ -116,7 +134,7 @@ class ALong000666SwMembershipSupplementPacketTest(unittest.TestCase):
                     confirm_post_review_execute=True,
                 )
 
-        result = [item for item in summary["endpoint_results"] if item["call_id"] == "index_member_000666_ts_code_filter"][0]
+        result = [item for item in summary["endpoint_results"] if item["call_id"] == "index_member_all_current_universe_crosscheck"][0]
         self.assertEqual(summary["decision"]["supplement_status"], "partial_or_failed_supplement_probe")
         self.assertEqual(result["call_status"], "error")
         self.assertNotIn("TOKEN_FIXTURE_VALUE", result["error_message_redacted"])
@@ -180,7 +198,7 @@ class ALong000666SwMembershipSupplementPacketTest(unittest.TestCase):
             packet = runner.read_json(runner.PACKET_PATH)
             packet["scope"]["signal_search_allowed"] = True
             packet["target"]["symbol"] = "600519.SH"
-            packet["call_budget"]["planned_total_endpoint_calls"] = 4
+            packet["call_budget"]["planned_total_endpoint_calls"] = 3
             packet["prohibited_claims"]["a_long_alpha_found"] = True
             packet_path = Path(tmp) / "packet.json"
             packet_path.write_text(json.dumps(packet), encoding="utf-8")
@@ -188,15 +206,27 @@ class ALong000666SwMembershipSupplementPacketTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.load_and_validate_packet(packet_path)
 
-    def test_call_plan_is_fixed_to_000666_and_three_endpoint_families(self) -> None:
+    def test_call_plan_is_fixed_to_000666_and_corrected_endpoint_families(self) -> None:
         calls = runner.supplement_call_plan()
 
-        self.assertEqual(len(calls), 3)
-        self.assertEqual([call["api_family"] for call in calls], ["stock_basic", "index_member", "index_member_all"])
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(
+            [call["api_family"] for call in calls],
+            ["stock_basic", "index_classify", "index_member_all", "index_member_all"],
+        )
         self.assertEqual(calls[0]["kwargs"]["list_status"], "D")
-        self.assertEqual(calls[1]["kwargs"]["ts_code"], "000666.SZ")
+        self.assertIn("industry", calls[0]["kwargs"]["fields"])
+        self.assertIn("area", calls[0]["kwargs"]["fields"])
+        self.assertEqual(calls[1]["kwargs"]["level"], "L2")
         self.assertEqual(calls[2]["kwargs"]["ts_code"], "000666.SZ")
-        self.assertTrue(all(call["component_id"] in {"delisted_symbol_context", "sw_membership_candidate"} for call in calls))
+        self.assertNotIn("index_member", {call["method"] for call in calls})
+        self.assertTrue(
+            all(
+                call["component_id"]
+                in {"delisted_symbol_context", "sw_classification_context", "sw_membership_candidate"}
+                for call in calls
+            )
+        )
 
     def _contains_key(self, payload, needle: str) -> bool:
         if isinstance(payload, dict):

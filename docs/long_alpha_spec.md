@@ -305,7 +305,7 @@ Default taxonomy:
 
 Initial universe assumptions to validate later:
 
-- A-share common stocks with sufficient listing history, liquidity, trading-status observability, and fundamentals coverage.
+- A-share main-board common stocks only, with sufficient listing history, liquidity, trading-status observability, and fundamentals coverage. ChiNext / STAR / BSE names are out of scope unless the user explicitly expands trading access.
 - ST / *ST names, long suspensions, materially illiquid names, and names with unresolved major regulatory or accounting flags require explicit eligibility rules before inclusion.
 - IPOs and newly restructured names require a minimum post-listing and post-restructuring evidence window before normal long-alpha scoring.
 - State-owned enterprise, private enterprise, and strategic-industry policy exposure should be visible as context fields, not hidden narrative assumptions.
@@ -425,7 +425,7 @@ The audit must produce pass / fail / blocked findings for:
 
 If any hard check fails or lacks the required source, A-long stays blocked for signal backtests until the data route is repaired or a new reviewed audit plan is approved. A hard-check pass plus a declared usable window only allows a later reviewed signal-search preregistration; it does not prove alpha or authorize production / ship-gate / full-size use.
 
-Current blocked finding: the local cache-only audit first failed because raw PIT and total-return sources were missing. The later Tushare route-validation, route-gap repair, thin-slice materialization / audit, daily-route diagnostic, and paced fixed-panel materialization steps made the 2018-2025 nine-symbol raw panel available. The full-period raw-only audit at `research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json` now fails with one active data-route blocker: `profit_dedt` blank-vs-nonblank duplicates are resolved under a strict non-null preference rule, but the delisted sample `000666.SZ` still lacks SW membership rows. This still does not make the A-long data usable for alpha. Repair that SW industry-source gap and pass a rerun audit before creating any A-long signal-search preregistration.
+Current blocked finding: the local cache-only audit first failed because raw PIT and total-return sources were missing. The later Tushare route-validation, route-gap repair, thin-slice materialization / audit, daily-route diagnostic, and paced fixed-panel materialization steps made a 2018-2025 nine-symbol raw panel available, but that historical panel included `300750.SZ` (ChiNext). Because the user only has main-board A-share access, the current A-long path must be main-board-only before any audit rerun or signal-search preregistration. The old panel and the first `000666.SZ` supplement execution remain historical records only; the supplement is inconclusive because it omitted `stock_basic.industry` / `area` and used an invalid `index_member` leg. The corrected supplement packet is prepared but not executed. None of these make A-long data usable for alpha.
 
 ### 11.11 Deferred A-Long Decisions
 

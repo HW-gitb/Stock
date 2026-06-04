@@ -111,7 +111,7 @@
         "raw_output_root": {"const": "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/"},
         "raw_output_root_is_gitignored": {"const": true},
         "max_total_calls": {"const": 4},
-        "planned_call_count": {"const": 3},
+        "planned_call_count": {"enum": [3, 4]},
         "actual_call_count": {"type": "integer", "minimum": 0, "maximum": 4},
         "budget_exceeded": {"const": false},
         "network_call_attempted": {"type": "boolean"},
@@ -152,9 +152,17 @@
         "error_message_redacted"
       ],
       "properties": {
-        "call_id": {"enum": ["stock_basic_000666_delisted_context", "index_member_000666_ts_code_filter", "index_member_all_000666_ts_code_filter"]},
-        "component_id": {"enum": ["delisted_symbol_context", "sw_membership_candidate"]},
-        "api_family": {"enum": ["stock_basic", "index_member", "index_member_all"]},
+        "call_id": {
+          "enum": [
+            "stock_basic_000666_delisted_context",
+            "index_member_000666_ts_code_filter",
+            "index_classify_sw_l2_context",
+            "index_member_all_000666_ts_code_filter",
+            "index_member_all_current_universe_crosscheck"
+          ]
+        },
+        "component_id": {"enum": ["delisted_symbol_context", "sw_classification_context", "sw_membership_candidate"]},
+        "api_family": {"enum": ["stock_basic", "index_member", "index_classify", "index_member_all"]},
         "request_shape_without_token": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean", "null"]}},
         "call_status": {"enum": ["success", "empty", "error"]},
         "row_count": {"type": ["integer", "null"], "minimum": 0},
@@ -162,8 +170,16 @@
         "required_fields_present": {"type": "array", "items": {"$ref": "#/$defs/nonEmptyString"}},
         "required_fields_missing": {"type": "array", "items": {"$ref": "#/$defs/nonEmptyString"}},
         "target_symbol": {"const": "000666.SZ"},
-        "target_match_field": {"enum": ["ts_code", "con_code"]},
+        "target_match_field": {"enum": ["ts_code", "con_code", "none"]},
         "target_match_count": {"type": "integer", "minimum": 0},
+        "target_value_flags": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "industry": {"type": "boolean"},
+            "area": {"type": "boolean"}
+          }
+        },
         "raw_payload_ref": {"$ref": "#/$defs/nonEmptyString"},
         "tracked_summary_excludes_raw_rows": {"const": true},
         "error_class": {"type": ["string", "null"]},

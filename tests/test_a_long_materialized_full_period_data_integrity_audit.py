@@ -89,7 +89,7 @@ class ALongMaterializedFullPeriodDataIntegrityAuditTest(unittest.TestCase):
                     "ts_code": symbol,
                     "name": symbol,
                     "list_status": "L",
-                    "list_date": "20180611" if symbol == "300750.SZ" else "20000101",
+                    "list_date": "20000101",
                     "delist_date": None,
                 }
                 for symbol in runner.ACTIVE_SYMBOLS
@@ -355,6 +355,33 @@ class ALongMaterializedFullPeriodDataIntegrityAuditTest(unittest.TestCase):
             checks = {item["check_id"]: item for item in report["check_results"]}
             self.assertEqual(report["decision"]["audit_status"], "fail_data_not_ready")
             self.assertIn("000300.SH", checks["return_benchmark_measurement_basis"]["metrics"]["benchmarks_with_failed_anchor_input_shape"])
+
+    def test_non_main_board_summary_is_rejected_before_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            summary_path, raw_root = self.build_fixture(tmp_path)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary["broader_materialization_boundary"]["active_symbols"] = [
+                "000001.SZ",
+                "600519.SH",
+                "300750.SZ",
+                "601318.SH",
+                "600036.SH",
+                "000651.SZ",
+                "002415.SZ",
+                "600276.SH",
+            ]
+            summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "main-board only"):
+                runner.run(
+                    argparse.Namespace(
+                        materialization_summary=summary_path,
+                        raw_root=raw_root,
+                        output_dir=tmp_path / "out",
+                        generated_at="2026-06-04T00:00:00Z",
+                    )
+                )
 
     def test_missing_terminal_delisting_return_fails_survivorship(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

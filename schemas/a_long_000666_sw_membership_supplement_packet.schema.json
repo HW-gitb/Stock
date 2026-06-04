@@ -34,8 +34,8 @@
     "call_plan": {
       "type": "array",
       "items": {"$ref": "#/$defs/callPlanItem"},
-      "minItems": 3,
-      "maxItems": 3
+      "minItems": 4,
+      "maxItems": 4
     },
     "pre_execution_gates": {"$ref": "#/$defs/preExecutionGates"},
     "decision_policy": {"$ref": "#/$defs/decisionPolicy"},
@@ -123,7 +123,7 @@
       "required": ["max_total_endpoint_calls", "planned_total_endpoint_calls", "retry_count_allowed", "abort_if_budget_exceeded"],
       "properties": {
         "max_total_endpoint_calls": {"const": 4},
-        "planned_total_endpoint_calls": {"const": 3},
+        "planned_total_endpoint_calls": {"const": 4},
         "retry_count_allowed": {"const": 0},
         "abort_if_budget_exceeded": {"const": true}
       }
@@ -153,16 +153,21 @@
       "additionalProperties": false,
       "required": ["call_id", "component_id", "api_family", "method", "kwargs", "required_fields", "target_match_field"],
       "properties": {
-        "call_id": {"enum": ["stock_basic_000666_delisted_context", "index_member_000666_ts_code_filter", "index_member_all_000666_ts_code_filter"]},
-        "component_id": {"enum": ["delisted_symbol_context", "sw_membership_candidate"]},
-        "api_family": {"enum": ["stock_basic", "index_member", "index_member_all"]},
-        "method": {"enum": ["stock_basic", "index_member", "index_member_all"]},
+        "call_id": {"enum": ["stock_basic_000666_delisted_context", "index_classify_sw_l2_context", "index_member_all_000666_ts_code_filter", "index_member_all_current_universe_crosscheck"]},
+        "component_id": {"enum": ["delisted_symbol_context", "sw_classification_context", "sw_membership_candidate"]},
+        "api_family": {"enum": ["stock_basic", "index_classify", "index_member_all"]},
+        "method": {"enum": ["stock_basic", "index_classify", "index_member_all"]},
         "kwargs": {
           "type": "object",
           "additionalProperties": {"type": ["string", "number", "boolean", "null"]}
         },
         "required_fields": {"$ref": "#/$defs/stringList"},
-        "target_match_field": {"enum": ["ts_code", "con_code"]}
+        "target_match_field": {"enum": ["ts_code", "none"]},
+        "target_value_fields": {
+          "type": "array",
+          "items": {"enum": ["industry", "area"]},
+          "uniqueItems": true
+        }
       }
     },
     "preExecutionGates": {

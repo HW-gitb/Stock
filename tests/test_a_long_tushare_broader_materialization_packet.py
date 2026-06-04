@@ -387,6 +387,25 @@ class ALongTushareBroaderMaterializationPacketTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.load_and_validate_packet(packet_path)
 
+    def test_packet_loader_rejects_non_main_board_symbol(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            packet = runner.read_json(runner.PACKET_PATH)
+            packet["broader_materialization_boundary"]["active_symbols"] = [
+                "000001.SZ",
+                "600519.SH",
+                "300750.SZ",
+                "601318.SH",
+                "600036.SH",
+                "000651.SZ",
+                "002415.SZ",
+                "600276.SH",
+            ]
+            packet_path = Path(tmp) / "packet.json"
+            packet_path.write_text(json.dumps(packet), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "main-board only"):
+                runner.load_and_validate_packet(packet_path)
+
     def test_call_plan_matches_packet_budget(self) -> None:
         calls = runner.materialization_call_plan()
 

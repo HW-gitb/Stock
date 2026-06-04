@@ -5,6 +5,7 @@
   "created_at": "2026-06-04T00:00:00+08:00",
   "source_refs": [
     "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json",
+    "docs/SESSION_LOG.md entry: Claude review found the first 000666 supplement probe inconclusive because stock_basic omitted industry/area and index_member used an invalid interface name",
     "docs/system_risk_register.md",
     "AGENTS.md decision 40"
   ],
@@ -42,7 +43,7 @@
   },
   "call_budget": {
     "max_total_endpoint_calls": 4,
-    "planned_total_endpoint_calls": 3,
+    "planned_total_endpoint_calls": 4,
     "retry_count_allowed": 0,
     "abort_if_budget_exceeded": true
   },
@@ -63,33 +64,39 @@
       "kwargs": {
         "exchange": "",
         "list_status": "D",
-        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date"
+        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date,industry,area"
       },
       "required_fields": [
         "ts_code",
         "name",
         "list_status",
         "list_date",
-        "delist_date"
+        "delist_date",
+        "industry",
+        "area"
       ],
-      "target_match_field": "ts_code"
+      "target_match_field": "ts_code",
+      "target_value_fields": [
+        "industry",
+        "area"
+      ]
     },
     {
-      "call_id": "index_member_000666_ts_code_filter",
-      "component_id": "sw_membership_candidate",
-      "api_family": "index_member",
-      "method": "index_member",
+      "call_id": "index_classify_sw_l2_context",
+      "component_id": "sw_classification_context",
+      "api_family": "index_classify",
+      "method": "index_classify",
       "kwargs": {
-        "ts_code": "000666.SZ",
-        "fields": "index_code,con_code,in_date,out_date,is_new"
+        "level": "L2",
+        "fields": "index_code,industry_name,level,parent_code"
       },
       "required_fields": [
         "index_code",
-        "con_code",
-        "in_date",
-        "out_date"
+        "industry_name",
+        "level",
+        "parent_code"
       ],
-      "target_match_field": "con_code"
+      "target_match_field": "none"
     },
     {
       "call_id": "index_member_all_000666_ts_code_filter",
@@ -98,6 +105,23 @@
       "method": "index_member_all",
       "kwargs": {
         "ts_code": "000666.SZ",
+        "fields": "ts_code,name,l1_code,l1_name,l2_code,l2_name,in_date,out_date,is_new"
+      },
+      "required_fields": [
+        "ts_code",
+        "l2_code",
+        "l2_name",
+        "in_date",
+        "out_date"
+      ],
+      "target_match_field": "ts_code"
+    },
+    {
+      "call_id": "index_member_all_current_universe_crosscheck",
+      "component_id": "sw_membership_candidate",
+      "api_family": "index_member_all",
+      "method": "index_member_all",
+      "kwargs": {
         "fields": "ts_code,name,l1_code,l1_name,l2_code,l2_name,in_date,out_date,is_new"
       },
       "required_fields": [
@@ -142,7 +166,9 @@
   },
   "limitations": [
     "This artifact is a no-access packet; it executes no Tushare call and reads no raw payload.",
-    "Later execution is limited to 000666.SZ and the three fixed endpoint probes only.",
+    "Later execution is limited to 000666.SZ and the four fixed corrected endpoint probes only.",
+    "The first supplement execution is treated as inconclusive because stock_basic did not request industry/area and index_member errored on interface name.",
+    "stock_basic industry/area is only a coarse candidate signal; it does not by itself satisfy the SW L2 membership interval audit requirement.",
     "A found candidate source still requires a separate reviewed audit repair and full-period audit rerun.",
     "No signal search, alpha backtest, production use, ship-gate claim, full-size use, or broker/order automation is authorized."
   ]
