@@ -1,0 +1,989 @@
+{
+  "schema_name": "a_long_materialized_full_period_data_integrity_audit_report",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-04T12:14:56+00:00",
+  "artifact_id": "a_long_materialized_full_period_data_integrity_audit_report_20260604",
+  "source_refs": [
+    "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json",
+    "research/preregistrations/a_long_data_integrity_audit_20260603.json",
+    "docs/system_risk_register.md"
+  ],
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_materialized_full_period_data_integrity_audit",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "materialized_raw_read_only": true,
+    "provider_call_executed": false,
+    "data_fetch_executed": false,
+    "raw_rows_in_tracked_report": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "execution": {
+    "materialization_summary_ref": "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json",
+    "raw_root": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/",
+    "raw_payload_count": 71,
+    "network_calls_executed": 0,
+    "provider_calls_executed": 0,
+    "self_tests_required": 11,
+    "self_tests_passed": 11,
+    "tracked_report_contains_raw_records": false,
+    "tracked_report_contains_secret": false,
+    "tracked_report_contains_request_url": false
+  },
+  "fixed_panel_boundary": {
+    "panel_id": "a_long_tushare_full_period_panel_2018_2025",
+    "start_date": "20180101",
+    "end_date": "20251231",
+    "active_symbols": [
+      "000001.SZ",
+      "600519.SH",
+      "300750.SZ",
+      "601318.SH",
+      "600036.SH",
+      "000651.SZ",
+      "002415.SZ",
+      "600276.SH"
+    ],
+    "delisted_symbols": [
+      "000666.SZ"
+    ],
+    "benchmark_indices": [
+      "000300.SH",
+      "000852.SH"
+    ],
+    "monthly_as_of_count": 96,
+    "not_full_market": true,
+    "not_full_universe": true
+  },
+  "required_runner_self_tests": [
+    {
+      "fixture_id": "future_ann_date_hard_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "valid_ann_date_rows": 1,
+        "future_ann_date_rows": 1,
+        "missing_or_invalid_ann_date_rows": 0,
+        "ann_date_future_lookahead_violation_rate": 1.0,
+        "ann_date_missing_or_invalid_exclusion_rate_pct": 0.0,
+        "hard_fail": true
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "restated_value_asof_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "duplicate_groups_checked": 1,
+        "restatement_or_latest_only_violation_groups": 1,
+        "hard_fail": true
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "dropped_delisted_member_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "membership_rows_checked": 1,
+        "survivorship_or_terminal_return_violation_rows": 1,
+        "hard_fail": true
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "missing_delisting_terminal_return_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "survivorship": {
+          "membership_rows_checked": 1,
+          "survivorship_or_terminal_return_violation_rows": 1,
+          "hard_fail": true
+        },
+        "return_measurement": {
+          "return_rows_checked": 1,
+          "return_or_benchmark_measurement_violation_rows": 1,
+          "hard_fail": true
+        }
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "benchmark_anchor_mismatch_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "return_rows_checked": 1,
+        "return_or_benchmark_measurement_violation_rows": 1,
+        "hard_fail": true
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "sparse_early_coverage_declares_usable_window",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "threshold_pct": 80.0,
+        "usable_start_year": 2020,
+        "thin_cell_count": 2,
+        "thin_cells": [
+          {
+            "year": 2018,
+            "table": "income",
+            "coverage_pct": 10.0
+          },
+          {
+            "year": 2019,
+            "table": "income",
+            "coverage_pct": 70.0
+          }
+        ],
+        "global_hard_fail": false
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "materialized_full_period_fundamental_missing_ann_date_column_blocks",
+      "checker_origin": "materialized_full_period_runner",
+      "target_check_id": "fundamental_pit",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "blocked_missing_required_source",
+      "metrics": {
+        "rows_checked": 280,
+        "valid_ann_date_rows": 280,
+        "missing_or_invalid_ann_date_rows": 0,
+        "missing_or_invalid_ann_date_exclusion_rate_pct": 0.0,
+        "future_ann_date_rows_after_panel_end": 0,
+        "future_ann_date_rows_excluded_by_asof_gate": 0,
+        "ann_date_asof_gating_feasible": false,
+        "asof_selection_events_checked": 1260,
+        "covered_symbol_count": 9,
+        "covered_table_count": 4,
+        "missing_required_columns": [
+          "income_000001_SZ_2018_2025:ann_date"
+        ]
+      }
+    },
+    {
+      "fixture_id": "materialized_full_period_restatement_same_ann_date_conflict_fails",
+      "checker_origin": "materialized_full_period_runner",
+      "target_check_id": "restatement_revision_asof",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "fail_data_not_ready",
+      "metrics": {
+        "period_groups_checked": 288,
+        "groups_with_multiple_ann_dates": 0,
+        "same_ann_date_conflicting_duplicate_groups": 1,
+        "same_ann_date_conflict_examples": [
+          {
+            "table": "income",
+            "symbol": "000001.SZ",
+            "end_date": "20191231",
+            "ann_date": "20200430",
+            "row_count": 2,
+            "differing_fields": [
+              "revenue"
+            ]
+          }
+        ],
+        "asof_latest_known_selection_events_checked": 1296,
+        "tables_with_f_ann_date_column": [
+          "balancesheet",
+          "cashflow",
+          "fina_indicator",
+          "income"
+        ]
+      }
+    },
+    {
+      "fixture_id": "materialized_full_period_survivorship_missing_terminal_return_fails",
+      "checker_origin": "materialized_full_period_runner",
+      "target_check_id": "survivorship_pit_universe",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "fail_data_not_ready",
+      "metrics": {
+        "fixed_symbols_found_in_stock_basic": [
+          "000001.SZ",
+          "000651.SZ",
+          "000666.SZ",
+          "002415.SZ",
+          "300750.SZ",
+          "600036.SH",
+          "600276.SH",
+          "600519.SH",
+          "601318.SH"
+        ],
+        "missing_fixed_symbols": [],
+        "active_status_failures": [],
+        "delisted_status_failures": [],
+        "pit_membership_decisions_checked": 69,
+        "invalid_membership_decisions": 0,
+        "pre_list_exclusion_count": 0,
+        "post_delist_exclusion_count": 3,
+        "sw_membership_symbols_with_rows": [
+          "000001.SZ",
+          "000651.SZ",
+          "000666.SZ",
+          "002415.SZ",
+          "300750.SZ",
+          "600036.SH",
+          "600276.SH",
+          "600519.SH",
+          "601318.SH"
+        ],
+        "sw_membership_missing_symbols": [],
+        "delisted_terminal_return_inputs": [
+          {
+            "symbol": "000666.SZ",
+            "delist_date": "20231026",
+            "last_trade_date": "20181231",
+            "last_adj_factor_date": "20231025",
+            "terminal_gap_days": 1760,
+            "terminal_return_input_available": false
+          }
+        ],
+        "terminal_return_input_failed_symbols": [
+          "000666.SZ"
+        ]
+      }
+    },
+    {
+      "fixture_id": "materialized_full_period_return_benchmark_missing_open_fails",
+      "checker_origin": "materialized_full_period_runner",
+      "target_check_id": "return_benchmark_measurement_basis",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "fail_data_not_ready",
+      "metrics": {
+        "symbol_return_inputs": [
+          {
+            "symbol": "000001.SZ",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "600519.SH",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "300750.SZ",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "601318.SH",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "600036.SH",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000651.SZ",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "002415.SZ",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "600276.SH",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000666.SZ",
+            "daily_row_count": 6,
+            "adj_factor_row_count": 7,
+            "daily_adj_overlap_count": 6,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          }
+        ],
+        "benchmark_inputs": [
+          {
+            "benchmark": "000300.SH",
+            "row_count": 8,
+            "has_open_close": false,
+            "overlap_with_stock_trade_dates": 8
+          },
+          {
+            "benchmark": "000852.SH",
+            "row_count": 8,
+            "has_open_close": true,
+            "overlap_with_stock_trade_dates": 8
+          }
+        ],
+        "symbols_with_failed_return_input_shape": [],
+        "benchmarks_with_failed_anchor_input_shape": [
+          "000300.SH"
+        ],
+        "stock_and_benchmark_anchor_policy": "future return calculation must use same entry/exit anchors; this audit checks open/close inputs only and does not calculate returns.",
+        "silent_zero_fill_used": false
+      }
+    },
+    {
+      "fixture_id": "materialized_full_period_temporal_coverage_below_threshold_detected",
+      "checker_origin": "materialized_full_period_runner",
+      "target_check_id": "temporal_coverage_bias",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "coverage_characterized_fixed_panel",
+      "metrics": {
+        "threshold_pct": 80.0,
+        "usable_start_year": 2019,
+        "below_threshold_cell_count": 1,
+        "below_threshold_cells": [
+          {
+            "year": 2018,
+            "table_id": "income",
+            "eligible_symbol_count": 9,
+            "covered_symbol_count": 0,
+            "coverage_pct": 0.0,
+            "status": "below_threshold"
+          }
+        ]
+      }
+    }
+  ],
+  "check_results": [
+    {
+      "check_id": "fundamental_pit",
+      "status": "pass_fixed_panel",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "rows_checked": 1673,
+        "valid_ann_date_rows": 1665,
+        "missing_or_invalid_ann_date_rows": 0,
+        "missing_or_invalid_ann_date_exclusion_rate_pct": 0.0,
+        "future_ann_date_rows_after_panel_end": 8,
+        "future_ann_date_rows_excluded_by_asof_gate": 8,
+        "ann_date_asof_gating_feasible": true,
+        "asof_selection_events_checked": 55461,
+        "covered_symbol_count": 9,
+        "covered_table_count": 4,
+        "missing_required_columns": []
+      },
+      "findings": [
+        "Raw full-period fundamentals include ann_date/end_date and can be selected only when ann_date <= as_of.",
+        "Rows announced after the fixed panel end are excluded; they are not silent-filled or used early."
+      ],
+      "allowed_followup": "If the fixed-panel audit passes, create a separate reviewed signal-search preregistration. Do not run signal search or claim alpha from this audit report."
+    },
+    {
+      "check_id": "restatement_revision_asof",
+      "status": "fail_data_not_ready",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "period_groups_checked": 1113,
+        "groups_with_multiple_ann_dates": 0,
+        "same_ann_date_conflicting_duplicate_groups": 6,
+        "same_ann_date_conflict_examples": [
+          {
+            "table": "fina_indicator",
+            "symbol": "000001.SZ",
+            "end_date": "20240630",
+            "ann_date": "20240816",
+            "row_count": 2,
+            "differing_fields": [
+              "profit_dedt"
+            ]
+          },
+          {
+            "table": "fina_indicator",
+            "symbol": "601318.SH",
+            "end_date": "20240331",
+            "ann_date": "20240424",
+            "row_count": 2,
+            "differing_fields": [
+              "profit_dedt"
+            ]
+          },
+          {
+            "table": "fina_indicator",
+            "symbol": "601318.SH",
+            "end_date": "20230930",
+            "ann_date": "20231028",
+            "row_count": 2,
+            "differing_fields": [
+              "profit_dedt"
+            ]
+          },
+          {
+            "table": "fina_indicator",
+            "symbol": "600036.SH",
+            "end_date": "20250630",
+            "ann_date": "20250830",
+            "row_count": 2,
+            "differing_fields": [
+              "profit_dedt"
+            ]
+          },
+          {
+            "table": "fina_indicator",
+            "symbol": "600036.SH",
+            "end_date": "20240331",
+            "ann_date": "20240430",
+            "row_count": 2,
+            "differing_fields": [
+              "profit_dedt"
+            ]
+          },
+          {
+            "table": "fina_indicator",
+            "symbol": "600036.SH",
+            "end_date": "20230930",
+            "ann_date": "20231028",
+            "row_count": 2,
+            "differing_fields": [
+              "profit_dedt"
+            ]
+          }
+        ],
+        "asof_latest_known_selection_events_checked": 55461,
+        "tables_with_f_ann_date_column": [
+          "balancesheet",
+          "cashflow",
+          "income"
+        ]
+      },
+      "findings": [
+        "The audit checks period groups and would select latest-known ann_date <= as_of instead of later revised values.",
+        "Few or zero restatement groups means no conflicting revision was observed in this fixed panel; it is not a universal provider guarantee."
+      ],
+      "allowed_followup": "If the fixed-panel audit passes, create a separate reviewed signal-search preregistration. Do not run signal search or claim alpha from this audit report."
+    },
+    {
+      "check_id": "survivorship_pit_universe",
+      "status": "fail_data_not_ready",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "fixed_symbols_found_in_stock_basic": [
+          "000001.SZ",
+          "000651.SZ",
+          "000666.SZ",
+          "002415.SZ",
+          "300750.SZ",
+          "600036.SH",
+          "600276.SH",
+          "600519.SH",
+          "601318.SH"
+        ],
+        "missing_fixed_symbols": [],
+        "active_status_failures": [],
+        "delisted_status_failures": [],
+        "pit_membership_decisions_checked": 832,
+        "invalid_membership_decisions": 0,
+        "pre_list_exclusion_count": 5,
+        "post_delist_exclusion_count": 27,
+        "sw_membership_symbols_with_rows": [
+          "000001.SZ",
+          "000651.SZ",
+          "002415.SZ",
+          "300750.SZ",
+          "600036.SH",
+          "600276.SH",
+          "600519.SH",
+          "601318.SH"
+        ],
+        "sw_membership_missing_symbols": [
+          "000666.SZ"
+        ],
+        "delisted_terminal_return_inputs": [
+          {
+            "symbol": "000666.SZ",
+            "delist_date": "20231026",
+            "last_trade_date": "20230831",
+            "last_adj_factor_date": "20231025",
+            "terminal_gap_days": 56,
+            "terminal_return_input_available": true
+          }
+        ],
+        "terminal_return_input_failed_symbols": []
+      },
+      "findings": [
+        "The fixed active and delisted sample symbols are visible in stock_basic with list/delist dates.",
+        "The delisted sample keeps terminal daily/adj_factor inputs near delisting instead of back-deleting the loss window.",
+        "This is a bounded fixed-panel universe audit, not a full-market historical universe proof."
+      ],
+      "allowed_followup": "If the fixed-panel audit passes, create a separate reviewed signal-search preregistration. Do not run signal search or claim alpha from this audit report."
+    },
+    {
+      "check_id": "return_benchmark_measurement_basis",
+      "status": "pass_fixed_panel",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "symbol_return_inputs": [
+          {
+            "symbol": "000001.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 52,
+            "valid_dividend_ex_date_count": 28,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "600519.SH",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 58,
+            "valid_dividend_ex_date_count": 29,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "300750.SZ",
+            "daily_row_count": 1837,
+            "adj_factor_row_count": 1837,
+            "daily_adj_overlap_count": 1837,
+            "dividend_row_count": 37,
+            "valid_dividend_ex_date_count": 10,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "601318.SH",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 62,
+            "valid_dividend_ex_date_count": 60,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "600036.SH",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 49,
+            "valid_dividend_ex_date_count": 26,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000651.SZ",
+            "daily_row_count": 1936,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1936,
+            "dividend_row_count": 65,
+            "valid_dividend_ex_date_count": 33,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "002415.SZ",
+            "daily_row_count": 1940,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1940,
+            "dividend_row_count": 44,
+            "valid_dividend_ex_date_count": 18,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "600276.SH",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 51,
+            "valid_dividend_ex_date_count": 27,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000666.SZ",
+            "daily_row_count": 1211,
+            "adj_factor_row_count": 1410,
+            "daily_adj_overlap_count": 1211,
+            "dividend_row_count": 39,
+            "valid_dividend_ex_date_count": 24,
+            "return_input_shape_ok": true
+          }
+        ],
+        "benchmark_inputs": [
+          {
+            "benchmark": "000300.SH",
+            "row_count": 1942,
+            "has_open_close": true,
+            "overlap_with_stock_trade_dates": 1942
+          },
+          {
+            "benchmark": "000852.SH",
+            "row_count": 1942,
+            "has_open_close": true,
+            "overlap_with_stock_trade_dates": 1942
+          }
+        ],
+        "symbols_with_failed_return_input_shape": [],
+        "benchmarks_with_failed_anchor_input_shape": [],
+        "stock_and_benchmark_anchor_policy": "future return calculation must use same entry/exit anchors; this audit checks open/close inputs only and does not calculate returns.",
+        "silent_zero_fill_used": false
+      },
+      "findings": [
+        "Raw daily open/close, adj_factor, dividend-source, and benchmark open/close inputs exist for the fixed panel.",
+        "No return, benchmark excess, signal, or alpha was calculated in this audit."
+      ],
+      "allowed_followup": "If the fixed-panel audit passes, create a separate reviewed signal-search preregistration. Do not run signal search or claim alpha from this audit report."
+    },
+    {
+      "check_id": "temporal_coverage_bias",
+      "status": "coverage_characterized_fixed_panel",
+      "hard_check": false,
+      "blocks_signal_search": true,
+      "metrics": {
+        "threshold_pct": 80.0,
+        "usable_start_year": 2018,
+        "below_threshold_cell_count": 0,
+        "below_threshold_cells": []
+      },
+      "findings": [
+        "Coverage is characterized by year and required fundamental table for the fixed 2018-2025 panel.",
+        "Low early coverage would narrow the usable signal-search window instead of being silently ignored."
+      ],
+      "allowed_followup": "If the fixed-panel audit passes, create a separate reviewed signal-search preregistration. Do not run signal search or claim alpha from this audit report."
+    }
+  ],
+  "coverage_by_year": [
+    {
+      "year": 2018,
+      "table_id": "income",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2018,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2018,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2018,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2019,
+      "table_id": "income",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2019,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2019,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2019,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2020,
+      "table_id": "income",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2020,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2020,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2020,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2021,
+      "table_id": "income",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2021,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2021,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2021,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2022,
+      "table_id": "income",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2022,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2022,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2022,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2023,
+      "table_id": "income",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2023,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2023,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2023,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 9,
+      "covered_symbol_count": 9,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2024,
+      "table_id": "income",
+      "eligible_symbol_count": 8,
+      "covered_symbol_count": 8,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2024,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 8,
+      "covered_symbol_count": 8,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2024,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 8,
+      "covered_symbol_count": 8,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2024,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 8,
+      "covered_symbol_count": 8,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2025,
+      "table_id": "income",
+      "eligible_symbol_count": 8,
+      "covered_symbol_count": 8,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2025,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 8,
+      "covered_symbol_count": 8,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2025,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 8,
+      "covered_symbol_count": 8,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    },
+    {
+      "year": 2025,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 8,
+      "covered_symbol_count": 8,
+      "coverage_pct": 100.0,
+      "status": "pass_fixed_panel"
+    }
+  ],
+  "decision": {
+    "audit_status": "fail_data_not_ready",
+    "hard_checks_pass": false,
+    "usable_start_year": 2018,
+    "data_can_be_used_for_alpha_now": false,
+    "signal_search_preregistration_may_be_created": false,
+    "signal_search_authorized_by_this_report": false,
+    "alpha_found": false,
+    "plain_result": "全周期固定 panel 审计发现硬错误。不能找 alpha。",
+    "next_action": "先修失败的字段或口径，再重新审计。"
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "signal_search_executed": false,
+    "signal_search_authorized": false,
+    "alpha_backtest_executed": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "provider_selected": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "result_artifacts": [
+    "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json",
+    "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/check_summary.csv",
+    "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/coverage_by_year.csv"
+  ],
+  "limitations": [
+    "This audit reads only the bounded nine-symbol 2018-2025 fixed panel, not the full A-share market or full A-long universe.",
+    "A pass permits only the next reviewed signal-search preregistration step; it does not run signal search or prove alpha.",
+    "No provider call, data fetch, return calculation, alpha backtest, DataHub, production use, ship-gate claim, full-size use, or broker/order automation is authorized."
+  ]
+}

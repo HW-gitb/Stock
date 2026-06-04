@@ -3411,3 +3411,33 @@ git diff --check
 1. Do not rerun the spent A-long data audit without a new reviewed authorization.
 2. Repair or replace the A-long data route first: raw PIT fundamentals with `ann_date` / `end_date`, full PIT universe, dividend / total-return treatment, and terminal delisting return lineage.
 3. Only after a repaired data route passes a new reviewed audit may A-long create a separate signal-search preregistration.
+
+## 2026-06-04 append: A-long full-period fixed-panel audit execution
+
+**Plain result**:
+
+- The 2018-2025 fixed panel is downloaded, but it still cannot be used to find alpha.
+- The full-period raw-only audit failed with two hard data-route blockers.
+- Blocker 1: `fina_indicator` has 6 same-ann-date duplicate conflicts on `profit_dedt`.
+- Blocker 2: delisted sample `000666.SZ` has no SW membership rows in the materialized membership payload.
+
+**What changed**:
+
+- Added `runners/a_long_materialized_full_period_data_integrity_audit.py`.
+- Added `schemas/a_long_materialized_full_period_data_integrity_audit_report.schema.json`.
+- Added `tests/test_a_long_materialized_full_period_data_integrity_audit.py`.
+- Added `tests/schema/test_a_long_materialized_full_period_data_integrity_audit_schema.py`.
+- Wrote `research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json`, `check_summary.csv`, and `coverage_by_year.csv`.
+
+**Passed parts**:
+
+- PIT `ann_date` gating is feasible for the fixed panel.
+- Terminal delisting return inputs exist for `000666.SZ`.
+- Daily / adj_factor / dividend source shape and CSI300 / CSI1000 open-close benchmark inputs exist.
+- Temporal coverage meets the threshold from 2018 for the fixed panel.
+
+**Next-step notes**:
+
+1. Do not start A-long signal search.
+2. Repair `fina_indicator` duplicate handling/source lineage and SW membership coverage for `000666.SZ`.
+3. Rerun the full-period audit after the repair.

@@ -8,6 +8,67 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long full-period data-integrity audit) — **PASS (可提交)**
+
+**Verdict**: Pass. The audit is genuine (real checks on real materialized rows, R1+R2 discipline carried forward) and it correctly FAILED on two real data-integrity findings rather than rubber-stamping. Honest fail; hygiene clean. Safe to commit. The findings are real blockers to resolve next, NOT defects in the audit.
+
+**Verified genuine + disciplined**:
+- No network; reads gitignored raw via validated refs; `network/provider_calls_executed=0`.
+- R1 carried: `check_fundamental_pit` has no dead look-ahead counter (uses `ann_date_asof_gating_feasible`, excludes future-announced rows).
+- R2 carried: `run_materialized_runner_self_tests` adds 5 planted-violation fixtures calling THIS runner's checks (`checker_origin=materialized_full_period_runner`); report shows 11/11 self-tests pass (6 legacy + 5 this-runner).
+- 300750 pre-list fix correct: `as_of < list_date` is counted as `pre_list_exclusion`, not a survivorship failure (CATL listed mid-2018; its pre-list months are not violations).
+- Hygiene: `same_ann_date_conflict_examples` store field NAMES + dates only (no values); report `raw_rows=false`; grep no records/token/URL. Tests 11/11.
+
+**Two real findings (genuine blockers, not audit defects)**:
+1. `restatement_revision_asof` FAIL — `same_ann_date_conflicting_duplicate_groups=6` in `fina_indicator`: same (ts_code, end_date, ann_date) rows with conflicting `profit_dedt`. Real ambiguity — selecting that field as a factor would non-deterministically pick a value. Needs a deterministic dedup rule (e.g., by report_type / update_flag) before profit_dedt is usable.
+2. `survivorship_pit_universe` FAIL — `sw_membership_missing_symbols` includes delisted 000666.SZ: SW industry membership (`index_member_all`) returns no rows for a delisted name. Real gap for an industry-neutral long factor that holds through delisting — needs a historical-industry source for delisted names OR an explicit design decision.
+
+**Net**: the data-integrity-first discipline WORKING — scaling to 9 symbols × 8 years surfaced two real issues the 3-symbol/2-year thin slice could not (multi-period restatement conflicts; delisted-name industry gap). Both need genuine data/design decisions before A-long signal preregistration; the audit correctly blocks until then.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long full-period data-integrity audit)
+
+**Plain result**:
+- 跑完了。
+- 固定 2018-2025 panel 仍不能找 alpha。
+- 不是因为数据没下载，而是审计发现两个硬问题：`fina_indicator` 有 6 组同一 `ann_date` 的 `profit_dedt` 重复冲突；退市样本 `000666.SZ` 缺 SW 行业成员记录。
+- 已通过的部分：PIT `ann_date` gating、退市终态价格输入、收益 / 基准输入、2018 起覆盖率刻画。
+
+**Execution**:
+- Added `runners/a_long_materialized_full_period_data_integrity_audit.py`.
+- Added `schemas/a_long_materialized_full_period_data_integrity_audit_report.schema.json`.
+- Added tests: `tests/test_a_long_materialized_full_period_data_integrity_audit.py`, `tests/schema/test_a_long_materialized_full_period_data_integrity_audit_schema.py`.
+- Ran `python runners\a_long_materialized_full_period_data_integrity_audit.py`.
+- Wrote `research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json`, `check_summary.csv`, and `coverage_by_year.csv`.
+- Runner reads only existing gitignored raw under `data/a_long/raw/tushare/materialization_full_period_panel_20260604/`; no provider call, no data fetch, no signal search.
+
+**Important repair in-round**:
+- Initial audit logic incorrectly counted pre-list months for `300750.SZ` as invalid membership decisions. Fixed it: pre-list months are now counted as PIT exclusions, not failures.
+- Added failure examples for same-ann-date duplicate conflicts so the report is actionable.
+
+**Validation**:
+- `python -m unittest tests.test_a_long_materialized_full_period_data_integrity_audit tests.schema.test_a_long_materialized_full_period_data_integrity_audit_schema -v` passed 11/11.
+- Real report validates against `schemas/a_long_materialized_full_period_data_integrity_audit_report.schema.json`.
+- `python -m unittest discover -v` passed 690/690.
+- `git diff --check` passed with normal Windows LF/CRLF warnings only.
+- `docs/CURRENT.md` line count = 149.
+- No-secret/raw-row scan on tracked audit report: no `"records"` key, no `TUSHARE_TOKEN`, no `api_key`, no `http://` or `https://`; `request_url` appears only as a boolean field name.
+
+**Non-authorization**:
+- No A-long signal search.
+- No alpha backtest.
+- No DataHub / production readiness / ship-gate evidence / full-size use.
+- No broker/order automation.
+
+**Next route**:
+- Fix the two audit blockers in one reviewed package if practical: deterministic/source-safe handling for `fina_indicator` same-ann-date `profit_dedt` duplicates, and SW membership coverage for `000666.SZ`.
+- Then rerun the full-period audit.
+
+**Ready for Claude review**: Yes.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long paced fixed-panel rerun) — **PASS (可提交)**
 
 **Verdict**: Pass. The pacing repair is correct, evidence-gated, and hygiene-clean; the paced rerun materialized all 11 tables (9 empty-daily refetched at 1.25s pacing, 62 reused). Confirms the diagnosis (rate, not window). Honest (shape-passed, not alpha/audit). Safe to commit.
