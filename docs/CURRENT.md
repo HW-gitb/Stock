@@ -1,5 +1,5 @@
 # Stock 项目 - 当前状态快照
-**最后更新**：2026-06-04（A-long full-period data-integrity audit failed）
+**最后更新**：2026-06-04（A-long audit narrowed to delisted SW membership gap）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -15,13 +15,13 @@
 - `schemas/provider_p1_missing_key_metrics_resolution_plan.schema.json` / `docs/provider_evidence_p1_us_missing_key_metrics_resolution_plan_20260602.json` now route the three missing key-metrics fields as candidate derivations pending separate field-presence / lineage review; this performs no raw-payload parse, no new provider call, no derivation implementation, no DataHub / runner consumption, and no Phase 7c authorization.
 - Phase 7c now has schema-first contracts for local resource/job-spec enforcement, shared ODS/DWD/DWS/factor layers, report families, reproducibility manifests, data-quality monitor boundaries, and a minimal A-share local-cache read-path plan (`engine/datahub/job_spec_contract.py`, `schemas/datahub_shared_layer_contract.schema.json`, `schemas/datahub_report_contract.schema.json`, `schemas/datahub_reproducibility_manifest.schema.json`, `schemas/datahub_data_quality_monitor_contract.schema.json`, `schemas/datahub_minimal_a_share_read_path_plan.schema.json`). These still do not fetch provider data, read cache, create DataHub tables, change runners, authorize provider selection / full-size US / production claims, or provide ship-gate evidence.
 - `execution_aggregate_report` v1.1.4 now binds reviewed forward-live evidence to aggregate `capital_context`, validates source-window coverage for claimed months, and requires at least 12 monthly alpha / return observations before alpha t-stat or Sharpe metrics can pass; full-size remains blocked by the concurrency gate.
-- US operating model is active-only + forward-live validation; historical US backtests stay idea-only. A-short steady is `risk_filter_only`. A-long full-period fixed-panel audit has run and failed: `research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json` records `fail_data_not_ready`. Simple result: the 2018-2025 sample panel is downloaded, but A-long still cannot search for alpha because `fina_indicator` has 6 same-ann-date duplicate conflicts on `profit_dedt` and the delisted sample `000666.SZ` lacks SW industry membership.
+- US operating model is active-only + forward-live validation; historical US backtests stay idea-only. A-short steady is `risk_filter_only`. A-long full-period fixed-panel audit still records `fail_data_not_ready`, but the failure is now narrowed: the 6 same-ann-date `profit_dedt` duplicates are resolved by a strict non-null preference rule; A-long still cannot search for alpha because delisted sample `000666.SZ` lacks SW industry membership.
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：A-share alpha validation is the active priority; A-long fixed 2018-2025 panel materialized, but the full-period data-integrity audit failed. Signal search remains blocked until the failed data-route gaps are repaired and a rerun passes. Phase 7c implementation remains not started.
-- **当前 P0 / P1 目标**：repair the two A-long full-period audit blockers: deterministic handling / source repair for `fina_indicator` same-ann-date `profit_dedt` duplicates, and SW membership coverage for the delisted sample `000666.SZ`. Then rerun the data-integrity audit. Do not start signal search.
+- **当前 Phase**：A-share alpha validation is the active priority; A-long fixed 2018-2025 panel materialized, but the full-period data-integrity audit still fails on delisted SW membership. Signal search remains blocked until that data-route gap is repaired and a rerun passes. Phase 7c implementation remains not started.
+- **当前 P0 / P1 目标**：repair SW membership coverage for the delisted sample `000666.SZ`, then rerun the data-integrity audit. The `profit_dedt` duplicate issue is no longer an active blocker. Do not start signal search.
 - **当前 P1 provider blocker**：US inactive / delisted historical coverage is user-accepted as scoped out for the current active-only forward model. `SR-PROVIDER-001` remains open for license / storage, active-symbol PIT if fundamentals are used, active price-adjustment / corporate actions if used, SEC parser / mapping if used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness. US forward universes must be PIT-frozen at start and must capture real delisting / halt / merger / no-trade outcomes during the forward window; the 12-month forward-live ship-gate requirement is unchanged.
 - **执行锁**：A-long signal search remains blocked because the full-period audit failed. A-short steady is `risk_filter_only` and spent；burst paths remain blocked/failed. Material audit findings must be fixed or entered in the risk register.
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
@@ -40,7 +40,7 @@
 - **A-long Tushare route validation / gap repair**（2026-06-04）：route validation was partial, then route-gap repair passed small-sample field checks; neither authorizes alpha search.
 - **A-long thin-slice materialization execution**（2026-06-04）：`runners/a_long_tushare_incremental_materialization_packet.py` executed the reviewed 2022-2023 three-symbol packet and wrote `docs/a_long_tushare_incremental_materialization_execution_summary_20260604.json`; 29/29 calls succeeded, raw rows stayed under gitignored `data/a_long/raw/tushare/materialization_thin_slice_20260604/`, but no data is ready for alpha.
 - **A-long broader materialization / paced rerun**（2026-06-04）：the first 2018-2025 run failed on `daily`; diagnostic proved pacing/rate-limit, and paced refetch rewrote `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json` with `passed_full_period_panel_materialization_shape`.
-- **A-long full-period data-integrity audit**（2026-06-04）：`runners/a_long_materialized_full_period_data_integrity_audit.py` read only the materialized 2018-2025 raw panel and wrote `research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json`. Result is `fail_data_not_ready`: PIT fundamentals, terminal delisting return inputs, return / benchmark inputs, and coverage characterization passed, but `fina_indicator` same-ann-date duplicate conflicts and missing SW membership for `000666.SZ` block signal search.
+- **A-long full-period data-integrity audit repair/rerun**（2026-06-04）：`runners/a_long_materialized_full_period_data_integrity_audit.py` now resolves same-ann-date `profit_dedt` blank-vs-nonblank duplicates only under a strict non-null preference rule. The rerun report still records `fail_data_not_ready`: PIT fundamentals, restatement selection, terminal delisting return inputs, return / benchmark inputs, and coverage characterization passed; missing SW membership for `000666.SZ` still blocks signal search.
 ---
 
 ## 3. 当前有效策略结论
@@ -91,7 +91,7 @@
 ### P0 / P1 - Post redesigned outcome boundary
 
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
-- The current active alpha-search route is A-long, but signal search is still blocked. The full-period panel data-integrity audit has run and failed. Next step is a reviewed repair for the two audit blockers: `fina_indicator` same-ann-date duplicate conflict handling/source repair, and SW membership for the delisted sample `000666.SZ`. Do not start signal search.
+- The current active alpha-search route is A-long, but signal search is still blocked. The full-period panel data-integrity audit has run and now has one active blocker left: SW membership for the delisted sample `000666.SZ`. Do not start signal search.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
 - The full-universe redesigned outcome / excess slice has failed its registered thresholds; do not rerun EGS, change preregistered parameters, full-refresh forward_daily, or reinterpret it as production evidence.
 - Any further redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
@@ -100,7 +100,7 @@
 - Current US model is active-only universe + forward-live validation only. Historical US backtests are exploration / idea-only forever; they cannot prove alpha, support ship-gate, unlock full-size, or authorize DataHub / production.
 - Forward universe must be frozen point-in-time at the forward start date; real delisting / halt / merger / bankruptcy / no-trade outcomes during the forward window must be captured, not deleted.
 - No further inactive / delisted historical coverage work or paid / specialized US data purchase is required now. Remaining provider work is only license / storage, active-PIT if used, active price / corporate actions if used, SEC parser / mapping if used, fallback / stability, and production-readiness gates.
-- Next high-value work is the A-long audit-blocker repair and audit rerun. Until that rerun passes, A-long cannot search for alpha.
+- Next high-value work is a reviewed `000666.SZ` SW industry-source supplement or an explicit blocked redesign decision. Until a rerun audit passes, A-long cannot search for alpha.
 
 ### P2 - DataHub local resource boundary
 

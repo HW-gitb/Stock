@@ -302,6 +302,42 @@ class ALongMaterializedFullPeriodDataIntegrityAuditTest(unittest.TestCase):
             self.assertEqual(checks["fundamental_pit"]["status"], "blocked_missing_required_source")
             self.assertIn("income_000001_SZ_2018_2025:ann_date", checks["fundamental_pit"]["metrics"]["missing_required_columns"])
 
+    def test_same_ann_date_profit_dedt_blank_duplicate_is_resolved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            summary_path, raw_root = self.build_fixture(tmp_path)
+            cid = runner.call_id_for("fina_indicator", "000001.SZ")
+            payload_path = raw_root / f"{cid}.json"
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            payload["records"].append(
+                {
+                    "ts_code": "000001.SZ",
+                    "ann_date": "20200430",
+                    "f_ann_date": "20200430",
+                    "end_date": "20191231",
+                    "roe": 1.0,
+                    "profit_dedt": None,
+                }
+            )
+            payload["row_count"] = len(payload["records"])
+            payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            report = runner.run(
+                argparse.Namespace(
+                    materialization_summary=summary_path,
+                    raw_root=raw_root,
+                    output_dir=tmp_path / "out",
+                    generated_at="2026-06-04T00:00:00Z",
+                )
+            )
+
+            checks = {item["check_id"]: item for item in report["check_results"]}
+            restatement = checks["restatement_revision_asof"]
+            self.assertEqual(restatement["status"], "pass_fixed_panel")
+            self.assertEqual(restatement["metrics"]["same_ann_date_conflicting_duplicate_groups"], 0)
+            self.assertEqual(restatement["metrics"]["same_ann_date_duplicate_groups_resolved_by_non_null_preference"], 1)
+            self.assertEqual(report["decision"]["audit_status"], "passed_fixed_panel_data_integrity_for_signal_preregistration")
+
     def test_missing_benchmark_open_fails_measurement_basis(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

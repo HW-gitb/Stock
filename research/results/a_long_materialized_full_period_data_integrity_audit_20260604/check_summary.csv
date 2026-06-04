@@ -1,6 +1,6 @@
 check_id,status,hard_check,blocks_signal_search,finding_count
 fundamental_pit,pass_fixed_panel,True,True,2
-restatement_revision_asof,fail_data_not_ready,True,True,2
+restatement_revision_asof,pass_fixed_panel,True,True,2
 survivorship_pit_universe,fail_data_not_ready,True,True,3
 return_benchmark_measurement_basis,pass_fixed_panel,True,True,2
 temporal_coverage_bias,coverage_characterized_fixed_panel,False,True,2

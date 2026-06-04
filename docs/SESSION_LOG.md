@@ -8,6 +8,52 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long audit blocker-1 repair: profit_dedt dedup) — **PASS (可提交)**
+
+**Verdict**: Pass. Came in skeptical — the audit runner was modified to turn a FAIL into a pass (the exact "fix the audit, not the data" trap). Verified it is a GENUINE, narrow, transparent data-handling fix, NOT an audit-weakening: the dedup only resolves the benign null-vs-single-value pattern on one allowlisted field; genuine conflicts still hard-fail; the audit still FAILS overall on the remaining real blocker. Safe to commit.
+
+**Why the fix is sound (not a loophole)**:
+- `same_ann_duplicate_resolution`: resolves ONLY if every differing field ∈ `{profit_dedt}` (single allowlist) AND that field has EXACTLY ONE non-null value (null-vs-value). ANY other differing field → hard fail; TWO different non-null values → hard fail.
+- The 6 original "conflicts" were all this pattern: report records `same_ann_date_conflicting_duplicate_groups=0`, `resolved_by_non_null_preference=6`, with 6 transparent `resolution_examples` + the rule text. Reviewable, not hidden.
+- Genuine conflict still fails: the restatement self-test (plants a different non-null `revenue`, non-allowlisted) still shows `conflicts=1 / resolved=0` → fail; the new regression test plants a `profit_dedt=null` dup → resolves (1). Both directions tested.
+- Audit still FAILS overall: `audit_status=fail_data_not_ready`, `data_can_be_used_for_alpha=false`; the only remaining hard failure is `survivorship_pit_universe` (000666.SZ missing SW membership). Did NOT falsely flip to pass. Decision message now names the remaining blocker + next action specifically.
+- Hygiene: `resolution_examples` = field names + dates only; self-tests 11/11; tests 12/12.
+
+**Optional (future, not a defect)**: "prefer non-null" handles the null-vs-value pattern; a stricter dedup would key on Tushare `update_flag`/`report_type` to pick the authoritative row. Current rule is safe (two-non-null still fails → flags for review), so this only matters if same-day genuine restatements appear.
+
+**Net**: blocker #1 (profit_dedt sparse-duplicate) genuinely resolved; blocker #2 (delisted 000666 SW industry) correctly still open. Next: supplement the delisted-name SW industry source OR an explicit design decision (e.g., industry-neutralize active names only). A-long stays blocked from signal search until then — correctly.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long full-period audit blocker repair rerun)
+
+**Plain result**:
+- 已提交上一轮 full-period audit：`bff59d5 Run A-long full-period data integrity audit`。
+- 本轮没有让 A-long 过审，也没有开始找 alpha。
+- 修掉了 `profit_dedt` 重复冲突：6 组同一 `ann_date` 的空值 / 非空值重复现在按严格非空优先规则处理。
+- A-long 仍不能找 alpha：唯一剩余硬缺口是退市样本 `000666.SZ` 没有 SW 行业成员记录。
+
+**Worked on**:
+- [tracked] `runners/a_long_materialized_full_period_data_integrity_audit.py`：新增 same-ann-date nullable duplicate resolution，只有 `profit_dedt` 这类允许字段且只有一个非空值时才可解决；其他冲突仍 hard-fail。
+- [tracked] `tests/test_a_long_materialized_full_period_data_integrity_audit.py`：新增 blank-vs-nonblank duplicate regression。
+- [tracked] `research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json`, `check_summary.csv`：重跑真实 full-period audit。
+- [tracked] `AGENTS.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `research/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`：同步“只剩 `000666.SZ` SW membership 缺口”的状态。
+- [untracked] none.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_materialized_full_period_data_integrity_audit tests.schema.test_a_long_materialized_full_period_data_integrity_audit_schema -v` passed 12/12.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 691/691.
+- `git diff --check` passed with only normal Windows LF/CRLF warnings.
+- `docs/CURRENT.md` line count = 149.
+- Tracked audit report no-secret/no-raw scan: no `"records"`, no `TUSHARE_TOKEN`, no `api_key`, no `http://` or `https://`; only `request_url` boolean field name appears.
+
+**Current review state**:
+- Ready for Claude review.
+- Expected next reviewer action: verify the non-null duplicate rule is narrow, verify unresolved same-ann-date conflicts still fail, and verify the remaining `000666.SZ` SW membership blocker is still registered / not overclaimed.
+- After PASS, commit this repair. Then the next implementation step is a reviewed tiny `000666.SZ` SW industry-source supplement or an explicit blocked redesign decision; do not start A-long signal search.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long full-period data-integrity audit) — **PASS (可提交)**
 
 **Verdict**: Pass. The audit is genuine (real checks on real materialized rows, R1+R2 discipline carried forward) and it correctly FAILED on two real data-integrity findings rather than rubber-stamping. Honest fail; hygiene clean. Safe to commit. The findings are real blockers to resolve next, NOT defects in the audit.

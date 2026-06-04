@@ -1,7 +1,7 @@
 {
   "schema_name": "a_long_materialized_full_period_data_integrity_audit_report",
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-04T12:14:56+00:00",
+  "generated_at": "2026-06-04T12:42:31+00:00",
   "artifact_id": "a_long_materialized_full_period_data_integrity_audit_report_20260604",
   "source_refs": [
     "docs/a_long_tushare_broader_materialization_execution_summary_20260604.json",
@@ -199,6 +199,9 @@
             ]
           }
         ],
+        "same_ann_date_duplicate_groups_resolved_by_non_null_preference": 0,
+        "same_ann_date_duplicate_resolution_examples": [],
+        "same_ann_date_duplicate_resolution_rule": "If duplicated rows share ts_code/end_date/ann_date and differ only in allowed nullable fields with exactly one non-null value, the audit treats the duplicate as source-complementary and records a deterministic non-null preference. Any other same-ann-date difference remains a hard failure.",
         "asof_latest_known_selection_events_checked": 1296,
         "tables_with_f_ann_date_column": [
           "balancesheet",
@@ -425,21 +428,24 @@
     },
     {
       "check_id": "restatement_revision_asof",
-      "status": "fail_data_not_ready",
+      "status": "pass_fixed_panel",
       "hard_check": true,
       "blocks_signal_search": true,
       "metrics": {
         "period_groups_checked": 1113,
         "groups_with_multiple_ann_dates": 0,
-        "same_ann_date_conflicting_duplicate_groups": 6,
-        "same_ann_date_conflict_examples": [
+        "same_ann_date_conflicting_duplicate_groups": 0,
+        "same_ann_date_conflict_examples": [],
+        "same_ann_date_duplicate_groups_resolved_by_non_null_preference": 6,
+        "same_ann_date_duplicate_resolution_examples": [
           {
             "table": "fina_indicator",
             "symbol": "000001.SZ",
             "end_date": "20240630",
             "ann_date": "20240816",
             "row_count": 2,
-            "differing_fields": [
+            "resolution_rule": "prefer_single_non_null_value_when_only_allowed_fields_differ",
+            "resolved_fields": [
               "profit_dedt"
             ]
           },
@@ -449,7 +455,8 @@
             "end_date": "20240331",
             "ann_date": "20240424",
             "row_count": 2,
-            "differing_fields": [
+            "resolution_rule": "prefer_single_non_null_value_when_only_allowed_fields_differ",
+            "resolved_fields": [
               "profit_dedt"
             ]
           },
@@ -459,7 +466,8 @@
             "end_date": "20230930",
             "ann_date": "20231028",
             "row_count": 2,
-            "differing_fields": [
+            "resolution_rule": "prefer_single_non_null_value_when_only_allowed_fields_differ",
+            "resolved_fields": [
               "profit_dedt"
             ]
           },
@@ -469,7 +477,8 @@
             "end_date": "20250630",
             "ann_date": "20250830",
             "row_count": 2,
-            "differing_fields": [
+            "resolution_rule": "prefer_single_non_null_value_when_only_allowed_fields_differ",
+            "resolved_fields": [
               "profit_dedt"
             ]
           },
@@ -479,7 +488,8 @@
             "end_date": "20240331",
             "ann_date": "20240430",
             "row_count": 2,
-            "differing_fields": [
+            "resolution_rule": "prefer_single_non_null_value_when_only_allowed_fields_differ",
+            "resolved_fields": [
               "profit_dedt"
             ]
           },
@@ -489,11 +499,13 @@
             "end_date": "20230930",
             "ann_date": "20231028",
             "row_count": 2,
-            "differing_fields": [
+            "resolution_rule": "prefer_single_non_null_value_when_only_allowed_fields_differ",
+            "resolved_fields": [
               "profit_dedt"
             ]
           }
         ],
+        "same_ann_date_duplicate_resolution_rule": "If duplicated rows share ts_code/end_date/ann_date and differ only in allowed nullable fields with exactly one non-null value, the audit treats the duplicate as source-complementary and records a deterministic non-null preference. Any other same-ann-date difference remains a hard failure.",
         "asof_latest_known_selection_events_checked": 55461,
         "tables_with_f_ann_date_column": [
           "balancesheet",
@@ -961,8 +973,8 @@
     "signal_search_preregistration_may_be_created": false,
     "signal_search_authorized_by_this_report": false,
     "alpha_found": false,
-    "plain_result": "全周期固定 panel 审计发现硬错误。不能找 alpha。",
-    "next_action": "先修失败的字段或口径，再重新审计。"
+    "plain_result": "全周期固定 panel 只剩一个硬缺口：退市样本 000666.SZ 没有 SW 行业成员记录。不能找 alpha。",
+    "next_action": "先补可审的退市股 SW 行业来源；补不到就必须继续阻塞 A-long 行业归一化信号搜索。"
   },
   "prohibited_claims": {
     "a_long_alpha_found": false,

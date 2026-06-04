@@ -3441,3 +3441,24 @@ git diff --check
 1. Do not start A-long signal search.
 2. Repair `fina_indicator` duplicate handling/source lineage and SW membership coverage for `000666.SZ`.
 3. Rerun the full-period audit after the repair.
+
+## 2026-06-04 append: A-long full-period audit blocker repair rerun
+
+**Plain result**:
+
+- A-long still cannot search for alpha.
+- The `profit_dedt` duplicate blocker is repaired.
+- One blocker remains: delisted sample `000666.SZ` still has no SW membership rows.
+
+**What changed**:
+
+- `runners/a_long_materialized_full_period_data_integrity_audit.py` now resolves same `ts_code` / `end_date` / `ann_date` duplicate rows only when the only differing field is an allowed nullable field (`profit_dedt`) and exactly one non-null value exists.
+- Any other same-ann-date duplicate difference remains a hard failure.
+- The rerun report records 6 resolved `profit_dedt` duplicate groups and `restatement_revision_asof = pass_fixed_panel`.
+- The rerun report still records `survivorship_pit_universe = fail_data_not_ready` because `sw_membership_missing_symbols = ["000666.SZ"]`.
+
+**Next-step notes**:
+
+1. Do not start A-long signal search.
+2. Repair or supplement the `000666.SZ` SW industry source under review.
+3. Rerun the full-period audit after that repair.

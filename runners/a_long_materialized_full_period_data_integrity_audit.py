@@ -43,6 +43,7 @@ DELISTED_SYMBOLS = ["000666.SZ"]
 SYMBOLS = ACTIVE_SYMBOLS + DELISTED_SYMBOLS
 BENCHMARKS = ["000300.SH", "000852.SH"]
 FUNDAMENTAL_TABLES = ["income", "balancesheet", "cashflow", "fina_indicator"]
+SAME_ANN_DATE_NON_NULL_PREFERENCE_FIELDS = {"profit_dedt"}
 CHECK_IDS = [
     "fundamental_pit",
     "restatement_revision_asof",
@@ -323,13 +324,45 @@ def compact_value(value: Any) -> Any:
     return value
 
 
+def differing_fields(rows: list[dict[str, Any]]) -> list[str]:
+    keys = sorted({key for item in rows for key in item if key not in {"request_url", "token"}})
+    out = []
+    for key in keys:
+        values = {
+            json.dumps(compact_value(item.get(key)), ensure_ascii=False, sort_keys=True, default=json_default)
+            for item in rows
+        }
+        if len(values) > 1:
+            out.append(key)
+    return out
+
+
+def same_ann_duplicate_resolution(rows: list[dict[str, Any]]) -> tuple[bool, list[str]]:
+    fields = differing_fields(rows)
+    if not fields:
+        return True, []
+    if not set(fields).issubset(SAME_ANN_DATE_NON_NULL_PREFERENCE_FIELDS):
+        return False, fields
+    for field in fields:
+        non_null_values = {
+            json.dumps(compact_value(row.get(field)), ensure_ascii=False, sort_keys=True, default=json_default)
+            for row in rows
+            if compact_value(row.get(field)) is not None
+        }
+        if len(non_null_values) != 1:
+            return False, fields
+    return True, fields
+
+
 def check_restatement_revision(payloads: dict[str, dict[str, Any]], as_ofs: list[str]) -> dict[str, Any]:
     groups_checked = 0
     multi_ann_groups = 0
     same_ann_conflicts = 0
+    resolved_same_ann_duplicates = 0
     asof_selection_count = 0
     tables_with_f_ann_date: set[str] = set()
     conflict_examples: list[dict[str, Any]] = []
+    resolution_examples: list[dict[str, Any]] = []
 
     for table in FUNDAMENTAL_TABLES:
         by_period: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
@@ -353,18 +386,26 @@ def check_restatement_revision(payloads: dict[str, dict[str, Any]], as_ofs: list
             for ann_date, signatures in by_ann.items():
                 if len(signatures) <= 1:
                     continue
+                sample_rows = by_ann_rows[ann_date]
+                is_resolved, fields = same_ann_duplicate_resolution(sample_rows)
+                if is_resolved:
+                    resolved_same_ann_duplicates += 1
+                    if fields and len(resolution_examples) < 10:
+                        first = sample_rows[0]
+                        resolution_examples.append(
+                            {
+                                "table": table,
+                                "symbol": first.get("ts_code"),
+                                "end_date": normalize_yyyymmdd(first.get("end_date")),
+                                "ann_date": ann_date,
+                                "row_count": len(sample_rows),
+                                "resolution_rule": "prefer_single_non_null_value_when_only_allowed_fields_differ",
+                                "resolved_fields": fields,
+                            }
+                        )
+                    continue
                 same_ann_conflicts += 1
                 if len(conflict_examples) < 10:
-                    sample_rows = by_ann_rows[ann_date]
-                    keys = sorted({key for item in sample_rows for key in item})
-                    differing_fields = []
-                    for key in keys:
-                        values = {
-                            json.dumps(compact_value(item.get(key)), ensure_ascii=False, sort_keys=True)
-                            for item in sample_rows
-                        }
-                        if len(values) > 1:
-                            differing_fields.append(key)
                     first = sample_rows[0]
                     conflict_examples.append(
                         {
@@ -373,7 +414,7 @@ def check_restatement_revision(payloads: dict[str, dict[str, Any]], as_ofs: list
                             "end_date": normalize_yyyymmdd(first.get("end_date")),
                             "ann_date": ann_date,
                             "row_count": len(sample_rows),
-                            "differing_fields": differing_fields,
+                            "differing_fields": fields,
                         }
                     )
             ann_dates = sorted(date for date in by_ann if date)
@@ -392,6 +433,13 @@ def check_restatement_revision(payloads: dict[str, dict[str, Any]], as_ofs: list
             "groups_with_multiple_ann_dates": multi_ann_groups,
             "same_ann_date_conflicting_duplicate_groups": same_ann_conflicts,
             "same_ann_date_conflict_examples": conflict_examples,
+            "same_ann_date_duplicate_groups_resolved_by_non_null_preference": resolved_same_ann_duplicates,
+            "same_ann_date_duplicate_resolution_examples": resolution_examples,
+            "same_ann_date_duplicate_resolution_rule": (
+                "If duplicated rows share ts_code/end_date/ann_date and differ only in allowed nullable fields "
+                "with exactly one non-null value, the audit treats the duplicate as source-complementary and records "
+                "a deterministic non-null preference. Any other same-ann-date difference remains a hard failure."
+            ),
             "asof_latest_known_selection_events_checked": asof_selection_count,
             "tables_with_f_ann_date_column": sorted(tables_with_f_ann_date),
         },
@@ -894,8 +942,17 @@ def decision_from_checks(checks: list[dict[str, Any]]) -> dict[str, Any]:
         hard_checks_pass = False
     elif failed:
         status = "fail_data_not_ready"
-        plain = "全周期固定 panel 审计发现硬错误。不能找 alpha。"
-        next_action = "先修失败的字段或口径，再重新审计。"
+        survivorship = next(check for check in checks if check["check_id"] == "survivorship_pit_universe")
+        membership_missing = survivorship["metrics"].get("sw_membership_missing_symbols", [])
+        if failed == ["survivorship_pit_universe"] and membership_missing:
+            plain = (
+                "全周期固定 panel 只剩一个硬缺口：退市样本 "
+                f"{', '.join(membership_missing)} 没有 SW 行业成员记录。不能找 alpha。"
+            )
+            next_action = "先补可审的退市股 SW 行业来源；补不到就必须继续阻塞 A-long 行业归一化信号搜索。"
+        else:
+            plain = "全周期固定 panel 审计发现硬错误。不能找 alpha。"
+            next_action = "先修失败的字段或口径，再重新审计。"
         may_preregister = False
         hard_checks_pass = False
     elif usable_start_year is None:
