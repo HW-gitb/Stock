@@ -8,6 +8,49 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long main-board candidate-universe preflight) — **PASS (可提交)**
+
+**Verdict**: Pass. Real 4-call preflight; hygiene clean (token/url false, no records/URL leak; raw gitignored; examples are public ts_codes, not raw values); honest — `blocked_sw_industry_coverage_for_full_universe_signal_search`, `data_can_be_used_for_alpha=false`, `signal_search_authorized=false`, full alpha run NOT executed. Safe runner (double-gate, validate_raw_root gitignore, tracked-no-records, max 4, redact). The finding is real — data-integrity-first working again at full-universe scale.
+
+**Finding (full main-board scale surfaces a gap the 9-symbol panel hid)**: of 3,200 active main-board stocks, 1,193 (≈37%) are missing SW membership in current raw (active coverage 62.7%); plus 187 main-board stocks delisted 2018-2025 also missing. The single bulk `index_member_all` (~3000 rows) structurally can't cover all ~5,200 A-share names — the 9-symbol large-cap panel happened to be in the bulk set, which is why the panel audit passed but the full universe doesn't.
+
+**Two gaps — different dispositions**:
+1. **Active 1,193 — fixable.** The preflight PROVED a missing active name returns via per-symbol `index_member_all(ts_code=...)`. So this is a batch SW-membership supplement (~1,193 paced calls + checkpoint, per the daily-rate lesson). Straightforward.
+2. **Delisted 187 — needs a NEW, SCALED user approval; must NOT ride on the 000666 approval.** These are like 000666 (delisted → unrecoverable from Tushare). BUT the approved 000666 exception is capped at **1 symbol / 12.5%** — 187 names BLOWS the 1-symbol count cap. 187/(3200+187) ≈ 5.5%, so a rate cap of 12.5% would fit, but the count cap of 1 does not. So a new boundary at the 187 scale is required: drop the count-cap, keep a rate cap, delisted-only, and EVIDENCE-GATE that these 187 genuinely lack a Tushare industry (like the 000666 probe did) — not a silent extension.
+
+**Net**: preflight correctly blocks full alpha until both gaps close. Next = (a) active SW batch supplement (feasible) + (b) a re-approved delisted-no-industry boundary at the 187 scale. Don't pull full alpha before both pass.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long main-board candidate-universe preflight)
+
+**Commits**:
+- `49ed363 Register A-long signal search after audit pass` committed the prior Claude PASS / signal-search preregistration package.
+
+**Plain result**:
+- A-long 现在还不能全量找 alpha。
+- 原因不是电脑带不动，也不是信号已经失败。
+- 原因是全主板候选池的行业覆盖没过关：现有 raw 里 3,200 只活跃主板股中 1,193 只缺 SW membership；2018-2025 期间退市的 187 只主板股也缺 SW membership。
+- 好消息：4-call preflight 证明活跃股缺口可以用 `index_member_all(ts_code=...)` 分批补。
+- 退市股无行业仍需要一个 reviewed 边界；在它过审前，不应启动全量 alpha 拉取 / 搜索。
+
+**Worked on**:
+1. [tracked] Added `runners/a_long_main_board_candidate_universe_preflight.py`.
+2. [tracked] Added `schemas/a_long_main_board_candidate_universe_preflight_execution_summary.schema.json`.
+3. [tracked] Added `docs/a_long_main_board_candidate_universe_preflight_execution_summary_20260604.json`.
+4. [tracked] Added `tests/test_a_long_main_board_candidate_universe_preflight.py` and `tests/schema/test_a_long_main_board_candidate_universe_preflight_schema.py`.
+5. [tracked] Updated `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `research/README.md`, and `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`.
+6. [untracked/gitignored] Raw probe wrappers written under `data/a_long/raw/tushare/main_board_candidate_universe_preflight_20260604/`.
+
+**Validation**:
+- Executed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\a_long_main_board_candidate_universe_preflight.py --confirm-independent-review-pass --confirm-post-review-execute`.
+- Result: `blocked_sw_industry_coverage_for_full_universe_signal_search`; `ready=false`; `active_missing_sw=1193`; `delisted_missing_sw=187`.
+- Tests passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_main_board_candidate_universe_preflight tests.schema.test_a_long_main_board_candidate_universe_preflight_schema -v` (9 tests, 1 skipped because `TUSHARE_TOKEN` is present).
+
+**Current review state**:
+- Needs Claude review before commit.
+- Reviewer should verify that the package correctly stops before full alpha pull/search, does not claim alpha, keeps raw rows gitignored, and routes the next work to active SW supplement + reviewed delisted no-industry boundary.
+
 ## 2026-06-04 — Claude 审查 (A-long main-board audit pass + signal-search preregistration) — **PASS (可提交)**
 
 **Verdict**: Pass. The re-materialized main-board (600887) panel genuinely passed the data-integrity audit, and the first A-long signal-search preregistration is exemplary — it freezes the correct measurement basis and the anti-self-deception discipline the project earned the hard way. Safe to commit.

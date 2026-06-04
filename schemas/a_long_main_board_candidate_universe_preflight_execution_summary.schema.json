@@ -1,0 +1,287 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_main_board_candidate_universe_preflight_execution_summary/1.0.0/schema.json",
+  "title": "A-long Main-board Candidate Universe Preflight Execution Summary",
+  "description": "Tracked no-secret summary for the A-long main-board candidate-universe preflight before any full alpha run. Raw probe payloads must stay gitignored. This summary never authorizes signal search, alpha, production, ship-gate evidence, full-size use, DataHub, or broker automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "preregistration_ref",
+    "scope",
+    "execution",
+    "candidate_universe",
+    "probe_interpretation",
+    "endpoint_results",
+    "decision",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_main_board_candidate_universe_preflight_execution_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_main_board_candidate_universe_preflight_execution_summary_20260604"},
+    "preregistration_ref": {"const": "research/preregistrations/a_long_signal_search_preregistration_20260604.json"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "candidate_universe": {"$ref": "#/$defs/candidateUniverse"},
+    "probe_interpretation": {"$ref": "#/$defs/probeInterpretation"},
+    "endpoint_results": {"type": "array", "items": {"$ref": "#/$defs/endpointResult"}, "maxItems": 4},
+    "decision": {"$ref": "#/$defs/decision"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {"type": "array", "items": {"$ref": "#/$defs/nonEmptyString"}, "minItems": 1},
+    "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "provider_family",
+        "provider_call_executed",
+        "tushare_call_executed",
+        "data_fetch_executed",
+        "raw_payload_written_to_gitignored_path",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_secret",
+        "full_market_materialization_executed",
+        "full_universe_signal_search_executed",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_main_board_candidate_universe_preflight"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "provider_family": {"const": "tushare_existing_account"},
+        "provider_call_executed": {"type": "boolean"},
+        "tushare_call_executed": {"type": "boolean"},
+        "data_fetch_executed": {"type": "boolean"},
+        "raw_payload_written_to_gitignored_path": {"type": "boolean"},
+        "tracked_summary_contains_raw_rows": {"const": false},
+        "tracked_summary_contains_secret": {"const": false},
+        "full_market_materialization_executed": {"const": false},
+        "full_universe_signal_search_executed": {"const": false},
+        "signal_search_executed": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary_path",
+        "raw_output_root",
+        "raw_output_root_is_gitignored",
+        "source_raw_root",
+        "max_total_calls",
+        "planned_call_count",
+        "actual_call_count",
+        "budget_exceeded",
+        "network_call_attempted",
+        "environment_precheck_passed",
+        "independent_review_confirmed",
+        "post_review_execute_confirmed",
+        "token_logged",
+        "request_url_logged"
+      ],
+      "properties": {
+        "summary_path": {"const": "docs/a_long_main_board_candidate_universe_preflight_execution_summary_20260604.json"},
+        "raw_output_root": {"const": "data/a_long/raw/tushare/main_board_candidate_universe_preflight_20260604/"},
+        "raw_output_root_is_gitignored": {"const": true},
+        "source_raw_root": {"const": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/"},
+        "max_total_calls": {"const": 4},
+        "planned_call_count": {"const": 4},
+        "actual_call_count": {"type": "integer", "minimum": 0, "maximum": 4},
+        "budget_exceeded": {"const": false},
+        "network_call_attempted": {"type": "boolean"},
+        "environment_precheck_passed": {"type": "boolean"},
+        "independent_review_confirmed": {"type": "boolean"},
+        "post_review_execute_confirmed": {"type": "boolean"},
+        "token_logged": {"const": false},
+        "request_url_logged": {"const": false}
+      }
+    },
+    "candidateUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_raw_root",
+        "start_date",
+        "end_date",
+        "stock_basic_active_rows",
+        "main_board_active_count",
+        "stock_basic_delisted_rows",
+        "main_board_delisted_2018_2025_count",
+        "current_sw_membership_rows",
+        "active_with_sw_membership_count",
+        "active_missing_sw_membership_count",
+        "active_missing_sw_membership_examples",
+        "delisted_missing_sw_membership_count",
+        "delisted_missing_sw_membership_examples",
+        "main_board_active_sw_coverage_pct"
+      ],
+      "properties": {
+        "source_raw_root": {"const": "data/a_long/raw/tushare/materialization_full_period_panel_20260604/"},
+        "start_date": {"const": "20180101"},
+        "end_date": {"const": "20251231"},
+        "stock_basic_active_rows": {"$ref": "#/$defs/nonNegativeInteger"},
+        "main_board_active_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "stock_basic_delisted_rows": {"$ref": "#/$defs/nonNegativeInteger"},
+        "main_board_delisted_2018_2025_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "current_sw_membership_rows": {"$ref": "#/$defs/nonNegativeInteger"},
+        "active_with_sw_membership_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "active_missing_sw_membership_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "active_missing_sw_membership_examples": {"type": "array", "items": {"$ref": "#/$defs/nonEmptyString"}},
+        "delisted_missing_sw_membership_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "delisted_missing_sw_membership_examples": {"type": "array", "items": {"$ref": "#/$defs/nonEmptyString"}},
+        "main_board_active_sw_coverage_pct": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "endpointResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_id",
+        "api_family",
+        "probe_kind",
+        "request_shape_without_token",
+        "call_status",
+        "row_count",
+        "columns",
+        "target_symbol",
+        "target_match_count",
+        "raw_payload_ref",
+        "tracked_summary_excludes_raw_rows",
+        "error_class",
+        "error_message_redacted"
+      ],
+      "properties": {
+        "call_id": {
+          "enum": [
+            "index_member_all_l2_index_code_probe",
+            "index_member_all_missing_active_ts_code_probe",
+            "index_member_all_present_active_ts_code_probe",
+            "stock_basic_active_industry_area_probe"
+          ]
+        },
+        "api_family": {"enum": ["index_member_all", "stock_basic"]},
+        "probe_kind": {
+          "enum": [
+            "l2_index_code_filter",
+            "missing_active_ts_code_filter",
+            "present_active_ts_code_filter",
+            "stock_basic_active_industry_area_fields"
+          ]
+        },
+        "request_shape_without_token": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean", "null"]}},
+        "call_status": {"enum": ["success", "empty", "error"]},
+        "row_count": {"type": ["integer", "null"], "minimum": 0},
+        "columns": {"type": "array", "items": {"$ref": "#/$defs/nonEmptyString"}},
+        "target_symbol": {"type": ["string", "null"]},
+        "target_match_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "raw_payload_ref": {"$ref": "#/$defs/nonEmptyString"},
+        "tracked_summary_excludes_raw_rows": {"const": true},
+        "error_class": {"type": ["string", "null"]},
+        "error_message_redacted": {"type": ["string", "null"]}
+      }
+    },
+    "probeInterpretation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_ts_code_filter_can_supplement_missing_sw",
+        "stock_basic_active_industry_area_available",
+        "l2_index_code_filter_not_sufficient_for_pagination",
+        "delisted_sw_membership_still_unresolved"
+      ],
+      "properties": {
+        "active_ts_code_filter_can_supplement_missing_sw": {"type": "boolean"},
+        "stock_basic_active_industry_area_available": {"type": "boolean"},
+        "l2_index_code_filter_not_sufficient_for_pagination": {"type": "boolean"},
+        "delisted_sw_membership_still_unresolved": {"type": "boolean"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preflight_status",
+        "candidate_universe_ready_for_signal_search",
+        "data_can_be_used_for_alpha_now",
+        "signal_search_authorized_by_this_summary",
+        "full_alpha_run_executed",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "preflight_status": {
+          "enum": [
+            "dry_run_environment_ready",
+            "not_executed_environment_missing",
+            "candidate_universe_preflight_passed",
+            "blocked_sw_industry_coverage_for_full_universe_signal_search",
+            "partial_or_failed_candidate_universe_preflight"
+          ]
+        },
+        "candidate_universe_ready_for_signal_search": {"type": "boolean"},
+        "data_can_be_used_for_alpha_now": {"const": false},
+        "signal_search_authorized_by_this_summary": {"const": false},
+        "full_alpha_run_executed": {"const": false},
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"},
+        "next_action": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_alpha_found",
+        "candidate_universe_ready",
+        "full_universe_ready",
+        "signal_search_authorized",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_alpha_found": {"const": false},
+        "candidate_universe_ready": {"const": false},
+        "full_universe_ready": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

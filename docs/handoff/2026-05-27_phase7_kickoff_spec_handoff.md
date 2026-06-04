@@ -3619,3 +3619,26 @@ git diff --check
 1. Do not start A-long signal search from the old `300750.SZ` panel.
 2. After review and commit, the next data step is a reviewed main-board-only fixed-panel replacement, then a repaired data-integrity audit path.
 3. No provider call, data fetch, audit rerun, or alpha search was executed in this guard slice.
+
+## 2026-06-04 append: A-long main-board candidate-universe preflight
+
+**Plain result**:
+
+- The fixed-panel data route passed, but the full main-board A-long alpha run is still blocked.
+- The block is not compute capacity. It is data readiness: the full candidate universe does not yet have accepted industry coverage.
+- Existing raw has 3,200 main-board active names; 1,193 active names are missing SW membership in the existing raw.
+- A 4-call preflight showed `index_member_all(ts_code=...)` can supplement active missing SW rows.
+- 187 main-board names delisted during 2018-2025 still lack SW membership under the current route, so delisted no-industry handling must be reviewed before full alpha search.
+
+**What changed**:
+
+- Added `runners/a_long_main_board_candidate_universe_preflight.py`.
+- Added `schemas/a_long_main_board_candidate_universe_preflight_execution_summary.schema.json`.
+- Added tracked summary `docs/a_long_main_board_candidate_universe_preflight_execution_summary_20260604.json`.
+- Added tests for blocking behavior, no-raw tracked summaries, schema validation, and scope-creep rejection.
+
+**Next route**:
+
+1. Do not start the full A-long alpha pull/search yet.
+2. Next combined package should supplement active SW membership and make a reviewed delisted no-industry boundary decision.
+3. Only after that universe gate passes should the project proceed to full-period data pull and signal execution.
