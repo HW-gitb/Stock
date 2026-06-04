@@ -8,6 +8,64 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long broader materialization execution) — **PASS (可提交)**
+
+**Verdict**: Pass. Honest, clean real-network execution (71/71 via the double-gate) that correctly surfaced a real, narrow data-route failure at scale. Result honestly classified as partial / not-usable. Safe to commit.
+
+**Verified**:
+- Hygiene: tracked summary `token_logged/request_url_logged=false`; grep found no `records`/URL/token; raw under gitignored `materialization_full_period_panel_20260604/`.
+- Honest result: `materialization_status=partial_or_failed_full_period_panel_materialization`; `data_can_be_used_for_alpha_now=false`; `signal_search_authorized=false`; the one incomplete table `daily_price_adj_factor_dividend` is honestly flagged "shape incomplete"; `next_action`=fix the failed leg (no full-market/audit/signal). 10/11 tables shape-present.
+
+**The failure (diagnosed)**: all 9 `daily` calls returned `call_status=empty, row_count=0` for the 8-year span (ts_code + start 20180101 + end 20251231). NOT data-availability: the same `daily` endpoint worked at 2-year (thin slice), and `adj_factor` (same symbols, same 8-year range) returned rows. So it is `daily`-endpoint-specific at the 8-year single-call span. Two likely causes: (a) a `daily` per-call window/row limit tripped by 8 years; (b) a `daily` per-interface rate limit during the 71-call burst (retry=0, no pacing). `adj_factor` surviving favors a daily-specific limit. **Fix**: chunk the daily pull into shorter windows (per-year or 2-3yr) and/or add daily pacing/retry; the narrow repair should first test ONE short-window daily call to disambiguate span-limit vs rate-limit before re-pulling.
+
+Tests 17/17 (655/655 full per Codex).
+
+**Net**: scale-up worked as a discovery tool — the careful pipeline surfaced a real daily-call-shape bug at 8 years that the 2-year thin slice could not. Narrow fix → re-run → then the full-period audit.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long broader materialization execution)
+
+**Plain result**:
+- 更大的 A 股长线固定样本池已经跑了。
+- 数据没有落完整。
+- 现在仍不能审计、不能找 alpha。
+- 失败点很窄：71/71 planned Tushare calls executed；财报、股票池、行业、基准 shape 通过；9 个 `daily` 价格调用全部 0 行。
+
+**Execution**:
+- Ran `runners/a_long_tushare_broader_materialization_packet.py --confirm-independent-review-pass --confirm-post-review-execute`.
+- Wrote tracked summary `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json`.
+- Raw payloads were written only under gitignored `data/a_long/raw/tushare/materialization_full_period_panel_20260604/`.
+- New network calls: 71; reused raw payloads: 0; retries: 0.
+- Summary decision: `partial_or_failed_full_period_panel_materialization`.
+
+**Worked on**:
+- [tracked modified] `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/long_alpha_spec.md`, `docs/provider_data_requirements_audit.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `research/README.md`, `docs/SESSION_LOG.md`.
+- [untracked new] `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json`.
+
+**Validation**:
+- Live runner command completed successfully and printed `partial_or_failed_full_period_panel_materialization`.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_tushare_broader_materialization_packet tests.schema.test_a_long_tushare_broader_materialization_packet_schema -v` passed 17/17.
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` passed 655/655.
+- Generated summary validates against `schemas/a_long_tushare_broader_materialization_execution_summary.schema.json`.
+- `git diff --check` passed with normal Windows LF/CRLF warnings only.
+- `docs/CURRENT.md` line count is 112.
+- `git check-ignore -v data\a_long\raw\tushare\materialization_full_period_panel_20260604\trade_calendar_2018_2025.json` confirms raw output is ignored by `data/a_long/raw/`.
+- Sensitive scan of the tracked summary found no URL / token / API key / bearer / raw `records`; summary flags show no raw rows, no secret, no token logged, and no request URL logged.
+
+**Non-authorization**:
+- No full audit, no signal search, no alpha backtest, no full-market / full-universe pull, no DataHub, no production readiness, no ship-gate evidence, no full-size use, and no broker/order automation.
+
+**Reviewer focus**:
+- Verify the execution summary is honestly classified as incomplete, not partially usable data.
+- Verify the only failed leg is the 9 zero-row `daily` price calls and that docs route the next step to a narrow daily-price route / parameter repair.
+- Verify raw refs remain gitignored and the tracked summary contains no raw rows, request URL, or secret.
+- Verify docs consistently say A-long still cannot audit or search for alpha.
+
+**Ready for Claude review**: Yes.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long broader materialization packet) — **PASS (可提交)**
 
 **Verdict**: Pass. Real, executable, bounded scale-up packet (2018-2025, 9 symbols) that is NOT yet run — double-gated. Safe-when-run; honestly scoped; no overclaim. Safe to commit.

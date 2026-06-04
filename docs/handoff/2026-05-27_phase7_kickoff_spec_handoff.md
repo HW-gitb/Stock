@@ -1,5 +1,29 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-04 append: A-long broader materialization execution
+
+**Changed**:
+- Added `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json`.
+- Updated routing/status docs to record the failed price-data leg.
+
+**Plain result**:
+- 更大的 A 股长线固定样本池已经跑了。
+- 数据没有落完整。
+- 现在仍不能审计、不能找 alpha。
+- 失败点很窄：71/71 planned Tushare calls executed；财报、股票池、行业、基准 shape 通过；9 个 `daily` 价格调用全部 0 行。
+
+**Boundaries**:
+- Raw rows stayed under gitignored `data/a_long/raw/tushare/materialization_full_period_panel_20260604/`.
+- The tracked summary contains no raw rows, request URL, or secret.
+- No full-market / full-universe materialization, audit rerun, signal search, alpha backtest, DataHub, production claim, ship-gate claim, full-size use, or broker/order automation is authorized.
+
+**Next**:
+- Independent review of the execution summary.
+- After review, repair the `daily` price route / parameters before any full-period panel data-integrity audit.
+- Do not start signal search from this execution summary.
+
+---
+
 ## 2026-06-04 append: A-long broader materialization packet
 
 **Changed**:
