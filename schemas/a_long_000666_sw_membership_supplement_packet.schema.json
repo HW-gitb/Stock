@@ -1,0 +1,241 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_000666_sw_membership_supplement_packet/1.0.0/schema.json",
+  "title": "A-long 000666 SW Membership Supplement Packet",
+  "description": "No-access reviewed execution packet for the remaining A-long full-period audit blocker: delisted sample 000666.SZ has no SW membership rows. The artifact itself executes no call and authorizes no signal search.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "artifact_id",
+    "created_at",
+    "source_refs",
+    "scope",
+    "target",
+    "call_budget",
+    "storage",
+    "call_plan",
+    "pre_execution_gates",
+    "decision_policy",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_000666_sw_membership_supplement_packet"},
+    "schema_version": {"const": "1.0.0"},
+    "artifact_id": {"const": "a_long_000666_sw_membership_supplement_packet_20260604"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "source_refs": {"$ref": "#/$defs/stringList"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "target": {"$ref": "#/$defs/target"},
+    "call_budget": {"$ref": "#/$defs/callBudget"},
+    "storage": {"$ref": "#/$defs/storage"},
+    "call_plan": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/callPlanItem"},
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "pre_execution_gates": {"$ref": "#/$defs/preExecutionGates"},
+    "decision_policy": {"$ref": "#/$defs/decisionPolicy"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {"type": "array", "items": {"$ref": "#/$defs/nonEmptyString"}, "minItems": 1},
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "single_symbol_supplement_only",
+        "provider_family",
+        "ready_for_later_execution_after_independent_review",
+        "actual_tushare_calls_require_post_review_execute_command",
+        "provider_calls_executed_by_this_artifact",
+        "tushare_calls_executed_by_this_artifact",
+        "data_fetch_executed_by_this_artifact",
+        "raw_payloads_read_by_this_artifact",
+        "audit_rerun_allowed_by_this_artifact",
+        "signal_search_allowed",
+        "alpha_backtest_allowed",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_000666_sw_membership_supplement_packet"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "single_symbol_supplement_only": {"const": true},
+        "provider_family": {"const": "tushare_existing_account"},
+        "ready_for_later_execution_after_independent_review": {"const": true},
+        "actual_tushare_calls_require_post_review_execute_command": {"const": true},
+        "provider_calls_executed_by_this_artifact": {"const": false},
+        "tushare_calls_executed_by_this_artifact": {"const": false},
+        "data_fetch_executed_by_this_artifact": {"const": false},
+        "raw_payloads_read_by_this_artifact": {"const": false},
+        "audit_rerun_allowed_by_this_artifact": {"const": false},
+        "signal_search_allowed": {"const": false},
+        "alpha_backtest_allowed": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol",
+        "role",
+        "remaining_blocker",
+        "current_materialized_sw_membership_row_count",
+        "not_full_universe",
+        "not_signal_search"
+      ],
+      "properties": {
+        "symbol": {"const": "000666.SZ"},
+        "role": {"const": "delisted_sample"},
+        "remaining_blocker": {"const": "missing_sw_membership_rows"},
+        "current_materialized_sw_membership_row_count": {"const": 0},
+        "not_full_universe": {"const": true},
+        "not_signal_search": {"const": true}
+      }
+    },
+    "callBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_total_endpoint_calls", "planned_total_endpoint_calls", "retry_count_allowed", "abort_if_budget_exceeded"],
+      "properties": {
+        "max_total_endpoint_calls": {"const": 4},
+        "planned_total_endpoint_calls": {"const": 3},
+        "retry_count_allowed": {"const": 0},
+        "abort_if_budget_exceeded": {"const": true}
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_output_root",
+        "raw_output_root_must_be_gitignored",
+        "tracked_summary_path",
+        "tracked_summary_must_exclude_raw_rows",
+        "tracked_summary_must_exclude_request_urls",
+        "tracked_summary_must_exclude_secret"
+      ],
+      "properties": {
+        "raw_output_root": {"const": "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/"},
+        "raw_output_root_must_be_gitignored": {"const": true},
+        "tracked_summary_path": {"const": "docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json"},
+        "tracked_summary_must_exclude_raw_rows": {"const": true},
+        "tracked_summary_must_exclude_request_urls": {"const": true},
+        "tracked_summary_must_exclude_secret": {"const": true}
+      }
+    },
+    "callPlanItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["call_id", "component_id", "api_family", "method", "kwargs", "required_fields", "target_match_field"],
+      "properties": {
+        "call_id": {"enum": ["stock_basic_000666_delisted_context", "index_member_000666_ts_code_filter", "index_member_all_000666_ts_code_filter"]},
+        "component_id": {"enum": ["delisted_symbol_context", "sw_membership_candidate"]},
+        "api_family": {"enum": ["stock_basic", "index_member", "index_member_all"]},
+        "method": {"enum": ["stock_basic", "index_member", "index_member_all"]},
+        "kwargs": {
+          "type": "object",
+          "additionalProperties": {"type": ["string", "number", "boolean", "null"]}
+        },
+        "required_fields": {"$ref": "#/$defs/stringList"},
+        "target_match_field": {"enum": ["ts_code", "con_code"]}
+      }
+    },
+    "preExecutionGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independent_review_pass_required",
+        "post_review_execute_command_required",
+        "environment_precheck_required",
+        "exact_symbol_fixed",
+        "call_plan_fixed",
+        "budget_precheck_required",
+        "raw_output_gitignore_check_required",
+        "no_secret_summary_scan_required",
+        "abort_on_budget_or_scope_violation"
+      ],
+      "properties": {
+        "independent_review_pass_required": {"const": true},
+        "post_review_execute_command_required": {"const": true},
+        "environment_precheck_required": {"const": true},
+        "exact_symbol_fixed": {"const": true},
+        "call_plan_fixed": {"const": true},
+        "budget_precheck_required": {"const": true},
+        "raw_output_gitignore_check_required": {"const": true},
+        "no_secret_summary_scan_required": {"const": true},
+        "abort_on_budget_or_scope_violation": {"const": true}
+      }
+    },
+    "decisionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_found_does_not_close_audit",
+        "no_candidate_keeps_a_long_blocked",
+        "no_silent_industry_default",
+        "no_drop_delisted_sample_default"
+      ],
+      "properties": {
+        "candidate_found_does_not_close_audit": {"const": true},
+        "no_candidate_keeps_a_long_blocked": {"const": true},
+        "no_silent_industry_default": {"const": true},
+        "no_drop_delisted_sample_default": {"const": true}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sw_membership_gap_closed_by_packet_artifact",
+        "a_long_data_ready",
+        "a_long_alpha_found",
+        "signal_search_authorized",
+        "audit_rerun_authorized",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "provider_selected",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "sw_membership_gap_closed_by_packet_artifact": {"const": false},
+        "a_long_data_ready": {"const": false},
+        "a_long_alpha_found": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "audit_rerun_authorized": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "provider_selected": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

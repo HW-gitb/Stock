@@ -8,6 +8,47 @@
 
 ---
 
+## 2026-06-04 — Claude 审查 (A-long 000666 SW membership supplement packet) — **PASS (可提交)**
+
+**Verdict**: Pass. Safe, bounded, honest no-access probe packet (not yet run) for blocker #2. Probe-first is the right call here — whether Tushare carries a delisted name's historical SW industry is unknown, so probe before choosing fix-vs-design-decision. Safe to commit.
+
+**Verified**:
+- Bounded: single symbol 000666.SZ, 3 planned / max 4 calls, retry 0; 3 well-targeted probes (stock_basic, per-index `index_member`, `index_member_all` by ts_code).
+- Safe-when-run: `require_live_execution_confirmations` needs both `--confirm` flags (else raise); reuses `route_base` primitives (token env-only, normalize, redact); `validate_raw_root` raises if raw root not gitignored; tracked result excludes `records` (records→gitignored raw only); budget guard (max 4).
+- Honest / no overclaim: `decision_policy` = candidate_found_does_NOT_close_audit, no_candidate_keeps_a_long_blocked, no_silent_industry_default, no_drop_delisted_sample_default; `prohibited_claims` all false incl. `sw_membership_gap_closed_by_packet_artifact=false`; limitations note a found source still needs audit-repair + full-period rerun.
+- Tests 17/17 (cover no-token-no-call, error redaction, scope-creep rejection, summary overclaim rejection).
+
+**Net**: commit-safe; user `执行` runs the 3-call probe. If it finds 000666's historical SW industry → a separate reviewed audit-repair + rerun; if not → an explicit design decision (industry-neutralize active names only / last-known fallback). A-long stays blocked until then — correctly.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long 000666 SW membership supplement packet)
+
+**Plain result**:
+- 已提交上一轮修复：`ce3fe4b Resolve A-long profit_dedt duplicate blocker`。
+- 本轮没有跑 Tushare，也没有抓数据。
+- 写好了 `000666.SZ` SW 行业归属补探 packet，等待 Claude 审查。
+- 这个 packet 只能在 Claude PASS + 用户再次 `执行` 后跑最多 3 个固定 Tushare calls。
+- A-long 现在仍不能找 alpha；即使补探找到候选来源，也还要单独修 audit 并重跑通过。
+
+**Worked on**:
+- [tracked] `schemas/a_long_000666_sw_membership_supplement_packet.schema.json`：锁定 no-access packet、单 symbol、3 planned calls、max 4、zero retry、无 signal / audit / production / ship-gate / full-size。
+- [tracked] `docs/a_long_000666_sw_membership_supplement_packet_20260604.json`：固定 `stock_basic` / `index_member` / `index_member_all` 三个补探调用形状。
+- [tracked] `runners/a_long_000666_sw_membership_supplement_packet.py`：实现后续 reviewed execution runner；默认 live 执行必须有 independent review + post-review execute 双确认；缺 token 只写 no-execution summary；raw 只写 gitignored `data/a_long/raw/`。
+- [tracked] `schemas/a_long_000666_sw_membership_supplement_execution_summary.schema.json`：锁定未来 tracked summary 不含 raw rows / request URL / secret，且不能授权 alpha / audit rerun / production。
+- [tracked] `tests/test_a_long_000666_sw_membership_supplement_packet.py`, `tests/schema/test_a_long_000666_sw_membership_supplement_packet_schema.py`：覆盖 fake execution、无候选、错误脱敏、缺 token 不联网、dry-run 不误判、scope creep 拒绝、summary overclaim 拒绝。
+- [tracked-intended] `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `research/README.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`：同步“packet prepared but not executed”的路由。
+- [not committed yet] this slice is ready for Claude review; commit only after independent PASS.
+
+**Validation**:
+- `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_000666_sw_membership_supplement_packet tests.schema.test_a_long_000666_sw_membership_supplement_packet_schema -v` passed 17/17.
+
+**Current review state**:
+- Ready for Claude review.
+- Reviewer should verify the packet cannot execute during artifact creation, live execution requires both confirmations, tracked summary cannot contain raw rows / URLs / secrets, and no packet / summary can claim A-long data readiness or signal-search authorization.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long audit blocker-1 repair: profit_dedt dedup) — **PASS (可提交)**
 
 **Verdict**: Pass. Came in skeptical — the audit runner was modified to turn a FAIL into a pass (the exact "fix the audit, not the data" trap). Verified it is a GENUINE, narrow, transparent data-handling fix, NOT an audit-weakening: the dedup only resolves the benign null-vs-single-value pattern on one allowlisted field; genuine conflicts still hard-fail; the audit still FAILS overall on the remaining real blocker. Safe to commit.

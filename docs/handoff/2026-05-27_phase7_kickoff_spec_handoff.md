@@ -3462,3 +3462,26 @@ git diff --check
 1. Do not start A-long signal search.
 2. Repair or supplement the `000666.SZ` SW industry source under review.
 3. Rerun the full-period audit after that repair.
+
+## 2026-06-04 append: A-long 000666 SW membership supplement packet
+
+**Plain result**:
+
+- The next packet is prepared, but it has not run.
+- It targets only the remaining `000666.SZ` SW membership gap.
+- It allows at most 3 fixed Tushare calls after Claude PASS plus user `执行`.
+- It still does not make A-long data usable for alpha.
+
+**What changed**:
+
+- Added `schemas/a_long_000666_sw_membership_supplement_packet.schema.json`.
+- Added `docs/a_long_000666_sw_membership_supplement_packet_20260604.json`.
+- Added `runners/a_long_000666_sw_membership_supplement_packet.py`.
+- Added `schemas/a_long_000666_sw_membership_supplement_execution_summary.schema.json`.
+- Added tests for fake execution, no-candidate routing, dry-run status, no-secret/no-raw tracked summary, and scope-creep rejection.
+
+**Next-step notes**:
+
+1. Do not run the supplement until independent review passes and the user gives a separate `执行`.
+2. If the supplement finds a candidate source, wire it into a reviewed audit repair and rerun the full-period audit.
+3. Do not start A-long signal search until the repaired audit passes.

@@ -1,0 +1,149 @@
+{
+  "schema_name": "a_long_000666_sw_membership_supplement_packet",
+  "schema_version": "1.0.0",
+  "artifact_id": "a_long_000666_sw_membership_supplement_packet_20260604",
+  "created_at": "2026-06-04T00:00:00+08:00",
+  "source_refs": [
+    "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json",
+    "docs/system_risk_register.md",
+    "AGENTS.md decision 40"
+  ],
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_000666_sw_membership_supplement_packet",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "single_symbol_supplement_only": true,
+    "provider_family": "tushare_existing_account",
+    "ready_for_later_execution_after_independent_review": true,
+    "actual_tushare_calls_require_post_review_execute_command": true,
+    "provider_calls_executed_by_this_artifact": false,
+    "tushare_calls_executed_by_this_artifact": false,
+    "data_fetch_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "audit_rerun_allowed_by_this_artifact": false,
+    "signal_search_allowed": false,
+    "alpha_backtest_allowed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "target": {
+    "symbol": "000666.SZ",
+    "role": "delisted_sample",
+    "remaining_blocker": "missing_sw_membership_rows",
+    "current_materialized_sw_membership_row_count": 0,
+    "not_full_universe": true,
+    "not_signal_search": true
+  },
+  "call_budget": {
+    "max_total_endpoint_calls": 4,
+    "planned_total_endpoint_calls": 3,
+    "retry_count_allowed": 0,
+    "abort_if_budget_exceeded": true
+  },
+  "storage": {
+    "raw_output_root": "data/a_long/raw/tushare/000666_sw_membership_supplement_20260604/",
+    "raw_output_root_must_be_gitignored": true,
+    "tracked_summary_path": "docs/a_long_000666_sw_membership_supplement_execution_summary_20260604.json",
+    "tracked_summary_must_exclude_raw_rows": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "tracked_summary_must_exclude_secret": true
+  },
+  "call_plan": [
+    {
+      "call_id": "stock_basic_000666_delisted_context",
+      "component_id": "delisted_symbol_context",
+      "api_family": "stock_basic",
+      "method": "stock_basic",
+      "kwargs": {
+        "exchange": "",
+        "list_status": "D",
+        "fields": "ts_code,symbol,name,exchange,market,list_status,list_date,delist_date"
+      },
+      "required_fields": [
+        "ts_code",
+        "name",
+        "list_status",
+        "list_date",
+        "delist_date"
+      ],
+      "target_match_field": "ts_code"
+    },
+    {
+      "call_id": "index_member_000666_ts_code_filter",
+      "component_id": "sw_membership_candidate",
+      "api_family": "index_member",
+      "method": "index_member",
+      "kwargs": {
+        "ts_code": "000666.SZ",
+        "fields": "index_code,con_code,in_date,out_date,is_new"
+      },
+      "required_fields": [
+        "index_code",
+        "con_code",
+        "in_date",
+        "out_date"
+      ],
+      "target_match_field": "con_code"
+    },
+    {
+      "call_id": "index_member_all_000666_ts_code_filter",
+      "component_id": "sw_membership_candidate",
+      "api_family": "index_member_all",
+      "method": "index_member_all",
+      "kwargs": {
+        "ts_code": "000666.SZ",
+        "fields": "ts_code,name,l1_code,l1_name,l2_code,l2_name,in_date,out_date,is_new"
+      },
+      "required_fields": [
+        "ts_code",
+        "l2_code",
+        "l2_name",
+        "in_date",
+        "out_date"
+      ],
+      "target_match_field": "ts_code"
+    }
+  ],
+  "pre_execution_gates": {
+    "independent_review_pass_required": true,
+    "post_review_execute_command_required": true,
+    "environment_precheck_required": true,
+    "exact_symbol_fixed": true,
+    "call_plan_fixed": true,
+    "budget_precheck_required": true,
+    "raw_output_gitignore_check_required": true,
+    "no_secret_summary_scan_required": true,
+    "abort_on_budget_or_scope_violation": true
+  },
+  "decision_policy": {
+    "candidate_found_does_not_close_audit": true,
+    "no_candidate_keeps_a_long_blocked": true,
+    "no_silent_industry_default": true,
+    "no_drop_delisted_sample_default": true
+  },
+  "prohibited_claims": {
+    "sw_membership_gap_closed_by_packet_artifact": false,
+    "a_long_data_ready": false,
+    "a_long_alpha_found": false,
+    "signal_search_authorized": false,
+    "audit_rerun_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "provider_selected": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This artifact is a no-access packet; it executes no Tushare call and reads no raw payload.",
+    "Later execution is limited to 000666.SZ and the three fixed endpoint probes only.",
+    "A found candidate source still requires a separate reviewed audit repair and full-period audit rerun.",
+    "No signal search, alpha backtest, production use, ship-gate claim, full-size use, or broker/order automation is authorized."
+  ]
+}
