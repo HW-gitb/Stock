@@ -8,6 +8,47 @@
 
 ---
 
+## 2026-06-05 — Claude 审查 (A-long full main-board materialization completed) — **PASS (可提交)**
+
+**Verdict**: Pass. The full main-board raw materialization completed cleanly (23,677 success + 40 empty + 0 error across 23,717 calls). Tracked summary hygiene-clean and honest. Safe to commit.
+
+**Verified**:
+- Clean final, not the failed intermediate: all per-table rollups show `calls_error=0`; `materialization_status=passed_full_main_board_materialization_shape`. The 48 pre-hotfix corrupt checkpoints were correctly SURFACED (first resume reused them → failed summary, not hidden), then deleted + refetched → final 0-error (only 48 new calls; 23,669 reused).
+- Hygiene airtight: tracked summary is 302 lines (counts + per-table rollup only); `endpoint_manifest.tracked_summary_embeds_endpoint_results=false` with the 23,717-result manifest under a GITIGNORED path; grep found 0 `raw_payload_ref`, no records, token/url=false.
+- Honest: `data_can_be_used_for_alpha_now=false`, `signal_search_authorized=false`, `alpha_found=false`, `next_reviewed_step_can_be_full_data_integrity_audit=true`. 40 empty (0.17%) are honest 0-row calls; 0 real Tushare errors.
+
+**Next**: full main-board data materialized (route + hotfix proven). Next slice = the FULL data-integrity audit runner on the ~3,387-name universe (genuine checks + self-tests, now at full scale, consuming the approved 191 boundary). That is the real full-universe cleanliness test and may surface new full-scale issues (as the preflight did). Only if it passes → the frozen signal search.
+
+---
+
+## 2026-06-05 — Codex 执行 (A-long full main-board materialization completed)
+
+**Plain result**:
+- Full main-board raw materialization completed.
+- Final tracked summary: `docs/a_long_full_main_board_materialization_execution_summary_20260605.json`.
+- Endpoint manifest has 23,717 results: 23,677 success + 40 empty + 0 error.
+- This means raw data was pulled and shape-materialized. It still cannot be used to find alpha until a separate full data-integrity audit passes.
+
+**What happened during resume**:
+- Hotfix commit: `6917c87 Fix A-long materialization atomic writer`.
+- First post-hotfix resume found 48 old error checkpoints from the pre-hotfix writer. They were valid JSON but represented local file-write failures, so the runner reused them and correctly produced a failed/partial summary.
+- Those 48 error checkpoints were deleted, then the same reviewed materialization command was rerun.
+- Final run reused 23,669 existing raw payloads and made only 48 new Tushare calls.
+
+**Final decision recorded by summary**:
+- `materialization_status = passed_full_main_board_materialization_shape`
+- `raw_materialization_shape_available = true`
+- `data_can_be_used_for_alpha_now = false`
+- `next_reviewed_step_can_be_full_data_integrity_audit = true`
+- `signal_search_authorized_by_this_summary = false`
+- `alpha_found = false`
+
+**Review state**:
+- Needs Claude review of the new execution summary and this status update before commit.
+- Next real work after review / commit is the separate full main-board data-integrity audit. Do not run signal search before that audit passes.
+
+---
+
 ## 2026-06-05 — Claude 审查 (A-long materialization atomic-writer hotfix) — **PASS (可提交)**
 
 **Verdict**: Pass. The live full-pull hit a real Windows file-lock bug in the shared `write_json_atomic`; the hotfix is correct, safe, and improves the shared primitive's robustness. Resume-safe after commit.
