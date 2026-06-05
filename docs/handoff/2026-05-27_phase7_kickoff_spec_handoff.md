@@ -3642,3 +3642,71 @@ git diff --check
 1. Do not start the full A-long alpha pull/search yet.
 2. Next combined package should supplement active SW membership and make a reviewed delisted no-industry boundary decision.
 3. Only after that universe gate passes should the project proceed to full-period data pull and signal execution.
+
+## 2026-06-04 append: A-long main-board SW coverage repair
+
+**Plain result**:
+
+- The combined repair ran, but A-long is still not ready for full alpha.
+- Active missing SW membership fell from 1,193 to 4.
+- The remaining active symbols are `600421.SH`, `600599.SH`, `600636.SH`, and `600696.SH`.
+- All four are `退市*`-named `stock_basic` rows still marked `list_status = L`, with no `stock_basic.industry` / `area` and no `index_member_all(ts_code=...)` rows.
+- The 187 delisted missing-SW names now have no-usable-SW-source evidence under the scaled delisted-only boundary; exception rate is 5.52111%, within the 12.5% cap.
+
+**What changed**:
+
+- Added `runners/a_long_main_board_sw_coverage_repair.py`.
+- Added `schemas/a_long_main_board_sw_coverage_repair_execution_summary.schema.json`.
+- Added tracked summary `docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json`.
+- Added tests for fake pass/block behavior, no-raw tracked summaries, schema validation, and scope-creep rejection.
+- Raw repair payloads are only under gitignored `data/a_long/raw/tushare/main_board_sw_coverage_repair_20260604/`.
+
+**Next route**:
+
+1. Do not start full alpha pull/search yet.
+2. Next package should handle the four active `退市*` unresolved names through a reviewed active-name boundary or a repaired source.
+3. The delisted-only boundary must not be silently applied to active symbols.
+
+## 2026-06-05 append: A-long four active-name delisting-shell repair
+
+**Plain result**:
+
+- Claude rejected the four-name manual SW 2021 patch as the wrong fix.
+- The four active unresolved names are now identified as `退市*` delisting-shell rows: `600421.SH`, `600599.SH`, `600636.SH`, and `600696.SH`.
+- The refreshed SW repair summary reused existing raw payloads and made no new Tushare call.
+- Candidate industry handling is still blocked. This is not alpha, production, ship-gate evidence, or full-size permission.
+
+**What changed**:
+
+- Removed the manual SW 2021 patch route and deleted the patch schema / artifact / tests.
+- Updated `runners/a_long_main_board_sw_coverage_repair.py` and `docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json` so active `退市*` shells are detected but do not close the gate.
+- Added tests proving a `退市*` active row remains blocked without scaled boundary approval.
+
+**Next route**:
+
+1. Superseded by the next append: the 191-name boundary packet is now prepared.
+2. Claude should review the repair and boundary packet together before commit.
+3. Do not run full alpha search before that boundary passes.
+
+## 2026-06-05 append: A-long final pre-full-pull no-industry boundary packet
+
+**Plain result**:
+
+- The full pull still has not run.
+- The last pre-full-pull decision packet is now written: `docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json`.
+- It recommends one boundary: 191 no-industry names (`187` already delisted + `4` active `退市*` shell rows) stay in returns/risk, but are excluded only from industry-normalization denominators.
+- It blocks manual industry fill, silent default industry, and dropping these names from returns/risk.
+- It still authorizes no alpha, no production, no ship-gate evidence, and no full-size use.
+
+**What changed**:
+
+- Added `schemas/a_long_scaled_delisted_no_industry_boundary_decision.schema.json`.
+- Added `docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json`.
+- Added `tests/schema/test_a_long_scaled_delisted_no_industry_boundary_decision_schema.py`.
+- Updated routing docs / CURRENT / risk register / research README / session log.
+
+**Next route**:
+
+1. Claude should review the SW repair plus this boundary packet together.
+2. If Claude passes and the user approves, the next separate package can be the full main-board pull plus signal-search execution.
+3. Do not run the full pull from this artifact alone.

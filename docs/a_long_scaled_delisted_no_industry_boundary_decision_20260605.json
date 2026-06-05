@@ -1,0 +1,113 @@
+{
+  "schema_name": "a_long_scaled_delisted_no_industry_boundary_decision",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-05T00:00:00Z",
+  "artifact_id": "a_long_scaled_delisted_no_industry_boundary_decision_20260605",
+  "source_refs": [
+    "docs/a_long_main_board_candidate_universe_preflight_execution_summary_20260604.json",
+    "docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json",
+    "research/preregistrations/a_long_signal_search_preregistration_20260604.json",
+    "research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json",
+    "docs/system_risk_register.md",
+    "docs/SESSION_LOG.md"
+  ],
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_scaled_delisted_no_industry_boundary_decision",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "docs_only": true,
+    "reads_tracked_summary_only": true,
+    "raw_payload_read_by_this_artifact": false,
+    "data_fetch_executed": false,
+    "provider_call_executed": false,
+    "tushare_call_executed": false,
+    "full_universe_data_pull_authorized_by_this_artifact": false,
+    "full_universe_signal_search_authorized_by_this_artifact": false,
+    "signal_search_executed_by_this_artifact": false,
+    "alpha_backtest_executed_by_this_artifact": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "reviewed_boundary": {
+    "candidate_universe_preflight_summary_ref": "docs/a_long_main_board_candidate_universe_preflight_execution_summary_20260604.json",
+    "sw_coverage_repair_summary_ref": "docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json",
+    "board_scope": "main_board_only",
+    "source_window": {
+      "start_date": "20180101",
+      "end_date": "20251231"
+    },
+    "main_board_active_count": 3200,
+    "main_board_delisted_2018_2025_count": 187,
+    "active_sw_supplement_success_count": 1189,
+    "active_delisting_shell_count": 4,
+    "active_delisting_shell_symbols": [
+      "600421.SH",
+      "600599.SH",
+      "600636.SH",
+      "600696.SH"
+    ],
+    "active_investable_unresolved_count": 0,
+    "original_delisted_no_usable_sw_source_count": 187,
+    "scaled_no_industry_boundary_count_if_approved": 191,
+    "exception_rate_denominator_count": 3387,
+    "scaled_exception_rate_pct": 5.639209,
+    "max_exception_rate_pct": 12.5,
+    "threshold_passed": true,
+    "boundary_treatment": {
+      "manual_industry_fill_allowed": false,
+      "silent_unknown_or_default_industry_allowed": false,
+      "drop_from_universe_returns_or_risk_allowed": false,
+      "exclude_only_from_industry_normalization_denominators": true,
+      "keep_in_pit_universe_returns_risk_drawdown_and_coverage": true,
+      "terminal_delisting_return_required": true,
+      "selection_time_st_or_delisting_name_veto_required": true,
+      "industry_neutral_view_must_report_excluded_denominator_count": true,
+      "non_neutral_view_must_be_reported": true,
+      "future_full_pull_runner_must_consume_this_boundary_before_signal_execution": true
+    }
+  },
+  "decision": {
+    "decision_status": "pending_independent_review_and_user_approval",
+    "recommended_route": "approve_scaled_delisted_no_industry_boundary_for_next_full_pull_package",
+    "candidate_universe_ready_for_full_pull_now": false,
+    "pre_full_pull_boundary_ready_if_claude_pass_and_user_approval": true,
+    "data_can_be_used_for_alpha_now": false,
+    "signal_search_authorized_by_this_artifact": false,
+    "full_pull_authorized_by_this_artifact": false,
+    "plain_result": "The last blocker before the next full-pull package is a boundary decision, not more data probing. The recommended boundary is: 191 no-industry delisted or delisting-shell names stay in returns and risk, but are excluded only from industry-normalization denominators. This artifact itself still does not allow the full pull.",
+    "next_action": "Send this package with the current working tree to Claude review. If Claude passes and the user approves this boundary, the next separate package can be the full main-board pull plus signal-search execution."
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "full_universe_data_pulled": false,
+    "signal_search_executed": false,
+    "signal_search_authorized": false,
+    "alpha_backtest_executed": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "manual_industry_fill_accepted": false,
+    "delisting_names_dropped_from_returns_or_risk": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Claude must review the repair plus this boundary packet before commit.",
+    "The user must explicitly approve the scaled 191-name no-industry boundary before the full-pull package runs.",
+    "The future full-pull runner must consume this boundary before signal execution and must keep the 191 names in returns, risk, drawdown, terminal delisting return handling, and coverage reporting.",
+    "The future full-pull runner must report industry-neutral and non-neutral views separately and disclose the excluded industry-normalization denominator count."
+  ],
+  "limitations": [
+    "This is a decision packet only; it reads tracked summaries and runs no provider call.",
+    "This does not prove alpha and does not authorize the full pull by itself.",
+    "This does not allow manual industry fill or silent default industry values.",
+    "This does not allow dropping delisted or delisting-shell names from returns, risk, drawdown, terminal delisting return handling, or coverage reporting.",
+    "Any positive future backtest remains research-only until the unchanged ship gate, including at least 12 months of forward-live evidence, is satisfied."
+  ]
+}

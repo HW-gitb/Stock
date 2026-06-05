@@ -1,5 +1,5 @@
 # Stock 项目 - 当前状态快照
-**最后更新**：2026-06-04（A-long candidate-universe preflight blocked full alpha run）
+**最后更新**：2026-06-05（A-long 4 active delisting-shell boundary pending）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
@@ -20,14 +20,16 @@
 - The main-board-only A-long 2018-2025 fixed panel has now been materialized and audited: `docs/a_long_tushare_broader_materialization_execution_summary_20260604.json` records `passed_full_period_panel_materialization_shape`; `research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json` records `passed_fixed_panel_data_integrity_for_signal_preregistration`, 11/11 self-tests, hard checks pass, usable start year 2018. Simple result: data route passed, but this is still only a 9-symbol fixed-panel route proof, not alpha and not full-universe proof.
 - `schemas/a_long_signal_search_preregistration.schema.json`, `research/preregistrations/a_long_signal_search_preregistration_20260604.json`, and `research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json` register the next A-long signal-search design. They run no signal, fetch no data, and do not authorize alpha, production, ship-gate evidence, or full-size use.
 - `runners/a_long_main_board_candidate_universe_preflight.py` executed 4 Tushare probes and wrote `docs/a_long_main_board_candidate_universe_preflight_execution_summary_20260604.json`. Plain result: A-long full main-board alpha search is blocked now. Existing raw has 3,200 main-board active names, but 1,193 active names are missing SW membership; `index_member_all(ts_code=...)` can supplement active missing rows, while 187 main-board names delisted during 2018-2025 still lack SW membership under the current route. No signals, returns, alpha, production, ship-gate, or full-size use were authorized.
+- `runners/a_long_main_board_sw_coverage_repair.py` now rejects the prior four-symbol manual industry-fill route. The refreshed summary reused existing raw payloads (`actual_network_call_count = 0`), keeps original Tushare active SW unresolved at 4, identifies all four as `退市*` delisting-shell rows, records `pending_scaled_delisted_no_source_count_if_approved = 191`, and sets `candidate_universe_ready_for_next_full_alpha_package = false`. No signals, returns, alpha, production, ship-gate, or full-size use were authorized.
+- `docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json` is now the final pre-full-pull decision packet. It recommends a 191-name no-industry boundary: keep those names in PIT universe / returns / risk, exclude only from industry-normalization denominators, no manual industry fill, no silent default, no dropping from returns/risk. It is pending Claude review and user approval and still authorizes no full pull/search by itself.
 ---
 
 ## 1. 当前 Phase 与目标
 
-- **当前 Phase**：A-share alpha validation is the active priority. A-long fixed-panel data route passed, but full main-board candidate-universe preflight blocked the alpha run before full pull.
-- **当前 P0 / P1 目标**：Claude review the candidate-universe preflight package. After clean review and user approval, the next combined package should supplement active-symbol SW membership and freeze a reviewed delisted-no-industry boundary before any full alpha pull/search.
+- **当前 Phase**：A-share alpha validation is the active priority. A-long fixed-panel data route passed, and the final pre-full-pull 191-name no-industry boundary packet is now prepared but not yet reviewed / approved.
+- **当前 P0 / P1 目标**：Claude review the SW repair plus `docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json` together. After clean review, user approval, and commit, the next separate package can be full main-board pull + signal-search execution. Do not run full alpha search yet.
 - **当前 P1 provider blocker**：US inactive / delisted historical coverage is user-accepted as scoped out for the current active-only forward model. `SR-PROVIDER-001` remains open for license / storage, active-symbol PIT if fundamentals are used, active price-adjustment / corporate actions if used, SEC parser / mapping if used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness. US forward universes must be PIT-frozen at start and must capture real delisting / halt / merger / no-trade outcomes during the forward window; the 12-month forward-live ship-gate requirement is unchanged.
-- **执行锁**：A-long full alpha search is blocked by candidate-universe industry coverage. The fixed 9-symbol panel is route proof only, not full-universe alpha evidence. A-short steady is `risk_filter_only` and spent；burst paths remain blocked/failed. Material audit findings must be fixed or entered in the risk register.
+- **执行锁**：A-long full alpha search remains blocked. The fixed 9-symbol panel is route proof only, not full-universe alpha evidence. A-short steady is `risk_filter_only` and spent；burst paths remain blocked/failed. Material audit findings must be fixed or entered in the risk register.
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
@@ -48,6 +50,7 @@
 - **A-long corrected 000666 supplement execution**（2026-06-04）：the 4-call corrected probe ran and found no usable SW membership source for `000666.SZ`; the approved bounded exception is now enforced by the audit runner.
 - **A-long main-board fixed-panel materialization / audit / preregistration**（2026-06-04）：the current 2018-2025 main-board-only fixed panel (`600887.SH` replacing old `300750.SZ`) materialized successfully, the local audit passed with 11/11 self-tests and usable start year 2018, and the first signal-search preregistration was registered. This authorizes no signal run by itself.
 - **A-long candidate-universe preflight**（2026-06-04）：the reviewed next step stopped before full alpha pull. Active SW membership can be supplemented by `index_member_all(ts_code=...)`, but 187 delisted main-board names still have no SW membership in the current route. No alpha search was run.
+- **A-long SW coverage repair fix + boundary packet**（2026-06-05）：the manual SW 2021 patch was removed after Claude FAIL. The combined repair keeps the real 1,189 / 1,193 active supplement result, identifies the remaining four as `退市*` delisting-shell rows, and keeps `ready=false`. The new boundary packet freezes the recommended 191-name no-industry handling for Claude / user review; it still proves no alpha and authorizes no full pull by itself.
 ---
 
 ## 3. 当前有效策略结论
@@ -98,7 +101,7 @@
 ### P0 / P1 - Post redesigned outcome boundary
 
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
-- The current active alpha-search route is A-long, but the full main-board alpha run is blocked by candidate-universe SW coverage. The fixed 9-symbol panel must not be used as alpha proof.
+- The current active alpha-search route is A-long, but full-period alpha search remains blocked. The final pre-full-pull packet is `docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json`; Claude must review it and the user must approve it before any full pull/search. The fixed 9-symbol panel must not be used as alpha proof.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
 - The full-universe redesigned outcome / excess slice has failed its registered thresholds; do not rerun EGS, change preregistered parameters, full-refresh forward_daily, or reinterpret it as production evidence.
 - Any further redesigned A-share burst test must append a planned test to `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` and create a new reviewed preregistration before it runs.
@@ -107,7 +110,7 @@
 - Current US model is active-only universe + forward-live validation only. Historical US backtests are exploration / idea-only forever; they cannot prove alpha, support ship-gate, unlock full-size, or authorize DataHub / production.
 - Forward universe must be frozen point-in-time at the forward start date; real delisting / halt / merger / bankruptcy / no-trade outcomes during the forward window must be captured, not deleted.
 - No further inactive / delisted historical coverage work or paid / specialized US data purchase is required now. Remaining provider work is only license / storage, active-PIT if used, active price / corporate actions if used, SEC parser / mapping if used, fallback / stability, and production-readiness gates.
-- Next high-value work, after Claude review, is one combined A-long data-readiness repair package: active SW membership supplement for missing active main-board names + reviewed delisted no-industry boundary for the 187 delisted main-board names. Until that passes, no full alpha pull/search.
+- Next high-value work, after Claude review / user approval / commit of the current packet, is the separate full main-board pull + signal-search execution package. Until the 191-name boundary passes, do not run full alpha pull/search.
 
 ### P2 - DataHub local resource boundary
 

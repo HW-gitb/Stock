@@ -8,6 +8,144 @@
 
 ---
 
+## 2026-06-05 — Claude 审查 (A-long manual-patch FAIL fix + scaled delisted boundary decision) — **PASS; boundary PENDING user approval**
+
+**Verdict**: Pass on both. The manual-patch FAIL is genuinely fixed, and the scaled delisted-no-industry boundary decision is exemplary and correctly awaits the user's explicit approval.
+
+**(1) Manual-patch FAIL fix — genuinely closed**: `docs/a_long_manual_sw_industry_patch_20260605.json` is DELETED (verified on disk); the 4 退市 shells (600421/600599/600636/600696) now sit in an `active_delisting_shell_boundary` with `manual_industry_assignment_allowed=false`, `candidate_ready_override_allowed=false`, `requires_separate_scaled_delisted_boundary_approval=true`; `candidate_universe_ready_for_next_full_alpha_package` reverted to **false**; `repair_status=active_delisting_shell_boundary_pending_approval`. The legit 1,189 active per-symbol supplement stays. Tests 14/14.
+
+**(2) Scaled delisted-no-industry boundary decision — exemplary + correctly PENDING**: implements exactly the recommended design — 191 names (187 delisted + 4 退市 shells), RATE cap 5.64% ≤ 12.5% (old single-symbol COUNT cap removed), delisted/shell-only, kept in PIT universe/returns/risk/drawdown/coverage, excluded ONLY from industry-normalization denominators, terminal-delisting-return required, selection-time ST/退市 veto, both neutral + non-neutral views reported with excluded-denominator count disclosed, no manual fill / no silent default. `decision_status=pending_independent_review_and_user_approval` — correctly NOT overclaiming approval this time. Authorizes no pull/signal/alpha. Schema test passes.
+
+**Net**: both PASS. The boundary is the last gate before the full main-board pull + signal-search execution package and needs the user's EXPLICIT approval (audit-strictness boundary; correctly pending). I recommend approving — it is the right design under the no-buy-data constraint. After approval + commit → the full-pull + signal-search package (the first real A-long alpha search). Status: **USER-APPROVED (`批准` received 2026-06-05)** — the scaled 191-name delisted/shell no-industry boundary (rate-cap ≤12.5%, delisted/shell-only, returns/risk retained, industry-denominator-exclusion-only, no manual/silent fill) is an approved A-long design boundary; Codex may commit it. The future full-pull/signal runner MUST consume this boundary; any widening (more names, higher rate cap, active names, or any manual fill) needs a NEW reviewed approval.
+
+---
+
+## 2026-06-05 — Codex 执行 (A-long final pre-full-pull boundary packet)
+
+**Plain result**:
+- 还没有跑全量拉取。
+- 全量拉取前最后一个前置包已写好：`docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json`。
+- 建议边界很简单：191 个无行业退市/壳股不手工补行业，不从收益/风险里删掉，只从行业中性化分母里剔除。
+- 这个包仍然不授权 full pull、不授权找 alpha、不授权 production / ship-gate / full-size。
+
+**Worked on**:
+1. [tracked] Added `schemas/a_long_scaled_delisted_no_industry_boundary_decision.schema.json`.
+2. [tracked] Added `docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json`.
+3. [tracked] Added `tests/schema/test_a_long_scaled_delisted_no_industry_boundary_decision_schema.py`.
+4. [tracked] Updated `docs/README.md`, `research/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, and `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`.
+
+**Validation**:
+- Targeted tests passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_long_scaled_delisted_no_industry_boundary_decision_schema tests.schema.test_a_long_main_board_sw_coverage_repair_schema tests.test_a_long_main_board_sw_coverage_repair -v` (14 tests).
+- Full suite passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` (748 tests, 1 skipped).
+
+**Current review state**:
+- Needs Claude review before commit.
+- Reviewer should review this together with the previous SW repair changes. The key question is whether the 191-name no-industry boundary is acceptable before the next separate full main-board pull + signal-search execution package.
+
+---
+
+## 2026-06-05 — Codex 修复 (A-long 4-name manual SW patch FAIL)
+
+**Plain result**:
+- 已按 Claude Required 修复：不再给 4 只手工补行业。
+- 4 只现在识别为 active 表里的 `退市*` 壳：`600421.SH`、`600599.SH`、`600636.SH`、`600696.SH`。
+- 结论回到保守状态：A-long 仍不能全量找 alpha。
+- 如果未来批准扩大边界，no-industry 数量会从 187 变成 191；这还需要单独用户决策。
+
+**Worked on**:
+1. [tracked] Removed the rejected manual patch route from `runners/a_long_main_board_sw_coverage_repair.py`.
+2. [tracked] Updated `schemas/a_long_main_board_sw_coverage_repair_execution_summary.schema.json`.
+3. [tracked] Refreshed `docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json`: `actual_network_call_count = 0`, `active_delisting_shell_count = 4`, `pending_scaled_delisted_no_source_count_if_approved = 191`, `candidate_universe_ready_for_next_full_alpha_package = false`.
+4. [tracked] Updated docs routing / CURRENT / risk register / handoff / research README.
+5. [untracked removed] Removed `docs/a_long_manual_sw_industry_patch_20260605.json`, `schemas/a_long_manual_sw_industry_patch.schema.json`, and `tests/schema/test_a_long_manual_sw_industry_patch_schema.py`.
+
+**Validation**:
+- Targeted tests passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_main_board_sw_coverage_repair tests.schema.test_a_long_main_board_sw_coverage_repair_schema -v` (9 tests).
+- Full suite passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` (743 tests, 1 skipped).
+- `docs/CURRENT.md` is 111 lines.
+
+**Current review state**:
+- Needs Claude review before commit.
+- Reviewer should verify that no manual industry assignment remains, the four `退市*` rows keep `ready=false`, and the next route is a separate scaled boundary / exclusion decision rather than alpha search.
+
+---
+
+## 2026-06-05 — Claude 审查 (A-long 4-name manual SW patch) — **FAIL on the manual patch (wrong fix); active supplement OK**
+
+**Verdict**: The active SW batch supplement (1,193→4 via per-symbol `index_member_all`) is fine and hygiene-clean (network 0 / reused 1381 / token=false / no records leak). BUT the final 4-name MANUAL SW patch is the WRONG fix and must NOT be accepted as-is; it does not genuinely close the active gap and must not flip `candidate_universe_ready=true`.
+
+**Why the manual patch is wrong**:
+- **All 4 are 退市 (delisting) shells** — `退市华嵘`/`退市熊猫`/`退市国化`/`退市岩石` (600421/600599/600636/600696). They show `list_status=L` only because stock_basic is stale during the 退市整理期; they are delisting shells, not investable active quality candidates, and they lack SW membership for the SAME reason as the 187 delisted (current `index_member_all` drops names that left the index). So they are the SAME unrecoverable-industry case → they belong in the **delisted-no-industry boundary** (excluded from industry-neutralization, kept in returns/risk) OR excluded as 退市 — NOT a manual industry assignment. The patch fixes a symptom (missing industry) instead of the root cause (退市 names leaked into the "active" set; the prereg's ST/退市 exclusion + A-short `filter_l0` already drop `ST|退市|暂停`).
+- **Provenance is unverified** — the patch's own `source_verification_mode = user_supplied_public_source_metadata_PENDING_independent_review`, every row `pending independent reviewer URL verification`. I cannot verify the URLs/classifications (an LLM can produce plausible ones) and the user did not supply these in the Claude session. So an unverified manual fill is currently load-bearing for `candidate_universe_ready=true` — premature.
+- **Shell-company static industry is PIT-dubious** — repeatedly-reshelled names (600696 岩石→白酒, 600599 熊猫→金融, 600636 国化→教育); a single static SW class is not point-in-time-correct across 2018-2025.
+
+**Required (before commit) — USER-APPROVED (`批准修复` received 2026-06-05)**: do NOT manually classify these 4.
+- Remove / reject the manual SW patch (`docs/a_long_manual_sw_industry_patch_20260605.json`) as the active-coverage solution; the 1,193→4 per-symbol batch supplement stays (it is sound).
+- Verify the 4 names' actual list/delist status, then fold them into the delisted-no-industry boundary OR exclude them as 退市 (consistent with the prereg ST/退市 exclusion + A-short `filter_l0`). No manual industry assignment, no unverified-source fill.
+- Revert `candidate_universe_ready_for_next_full_alpha_package` to **false**; the active investable universe is then genuinely complete with zero manual fill, but the delisted-no-industry count grows (187 → ~191) and that SCALED boundary STILL needs its own separate user approval (per the prior preflight review). A-long stays blocked from the full alpha pull until that scaled boundary is reviewed + approved. Status: **USER-APPROVED**.
+
+---
+
+## 2026-06-05 — Codex 执行 (A-long four active-name manual SW patch)
+
+**Plain result**:
+- 这 4 只先补上了：`600421.SH`、`600599.SH`、`600636.SH`、`600696.SH`。
+- Tushare 原路仍显示这 4 只没有 SW membership；本次只用用户提供的公开来源元数据做人工 SW 2021 补丁。
+- 补丁后 active 未解行业缺口 = 0；187 只退市股仍走原来的 delisted-only no-source 边界，不批量人工分类。
+- 还没有跑 alpha，也没有授权 production / ship-gate / full-size。
+
+**Worked on**:
+1. [tracked] Added `schemas/a_long_manual_sw_industry_patch.schema.json`.
+2. [tracked] Added `docs/a_long_manual_sw_industry_patch_20260605.json`.
+3. [tracked] Updated `runners/a_long_main_board_sw_coverage_repair.py` to consume only this four-symbol manual patch after Tushare leaves active rows unresolved.
+4. [tracked] Refreshed `docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json`: `actual_network_call_count = 0`, `reused_raw_payload_count = 1381`, `active_unresolved_after_manual_patch_count = 0`, `candidate_universe_ready_for_next_full_alpha_package = true`.
+5. [tracked] Added / updated tests and routing docs.
+
+**Validation**:
+- Targeted tests passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_main_board_sw_coverage_repair tests.schema.test_a_long_main_board_sw_coverage_repair_schema tests.schema.test_a_long_manual_sw_industry_patch_schema -v` (13 tests).
+- Full suite passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` (747 tests, 1 skipped).
+- `docs/CURRENT.md` is 111 lines.
+
+**Current review state**:
+- Needs Claude review before commit.
+- Reviewer should verify the patch is limited to the four active symbols, does not apply to the 187 delisted names, records user-supplied public-source metadata without overclaiming independent verification, and still blocks alpha / production / ship-gate claims.
+
+---
+
+## 2026-06-04 — Codex 执行 (A-long main-board SW coverage repair)
+
+**Commits**:
+- `e75343e Add A-long candidate-universe preflight` committed the prior Claude PASS / candidate-universe preflight package before this execution.
+
+**Plain result**:
+- A-long 现在仍不能全量找 alpha。
+- 好消息：活跃股行业缺口从 1,193 只降到 4 只。
+- 退市 187 只的无 SW 行业边界已经有证据：187/187 都是 no-usable-SW-source，比例 5.52111%，低于 12.5% 上限。
+- 剩下 4 只活跃缺口是 `600421.SH`、`600599.SH`、`600636.SH`、`600696.SH`；它们在 `stock_basic` 里名字都是 `退市*`，但 `list_status = L`，`industry/area = null`，`index_member_all(ts_code=...)` 也没有行。
+- 当前包不把“退市股例外”静默套到活跃股，所以正确结论是继续阻塞 full alpha。
+
+**Worked on**:
+1. [tracked] Added `runners/a_long_main_board_sw_coverage_repair.py`.
+2. [tracked] Added `schemas/a_long_main_board_sw_coverage_repair_execution_summary.schema.json`.
+3. [tracked] Added `docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json`.
+4. [tracked] Added `tests/test_a_long_main_board_sw_coverage_repair.py` and `tests/schema/test_a_long_main_board_sw_coverage_repair_schema.py`.
+5. [tracked] Updated `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `research/README.md`, and `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`.
+6. [untracked/gitignored] Raw repair payloads written under `data/a_long/raw/tushare/main_board_sw_coverage_repair_20260604/`.
+
+**Execution / validation**:
+- Commit command completed: `git commit -m "Add A-long candidate-universe preflight"` -> `e75343e`.
+- Live repair command: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe runners\a_long_main_board_sw_coverage_repair.py --confirm-independent-review-pass --confirm-post-review-execute --sleep-seconds 0.05`.
+- Result: `active_supplement_or_delisted_boundary_incomplete`; `ready=false`; `active_unresolved=4`; `delisted_unresolved=0`; `exception_rate=5.52111%`.
+- Re-ran the runner with `--sleep-seconds 0` to reuse already-written raw and refresh clearer tracked summary wording; no new network calls were needed by that rerun.
+- Tests passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_main_board_sw_coverage_repair tests.schema.test_a_long_main_board_sw_coverage_repair_schema tests.test_a_long_main_board_candidate_universe_preflight tests.schema.test_a_long_main_board_candidate_universe_preflight_schema -v` (16 pass, 1 skipped because `TUSHARE_TOKEN` is present).
+- Full suite passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` (742 tests, 1 skipped).
+
+**Current review state**:
+- Needs Claude review before commit.
+- Reviewer should verify that the package honestly stops before full alpha, does not apply the delisted-only exception to active names, keeps raw rows gitignored, and routes the next step to a reviewed boundary/source repair for the four active `退市*` unresolved names.
+
+---
+
 ## 2026-06-04 — Claude 审查 (A-long main-board candidate-universe preflight) — **PASS (可提交)**
 
 **Verdict**: Pass. Real 4-call preflight; hygiene clean (token/url false, no records/URL leak; raw gitignored; examples are public ts_codes, not raw values); honest — `blocked_sw_industry_coverage_for_full_universe_signal_search`, `data_can_be_used_for_alpha=false`, `signal_search_authorized=false`, full alpha run NOT executed. Safe runner (double-gate, validate_raw_root gitignore, tracked-no-records, max 4, redact). The finding is real — data-integrity-first working again at full-universe scale.

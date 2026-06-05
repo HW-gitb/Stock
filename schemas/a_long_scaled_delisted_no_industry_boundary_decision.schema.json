@@ -1,0 +1,230 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_scaled_delisted_no_industry_boundary_decision/1.0.0/schema.json",
+  "title": "A-long Scaled Delisted No-industry Boundary Decision",
+  "description": "Research-only decision packet for the pre-full-pull A-long main-board boundary: 187 already-delisted names plus 4 active delisting-shell rows have no usable SW industry source. This packet does not authorize a data pull, signal search, alpha, production, ship-gate evidence, full-size use, DataHub, or broker automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "source_refs",
+    "scope",
+    "reviewed_boundary",
+    "decision",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_scaled_delisted_no_industry_boundary_decision"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_scaled_delisted_no_industry_boundary_decision_20260605"},
+    "source_refs": {"$ref": "#/$defs/stringList"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "reviewed_boundary": {"$ref": "#/$defs/reviewedBoundary"},
+    "decision": {"$ref": "#/$defs/decision"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "next_steps": {"$ref": "#/$defs/stringList"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "docs_only",
+        "reads_tracked_summary_only",
+        "raw_payload_read_by_this_artifact",
+        "data_fetch_executed",
+        "provider_call_executed",
+        "tushare_call_executed",
+        "full_universe_data_pull_authorized_by_this_artifact",
+        "full_universe_signal_search_authorized_by_this_artifact",
+        "signal_search_executed_by_this_artifact",
+        "alpha_backtest_executed_by_this_artifact",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_scaled_delisted_no_industry_boundary_decision"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "docs_only": {"const": true},
+        "reads_tracked_summary_only": {"const": true},
+        "raw_payload_read_by_this_artifact": {"const": false},
+        "data_fetch_executed": {"const": false},
+        "provider_call_executed": {"const": false},
+        "tushare_call_executed": {"const": false},
+        "full_universe_data_pull_authorized_by_this_artifact": {"const": false},
+        "full_universe_signal_search_authorized_by_this_artifact": {"const": false},
+        "signal_search_executed_by_this_artifact": {"const": false},
+        "alpha_backtest_executed_by_this_artifact": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "reviewedBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_universe_preflight_summary_ref",
+        "sw_coverage_repair_summary_ref",
+        "board_scope",
+        "source_window",
+        "main_board_active_count",
+        "main_board_delisted_2018_2025_count",
+        "active_sw_supplement_success_count",
+        "active_delisting_shell_count",
+        "active_delisting_shell_symbols",
+        "active_investable_unresolved_count",
+        "original_delisted_no_usable_sw_source_count",
+        "scaled_no_industry_boundary_count_if_approved",
+        "exception_rate_denominator_count",
+        "scaled_exception_rate_pct",
+        "max_exception_rate_pct",
+        "threshold_passed",
+        "boundary_treatment"
+      ],
+      "properties": {
+        "candidate_universe_preflight_summary_ref": {"const": "docs/a_long_main_board_candidate_universe_preflight_execution_summary_20260604.json"},
+        "sw_coverage_repair_summary_ref": {"const": "docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json"},
+        "board_scope": {"const": "main_board_only"},
+        "source_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start_date", "end_date"],
+          "properties": {
+            "start_date": {"const": "20180101"},
+            "end_date": {"const": "20251231"}
+          }
+        },
+        "main_board_active_count": {"const": 3200},
+        "main_board_delisted_2018_2025_count": {"const": 187},
+        "active_sw_supplement_success_count": {"const": 1189},
+        "active_delisting_shell_count": {"const": 4},
+        "active_delisting_shell_symbols": {
+          "const": ["600421.SH", "600599.SH", "600636.SH", "600696.SH"]
+        },
+        "active_investable_unresolved_count": {"const": 0},
+        "original_delisted_no_usable_sw_source_count": {"const": 187},
+        "scaled_no_industry_boundary_count_if_approved": {"const": 191},
+        "exception_rate_denominator_count": {"const": 3387},
+        "scaled_exception_rate_pct": {"const": 5.639209},
+        "max_exception_rate_pct": {"const": 12.5},
+        "threshold_passed": {"const": true},
+        "boundary_treatment": {"$ref": "#/$defs/boundaryTreatment"}
+      }
+    },
+    "boundaryTreatment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manual_industry_fill_allowed",
+        "silent_unknown_or_default_industry_allowed",
+        "drop_from_universe_returns_or_risk_allowed",
+        "exclude_only_from_industry_normalization_denominators",
+        "keep_in_pit_universe_returns_risk_drawdown_and_coverage",
+        "terminal_delisting_return_required",
+        "selection_time_st_or_delisting_name_veto_required",
+        "industry_neutral_view_must_report_excluded_denominator_count",
+        "non_neutral_view_must_be_reported",
+        "future_full_pull_runner_must_consume_this_boundary_before_signal_execution"
+      ],
+      "properties": {
+        "manual_industry_fill_allowed": {"const": false},
+        "silent_unknown_or_default_industry_allowed": {"const": false},
+        "drop_from_universe_returns_or_risk_allowed": {"const": false},
+        "exclude_only_from_industry_normalization_denominators": {"const": true},
+        "keep_in_pit_universe_returns_risk_drawdown_and_coverage": {"const": true},
+        "terminal_delisting_return_required": {"const": true},
+        "selection_time_st_or_delisting_name_veto_required": {"const": true},
+        "industry_neutral_view_must_report_excluded_denominator_count": {"const": true},
+        "non_neutral_view_must_be_reported": {"const": true},
+        "future_full_pull_runner_must_consume_this_boundary_before_signal_execution": {"const": true}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_status",
+        "recommended_route",
+        "candidate_universe_ready_for_full_pull_now",
+        "pre_full_pull_boundary_ready_if_claude_pass_and_user_approval",
+        "data_can_be_used_for_alpha_now",
+        "signal_search_authorized_by_this_artifact",
+        "full_pull_authorized_by_this_artifact",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "decision_status": {"const": "pending_independent_review_and_user_approval"},
+        "recommended_route": {"const": "approve_scaled_delisted_no_industry_boundary_for_next_full_pull_package"},
+        "candidate_universe_ready_for_full_pull_now": {"const": false},
+        "pre_full_pull_boundary_ready_if_claude_pass_and_user_approval": {"const": true},
+        "data_can_be_used_for_alpha_now": {"const": false},
+        "signal_search_authorized_by_this_artifact": {"const": false},
+        "full_pull_authorized_by_this_artifact": {"const": false},
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"},
+        "next_action": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_alpha_found",
+        "full_universe_data_pulled",
+        "signal_search_executed",
+        "signal_search_authorized",
+        "alpha_backtest_executed",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "datahub_authorized",
+        "manual_industry_fill_accepted",
+        "delisting_names_dropped_from_returns_or_risk",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_alpha_found": {"const": false},
+        "full_universe_data_pulled": {"const": false},
+        "signal_search_executed": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "datahub_authorized": {"const": false},
+        "manual_industry_fill_accepted": {"const": false},
+        "delisting_names_dropped_from_returns_or_risk": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}
