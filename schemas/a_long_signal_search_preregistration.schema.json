@@ -305,25 +305,36 @@
       "required": [
         "normalization_basis",
         "reviewed_delisted_missing_industry_exception_allowed",
-        "exception_symbols",
-        "active_missing_industry_hard_fail",
+        "reviewed_exception_boundary_ref",
+        "exception_symbol_set_source",
+        "exception_count",
+        "exception_rate_pct",
+        "max_exception_rate_pct",
+        "active_investable_missing_industry_hard_fail",
+        "active_delisting_shell_exception_allowed_only_by_boundary",
         "exception_retained_in_returns_and_risk",
         "exception_excluded_only_from_industry_denominators",
-        "silent_industry_fill_allowed"
+        "terminal_delisting_return_required",
+        "selection_time_st_or_delisting_name_veto_required",
+        "silent_industry_fill_allowed",
+        "manual_industry_fill_allowed"
       ],
       "properties": {
         "normalization_basis": {"const": "SW_L2_then_SW_L1_if_sample_lt_20"},
         "reviewed_delisted_missing_industry_exception_allowed": {"const": true},
-        "exception_symbols": {
-          "type": "array",
-          "items": {"const": "000666.SZ"},
-          "minItems": 1,
-          "maxItems": 1
-        },
-        "active_missing_industry_hard_fail": {"const": true},
+        "reviewed_exception_boundary_ref": {"const": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json"},
+        "exception_symbol_set_source": {"const": "reviewed_191_name_boundary_from_sw_repair_summary"},
+        "exception_count": {"const": 191},
+        "exception_rate_pct": {"const": 5.639209},
+        "max_exception_rate_pct": {"const": 12.5},
+        "active_investable_missing_industry_hard_fail": {"const": true},
+        "active_delisting_shell_exception_allowed_only_by_boundary": {"const": true},
         "exception_retained_in_returns_and_risk": {"const": true},
         "exception_excluded_only_from_industry_denominators": {"const": true},
-        "silent_industry_fill_allowed": {"const": false}
+        "terminal_delisting_return_required": {"const": true},
+        "selection_time_st_or_delisting_name_veto_required": {"const": true},
+        "silent_industry_fill_allowed": {"const": false},
+        "manual_industry_fill_allowed": {"const": false}
       }
     },
     "multipleTestingPolicy": {

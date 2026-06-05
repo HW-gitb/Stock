@@ -10,7 +10,8 @@
     "protected_decision": "Whether the first A-long quality / cashflow / balance-sheet / earnings-stability search produces a research-only alpha clue after the data route passed fixed-panel audit.",
     "applies_to": [
       "research/preregistrations/a_long_signal_search_preregistration_20260604.json",
-      "The future reviewed A-long main-board signal-search execution package that may be created after independent review and user execute."
+      "docs/a_long_full_main_board_signal_search_execution_packet_20260605.json",
+      "The future reviewed A-long main-board signal-search execution package that may be executed only after independent review and user execute."
     ],
     "does_not_authorize": [
       "No signal-search run is authorized by this ledger before independent review and an explicit user execute command.",
@@ -45,14 +46,15 @@
       "design_summary": "Research-only A-long main-board quality / cashflow / balance-sheet / earnings-stability signal search, gated by the fixed-panel audit pass but requiring a future reviewed execution package before any run.",
       "review_boundary": [
         "The fixed 9-symbol panel is route proof only and must not be reported as alpha proof.",
-        "Future execution must use a reviewed main-board candidate universe and preserve PIT list / delist / terminal return handling.",
-        "No provider expansion, DataHub work, production use, ship-gate claim, full-size manual use, or broker / order automation."
+      "Future execution must use a reviewed main-board candidate universe and preserve PIT list / delist / terminal return handling.",
+      "Future execution must consume the approved 191-name no-industry boundary: no manual industry fill, no silent default, no dropping boundary names from returns/risk, and denominator-only exclusion for industry normalization.",
+      "No provider expansion, DataHub work, production use, ship-gate claim, full-size manual use, or broker / order automation."
       ]
     }
   ],
   "next_required_actions": [
     "Independent review must pass the preregistration before any signal-search runner or data execution package.",
     "The user must explicitly execute the future reviewed run package.",
-    "If approved later, combine main-board universe expansion, runner implementation, signal run, summary, tests, and docs in one large reviewed package rather than many small slices."
+    "If approved later, execute the reviewed full main-board packet with checkpoint/resume; the data-integrity audit must pass before the frozen signal search runs."
   ]
 }

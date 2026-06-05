@@ -122,13 +122,19 @@
     "industry_policy": {
       "normalization_basis": "SW_L2_then_SW_L1_if_sample_lt_20",
       "reviewed_delisted_missing_industry_exception_allowed": true,
-      "exception_symbols": [
-        "000666.SZ"
-      ],
-      "active_missing_industry_hard_fail": true,
+      "reviewed_exception_boundary_ref": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+      "exception_symbol_set_source": "reviewed_191_name_boundary_from_sw_repair_summary",
+      "exception_count": 191,
+      "exception_rate_pct": 5.639209,
+      "max_exception_rate_pct": 12.5,
+      "active_investable_missing_industry_hard_fail": true,
+      "active_delisting_shell_exception_allowed_only_by_boundary": true,
       "exception_retained_in_returns_and_risk": true,
       "exception_excluded_only_from_industry_denominators": true,
-      "silent_industry_fill_allowed": false
+      "terminal_delisting_return_required": true,
+      "selection_time_st_or_delisting_name_veto_required": true,
+      "silent_industry_fill_allowed": false,
+      "manual_industry_fill_allowed": false
     },
     "multiple_testing_policy": {
       "family_list_frozen": true,
@@ -184,6 +190,7 @@
   "next_steps": [
     "Independent review must verify this preregistration before any signal-search runner or full-universe data execution.",
     "After clean review and explicit user execute, the next execution package may combine main-board candidate-universe expansion, runner implementation, full-period signal run, summary, tests, and docs in one reviewed big package.",
+    "The future execution must consume the approved 191-name no-industry boundary in docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json: no manual fill, no silent default, no dropping those names from returns or risk, and exclusion only from industry-normalization denominators.",
     "The future run must not use the fixed 9-symbol panel as alpha proof; it is only the data-route proof that justified this preregistration."
   ],
   "limitations": [

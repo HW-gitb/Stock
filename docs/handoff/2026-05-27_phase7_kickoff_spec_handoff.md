@@ -3710,3 +3710,26 @@ git diff --check
 1. Claude should review the SW repair plus this boundary packet together.
 2. If Claude passes and the user approves, the next separate package can be the full main-board pull plus signal-search execution.
 3. Do not run the full pull from this artifact alone.
+
+## 2026-06-05 append: A-long full main-board execution packet prepared
+
+**Plain result**:
+
+- The 191-name no-industry boundary passed Claude review, received user approval, and was committed in `e51798b`.
+- The next large execution package is now prepared: `docs/a_long_full_main_board_signal_search_execution_packet_20260605.json`.
+- The package locks main-board only, 2018-2025, 3,387 candidate names, 23,717 planned Tushare calls, checkpoint/resume, full data-integrity audit before signal search, and the frozen A-long signal families.
+- The signal preregistration now references the approved 191-name boundary instead of the old single `000666.SZ` exception.
+- This slice still executes no network call and computes no alpha.
+
+**What changed**:
+
+- Added `schemas/a_long_full_main_board_signal_search_execution_packet.schema.json`.
+- Added `docs/a_long_full_main_board_signal_search_execution_packet_20260605.json`.
+- Added `tests/schema/test_a_long_full_main_board_signal_search_execution_packet_schema.py`.
+- Updated the A-long signal-search preregistration / ledger boundary wording and routing docs.
+
+**Next route**:
+
+1. Claude should review this execution packet plus the synchronized preregistration boundary update.
+2. If Claude passes and the user approves / commits, a later explicit execute command can run the real full main-board pull.
+3. The real run must stop after data pull if the full data-integrity audit fails; signal search runs only after audit pass.

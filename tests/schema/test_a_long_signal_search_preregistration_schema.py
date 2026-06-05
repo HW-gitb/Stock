@@ -129,12 +129,23 @@ class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
     def test_industry_exception_retains_delisted_returns_and_blocks_silent_fill(self) -> None:
         industry = self._load_artifact()["search_design"]["industry_policy"]
 
-        self.assertEqual(industry["exception_symbols"], ["000666.SZ"])
+        self.assertEqual(
+            industry["reviewed_exception_boundary_ref"],
+            "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+        )
+        self.assertEqual(industry["exception_symbol_set_source"], "reviewed_191_name_boundary_from_sw_repair_summary")
+        self.assertEqual(industry["exception_count"], 191)
+        self.assertEqual(industry["exception_rate_pct"], 5.639209)
+        self.assertLessEqual(industry["exception_rate_pct"], industry["max_exception_rate_pct"])
         self.assertTrue(industry["reviewed_delisted_missing_industry_exception_allowed"])
-        self.assertTrue(industry["active_missing_industry_hard_fail"])
+        self.assertTrue(industry["active_investable_missing_industry_hard_fail"])
+        self.assertTrue(industry["active_delisting_shell_exception_allowed_only_by_boundary"])
         self.assertTrue(industry["exception_retained_in_returns_and_risk"])
         self.assertTrue(industry["exception_excluded_only_from_industry_denominators"])
+        self.assertTrue(industry["terminal_delisting_return_required"])
+        self.assertTrue(industry["selection_time_st_or_delisting_name_veto_required"])
         self.assertFalse(industry["silent_industry_fill_allowed"])
+        self.assertFalse(industry["manual_industry_fill_allowed"])
 
     def test_scope_creep_is_rejected_by_schema(self) -> None:
         payload = copy.deepcopy(self._load_artifact())

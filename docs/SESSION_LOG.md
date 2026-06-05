@@ -8,6 +8,50 @@
 
 ---
 
+## 2026-06-05 — Claude 审查 (A-long full main-board signal-search execution packet) — **PASS (可提交)**
+
+**Verdict**: Pass. Complete, disciplined execution packet (the plan/contract) for A-long's first real alpha search. Packet only — no network call, no run, authorizes nothing until a runner is built + user executes. Safe to commit.
+
+**Verified**:
+- **Sequence gate (critical)**: `full_data_integrity_audit_pass_required_before_signal_search=true` + `abort_signal_search_if_audit_fails=true`, in BOTH audit_and_signal_plan AND pre_execution_gates — full pull → full data-integrity audit → ONLY IF it passes, the frozen signal search.
+- Scope: main-board-only (no full-market/cross-board), 2018-2025, consumes the approved 191-name boundary (5.64%, industry-denominators-only, names kept in returns/risk, active-investable-missing-industry forbidden), ST/退市 selection veto, terminal-delisting-return required.
+- Budget/runtime honest: 23,717 / 24,000 calls, retry 0, abort-on-exceed, checkpoint/resume required, 1.25s pacing (daily-rate lesson), ~8.2h network time disclosed.
+- Measurement discipline (consumes the prereg): same-anchor both legs, total-return, BH-FDR/Bonferroni, no parameter sweep, no post-result rescue-slicing, frozen families, ledger spend on signal run.
+- Hygiene-when-run: raw→gitignored, tracked outputs exclude raw/url/secret, token env, double-gate. No over-claim (research-only, 12-mo forward-live ship gate unchanged). Boundary approval referenced (hash e51798b). Tests 20/20.
+
+**Note**: this slice is the PACKET (contract) only — no runner, nothing run. The runner must be built to this contract + reviewed, then the user executes the ~8h pull → audit → (if pass) signal. When the runner appears I'll verify it implements the contract (pacing, audit-gates-signal abort, same-anchor, report-all-families).
+
+**Honest expectation**: a real search — like the A-short re-audit, the most likely honest outcome is "no alpha / risk-filter-only" (real main-board fundamental alpha is hard). The discipline ensures that IF a family survives (same-anchor, FDR, not-one-year/few-names, net of costs) it is a trustworthy candidate clue — still research-only until 12-mo forward-live. Worth running for the honest answer; don't pre-expect alpha.
+
+---
+
+## 2026-06-05 — Codex 执行 (A-long full main-board execution packet)
+
+**Plain result**:
+- 还没有拉全量数据。
+- 已把下一次大包写清楚：全主板 2018-2025 拉取 + 全量数据审计 + 审计通过后才跑冻结信号。
+- 预计计划调用量：23,717 次 Tushare endpoint call；需要 checkpoint/resume。
+- 191 个无行业退市/壳股边界已经同步进信号预注册：不手工补行业、不丢收益/风险，只从行业中性化分母里剔除。
+- 这个包仍不证明 alpha，也不授权 production / ship-gate / full-size。
+
+**Worked on**:
+1. [tracked] Added `schemas/a_long_full_main_board_signal_search_execution_packet.schema.json`.
+2. [tracked] Added `docs/a_long_full_main_board_signal_search_execution_packet_20260605.json`.
+3. [tracked] Added `tests/schema/test_a_long_full_main_board_signal_search_execution_packet_schema.py`.
+4. [tracked] Updated `schemas/a_long_signal_search_preregistration.schema.json`, `research/preregistrations/a_long_signal_search_preregistration_20260604.json`, and `research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json` to consume the approved 191-name boundary.
+5. [tracked] Updated routing/status docs: `docs/README.md`, `research/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, and the Phase 7 handoff.
+
+**Validation**:
+- Targeted tests passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.schema.test_a_long_full_main_board_signal_search_execution_packet_schema tests.schema.test_a_long_signal_search_preregistration_schema tests.schema.test_a_long_scaled_delisted_no_industry_boundary_decision_schema -v` (20 tests).
+- Full suite passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest discover -v` (754 tests, 1 skipped).
+
+**Current review state**:
+- Needs Claude review before commit.
+- Reviewer should verify that this is an execution packet only: no network call, no raw read, no signal run, and no alpha claim happened in this slice.
+- After Claude PASS + user approval / commit, the next user `执行` can run the real full main-board pull. The real run must stop before signal search if the full data-integrity audit fails.
+
+---
+
 ## 2026-06-05 — Claude 审查 (A-long manual-patch FAIL fix + scaled delisted boundary decision) — **PASS; boundary PENDING user approval**
 
 **Verdict**: Pass on both. The manual-patch FAIL is genuinely fixed, and the scaled delisted-no-industry boundary decision is exemplary and correctly awaits the user's explicit approval.

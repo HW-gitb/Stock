@@ -1,0 +1,217 @@
+{
+  "schema_name": "a_long_full_main_board_signal_search_execution_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-05T00:00:00+08:00",
+  "artifact_id": "a_long_full_main_board_signal_search_execution_packet_20260605",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_full_main_board_data_pull_audit_and_signal_search_execution_packet",
+    "packet_status": "execution_packet_recorded_for_review_not_executed",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_calls_executed_by_this_artifact": false,
+    "tushare_calls_executed_by_this_artifact": false,
+    "data_fetch_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "signal_search_executed_by_this_artifact": false,
+    "alpha_backtest_executed_by_this_artifact": false,
+    "ready_for_later_execution_after_independent_review": true,
+    "actual_tushare_calls_require_post_review_execute_command": true,
+    "network_access_required_for_later_execution": true,
+    "full_main_board_data_pull_allowed_after_gates": true,
+    "full_main_board_signal_search_allowed_after_gates": true,
+    "full_market_or_cross_board_pull_allowed": false,
+    "provider_expansion_allowed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "a_long_signal_search_preregistration_20260604",
+      "path": "research/preregistrations/a_long_signal_search_preregistration_20260604.json",
+      "role": "Freezes the first A-long quality / cashflow / balance-sheet / earnings-stability search design and no-rescue rules."
+    },
+    {
+      "artifact_id": "a_long_signal_search_program_test_budget_ledger_20260604",
+      "path": "research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json",
+      "role": "Records the singleton planned signal-search test and spend rule."
+    },
+    {
+      "artifact_id": "a_long_scaled_delisted_no_industry_boundary_decision_20260605",
+      "path": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+      "role": "Freezes the approved 191-name no-industry boundary for future full pull and signal execution."
+    },
+    {
+      "artifact_id": "a_long_main_board_sw_coverage_repair_execution_summary_20260604",
+      "path": "docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json",
+      "role": "Records active SW supplement success, four active delisting-shell rows, and 187 delisted no-source rows."
+    },
+    {
+      "artifact_id": "a_long_main_board_candidate_universe_preflight_execution_summary_20260604",
+      "path": "docs/a_long_main_board_candidate_universe_preflight_execution_summary_20260604.json",
+      "role": "Records the full main-board candidate universe counts before the repair."
+    },
+    {
+      "artifact_id": "a_long_materialized_full_period_data_integrity_audit_report_20260604",
+      "path": "research/results/a_long_materialized_full_period_data_integrity_audit_20260604/audit_report.json",
+      "role": "Fixed-panel route proof that allowed preregistration but cannot be used as alpha or full-universe proof."
+    },
+    {
+      "artifact_id": "sr_along_data_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Durable blocker that keeps A-long full search locked until the reviewed boundary and execution package are in place."
+    }
+  ],
+  "boundary_approval": {
+    "boundary_ref": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+    "claude_review_pass_recorded": true,
+    "user_approval_recorded": true,
+    "approval_log_ref": "docs/SESSION_LOG.md#2026-06-05-claude-review-a-long-manual-patch-fail-fix-scaled-delisted-boundary-decision",
+    "committed_boundary_hash": "e51798b",
+    "boundary_artifact_itself_authorizes_no_pull": true
+  },
+  "execution_boundary": {
+    "board_scope": "main_board_only",
+    "start_date": "20180101",
+    "end_date": "20251231",
+    "as_of_schedule_rule": "monthly_last_open_A_share_trading_day",
+    "main_board_active_count_from_preflight": 3200,
+    "main_board_delisted_2018_2025_count_from_preflight": 187,
+    "candidate_universe_count_before_boundary": 3387,
+    "reviewed_no_industry_exception_count": 191,
+    "reviewed_no_industry_exception_rate_pct": 5.639209,
+    "max_exception_rate_pct": 12.5,
+    "active_investable_missing_industry_allowed": false,
+    "active_delisting_shell_exception_count": 4,
+    "active_delisting_shell_symbols": [
+      "600421.SH",
+      "600599.SH",
+      "600636.SH",
+      "600696.SH"
+    ],
+    "manual_industry_fill_allowed": false,
+    "silent_unknown_or_default_industry_allowed": false,
+    "drop_boundary_names_from_returns_or_risk_allowed": false,
+    "industry_denominator_exclusion_only": true,
+    "terminal_delisting_return_required": true,
+    "selection_time_st_or_delisting_name_veto_required": true
+  },
+  "data_pull_plan": {
+    "provider": "Tushare",
+    "account_boundary": "existing_user_tushare_token_only_no_new_provider_no_paid_change",
+    "tables": [
+      "trade_calendar",
+      "stock_basic_active",
+      "stock_basic_delisted",
+      "income",
+      "balancesheet",
+      "cashflow",
+      "fina_indicator",
+      "industry_classification",
+      "industry_membership",
+      "daily_price",
+      "adj_factor",
+      "dividend",
+      "benchmark_index_daily"
+    ],
+    "estimated_symbol_count": 3387,
+    "planned_total_endpoint_calls": 23717,
+    "max_total_endpoint_calls": 24000,
+    "retry_count_allowed": 0,
+    "abort_if_budget_exceeded": true,
+    "checkpoint_resume_required": true,
+    "minimum_seconds_between_network_calls": 1.25,
+    "plain_runtime_expectation": "This is a large local run. At 1.25 seconds per call, network pacing alone is about 8.2 hours before provider latency and processing."
+  },
+  "audit_and_signal_plan": {
+    "full_data_integrity_audit_required_before_signal_search": true,
+    "abort_signal_search_if_audit_fails": true,
+    "preregistration_ref": "research/preregistrations/a_long_signal_search_preregistration_20260604.json",
+    "ledger_ref": "research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json",
+    "planned_test_id": "a_long_signal_search_preregistration_20260604",
+    "allowed_signal_families": [
+      "profitability_quality",
+      "cash_conversion",
+      "balance_sheet_strength",
+      "earnings_stability"
+    ],
+    "blocked_signal_families": [
+      "valuation_without_share_count_or_market_cap_lineage",
+      "news_or_llm_semantic_signal",
+      "short_term_momentum",
+      "intraday_or_microstructure",
+      "us_provider_fields"
+    ],
+    "entry_rule": "next_trading_day_open_after_as_of",
+    "exit_horizons_trading_days": [
+      252,
+      504
+    ],
+    "primary_benchmark": "CSI300",
+    "secondary_benchmark": "CSI1000",
+    "same_anchor_required": true,
+    "total_return_with_adj_factor_and_dividend_lineage_required": true,
+    "multiple_testing_correction_required": "benjamini_hochberg_fdr_or_bonferroni",
+    "parameter_sweep_allowed": false,
+    "post_result_rescue_slicing_allowed": false,
+    "ledger_spend_required_if_signal_executes": true
+  },
+  "storage_and_output_boundary": {
+    "raw_output_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
+    "raw_output_root_must_be_gitignored": true,
+    "materialization_summary_path": "docs/a_long_full_main_board_materialization_execution_summary_20260605.json",
+    "audit_report_path": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+    "signal_evidence_report_path": "research/results/a_long_signal_search_20260604/evidence_report.json",
+    "tracked_outputs_must_exclude_raw_rows": true,
+    "tracked_outputs_must_exclude_request_urls": true,
+    "tracked_outputs_must_exclude_secret": true,
+    "raw_retention_authorizes_production_storage": false
+  },
+  "pre_execution_gates": {
+    "independent_review_pass_required": true,
+    "post_review_execute_command_required": true,
+    "environment_precheck_required": true,
+    "tushare_token_presence_required": true,
+    "environment_values_must_not_be_logged": true,
+    "raw_root_gitignore_check_required": true,
+    "exact_boundary_consumption_required": true,
+    "main_board_scope_check_required": true,
+    "budget_precheck_required": true,
+    "abort_on_budget_or_scope_violation": true,
+    "checkpoint_resume_policy_required": true,
+    "no_secret_summary_scan_required": true,
+    "full_data_integrity_audit_pass_required_before_signal_search": true,
+    "ledger_spend_update_required_after_signal_execution": true
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "full_main_board_data_pulled_by_this_artifact": false,
+    "signal_search_executed_by_this_artifact": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "provider_expansion_authorized": false,
+    "manual_industry_fill_authorized": false,
+    "boundary_names_dropped_from_returns_or_risk": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Send this execution packet and the synchronized preregistration boundary changes to Claude review.",
+    "If Claude passes and the user later issues the post-review execute command, run the full main-board data pull with checkpoint/resume and no secret logging.",
+    "After the pull, run the full main-board data-integrity audit first; if that audit fails, stop before signal search.",
+    "Only if the audit passes, run the frozen signal families and spend the singleton A-long signal-search ledger test."
+  ],
+  "limitations": [
+    "This packet is not the run. It executes no network call, reads no raw payload, computes no return, and searches no signal.",
+    "A future positive backtest would still be research-only and cannot support full-size use without the unchanged ship gate, including at least 12 months of forward-live evidence.",
+    "The 191 no-industry boundary is accepted only for industry-normalization denominators; the names must remain in returns, risk, drawdown, terminal delisting handling, and coverage.",
+    "This does not authorize provider expansion, DataHub, production storage, broker access, automatic order execution, ship-gate evidence, or full-size manual use."
+  ]
+}
