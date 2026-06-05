@@ -3733,3 +3733,35 @@ git diff --check
 1. Claude should review this execution packet plus the synchronized preregistration boundary update.
 2. If Claude passes and the user approves / commits, a later explicit execute command can run the real full main-board pull.
 3. The real run must stop after data pull if the full data-integrity audit fails; signal search runs only after audit pass.
+
+## 2026-06-05 append: A-long full main-board materialization runner package
+
+**Plain result**:
+
+- The execution packet has passed review / commit, but the full raw pull has still not run.
+- Added the runner for only the first executable stop: 2018-2025 full main-board raw materialization.
+- This runner does not run the full data-integrity audit and does not search alpha.
+- Tracked summary is intentionally small: endpoint-level details go to a gitignored manifest, not into tracked docs.
+
+**What changed**:
+
+- Added `runners/a_long_full_main_board_materialization_packet.py`.
+- Added `schemas/a_long_full_main_board_materialization_execution_summary.schema.json`.
+- Added `tests/test_a_long_full_main_board_materialization_packet.py`.
+- Added `tests/schema/test_a_long_full_main_board_materialization_execution_summary_schema.py`.
+- Updated routing/status docs.
+
+**Runner boundaries**:
+
+- Validates `docs/a_long_full_main_board_signal_search_execution_packet_20260605.json`.
+- Validates the approved 191-name no-industry boundary and prior active SW repair summary.
+- Locks 23,717 planned Tushare calls, max 24,000, zero retry, 1.25s pacing, checkpoint/resume.
+- Stops before symbol calls if the base `stock_basic` universe no longer matches 3,200 active + 187 delisted.
+- Writes raw payloads and endpoint manifest only under gitignored `data/a_long/raw/tushare/full_main_board_signal_search_20260605/`.
+- Does not authorize audit, signal search, alpha, production, ship-gate evidence, full-size use, DataHub, or broker/order automation.
+
+**Next route**:
+
+1. Claude should review the runner, summary schema, tests, and docs for scope creep.
+2. If Claude passes and the user approves / commits, a later explicit execute command may run the ~8h full raw materialization.
+3. After materialization passes, the next separate gate is full main-board data-integrity audit. Signal search still waits for audit pass.

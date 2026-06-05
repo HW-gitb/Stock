@@ -8,6 +8,50 @@
 
 ---
 
+## 2026-06-05 — Claude 审查 (A-long full main-board materialization runner) — **PASS (可提交)**
+
+**Verdict**: Pass. The materialization runner faithfully implements the reviewed execution-packet contract and is safe-when-run (double-gated, not yet run). Materialization only — no audit, no signal, no alpha. Safe to commit.
+
+**Verified (grep + tests)**:
+- Double-gate: `require_live_execution_confirmations` needs BOTH confirm flags (else raise). Not yet run.
+- Contract guards: `load_and_validate_packet` asserts planned 23,717 / max 24,000 / abort-on-exceed / tracked-outputs-exclude raw+url+secret + `planned_total_call_count(universe)==23,717`; `validate_boundary_and_repair_refs` ties to the approved 191 boundary + prior SW-repair summary; universe guard validates exact 3,200 active + 187 delisted.
+- Safe-when-run: reuses reviewed primitives — `broader_runner.NetworkPacer` (1.25s pacing), `route_base.get_tushare_client` (token env-only); `validate_raw_root` gitignore guard; `execute_call_with_checkpoint` (checkpoint/resume; records→gitignored raw, tracked result excludes records/secret); does NOT redo the 1,189 active supplement (consumes the reviewed repair).
+- Materialization only — no audit/signal/alpha authorization. Tests 12/12.
+
+**Note**: still not run. After commit + user execute, this does the ~8h full main-board raw pull (materialization only) → next slice = the full data-integrity audit runner → only if it passes, the frozen signal search. Each a separate reviewed + user-executed step.
+
+---
+
+## 2026-06-05 — Codex 执行 (A-long full main-board materialization runner package)
+
+**Plain result**:
+- 没有拉全量数据。
+- 已实现全主板原始数据拉取 runner，但它只负责 materialization，不会跑 audit，也不会找 alpha。
+- 下一步是 Claude 审查 runner/schema/tests/docs。PASS + 用户提交后，下一次 `执行` 才能开始约 8 小时 full raw pull。
+
+**Worked on**:
+1. [tracked] Added `runners/a_long_full_main_board_materialization_packet.py`.
+2. [tracked] Added `schemas/a_long_full_main_board_materialization_execution_summary.schema.json`.
+3. [tracked] Added `tests/test_a_long_full_main_board_materialization_packet.py`.
+4. [tracked] Added `tests/schema/test_a_long_full_main_board_materialization_execution_summary_schema.py`.
+5. [tracked] Updated routing/status docs: `docs/README.md`, `research/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, and the Phase 7 handoff.
+
+**Important boundary**:
+- Runner validates the reviewed execution packet, the approved 191-name no-industry boundary, and the prior active SW repair summary.
+- It locks 23,717 planned calls / 24,000 max / zero retry / 1.25s pacing.
+- It stops before symbol calls if the base universe no longer equals 3,200 active + 187 delisted.
+- Raw rows and endpoint manifest stay under gitignored `data/a_long/raw/tushare/full_main_board_signal_search_20260605/`; tracked summary stays no raw rows / no endpoint list / no secret / no request URL.
+- It does not authorize full audit, signal search, alpha, production, ship-gate, full-size use, DataHub, or broker/order automation.
+
+**Validation**:
+- Targeted tests passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_full_main_board_materialization_packet tests.schema.test_a_long_full_main_board_materialization_execution_summary_schema -v` (12 tests).
+
+**Current review state**:
+- Needs Claude review before commit.
+- Reviewer should verify there was no provider call, no raw read beyond tests/dry-run checks, no materialization summary claiming data ready, and no accidental audit / signal-search authorization.
+
+---
+
 ## 2026-06-05 — Claude 审查 (A-long full main-board signal-search execution packet) — **PASS (可提交)**
 
 **Verdict**: Pass. Complete, disciplined execution packet (the plan/contract) for A-long's first real alpha search. Packet only — no network call, no run, authorizes nothing until a runner is built + user executes. Safe to commit.
