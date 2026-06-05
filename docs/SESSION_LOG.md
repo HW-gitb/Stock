@@ -8,6 +8,46 @@
 
 ---
 
+## 2026-06-05 — Claude 审查 (A-long materialization atomic-writer hotfix) — **PASS (可提交)**
+
+**Verdict**: Pass. The live full-pull hit a real Windows file-lock bug in the shared `write_json_atomic`; the hotfix is correct, safe, and improves the shared primitive's robustness. Resume-safe after commit.
+
+**Verified**:
+- `write_json_atomic` fix: unique temp name (`.{name}.{pid}.{uuid}.tmp`), 5-attempt retry on PermissionError with backoff + temp cleanup, cleanup-and-raise on any other error, returns on the atomic replace. Atomicity preserved (write-fresh-temp → atomic replace); no orphan `.tmp` (unlinked on every failure path; test asserts none remain). More robust than the original fixed-`.tmp` version. SHARED primitive (thin_runner) → broader + full runners inherit it.
+- Regression test genuinely covers it: patches `Path.replace` to fail once with PermissionError, asserts retry (≥2 calls), valid final JSON, no orphan `.tmp`.
+- The 2 corrupt checkpoints (dividend_000709_SZ, daily_000739_SZ) deleted; bad_count=0 on the rest → resume refetches only the missing (checkpoint reuse only reuses valid payloads).
+- Honest partial state: no tracked materialization summary → data not usable; no audit/signal/alpha authorized. Codex correctly blocks resume until this review. Tests 17/17.
+
+**Note**: after commit + user execute, resume the SAME full-pull command — existing valid raw is reused (checkpoint), only the ~2 missing + remainder hit Tushare. Then materialization summary → full audit → (if pass) signal.
+
+---
+
+## 2026-06-05 — Codex live run paused (A-long full main-board materialization)
+
+**Plain result**:
+- Full raw pull started but did not finish.
+- Partial raw payloads were written under gitignored `data/a_long/raw/tushare/full_main_board_signal_search_20260605/`.
+- No tracked materialization summary was produced, so data is not usable yet.
+- This still does not authorize audit, signal search, alpha, production, ship-gate, or full-size use.
+
+**Failure found**:
+- The first live run exposed a local Windows file-lock bug in the shared atomic JSON writer.
+- Two raw checkpoint files were written as invalid/error checkpoints during transient `.tmp` replace failures: `dividend_000709_SZ.json` and `daily_000739_SZ_2018_2025.json`.
+- Those two invalid checkpoints were deleted. A follow-up parse scan found `bad_count = 0` across the remaining raw JSON files.
+
+**Fix prepared**:
+- `runners/a_long_tushare_incremental_materialization_packet.py::write_json_atomic` now uses unique temp filenames and retries transient `PermissionError`.
+- `tests/test_a_long_full_main_board_materialization_packet.py` adds a regression test that simulates the first `Path.replace` failing with a Windows file lock and verifies the final JSON is valid.
+
+**Validation**:
+- Targeted tests passed: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -m unittest tests.test_a_long_full_main_board_materialization_packet tests.schema.test_a_long_full_main_board_materialization_execution_summary_schema -v` (13 tests).
+
+**Review state**:
+- Because execution code changed after the previous Claude PASS, do not resume the live pull until Claude reviews this hotfix.
+- After Claude PASS + user approval, rerun the same full materialization command; existing valid raw payloads should be reused and only missing calls should hit Tushare.
+
+---
+
 ## 2026-06-05 — Claude 审查 (A-long full main-board materialization runner) — **PASS (可提交)**
 
 **Verdict**: Pass. The materialization runner faithfully implements the reviewed execution-packet contract and is safe-when-run (double-gated, not yet run). Materialization only — no audit, no signal, no alpha. Safe to commit.

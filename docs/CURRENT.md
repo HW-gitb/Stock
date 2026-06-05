@@ -7,6 +7,7 @@
 
 ## 0. Latest Delta
 
+- 2026-06-05 live A-long full main-board materialization started but paused before completion. Partial raw payloads exist under gitignored `data/a_long/raw/tushare/full_main_board_signal_search_20260605/`, no tracked materialization summary exists, and the data is not usable yet. The live run exposed a Windows file-lock bug in atomic JSON writes; a hotfix is prepared and targeted tests pass, but the pull must not resume until Claude reviews the hotfix.
 - Original A-share `minimal_data_burst` remains blocked; corrected-basis supersession failed preflight with `valid_signal_events = 0`, is spent as `failed_preflight_zero_signal_events`, and must not run outcome / benchmark-excess.
 - The full-universe redesigned A-share burst outcome / excess slice has run on frozen local data only: raw signal events 134, selected 123, available returns 116.
 - `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` records `decision = falsified_or_redesign_required`: mean net CSI1000 excess `-2.8696001309` pp, monthly clustered t-stat `-0.6312965283`, max monthly signal-excess drawdown `26.5735343137` pp.
@@ -28,7 +29,7 @@
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：A-share alpha validation is the active priority. A-long fixed-panel data route passed, the 191-name no-industry boundary is accepted, and the full main-board execution packet passed review / commit.
-- **当前 P0 / P1 目标**：Claude review the new full main-board materialization runner package: `runners/a_long_full_main_board_materialization_packet.py` plus `schemas/a_long_full_main_board_materialization_execution_summary.schema.json` and tests. After clean review, user approval / commit, and a later explicit execute command, the ~8h full raw pull can run. Do not run full audit or signal search before materialization succeeds.
+- **当前 P0 / P1 目标**：Claude review the post-live hotfix to atomic JSON writes before resuming the full main-board materialization. Existing valid raw payloads should be reused after review; do not run full audit or signal search before materialization succeeds.
 - **当前 P1 provider blocker**：US inactive / delisted historical coverage is user-accepted as scoped out for the current active-only forward model. `SR-PROVIDER-001` remains open for license / storage, active-symbol PIT if fundamentals are used, active price-adjustment / corporate actions if used, SEC parser / mapping if used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness. US forward universes must be PIT-frozen at start and must capture real delisting / halt / merger / no-trade outcomes during the forward window; the 12-month forward-live ship-gate requirement is unchanged.
 - **执行锁**：A-long full alpha search remains blocked. This runner package is data materialization only: it can write raw payloads after review / execute, but it cannot run audit or alpha. The fixed 9-symbol panel is route proof only, not full-universe alpha evidence.
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。

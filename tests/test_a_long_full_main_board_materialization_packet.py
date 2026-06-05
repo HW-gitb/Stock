@@ -146,6 +146,25 @@ class ALongFullMainBoardMaterializationPacketTest(unittest.TestCase):
         schema = json.loads(Path("schemas/a_long_full_main_board_materialization_execution_summary.schema.json").read_text(encoding="utf-8"))
         self.assertGreaterEqual(len(list(Draft7Validator(schema).iter_errors(invalid))), 3)
 
+    def test_atomic_json_write_retries_transient_replace_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "payload.json"
+            original_replace = Path.replace
+            calls = {"count": 0}
+
+            def flaky_replace(path_self: Path, target_path: Path) -> Path:
+                calls["count"] += 1
+                if calls["count"] == 1:
+                    raise PermissionError("simulated transient Windows file lock")
+                return original_replace(path_self, target_path)
+
+            with mock.patch.object(Path, "replace", flaky_replace):
+                runner.write_json_atomic({"status": "ok", "rows": [1, 2, 3]}, target)
+
+            self.assertGreaterEqual(calls["count"], 2)
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"status": "ok", "rows": [1, 2, 3]})
+            self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+
     def _contains_key(self, payload, needle: str) -> bool:
         if isinstance(payload, dict):
             return any(key == needle or self._contains_key(value, needle) for key, value in payload.items())

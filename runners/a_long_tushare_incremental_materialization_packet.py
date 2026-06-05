@@ -4,9 +4,11 @@ import argparse
 import json
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from uuid import uuid4
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,11 +75,32 @@ def read_json(path: Path) -> Any:
 
 def write_json_atomic(payload: Any, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f"{path.name}.tmp")
-    with tmp_path.open("w", encoding="utf-8", newline="\n") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2, default=str)
-        handle.write("\n")
-    tmp_path.replace(path)
+    last_error: PermissionError | None = None
+    for attempt in range(5):
+        tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
+        try:
+            with tmp_path.open("w", encoding="utf-8", newline="\n") as handle:
+                json.dump(payload, handle, ensure_ascii=False, indent=2, default=str)
+                handle.write("\n")
+            tmp_path.replace(path)
+            return
+        except PermissionError as exc:
+            last_error = exc
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            if attempt == 4:
+                raise
+            time.sleep(0.2 * (attempt + 1))
+        except Exception:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
+    if last_error is not None:
+        raise last_error
 
 
 def load_and_validate_packet(path: Path = PACKET_PATH) -> dict[str, Any]:
