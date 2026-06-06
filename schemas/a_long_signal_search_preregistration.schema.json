@@ -383,7 +383,8 @@
         "runner_must_abort_if_exclusion_not_applied",
         "excluded_groups_must_be_reported",
         "silent_use_of_ambiguous_groups_allowed",
-        "latest_only_fill_allowed"
+        "latest_only_fill_allowed",
+        "fina_indicator_pit_contract"
       ],
       "properties": {
         "full_main_board_audit_report_ref": {"const": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json"},
@@ -396,7 +397,8 @@
         "runner_must_abort_if_exclusion_not_applied": {"const": true},
         "excluded_groups_must_be_reported": {"const": true},
         "silent_use_of_ambiguous_groups_allowed": {"const": false},
-        "latest_only_fill_allowed": {"const": false}
+        "latest_only_fill_allowed": {"const": false},
+        "fina_indicator_pit_contract": {"const": "ann_date_only_with_restatement_exclusion_no_latest_fill"}
       }
     },
     "multipleTestingPolicy": {

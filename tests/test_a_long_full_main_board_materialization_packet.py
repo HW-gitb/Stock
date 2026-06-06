@@ -35,9 +35,12 @@ class ALongFullMainBoardMaterializationPacketTest(unittest.TestCase):
         benchmark_calls = [call for call in base_calls if call["table_id"] == "benchmark_index_daily"]
         self.assertEqual([call["kwargs"]["ts_code"] for call in benchmark_calls], ["H00300.CSI", "H00852.CSI"])
         self.assertTrue(all(call["minimum_fields"] == ["ts_code", "trade_date", "close"] for call in benchmark_calls))
+        income_call = next(call for call in runner.symbol_call_plan(["000001.SZ"]) if call["table_id"] == "income")
+        self.assertIn("f_ann_date", income_call["kwargs"]["fields"])
+        self.assertIn("f_ann_date", income_call["minimum_fields"])
         fina_indicator_call = next(call for call in runner.symbol_call_plan(["000001.SZ"]) if call["table_id"] == "fina_indicator")
-        self.assertIn("f_ann_date", fina_indicator_call["kwargs"]["fields"])
-        self.assertIn("f_ann_date", fina_indicator_call["minimum_fields"])
+        self.assertNotIn("f_ann_date", fina_indicator_call["kwargs"]["fields"])
+        self.assertNotIn("f_ann_date", fina_indicator_call["minimum_fields"])
 
     def test_candidate_universe_helper_filters_main_board_and_delisted_window(self) -> None:
         active_records = [

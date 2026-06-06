@@ -8,6 +8,82 @@
 
 ---
 
+## 2026-06-06 — Claude 审查 (A-long fina_indicator ann_date-only PIT contract) — **PASS (可提交)**
+
+The recommended Step-1 preflight probe ran FIRST and correctly caught the issue before any ~8h run: existing Tushare gives `namechange_2018_2025` (5,053 rows) + `H00300.CSI`/`H00852.CSI` full-period close (1,940 each) but `fina_indicator` has NO `f_ann_date`. Codex dispositioned it as a table-specific PIT contract (not latest-fill). Verified:
+- **Critical correctness** ✓ — `select_latest_pit_row` (line 542) requires `f_ann_date` ONLY for `F_ANN_DATE_REQUIRED_TABLES = {income, balancesheet, cashflow}`; `fina_indicator` (in `ANN_DATE_ONLY_TABLES`) is NOT skipped for lacking it → ROE + earnings_stability survive (the real risk of this change). `fina_indicator` PIT = `ann_date ≤ as_of` + restatement-exclusion + no latest-fill (line 539/548). An unregistered table raises (line 544, defensive).
+- Materialization request drops `f_ann_date` from `fina_indicator` (won't fail on the missing field) + locks the `fundamental_field_contract`; the audit records `fina_indicator_pit_contract = ann_date_only_with_restatement_exclusion_no_latest_fill` (line 633) + table-specific f_ann_date checks; prereg/packet/schemas precommit the contract (drift-guarded, e.g. line 296).
+- **256 A-long tests OK (1 skip)** re-run independently in my jsonschema-present env.
+
+**Soundness**: ann_date-only is the strongest available PIT for a table Tushare doesn't expose `f_ann_date` for; same-ann-date version ambiguity is still caught by the restatement-exclusion list (which already covered fina_indicator's profit_dedt). Documented, no silent latest-fill. Acceptable.
+
+**Next**: commit. Then Step 1 materialization retry (per `CURRENT.md`): availability already probed ✓ → clear stale checkpoints for changed-field calls (fina_indicator shape changed; benchmark H-codes) → run the 23,718-call materialization → Claude reviews the summary → Step 2 amended audit → Step 3 first valid signal search. No alpha/production/ship-gate authorized.
+
+---
+
+## 2026-06-06 — Codex 修复 (A-long fina_indicator PIT contract) — **ready for review**
+
+**Fixed without provider calls, raw materialization, amended full audit, signal search, alpha run, production claim, or ship-gate claim.**
+
+**Plain result**:
+- The prior preflight blocker is dispositioned as a table-specific PIT contract mismatch, not as permission to latest-fill or weaken statement-table PIT.
+- `income` / `balancesheet` / `cashflow` still hard-require `f_ann_date`.
+- Current Tushare route treats `fina_indicator` as `ann_date`-only: request fields are `ts_code,ann_date,end_date,roe,profit_dedt`; PIT eligibility is `ann_date <= as_of`; unresolved same-`ann_date` restatement groups remain excluded by `restatement_ambiguous_exclusions.csv`; latest-fill remains forbidden.
+- Materialization checkpoint validation now locks this request shape, so stale/raw drift must be decided by request-shape validation rather than by the old `fina_indicator.f_ann_date` assumption.
+
+**Worked on**:
+- [tracked] `runners/a_long_full_main_board_materialization_packet.py`: removed `f_ann_date` from the reviewed `fina_indicator` request/minimum fields and hard-validates the new `fundamental_field_contract`.
+- [tracked] `runners/a_long_full_main_board_signal_search.py`: limits `f_ann_date` hard requirement to statement tables, registers `fina_indicator` as `ann_date`-only, and rejects preregistration drift.
+- [tracked] `runners/a_long_full_main_board_data_integrity_audit.py`: updates self-tests/metrics/findings so `fina_indicator` is checked as ann-date-only while statement tables retain `f_ann_date`.
+- [tracked] `schemas/a_long_full_main_board_signal_search_execution_packet.schema.json` and `docs/a_long_full_main_board_signal_search_execution_packet_20260605.json`: lock `fundamental_field_contract`.
+- [tracked] `schemas/a_long_data_integrity_audit_preregistration.schema.json`, `research/preregistrations/a_long_data_integrity_audit_20260603.json`, `schemas/a_long_signal_search_preregistration.schema.json`, `research/preregistrations/a_long_signal_search_preregistration_20260604.json`: precommit the `fina_indicator` ann-date-only restatement-exclusion contract.
+- [tracked] focused runner/schema tests: `tests/test_a_long_full_main_board_materialization_packet.py`, `tests/test_a_long_full_main_board_signal_search.py`, `tests/test_a_long_full_main_board_data_integrity_audit.py`, and the three touched A-long schema tests.
+- [tracked] routing/risk handoff docs: `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, `docs/SESSION_LOG.md`.
+- [untracked] none.
+
+**Validation**:
+- Focused current-chain run passed: `python -m unittest tests.test_a_long_full_main_board_materialization_packet tests.test_a_long_full_main_board_signal_search tests.test_a_long_full_main_board_data_integrity_audit tests.schema.test_a_long_full_main_board_signal_search_execution_packet_schema tests.schema.test_a_long_data_integrity_audit_preregistration_schema tests.schema.test_a_long_signal_search_preregistration_schema tests.schema.test_a_long_full_main_board_materialization_execution_summary_schema tests.schema.test_a_long_full_main_board_data_integrity_audit_schema tests.schema.test_a_long_signal_search_execution_summary_schema -v` -> **95 tests OK, 1 skipped** (`signal-search execution summary has not been generated yet`).
+- Broader A-long discovery passed: `python -m unittest discover -s tests -p "test_a_long*.py" -v` -> **256 tests OK, 1 skipped**.
+
+**Review / next state**:
+- Ready for independent review and commit.
+- After PASS + commit, the next executable step is still the separate materialization retry. That retry may use the repaired table-specific contract but still does not authorize audit or signal unless materialization passes and the next gate is explicitly executed.
+
+---
+
+## 2026-06-06 — Codex 执行 (A-long materialization preflight) — **STOPPED before materialization**
+
+**Executed only the Step 1 preflight; no raw materialization / audit / signal search ran.**
+
+**Worked on**:
+- [tracked] `docs/CURRENT.md`: recorded the preflight STOP result and changed the then-current next step from materialization to `fina_indicator.f_ann_date` contract repair / disposition. This interim instruction is superseded by the `fina_indicator` ann_date-only repair entry above.
+- [tracked] `docs/system_risk_register.md`: updated `SR-ALONG-DATA-001` with the exact preflight blocker.
+- [tracked] `docs/SESSION_LOG.md`: this execution handoff.
+- [untracked] none.
+
+**Environment / dependency note**:
+- Bundled Python had `jsonschema` but not `tushare`; Codex installed `tushare 1.4.29` into the bundled Python after sandboxed pip failed on network permissions.
+- User Python at `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` existed but could not execute in this environment (`Access is denied`), so the bundled Python was used.
+- `TUSHARE_TOKEN` was present; token content was not recorded.
+
+**Preflight result**:
+- Initial hand-written direct `tushare.pro_api(token)` probes used the package default endpoint and returned empty frames. Codex then reran through the project helper `runners.a_long_tushare_route_validation_packet.get_tushare_client()`, which pins the HTTPS Tushare endpoint used by repo runners.
+- Project-helper probe returned:
+  - `namechange_2018_2025`: 5,053 rows; required columns present: `ts_code`, `name`, `start_date`, `end_date`.
+  - `index_daily(H00300.CSI, 20180101..20251231, close)`: 1,940 rows; required columns present.
+  - `index_daily(H00852.CSI, 20180101..20251231, close)`: 1,940 rows; required columns present.
+  - `fina_indicator(000001.SZ, 20180101..20251231, fields=ts_code,ann_date,f_ann_date,end_date,roe,profit_dedt)`: 55 rows, but returned columns were only `ts_code`, `ann_date`, `end_date`, `roe`, `profit_dedt`; `f_ann_date` was missing.
+
+**Boundary / decision**:
+- Per `docs/CURRENT.md` Step 1 at that time, missing `fina_indicator.f_ann_date` was an abort condition. Codex did **not** clear stale checkpoints, did **not** delete old raw payloads, did **not** run the 23,718-call materialization, did **not** run the amended full audit, and did **not** run signal search. The later repair above supersedes this field assumption with an explicit ann_date-only `fina_indicator` contract.
+- The old 23,717-call materialization and old full-audit PASS remain stale. `namechange` and H-code close availability are encouraging but not enough to proceed because the current reviewed contract hard-requires `f_ann_date`.
+
+**Validation / review state**:
+- Validation is the preflight itself; no schema artifact was written because no runner summary exists for this preflight-only stop.
+- Next action at that time was a reviewed `修复`: decide whether to change `fina_indicator` PIT handling to an explicitly documented `ann_date` + restatement-exclusion basis, find another reviewed field/source for `f_ann_date`, or otherwise change the materialization/audit/signal contract. The top entry has now implemented the ann_date-only repair; materialization/audit/signal remain locked until review / commit and separate user `执行`.
+
+---
+
 ## 2026-06-06 — Claude 审查 (A-long schema-sync / jsonschema-hard fix) — **PASS (可提交)**
 
 Re-verified in MY jsonschema-present env (the decisive check, since last round's bug only surfaced there).
@@ -18,7 +94,7 @@ Re-verified in MY jsonschema-present env (the decisive check, since last round's
 - **New audit check `check_selection_time_status_source`** (line 708, in CHECK_IDS, run line 1272, self-test line 1183) ✓ — the audit now hard-blocks (`blocked_missing_required_source`) if the `namechange_2018_2025` PIT selection-status source is absent. Coherent: the audit enforces R-VETO-PIT's data dependency on the audit side.
 - The 4 prior Required (R-VETO-PIT PIT-veto, R-AUDIT-BENCH H-code TR close, R-FANNDATE, R-CHECKPOINT-SHAPE) remain correct and pass.
 
-**Bottom line**: the code + schemas + jsonschema enforcement are now clean and independently verified. No remaining false-positive bug. The signal-search/audit/materialization chain is correctly LOCKED on DATA: the next reviewed step is the materialization that adds `namechange_2018_2025` + H-code TR-close (`H00300.CSI`/`H00852.CSI`) 2018-2025 + `fina_indicator.f_ann_date`, clearing stale checkpoints (per R-CHECKPOINT-SHAPE which will now raise on the changed fina_indicator shape). Then rerun the amended full audit → then the double-gated signal `执行` → then review the result. No alpha/production/ship-gate authorized.
+**Bottom line**: the code + schemas + jsonschema enforcement are now clean and independently verified. No remaining false-positive bug. The signal-search/audit/materialization chain is correctly LOCKED on DATA. Supersession note: the later top repair changed the next materialization shape to `namechange_2018_2025` + H-code TR-close (`H00300.CSI`/`H00852.CSI`) 2018-2025 + statement-table `f_ann_date` + `fina_indicator` ann_date-only contract; do not execute an old `fina_indicator.f_ann_date` request. Then rerun the amended full audit → then the double-gated signal `执行` → then review the result. No alpha/production/ship-gate authorized.
 
 ---
 
@@ -38,7 +114,7 @@ Re-verified in MY jsonschema-present env (the decisive check, since last round's
 
 **Plain result**: this closes the schema-sync / schema-hard review blockers in code and local verification. It does not execute any provider call, Tushare call, materialization, amended full audit, signal search, alpha backtest, production claim, ship-gate claim, or full-size authorization.
 
-**Next**: independent review / commit remains required. After PASS + commit, the next executable step is still a separate reviewed materialization that adds `namechange_2018_2025`, H-code TR-close full-period payloads, and the `fina_indicator.f_ann_date` field contract under request-shape validation; then rerun the amended full data-integrity audit.
+**Next**: superseded by the latest `fina_indicator` ann_date-only repair entry above. Independent review / commit remains required. After PASS + commit, the next executable step is still a separate reviewed materialization that adds `namechange_2018_2025`, H-code TR-close full-period payloads, statement-table `f_ann_date`, and the `fina_indicator` ann_date-only request shape under checkpoint validation; then rerun the amended full data-integrity audit.
 
 ---
 
@@ -73,7 +149,7 @@ Re-verified in MY jsonschema-present env (the decisive check, since last round's
 
 **Validation**: `python -m unittest` via the Codex bundled Python passed 83 A-long tests; 15 schema-dependent tests skipped because that interpreter lacks `jsonschema`.
 
-**Next**: after review/commit, the next executable step is a separate reviewed materialization that adds `namechange_2018_2025`, H-code TR-close full-period payloads, and the `fina_indicator.f_ann_date` field contract under request-shape validation; then rerun the full data-integrity audit. No signal search, alpha, production, ship-gate, or full-size claim is authorized.
+**Next**: superseded by the latest `fina_indicator` ann_date-only repair entry above. After review/commit, the next executable step is a separate reviewed materialization that adds `namechange_2018_2025`, H-code TR-close full-period payloads, statement-table `f_ann_date`, and the `fina_indicator` ann_date-only request shape under checkpoint validation; then rerun the full data-integrity audit. No signal search, alpha, production, ship-gate, or full-size claim is authorized.
 
 ---
 

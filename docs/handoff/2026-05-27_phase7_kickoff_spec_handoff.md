@@ -1,5 +1,26 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-06 append: A-long fina_indicator PIT contract repair
+
+**Changed**:
+- Disposed the materialization preflight blocker where Tushare returned `fina_indicator` rows but no `f_ann_date`.
+- `income`, `balancesheet`, and `cashflow` remain statement tables that hard-require `f_ann_date`.
+- `fina_indicator` is now explicitly ann_date-only in the current route: materialization requests `ts_code,ann_date,end_date,roe,profit_dedt`.
+- Future signal selection for `fina_indicator` uses `ann_date <= as_of`, still excludes every matching `restatement_ambiguous_exclusions.csv` group, and still forbids latest-fill.
+- The execution packet/schema, data-integrity preregistration/schema, signal preregistration/schema, materialization runner, audit runner, signal runner, and tests lock this table-specific PIT contract.
+
+**Plain result**:
+- This repair does not run provider calls, materialization, audit, signal search, alpha, production, ship-gate, or full-size use.
+- A-long still has no valid alpha result.
+- After review / commit, the next separate `执行` may retry the reviewed 23,718-call materialization gate.
+
+**Boundaries**:
+- Do not clear reused `fina_indicator` checkpoints merely because they lack `f_ann_date`; the current reviewed request shape is ann_date-only and checkpoint shape validation should decide reuse.
+- Do not weaken `f_ann_date` for `income`, `balancesheet`, or `cashflow`.
+- Full audit still must pass before signal search; signal search still needs explicit later `执行`.
+
+---
+
 ## 2026-06-04 append: A-long main-board fixed-panel audit pass and signal-search preregistration
 
 **Changed**:

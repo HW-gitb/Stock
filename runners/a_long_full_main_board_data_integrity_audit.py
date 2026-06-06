@@ -629,14 +629,17 @@ def check_restatement_revision(store: PayloadStore, context: AuditContext, sidec
             "same_ann_date_duplicate_groups_resolved_by_f_ann_date_asof": resolved_by_f_ann_date,
             "same_ann_date_duplicate_resolution_examples": resolution_examples,
             "tables_with_f_ann_date_column": sorted(tables_with_f_ann_date),
+            "tables_without_f_ann_date_column": sorted(set(FUNDAMENTAL_TABLES) - tables_with_f_ann_date),
+            "fina_indicator_pit_contract": "ann_date_only_with_restatement_exclusion_no_latest_fill",
             "resolution_rule": (
                 "Same-ann-date duplicates may resolve only by a narrow nullable-field preference or by valid f_ann_date "
-                "as-of disambiguation. Future signal code must choose the latest f_ann_date <= as_of, not latest-only."
+                "as-of disambiguation when the table exposes f_ann_date. Tushare fina_indicator is ann_date-only in the "
+                "current reviewed route; unresolved same-ann-date groups must be excluded, not latest-only filled."
             ),
         },
         [
             "The audit checks same-ann-date duplicate conflicts and multi-ann-date period groups.",
-            "Latest-known selection must use ann_date / f_ann_date <= as_of; no later restatement is silently used.",
+            "Latest-known selection must use ann_date and, where exposed, f_ann_date <= as_of; no later restatement is silently used.",
             "Unresolved same-ann-date groups without a version disambiguator are allowed only below the exclusion-rate cap and must be excluded from signal inputs.",
         ],
     )
@@ -1112,7 +1115,10 @@ def build_self_test_store() -> tuple[PayloadStore, AuditContext, dict[str, Any]]
         ),
     }
     for table in FUNDAMENTAL_TABLES:
-        columns = ["ts_code", "ann_date", "f_ann_date", "end_date"]
+        columns = ["ts_code", "ann_date", "end_date"]
+        include_f_ann_date = table != "fina_indicator"
+        if include_f_ann_date:
+            columns.insert(2, "f_ann_date")
         if table == "income":
             columns += ["revenue", "n_income_attr_p"]
         elif table == "balancesheet":
@@ -1122,7 +1128,12 @@ def build_self_test_store() -> tuple[PayloadStore, AuditContext, dict[str, Any]]
         else:
             columns += ["roe", "profit_dedt"]
         for symbol in symbols:
-            rows = [{"ts_code": symbol, "ann_date": f"{year}0430", "f_ann_date": f"{year}0430", "end_date": f"{year - 1}1231"} for year in range(2018, 2026)]
+            rows = []
+            for year in range(2018, 2026):
+                row = {"ts_code": symbol, "ann_date": f"{year}0430", "end_date": f"{year - 1}1231"}
+                if include_f_ann_date:
+                    row["f_ann_date"] = f"{year}0430"
+                rows.append(row)
             payloads[call_id_for(table, symbol)] = self_test_payload(call_id_for(table, symbol), columns, rows)
     price_rows = [{"trade_date": f"{year}1231", "open": 10.0, "close": 10.5} for year in range(2018, 2026)]
     terminal = [{"trade_date": "20231025", "open": 8.0, "close": 8.5}]

@@ -238,6 +238,23 @@ class ALongFullMainBoardDataIntegrityAuditTest(unittest.TestCase):
         self.assertIn("revenue", fields)
         self.assertEqual(rule, "resolved_by_f_ann_date_asof_disambiguation")
 
+    def test_fina_indicator_is_ann_date_only_in_current_contract(self) -> None:
+        store, context, _repair = runner.build_self_test_store()
+
+        self.assertNotIn("f_ann_date", store.columns(runner.call_id_for("fina_indicator", "000001.SZ")))
+        check = runner.check_restatement_revision(store, context)
+
+        self.assertEqual(check["status"], "pass_full_main_board")
+        self.assertEqual(
+            check["metrics"]["tables_with_f_ann_date_column"],
+            ["balancesheet", "cashflow", "income"],
+        )
+        self.assertEqual(check["metrics"]["tables_without_f_ann_date_column"], ["fina_indicator"])
+        self.assertEqual(
+            check["metrics"]["fina_indicator_pit_contract"],
+            "ann_date_only_with_restatement_exclusion_no_latest_fill",
+        )
+
     def test_restatement_exclusion_cap_is_loaded_from_preregistration(self) -> None:
         policy = runner.load_restatement_exclusion_policy()
 

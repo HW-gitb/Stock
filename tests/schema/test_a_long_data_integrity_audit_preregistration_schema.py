@@ -220,6 +220,8 @@ class ALongDataIntegrityAuditPreregistrationTest(unittest.TestCase):
         self.assertFalse(amendment["signal_search_authorized_by_this_amendment"])
         self.assertFalse(amendment["alpha_or_production_claim_allowed"])
         self.assertIn("same 0.5 percent ceiling", amendment["cap_rationale"])
+        self.assertIn("fina_indicator", amendment["fina_indicator_pit_contract"])
+        self.assertIn("ann_date", amendment["fina_indicator_pit_contract"])
 
     def test_decision_policy_blocks_signal_search_until_all_checks_pass(self) -> None:
         decision = self._load_artifact()["decision_policy"]

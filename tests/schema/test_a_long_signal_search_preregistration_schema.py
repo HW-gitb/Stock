@@ -176,6 +176,10 @@ class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertTrue(policy["excluded_groups_must_be_reported"])
         self.assertFalse(policy["silent_use_of_ambiguous_groups_allowed"])
         self.assertFalse(policy["latest_only_fill_allowed"])
+        self.assertEqual(
+            policy["fina_indicator_pit_contract"],
+            "ann_date_only_with_restatement_exclusion_no_latest_fill",
+        )
 
     def test_scope_creep_is_rejected_by_schema(self) -> None:
         payload = copy.deepcopy(self._load_artifact())

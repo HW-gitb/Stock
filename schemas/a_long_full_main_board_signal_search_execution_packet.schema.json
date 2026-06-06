@@ -206,6 +206,7 @@
         "benchmark_total_return_index_codes",
         "benchmark_price_index_codes_allowed",
         "benchmark_total_return_required_fields",
+        "fundamental_field_contract",
         "max_total_endpoint_calls",
         "retry_count_allowed",
         "abort_if_budget_exceeded",
@@ -256,6 +257,36 @@
           "minItems": 3,
           "maxItems": 3,
           "uniqueItems": true
+        },
+        "fundamental_field_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "f_ann_date_required_tables",
+            "ann_date_only_tables",
+            "fina_indicator_f_ann_date_requested",
+            "fina_indicator_pit_basis",
+            "statement_tables_missing_f_ann_date_blocks"
+          ],
+          "properties": {
+            "f_ann_date_required_tables": {
+              "type": "array",
+              "items": {"enum": ["income", "balancesheet", "cashflow"]},
+              "minItems": 3,
+              "maxItems": 3,
+              "uniqueItems": true
+            },
+            "ann_date_only_tables": {
+              "type": "array",
+              "items": {"const": "fina_indicator"},
+              "minItems": 1,
+              "maxItems": 1,
+              "uniqueItems": true
+            },
+            "fina_indicator_f_ann_date_requested": {"const": false},
+            "fina_indicator_pit_basis": {"const": "ann_date_only_with_restatement_exclusion_no_latest_fill"},
+            "statement_tables_missing_f_ann_date_blocks": {"const": true}
+          }
         },
         "max_total_endpoint_calls": {"const": 24000},
         "retry_count_allowed": {"const": 0},

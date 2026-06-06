@@ -52,7 +52,8 @@ ALLOWED_SIGNAL_FAMILIES = [
     "balance_sheet_strength",
     "earnings_stability",
 ]
-F_ANN_DATE_REQUIRED_TABLES = {"income", "balancesheet", "cashflow", "fina_indicator"}
+F_ANN_DATE_REQUIRED_TABLES = {"income", "balancesheet", "cashflow"}
+ANN_DATE_ONLY_TABLES = {"fina_indicator"}
 HORIZONS = [252, 504]
 BENCHMARKS = {
     "CSI300": "H00300.CSI",
@@ -292,6 +293,8 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
         raise ValueError("silent use of ambiguous restatement groups must remain forbidden")
     if restatement.get("latest_only_fill_allowed") is not False:
         raise ValueError("latest-only fill must remain forbidden")
+    if restatement.get("fina_indicator_pit_contract") != "ann_date_only_with_restatement_exclusion_no_latest_fill":
+        raise ValueError("fina_indicator PIT contract drifted")
 
     testing = design.get("multiple_testing_policy") or {}
     if testing.get("parameter_sweep_allowed") is not False:
@@ -538,6 +541,8 @@ def select_latest_pit_row(
         f_ann_date = normalize_yyyymmdd(row.get("f_ann_date"))
         if table_id in F_ANN_DATE_REQUIRED_TABLES and f_ann_date is None:
             continue
+        if table_id not in F_ANN_DATE_REQUIRED_TABLES | ANN_DATE_ONLY_TABLES:
+            raise ValueError(f"unregistered PIT fundamental table: {table_id}")
         if f_ann_date is not None and f_ann_date > as_of:
             continue
         if row_exclusion_key(table_id, row) in restatement_exclusions:

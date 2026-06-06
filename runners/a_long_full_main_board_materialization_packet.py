@@ -203,6 +203,17 @@ def load_and_validate_packet(path: Path = PACKET_PATH) -> dict[str, Any]:
         raise ValueError("packet price-index benchmark codes must remain forbidden")
     if pull.get("benchmark_total_return_required_fields") != ["ts_code", "trade_date", "close"]:
         raise ValueError("packet total-return benchmark required fields mismatch")
+    field_contract = pull.get("fundamental_field_contract") or {}
+    if field_contract.get("f_ann_date_required_tables") != ["income", "balancesheet", "cashflow"]:
+        raise ValueError("packet f_ann_date required table contract mismatch")
+    if field_contract.get("ann_date_only_tables") != ["fina_indicator"]:
+        raise ValueError("packet ann-date-only table contract mismatch")
+    if field_contract.get("fina_indicator_f_ann_date_requested") is not False:
+        raise ValueError("packet must not request fina_indicator.f_ann_date in the current Tushare route")
+    if field_contract.get("fina_indicator_pit_basis") != "ann_date_only_with_restatement_exclusion_no_latest_fill":
+        raise ValueError("packet fina_indicator PIT basis mismatch")
+    if field_contract.get("statement_tables_missing_f_ann_date_blocks") is not True:
+        raise ValueError("packet statement table f_ann_date hard-block contract mismatch")
     if pull.get("max_total_endpoint_calls") != MAX_TOTAL_ENDPOINT_CALLS:
         raise ValueError("packet max_total_endpoint_calls mismatch")
     if pull.get("retry_count_allowed") != 0:
@@ -435,13 +446,13 @@ def symbol_call_plan(symbols: list[str]) -> list[dict[str, Any]]:
         "income": "ts_code,ann_date,f_ann_date,end_date,report_type,revenue,n_income_attr_p",
         "balancesheet": "ts_code,ann_date,f_ann_date,end_date,report_type,total_assets,total_liab,total_hldr_eqy_exc_min_int",
         "cashflow": "ts_code,ann_date,f_ann_date,end_date,report_type,n_cashflow_act",
-        "fina_indicator": "ts_code,ann_date,f_ann_date,end_date,roe,profit_dedt",
+        "fina_indicator": "ts_code,ann_date,end_date,roe,profit_dedt",
     }
     fundamental_minimums = {
         "income": ["ts_code", "ann_date", "f_ann_date", "end_date", "revenue", "n_income_attr_p"],
         "balancesheet": ["ts_code", "ann_date", "f_ann_date", "end_date", "total_assets", "total_liab", "total_hldr_eqy_exc_min_int"],
         "cashflow": ["ts_code", "ann_date", "f_ann_date", "end_date", "n_cashflow_act"],
-        "fina_indicator": ["ts_code", "ann_date", "f_ann_date", "end_date", "roe", "profit_dedt"],
+        "fina_indicator": ["ts_code", "ann_date", "end_date", "roe", "profit_dedt"],
     }
     calls: list[dict[str, Any]] = []
     for symbol in symbols:

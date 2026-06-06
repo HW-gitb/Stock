@@ -133,12 +133,12 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
             ),
             runner.call_id_for("fina_indicator", "000001.SZ"): self._payload(
                 [
-                    {"ts_code": "000001.SZ", "ann_date": "20220430", "f_ann_date": "20220430", "end_date": "20211231", "roe": 10.0, "profit_dedt": 100.0},
-                    {"ts_code": "000001.SZ", "ann_date": "20210430", "f_ann_date": "20210430", "end_date": "20201231", "roe": 9.0, "profit_dedt": 80.0},
-                    {"ts_code": "000001.SZ", "ann_date": "20200430", "f_ann_date": "20200430", "end_date": "20191231", "roe": 8.0, "profit_dedt": 70.0},
-                    {"ts_code": "000001.SZ", "ann_date": "20190430", "f_ann_date": "20190430", "end_date": "20181231", "roe": 7.0, "profit_dedt": 65.0},
-                    {"ts_code": "000001.SZ", "ann_date": "20211030", "f_ann_date": "20211030", "end_date": "20210930", "roe": 8.0, "profit_dedt": 95.0},
-                    {"ts_code": "000001.SZ", "ann_date": "20210830", "f_ann_date": "20210830", "end_date": "20210630", "roe": 6.0, "profit_dedt": 90.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20220430", "end_date": "20211231", "roe": 10.0, "profit_dedt": 100.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20210430", "end_date": "20201231", "roe": 9.0, "profit_dedt": 80.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20200430", "end_date": "20191231", "roe": 8.0, "profit_dedt": 70.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20190430", "end_date": "20181231", "roe": 7.0, "profit_dedt": 65.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20211030", "end_date": "20210930", "roe": 8.0, "profit_dedt": 95.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20210830", "end_date": "20210630", "roe": 6.0, "profit_dedt": 90.0},
                 ]
             ),
         }
@@ -414,7 +414,7 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
         self.assertFalse(runner.symbol_vetoed_at_selection_time(context, "600421.SH", "20200131"))
         self.assertTrue(runner.symbol_vetoed_at_selection_time(context, "600421.SH", "20210131"))
 
-    def test_select_latest_pit_row_requires_f_ann_date_for_fundamentals(self) -> None:
+    def test_select_latest_pit_row_requires_f_ann_date_for_statement_tables_only(self) -> None:
         selected = runner.select_latest_pit_row(
             [
                 {
@@ -430,6 +430,24 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
         )
 
         self.assertIsNone(selected)
+
+        indicator_selected = runner.select_latest_pit_row(
+            [
+                {
+                    "ts_code": "000001.SZ",
+                    "end_date": "20211231",
+                    "ann_date": "20220430",
+                    "roe": 10.0,
+                    "profit_dedt": 100.0,
+                }
+            ],
+            table_id="fina_indicator",
+            as_of="20220531",
+            restatement_exclusions=set(),
+        )
+
+        self.assertIsNotNone(indicator_selected)
+        self.assertEqual(indicator_selected["roe"], 10.0)
 
     def test_materialization_manifest_must_include_total_return_benchmark_payloads(self) -> None:
         fake_summary = {

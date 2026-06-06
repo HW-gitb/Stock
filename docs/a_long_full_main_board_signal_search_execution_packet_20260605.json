@@ -133,6 +133,19 @@
       "trade_date",
       "close"
     ],
+    "fundamental_field_contract": {
+      "f_ann_date_required_tables": [
+        "income",
+        "balancesheet",
+        "cashflow"
+      ],
+      "ann_date_only_tables": [
+        "fina_indicator"
+      ],
+      "fina_indicator_f_ann_date_requested": false,
+      "fina_indicator_pit_basis": "ann_date_only_with_restatement_exclusion_no_latest_fill",
+      "statement_tables_missing_f_ann_date_blocks": true
+    },
     "max_total_endpoint_calls": 24000,
     "retry_count_allowed": 0,
     "abort_if_budget_exceeded": true,

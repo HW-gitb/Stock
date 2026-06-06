@@ -137,6 +137,15 @@ class ALongFullMainBoardSignalSearchExecutionPacketSchemaTest(unittest.TestCase)
         self.assertEqual(pull["benchmark_total_return_index_codes"], ["H00300.CSI", "H00852.CSI"])
         self.assertFalse(pull["benchmark_price_index_codes_allowed"])
         self.assertEqual(pull["benchmark_total_return_required_fields"], ["ts_code", "trade_date", "close"])
+        field_contract = pull["fundamental_field_contract"]
+        self.assertEqual(field_contract["f_ann_date_required_tables"], ["income", "balancesheet", "cashflow"])
+        self.assertEqual(field_contract["ann_date_only_tables"], ["fina_indicator"])
+        self.assertFalse(field_contract["fina_indicator_f_ann_date_requested"])
+        self.assertEqual(
+            field_contract["fina_indicator_pit_basis"],
+            "ann_date_only_with_restatement_exclusion_no_latest_fill",
+        )
+        self.assertTrue(field_contract["statement_tables_missing_f_ann_date_blocks"])
         self.assertLessEqual(pull["planned_total_endpoint_calls"], pull["max_total_endpoint_calls"])
         self.assertEqual(pull["retry_count_allowed"], 0)
         self.assertTrue(pull["checkpoint_resume_required"])

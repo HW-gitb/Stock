@@ -171,7 +171,8 @@
       "runner_must_abort_if_exclusion_not_applied": true,
       "excluded_groups_must_be_reported": true,
       "silent_use_of_ambiguous_groups_allowed": false,
-      "latest_only_fill_allowed": false
+      "latest_only_fill_allowed": false,
+      "fina_indicator_pit_contract": "ann_date_only_with_restatement_exclusion_no_latest_fill"
     },
     "multiple_testing_policy": {
       "family_list_frozen": true,
@@ -191,6 +192,7 @@
       "For earnings_stability, use same-period YoY profit_dedt growth volatility only; do not mix 3/6/9/12-month YTD cumulative rows.",
       "Report both CSI300 and CSI1000 benchmark result cells; candidate-alpha promotion requires the same family/view/horizon to clear both benchmarks.",
       "Use the reviewed close-to-close total-vs-total amendment because total-return benchmark close values are available while same-anchor total-return benchmark open values are unavailable; this is not a silent price-index fallback.",
+      "Use fina_indicator as ann_date-only in the current reviewed Tushare route; unresolved same-ann-date groups must be excluded through restatement_ambiguous_exclusions.csv, not latest-filled.",
       "Report industry-neutral and non-neutral views separately, with 000666.SZ retained in returns and risk.",
       "Report the count of restatement_ambiguous_exclusions.csv groups excluded from factor inputs; abort if the exclusion list is missing or not applied.",
       "Report failed / missing-data exclusions and do not fill missing fundamentals with zero or latest values.",
