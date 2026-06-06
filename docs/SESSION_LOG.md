@@ -8,6 +8,94 @@
 
 ---
 
+## 2026-06-06 — Claude 审查 (A-long signal-search R1 route-A neutral-exclusion delta) — **PASS (可提交)**
+
+**Verdict**: Pass. R1 resolved via route A — the look-ahead backcast is fully removed; pre-membership name-months are excluded from the industry-neutral denominator only (kept in non-neutral + returns/risk), mirroring the 191 boundary. No new policy, no look-ahead. Safe to commit; then the double-gated `执行` runs the real search.
+
+**R1 fix verified (delta only)**:
+- Backcast GONE: `industry_for_symbol` collects only interval-covered rows (`in_date ≤ as_of ≤ out_date`); no future-membership fallback. `grep backcast` on the runner = 0 residue.
+- Correct 3-way distinction in `industry_context_for_symbol`: `asof_interval` → real industry; `no_interval_membership` (has rows, none cover this as_of) → `industry_excluded=True`, NOT a fail; `missing` (no membership rows at all) + active + non-exception → **hard-fail raise** (line 556-557). Delisted names are all in the 191 boundary → always excluded, never trip line 558.
+- Per-(symbol, as_of) exclusion: excluded names stay in `scored` → get the non-neutral percentile + return rows; `add_industry_neutral_scores` skips them → out of the neutral denominator only. Exactly the 191-boundary treatment, applied per-as_of.
+- Diagnostics disclose the scale: `industry_neutral_excluded_observation_count/share` + a dedicated `..._2018_2020_observation_count/share` for the early window. Schema updated to require them (no backcast residue in schema).
+- Tests genuine: `test_pre_membership_symbol_is_excluded_from_neutral_not_backcast` (no-interval → excluded from neutral, KEPT in non-neutral) + `test_active_symbol_with_no_membership_source_still_hard_fails` (total gap → raise). 20 tests green (independently run, +1 skip = no summary yet). Core (same-anchor / PIT / exclusion / FDR / O1–O4) untouched. No run happened; ledger unspent (`tests_spent_count=0`).
+
+**Watch at result-review (not a blocker)**: route A is PIT-honest but means the industry-NEUTRAL view's early window (2018–2020) may have materially reduced coverage if SW in_dates cluster at the 2021 revision. The new diagnostics will quantify it; when the real result returns I'll check whether the early-window neutral view has enough coverage to be meaningful, or whether the neutral view is effectively post-2021. The non-neutral view is unaffected.
+
+**Next**: commit. Then the double-gated `执行` writes `research/results/a_long_signal_search_20260604/execution_summary.json` + auto-spends the singleton ledger → returns for review (the actual alpha verdict + the disclosed neutral-exclusion scale). No alpha/production/ship-gate authorized.
+
+---
+
+## 2026-06-06 — Codex 修复 (A-long signal-search SW interval neutral-exclusion R1)
+
+**Plain result**:
+- Claude 说得对：把 2021 的行业分类回填到 2018 是偷看未来。
+- 已撤销 backcast。
+- 简单说：早期没有当期行业的股票不会被删，也不会回填行业；它只不参加当月“行业中性”排名，仍保留在非中性排名和收益/风险里。
+
+**Fixed**:
+- `industry_for_symbol` no longer returns future membership classifications for dates before the earliest `in_date`.
+- Per-as-of `industry_excluded` now covers either the approved 191-name boundary or a no-interval membership at that as-of.
+- Active non-exception names with no membership source at all still hard-fail.
+- Replaced backcast diagnostics with industry-neutral exclusion diagnostics, including 2018-2020 excluded name-month share.
+- Replaced the backcast regression test with route-A tests: no-interval membership is excluded from neutral but kept in non-neutral; no membership source still hard-fails.
+
+**Validation**:
+- `python -m unittest tests.test_a_long_full_main_board_signal_search tests.schema.test_a_long_signal_search_execution_summary_schema -v` passed 20 tests; generated-summary validation skipped because no true summary exists.
+- Broader A-long regression command passed 58 tests; generated-summary validation skipped for the same no-summary reason.
+- Needs Claude review before commit and before rerunning the true signal search.
+- Still no `execution_summary.json`; ledger remains unspent until a clean run.
+
+---
+
+## 2026-06-06 — Claude 审查 (A-long signal-search SW classification backcast hotfix) — **FAIL / look-ahead; Required fix before run**
+
+**Verdict**: The honest failure was handled right (hard-fail fired on `002189.SZ` missing PIT industry → no summary, ledger unspent — good). But the hotfix RESOLVES it with look-ahead and must not be a silent workaround of the PIT hard guard. Do not run the singleton search until R1 is fixed.
+
+**Required**:
+- **R1 — industry backcast is look-ahead.** `industry_for_symbol` (line 538-545): when an as_of is BEFORE a symbol's earliest SW `in_date`, it backcasts the earliest FUTURE membership's classification (source `verified_active_sw_classification_backcast`). That assigns an industry not in effect at that as_of. `002189.SZ` in_date=`20210730` plausibly coincides with the 申万 2021 classification revision, so backcasting it to 2018–2020 applies a later classification STANDARD to earlier dates — not just a stale label. Scope is broader than the SESSION_LOG implies: the code backcasts for ANY name whose earliest `in_date` > as_of (raw OR supplement), not only the 1,189 supplements — so if SW in_dates cluster at the 2021 revision, a LARGE (currently unknown) share of 2018–2020 name-months would be backcast, contaminating the early-window industry-neutral view of the one-shot test. This is the same "hard guard fired → introduce an assumption to pass" pattern as the restatement cap / survivorship 90-day.
+- **Fix (recommended, PIT-clean, no new policy)**: for an as_of before a name's earliest `in_date`, do NOT backcast — exclude the name from the industry-NEUTRAL denominator for those as_ofs only (keep it in the non-neutral view + returns/risk), mirroring the 191-boundary treatment; make `industry_excluded` per-(symbol, as_of). Reserve the hard-fail for names with NO membership source at all. This needs no look-ahead and is consistent with the existing boundary mechanism. The regression test that currently locks the backcast must be replaced accordingly.
+- **Alternative (USER decision)**: if the project wants to treat SW industry as a static backcastable control (common for neutralization), that must be a DECLARED, reviewed, user-approved preregistration policy — explicitly addressing the SW-2021-revision concern and DISCLOSING the backcast scale (name-months + share, esp. 2018–2020) — not a silent hotfix. Even then, the scale must be measured before spending the singleton.
+
+**Acknowledge**: the committed runner (84db620) hard-fails on this case — correct but too strict (it can't distinguish "no source ever" from "source exists but in_date > as_of"); a fix IS needed to run, just not the backcast. The instinct to add backcast diagnostics (`active_sw_classification_backcast_*`) was good — keep them to measure scale under whichever route. Core (same-anchor / PIT fundamentals / exclusion / FDR / O1–O4) unaffected by this hotfix. 19 tests green but they LOCK the backcast — they'll change under the fix. No run happened; ledger unspent (verified `tests_spent_count=0`).
+
+**Next**: fix R1 (recommended exclude-from-neutral route) → Claude re-review the delta → only then commit + double-gated `执行`.
+
+**Disposition (2026-06-06) — USER-DECIDED: route A** (PIT-clean exclude-from-neutral; NO backcast, NOT route B/declared-backcast-policy). R1 fix acceptance criteria:
+1. Remove the backcast: `industry_for_symbol` must NOT return a future membership's classification for as_ofs before the earliest `in_date`. For such as_ofs the name simply has no PIT industry; no `verified_active_sw_classification_backcast` source.
+2. `industry_excluded` becomes per-(symbol, as_of): exclude from the industry-NEUTRAL denominator at a given as_of if the name is a 191-boundary exception OR has no interval-covered membership (`in_date ≤ as_of ≤ out_date`) at that as_of. The name stays in the non-neutral view + returns/risk/drawdown either way (mirrors the 191 boundary).
+3. Keep the hard-fail ONLY for an active non-exception name with NO membership row at all (genuine total source gap).
+4. Replace the backcast diagnostics with per-as_of neutral-exclusion diagnostics (count + share of name-months excluded from the neutral denominator, esp. 2018–2020) so the early-window neutral coverage reduction is disclosed.
+5. Replace the backcast regression test: assert a name with `in_date > as_of` is excluded from the neutral denominator at that as_of (not backcast) yet kept in non-neutral; a name with no membership at all still hard-fails.
+6. Re-run the search → Claude re-reviews only this delta → then commit + double-gated `执行`. No alpha/production/ship-gate authorized by this approval; ledger stays unspent until a clean run.
+
+---
+
+## 2026-06-06 — Codex 执行尝试 + hotfix (A-long signal-search SW supplement classification backcast)
+
+**Plain result**:
+- 真正的 A-long signal search 启动了，但没有跑出结果。
+- 简单说：程序在找 alpha 前被数据口径挡住了，原因是 `002189.SZ` 有已审过的行业补充数据，但该行业记录的 `in_date=20210730`，早期 2018-2021 月份按原 runner 逻辑会被判成“无行业”。
+- 没有生成 alpha 结果；ledger 没花。
+
+**Execution attempt**:
+- Command: `python runners/a_long_full_main_board_signal_search.py --confirm-independent-review-pass --confirm-post-review-execute`.
+- Failure before summary write: `ValueError: active investable symbol lacks industry during signal search: 002189.SZ`.
+- Confirmed no `research/results/a_long_signal_search_20260604/execution_summary.json` exists and `tests_spent_count` remains `0`.
+
+**Hotfix implemented, not rerun**:
+- `industry_for_symbol` now uses reviewed active SW supplement classifications as explicit full-window classification backcasts when no interval-covered row exists for an early as-of date.
+- Future summaries must report `active_sw_classification_backcast_observation_count` and `active_sw_classification_backcast_symbol_count`.
+- Added a regression test for the `002189.SZ` style case.
+
+**Validation**:
+- `python -m unittest tests.test_a_long_full_main_board_signal_search tests.schema.test_a_long_signal_search_execution_summary_schema -v` passed 19 tests; generated-summary validation skipped because no true summary exists.
+
+**Review state**:
+- Needs Claude review before commit and before rerunning true signal search, because runner/schema/tests changed after the previous PASS.
+- Still no provider call, no data fetch, no signal result, no alpha, no production, no ship-gate, and no full-size permission.
+
+---
+
 ## 2026-06-06 — Claude 审查 (A-long signal-search R1/O2 fix delta) — **PASS (可提交)**
 
 **Verdict**: Pass. R1 resolved — the inert year-guard is replaced by a real, triggerable single-year RETURN-contribution guard. With O1/O3/O4 + core already verified sound, the whole signal-search package is now clean. Safe to commit; then the double-gated `执行` runs the real search.

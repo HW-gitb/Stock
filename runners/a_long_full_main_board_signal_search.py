@@ -521,7 +521,13 @@ def load_industry_records(store: audit.PayloadStore) -> dict[str, list[dict[str,
     return dict(records_by_symbol)
 
 
-def industry_for_symbol(records_by_symbol: dict[str, list[dict[str, Any]]], symbol: str, as_of: str) -> tuple[str | None, str | None]:
+def industry_values(row: dict[str, Any]) -> tuple[str | None, str | None]:
+    l2 = row.get("l2_code") or row.get("l2_name")
+    l1 = row.get("l1_code") or row.get("l1_name")
+    return str(l2) if l2 else None, str(l1) if l1 else None
+
+
+def industry_for_symbol(records_by_symbol: dict[str, list[dict[str, Any]]], symbol: str, as_of: str) -> tuple[str | None, str | None, str]:
     candidates: list[dict[str, Any]] = []
     for row in records_by_symbol.get(symbol, []):
         in_date = normalize_yyyymmdd(row.get("in_date")) or "00000000"
@@ -529,12 +535,29 @@ def industry_for_symbol(records_by_symbol: dict[str, list[dict[str, Any]]], symb
         if in_date <= as_of <= out_date:
             candidates.append(row)
     if not candidates:
-        return None, None
+        if records_by_symbol.get(symbol):
+            return None, None, "no_interval_membership"
+        return None, None, "missing"
     candidates.sort(key=lambda row: normalize_yyyymmdd(row.get("in_date")) or "")
     chosen = candidates[-1]
-    l2 = chosen.get("l2_code") or chosen.get("l2_name")
-    l1 = chosen.get("l1_code") or chosen.get("l1_name")
-    return str(l2) if l2 else None, str(l1) if l1 else None
+    l2, l1 = industry_values(chosen)
+    return l2, l1, "asof_interval"
+
+
+def industry_context_for_symbol(
+    records_by_symbol: dict[str, list[dict[str, Any]]],
+    context: SignalContext,
+    symbol: str,
+    as_of: str,
+) -> tuple[str | None, str | None, str, bool]:
+    l2, l1, industry_source = industry_for_symbol(records_by_symbol, symbol, as_of)
+    has_membership_source = bool(records_by_symbol.get(symbol))
+    industry_excluded = symbol in context.exception_symbols or industry_source == "no_interval_membership"
+    if symbol in context.active_symbols and symbol not in context.exception_symbols and not has_membership_source:
+        raise ValueError(f"active investable symbol has no industry membership source during signal search: {symbol}")
+    if not industry_excluded and not (l2 or l1):
+        raise ValueError(f"active investable symbol lacks industry during signal search: {symbol}")
+    return l2, l1, industry_source, industry_excluded
 
 
 def percentile_scores(items: list[dict[str, Any]], field: str, out_field: str) -> None:
@@ -669,9 +692,17 @@ def monthly_cohort_rows(
         "industry_denominator_exclusion_symbol_count": len(context.exception_symbols),
         "scored_pit_universe_excluded_before_list_count": 0,
         "scored_pit_universe_excluded_after_delist_count": 0,
+        "industry_neutral_excluded_observation_count": 0,
+        "industry_neutral_excluded_symbol_count": 0,
+        "industry_neutral_excluded_observation_share": None,
+        "industry_neutral_excluded_2018_2020_observation_count": 0,
+        "industry_neutral_excluded_2018_2020_observation_share": None,
         "missing_signal_rows": 0,
         "missing_return_rows": 0,
     }
+    industry_neutral_scored_observations = 0
+    industry_neutral_scored_2018_2020_observations = 0
+    industry_neutral_excluded_symbols: set[str] = set()
     for as_of in context.as_ofs:
         scored: list[dict[str, Any]] = []
         for symbol in context.symbols:
@@ -687,15 +718,22 @@ def monthly_cohort_rows(
             if not values:
                 diagnostics["missing_signal_rows"] += 1
                 continue
-            l2, l1 = industry_for_symbol(industry_records, symbol, as_of)
-            industry_excluded = symbol in context.exception_symbols
-            if not industry_excluded and not (l2 or l1):
-                raise ValueError(f"active investable symbol lacks industry during signal search: {symbol}")
+            l2, l1, industry_source, industry_excluded = industry_context_for_symbol(industry_records, context, symbol, as_of)
+            industry_neutral_scored_observations += 1
+            in_early_window = "2018" <= str(as_of)[:4] <= "2020"
+            if in_early_window:
+                industry_neutral_scored_2018_2020_observations += 1
+            if industry_excluded:
+                diagnostics["industry_neutral_excluded_observation_count"] += 1
+                industry_neutral_excluded_symbols.add(symbol)
+                if in_early_window:
+                    diagnostics["industry_neutral_excluded_2018_2020_observation_count"] += 1
             item: dict[str, Any] = {
                 "symbol": symbol,
                 "as_of": as_of,
                 "industry_l2": l2,
                 "industry_l1": l1,
+                "industry_source": industry_source,
                 "industry_excluded": industry_excluded,
             }
             item.update(values)
@@ -735,8 +773,20 @@ def monthly_cohort_rows(
                         as_of,
                         horizon,
                     )
-                    row[f"excess_{benchmark_name}"] = None if bench_ret is None else stock_ret - bench_ret
+                row[f"excess_{benchmark_name}"] = None if bench_ret is None else stock_ret - bench_ret
                 rows.append(row)
+    diagnostics["industry_neutral_excluded_symbol_count"] = len(industry_neutral_excluded_symbols)
+    if industry_neutral_scored_observations:
+        diagnostics["industry_neutral_excluded_observation_share"] = round(
+            diagnostics["industry_neutral_excluded_observation_count"] / industry_neutral_scored_observations,
+            10,
+        )
+    if industry_neutral_scored_2018_2020_observations:
+        diagnostics["industry_neutral_excluded_2018_2020_observation_share"] = round(
+            diagnostics["industry_neutral_excluded_2018_2020_observation_count"]
+            / industry_neutral_scored_2018_2020_observations,
+            10,
+        )
     return rows, diagnostics
 
 

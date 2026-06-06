@@ -1,12 +1,12 @@
 # Stock 项目 - 当前状态快照
-**最后更新**：2026-06-06（A-long signal-search runner PASS; ready to commit, then execute）
+**最后更新**：2026-06-06（A-long signal-search execution blocked; SW interval neutral-exclusion hotfix pending review）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
 ---
 
 ## 0. Latest Delta
-- 2026-06-06 A-long signal-search runner optional hardening + R1/O2 fix passed Claude review and is ready to commit, but the true search is not executed: delisted names leave scoring after `delist_date`; single-year concentration uses positive-return contribution share; the runner spends the singleton ledger after a valid true run; and restatement exclusion is checked against 1,504 raw keys.
+- 2026-06-06 A-long signal-search execution was attempted after the Claude-PASS runner commit, but stopped before writing a result: `002189.SZ` had reviewed active SW supplement raw with `in_date=20210730`, while early 2018-2021 as-of rows had no interval-covered industry. The rejected backcast workaround was replaced with PIT-clean per-as-of industry-neutral exclusion: those rows stay in non-neutral returns/risk but leave the industry-neutral denominator. Needs Claude review before rerun.
 - 2026-06-05 A-long full main-board raw materialization completed after the atomic-writer hotfix and checkpoint refetch. Final summary: `docs/a_long_full_main_board_materialization_execution_summary_20260605.json`; endpoint manifest has 23,717 results = 23,677 success + 40 empty + 0 error.
 - 2026-06-05 A-long full main-board local data-integrity audit R1 repair passed Claude review and was committed. The audit is data-readiness only: future signal search must consume `restatement_ambiguous_exclusions.csv` and exclude 1,504 ambiguous same-ann-date groups; this is not alpha.
 - US operating model is active-only + forward-live validation; historical US backtests stay idea-only. A-short steady is `risk_filter_only`. A-share scope is main-board only: A-short already filters non-main boards before analysis, and A-long materialization / audit runners now reject non-main active symbols. The old A-long panel containing `300750.SZ` is historical only and cannot be used as the current alpha/data-readiness path.
@@ -16,7 +16,7 @@
 ## 1. 当前 Phase 与目标
 
 - **当前 Phase**：A-share alpha validation is the active priority. A-long full main-board data route is audit-clean for the next reviewed signal-search gate.
-- **当前 P0 / P1 目标**：Commit the Claude-PASS A-long signal-search runner package. After commit, the next separate `执行` may run the frozen signal search. Do not run true signal execution before commit.
+- **当前 P0 / P1 目标**：Claude review the A-long signal-search SW interval neutral-exclusion hotfix. After PASS + commit, rerun the frozen signal search. Do not rerun true signal execution before this hotfix is reviewed and committed.
 - **当前 P1 provider blocker**：US inactive / delisted historical coverage is user-accepted as scoped out for the current active-only forward model. `SR-PROVIDER-001` remains open for license / storage, active-symbol PIT if fundamentals are used, active price-adjustment / corporate actions if used, SEC parser / mapping if used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness. US forward universes must be PIT-frozen at start and must capture real delisting / halt / merger / no-trade outcomes during the forward window; the 12-month forward-live ship-gate requirement is unchanged.
 - **执行锁**：A-long signal-search code exists but has not run. It requires two explicit confirmations and must abort if the PASS audit gate, unspent ledger, exclusion CSV, or 191-name boundary is missing / drifted. No alpha / production / ship-gate / full-size use is authorized now.
 - **协作模式**：Codex = Designer + Implementer；Claude = Independent Reviewer；用户 = Final Approver。详 `docs/AI_REVIEW_PROTOCOL.md`。

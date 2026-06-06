@@ -268,6 +268,65 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
         )
         self.assertTrue(cell["passes_single_year_concentration_guard"])
 
+    def test_pre_membership_symbol_is_excluded_from_neutral_not_backcast(self) -> None:
+        records = {
+            "002189.SZ": [
+                {
+                    "ts_code": "002189.SZ",
+                    "l1_code": "801740.SI",
+                    "l2_code": "801745.SI",
+                    "in_date": "20210730",
+                    "out_date": None,
+                }
+            ]
+        }
+        context = runner.SignalContext(
+            symbols=["002189.SZ"],
+            active_symbols=["002189.SZ"],
+            delisted_symbols=[],
+            exception_symbols=set(),
+            as_ofs=["20180131"],
+            trade_dates=["20180131"],
+            list_date_by_symbol={"002189.SZ": "20000101"},
+            delist_date_by_symbol={"002189.SZ": None},
+        )
+
+        l2, l1, source, industry_excluded = runner.industry_context_for_symbol(records, context, "002189.SZ", "20180131")
+
+        self.assertIsNone(l2)
+        self.assertIsNone(l1)
+        self.assertEqual(source, "no_interval_membership")
+        self.assertTrue(industry_excluded)
+
+        items = [
+            {"symbol": "002189.SZ", "profitability_quality": 3.0, "industry_excluded": True},
+            {"symbol": "000001.SZ", "profitability_quality": 1.0, "industry_l2": "801780.SI", "industry_l1": "801780.SI", "industry_excluded": False},
+            {"symbol": "000002.SZ", "profitability_quality": 2.0, "industry_l2": "801780.SI", "industry_l1": "801780.SI", "industry_excluded": False},
+        ]
+        runner.percentile_scores(items, "profitability_quality", "profitability_quality__non_neutral")
+        runner.add_industry_neutral_scores(items, "profitability_quality")
+
+        excluded = next(item for item in items if item["symbol"] == "002189.SZ")
+        included = next(item for item in items if item["symbol"] == "000002.SZ")
+        self.assertIn("profitability_quality__non_neutral", excluded)
+        self.assertNotIn("profitability_quality__industry_neutral", excluded)
+        self.assertIn("profitability_quality__industry_neutral", included)
+
+    def test_active_symbol_with_no_membership_source_still_hard_fails(self) -> None:
+        context = runner.SignalContext(
+            symbols=["000001.SZ"],
+            active_symbols=["000001.SZ"],
+            delisted_symbols=[],
+            exception_symbols=set(),
+            as_ofs=["20180131"],
+            trade_dates=["20180131"],
+            list_date_by_symbol={"000001.SZ": "19910403"},
+            delist_date_by_symbol={"000001.SZ": None},
+        )
+
+        with self.assertRaisesRegex(ValueError, "no industry membership source"):
+            runner.industry_context_for_symbol({}, context, "000001.SZ", "20180131")
+
     def test_decision_never_authorizes_production(self) -> None:
         results = [
             {
