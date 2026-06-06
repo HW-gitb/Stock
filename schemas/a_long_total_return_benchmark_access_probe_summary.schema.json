@@ -1,0 +1,225 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_total_return_benchmark_access_probe_summary/1.0.0/schema.json",
+  "title": "A-long Total-return Benchmark Access Probe Summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "probe_design",
+    "direct_probes",
+    "decision",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_total_return_benchmark_access_probe_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_total_return_benchmark_access_probe_summary_20260606"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "probe_design": {"$ref": "#/$defs/probeDesign"},
+    "direct_probes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/directProbe"},
+      "minItems": 8,
+      "maxItems": 8
+    },
+    "decision": {"$ref": "#/$defs/decision"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "stringMapNullable": {
+      "type": "object",
+      "additionalProperties": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "provider_family",
+        "existing_account_only",
+        "tushare_calls_executed",
+        "provider_expansion_allowed",
+        "paid_tier_change_allowed",
+        "raw_payloads_written",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_secret",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_total_return_benchmark_access_probe"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "provider_family": {"const": "tushare_existing_account"},
+        "existing_account_only": {"const": true},
+        "tushare_calls_executed": {"type": "boolean"},
+        "provider_expansion_allowed": {"const": false},
+        "paid_tier_change_allowed": {"const": false},
+        "raw_payloads_written": {"const": false},
+        "tracked_summary_contains_raw_rows": {"const": false},
+        "tracked_summary_contains_secret": {"const": false},
+        "signal_search_executed": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false}
+      }
+    },
+    "probeDesign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_date",
+        "end_date",
+        "required_basis",
+        "required_fields",
+        "control_price_indices",
+        "total_return_candidates",
+        "max_total_calls"
+      ],
+      "properties": {
+        "start_date": {"const": "20200102"},
+        "end_date": {"const": "20200110"},
+        "required_basis": {"const": "benchmark_total_return_index_next_trading_day_open_to_same_exit_close"},
+        "required_fields": {
+          "type": "array",
+          "items": {"enum": ["ts_code", "trade_date", "open", "close"]},
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "control_price_indices": {"$ref": "#/$defs/stringMapNullable"},
+        "total_return_candidates": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 3
+          }
+        },
+        "max_total_calls": {"const": 8}
+      }
+    },
+    "directProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benchmark_label",
+        "candidate_role",
+        "ts_code",
+        "call_status",
+        "row_count",
+        "columns",
+        "open_non_null_count",
+        "close_non_null_count",
+        "same_anchor_open_close_available",
+        "close_only_total_return_candidate",
+        "tracked_summary_contains_raw_rows",
+        "error_class",
+        "error_message_redacted"
+      ],
+      "properties": {
+        "benchmark_label": {"enum": ["CSI300", "CSI1000"]},
+        "candidate_role": {"enum": ["price_index_control", "total_return_candidate"]},
+        "ts_code": {"$ref": "#/$defs/nonEmptyString"},
+        "call_status": {"enum": ["success", "empty", "error"]},
+        "row_count": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "columns": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "open_non_null_count": {"type": "integer", "minimum": 0},
+        "close_non_null_count": {"type": "integer", "minimum": 0},
+        "same_anchor_open_close_available": {"type": "boolean"},
+        "close_only_total_return_candidate": {"type": "boolean"},
+        "tracked_summary_contains_raw_rows": {"const": false},
+        "error_class": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "error_message_redacted": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benchmark_access_status",
+        "control_price_index_probe_passed",
+        "selected_total_return_codes",
+        "signal_search_may_execute",
+        "runner_benchmark_switch_allowed",
+        "price_index_fallback_allowed",
+        "derived_total_return_open_allowed",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "benchmark_access_status": {
+          "enum": [
+            "passed_total_return_same_anchor_open_available",
+            "blocked_total_return_same_anchor_open_unavailable"
+          ]
+        },
+        "control_price_index_probe_passed": {"type": "boolean"},
+        "selected_total_return_codes": {"$ref": "#/$defs/stringMapNullable"},
+        "signal_search_may_execute": {"const": false},
+        "runner_benchmark_switch_allowed": {"const": false},
+        "price_index_fallback_allowed": {"const": false},
+        "derived_total_return_open_allowed": {"const": false},
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"},
+        "next_action": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_alpha_found",
+        "signal_search_authorized",
+        "benchmark_total_return_route_ready",
+        "price_index_benchmark_allowed",
+        "derived_total_return_open_allowed",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_alpha_found": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "benchmark_total_return_route_ready": {"const": false},
+        "price_index_benchmark_allowed": {"const": false},
+        "derived_total_return_open_allowed": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

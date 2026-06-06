@@ -611,8 +611,11 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 def validate_json(schema_path: Path, payload: dict[str, Any]) -> None:
     try:
         from jsonschema import Draft7Validator
-    except ModuleNotFoundError:
-        return
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "jsonschema is required for schema-gated A-short audit outputs; "
+            "install project requirements before running this producer."
+        ) from exc
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
     if errors:

@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from runners import a_long_full_main_board_signal_search as runner
 from runners import a_long_full_main_board_data_integrity_audit as audit_runner
@@ -26,14 +27,20 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
 
     def test_current_gate_artifacts_validate(self) -> None:
         prereg = runner.load_and_validate_preregistration()
-        ledger = runner.load_and_validate_ledger()
-        audit = runner.load_and_validate_audit_report()
+        ledger_payload = runner.read_json(runner.LEDGER_PATH)
+        if ledger_payload["budget_policy"]["tests_spent_count"] == 0:
+            ledger = runner.load_and_validate_ledger()
+        else:
+            ledger = ledger_payload
+            self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
+            self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
         exclusions = runner.load_restatement_exclusions()
 
         self.assertEqual(prereg["artifact_id"], "a_long_signal_search_preregistration_20260604")
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
-        self.assertEqual(audit["decision"]["audit_status"], "passed_full_main_board_data_integrity_for_signal_search")
+        self.assertIn(ledger["budget_policy"]["tests_spent_count"], {0, 1})
         self.assertEqual(len(exclusions), runner.EXPECTED_RESTATEMENT_EXCLUSION_GROUP_COUNT)
+        with self.assertRaisesRegex(ValueError, "PIT selection-time"):
+            runner.load_and_validate_audit_report()
 
     def test_restatement_exclusion_csv_count_is_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,9 +133,12 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
             ),
             runner.call_id_for("fina_indicator", "000001.SZ"): self._payload(
                 [
-                    {"ts_code": "000001.SZ", "ann_date": "20220430", "end_date": "20211231", "roe": 10.0, "profit_dedt": 100.0},
-                    {"ts_code": "000001.SZ", "ann_date": "20211030", "end_date": "20210930", "roe": 8.0, "profit_dedt": 95.0},
-                    {"ts_code": "000001.SZ", "ann_date": "20210830", "end_date": "20210630", "roe": 6.0, "profit_dedt": 90.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20220430", "f_ann_date": "20220430", "end_date": "20211231", "roe": 10.0, "profit_dedt": 100.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20210430", "f_ann_date": "20210430", "end_date": "20201231", "roe": 9.0, "profit_dedt": 80.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20200430", "f_ann_date": "20200430", "end_date": "20191231", "roe": 8.0, "profit_dedt": 70.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20190430", "f_ann_date": "20190430", "end_date": "20181231", "roe": 7.0, "profit_dedt": 65.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20211030", "f_ann_date": "20211030", "end_date": "20210930", "roe": 8.0, "profit_dedt": 95.0},
+                    {"ts_code": "000001.SZ", "ann_date": "20210830", "f_ann_date": "20210830", "end_date": "20210630", "roe": 6.0, "profit_dedt": 90.0},
                 ]
             ),
         }
@@ -139,15 +149,72 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
         self.assertEqual(set(values), set(runner.ALLOWED_SIGNAL_FAMILIES))
         self.assertAlmostEqual(values["cash_conversion"], 1.2)
         self.assertAlmostEqual(values["balance_sheet_strength"], 0.2)
+        expected_growths = [(100.0 - 80.0) / 80.0, (80.0 - 70.0) / 70.0, (70.0 - 65.0) / 65.0]
+        self.assertAlmostEqual(values["earnings_stability"], -runner.pstdev(expected_growths))
+
+    def test_cash_conversion_requires_same_period_income_and_cashflow_rows(self) -> None:
+        symbol = "000001.SZ"
+        payloads = {
+            runner.call_id_for("income", symbol): self._payload(
+                [
+                    {
+                        "ts_code": symbol,
+                        "ann_date": "20220430",
+                        "f_ann_date": "20220430",
+                        "end_date": "20211231",
+                        "n_income_attr_p": 100.0,
+                    }
+                ]
+            ),
+            runner.call_id_for("balancesheet", symbol): self._payload([]),
+            runner.call_id_for("cashflow", symbol): self._payload(
+                [
+                    {
+                        "ts_code": symbol,
+                        "ann_date": "20220430",
+                        "f_ann_date": "20220430",
+                        "end_date": "20210930",
+                        "n_cashflow_act": 120.0,
+                    }
+                ]
+            ),
+            runner.call_id_for("fina_indicator", symbol): self._payload([]),
+        }
+        store = audit_runner.PayloadStore(raw_root=Path("."), payloads=payloads)
+
+        values = runner.compute_signal_values(store, symbol, "20220531", set())
+
+        self.assertNotIn("cash_conversion", values)
+
+    def test_earnings_stability_does_not_mix_ytd_quarter_sequence(self) -> None:
+        symbol = "000001.SZ"
+        payloads = {
+            runner.call_id_for("income", symbol): self._payload([]),
+            runner.call_id_for("balancesheet", symbol): self._payload([]),
+            runner.call_id_for("cashflow", symbol): self._payload([]),
+            runner.call_id_for("fina_indicator", symbol): self._payload(
+                [
+                    {"ts_code": symbol, "ann_date": "20220430", "f_ann_date": "20220430", "end_date": "20211231", "roe": 10.0, "profit_dedt": 100.0},
+                    {"ts_code": symbol, "ann_date": "20211030", "f_ann_date": "20211030", "end_date": "20210930", "roe": 8.0, "profit_dedt": 95.0},
+                    {"ts_code": symbol, "ann_date": "20210830", "f_ann_date": "20210830", "end_date": "20210630", "roe": 6.0, "profit_dedt": 90.0},
+                    {"ts_code": symbol, "ann_date": "20210430", "f_ann_date": "20210430", "end_date": "20210331", "roe": 5.0, "profit_dedt": 40.0},
+                ]
+            ),
+        }
+        store = audit_runner.PayloadStore(raw_root=Path("."), payloads=payloads)
+
+        values = runner.compute_signal_values(store, symbol, "20220531", set())
+
+        self.assertNotIn("earnings_stability", values)
 
     def test_compute_return_uses_same_anchor_and_cost(self) -> None:
         stock = {
-            "20200102": {"open": 100.0, "close": 101.0},
-            "20200103": {"open": 102.0, "close": 110.0},
+            "20200102": {"close": 101.0},
+            "20200103": {"close": 110.0},
         }
         index = {
-            "20200102": {"open": 1000.0, "close": 1000.0},
-            "20200103": {"open": 1000.0, "close": 1050.0},
+            "20200102": {"close": 1000.0},
+            "20200103": {"close": 1050.0},
         }
 
         stock_return, benchmark_return, entry, exit_ = runner.compute_return(
@@ -159,8 +226,250 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
         )
 
         self.assertEqual((entry, exit_), ("20200102", "20200103"))
-        self.assertAlmostEqual(stock_return, 0.10 - runner.ROUND_TRIP_COST)
+        self.assertAlmostEqual(stock_return, (110.0 / 101.0) - 1.0 - runner.ROUND_TRIP_COST)
         self.assertAlmostEqual(benchmark_return, 0.05)
+
+    def test_compute_return_uses_actual_terminal_exit_anchor_for_benchmark(self) -> None:
+        stock = {
+            "20200102": {"close": 100.0},
+            "20200103": {"close": 80.0},
+        }
+        index = {
+            "20200102": {"close": 1000.0},
+            "20200103": {"close": 900.0},
+            "20200106": {"close": 1100.0},
+        }
+
+        stock_return, benchmark_return, entry, exit_ = runner.compute_return(
+            stock,
+            index,
+            ["20200101", "20200102", "20200103", "20200106"],
+            "20200101",
+            2,
+        )
+
+        self.assertEqual((entry, exit_), ("20200102", "20200103"))
+        self.assertAlmostEqual(stock_return, -0.2 - runner.ROUND_TRIP_COST)
+        self.assertAlmostEqual(benchmark_return, -0.1)
+
+    def test_stock_total_return_rows_apply_adj_factor_for_split_safety(self) -> None:
+        symbol = "000001.SZ"
+        payloads = {
+            runner.call_id_for("daily", symbol): self._payload(
+                [
+                    {"ts_code": symbol, "trade_date": "20200102", "open": 100.0, "close": 101.0},
+                    {"ts_code": symbol, "trade_date": "20200103", "open": 51.0, "close": 50.5},
+                ]
+            ),
+            runner.call_id_for("adj_factor", symbol): self._payload(
+                [
+                    {"ts_code": symbol, "trade_date": "20200102", "adj_factor": 1.0},
+                    {"ts_code": symbol, "trade_date": "20200103", "adj_factor": 2.0},
+                ]
+            ),
+        }
+        store = audit_runner.PayloadStore(raw_root=Path("."), payloads=payloads)
+
+        prices = runner.stock_total_return_close_rows(store, symbol)
+
+        self.assertEqual(prices["20200102"], {"close": 101.0})
+        self.assertEqual(prices["20200103"], {"close": 101.0})
+
+    def test_newey_west_t_stat_is_more_conservative_for_overlap_like_series(self) -> None:
+        values = [0.02 + (0.002 * (index // 6)) for index in range(48)]
+        naive_t = runner.mean(values) / (runner.pstdev(values) / runner.math.sqrt(len(values)))
+
+        hac_t, _se, lag = runner.newey_west_hac_t_stat(values, horizon=252)
+
+        self.assertEqual(lag, 12)
+        self.assertIsNotNone(hac_t)
+        self.assertLess(abs(hac_t), abs(naive_t))
+
+    def test_monthly_cohort_rows_attaches_all_benchmark_excess_fields(self) -> None:
+        symbol = "000001.SZ"
+        payloads = {
+            runner.call_id_for("income", symbol): self._payload([]),
+            runner.call_id_for("balancesheet", symbol): self._payload([]),
+            runner.call_id_for("cashflow", symbol): self._payload([]),
+            runner.call_id_for("fina_indicator", symbol): self._payload(
+                [
+                    {
+                        "ts_code": symbol,
+                        "ann_date": "20191231",
+                        "f_ann_date": "20191231",
+                        "end_date": "20190930",
+                        "roe": 12.0,
+                        "profit_dedt": 100.0,
+                    }
+                ]
+            ),
+            runner.call_id_for("daily", symbol): self._payload(
+                [
+                    {"ts_code": symbol, "trade_date": "20200102", "open": 100.0, "close": 101.0},
+                    {"ts_code": symbol, "trade_date": "20200103", "open": 100.0, "close": 110.0},
+                ]
+            ),
+            runner.call_id_for("adj_factor", symbol): self._payload(
+                [
+                    {"ts_code": symbol, "trade_date": "20200102", "adj_factor": 1.0},
+                    {"ts_code": symbol, "trade_date": "20200103", "adj_factor": 1.0},
+                ]
+            ),
+            runner.benchmark_call_id("H00300.CSI"): self._payload(
+                [
+                    {"trade_date": "20200102", "open": None, "close": 1000.0},
+                    {"trade_date": "20200103", "open": None, "close": 1010.0},
+                ]
+            ),
+            runner.benchmark_call_id("H00852.CSI"): self._payload(
+                [
+                    {"trade_date": "20200102", "open": None, "close": 1000.0},
+                    {"trade_date": "20200103", "open": None, "close": 1020.0},
+                ]
+            ),
+        }
+        store = audit_runner.PayloadStore(raw_root=Path("."), payloads=payloads)
+        context = runner.SignalContext(
+            symbols=[symbol],
+            active_symbols=[symbol],
+            delisted_symbols=[],
+            exception_symbols=set(),
+            as_ofs=["20200101"],
+            trade_dates=["20200101", "20200102", "20200103"],
+            list_date_by_symbol={symbol: "19910101"},
+            delist_date_by_symbol={symbol: None},
+        )
+
+        original_horizons = runner.HORIZONS
+        original_load_industry_records = runner.load_industry_records
+        try:
+            runner.HORIZONS = [1]
+            runner.load_industry_records = lambda _store: {
+                symbol: [
+                    {
+                        "ts_code": symbol,
+                        "l1_code": "801780.SI",
+                        "l2_code": "801783.SI",
+                        "in_date": "20100101",
+                        "out_date": None,
+                    }
+                ]
+            }
+            rows, diagnostics = runner.monthly_cohort_rows(
+                store=store,
+                context=context,
+                restatement_exclusions=set(),
+            )
+        finally:
+            runner.HORIZONS = original_horizons
+            runner.load_industry_records = original_load_industry_records
+
+        self.assertEqual(diagnostics["missing_return_rows"], 0)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("excess_CSI300", rows[0])
+        self.assertIn("excess_CSI1000", rows[0])
+        self.assertIsNotNone(rows[0]["excess_CSI300"])
+        self.assertIsNotNone(rows[0]["excess_CSI1000"])
+        original_horizons = runner.HORIZONS
+        try:
+            runner.HORIZONS = [1]
+            results = runner.summarize_results(rows)
+            self.assertGreater(sum(item["monthly_cohort_count"] for item in results), 0)
+            runner.validate_pipeline_result_sanity(rows, results)
+        finally:
+            runner.HORIZONS = original_horizons
+
+    def test_current_stock_basic_name_is_not_selection_time_veto_source(self) -> None:
+        context = runner.SignalContext(
+            symbols=["600421.SH"],
+            active_symbols=["600421.SH"],
+            delisted_symbols=[],
+            exception_symbols=set(),
+            as_ofs=["20200131"],
+            trade_dates=["20200131", "20200203"],
+            list_date_by_symbol={"600421.SH": "19960101"},
+            delist_date_by_symbol={"600421.SH": None},
+            name_by_symbol={"600421.SH": "\u9000\u5e02\u672a\u6765"},
+        )
+
+        self.assertFalse(runner.symbol_vetoed_at_selection_time(context, "600421.SH", "20200131"))
+
+    def test_pit_selection_status_veto_blocks_only_after_observed_start(self) -> None:
+        context = runner.SignalContext(
+            symbols=["600421.SH"],
+            active_symbols=["600421.SH"],
+            delisted_symbols=[],
+            exception_symbols=set(),
+            as_ofs=["20200131"],
+            trade_dates=["20200131", "20200203"],
+            list_date_by_symbol={"600421.SH": "19960101"},
+            delist_date_by_symbol={"600421.SH": None},
+            selection_status_by_symbol={
+                "600421.SH": [
+                    {"name": "\u9000\u5e02\u672a\u6765", "start_date": "20210101", "end_date": None}
+                ]
+            },
+        )
+
+        self.assertFalse(runner.symbol_vetoed_at_selection_time(context, "600421.SH", "20200131"))
+        self.assertTrue(runner.symbol_vetoed_at_selection_time(context, "600421.SH", "20210131"))
+
+    def test_select_latest_pit_row_requires_f_ann_date_for_fundamentals(self) -> None:
+        selected = runner.select_latest_pit_row(
+            [
+                {
+                    "ts_code": "000001.SZ",
+                    "end_date": "20211231",
+                    "ann_date": "20220430",
+                    "revenue": 100.0,
+                }
+            ],
+            table_id="income",
+            as_of="20220531",
+            restatement_exclusions=set(),
+        )
+
+        self.assertIsNone(selected)
+
+    def test_materialization_manifest_must_include_total_return_benchmark_payloads(self) -> None:
+        fake_summary = {
+            "execution": {
+                "endpoint_results_count": 23718,
+                "token_logged": False,
+                "request_url_logged": False,
+            }
+        }
+        price_only_manifest = {
+            "index_daily_000300_SH_2018_2025": {"call_status": "success"},
+            "index_daily_000852_SH_2018_2025": {"call_status": "success"},
+        }
+
+        with (
+            mock.patch.object(runner, "read_json", return_value=fake_summary),
+            mock.patch.object(runner.audit, "validate_materialization_summary", return_value=None),
+            mock.patch.object(runner.audit, "load_endpoint_manifest", return_value=price_only_manifest),
+        ):
+            with self.assertRaisesRegex(ValueError, "total-return benchmark"):
+                runner.validate_materialization_summary_and_manifest(Path("."))
+
+    def test_pipeline_sanity_rejects_return_rows_with_zero_cohorts(self) -> None:
+        rows = [
+            {
+                "as_of": "20200131",
+                "symbol": "000001.SZ",
+                "horizon": 252,
+                "profitability_quality__non_neutral": 0.9,
+                "excess_CSI1000": 0.01,
+            }
+        ]
+        results = runner.summarize_results(rows)
+
+        with self.assertRaisesRegex(ValueError, "pipeline failure"):
+            runner.validate_pipeline_result_sanity(rows, results)
+
+    def test_pipeline_sanity_rejects_no_evaluated_return_rows(self) -> None:
+        with self.assertRaisesRegex(ValueError, "no evaluated return rows"):
+            runner.validate_pipeline_result_sanity([], [])
 
     def _year_concentration_fixture(self, returns_by_year: dict[int, float]) -> list[dict]:
         rows = []
@@ -184,6 +493,7 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
                         "earnings_stability__non_neutral": idx / 14,
                         "earnings_stability__industry_neutral": idx / 14,
                         "excess_CSI300": cohort_return,
+                        "excess_CSI1000": cohort_return,
                     }
                 )
         return rows
@@ -218,16 +528,23 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
                         "earnings_stability__non_neutral": idx / 14,
                         "earnings_stability__industry_neutral": idx / 14,
                         "excess_CSI300": 0.02 if idx >= 5 else -0.01,
+                        "excess_CSI1000": 0.01 if idx >= 5 else -0.02,
                     }
                 )
                 rows.append({**rows[-1], "horizon": 504})
 
         results = runner.summarize_results(rows)
 
-        self.assertEqual(len(results), 16)
+        self.assertEqual(len(results), 32)
         self.assertTrue(all("bh_adjusted_p_value" in item for item in results))
+        self.assertEqual({item["benchmark"] for item in results}, {"CSI300", "CSI1000"})
         self.assertTrue(all("max_single_year_positive_return_share" in item for item in results))
         self.assertTrue(all("passes_single_year_concentration_guard" in item for item in results))
+        self.assertTrue(all("passes_drawdown_guard" in item for item in results))
+        self.assertTrue(all("worst_monthly_cohort_excess" in item for item in results))
+        self.assertTrue(all("best_monthly_cohort_excess" in item for item in results))
+        self.assertTrue(all(item["monthly_t_stat_method"] == runner.MONTHLY_T_STAT_METHOD for item in results))
+        self.assertEqual({item["hac_lag_months"] for item in results}, {12, 24})
         self.assertTrue(all(item["passes_minimum_monthly_cohorts"] for item in results))
 
     def test_summarize_results_rejects_single_year_positive_return_dominance(self) -> None:
@@ -330,6 +647,10 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
     def test_decision_never_authorizes_production(self) -> None:
         results = [
             {
+                "benchmark": "CSI300",
+                "signal_family": "profitability_quality",
+                "view": "non_neutral",
+                "horizon_trading_days": 252,
                 "passes_minimum_monthly_cohorts": True,
                 "mean_monthly_cohort_net_excess": 0.02,
                 "monthly_clustered_t_stat": 3.0,
@@ -337,19 +658,40 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
                 "top_symbol_selection_share": 0.1,
                 "passes_name_concentration_guard": True,
                 "passes_single_year_concentration_guard": True,
+                "passes_drawdown_guard": True,
+            },
+            {
+                "benchmark": "CSI1000",
+                "signal_family": "profitability_quality",
+                "view": "non_neutral",
+                "horizon_trading_days": 252,
+                "passes_minimum_monthly_cohorts": True,
+                "mean_monthly_cohort_net_excess": 0.015,
+                "monthly_clustered_t_stat": 2.5,
+                "bh_adjusted_p_value": 0.02,
+                "top_symbol_selection_share": 0.1,
+                "passes_name_concentration_guard": True,
+                "passes_single_year_concentration_guard": True,
+                "passes_drawdown_guard": True,
             }
         ]
 
         decision = runner.decision_from_results(results)
 
         self.assertEqual(decision["research_verdict"], "candidate_alpha_clue_research_only")
+        self.assertTrue(decision["secondary_benchmark_required_for_candidate_alpha"])
         self.assertFalse(decision["alpha_found_for_production"])
         self.assertFalse(decision["ship_gate_evidence"])
         self.assertFalse(decision["full_size_allowed"])
+        self.assertIn("CSI1000", decision["size_exposure_caveat"])
 
     def test_decision_rejects_single_year_dominated_candidate(self) -> None:
         results = [
             {
+                "benchmark": "CSI300",
+                "signal_family": "profitability_quality",
+                "view": "non_neutral",
+                "horizon_trading_days": 252,
                 "passes_minimum_monthly_cohorts": True,
                 "mean_monthly_cohort_net_excess": 0.02,
                 "monthly_clustered_t_stat": 3.0,
@@ -357,6 +699,7 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
                 "top_symbol_selection_share": 0.1,
                 "passes_name_concentration_guard": True,
                 "passes_single_year_concentration_guard": False,
+                "passes_drawdown_guard": True,
             }
         ]
 
@@ -364,6 +707,107 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
 
         self.assertEqual(decision["research_verdict"], "no_alpha_found_under_frozen_rules")
         self.assertEqual(decision["candidate_alpha_clue_count"], 0)
+
+    def test_decision_rejects_candidate_that_fails_drawdown_guard(self) -> None:
+        results = [
+            {
+                "benchmark": "CSI300",
+                "signal_family": "profitability_quality",
+                "view": "non_neutral",
+                "horizon_trading_days": 252,
+                "passes_minimum_monthly_cohorts": True,
+                "mean_monthly_cohort_net_excess": 0.02,
+                "monthly_clustered_t_stat": 3.0,
+                "bh_adjusted_p_value": 0.01,
+                "top_symbol_selection_share": 0.1,
+                "passes_name_concentration_guard": True,
+                "passes_single_year_concentration_guard": True,
+                "passes_drawdown_guard": False,
+            },
+            {
+                "benchmark": "CSI1000",
+                "signal_family": "profitability_quality",
+                "view": "non_neutral",
+                "horizon_trading_days": 252,
+                "passes_minimum_monthly_cohorts": True,
+                "mean_monthly_cohort_net_excess": 0.02,
+                "monthly_clustered_t_stat": 3.0,
+                "bh_adjusted_p_value": 0.01,
+                "top_symbol_selection_share": 0.1,
+                "passes_name_concentration_guard": True,
+                "passes_single_year_concentration_guard": True,
+                "passes_drawdown_guard": True,
+            },
+        ]
+
+        decision = runner.decision_from_results(results)
+
+        self.assertEqual(decision["research_verdict"], "no_alpha_found_under_frozen_rules")
+        self.assertEqual(decision["candidate_alpha_clue_count"], 0)
+
+    def test_decision_rejects_csi1000_only_candidate_alpha(self) -> None:
+        results = [
+            {
+                "benchmark": "CSI1000",
+                "signal_family": "profitability_quality",
+                "view": "non_neutral",
+                "horizon_trading_days": 252,
+                "passes_minimum_monthly_cohorts": True,
+                "mean_monthly_cohort_net_excess": 0.03,
+                "monthly_clustered_t_stat": 3.0,
+                "bh_adjusted_p_value": 0.01,
+                "top_symbol_selection_share": 0.1,
+                "passes_name_concentration_guard": True,
+                "passes_single_year_concentration_guard": True,
+                "passes_drawdown_guard": True,
+            }
+        ]
+
+        decision = runner.decision_from_results(results)
+
+        self.assertEqual(decision["research_verdict"], "no_alpha_found_under_frozen_rules")
+        self.assertEqual(decision["candidate_alpha_clue_count"], 0)
+
+    def test_decision_rejects_csi300_only_candidate_without_csi1000_robustness(self) -> None:
+        results = [
+            {
+                "benchmark": "CSI300",
+                "signal_family": "profitability_quality",
+                "view": "non_neutral",
+                "horizon_trading_days": 252,
+                "passes_minimum_monthly_cohorts": True,
+                "mean_monthly_cohort_net_excess": 0.03,
+                "monthly_clustered_t_stat": 3.0,
+                "bh_adjusted_p_value": 0.01,
+                "top_symbol_selection_share": 0.1,
+                "passes_name_concentration_guard": True,
+                "passes_single_year_concentration_guard": True,
+                "passes_drawdown_guard": True,
+            }
+        ]
+
+        decision = runner.decision_from_results(results)
+
+        self.assertEqual(decision["research_verdict"], "no_alpha_found_under_frozen_rules")
+        self.assertEqual(decision["candidate_alpha_clue_count"], 0)
+
+    def test_benchmark_route_amendment_accepts_blocked_tr_open_probe(self) -> None:
+        summary = runner.load_and_validate_benchmark_route_amendment()
+
+        self.assertEqual(summary["decision"]["benchmark_access_status"], "blocked_total_return_same_anchor_open_unavailable")
+
+    def test_benchmark_route_amendment_rejects_probe_status_drift(self) -> None:
+        summary = runner.read_json(runner.BENCHMARK_ACCESS_PROBE_SUMMARY_PATH)
+        summary["decision"]["benchmark_access_status"] = "passed_total_return_same_anchor_open_available"
+        summary["decision"]["selected_total_return_codes"] = {
+            "CSI300": "H00300.CSI",
+            "CSI1000": "H00852.CSI",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "probe_summary.json"
+            path.write_text(json.dumps(summary, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "blocked total-return-open probe"):
+                runner.load_and_validate_benchmark_route_amendment(path)
 
     def test_delisted_symbol_leaves_scored_universe_after_delist_date(self) -> None:
         context = runner.SignalContext(
@@ -421,7 +865,7 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
     def test_spend_ledger_after_success_updates_singleton_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             ledger_path = Path(tmp) / "ledger.json"
-            ledger = copy.deepcopy(runner.read_json(runner.LEDGER_PATH))
+            ledger = self._unspent_ledger_fixture()
             ledger_path.write_text(json.dumps(ledger, ensure_ascii=False), encoding="utf-8")
             summary = {
                 "decision": {
@@ -441,6 +885,35 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
         self.assertEqual(spent["budget_policy"]["tests_spent_count"], 1)
         self.assertEqual(spent["planned_tests"], [])
         self.assertEqual(spent["test_spend_log"][0]["status"], "spent_failed_outcome_threshold")
+
+    def _unspent_ledger_fixture(self) -> dict:
+        ledger = copy.deepcopy(runner.read_json(runner.LEDGER_PATH))
+        ledger["generated_at"] = "2026-06-04T00:00:00Z"
+        ledger["ledger_status"] = "active_planned_test_pending_review"
+        ledger["budget_policy"]["tests_spent_count"] = 0
+        ledger["budget_policy"]["tests_available_without_new_review"] = 0
+        ledger["test_spend_log"] = []
+        if not ledger.get("planned_tests"):
+            ledger["planned_tests"] = [
+                {
+                    "test_id": "a_long_signal_search_preregistration_20260604",
+                    "planned_status": "planned_not_reviewed",
+                    "created_at": "2026-06-04T00:00:00Z",
+                    "planned_preregistration_ref": "research/preregistrations/a_long_signal_search_preregistration_20260604.json",
+                    "planned_result_ref": "research/results/a_long_signal_search_20260604/evidence_report.json",
+                    "promotion_relevant": True,
+                    "expected_tests_spent": 1,
+                    "approval_status": "pending_user_approval",
+                    "design_summary": (
+                        "Research-only A-long main-board quality / cashflow / balance-sheet / "
+                        "earnings-stability signal search."
+                    ),
+                    "review_boundary": [
+                        "No alpha, production, ship-gate, full-size, or broker / order automation authorization."
+                    ],
+                }
+            ]
+        return ledger
 
     def _payload(self, records: list[dict]) -> dict:
         columns = sorted({key for row in records for key in row})

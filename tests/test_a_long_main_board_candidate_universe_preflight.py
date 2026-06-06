@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from runners import a_long_main_board_candidate_universe_preflight as runner
 
@@ -186,14 +188,15 @@ class ALongMainBoardCandidateUniversePreflightTest(unittest.TestCase):
         source_root = self._source_root(missing_active=True, include_delisted=True)
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                summary = runner.execute_preflight(
-                    raw_root=self.raw_root,
-                    source_raw_root=source_root,
-                    summary_path=Path(tmp) / "summary.json",
-                    generated_at="2026-06-04T00:00:00+00:00",
-                    confirm_independent_review_pass=True,
-                    confirm_post_review_execute=True,
-                )
+                with mock.patch.dict(os.environ, {}, clear=True):
+                    summary = runner.execute_preflight(
+                        raw_root=self.raw_root,
+                        source_raw_root=source_root,
+                        summary_path=Path(tmp) / "summary.json",
+                        generated_at="2026-06-04T00:00:00+00:00",
+                        confirm_independent_review_pass=True,
+                        confirm_post_review_execute=True,
+                    )
         finally:
             shutil.rmtree(source_root, ignore_errors=True)
 

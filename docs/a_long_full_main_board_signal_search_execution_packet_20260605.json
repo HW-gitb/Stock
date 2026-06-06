@@ -109,6 +109,7 @@
       "trade_calendar",
       "stock_basic_active",
       "stock_basic_delisted",
+      "security_name_change",
       "income",
       "balancesheet",
       "cashflow",
@@ -121,7 +122,17 @@
       "benchmark_index_daily"
     ],
     "estimated_symbol_count": 3387,
-    "planned_total_endpoint_calls": 23717,
+    "planned_total_endpoint_calls": 23718,
+    "benchmark_total_return_index_codes": [
+      "H00300.CSI",
+      "H00852.CSI"
+    ],
+    "benchmark_price_index_codes_allowed": false,
+    "benchmark_total_return_required_fields": [
+      "ts_code",
+      "trade_date",
+      "close"
+    ],
     "max_total_endpoint_calls": 24000,
     "retry_count_allowed": 0,
     "abort_if_budget_exceeded": true,
@@ -148,16 +159,34 @@
       "intraday_or_microstructure",
       "us_provider_fields"
     ],
-    "entry_rule": "next_trading_day_open_after_as_of",
+    "entry_rule": "next_trading_day_close_after_as_of",
     "exit_horizons_trading_days": [
       252,
       504
     ],
     "primary_benchmark": "CSI300",
     "secondary_benchmark": "CSI1000",
+    "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+    "benchmark_access_probe_ref": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+    "benchmark_access_status": "total_return_close_available_close_to_close_amendment_selected",
+    "required_total_return_benchmark_call_ids": [
+      "index_daily_H00300_CSI_2018_2025",
+      "index_daily_H00852_CSI_2018_2025"
+    ],
+    "required_selection_time_status_call_id": "namechange_2018_2025",
+    "price_index_benchmark_allowed": false,
+    "price_index_fallback_allowed": false,
+    "derived_total_return_open_allowed": false,
     "same_anchor_required": true,
     "total_return_with_adj_factor_and_dividend_lineage_required": true,
     "multiple_testing_correction_required": "benjamini_hochberg_fdr_or_bonferroni",
+    "t_stat_method": "newey_west_hac_on_monthly_overlapping_cohorts",
+    "hac_lag_rule": "ceil_horizon_trading_days_div_21_capped_at_monthly_cohort_count_minus_1",
+    "monthly_cohort_count_is_not_independent_n": true,
+    "earnings_stability_basis": "same_period_yoy_profit_dedt_growth_volatility",
+    "mixed_ytd_quarter_sequence_allowed": false,
+    "minimum_earnings_stability_yoy_growths": 3,
+    "min_allowed_monthly_excess_drawdown": -0.15,
     "parameter_sweep_allowed": false,
     "post_result_rescue_slicing_allowed": false,
     "ledger_spend_required_if_signal_executes": true

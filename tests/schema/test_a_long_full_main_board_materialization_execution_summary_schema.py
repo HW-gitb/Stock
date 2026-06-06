@@ -4,6 +4,8 @@ import json
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft7Validator
+
 
 SCHEMA_PATH = Path("schemas/a_long_full_main_board_materialization_execution_summary.schema.json")
 
@@ -13,11 +15,6 @@ class ALongFullMainBoardMaterializationExecutionSummarySchemaTest(unittest.TestC
         return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
     def test_schema_meta_validates_when_jsonschema_available(self) -> None:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
-
         schema = self._load_schema()
 
         Draft7Validator.check_schema(schema)
@@ -44,10 +41,13 @@ class ALongFullMainBoardMaterializationExecutionSummarySchemaTest(unittest.TestC
         execution = schema["$defs"]["execution"]["properties"]
         boundary = schema["$defs"]["executionBoundary"]["properties"]
         prior = schema["$defs"]["priorIndustryRepairDependency"]["properties"]
+        table_rollup = schema["properties"]["table_rollup"]
 
-        self.assertEqual(execution["planned_total_endpoint_calls"]["const"], 23717)
+        self.assertEqual(table_rollup["minItems"], 14)
+        self.assertEqual(table_rollup["maxItems"], 14)
+        self.assertEqual(execution["planned_total_endpoint_calls"]["const"], 23718)
         self.assertEqual(execution["max_total_endpoint_calls"]["const"], 24000)
-        self.assertEqual(execution["base_call_count"]["const"], 8)
+        self.assertEqual(execution["base_call_count"]["const"], 9)
         self.assertEqual(execution["calls_per_symbol"]["const"], 7)
         self.assertEqual(boundary["expected_active_count"]["const"], 3200)
         self.assertEqual(boundary["expected_delisted_count"]["const"], 187)

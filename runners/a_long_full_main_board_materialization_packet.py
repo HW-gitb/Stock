@@ -35,16 +35,18 @@ EXPECTED_DELISTED_COUNT = 187
 EXPECTED_UNIVERSE_COUNT = 3387
 REVIEWED_NO_INDUSTRY_EXCEPTION_COUNT = 191
 MAX_TOTAL_ENDPOINT_CALLS = 24000
-PLANNED_TOTAL_ENDPOINT_CALLS = 23717
-BASE_CALL_COUNT = 8
+PLANNED_TOTAL_ENDPOINT_CALLS = 23718
+BASE_CALL_COUNT = 9
 CALLS_PER_SYMBOL = 7
 DEFAULT_MIN_SECONDS_BETWEEN_NETWORK_CALLS = 1.25
-BENCHMARK_INDICES = ["000300.SH", "000852.SH"]
+BENCHMARK_INDICES = ["H00300.CSI", "H00852.CSI"]
+SELECTION_STATUS_CALL_ID = "namechange_2018_2025"
 ACTIVE_DELISTING_SHELL_SYMBOLS = ["600421.SH", "600599.SH", "600636.SH", "600696.SH"]
 DATA_TABLE_IDS = [
     "trade_calendar",
     "stock_basic_active",
     "stock_basic_delisted",
+    "security_name_change",
     "income",
     "balancesheet",
     "cashflow",
@@ -56,6 +58,15 @@ DATA_TABLE_IDS = [
     "dividend",
     "benchmark_index_daily",
 ]
+REQUIRED_NON_EMPTY_TABLE_IDS = {
+    "trade_calendar",
+    "stock_basic_active",
+    "stock_basic_delisted",
+    "security_name_change",
+    "industry_classification",
+    "industry_membership",
+    "benchmark_index_daily",
+}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -109,8 +120,11 @@ def write_json_atomic(payload: Any, path: Path) -> None:
 def validate_json(schema_path: Path, payload: dict[str, Any]) -> None:
     try:
         from jsonschema import Draft7Validator
-    except ModuleNotFoundError:
-        return
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "jsonschema is required for A-long schema-gated materialization; "
+            "install project requirements before running this producer."
+        ) from exc
     schema = read_json(schema_path)
     errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
     if errors:
@@ -183,6 +197,12 @@ def load_and_validate_packet(path: Path = PACKET_PATH) -> dict[str, Any]:
         raise ValueError("packet estimated_symbol_count mismatch")
     if pull.get("planned_total_endpoint_calls") != PLANNED_TOTAL_ENDPOINT_CALLS:
         raise ValueError("packet planned_total_endpoint_calls mismatch")
+    if pull.get("benchmark_total_return_index_codes") != BENCHMARK_INDICES:
+        raise ValueError("packet total-return benchmark index codes mismatch")
+    if pull.get("benchmark_price_index_codes_allowed") is not False:
+        raise ValueError("packet price-index benchmark codes must remain forbidden")
+    if pull.get("benchmark_total_return_required_fields") != ["ts_code", "trade_date", "close"]:
+        raise ValueError("packet total-return benchmark required fields mismatch")
     if pull.get("max_total_endpoint_calls") != MAX_TOTAL_ENDPOINT_CALLS:
         raise ValueError("packet max_total_endpoint_calls mismatch")
     if pull.get("retry_count_allowed") != 0:
@@ -191,6 +211,15 @@ def load_and_validate_packet(path: Path = PACKET_PATH) -> dict[str, Any]:
         raise ValueError("packet must abort on budget exceed")
     if set(pull.get("tables") or []) != set(DATA_TABLE_IDS):
         raise ValueError("packet table set mismatch")
+
+    signal_plan = packet.get("audit_and_signal_plan") or {}
+    expected_benchmark_call_ids = [f"index_daily_{code.replace('.', '_')}_{START_DATE[:4]}_{END_DATE[:4]}" for code in BENCHMARK_INDICES]
+    if signal_plan.get("required_total_return_benchmark_call_ids") != expected_benchmark_call_ids:
+        raise ValueError("packet required total-return benchmark call ids mismatch")
+    if signal_plan.get("required_selection_time_status_call_id") != SELECTION_STATUS_CALL_ID:
+        raise ValueError("packet required selection-time status call id mismatch")
+    if signal_plan.get("min_allowed_monthly_excess_drawdown") != -0.15:
+        raise ValueError("packet drawdown gate drifted")
 
     storage = packet.get("storage_and_output_boundary") or {}
     if storage.get("raw_output_root") != RAW_ROOT_REL.as_posix() + "/":
@@ -346,6 +375,18 @@ def base_call_plan() -> list[dict[str, Any]]:
             "minimum_fields": ["ts_code", "name", "list_status", "list_date", "delist_date"],
         },
         {
+            "call_id": SELECTION_STATUS_CALL_ID,
+            "table_id": "security_name_change",
+            "api_family": "namechange",
+            "method": "namechange",
+            "kwargs": {
+                "start_date": START_DATE,
+                "end_date": END_DATE,
+                "fields": "ts_code,name,start_date,end_date,change_reason",
+            },
+            "minimum_fields": ["ts_code", "name", "start_date", "end_date"],
+        },
+        {
             "call_id": "index_classify_sw_L1",
             "table_id": "industry_classification",
             "api_family": "index_classify",
@@ -381,9 +422,9 @@ def base_call_plan() -> list[dict[str, Any]]:
                     "ts_code": index_code,
                     "start_date": START_DATE,
                     "end_date": END_DATE,
-                    "fields": "ts_code,trade_date,open,close",
+                    "fields": "ts_code,trade_date,close",
                 },
-                "minimum_fields": ["ts_code", "trade_date", "open", "close"],
+                "minimum_fields": ["ts_code", "trade_date", "close"],
             }
         )
     return calls
@@ -394,13 +435,13 @@ def symbol_call_plan(symbols: list[str]) -> list[dict[str, Any]]:
         "income": "ts_code,ann_date,f_ann_date,end_date,report_type,revenue,n_income_attr_p",
         "balancesheet": "ts_code,ann_date,f_ann_date,end_date,report_type,total_assets,total_liab,total_hldr_eqy_exc_min_int",
         "cashflow": "ts_code,ann_date,f_ann_date,end_date,report_type,n_cashflow_act",
-        "fina_indicator": "ts_code,ann_date,end_date,roe,profit_dedt",
+        "fina_indicator": "ts_code,ann_date,f_ann_date,end_date,roe,profit_dedt",
     }
     fundamental_minimums = {
-        "income": ["ts_code", "ann_date", "end_date", "revenue", "n_income_attr_p"],
-        "balancesheet": ["ts_code", "ann_date", "end_date", "total_assets", "total_liab", "total_hldr_eqy_exc_min_int"],
-        "cashflow": ["ts_code", "ann_date", "end_date", "n_cashflow_act"],
-        "fina_indicator": ["ts_code", "ann_date", "end_date", "roe", "profit_dedt"],
+        "income": ["ts_code", "ann_date", "f_ann_date", "end_date", "revenue", "n_income_attr_p"],
+        "balancesheet": ["ts_code", "ann_date", "f_ann_date", "end_date", "total_assets", "total_liab", "total_hldr_eqy_exc_min_int"],
+        "cashflow": ["ts_code", "ann_date", "f_ann_date", "end_date", "n_cashflow_act"],
+        "fina_indicator": ["ts_code", "ann_date", "f_ann_date", "end_date", "roe", "profit_dedt"],
     }
     calls: list[dict[str, Any]] = []
     for symbol in symbols:
@@ -501,6 +542,11 @@ def execute_call_with_checkpoint(
     existing = load_existing_raw_payload(raw_root, call["call_id"])
     if existing is not None:
         payload, ref = existing
+        if payload.get("request_shape_without_token") != dict(call["kwargs"]):
+            raise ValueError(
+                "existing raw payload request shape drifted for "
+                f"{call['call_id']}; do not reuse stale checkpoint data"
+            )
         return result_from_payload(call, payload, ref, "reused_existing_raw"), False
 
     request_shape_without_token = dict(call["kwargs"])
@@ -607,7 +653,11 @@ def empty_candidate_universe(status: str) -> dict[str, Any]:
 
 
 def endpoint_shape_complete(result: dict[str, Any]) -> bool:
-    return result["call_status"] in {"success", "empty"} and not result.get("minimum_fields_missing")
+    if result["call_status"] not in {"success", "empty"} or result.get("minimum_fields_missing"):
+        return False
+    if result["table_id"] in REQUIRED_NON_EMPTY_TABLE_IDS:
+        return int(result.get("row_count") or 0) > 0
+    return True
 
 
 def base_shape_complete(results: list[dict[str, Any]]) -> bool:
@@ -627,7 +677,7 @@ def table_rollup(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         row_counts = [item["row_count"] for item in table_results if isinstance(item.get("row_count"), int)]
         status = (
             "passed_full_main_board_materialization_shape"
-            if total > 0 and error_count == 0 and not missing
+            if total > 0 and error_count == 0 and not missing and complete_count == total
             else "partial_or_failed_full_main_board_materialization_shape"
             if total > 0
             else "not_tested"

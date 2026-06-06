@@ -14,7 +14,7 @@ class ALongFullMainBoardDataIntegrityAuditTest(unittest.TestCase):
     def test_runner_self_tests_detect_expected_violations(self) -> None:
         results = runner.run_full_board_runner_self_tests()
 
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
         self.assertTrue(all(item["status"] == "pass" for item in results))
         self.assertTrue(all(item["detected_expected_violation"] for item in results))
 
@@ -27,7 +27,7 @@ class ALongFullMainBoardDataIntegrityAuditTest(unittest.TestCase):
                 "next_reviewed_step_can_be_full_data_integrity_audit": True,
             },
             "execution": {
-                "endpoint_results_count": 23717,
+                "endpoint_results_count": 23718,
                 "token_logged": False,
                 "request_url_logged": False,
             },
@@ -186,6 +186,16 @@ class ALongFullMainBoardDataIntegrityAuditTest(unittest.TestCase):
 
         self.assertEqual(check["status"], "pass_full_main_board")
         self.assertEqual(check["metrics"]["post_panel_listing_symbols_excluded_from_return_shape_count"], 1)
+
+    def test_selection_time_status_source_missing_blocks_audit(self) -> None:
+        store, context, _repair = runner.build_self_test_store()
+        payloads = copy.deepcopy(store.payloads)
+        payloads.pop(runner.SELECTION_STATUS_CALL_ID)
+
+        check = runner.check_selection_time_status_source(runner.PayloadStore(raw_root=Path("."), payloads=payloads), context)
+
+        self.assertEqual(check["status"], "blocked_missing_required_source")
+        self.assertFalse(check["metrics"]["current_stock_basic_name_veto_allowed"])
 
     def test_decision_blocks_signal_when_hard_check_fails(self) -> None:
         checks = [

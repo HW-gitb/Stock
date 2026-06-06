@@ -33,14 +33,14 @@
     "full_main_board_boundary": {"$ref": "#/$defs/fullMainBoardBoundary"},
     "required_runner_self_tests": {
       "type": "array",
-      "minItems": 11,
-      "maxItems": 11,
+      "minItems": 12,
+      "maxItems": 12,
       "items": {"$ref": "#/$defs/selfTest"}
     },
     "check_results": {
       "type": "array",
-      "minItems": 5,
-      "maxItems": 5,
+      "minItems": 6,
+      "maxItems": 6,
       "items": {"$ref": "#/$defs/checkResult"}
     },
     "coverage_by_year": {
@@ -130,11 +130,11 @@
       "properties": {
         "materialization_summary_ref": {"const": "docs/a_long_full_main_board_materialization_execution_summary_20260605.json"},
         "raw_root": {"const": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/"},
-        "endpoint_results_count": {"const": 23717},
+        "endpoint_results_count": {"const": 23718},
         "network_calls_executed": {"const": 0},
         "provider_calls_executed": {"const": 0},
-        "self_tests_required": {"const": 11},
-        "self_tests_passed": {"const": 11},
+        "self_tests_required": {"const": 12},
+        "self_tests_passed": {"const": 12},
         "tracked_report_contains_raw_records": {"const": false},
         "tracked_report_contains_endpoint_results": {"const": false},
         "tracked_report_contains_secret": {"const": false},
@@ -173,7 +173,7 @@
         },
         "benchmark_indices": {
           "type": "array",
-          "items": {"enum": ["000300.SH", "000852.SH"]},
+          "items": {"enum": ["H00300.CSI", "H00852.CSI"]},
           "minItems": 2,
           "maxItems": 2
         },
@@ -196,8 +196,9 @@
             "sparse_early_coverage_declares_usable_window",
             "full_main_board_fundamental_missing_ann_date_column_blocks",
             "full_main_board_restatement_same_ann_date_conflict_fails",
+            "full_main_board_selection_status_source_missing_fails",
             "full_main_board_survivorship_missing_terminal_return_fails",
-            "full_main_board_return_benchmark_missing_open_fails",
+            "full_main_board_return_benchmark_missing_total_return_close_fails",
             "full_main_board_temporal_coverage_below_threshold_detected"
           ]
         },
@@ -215,6 +216,7 @@
           "enum": [
             "fundamental_pit",
             "restatement_revision_asof",
+            "selection_time_status_source",
             "survivorship_pit_universe",
             "return_benchmark_measurement_basis",
             "temporal_coverage_bias"

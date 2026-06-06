@@ -5,6 +5,8 @@ import json
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft7Validator
+
 
 SCHEMA_PATH = Path("schemas/a_long_full_main_board_signal_search_execution_packet.schema.json")
 ARTIFACT_PATH = Path("docs/a_long_full_main_board_signal_search_execution_packet_20260605.json")
@@ -23,21 +25,11 @@ class ALongFullMainBoardSignalSearchExecutionPacketSchemaTest(unittest.TestCase)
         return self._load_json(ARTIFACT_PATH)
 
     def _validate(self, payload: dict) -> list:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
-
         schema = self._load_schema()
         Draft7Validator.check_schema(schema)
         return list(Draft7Validator(schema).iter_errors(payload))
 
     def test_schema_and_artifact_validate_when_jsonschema_available(self) -> None:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
-
         schema = self._load_schema()
         artifact = self._load_artifact()
 
@@ -101,7 +93,35 @@ class ALongFullMainBoardSignalSearchExecutionPacketSchemaTest(unittest.TestCase)
         self.assertEqual(plan["exit_horizons_trading_days"], [252, 504])
         self.assertEqual(plan["primary_benchmark"], "CSI300")
         self.assertEqual(plan["secondary_benchmark"], "CSI1000")
+        self.assertEqual(
+            plan["benchmark_return_basis"],
+            "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+        )
+        self.assertEqual(
+            plan["benchmark_access_probe_ref"],
+            "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+        )
+        self.assertEqual(plan["benchmark_access_status"], "total_return_close_available_close_to_close_amendment_selected")
+        self.assertEqual(
+            plan["required_total_return_benchmark_call_ids"],
+            ["index_daily_H00300_CSI_2018_2025", "index_daily_H00852_CSI_2018_2025"],
+        )
+        self.assertEqual(plan["required_selection_time_status_call_id"], "namechange_2018_2025")
+        self.assertFalse(plan["price_index_benchmark_allowed"])
+        self.assertFalse(plan["price_index_fallback_allowed"])
+        self.assertFalse(plan["derived_total_return_open_allowed"])
+        self.assertTrue(plan["total_return_with_adj_factor_and_dividend_lineage_required"])
         self.assertTrue(plan["same_anchor_required"])
+        self.assertEqual(plan["t_stat_method"], "newey_west_hac_on_monthly_overlapping_cohorts")
+        self.assertEqual(
+            plan["hac_lag_rule"],
+            "ceil_horizon_trading_days_div_21_capped_at_monthly_cohort_count_minus_1",
+        )
+        self.assertTrue(plan["monthly_cohort_count_is_not_independent_n"])
+        self.assertEqual(plan["earnings_stability_basis"], "same_period_yoy_profit_dedt_growth_volatility")
+        self.assertFalse(plan["mixed_ytd_quarter_sequence_allowed"])
+        self.assertEqual(plan["minimum_earnings_stability_yoy_growths"], 3)
+        self.assertEqual(plan["min_allowed_monthly_excess_drawdown"], -0.15)
         self.assertFalse(plan["parameter_sweep_allowed"])
         self.assertFalse(plan["post_result_rescue_slicing_allowed"])
         self.assertTrue(plan["ledger_spend_required_if_signal_executes"])
@@ -112,7 +132,11 @@ class ALongFullMainBoardSignalSearchExecutionPacketSchemaTest(unittest.TestCase)
         storage = artifact["storage_and_output_boundary"]
 
         self.assertEqual(pull["estimated_symbol_count"], 3387)
-        self.assertEqual(pull["planned_total_endpoint_calls"], 23717)
+        self.assertEqual(pull["planned_total_endpoint_calls"], 23718)
+        self.assertIn("security_name_change", pull["tables"])
+        self.assertEqual(pull["benchmark_total_return_index_codes"], ["H00300.CSI", "H00852.CSI"])
+        self.assertFalse(pull["benchmark_price_index_codes_allowed"])
+        self.assertEqual(pull["benchmark_total_return_required_fields"], ["ts_code", "trade_date", "close"])
         self.assertLessEqual(pull["planned_total_endpoint_calls"], pull["max_total_endpoint_calls"])
         self.assertEqual(pull["retry_count_allowed"], 0)
         self.assertTrue(pull["checkpoint_resume_required"])

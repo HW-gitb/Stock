@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from jsonschema import Draft7Validator
+
 from runners import a_long_full_main_board_materialization_packet as runner
 
 
@@ -21,11 +23,21 @@ class ALongFullMainBoardMaterializationPacketTest(unittest.TestCase):
         shutil.rmtree(self.raw_root, ignore_errors=True)
 
     def test_call_plan_matches_reviewed_budget_formula(self) -> None:
-        self.assertEqual(len(runner.base_call_plan()), 8)
+        base_calls = runner.base_call_plan()
+        self.assertEqual(len(base_calls), 9)
         self.assertEqual(len(runner.symbol_call_plan(["000001.SZ"])), 7)
         self.assertEqual(len(runner.symbol_call_plan(["000001.SZ", "600001.SH"])), 14)
-        self.assertEqual(runner.planned_total_call_count(3387), 23717)
+        self.assertEqual(runner.planned_total_call_count(3387), 23718)
         self.assertEqual(runner.planned_total_call_count(runner.EXPECTED_UNIVERSE_COUNT), runner.PLANNED_TOTAL_ENDPOINT_CALLS)
+        status_calls = [call for call in base_calls if call["table_id"] == "security_name_change"]
+        self.assertEqual(len(status_calls), 1)
+        self.assertEqual(status_calls[0]["call_id"], runner.SELECTION_STATUS_CALL_ID)
+        benchmark_calls = [call for call in base_calls if call["table_id"] == "benchmark_index_daily"]
+        self.assertEqual([call["kwargs"]["ts_code"] for call in benchmark_calls], ["H00300.CSI", "H00852.CSI"])
+        self.assertTrue(all(call["minimum_fields"] == ["ts_code", "trade_date", "close"] for call in benchmark_calls))
+        fina_indicator_call = next(call for call in runner.symbol_call_plan(["000001.SZ"]) if call["table_id"] == "fina_indicator")
+        self.assertIn("f_ann_date", fina_indicator_call["kwargs"]["fields"])
+        self.assertIn("f_ann_date", fina_indicator_call["minimum_fields"])
 
     def test_candidate_universe_helper_filters_main_board_and_delisted_window(self) -> None:
         active_records = [
@@ -70,11 +82,6 @@ class ALongFullMainBoardMaterializationPacketTest(unittest.TestCase):
             self.assertEqual(json.loads(summary_path.read_text(encoding="utf-8")), summary)
 
     def test_dry_run_ready_summary_validates_when_token_present(self) -> None:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
-
         with tempfile.TemporaryDirectory() as tmp:
             summary_path = Path(tmp) / "summary.json"
             with mock.patch.dict(os.environ, {"TUSHARE_TOKEN": "unit-test-token"}, clear=True):
@@ -124,11 +131,6 @@ class ALongFullMainBoardMaterializationPacketTest(unittest.TestCase):
                 runner.load_and_validate_packet(packet_path)
 
     def test_schema_rejects_summary_scope_creep_when_jsonschema_available(self) -> None:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
-
         with tempfile.TemporaryDirectory() as tmp:
             summary_path = Path(tmp) / "summary.json"
             with mock.patch.dict(os.environ, {"TUSHARE_TOKEN": "unit-test-token"}, clear=True):
@@ -164,6 +166,29 @@ class ALongFullMainBoardMaterializationPacketTest(unittest.TestCase):
             self.assertGreaterEqual(calls["count"], 2)
             self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"status": "ok", "rows": [1, 2, 3]})
             self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+
+    def test_checkpoint_reuse_rejects_request_shape_drift(self) -> None:
+        call = runner.base_call_plan()[0]
+        raw_path = runner.raw_payload_path(self.raw_root, call["call_id"])
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_path.write_text(
+            json.dumps(
+                {
+                    "call_id": call["call_id"],
+                    "table_id": call["table_id"],
+                    "api_family": call["api_family"],
+                    "request_shape_without_token": {"fields": "stale"},
+                    "call_status": "success",
+                    "row_count": 1,
+                    "columns": call["minimum_fields"],
+                    "records": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "request shape drifted"):
+            runner.execute_call_with_checkpoint(mock.Mock(), call, self.raw_root, pacer=mock.Mock())
 
     def _contains_key(self, payload, needle: str) -> bool:
         if isinstance(payload, dict):

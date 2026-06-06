@@ -4,9 +4,10 @@ import argparse
 import csv
 import json
 import math
+import os
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean, pstdev
@@ -28,6 +29,7 @@ AUDIT_REPORT_PATH = ROOT / "research" / "results" / "a_long_full_main_board_data
 RESTATEMENT_EXCLUSION_LIST_PATH = (
     ROOT / "research" / "results" / "a_long_full_main_board_data_integrity_audit_20260605" / "restatement_ambiguous_exclusions.csv"
 )
+BENCHMARK_ACCESS_PROBE_SUMMARY_PATH = ROOT / "docs" / "a_long_total_return_benchmark_access_probe_summary_20260606.json"
 RAW_ROOT_REL = Path("data/a_long/raw/tushare/full_main_board_signal_search_20260605")
 RAW_ROOT = ROOT / RAW_ROOT_REL
 OUTPUT_DIR = ROOT / "research" / "results" / "a_long_signal_search_20260604"
@@ -41,18 +43,31 @@ EXPECTED_DELISTED_COUNT = 187
 EXPECTED_UNIVERSE_COUNT = 3387
 EXPECTED_NO_INDUSTRY_EXCEPTION_COUNT = 191
 EXPECTED_RESTATEMENT_EXCLUSION_GROUP_COUNT = 1504
+EXPECTED_ENDPOINT_RESULTS_COUNT = 23718
+SELECTION_STATUS_CALL_ID = "namechange_2018_2025"
+SELECTION_STATUS_SOURCE = "tushare_namechange_pit_history"
 ALLOWED_SIGNAL_FAMILIES = [
     "profitability_quality",
     "cash_conversion",
     "balance_sheet_strength",
     "earnings_stability",
 ]
+F_ANN_DATE_REQUIRED_TABLES = {"income", "balancesheet", "cashflow", "fina_indicator"}
 HORIZONS = [252, 504]
 BENCHMARKS = {
-    "CSI300": "000300.SH",
-    "CSI1000": "000852.SH",
+    "CSI300": "H00300.CSI",
+    "CSI1000": "H00852.CSI",
 }
 PRIMARY_BENCHMARK = "CSI300"
+SECONDARY_BENCHMARK = "CSI1000"
+STOCK_RETURN_BASIS = "stock_total_return_adj_factor_next_trading_day_close_to_exit_close"
+BENCHMARK_RETURN_BASIS = "benchmark_total_return_index_next_trading_day_close_to_same_exit_close"
+BENCHMARK_ACCESS_STATUS = "total_return_close_available_close_to_close_amendment_selected"
+MONTHLY_T_STAT_METHOD = "newey_west_hac_on_monthly_overlapping_cohorts"
+HAC_LAG_RULE = "ceil_horizon_trading_days_div_21_capped_at_monthly_cohort_count_minus_1"
+TRADING_DAYS_PER_MONTH = 21
+EARNINGS_STABILITY_BASIS = "same_period_yoy_profit_dedt_growth_volatility"
+MIN_EARNINGS_STABILITY_YOY_GROWTHS = 3
 SUMMARY_ARTIFACT_ID = "a_long_signal_search_execution_summary_20260604"
 FULL_PERIOD_SUFFIX = "2018_2025"
 MIN_MONTHLY_COHORTS = 48
@@ -61,6 +76,7 @@ TOP_FRACTION = 0.2
 MIN_TOP_COUNT = 10
 MAX_TOP_SYMBOL_SELECTION_SHARE = 0.2
 MAX_SINGLE_YEAR_POSITIVE_RETURN_SHARE = 0.35
+MIN_ALLOWED_MONTHLY_EXCESS_DRAWDOWN = -0.15
 
 # Conservative round-trip cost: buy commission + sell commission + sell stamp tax
 # + buy/sell slippage. This is intentionally not optimized by result.
@@ -80,6 +96,9 @@ class SignalContext:
     trade_dates: list[str]
     list_date_by_symbol: dict[str, str]
     delist_date_by_symbol: dict[str, str | None]
+    name_by_symbol: dict[str, str] = field(default_factory=dict)
+    selection_status_by_symbol: dict[str, list[dict[str, str | None]]] = field(default_factory=dict)
+    selection_status_source: str = SELECTION_STATUS_SOURCE
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -111,11 +130,21 @@ def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
 
 
+def write_json_atomic(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    write_json(tmp_path, payload)
+    tmp_path.replace(path)
+
+
 def validate_json(schema_path: Path, payload: dict[str, Any]) -> None:
     try:
         from jsonschema import Draft7Validator
-    except ModuleNotFoundError:
-        return
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "jsonschema is required for A-long schema-gated signal search; "
+            "install project requirements before running this producer."
+        ) from exc
     schema = read_json(schema_path)
     errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
     if errors:
@@ -202,12 +231,39 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
     design = prereg.get("search_design") or {}
     if design.get("allowed_signal_families") != ALLOWED_SIGNAL_FAMILIES:
         raise ValueError("allowed signal families drifted")
+    signal_policy = design.get("signal_family_measurement_policy") or {}
+    if signal_policy.get("earnings_stability_basis") != EARNINGS_STABILITY_BASIS:
+        raise ValueError("earnings_stability basis drifted")
+    if signal_policy.get("mixed_ytd_quarter_sequence_allowed") is not False:
+        raise ValueError("earnings_stability must not mix YTD 3/6/9/12-month cumulative profit rows")
+    if signal_policy.get("minimum_same_period_yoy_growths") != MIN_EARNINGS_STABILITY_YOY_GROWTHS:
+        raise ValueError("earnings_stability minimum YoY growth count drifted")
     if design.get("entry_exit_measurement_rule", {}).get("exit_horizons_trading_days") != HORIZONS:
         raise ValueError("exit horizons drifted")
     if design.get("benchmark_rule", {}).get("primary_benchmark") != "CSI300":
         raise ValueError("primary benchmark drifted")
     if design.get("benchmark_rule", {}).get("secondary_benchmark") != "CSI1000":
         raise ValueError("secondary benchmark drifted")
+    measurement_rule = design.get("entry_exit_measurement_rule") or {}
+    if measurement_rule.get("entry_rule") != "next_trading_day_close_after_as_of":
+        raise ValueError("A-long entry rule must be next trading day close after the close-to-close amendment")
+    if measurement_rule.get("stock_return_basis") != STOCK_RETURN_BASIS:
+        raise ValueError("A-long stock return basis must be adj_factor total return after the close-to-close amendment")
+    if measurement_rule.get("dividend_and_adj_factor_required") is not True:
+        raise ValueError("close-to-close total-vs-total amendment must require adj_factor total return")
+    benchmark_rule = design.get("benchmark_rule") or {}
+    if benchmark_rule.get("benchmark_return_basis") != BENCHMARK_RETURN_BASIS:
+        raise ValueError("A-long benchmark return basis must be total-return-index same-anchor close-to-close")
+    if benchmark_rule.get("benchmark_access_probe_ref") != "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json":
+        raise ValueError("A-long benchmark access probe ref drifted")
+    if benchmark_rule.get("benchmark_access_status") != BENCHMARK_ACCESS_STATUS:
+        raise ValueError("A-long benchmark access status drifted from the reviewed close-to-close amendment")
+    if benchmark_rule.get("price_index_benchmark_allowed") is not False:
+        raise ValueError("price-index benchmark must remain forbidden after the close-to-close total-vs-total amendment")
+    if benchmark_rule.get("price_index_fallback_allowed") is not False:
+        raise ValueError("price-index fallback must remain forbidden")
+    if benchmark_rule.get("derived_total_return_open_allowed") is not False:
+        raise ValueError("derived total-return benchmark open must remain forbidden")
 
     industry = design.get("industry_policy") or {}
     if industry.get("exception_count") != EXPECTED_NO_INDUSTRY_EXCEPTION_COUNT:
@@ -216,6 +272,12 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
         raise ValueError("no-industry exceptions must stay in returns and risk")
     if industry.get("exception_excluded_only_from_industry_denominators") is not True:
         raise ValueError("no-industry exceptions may only leave industry denominators")
+    if industry.get("selection_time_st_or_delisting_name_veto_required") is not True:
+        raise ValueError("selection-time ST / delisting-name veto must remain required")
+    if industry.get("pit_selection_status_source_required") is not True:
+        raise ValueError("selection-time veto must require a PIT name/status source")
+    if industry.get("current_stock_basic_name_veto_allowed") is not False:
+        raise ValueError("current stock_basic.name must not be used as a historical selection-time veto source")
     if industry.get("silent_industry_fill_allowed") is not False:
         raise ValueError("silent industry fill must remain forbidden")
 
@@ -236,8 +298,16 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
         raise ValueError("parameter sweep must remain forbidden")
     if testing.get("post_result_rescue_slicing_allowed") is not False:
         raise ValueError("post-result rescue slicing must remain forbidden")
+    if testing.get("t_stat_method") != MONTHLY_T_STAT_METHOD:
+        raise ValueError("monthly cohort t-stat method must be Newey-West HAC for overlapping long-horizon returns")
+    if testing.get("hac_lag_rule") != HAC_LAG_RULE:
+        raise ValueError("HAC lag rule drifted")
+    if testing.get("monthly_cohort_count_is_not_independent_n") is not True:
+        raise ValueError("monthly cohort count must not be treated as independent sample size")
     if testing.get("minimum_monthly_cohorts") < MIN_MONTHLY_COHORTS:
         raise ValueError("minimum monthly cohorts drifted")
+    if testing.get("min_allowed_monthly_excess_drawdown") != MIN_ALLOWED_MONTHLY_EXCESS_DRAWDOWN:
+        raise ValueError("monthly excess drawdown gate drifted")
     return prereg
 
 
@@ -284,7 +354,42 @@ def load_and_validate_audit_report(path: Path = AUDIT_REPORT_PATH) -> dict[str, 
         raise ValueError("audit universe count drifted")
     if boundary.get("reviewed_no_industry_exception_count") != EXPECTED_NO_INDUSTRY_EXCEPTION_COUNT:
         raise ValueError("audit no-industry exception count drifted")
+    checks = {item.get("check_id"): item for item in report.get("checks", [])}
+    status_check = checks.get("selection_time_status_source")
+    if not status_check or status_check.get("status") != "pass_full_main_board":
+        raise ValueError("full audit must pass PIT selection-time name/status source check")
+    benchmark_check = checks.get("return_benchmark_measurement_basis") or {}
+    metrics = benchmark_check.get("metrics") or {}
+    if metrics.get("benchmark_return_basis") != BENCHMARK_RETURN_BASIS:
+        raise ValueError("full audit benchmark check must match the H-code total-return close basis")
     return report
+
+
+def load_and_validate_benchmark_route_amendment(path: Path = BENCHMARK_ACCESS_PROBE_SUMMARY_PATH) -> dict[str, Any]:
+    summary = read_json(path)
+    if summary.get("schema_name") != "a_long_total_return_benchmark_access_probe_summary":
+        raise ValueError("A-long total-return benchmark access probe schema_name mismatch")
+    decision = summary.get("decision") or {}
+    if decision.get("price_index_fallback_allowed") is not False:
+        raise ValueError("price-index benchmark fallback must remain forbidden")
+    if decision.get("derived_total_return_open_allowed") is not False:
+        raise ValueError("derived total-return benchmark open must remain forbidden")
+    if decision.get("benchmark_access_status") != "blocked_total_return_same_anchor_open_unavailable":
+        raise ValueError(
+            "A-long close-to-close amendment must be grounded in the blocked total-return-open probe"
+        )
+    if decision.get("runner_benchmark_switch_allowed") is not False:
+        raise ValueError("A-long probe summary must not authorize runner benchmark switch by itself")
+    close_only_codes = {
+        item.get("benchmark_label"): item.get("ts_code")
+        for item in summary.get("direct_probes", [])
+        if item.get("candidate_role") == "total_return_candidate"
+        and item.get("close_only_total_return_candidate") is True
+        and int(item.get("close_non_null_count") or 0) > 0
+    }
+    if close_only_codes.get("CSI300") != BENCHMARKS["CSI300"] or close_only_codes.get("CSI1000") != BENCHMARKS["CSI1000"]:
+        raise ValueError("A-long close-to-close amendment requires probed total-return close data for CSI300 and CSI1000")
+    return summary
 
 
 def load_restatement_exclusions(path: Path = RESTATEMENT_EXCLUSION_LIST_PATH) -> set[tuple[str, str, str, str]]:
@@ -314,19 +419,55 @@ def validate_materialization_summary_and_manifest(raw_root: Path) -> tuple[dict[
     summary = read_json(MATERIALIZATION_SUMMARY_PATH)
     audit.validate_materialization_summary(summary)
     execution = summary.get("execution") or {}
-    if execution.get("endpoint_results_count") != 23717:
+    if execution.get("endpoint_results_count") != EXPECTED_ENDPOINT_RESULTS_COUNT:
         raise ValueError("materialization endpoint count drifted")
     if execution.get("token_logged") is not False or execution.get("request_url_logged") is not False:
         raise ValueError("materialization summary must not log token or request URL")
     manifest = audit.load_endpoint_manifest(summary, raw_root)
+    required_benchmark_call_ids = [benchmark_call_id(code) for code in BENCHMARKS.values()]
+    missing_benchmark_call_ids = [call_id for call_id in required_benchmark_call_ids if call_id not in manifest]
+    if missing_benchmark_call_ids:
+        raise ValueError(
+            "materialized raw panel lacks required total-return benchmark index_daily payloads: "
+            + ", ".join(missing_benchmark_call_ids)
+        )
+    required_ids = required_benchmark_call_ids + [SELECTION_STATUS_CALL_ID]
+    for call_id in required_ids:
+        item = manifest.get(call_id)
+        if item is None:
+            raise ValueError(f"materialized raw panel lacks required PIT/status payload: {call_id}")
+        if item.get("call_status") != "success" or int(item.get("row_count") or 0) <= 0:
+            raise ValueError(f"required materialized payload is empty or not successful: {call_id}")
     store = audit.PayloadStore(raw_root=raw_root, manifest=manifest)
     return summary, manifest, store
+
+
+def selection_status_history(store: audit.PayloadStore, symbols: set[str]) -> dict[str, list[dict[str, str | None]]]:
+    history: dict[str, list[dict[str, str | None]]] = defaultdict(list)
+    for row in store.records(SELECTION_STATUS_CALL_ID):
+        symbol = str(row.get("ts_code") or "")
+        if symbol not in symbols:
+            continue
+        start_date = normalize_yyyymmdd(row.get("start_date"))
+        if start_date is None:
+            continue
+        history[symbol].append(
+            {
+                "name": str(row.get("name") or ""),
+                "start_date": start_date,
+                "end_date": normalize_yyyymmdd(row.get("end_date")),
+            }
+        )
+    for events in history.values():
+        events.sort(key=lambda item: (str(item.get("start_date") or ""), str(item.get("end_date") or "")))
+    return dict(history)
 
 
 def build_signal_context(store: audit.PayloadStore, repair: dict[str, Any]) -> SignalContext:
     audit_context = audit.build_context(store, repair)
     list_date_by_symbol: dict[str, str] = {}
     delist_date_by_symbol: dict[str, str | None] = {}
+    name_by_symbol: dict[str, str] = {}
     for call_id in ["stock_basic_active_L", "stock_basic_delisted_D"]:
         for row in store.records(call_id):
             symbol = row.get("ts_code")
@@ -337,6 +478,12 @@ def build_signal_context(store: audit.PayloadStore, repair: dict[str, Any]) -> S
                 continue
             list_date_by_symbol[text_symbol] = normalize_yyyymmdd(row.get("list_date")) or "00000000"
             delist_date_by_symbol[text_symbol] = normalize_yyyymmdd(row.get("delist_date"))
+            name_by_symbol[text_symbol] = str(row.get("name") or "")
+    status_history = selection_status_history(store, set(audit_context.symbols))
+    if not status_history:
+        raise ValueError(
+            "PIT selection-time name/status history is missing; current stock_basic.name cannot be used for historical veto"
+        )
     trade_dates = sorted(
         {
             str(row["cal_date"])
@@ -361,6 +508,8 @@ def build_signal_context(store: audit.PayloadStore, repair: dict[str, Any]) -> S
         trade_dates=trade_dates,
         list_date_by_symbol=list_date_by_symbol,
         delist_date_by_symbol=delist_date_by_symbol,
+        name_by_symbol=name_by_symbol,
+        selection_status_by_symbol=status_history,
     )
 
 
@@ -387,6 +536,8 @@ def select_latest_pit_row(
         if ann_date is None or end_date is None or ann_date > as_of:
             continue
         f_ann_date = normalize_yyyymmdd(row.get("f_ann_date"))
+        if table_id in F_ANN_DATE_REQUIRED_TABLES and f_ann_date is None:
+            continue
         if f_ann_date is not None and f_ann_date > as_of:
             continue
         if row_exclusion_key(table_id, row) in restatement_exclusions:
@@ -428,6 +579,37 @@ def select_recent_pit_rows(
     return [by_period[key] for key in sorted(by_period.keys(), reverse=True)[:limit]]
 
 
+def same_period_yoy_growths_from_ytd_profit(rows: list[dict[str, Any]], *, max_period_values: int = 5) -> list[float]:
+    period_profit: dict[str, float] = {}
+    for row in rows:
+        end_date = normalize_yyyymmdd(row.get("end_date"))
+        profit = numeric(row.get("profit_dedt"))
+        if end_date and profit is not None:
+            period_profit[end_date] = profit
+    if not period_profit:
+        return []
+
+    latest_end_date = max(period_profit)
+    period_suffix = latest_end_date[4:]
+    by_year: dict[int, float] = {}
+    for end_date, profit in period_profit.items():
+        if end_date[4:] == period_suffix:
+            by_year[int(end_date[:4])] = profit
+
+    selected_years = sorted(by_year.keys(), reverse=True)[:max_period_values]
+    selected_year_set = set(selected_years)
+    growths: list[float] = []
+    for year in selected_years:
+        previous_year = year - 1
+        if previous_year not in selected_year_set:
+            continue
+        previous_profit = by_year[previous_year]
+        if previous_profit == 0:
+            continue
+        growths.append((by_year[year] - previous_profit) / abs(previous_profit))
+    return growths
+
+
 def compute_signal_values(
     store: audit.PayloadStore,
     symbol: str,
@@ -451,7 +633,9 @@ def compute_signal_values(
 
     cashflow = numeric(cash_row.get("n_cashflow_act")) if cash_row else None
     net_income = numeric(income_row.get("n_income_attr_p")) if income_row else None
-    if cashflow is not None and net_income not in (None, 0.0):
+    income_end_date = normalize_yyyymmdd(income_row.get("end_date")) if income_row else None
+    cash_end_date = normalize_yyyymmdd(cash_row.get("end_date")) if cash_row else None
+    if cashflow is not None and net_income not in (None, 0.0) and income_end_date == cash_end_date:
         values["cash_conversion"] = cashflow / abs(net_income)
 
     equity = numeric(balance_row.get("total_hldr_eqy_exc_min_int")) if balance_row else None
@@ -465,14 +649,11 @@ def compute_signal_values(
         table_id="fina_indicator",
         as_of=as_of,
         restatement_exclusions=restatement_exclusions,
-        limit=4,
+        limit=32,
     )
-    profits = [numeric(row.get("profit_dedt")) for row in recent_profit_rows]
-    clean_profits = [value for value in profits if value is not None]
-    if len(clean_profits) >= 3:
-        avg_abs = abs(mean(clean_profits))
-        if avg_abs > 0:
-            values["earnings_stability"] = -(pstdev(clean_profits) / avg_abs)
+    yoy_growths = same_period_yoy_growths_from_ytd_profit(recent_profit_rows)
+    if len(yoy_growths) >= MIN_EARNINGS_STABILITY_YOY_GROWTHS:
+        values["earnings_stability"] = -pstdev(yoy_growths)
     return values
 
 
@@ -499,6 +680,35 @@ def symbol_in_pit_scored_universe(context: SignalContext, symbol: str, as_of: st
     if delist_date is not None and as_of >= delist_date:
         return False
     return True
+
+
+def selection_time_name_vetoed(name: str | None) -> bool:
+    if not name:
+        return False
+    text = str(name).strip()
+    upper = text.upper().replace("＊", "*")
+    return (
+        upper.startswith("*ST")
+        or upper.startswith("ST")
+        or upper.startswith("S*ST")
+        or upper.startswith("SST")
+        or text.startswith("退")
+        or "退市" in text
+    )
+
+
+def selection_time_names_for_symbol(context: SignalContext, symbol: str, as_of: str) -> list[str]:
+    names: list[str] = []
+    for event in context.selection_status_by_symbol.get(symbol, []):
+        start_date = event.get("start_date")
+        end_date = event.get("end_date")
+        if start_date and start_date <= as_of and (end_date is None or as_of <= end_date):
+            names.append(str(event.get("name") or ""))
+    return names
+
+
+def symbol_vetoed_at_selection_time(context: SignalContext, symbol: str, as_of: str) -> bool:
+    return any(selection_time_name_vetoed(name) for name in selection_time_names_for_symbol(context, symbol, as_of))
 
 
 def load_industry_records(store: audit.PayloadStore) -> dict[str, list[dict[str, Any]]]:
@@ -601,37 +811,40 @@ def add_industry_neutral_scores(items: list[dict[str, Any]], family: str) -> Non
     for item in items:
         if item["symbol"] in neutral_scores:
             item[f"{family}__industry_neutral"] = neutral_scores[item["symbol"]]
+        item.pop("_industry_percentile", None)
 
 
-def adjusted_price_rows(store: audit.PayloadStore, symbol: str) -> dict[str, dict[str, float]]:
+def stock_total_return_close_rows(store: audit.PayloadStore, symbol: str) -> dict[str, dict[str, float]]:
     daily_rows = store.records(call_id_for("daily", symbol))
-    adj_rows = store.records(call_id_for("adj_factor", symbol))
-    adj_by_date = {normalize_yyyymmdd(row.get("trade_date")): numeric(row.get("adj_factor")) for row in adj_rows}
+    factor_rows = store.records(call_id_for("adj_factor", symbol))
+    factor_by_date: dict[str, float] = {}
+    for row in factor_rows:
+        trade_date = normalize_yyyymmdd(row.get("trade_date"))
+        factor = numeric(row.get("adj_factor"))
+        if trade_date and factor is not None:
+            factor_by_date[trade_date] = factor
     out: dict[str, dict[str, float]] = {}
     for row in daily_rows:
         trade_date = normalize_yyyymmdd(row.get("trade_date"))
         if not trade_date:
             continue
-        factor = adj_by_date.get(trade_date)
-        open_price = numeric(row.get("open"))
         close_price = numeric(row.get("close"))
-        if factor is None or open_price is None or close_price is None:
+        factor = factor_by_date.get(trade_date)
+        if close_price is None or factor is None:
             continue
         out[trade_date] = {
-            "open": open_price * factor,
             "close": close_price * factor,
         }
     return out
 
 
-def index_price_rows(store: audit.PayloadStore, benchmark_code: str) -> dict[str, dict[str, float]]:
+def index_total_return_close_rows(store: audit.PayloadStore, benchmark_code: str) -> dict[str, dict[str, float]]:
     out: dict[str, dict[str, float]] = {}
     for row in store.records(benchmark_call_id(benchmark_code)):
         trade_date = normalize_yyyymmdd(row.get("trade_date"))
-        open_price = numeric(row.get("open"))
         close_price = numeric(row.get("close"))
-        if trade_date and open_price is not None and close_price is not None:
-            out[trade_date] = {"open": open_price, "close": close_price}
+        if trade_date and close_price is not None:
+            out[trade_date] = {"close": close_price}
     return out
 
 
@@ -662,17 +875,18 @@ def compute_return(
         if not earlier:
             return None, None, entry_date, exit_date
         stock_exit_date = max(earlier)
-    if entry_date not in index_prices or exit_date not in index_prices:
-        return None, None, entry_date, exit_date
-    stock_entry = stock_prices[entry_date]["open"]
+    benchmark_exit_date = stock_exit_date
+    if entry_date not in index_prices or benchmark_exit_date not in index_prices:
+        return None, None, entry_date, benchmark_exit_date
+    stock_entry = stock_prices[entry_date]["close"]
     stock_exit = stock_prices[stock_exit_date]["close"]
-    bench_entry = index_prices[entry_date]["open"]
-    bench_exit = index_prices[exit_date]["close"]
+    bench_entry = index_prices[entry_date]["close"]
+    bench_exit = index_prices[benchmark_exit_date]["close"]
     if min(stock_entry, stock_exit, bench_entry, bench_exit) <= 0:
-        return None, None, entry_date, exit_date
+        return None, None, entry_date, benchmark_exit_date
     stock_return = (stock_exit / stock_entry) - 1.0 - ROUND_TRIP_COST
     benchmark_return = (bench_exit / bench_entry) - 1.0
-    return stock_return, benchmark_return, entry_date, exit_date
+    return stock_return, benchmark_return, entry_date, benchmark_exit_date
 
 
 def monthly_cohort_rows(
@@ -682,7 +896,7 @@ def monthly_cohort_rows(
     restatement_exclusions: set[tuple[str, str, str, str]],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     industry_records = load_industry_records(store)
-    index_prices = {name: index_price_rows(store, code) for name, code in BENCHMARKS.items()}
+    index_prices = {name: index_total_return_close_rows(store, code) for name, code in BENCHMARKS.items()}
     stock_price_cache: dict[str, dict[str, dict[str, float]]] = {}
     rows: list[dict[str, Any]] = []
     diagnostics = {
@@ -692,6 +906,8 @@ def monthly_cohort_rows(
         "industry_denominator_exclusion_symbol_count": len(context.exception_symbols),
         "scored_pit_universe_excluded_before_list_count": 0,
         "scored_pit_universe_excluded_after_delist_count": 0,
+        "selection_time_name_vetoed_observation_count": 0,
+        "selection_time_name_vetoed_symbol_count": 0,
         "industry_neutral_excluded_observation_count": 0,
         "industry_neutral_excluded_symbol_count": 0,
         "industry_neutral_excluded_observation_share": None,
@@ -703,6 +919,7 @@ def monthly_cohort_rows(
     industry_neutral_scored_observations = 0
     industry_neutral_scored_2018_2020_observations = 0
     industry_neutral_excluded_symbols: set[str] = set()
+    selection_time_name_vetoed_symbols: set[str] = set()
     for as_of in context.as_ofs:
         scored: list[dict[str, Any]] = []
         for symbol in context.symbols:
@@ -713,6 +930,10 @@ def monthly_cohort_rows(
                 continue
             if delist_date is not None and as_of >= delist_date:
                 diagnostics["scored_pit_universe_excluded_after_delist_count"] += 1
+                continue
+            if symbol_vetoed_at_selection_time(context, symbol, as_of):
+                diagnostics["selection_time_name_vetoed_observation_count"] += 1
+                selection_time_name_vetoed_symbols.add(symbol)
                 continue
             values = compute_signal_values(store, symbol, as_of, restatement_exclusions)
             if not values:
@@ -744,7 +965,7 @@ def monthly_cohort_rows(
         for item in scored:
             symbol = item["symbol"]
             if symbol not in stock_price_cache:
-                stock_price_cache[symbol] = adjusted_price_rows(store, symbol)
+                stock_price_cache[symbol] = stock_total_return_close_rows(store, symbol)
             for horizon in HORIZONS:
                 stock_ret, _primary_bench_ret, entry_date, exit_date = compute_return(
                     stock_price_cache[symbol],
@@ -773,9 +994,10 @@ def monthly_cohort_rows(
                         as_of,
                         horizon,
                     )
-                row[f"excess_{benchmark_name}"] = None if bench_ret is None else stock_ret - bench_ret
+                    row[f"excess_{benchmark_name}"] = None if bench_ret is None else stock_ret - bench_ret
                 rows.append(row)
     diagnostics["industry_neutral_excluded_symbol_count"] = len(industry_neutral_excluded_symbols)
+    diagnostics["selection_time_name_vetoed_symbol_count"] = len(selection_time_name_vetoed_symbols)
     if industry_neutral_scored_observations:
         diagnostics["industry_neutral_excluded_observation_share"] = round(
             diagnostics["industry_neutral_excluded_observation_count"] / industry_neutral_scored_observations,
@@ -792,6 +1014,35 @@ def monthly_cohort_rows(
 
 def normal_two_sided_p_value(t_stat: float) -> float:
     return math.erfc(abs(t_stat) / math.sqrt(2.0))
+
+
+def hac_lag_for_horizon(horizon: int, cohort_count: int) -> int:
+    if cohort_count <= 1:
+        return 0
+    configured_lag = max(1, math.ceil(horizon / TRADING_DAYS_PER_MONTH))
+    return min(configured_lag, cohort_count - 1)
+
+
+def newey_west_hac_t_stat(values: list[float], *, horizon: int) -> tuple[float | None, float | None, int]:
+    if not values:
+        return None, None, 0
+    if len(values) == 1:
+        return 0.0, None, 0
+
+    avg = mean(values)
+    lag = hac_lag_for_horizon(horizon, len(values))
+    residuals = [value - avg for value in values]
+    gamma0 = sum(value * value for value in residuals) / len(values)
+    long_run_variance = gamma0
+    for offset in range(1, lag + 1):
+        autocovariance = sum(residuals[index] * residuals[index - offset] for index in range(offset, len(values))) / len(values)
+        weight = 1.0 - (offset / (lag + 1.0))
+        long_run_variance += 2.0 * weight * autocovariance
+
+    long_run_variance = max(long_run_variance, 0.0)
+    standard_error = math.sqrt(long_run_variance / len(values)) if long_run_variance > 0 else 0.0
+    t_stat = 0.0 if standard_error == 0 else avg / standard_error
+    return t_stat, standard_error, lag
 
 
 def add_bh_adjusted_p(results: list[dict[str, Any]]) -> None:
@@ -822,94 +1073,160 @@ def summarize_results(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for view in ["non_neutral", "industry_neutral"]:
             score_field = f"{family}__{view}"
             for horizon in HORIZONS:
-                cohort_returns: list[float] = []
-                selected_symbols: dict[str, int] = defaultdict(int)
-                yearly_positive_return_contribution: dict[str, float] = defaultdict(float)
-                as_ofs = sorted({row["as_of"] for row in rows if row.get("horizon") == horizon and row.get(score_field) is not None})
-                for as_of in as_ofs:
-                    cohort = [
-                        row for row in rows
-                        if row.get("as_of") == as_of
-                        and row.get("horizon") == horizon
-                        and row.get(score_field) is not None
-                        and row.get(f"excess_{PRIMARY_BENCHMARK}") is not None
-                    ]
-                    if not cohort:
-                        continue
-                    cohort.sort(key=lambda row: row[score_field], reverse=True)
-                    top_count = max(MIN_TOP_COUNT, int(len(cohort) * TOP_FRACTION))
-                    selected = cohort[:top_count]
-                    cohort_return = mean(float(row[f"excess_{PRIMARY_BENCHMARK}"]) for row in selected)
-                    cohort_returns.append(cohort_return)
-                    if cohort_return > 0:
-                        yearly_positive_return_contribution[str(as_of)[:4]] += cohort_return
-                    for row in selected:
-                        selected_symbols[str(row["symbol"])] += 1
-                if len(cohort_returns) >= 2:
-                    avg = mean(cohort_returns)
-                    sd = pstdev(cohort_returns)
-                    t_stat = 0.0 if sd == 0 else avg / (sd / math.sqrt(len(cohort_returns)))
-                    p_value = normal_two_sided_p_value(t_stat)
-                elif cohort_returns:
-                    avg = cohort_returns[0]
-                    sd = 0.0
-                    t_stat = 0.0
-                    p_value = None
-                else:
-                    avg = None
-                    sd = None
-                    t_stat = None
-                    p_value = None
-                total_selections = sum(selected_symbols.values())
-                top_symbol_share = max(selected_symbols.values()) / total_selections if total_selections else None
-                total_positive_return_contribution = sum(yearly_positive_return_contribution.values())
-                single_year_positive_return_share = (
-                    max(yearly_positive_return_contribution.values()) / total_positive_return_contribution
-                    if total_positive_return_contribution > 0
-                    else None
-                )
-                results.append(
-                    {
-                        "signal_family": family,
-                        "view": view,
-                        "horizon_trading_days": horizon,
-                        "monthly_cohort_count": len(cohort_returns),
-                        "mean_monthly_cohort_net_excess": None if avg is None else round(avg, 10),
-                        "monthly_cohort_std": None if sd is None else round(sd, 10),
-                        "monthly_clustered_t_stat": None if t_stat is None else round(t_stat, 10),
-                        "p_value": None if p_value is None else round(p_value, 10),
-                        "bh_adjusted_p_value": None,
-                        "positive_month_count": len([value for value in cohort_returns if value > 0]),
-                        "max_drawdown_on_monthly_excess": round(max_drawdown(cohort_returns), 10) if cohort_returns else None,
-                        "top_symbol_selection_share": None if top_symbol_share is None else round(top_symbol_share, 10),
-                        "max_single_year_positive_return_share": (
-                            None if single_year_positive_return_share is None else round(single_year_positive_return_share, 10)
-                        ),
-                        "passes_minimum_monthly_cohorts": len(cohort_returns) >= MIN_MONTHLY_COHORTS,
-                        "passes_name_concentration_guard": top_symbol_share is not None and top_symbol_share <= MAX_TOP_SYMBOL_SELECTION_SHARE,
-                        "passes_single_year_concentration_guard": (
-                            single_year_positive_return_share is not None
-                            and single_year_positive_return_share <= MAX_SINGLE_YEAR_POSITIVE_RETURN_SHARE
-                        ),
-                    }
-                )
+                for benchmark_name in BENCHMARKS:
+                    excess_field = f"excess_{benchmark_name}"
+                    cohort_returns: list[float] = []
+                    selected_symbols: dict[str, int] = defaultdict(int)
+                    yearly_positive_return_contribution: dict[str, float] = defaultdict(float)
+                    as_ofs = sorted({row["as_of"] for row in rows if row.get("horizon") == horizon and row.get(score_field) is not None})
+                    for as_of in as_ofs:
+                        cohort = [
+                            row for row in rows
+                            if row.get("as_of") == as_of
+                            and row.get("horizon") == horizon
+                            and row.get(score_field) is not None
+                            and row.get(excess_field) is not None
+                        ]
+                        if not cohort:
+                            continue
+                        cohort.sort(key=lambda row: row[score_field], reverse=True)
+                        top_count = max(MIN_TOP_COUNT, int(len(cohort) * TOP_FRACTION))
+                        selected = cohort[:top_count]
+                        cohort_return = mean(float(row[excess_field]) for row in selected)
+                        cohort_returns.append(cohort_return)
+                        if cohort_return > 0:
+                            yearly_positive_return_contribution[str(as_of)[:4]] += cohort_return
+                        for row in selected:
+                            selected_symbols[str(row["symbol"])] += 1
+                    if len(cohort_returns) >= 2:
+                        avg = mean(cohort_returns)
+                        sd = pstdev(cohort_returns)
+                        t_stat, _hac_standard_error, hac_lag_months = newey_west_hac_t_stat(cohort_returns, horizon=horizon)
+                        p_value = normal_two_sided_p_value(t_stat)
+                    elif cohort_returns:
+                        avg = cohort_returns[0]
+                        sd = 0.0
+                        t_stat = 0.0
+                        hac_lag_months = 0
+                        p_value = None
+                    else:
+                        avg = None
+                        sd = None
+                        t_stat = None
+                        hac_lag_months = 0
+                        p_value = None
+                    total_selections = sum(selected_symbols.values())
+                    top_symbol_share = max(selected_symbols.values()) / total_selections if total_selections else None
+                    total_positive_return_contribution = sum(yearly_positive_return_contribution.values())
+                    single_year_positive_return_share = (
+                        max(yearly_positive_return_contribution.values()) / total_positive_return_contribution
+                        if total_positive_return_contribution > 0
+                        else None
+                    )
+                    drawdown = max_drawdown(cohort_returns) if cohort_returns else None
+                    results.append(
+                        {
+                            "signal_family": family,
+                            "view": view,
+                            "horizon_trading_days": horizon,
+                            "benchmark": benchmark_name,
+                            "monthly_cohort_count": len(cohort_returns),
+                            "mean_monthly_cohort_net_excess": None if avg is None else round(avg, 10),
+                            "monthly_cohort_std": None if sd is None else round(sd, 10),
+                            "monthly_clustered_t_stat": None if t_stat is None else round(t_stat, 10),
+                            "monthly_t_stat_method": MONTHLY_T_STAT_METHOD,
+                            "hac_lag_months": hac_lag_months,
+                            "p_value": None if p_value is None else round(p_value, 10),
+                            "bh_adjusted_p_value": None,
+                            "positive_month_count": len([value for value in cohort_returns if value > 0]),
+                            "worst_monthly_cohort_excess": round(min(cohort_returns), 10) if cohort_returns else None,
+                            "best_monthly_cohort_excess": round(max(cohort_returns), 10) if cohort_returns else None,
+                            "max_drawdown_on_monthly_excess": None if drawdown is None else round(drawdown, 10),
+                            "top_symbol_selection_share": None if top_symbol_share is None else round(top_symbol_share, 10),
+                            "max_single_year_positive_return_share": (
+                                None if single_year_positive_return_share is None else round(single_year_positive_return_share, 10)
+                            ),
+                            "passes_minimum_monthly_cohorts": len(cohort_returns) >= MIN_MONTHLY_COHORTS,
+                            "passes_name_concentration_guard": top_symbol_share is not None and top_symbol_share <= MAX_TOP_SYMBOL_SELECTION_SHARE,
+                            "passes_single_year_concentration_guard": (
+                                single_year_positive_return_share is not None
+                                and single_year_positive_return_share <= MAX_SINGLE_YEAR_POSITIVE_RETURN_SHARE
+                            ),
+                            "passes_drawdown_guard": (
+                                drawdown is not None
+                                and drawdown >= MIN_ALLOWED_MONTHLY_EXCESS_DRAWDOWN
+                            ),
+                        }
+                    )
     add_bh_adjusted_p(results)
     return results
 
 
-def decision_from_results(results: list[dict[str, Any]]) -> dict[str, Any]:
-    candidates = [
-        item for item in results
-        if item.get("passes_minimum_monthly_cohorts") is True
+def validate_pipeline_result_sanity(rows: list[dict[str, Any]], results: list[dict[str, Any]]) -> None:
+    if not rows:
+        raise ValueError(
+            "signal-search pipeline failure: no evaluated return rows; "
+            "do not emit a no-alpha verdict or spend the singleton ledger"
+        )
+    expected_excess_fields = [f"excess_{benchmark_name}" for benchmark_name in BENCHMARKS]
+    missing_fields = [field for field in expected_excess_fields if all(field not in row for row in rows)]
+    if missing_fields:
+        raise ValueError(
+            "signal-search pipeline failure: evaluated return rows are missing benchmark excess fields: "
+            + ", ".join(missing_fields)
+        )
+    total_cohorts = sum(int(item.get("monthly_cohort_count") or 0) for item in results)
+    if total_cohorts == 0:
+        raise ValueError(
+            "signal-search pipeline failure: evaluated return rows produced zero monthly cohorts; "
+            "do not emit a no-alpha verdict or spend the singleton ledger"
+        )
+
+
+def result_cell_passes_candidate_threshold(item: dict[str, Any]) -> bool:
+    return (
+        item.get("passes_minimum_monthly_cohorts") is True
         and (item.get("mean_monthly_cohort_net_excess") or 0) > 0
         and (item.get("monthly_clustered_t_stat") or 0) >= 2.0
         and item.get("bh_adjusted_p_value") is not None
         and item["bh_adjusted_p_value"] <= FDR_ALPHA
         and item.get("passes_name_concentration_guard") is True
         and item.get("passes_single_year_concentration_guard") is True
+        and item.get("passes_drawdown_guard") is True
+    )
+
+
+def decision_from_results(results: list[dict[str, Any]]) -> dict[str, Any]:
+    cells_by_key = {
+        (
+            item.get("signal_family"),
+            item.get("view"),
+            item.get("horizon_trading_days"),
+            item.get("benchmark"),
+        ): item
+        for item in results
+    }
+    candidates = [
+        item for item in results
+        if item.get("benchmark") == PRIMARY_BENCHMARK
+        and result_cell_passes_candidate_threshold(item)
+        and result_cell_passes_candidate_threshold(
+            cells_by_key.get(
+                (
+                    item.get("signal_family"),
+                    item.get("view"),
+                    item.get("horizon_trading_days"),
+                    SECONDARY_BENCHMARK,
+                ),
+                {},
+            )
+        )
     ]
     if candidates:
-        plain = "Signal search found a research-only alpha clue. This is not enough for real-size use; it still needs forward validation."
+        plain = (
+            "Signal search found a research-only alpha clue that clears both CSI300 and CSI1000 robustness gates. "
+            "This is not enough for real-size use; it still needs forward validation."
+        )
         verdict = "candidate_alpha_clue_research_only"
     else:
         plain = "Signal search found no usable alpha clue under the frozen rules."
@@ -917,9 +1234,14 @@ def decision_from_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "research_verdict": verdict,
         "candidate_alpha_clue_count": len(candidates),
+        "secondary_benchmark_required_for_candidate_alpha": True,
         "alpha_found_for_production": False,
         "ship_gate_evidence": False,
         "full_size_allowed": False,
+        "size_exposure_caveat": (
+            "Equal-weight top-quintile A-long cohorts can carry size / equal-weight exposure versus cap-weighted CSI300; "
+            "candidate labels therefore require same-cell CSI1000 robustness and result review must inspect the CSI300-vs-CSI1000 gap."
+        ),
         "plain_result": plain,
         "next_action": (
             "If this result is no-alpha, do not rescue it by changing thresholds. "
@@ -942,6 +1264,7 @@ def build_summary(
     prereg = load_and_validate_preregistration()
     ledger = load_and_validate_ledger()
     audit_report = load_and_validate_audit_report()
+    load_and_validate_benchmark_route_amendment()
     restatement_exclusions = load_restatement_exclusions()
     materialization_summary, manifest, store = validate_materialization_summary_and_manifest(raw_root)
     repair = audit.validate_boundary_refs()
@@ -954,6 +1277,7 @@ def build_summary(
         )
     rows, diagnostics = monthly_cohort_rows(store=store, context=context, restatement_exclusions=restatement_exclusions)
     results = summarize_results(rows)
+    validate_pipeline_result_sanity(rows, results)
     decision = decision_from_results(results)
     return {
         "schema_name": "a_long_signal_search_execution_summary",
@@ -966,6 +1290,7 @@ def build_summary(
             display_path(MATERIALIZATION_SUMMARY_PATH),
             display_path(AUDIT_REPORT_PATH),
             display_path(RESTATEMENT_EXCLUSION_LIST_PATH),
+            display_path(BENCHMARK_ACCESS_PROBE_SUMMARY_PATH),
             "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
         ],
         "scope": {
@@ -992,6 +1317,7 @@ def build_summary(
             "preregistration_validated": prereg.get("artifact_id") == "a_long_signal_search_preregistration_20260604",
             "ledger_unspent_before_run": ledger["budget_policy"]["tests_spent_count"] == 0,
             "full_main_board_audit_passed": audit_report["decision"]["audit_status"] == "passed_full_main_board_data_integrity_for_signal_search",
+            "benchmark_route_amendment_validated": True,
             "restatement_exclusion_list_loaded": True,
             "restatement_exclusion_groups_expected": len(restatement_exclusions),
             "restatement_exclusion_groups_found_in_raw": restatement_keys_present,
@@ -1019,16 +1345,33 @@ def build_summary(
             "allowed_signal_families": list(ALLOWED_SIGNAL_FAMILIES),
             "horizons_trading_days": list(HORIZONS),
             "primary_benchmark": PRIMARY_BENCHMARK,
-            "secondary_benchmark": "CSI1000",
+            "secondary_benchmark": SECONDARY_BENCHMARK,
+            "stock_return_basis": STOCK_RETURN_BASIS,
+            "benchmark_return_basis": BENCHMARK_RETURN_BASIS,
+            "benchmark_access_probe_ref": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+            "benchmark_access_status": BENCHMARK_ACCESS_STATUS,
+            "price_index_benchmark_allowed": False,
+            "price_index_fallback_allowed": False,
+            "derived_total_return_open_allowed": False,
             "views": ["non_neutral", "industry_neutral"],
             "top_fraction": TOP_FRACTION,
             "minimum_top_count_per_month": MIN_TOP_COUNT,
             "minimum_monthly_cohorts": MIN_MONTHLY_COHORTS,
+            "monthly_t_stat_method": MONTHLY_T_STAT_METHOD,
+            "hac_lag_rule": HAC_LAG_RULE,
+            "monthly_cohort_count_is_not_independent_n": True,
+            "earnings_stability_basis": EARNINGS_STABILITY_BASIS,
+            "mixed_ytd_quarter_sequence_allowed": False,
+            "minimum_earnings_stability_yoy_growths": MIN_EARNINGS_STABILITY_YOY_GROWTHS,
+            "selection_time_status_source": SELECTION_STATUS_SOURCE,
+            "current_stock_basic_name_veto_allowed": False,
             "multiple_testing_correction": "benjamini_hochberg_fdr",
             "round_trip_cost": ROUND_TRIP_COST,
-            "same_anchor_open_to_close": True,
+            "same_anchor_close_to_close": True,
+            "secondary_benchmark_required_for_candidate_alpha": True,
             "max_top_symbol_selection_share": MAX_TOP_SYMBOL_SELECTION_SHARE,
             "max_single_year_positive_return_share": MAX_SINGLE_YEAR_POSITIVE_RETURN_SHARE,
+            "min_allowed_monthly_excess_drawdown": MIN_ALLOWED_MONTHLY_EXCESS_DRAWDOWN,
             "parameter_sweep_executed": False,
             "post_result_rescue_slicing_executed": False,
         },
@@ -1045,7 +1388,7 @@ def build_summary(
             "spends_singleton_test": True,
             "test_id": "a_long_signal_search_preregistration_20260604",
             "runner_writes_ledger": True,
-            "ledger_write_timing": "after_valid_summary_write",
+            "ledger_write_timing": "pending_summary_then_ledger_then_final_summary",
             "ledger_status_after_runner": "active_no_new_test_authorized",
         },
         "prohibited_claims": {
@@ -1111,8 +1454,26 @@ def spend_ledger_after_success(
         "If the result is a research clue, route it to forward-live validation; do not treat it as production or ship-gate evidence.",
     ]
     validate_json(LEDGER_SCHEMA_PATH, ledger)
-    write_json(ledger_path, ledger)
+    write_json_atomic(ledger_path, ledger)
     return ledger
+
+
+def write_summary_and_spend_ledger(*, summary_path: Path, summary: dict[str, Any], generated_at: str) -> None:
+    if summary_path.exists():
+        raise FileExistsError(f"refusing to overwrite existing signal-search summary: {display_path(summary_path)}")
+    pending_path = summary_path.with_name(summary_path.name + ".pending")
+    write_json_atomic(pending_path, summary)
+    try:
+        spend_ledger_after_success(
+            ledger_path=LEDGER_PATH,
+            summary=summary,
+            result_ref=display_path(summary_path),
+            generated_at=generated_at,
+        )
+    except Exception:
+        pending_path.unlink(missing_ok=True)
+        raise
+    pending_path.replace(summary_path)
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -1124,13 +1485,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         confirm_post_review_execute=args.confirm_post_review_execute,
     )
     validate_json(SCHEMA_PATH, summary)
-    write_json(args.summary_path, summary)
-    spend_ledger_after_success(
-        ledger_path=LEDGER_PATH,
-        summary=summary,
-        result_ref=display_path(args.summary_path),
-        generated_at=generated_at,
-    )
+    write_summary_and_spend_ledger(summary_path=args.summary_path, summary=summary, generated_at=generated_at)
     return summary
 
 

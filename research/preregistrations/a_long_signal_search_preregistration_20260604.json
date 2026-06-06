@@ -55,6 +55,10 @@
     {
       "path": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
       "role": "full exclusion list for unresolved same-ann-date restatement groups; future signal inputs must consume it"
+    },
+    {
+      "path": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "role": "records that existing-account Tushare total-return benchmark candidates provide close values but lack open values, motivating the reviewed close-to-close total-vs-total amendment"
     }
   ],
   "data_gate": {
@@ -97,21 +101,26 @@
       "timezone": "Asia/Shanghai"
     },
     "entry_exit_measurement_rule": {
-      "entry_rule": "next_trading_day_open_after_as_of",
+      "entry_rule": "next_trading_day_close_after_as_of",
       "exit_horizons_trading_days": [
         252,
         504
       ],
-      "stock_return_basis": "total_return_with_adj_factor_and_dividend_lineage",
+      "stock_return_basis": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close",
       "dividend_and_adj_factor_required": true,
       "same_anchor_required": true,
       "costs_required": true,
-      "cost_model": "A-share long-lane net return must include commission, sell-side stamp tax where applicable, and a documented conservative slippage assumption."
+      "cost_model": "A-share long-lane close-to-close total-return net return must include commission, sell-side stamp tax where applicable, and a documented conservative slippage assumption."
     },
     "benchmark_rule": {
       "primary_benchmark": "CSI300",
       "secondary_benchmark": "CSI1000",
-      "benchmark_return_basis": "benchmark_next_trading_day_open_to_same_exit_close",
+      "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+      "benchmark_access_probe_ref": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "benchmark_access_status": "total_return_close_available_close_to_close_amendment_selected",
+      "price_index_benchmark_allowed": false,
+      "price_index_fallback_allowed": false,
+      "derived_total_return_open_allowed": false,
       "same_anchor_required": true
     },
     "allowed_signal_families": [
@@ -120,6 +129,11 @@
       "balance_sheet_strength",
       "earnings_stability"
     ],
+    "signal_family_measurement_policy": {
+      "earnings_stability_basis": "same_period_yoy_profit_dedt_growth_volatility",
+      "mixed_ytd_quarter_sequence_allowed": false,
+      "minimum_same_period_yoy_growths": 3
+    },
     "blocked_signal_families": [
       "valuation_without_share_count_or_market_cap_lineage",
       "news_or_llm_semantic_signal",
@@ -141,6 +155,8 @@
       "exception_excluded_only_from_industry_denominators": true,
       "terminal_delisting_return_required": true,
       "selection_time_st_or_delisting_name_veto_required": true,
+      "pit_selection_status_source_required": true,
+      "current_stock_basic_name_veto_allowed": false,
       "silent_industry_fill_allowed": false,
       "manual_industry_fill_allowed": false
     },
@@ -162,11 +178,19 @@
       "parameter_sweep_allowed": false,
       "post_result_rescue_slicing_allowed": false,
       "correction_required": "benjamini_hochberg_fdr_or_bonferroni",
-      "minimum_monthly_cohorts": 48
+      "t_stat_method": "newey_west_hac_on_monthly_overlapping_cohorts",
+      "hac_lag_rule": "ceil_horizon_trading_days_div_21_capped_at_monthly_cohort_count_minus_1",
+      "monthly_cohort_count_is_not_independent_n": true,
+      "minimum_monthly_cohorts": 48,
+      "min_allowed_monthly_excess_drawdown": -0.15
     },
     "required_output_diagnostics": [
       "Report every frozen signal family, not only the winner.",
-      "Report monthly and yearly clustered benchmark excess, stock concentration, tail contribution, and drawdown.",
+      "Report monthly benchmark excess with Newey-West HAC t-statistics for overlapping long-horizon cohorts; monthly cohort count is not independent N.",
+      "Report yearly contribution, stock concentration, tail contribution, and drawdown.",
+      "For earnings_stability, use same-period YoY profit_dedt growth volatility only; do not mix 3/6/9/12-month YTD cumulative rows.",
+      "Report both CSI300 and CSI1000 benchmark result cells; candidate-alpha promotion requires the same family/view/horizon to clear both benchmarks.",
+      "Use the reviewed close-to-close total-vs-total amendment because total-return benchmark close values are available while same-anchor total-return benchmark open values are unavailable; this is not a silent price-index fallback.",
       "Report industry-neutral and non-neutral views separately, with 000666.SZ retained in returns and risk.",
       "Report the count of restatement_ambiguous_exclusions.csv groups excluded from factor inputs; abort if the exclusion list is missing or not applied.",
       "Report failed / missing-data exclusions and do not fill missing fundamentals with zero or latest values.",
@@ -175,7 +199,8 @@
   },
   "decision_policy": {
     "candidate_alpha_research_only": [
-      "A future reviewed run may label a family as a candidate alpha clue only if it beats the frozen same-anchor CSI300 primary benchmark after multiple-testing correction, remains positive net of costs, is not dominated by a tiny number of names or one year, and keeps drawdown within the registered research threshold.",
+      "A future reviewed run may label a family as a candidate alpha clue only if it beats both frozen same-anchor CSI300 and CSI1000 total-return benchmarks after multiple-testing correction, remains positive net of costs, is not dominated by a tiny number of names or one year, and keeps monthly excess drawdown no worse than -15%.",
+      "Because equal-weight top-quintile main-board cohorts can carry size / equal-weight exposure versus cap-weighted CSI300, any candidate label must disclose the CSI300-vs-CSI1000 gap and cannot be called pure quality alpha from CSI300 alone.",
       "This label would still be research-only and would not allow full-size use without the unchanged 12-month forward-live ship gate."
     ],
     "risk_filter_or_no_alpha": [
@@ -214,10 +239,12 @@
     "After clean review and explicit user execute, the next execution package may combine main-board candidate-universe expansion, runner implementation, full-period signal run, summary, tests, and docs in one reviewed big package.",
     "The future execution must consume the approved 191-name no-industry boundary in docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json: no manual fill, no silent default, no dropping those names from returns or risk, and exclusion only from industry-normalization denominators.",
     "The future execution must consume research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv and exclude every listed ambiguous same-ann-date group from signal inputs; missing or unapplied exclusions must abort the run.",
+    "The reviewed amendment selects close-to-close total-vs-total measurement because H00300.CSI / H00852.CSI return close but no open under the existing Tushare route. A future signal run still requires Claude review and explicit user execute, and must not use raw unadjusted stock price returns across split / bonus / transfer / rights events.",
     "The future run must not use the fixed 9-symbol panel as alpha proof; it is only the data-route proof that justified this preregistration."
   ],
   "limitations": [
     "This artifact runs no signal, computes no alpha, and fetches no data.",
+    "This amended preregistration records the total-return benchmark open blocker and selects a reviewed close-to-close total-vs-total measurement basis; it does not authorize a silent price-index fallback or a derived total-return open construction.",
     "The passed audit covers a fixed 9-symbol panel, not the full A-share main-board universe.",
     "This artifact does not authorize production, DataHub, provider expansion, ship-gate evidence, full-size manual use, or broker / order automation.",
     "Any future positive backtest remains insufficient for full-size use until the project ship gate, including at least 12 months of forward-live evidence, is satisfied."

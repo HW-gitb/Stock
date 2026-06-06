@@ -180,6 +180,7 @@
         "entry_exit_measurement_rule",
         "benchmark_rule",
         "allowed_signal_families",
+        "signal_family_measurement_policy",
         "blocked_signal_families",
         "industry_policy",
         "restatement_exclusion_policy",
@@ -201,6 +202,7 @@
           "maxItems": 4,
           "uniqueItems": true
         },
+        "signal_family_measurement_policy": {"$ref": "#/$defs/signalFamilyMeasurementPolicy"},
         "blocked_signal_families": {
           "type": "array",
           "items": {"enum": ["valuation_without_share_count_or_market_cap_lineage", "news_or_llm_semantic_signal", "short_term_momentum", "intraday_or_microstructure", "us_provider_fields"]},
@@ -270,7 +272,7 @@
         "cost_model"
       ],
       "properties": {
-        "entry_rule": {"const": "next_trading_day_open_after_as_of"},
+        "entry_rule": {"const": "next_trading_day_close_after_as_of"},
         "exit_horizons_trading_days": {
           "type": "array",
           "items": {"enum": [252, 504]},
@@ -278,7 +280,7 @@
           "maxItems": 2,
           "uniqueItems": true
         },
-        "stock_return_basis": {"const": "total_return_with_adj_factor_and_dividend_lineage"},
+        "stock_return_basis": {"const": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close"},
         "dividend_and_adj_factor_required": {"const": true},
         "same_anchor_required": {"const": true},
         "costs_required": {"const": true},
@@ -292,12 +294,22 @@
         "primary_benchmark",
         "secondary_benchmark",
         "benchmark_return_basis",
+        "benchmark_access_probe_ref",
+        "benchmark_access_status",
+        "price_index_benchmark_allowed",
+        "price_index_fallback_allowed",
+        "derived_total_return_open_allowed",
         "same_anchor_required"
       ],
       "properties": {
         "primary_benchmark": {"const": "CSI300"},
         "secondary_benchmark": {"const": "CSI1000"},
-        "benchmark_return_basis": {"const": "benchmark_next_trading_day_open_to_same_exit_close"},
+        "benchmark_return_basis": {"const": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close"},
+        "benchmark_access_probe_ref": {"const": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json"},
+        "benchmark_access_status": {"const": "total_return_close_available_close_to_close_amendment_selected"},
+        "price_index_benchmark_allowed": {"const": false},
+        "price_index_fallback_allowed": {"const": false},
+        "derived_total_return_open_allowed": {"const": false},
         "same_anchor_required": {"const": true}
       }
     },
@@ -318,6 +330,8 @@
         "exception_excluded_only_from_industry_denominators",
         "terminal_delisting_return_required",
         "selection_time_st_or_delisting_name_veto_required",
+        "pit_selection_status_source_required",
+        "current_stock_basic_name_veto_allowed",
         "silent_industry_fill_allowed",
         "manual_industry_fill_allowed"
       ],
@@ -335,8 +349,24 @@
         "exception_excluded_only_from_industry_denominators": {"const": true},
         "terminal_delisting_return_required": {"const": true},
         "selection_time_st_or_delisting_name_veto_required": {"const": true},
+        "pit_selection_status_source_required": {"const": true},
+        "current_stock_basic_name_veto_allowed": {"const": false},
         "silent_industry_fill_allowed": {"const": false},
         "manual_industry_fill_allowed": {"const": false}
+      }
+    },
+    "signalFamilyMeasurementPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "earnings_stability_basis",
+        "mixed_ytd_quarter_sequence_allowed",
+        "minimum_same_period_yoy_growths"
+      ],
+      "properties": {
+        "earnings_stability_basis": {"const": "same_period_yoy_profit_dedt_growth_volatility"},
+        "mixed_ytd_quarter_sequence_allowed": {"const": false},
+        "minimum_same_period_yoy_growths": {"const": 3}
       }
     },
     "restatementExclusionPolicy": {
@@ -377,14 +407,22 @@
         "parameter_sweep_allowed",
         "post_result_rescue_slicing_allowed",
         "correction_required",
-        "minimum_monthly_cohorts"
+        "t_stat_method",
+        "hac_lag_rule",
+        "monthly_cohort_count_is_not_independent_n",
+        "minimum_monthly_cohorts",
+        "min_allowed_monthly_excess_drawdown"
       ],
       "properties": {
         "family_list_frozen": {"const": true},
         "parameter_sweep_allowed": {"const": false},
         "post_result_rescue_slicing_allowed": {"const": false},
         "correction_required": {"enum": ["benjamini_hochberg_fdr_or_bonferroni"]},
-        "minimum_monthly_cohorts": {"type": "integer", "minimum": 48}
+        "t_stat_method": {"const": "newey_west_hac_on_monthly_overlapping_cohorts"},
+        "hac_lag_rule": {"const": "ceil_horizon_trading_days_div_21_capped_at_monthly_cohort_count_minus_1"},
+        "monthly_cohort_count_is_not_independent_n": {"const": true},
+        "minimum_monthly_cohorts": {"type": "integer", "minimum": 48},
+        "min_allowed_monthly_excess_drawdown": {"const": -0.15}
       }
     },
     "decisionPolicy": {

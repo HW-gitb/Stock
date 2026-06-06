@@ -40,7 +40,10 @@ EXPECTED_DELISTED_COUNT = 187
 EXPECTED_UNIVERSE_COUNT = 3387
 REVIEWED_NO_INDUSTRY_EXCEPTION_COUNT = 191
 ACTIVE_DELISTING_SHELL_SYMBOLS = ["600421.SH", "600599.SH", "600636.SH", "600696.SH"]
-BENCHMARKS = ["000300.SH", "000852.SH"]
+EXPECTED_ENDPOINT_RESULTS_COUNT = 23718
+BENCHMARKS = {"CSI300": "H00300.CSI", "CSI1000": "H00852.CSI"}
+BENCHMARK_RETURN_BASIS = "benchmark_total_return_index_next_trading_day_close_to_same_exit_close"
+SELECTION_STATUS_CALL_ID = "namechange_2018_2025"
 FUNDAMENTAL_TABLES = ["income", "balancesheet", "cashflow", "fina_indicator"]
 FULL_PERIOD_SUFFIX = "2018_2025"
 TEMPORAL_COVERAGE_THRESHOLD_PCT = 80.0
@@ -49,6 +52,7 @@ RESTATEMENT_EXCLUSION_LIST_REL = Path("research/results/a_long_full_main_board_d
 CHECK_IDS = [
     "fundamental_pit",
     "restatement_revision_asof",
+    "selection_time_status_source",
     "survivorship_pit_universe",
     "return_benchmark_measurement_basis",
     "temporal_coverage_bias",
@@ -150,8 +154,11 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 def validate_json(schema_path: Path, payload: dict[str, Any]) -> None:
     try:
         from jsonschema import Draft7Validator
-    except ModuleNotFoundError:
-        return
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "jsonschema is required for A-long schema-gated data-integrity audit; "
+            "install project requirements before running this producer."
+        ) from exc
     schema = read_json(schema_path)
     errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
     if errors:
@@ -277,7 +284,7 @@ def validate_materialization_summary(summary: dict[str, Any]) -> None:
         raise ValueError("materialization summary must route to the audit gate")
 
     execution = summary.get("execution") or {}
-    if execution.get("endpoint_results_count") != 23717:
+    if execution.get("endpoint_results_count") != EXPECTED_ENDPOINT_RESULTS_COUNT:
         raise ValueError("materialization summary endpoint count mismatch")
     if execution.get("token_logged") is not False or execution.get("request_url_logged") is not False:
         raise ValueError("materialization summary must stay no-secret/no-url")
@@ -698,6 +705,55 @@ def repair_supplement_membership_symbols(repair: dict[str, Any], context: AuditC
     return out, sorted(set(invalid))
 
 
+def check_selection_time_status_source(store: PayloadStore, context: AuditContext) -> dict[str, Any]:
+    failures: list[str] = []
+    try:
+        columns = store.columns(SELECTION_STATUS_CALL_ID)
+        rows = store.records(SELECTION_STATUS_CALL_ID)
+    except (KeyError, ValueError) as exc:
+        columns = set()
+        rows = []
+        failures.append(type(exc).__name__)
+
+    required_columns = {"ts_code", "name", "start_date", "end_date"}
+    missing_columns = sorted(required_columns - columns)
+    parseable_rows = 0
+    veto_like_rows = 0
+    universe_symbols = set(context.symbols)
+    covered_universe_symbols: set[str] = set()
+    for row in rows:
+        symbol = str(row.get("ts_code") or "")
+        if symbol in universe_symbols:
+            covered_universe_symbols.add(symbol)
+        if normalize_yyyymmdd(row.get("start_date")) is not None:
+            parseable_rows += 1
+        name = str(row.get("name") or "")
+        if any(marker in name for marker in ["ST", "*ST", "S*ST", "SST", "退", "退市"]):
+            veto_like_rows += 1
+
+    ok = not failures and not missing_columns and parseable_rows > 0
+    return make_check(
+        "selection_time_status_source",
+        "pass_full_main_board" if ok else "blocked_missing_required_source",
+        {
+            "source_call_id": SELECTION_STATUS_CALL_ID,
+            "source_table": "security_name_change",
+            "required_columns": sorted(required_columns),
+            "missing_columns": missing_columns,
+            "source_load_failures": failures,
+            "row_count": len(rows),
+            "parseable_start_date_row_count": parseable_rows,
+            "universe_symbol_with_status_history_count": len(covered_universe_symbols),
+            "veto_like_status_row_count": veto_like_rows,
+            "current_stock_basic_name_veto_allowed": False,
+        },
+        [
+            "Selection-time ST / delisting-name veto must be based on PIT name/status history.",
+            "Current or final stock_basic.name is not a valid historical veto source.",
+        ],
+    )
+
+
 def check_survivorship(store: PayloadStore, context: AuditContext, repair: dict[str, Any]) -> dict[str, Any]:
     listings = listing_rows(store, context)
     missing_symbols = sorted(set(context.symbols) - set(listings))
@@ -905,21 +961,30 @@ def check_return_benchmark(store: PayloadStore, context: AuditContext) -> dict[s
     first_symbol = eligible_symbols[0] if eligible_symbols else context.symbols[0]
     first_dates = {normalize_yyyymmdd(row.get("trade_date")) for row in store.records(call_id_for("daily", first_symbol))}
     first_dates.discard(None)
-    for benchmark in BENCHMARKS:
-        rows = store.records(index_call_id(benchmark))
-        columns = store.columns(index_call_id(benchmark))
+    for benchmark_label, benchmark_code in BENCHMARKS.items():
+        try:
+            rows = store.records(index_call_id(benchmark_code))
+            columns = store.columns(index_call_id(benchmark_code))
+            load_error = None
+        except (KeyError, ValueError) as exc:
+            rows = []
+            columns = set()
+            load_error = type(exc).__name__
         dates = {normalize_yyyymmdd(row.get("trade_date")) for row in rows}
         dates.discard(None)
         overlap = len(dates & first_dates)
-        ok = {"trade_date", "open", "close"}.issubset(columns) and overlap > 0
+        ok = {"trade_date", "close"}.issubset(columns) and len(rows) > 0 and overlap > 0
         if not ok:
-            benchmark_failures.append(benchmark)
+            benchmark_failures.append(benchmark_code)
         benchmark_metrics.append(
             {
-                "benchmark": benchmark,
+                "benchmark": benchmark_label,
+                "benchmark_code": benchmark_code,
                 "row_count": len(rows),
-                "has_open_close": {"open", "close"}.issubset(columns),
+                "has_trade_date_close": {"trade_date", "close"}.issubset(columns),
+                "open_required": False,
                 "overlap_with_stock_trade_dates": overlap,
+                "load_error": load_error,
             }
         )
 
@@ -943,11 +1008,12 @@ def check_return_benchmark(store: PayloadStore, context: AuditContext) -> dict[s
             "symbol_return_inputs_sample": sample_metrics,
             "benchmark_inputs": benchmark_metrics,
             "benchmarks_with_failed_anchor_input_shape": benchmark_failures,
-            "same_anchor_policy": "Future return calculation must use same entry/exit anchors; this audit checks open/close input shape only and does not calculate returns.",
+            "benchmark_return_basis": BENCHMARK_RETURN_BASIS,
+            "same_anchor_policy": "Future return calculation must use stock adj_factor close-to-close and H-code benchmark total-return close-to-close on the same entry/exit anchors; this audit checks input shape only and does not calculate returns.",
             "silent_zero_fill_used": False,
         },
         [
-            "Daily open/close, adj_factor, dividend-source, and benchmark open/close input shapes are checked.",
+            "Daily close, adj_factor, dividend-source, and H-code total-return benchmark close input shapes are checked.",
             "No return, benchmark excess, signal, or alpha is calculated in this audit.",
         ],
     )
@@ -1039,6 +1105,11 @@ def build_self_test_store() -> tuple[PayloadStore, AuditContext, dict[str, Any]]
             ["ts_code", "l2_code", "l2_name", "in_date", "out_date"],
             [{"ts_code": symbol, "l2_code": "L2", "l2_name": "Industry", "in_date": "20100101", "out_date": None} for symbol in symbols],
         ),
+        SELECTION_STATUS_CALL_ID: self_test_payload(
+            SELECTION_STATUS_CALL_ID,
+            ["ts_code", "name", "start_date", "end_date", "change_reason"],
+            [{"ts_code": "000666.SZ", "name": "退市示例", "start_date": "20230101", "end_date": None, "change_reason": "unit_test"}],
+        ),
     }
     for table in FUNDAMENTAL_TABLES:
         columns = ["ts_code", "ann_date", "f_ann_date", "end_date"]
@@ -1069,11 +1140,11 @@ def build_self_test_store() -> tuple[PayloadStore, AuditContext, dict[str, Any]]
             ["ts_code", "ann_date", "ex_date"],
             [{"ts_code": symbol, "ann_date": "20200430", "ex_date": "20200701"}],
         )
-    for benchmark in BENCHMARKS:
+    for benchmark in BENCHMARKS.values():
         payloads[index_call_id(benchmark)] = self_test_payload(
             index_call_id(benchmark),
-            ["ts_code", "trade_date", "open", "close"],
-            [{"ts_code": benchmark, **row} for row in price_rows],
+            ["ts_code", "trade_date", "close"],
+            [{"ts_code": benchmark, "trade_date": row["trade_date"], "close": row["close"]} for row in price_rows],
         )
     store = PayloadStore(raw_root=Path("."), payloads=payloads)
     context = AuditContext(active_symbols=active, delisted_symbols=delisted, exception_symbols=[], active_delisting_shell_symbols=[], as_ofs=monthly_last_open_days(store))
@@ -1108,14 +1179,19 @@ def run_full_board_runner_self_tests() -> list[dict[str, Any]]:
     tests.append(full_board_self_test_result("full_main_board_restatement_same_ann_date_conflict_fails", "restatement_revision_asof", check, check["status"] == "fail_data_not_ready"))
 
     payloads = copy.deepcopy(store.payloads)
+    payloads.pop(SELECTION_STATUS_CALL_ID)
+    check = check_selection_time_status_source(PayloadStore(raw_root=Path("."), payloads=payloads), context)
+    tests.append(full_board_self_test_result("full_main_board_selection_status_source_missing_fails", "selection_time_status_source", check, check["status"] == "blocked_missing_required_source"))
+
+    payloads = copy.deepcopy(store.payloads)
     payloads[call_id_for("daily", "000666.SZ")]["records"] = []
     check = check_survivorship(PayloadStore(raw_root=Path("."), payloads=payloads), context, repair)
     tests.append(full_board_self_test_result("full_main_board_survivorship_missing_terminal_return_fails", "survivorship_pit_universe", check, check["status"] == "fail_data_not_ready"))
 
     payloads = copy.deepcopy(store.payloads)
-    payloads[index_call_id("000300.SH")]["columns"] = [c for c in payloads[index_call_id("000300.SH")]["columns"] if c != "open"]
+    payloads[index_call_id(BENCHMARKS["CSI300"])]["records"] = []
     check = check_return_benchmark(PayloadStore(raw_root=Path("."), payloads=payloads), context)
-    tests.append(full_board_self_test_result("full_main_board_return_benchmark_missing_open_fails", "return_benchmark_measurement_basis", check, check["status"] == "fail_data_not_ready"))
+    tests.append(full_board_self_test_result("full_main_board_return_benchmark_missing_total_return_close_fails", "return_benchmark_measurement_basis", check, check["status"] == "fail_data_not_ready"))
 
     payloads = copy.deepcopy(store.payloads)
     for symbol in context.symbols:
@@ -1193,6 +1269,7 @@ def build_report(*, summary_path: Path, raw_root: Path, output_dir: Path, genera
     checks = [
         check_fundamental_pit(store, context),
         check_restatement_revision(store, context, sidecars),
+        check_selection_time_status_source(store, context),
         check_survivorship(store, context, repair),
         check_return_benchmark(store, context),
     ]
@@ -1255,7 +1332,7 @@ def build_report(*, summary_path: Path, raw_root: Path, output_dir: Path, genera
             "candidate_universe_count": len(context.symbols),
             "reviewed_no_industry_exception_count": len(context.exception_symbols),
             "active_delisting_shell_symbols": list(context.active_delisting_shell_symbols),
-            "benchmark_indices": list(BENCHMARKS),
+            "benchmark_indices": list(BENCHMARKS.values()),
             "monthly_as_of_count": len(context.as_ofs),
             "not_full_market_or_cross_board": True,
         },

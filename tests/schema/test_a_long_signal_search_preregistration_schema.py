@@ -5,6 +5,8 @@ import json
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft7Validator
+
 
 SCHEMA_PATH = Path("schemas/a_long_signal_search_preregistration.schema.json")
 ARTIFACT_PATH = Path("research/preregistrations/a_long_signal_search_preregistration_20260604.json")
@@ -26,21 +28,11 @@ class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
         return self._load_json(LEDGER_ARTIFACT_PATH)
 
     def _validate(self, payload: dict) -> list:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
-
         schema = self._load_schema()
         Draft7Validator.check_schema(schema)
         return list(Draft7Validator(schema).iter_errors(payload))
 
     def test_schema_artifact_and_ledger_validate_when_jsonschema_available(self) -> None:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
-
         schema = self._load_schema()
         artifact = self._load_artifact()
         ledger_schema = self._load_json(LEDGER_SCHEMA_PATH)
@@ -107,23 +99,39 @@ class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
             set(design["allowed_signal_families"]),
             {"profitability_quality", "cash_conversion", "balance_sheet_strength", "earnings_stability"},
         )
+        signal_policy = design["signal_family_measurement_policy"]
+        self.assertEqual(signal_policy["earnings_stability_basis"], "same_period_yoy_profit_dedt_growth_volatility")
+        self.assertFalse(signal_policy["mixed_ytd_quarter_sequence_allowed"])
+        self.assertEqual(signal_policy["minimum_same_period_yoy_growths"], 3)
         self.assertIn("valuation_without_share_count_or_market_cap_lineage", design["blocked_signal_families"])
         self.assertFalse(design["multiple_testing_policy"]["parameter_sweep_allowed"])
         self.assertFalse(design["multiple_testing_policy"]["post_result_rescue_slicing_allowed"])
+        self.assertEqual(design["multiple_testing_policy"]["t_stat_method"], "newey_west_hac_on_monthly_overlapping_cohorts")
+        self.assertEqual(
+            design["multiple_testing_policy"]["hac_lag_rule"],
+            "ceil_horizon_trading_days_div_21_capped_at_monthly_cohort_count_minus_1",
+        )
+        self.assertTrue(design["multiple_testing_policy"]["monthly_cohort_count_is_not_independent_n"])
         self.assertGreaterEqual(design["multiple_testing_policy"]["minimum_monthly_cohorts"], 48)
+        self.assertEqual(design["multiple_testing_policy"]["min_allowed_monthly_excess_drawdown"], -0.15)
 
-    def test_measurement_basis_locks_same_anchor_total_return_and_benchmarks(self) -> None:
+    def test_measurement_basis_locks_same_anchor_close_to_close_total_vs_total_and_benchmarks(self) -> None:
         design = self._load_artifact()["search_design"]
         measurement = design["entry_exit_measurement_rule"]
         benchmark = design["benchmark_rule"]
 
-        self.assertEqual(measurement["entry_rule"], "next_trading_day_open_after_as_of")
+        self.assertEqual(measurement["entry_rule"], "next_trading_day_close_after_as_of")
         self.assertEqual(measurement["exit_horizons_trading_days"], [252, 504])
-        self.assertEqual(measurement["stock_return_basis"], "total_return_with_adj_factor_and_dividend_lineage")
+        self.assertEqual(measurement["stock_return_basis"], "stock_total_return_adj_factor_next_trading_day_close_to_exit_close")
         self.assertTrue(measurement["same_anchor_required"])
         self.assertTrue(measurement["dividend_and_adj_factor_required"])
         self.assertEqual(benchmark["primary_benchmark"], "CSI300")
         self.assertEqual(benchmark["secondary_benchmark"], "CSI1000")
+        self.assertEqual(benchmark["benchmark_return_basis"], "benchmark_total_return_index_next_trading_day_close_to_same_exit_close")
+        self.assertEqual(benchmark["benchmark_access_status"], "total_return_close_available_close_to_close_amendment_selected")
+        self.assertFalse(benchmark["price_index_benchmark_allowed"])
+        self.assertFalse(benchmark["price_index_fallback_allowed"])
+        self.assertFalse(benchmark["derived_total_return_open_allowed"])
         self.assertTrue(benchmark["same_anchor_required"])
 
     def test_industry_exception_retains_delisted_returns_and_blocks_silent_fill(self) -> None:
@@ -144,6 +152,8 @@ class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertTrue(industry["exception_excluded_only_from_industry_denominators"])
         self.assertTrue(industry["terminal_delisting_return_required"])
         self.assertTrue(industry["selection_time_st_or_delisting_name_veto_required"])
+        self.assertTrue(industry["pit_selection_status_source_required"])
+        self.assertFalse(industry["current_stock_basic_name_veto_allowed"])
         self.assertFalse(industry["silent_industry_fill_allowed"])
         self.assertFalse(industry["manual_industry_fill_allowed"])
 

@@ -1,0 +1,248 @@
+{
+  "schema_name": "a_long_total_return_benchmark_access_probe_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-06T09:05:57+00:00",
+  "artifact_id": "a_long_total_return_benchmark_access_probe_summary_20260606",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_total_return_benchmark_access_probe",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "provider_family": "tushare_existing_account",
+    "existing_account_only": true,
+    "tushare_calls_executed": true,
+    "provider_expansion_allowed": false,
+    "paid_tier_change_allowed": false,
+    "raw_payloads_written": false,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_secret": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false
+  },
+  "probe_design": {
+    "start_date": "20200102",
+    "end_date": "20200110",
+    "required_basis": "benchmark_total_return_index_next_trading_day_open_to_same_exit_close",
+    "required_fields": [
+      "ts_code",
+      "trade_date",
+      "open",
+      "close"
+    ],
+    "control_price_indices": {
+      "CSI300": "000300.SH",
+      "CSI1000": "000852.SH"
+    },
+    "total_return_candidates": {
+      "CSI300": [
+        "H00300.CSI",
+        "H000300.CSI",
+        "000300.CSI"
+      ],
+      "CSI1000": [
+        "H00852.CSI",
+        "H000852.CSI",
+        "000852.CSI"
+      ]
+    },
+    "max_total_calls": 8
+  },
+  "direct_probes": [
+    {
+      "benchmark_label": "CSI300",
+      "candidate_role": "price_index_control",
+      "ts_code": "000300.SH",
+      "call_status": "success",
+      "row_count": 7,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "open_non_null_count": 7,
+      "close_non_null_count": 7,
+      "same_anchor_open_close_available": true,
+      "close_only_total_return_candidate": false,
+      "tracked_summary_contains_raw_rows": false,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "benchmark_label": "CSI1000",
+      "candidate_role": "price_index_control",
+      "ts_code": "000852.SH",
+      "call_status": "success",
+      "row_count": 7,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "open_non_null_count": 7,
+      "close_non_null_count": 7,
+      "same_anchor_open_close_available": true,
+      "close_only_total_return_candidate": false,
+      "tracked_summary_contains_raw_rows": false,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "benchmark_label": "CSI300",
+      "candidate_role": "total_return_candidate",
+      "ts_code": "H00300.CSI",
+      "call_status": "success",
+      "row_count": 7,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "open_non_null_count": 0,
+      "close_non_null_count": 7,
+      "same_anchor_open_close_available": false,
+      "close_only_total_return_candidate": true,
+      "tracked_summary_contains_raw_rows": false,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "benchmark_label": "CSI300",
+      "candidate_role": "total_return_candidate",
+      "ts_code": "H000300.CSI",
+      "call_status": "empty",
+      "row_count": 0,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "open_non_null_count": 0,
+      "close_non_null_count": 0,
+      "same_anchor_open_close_available": false,
+      "close_only_total_return_candidate": false,
+      "tracked_summary_contains_raw_rows": false,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "benchmark_label": "CSI300",
+      "candidate_role": "total_return_candidate",
+      "ts_code": "000300.CSI",
+      "call_status": "empty",
+      "row_count": 0,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "open_non_null_count": 0,
+      "close_non_null_count": 0,
+      "same_anchor_open_close_available": false,
+      "close_only_total_return_candidate": false,
+      "tracked_summary_contains_raw_rows": false,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "benchmark_label": "CSI1000",
+      "candidate_role": "total_return_candidate",
+      "ts_code": "H00852.CSI",
+      "call_status": "success",
+      "row_count": 7,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "open_non_null_count": 0,
+      "close_non_null_count": 7,
+      "same_anchor_open_close_available": false,
+      "close_only_total_return_candidate": true,
+      "tracked_summary_contains_raw_rows": false,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "benchmark_label": "CSI1000",
+      "candidate_role": "total_return_candidate",
+      "ts_code": "H000852.CSI",
+      "call_status": "empty",
+      "row_count": 0,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "open_non_null_count": 0,
+      "close_non_null_count": 0,
+      "same_anchor_open_close_available": false,
+      "close_only_total_return_candidate": false,
+      "tracked_summary_contains_raw_rows": false,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "benchmark_label": "CSI1000",
+      "candidate_role": "total_return_candidate",
+      "ts_code": "000852.CSI",
+      "call_status": "empty",
+      "row_count": 0,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "open",
+        "close"
+      ],
+      "open_non_null_count": 0,
+      "close_non_null_count": 0,
+      "same_anchor_open_close_available": false,
+      "close_only_total_return_candidate": false,
+      "tracked_summary_contains_raw_rows": false,
+      "error_class": null,
+      "error_message_redacted": null
+    }
+  ],
+  "decision": {
+    "benchmark_access_status": "blocked_total_return_same_anchor_open_unavailable",
+    "control_price_index_probe_passed": true,
+    "selected_total_return_codes": {
+      "CSI300": null,
+      "CSI1000": null
+    },
+    "signal_search_may_execute": false,
+    "runner_benchmark_switch_allowed": false,
+    "price_index_fallback_allowed": false,
+    "derived_total_return_open_allowed": false,
+    "plain_result": "Total-return benchmark close data exists for the preferred CSI series, but open is missing; A-long cannot run valid same-anchor total-vs-total excess now.",
+    "next_action": "Stop A-long signal search. Choose a reviewed alternative source for total-return benchmark open data, or approve a separate derivation policy before any rerun."
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "signal_search_authorized": false,
+    "benchmark_total_return_route_ready": false,
+    "price_index_benchmark_allowed": false,
+    "derived_total_return_open_allowed": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This summary records endpoint shape counts only; it stores no raw rows, token, or request URL.",
+    "A close-only total-return index is not enough for the frozen same-anchor open-to-close benchmark rule.",
+    "This does not authorize price-index fallback, derived total-return open construction, signal search, production, ship-gate evidence, or full-size use."
+  ]
+}

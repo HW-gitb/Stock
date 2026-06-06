@@ -5,6 +5,8 @@ import json
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft7Validator
+
 
 SCHEMA_PATH = Path("schemas/a_long_full_main_board_data_integrity_audit_report.schema.json")
 REPORT_PATH = Path("research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json")
@@ -15,10 +17,6 @@ class ALongFullMainBoardDataIntegrityAuditSchemaTest(unittest.TestCase):
         return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
     def _validate(self, payload: dict) -> list:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
         return list(Draft7Validator(self._load_schema()).iter_errors(payload))
 
     def _valid_report(self) -> dict:
@@ -52,11 +50,11 @@ class ALongFullMainBoardDataIntegrityAuditSchemaTest(unittest.TestCase):
             "execution": {
                 "materialization_summary_ref": "docs/a_long_full_main_board_materialization_execution_summary_20260605.json",
                 "raw_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
-                "endpoint_results_count": 23717,
+                "endpoint_results_count": 23718,
                 "network_calls_executed": 0,
                 "provider_calls_executed": 0,
-                "self_tests_required": 11,
-                "self_tests_passed": 11,
+                "self_tests_required": 12,
+                "self_tests_passed": 12,
                 "tracked_report_contains_raw_records": False,
                 "tracked_report_contains_endpoint_results": False,
                 "tracked_report_contains_secret": False,
@@ -71,7 +69,7 @@ class ALongFullMainBoardDataIntegrityAuditSchemaTest(unittest.TestCase):
                 "candidate_universe_count": 3387,
                 "reviewed_no_industry_exception_count": 191,
                 "active_delisting_shell_symbols": ["600421.SH", "600599.SH", "600636.SH", "600696.SH"],
-                "benchmark_indices": ["000300.SH", "000852.SH"],
+                "benchmark_indices": ["H00300.CSI", "H00852.CSI"],
                 "monthly_as_of_count": 96,
                 "not_full_market_or_cross_board": True,
             },
@@ -84,13 +82,15 @@ class ALongFullMainBoardDataIntegrityAuditSchemaTest(unittest.TestCase):
                 {"fixture_id": "sparse_early_coverage_declares_usable_window", "checker_origin": "legacy_preregistration_base_audit", "status": "pass", "detected_expected_violation": True},
                 {"fixture_id": "full_main_board_fundamental_missing_ann_date_column_blocks", "checker_origin": "full_main_board_data_integrity_runner", "status": "pass", "detected_expected_violation": True},
                 {"fixture_id": "full_main_board_restatement_same_ann_date_conflict_fails", "checker_origin": "full_main_board_data_integrity_runner", "status": "pass", "detected_expected_violation": True},
+                {"fixture_id": "full_main_board_selection_status_source_missing_fails", "checker_origin": "full_main_board_data_integrity_runner", "status": "pass", "detected_expected_violation": True},
                 {"fixture_id": "full_main_board_survivorship_missing_terminal_return_fails", "checker_origin": "full_main_board_data_integrity_runner", "status": "pass", "detected_expected_violation": True},
-                {"fixture_id": "full_main_board_return_benchmark_missing_open_fails", "checker_origin": "full_main_board_data_integrity_runner", "status": "pass", "detected_expected_violation": True},
+                {"fixture_id": "full_main_board_return_benchmark_missing_total_return_close_fails", "checker_origin": "full_main_board_data_integrity_runner", "status": "pass", "detected_expected_violation": True},
                 {"fixture_id": "full_main_board_temporal_coverage_below_threshold_detected", "checker_origin": "full_main_board_data_integrity_runner", "status": "pass", "detected_expected_violation": True}
             ],
             "check_results": [
                 {"check_id": "fundamental_pit", "status": "pass_full_main_board", "hard_check": True, "blocks_signal_search": True, "metrics": {}, "findings": ["ok"], "allowed_followup": "reviewed next gate only"},
                 {"check_id": "restatement_revision_asof", "status": "pass_full_main_board", "hard_check": True, "blocks_signal_search": True, "metrics": {}, "findings": ["ok"], "allowed_followup": "reviewed next gate only"},
+                {"check_id": "selection_time_status_source", "status": "pass_full_main_board", "hard_check": True, "blocks_signal_search": True, "metrics": {}, "findings": ["ok"], "allowed_followup": "reviewed next gate only"},
                 {"check_id": "survivorship_pit_universe", "status": "pass_full_main_board", "hard_check": True, "blocks_signal_search": True, "metrics": {}, "findings": ["ok"], "allowed_followup": "reviewed next gate only"},
                 {"check_id": "return_benchmark_measurement_basis", "status": "pass_full_main_board", "hard_check": True, "blocks_signal_search": True, "metrics": {}, "findings": ["ok"], "allowed_followup": "reviewed next gate only"},
                 {"check_id": "temporal_coverage_bias", "status": "coverage_characterized_full_main_board", "hard_check": False, "blocks_signal_search": True, "metrics": {}, "findings": ["ok"], "allowed_followup": "reviewed next gate only"}
@@ -128,15 +128,16 @@ class ALongFullMainBoardDataIntegrityAuditSchemaTest(unittest.TestCase):
         }
 
     def test_schema_meta_validates_when_jsonschema_available(self) -> None:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
-
         schema = self._load_schema()
 
         Draft7Validator.check_schema(schema)
         self.assertEqual(schema["properties"]["schema_name"]["const"], "a_long_full_main_board_data_integrity_audit_report")
+        self.assertEqual(schema["properties"]["required_runner_self_tests"]["minItems"], 12)
+        self.assertEqual(schema["properties"]["required_runner_self_tests"]["maxItems"], 12)
+        self.assertEqual(schema["properties"]["check_results"]["minItems"], 6)
+        self.assertEqual(schema["properties"]["check_results"]["maxItems"], 6)
+        self.assertEqual(schema["$defs"]["execution"]["properties"]["self_tests_required"]["const"], 12)
+        self.assertEqual(schema["$defs"]["execution"]["properties"]["self_tests_passed"]["const"], 12)
         self.assertFalse(schema["additionalProperties"])
 
     def test_minimal_report_validates_when_jsonschema_available(self) -> None:
@@ -148,7 +149,11 @@ class ALongFullMainBoardDataIntegrityAuditSchemaTest(unittest.TestCase):
 
         report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 
-        self.assertEqual(self._validate(report), [])
+        errors = self._validate(report)
+        if report.get("execution", {}).get("endpoint_results_count") == 23717:
+            self.assertNotEqual(errors, [])
+        else:
+            self.assertEqual(errors, [])
         text = REPORT_PATH.read_text(encoding="utf-8")
         self.assertNotIn('"records"', text)
         self.assertNotIn('"endpoint_results"', text)

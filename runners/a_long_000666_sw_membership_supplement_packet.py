@@ -63,8 +63,11 @@ def write_json_atomic(payload: Any, path: Path) -> None:
 def validate_json(schema_path: Path, payload: dict[str, Any]) -> None:
     try:
         from jsonschema import Draft7Validator
-    except ModuleNotFoundError:
-        return
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "jsonschema is required for schema-gated supplement outputs; "
+            "install project requirements before running this producer."
+        ) from exc
     schema = read_json(schema_path)
     errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
     if errors:

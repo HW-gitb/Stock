@@ -5,6 +5,8 @@ import json
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft7Validator
+
 
 SCHEMA_PATH = Path("schemas/a_long_signal_search_execution_summary.schema.json")
 SUMMARY_PATH = Path("research/results/a_long_signal_search_20260604/execution_summary.json")
@@ -15,10 +17,6 @@ class ALongSignalSearchExecutionSummarySchemaTest(unittest.TestCase):
         return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
     def _validate(self, payload: dict) -> list:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
         schema = self._load_schema()
         Draft7Validator.check_schema(schema)
         return list(Draft7Validator(schema).iter_errors(payload))
@@ -28,26 +26,33 @@ class ALongSignalSearchExecutionSummarySchemaTest(unittest.TestCase):
         for family in ["profitability_quality", "cash_conversion", "balance_sheet_strength", "earnings_stability"]:
             for view in ["non_neutral", "industry_neutral"]:
                 for horizon in [252, 504]:
-                    cells.append(
-                        {
-                            "signal_family": family,
-                            "view": view,
-                            "horizon_trading_days": horizon,
-                            "monthly_cohort_count": 50,
-                            "mean_monthly_cohort_net_excess": 0.001,
-                            "monthly_cohort_std": 0.01,
-                            "monthly_clustered_t_stat": 0.7,
-                            "p_value": 0.48,
-                            "bh_adjusted_p_value": 0.8,
-                            "positive_month_count": 27,
-                            "max_drawdown_on_monthly_excess": -0.05,
-                            "top_symbol_selection_share": 0.05,
-                            "max_single_year_positive_return_share": 0.2,
-                            "passes_minimum_monthly_cohorts": True,
-                            "passes_name_concentration_guard": True,
-                            "passes_single_year_concentration_guard": True,
-                        }
-                    )
+                    for benchmark in ["CSI300", "CSI1000"]:
+                        cells.append(
+                            {
+                                "signal_family": family,
+                                "view": view,
+                                "horizon_trading_days": horizon,
+                                "benchmark": benchmark,
+                                "monthly_cohort_count": 50,
+                                "mean_monthly_cohort_net_excess": 0.001,
+                                "monthly_cohort_std": 0.01,
+                                "monthly_clustered_t_stat": 0.7,
+                                "monthly_t_stat_method": "newey_west_hac_on_monthly_overlapping_cohorts",
+                                "hac_lag_months": 12 if horizon == 252 else 24,
+                                "p_value": 0.48,
+                                "bh_adjusted_p_value": 0.8,
+                                "positive_month_count": 27,
+                                "worst_monthly_cohort_excess": -0.02,
+                                "best_monthly_cohort_excess": 0.03,
+                                "max_drawdown_on_monthly_excess": -0.05,
+                                "top_symbol_selection_share": 0.05,
+                                "max_single_year_positive_return_share": 0.2,
+                                "passes_minimum_monthly_cohorts": True,
+                                "passes_name_concentration_guard": True,
+                                "passes_single_year_concentration_guard": True,
+                                "passes_drawdown_guard": True,
+                            }
+                        )
         return {
             "schema_name": "a_long_signal_search_execution_summary",
             "schema_version": "1.0.0",
@@ -59,6 +64,7 @@ class ALongSignalSearchExecutionSummarySchemaTest(unittest.TestCase):
                 "docs/a_long_full_main_board_materialization_execution_summary_20260605.json",
                 "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
                 "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+                "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
                 "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
             ],
             "scope": {
@@ -85,6 +91,7 @@ class ALongSignalSearchExecutionSummarySchemaTest(unittest.TestCase):
                 "preregistration_validated": True,
                 "ledger_unspent_before_run": True,
                 "full_main_board_audit_passed": True,
+                "benchmark_route_amendment_validated": True,
                 "restatement_exclusion_list_loaded": True,
                 "restatement_exclusion_groups_expected": 1504,
                 "restatement_exclusion_groups_found_in_raw": 1504,
@@ -113,15 +120,32 @@ class ALongSignalSearchExecutionSummarySchemaTest(unittest.TestCase):
                 "horizons_trading_days": [252, 504],
                 "primary_benchmark": "CSI300",
                 "secondary_benchmark": "CSI1000",
+                "stock_return_basis": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close",
+                "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+                "benchmark_access_probe_ref": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+                "benchmark_access_status": "total_return_close_available_close_to_close_amendment_selected",
+                "price_index_benchmark_allowed": False,
+                "price_index_fallback_allowed": False,
+                "derived_total_return_open_allowed": False,
                 "views": ["non_neutral", "industry_neutral"],
                 "top_fraction": 0.2,
                 "minimum_top_count_per_month": 10,
                 "minimum_monthly_cohorts": 48,
+                "monthly_t_stat_method": "newey_west_hac_on_monthly_overlapping_cohorts",
+                "hac_lag_rule": "ceil_horizon_trading_days_div_21_capped_at_monthly_cohort_count_minus_1",
+                "monthly_cohort_count_is_not_independent_n": True,
+                "earnings_stability_basis": "same_period_yoy_profit_dedt_growth_volatility",
+                "mixed_ytd_quarter_sequence_allowed": False,
+                "minimum_earnings_stability_yoy_growths": 3,
+                "selection_time_status_source": "tushare_namechange_pit_history",
+                "current_stock_basic_name_veto_allowed": False,
                 "multiple_testing_correction": "benjamini_hochberg_fdr",
                 "round_trip_cost": 0.0026,
-                "same_anchor_open_to_close": True,
+                "same_anchor_close_to_close": True,
+                "secondary_benchmark_required_for_candidate_alpha": True,
                 "max_top_symbol_selection_share": 0.2,
                 "max_single_year_positive_return_share": 0.35,
+                "min_allowed_monthly_excess_drawdown": -0.15,
                 "parameter_sweep_executed": False,
                 "post_result_rescue_slicing_executed": False,
             },
@@ -132,6 +156,8 @@ class ALongSignalSearchExecutionSummarySchemaTest(unittest.TestCase):
                 "industry_denominator_exclusion_symbol_count": 191,
                 "scored_pit_universe_excluded_before_list_count": 0,
                 "scored_pit_universe_excluded_after_delist_count": 0,
+                "selection_time_name_vetoed_observation_count": 0,
+                "selection_time_name_vetoed_symbol_count": 0,
                 "industry_neutral_excluded_observation_count": 1,
                 "industry_neutral_excluded_symbol_count": 1,
                 "industry_neutral_excluded_observation_share": 0.01,
@@ -139,17 +165,19 @@ class ALongSignalSearchExecutionSummarySchemaTest(unittest.TestCase):
                 "industry_neutral_excluded_2018_2020_observation_share": 0.02,
                 "missing_signal_rows": 0,
                 "missing_return_rows": 0,
-                "endpoint_results_count": 23717,
+                "endpoint_results_count": 23718,
                 "evaluated_stock_return_rows": 1,
-                "result_cell_count": 16,
+                "result_cell_count": 32,
             },
             "result_cells": cells,
             "decision": {
                 "research_verdict": "no_alpha_found_under_frozen_rules",
                 "candidate_alpha_clue_count": 0,
+                "secondary_benchmark_required_for_candidate_alpha": True,
                 "alpha_found_for_production": False,
                 "ship_gate_evidence": False,
                 "full_size_allowed": False,
+                "size_exposure_caveat": "CSI300-only results are not enough because size / equal-weight exposure must be checked against CSI1000.",
                 "plain_result": "Signal search found no usable alpha clue under the frozen rules.",
                 "next_action": "Do not rescue by changing thresholds.",
             },
@@ -158,7 +186,7 @@ class ALongSignalSearchExecutionSummarySchemaTest(unittest.TestCase):
                 "spends_singleton_test": True,
                 "test_id": "a_long_signal_search_preregistration_20260604",
                 "runner_writes_ledger": True,
-                "ledger_write_timing": "after_valid_summary_write",
+                "ledger_write_timing": "pending_summary_then_ledger_then_final_summary",
                 "ledger_status_after_runner": "active_no_new_test_authorized",
             },
             "prohibited_claims": {
@@ -174,11 +202,6 @@ class ALongSignalSearchExecutionSummarySchemaTest(unittest.TestCase):
         }
 
     def test_schema_meta_validates_when_jsonschema_available(self) -> None:
-        try:
-            from jsonschema import Draft7Validator
-        except ModuleNotFoundError as exc:
-            raise unittest.SkipTest("jsonschema is not installed in this interpreter") from exc
-
         schema = self._load_schema()
 
         Draft7Validator.check_schema(schema)
