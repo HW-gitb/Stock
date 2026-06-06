@@ -3765,3 +3765,98 @@ git diff --check
 1. Claude should review the runner, summary schema, tests, and docs for scope creep.
 2. If Claude passes and the user approves / commits, a later explicit execute command may run the ~8h full raw materialization.
 3. After materialization passes, the next separate gate is full main-board data-integrity audit. Signal search still waits for audit pass.
+
+## 2026-06-05 append: A-long full main-board data-integrity audit failed
+
+**Plain result**:
+
+- The full raw materialization completed before this append, but the data audit failed.
+- Report: `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json`.
+- Simple meaning: A-long full main-board data still cannot be used to search alpha.
+
+**What passed**:
+
+- Fundamental PIT field shape passed.
+- Time coverage is usable from 2018.
+- Active investable missing industry is now 0 after consuming the reviewed supplement summary.
+
+**What failed**:
+
+- 3,108 same-ann-date restatement / duplicate conflict groups remain.
+- 5 delisted symbols lack terminal return input near delisting: `000638.SZ`, `600355.SH`, `600485.SH`, `600677.SH`, `600680.SH`.
+- 14 symbols have incomplete return-input shape.
+
+**What changed**:
+
+- Added `runners/a_long_full_main_board_data_integrity_audit.py`.
+- Added `schemas/a_long_full_main_board_data_integrity_audit_report.schema.json`.
+- Added `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json`.
+- Added `research/results/a_long_full_main_board_data_integrity_audit_20260605/check_summary.csv`.
+- Added `research/results/a_long_full_main_board_data_integrity_audit_20260605/coverage_by_year.csv`.
+- Added `tests/test_a_long_full_main_board_data_integrity_audit.py`.
+- Added `tests/schema/test_a_long_full_main_board_data_integrity_audit_schema.py`.
+
+**Next route**:
+
+1. Claude should review the failed audit runner/report and the two runner fixes made during execution.
+2. After review / commit, the next package should repair or explicitly route the three failed checks.
+3. Do not run signal search until a repaired full audit passes.
+
+## 2026-06-05 append: A-long full main-board data-integrity audit repaired and passed
+
+**Plain result**:
+
+- The repaired full audit passed.
+- Report: `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json`.
+- Simple meaning: data is ready for the next reviewed signal-search gate. This is still not alpha.
+
+**Repair treatment**:
+
+- Same-ann-date rows with distinct `f_ann_date` are treated by as-of disambiguation: future signal code must use the latest `f_ann_date <= as_of`.
+- Same-ann-date rows that still have no disambiguator are not used silently. They are written to `research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv` and must be excluded from future signal inputs.
+- The ambiguous exclusion rate is `0.367838%`, below the frozen `0.5%` cap.
+- The 1,189 active SW supplements are verified from reviewed repair raw, not just credited from the tracked summary.
+- The 14 symbols with empty 2018-2025 daily / adj rows are all 2026 post-panel listings and are excluded from return-shape checks.
+- Post-panel delists are not treated as 2018-2025 terminal-return failures; long no-trade delisted names are reported separately.
+
+**What changed**:
+
+- Updated `runners/a_long_full_main_board_data_integrity_audit.py`.
+- Updated `schemas/a_long_full_main_board_data_integrity_audit_report.schema.json`.
+- Updated `tests/test_a_long_full_main_board_data_integrity_audit.py`.
+- Updated `tests/schema/test_a_long_full_main_board_data_integrity_audit_schema.py`.
+- Regenerated `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json`.
+- Added `research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv`.
+
+**Next route**:
+
+1. Claude should review the repaired audit runner/report and the exclusion-list treatment.
+2. If Claude passes and the user commits, the next separate gate may run the frozen signal search.
+3. Do not treat this audit as alpha, production, ship-gate evidence, or full-size permission.
+
+## 2026-06-05 append: A-long full main-board audit R1 route-A exclusion repair
+
+**Plain result**:
+
+- The prior repaired audit had one review failure: the 0.5% restatement exclusion cap lived only in the runner.
+- This repair moves that cap and rule into preregistration and makes future signal search consume the exclusion CSV.
+- Simple meaning: the 1,504 ambiguous rows are not being trusted; they are blocked from signal inputs.
+
+**What changed**:
+
+- `research/preregistrations/a_long_data_integrity_audit_20260603.json` now records the route-A amendment: `f_ann_date` as-of disambiguation when deterministic, unresolved same-ann-date groups excluded, 0.5% cap, observed 0.367838%, above cap means fail / re-review.
+- `research/preregistrations/a_long_signal_search_preregistration_20260604.json` now requires future signal execution to consume `research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv` and abort if missing or unapplied.
+- `runners/a_long_full_main_board_data_integrity_audit.py` now reads and cross-checks the preregistered cap, keeps the full 1,504-row list out of tracked JSON, writes the full list to CSV, and records extended no-trade terminal verification.
+- `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json` was regenerated. Full exclusion list remains in the CSV; JSON has only samples.
+
+**Validation**:
+
+- Local-only full audit rerun: `passed_full_main_board_data_integrity_for_signal_search`, with mandatory exclusions.
+- `restatement_ambiguous_exclusions.csv` has 1,505 lines including header.
+- Tests passed 36/36 for the full audit runner/report schema, data-integrity preregistration schema, and signal-search preregistration schema.
+
+**Next route**:
+
+1. Claude should review this R1 repair before commit.
+2. If Claude passes and the user commits, the next separate gate may run the frozen signal search.
+3. Do not run signal search before review / commit; this repair is still not alpha evidence.

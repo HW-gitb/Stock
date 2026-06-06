@@ -1,0 +1,313 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_full_main_board_data_integrity_audit_report/1.0.0/schema.json",
+  "title": "A-long Full Main-board Data Integrity Audit Report",
+  "description": "Local-only audit report for the already-materialized A-long 2018-2025 full main-board raw panel. It reads gitignored raw payloads and records PIT, restatement, survivorship, return-input, benchmark-input, and coverage checks without raw rows or endpoint results. It does not prove alpha or authorize signal execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "source_refs",
+    "scope",
+    "execution",
+    "full_main_board_boundary",
+    "required_runner_self_tests",
+    "check_results",
+    "coverage_by_year",
+    "decision",
+    "prohibited_claims",
+    "result_artifacts",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_full_main_board_data_integrity_audit_report"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_full_main_board_data_integrity_audit_report_20260605"},
+    "source_refs": {"$ref": "#/$defs/stringList"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "full_main_board_boundary": {"$ref": "#/$defs/fullMainBoardBoundary"},
+    "required_runner_self_tests": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": {"$ref": "#/$defs/selfTest"}
+    },
+    "check_results": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/checkResult"}
+    },
+    "coverage_by_year": {
+      "type": "array",
+      "minItems": 32,
+      "maxItems": 32,
+      "items": {"$ref": "#/$defs/coverageRow"}
+    },
+    "decision": {"$ref": "#/$defs/decision"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "result_artifacts": {"$ref": "#/$defs/stringList"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "flexibleObject": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "materialized_raw_read_only",
+        "reviewed_sw_repair_raw_read_only",
+        "provider_call_executed",
+        "tushare_call_executed",
+        "data_fetch_executed",
+        "raw_rows_in_tracked_report",
+        "endpoint_results_in_tracked_report",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_full_main_board_data_integrity_audit"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "materialized_raw_read_only": {"const": true},
+        "reviewed_sw_repair_raw_read_only": {"const": true},
+        "provider_call_executed": {"const": false},
+        "tushare_call_executed": {"const": false},
+        "data_fetch_executed": {"const": false},
+        "raw_rows_in_tracked_report": {"const": false},
+        "endpoint_results_in_tracked_report": {"const": false},
+        "signal_search_executed": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "materialization_summary_ref",
+        "raw_root",
+        "endpoint_results_count",
+        "network_calls_executed",
+        "provider_calls_executed",
+        "self_tests_required",
+        "self_tests_passed",
+        "tracked_report_contains_raw_records",
+        "tracked_report_contains_endpoint_results",
+        "tracked_report_contains_secret",
+        "tracked_report_contains_request_url"
+      ],
+      "properties": {
+        "materialization_summary_ref": {"const": "docs/a_long_full_main_board_materialization_execution_summary_20260605.json"},
+        "raw_root": {"const": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/"},
+        "endpoint_results_count": {"const": 23717},
+        "network_calls_executed": {"const": 0},
+        "provider_calls_executed": {"const": 0},
+        "self_tests_required": {"const": 11},
+        "self_tests_passed": {"const": 11},
+        "tracked_report_contains_raw_records": {"const": false},
+        "tracked_report_contains_endpoint_results": {"const": false},
+        "tracked_report_contains_secret": {"const": false},
+        "tracked_report_contains_request_url": {"const": false}
+      }
+    },
+    "fullMainBoardBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "board_scope",
+        "start_date",
+        "end_date",
+        "active_symbol_count",
+        "delisted_symbol_count",
+        "candidate_universe_count",
+        "reviewed_no_industry_exception_count",
+        "active_delisting_shell_symbols",
+        "benchmark_indices",
+        "monthly_as_of_count",
+        "not_full_market_or_cross_board"
+      ],
+      "properties": {
+        "board_scope": {"const": "main_board_only"},
+        "start_date": {"const": "20180101"},
+        "end_date": {"const": "20251231"},
+        "active_symbol_count": {"const": 3200},
+        "delisted_symbol_count": {"const": 187},
+        "candidate_universe_count": {"const": 3387},
+        "reviewed_no_industry_exception_count": {"const": 191},
+        "active_delisting_shell_symbols": {
+          "type": "array",
+          "items": {"enum": ["600421.SH", "600599.SH", "600636.SH", "600696.SH"]},
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "benchmark_indices": {
+          "type": "array",
+          "items": {"enum": ["000300.SH", "000852.SH"]},
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "monthly_as_of_count": {"type": "integer", "minimum": 90},
+        "not_full_market_or_cross_board": {"const": true}
+      }
+    },
+    "selfTest": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["fixture_id", "checker_origin", "status", "detected_expected_violation"],
+      "properties": {
+        "fixture_id": {
+          "enum": [
+            "future_ann_date_hard_fail",
+            "restated_value_asof_fail",
+            "dropped_delisted_member_fail",
+            "missing_delisting_terminal_return_fail",
+            "benchmark_anchor_mismatch_fail",
+            "sparse_early_coverage_declares_usable_window",
+            "full_main_board_fundamental_missing_ann_date_column_blocks",
+            "full_main_board_restatement_same_ann_date_conflict_fails",
+            "full_main_board_survivorship_missing_terminal_return_fails",
+            "full_main_board_return_benchmark_missing_open_fails",
+            "full_main_board_temporal_coverage_below_threshold_detected"
+          ]
+        },
+        "checker_origin": {"enum": ["legacy_preregistration_base_audit", "full_main_board_data_integrity_runner"]},
+        "status": {"const": "pass"},
+        "detected_expected_violation": {"const": true}
+      }
+    },
+    "checkResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["check_id", "status", "hard_check", "blocks_signal_search", "metrics", "findings", "allowed_followup"],
+      "properties": {
+        "check_id": {
+          "enum": [
+            "fundamental_pit",
+            "restatement_revision_asof",
+            "survivorship_pit_universe",
+            "return_benchmark_measurement_basis",
+            "temporal_coverage_bias"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass_full_main_board",
+            "fail_data_not_ready",
+            "blocked_missing_required_source",
+            "coverage_characterized_full_main_board"
+          ]
+        },
+        "hard_check": {"type": "boolean"},
+        "blocks_signal_search": {"type": "boolean"},
+        "metrics": {"$ref": "#/$defs/flexibleObject"},
+        "findings": {"$ref": "#/$defs/stringList"},
+        "allowed_followup": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "coverageRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["year", "table_id", "eligible_symbol_count", "covered_symbol_count", "coverage_pct", "status"],
+      "properties": {
+        "year": {"type": "integer", "minimum": 2018, "maximum": 2025},
+        "table_id": {"enum": ["income", "balancesheet", "cashflow", "fina_indicator"]},
+        "eligible_symbol_count": {"type": "integer", "minimum": 0},
+        "covered_symbol_count": {"type": "integer", "minimum": 0},
+        "coverage_pct": {"type": "number", "minimum": 0, "maximum": 100},
+        "status": {"enum": ["pass_full_main_board", "below_threshold"]}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audit_status",
+        "hard_checks_pass",
+        "usable_start_year",
+        "data_can_be_used_for_alpha_now",
+        "signal_search_may_be_executed_after_review",
+        "signal_search_authorized_by_this_report",
+        "alpha_found",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "audit_status": {
+          "enum": [
+            "blocked_missing_required_source",
+            "fail_data_not_ready",
+            "pass_hard_checks_with_limited_usable_window",
+            "passed_full_main_board_data_integrity_for_signal_search"
+          ]
+        },
+        "hard_checks_pass": {"type": "boolean"},
+        "usable_start_year": {"type": ["integer", "null"], "minimum": 2018, "maximum": 2025},
+        "data_can_be_used_for_alpha_now": {"const": false},
+        "signal_search_may_be_executed_after_review": {"type": "boolean"},
+        "signal_search_authorized_by_this_report": {"const": false},
+        "alpha_found": {"const": false},
+        "plain_result": {"$ref": "#/$defs/nonEmptyString"},
+        "next_action": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_alpha_found",
+        "signal_search_executed",
+        "signal_search_authorized",
+        "alpha_backtest_executed",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "provider_selected",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_alpha_found": {"const": false},
+        "signal_search_executed": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "provider_selected": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

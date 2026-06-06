@@ -1,0 +1,6 @@
+check_id,status,hard_check,blocks_signal_search,finding_count
+fundamental_pit,pass_full_main_board,True,True,2
+restatement_revision_asof,pass_full_main_board,True,True,3
+survivorship_pit_universe,pass_full_main_board,True,True,4
+return_benchmark_measurement_basis,pass_full_main_board,True,True,2
+temporal_coverage_bias,coverage_characterized_full_main_board,False,True,2

@@ -16,6 +16,7 @@
     "audit_as_of_schedule",
     "universe_definition",
     "audit_checks",
+    "reviewed_repair_amendments",
     "required_runner_self_tests",
     "decision_policy",
     "planned_test_budget",
@@ -131,6 +132,7 @@
         }
       ]
     },
+    "reviewed_repair_amendments": {"$ref": "#/$defs/reviewedRepairAmendments"},
     "required_runner_self_tests": {
       "$ref": "#/$defs/requiredRunnerSelfTests"
     },
@@ -494,7 +496,7 @@
                 "$ref": "#/$defs/restatementRevisionThreshold"
               },
               "non_blocking_tolerance": {
-                "type": "null"
+                "$ref": "#/$defs/restatementRevisionNonBlockingTolerance"
               },
               "failure_action": {
                 "const": "block_signal_search_until_data_repaired_or_new_reviewed_audit_plan"
@@ -720,6 +722,93 @@
         "unit": {
           "const": "fraction"
         }
+      }
+    },
+    "restatementRevisionNonBlockingTolerance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric",
+        "operator",
+        "value",
+        "unit",
+        "action_if_exceeded"
+      ],
+      "properties": {
+        "metric": {
+          "const": "same_ann_date_ambiguous_exclusion_rate_pct"
+        },
+        "operator": {
+          "const": "<="
+        },
+        "value": {
+          "const": 0.5
+        },
+        "unit": {
+          "const": "percent"
+        },
+        "action_if_exceeded": {
+          "const": "fail_data_not_ready_and_require_re_review_not_auto_tolerate"
+        }
+      }
+    },
+    "reviewedRepairAmendments": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {"$ref": "#/$defs/reviewedRepairAmendment"},
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "amendment_id": {
+                "const": "a_long_full_main_board_restatement_exclusion_policy_20260605"
+              }
+            },
+            "required": ["amendment_id"]
+          }
+        }
+      ]
+    },
+    "reviewedRepairAmendment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amendment_id",
+        "status",
+        "applies_to_check_id",
+        "user_decision_route",
+        "f_ann_date_asof_disambiguation_rule",
+        "ambiguous_group_signal_treatment",
+        "exclusion_list_artifact",
+        "max_ambiguous_exclusion_rate_pct",
+        "observed_ambiguous_exclusion_rate_pct",
+        "cap_rationale",
+        "below_cap_action",
+        "above_cap_action",
+        "signal_search_preregistration_must_consume_exclusion_list",
+        "silent_use_of_ambiguous_groups_allowed",
+        "signal_search_authorized_by_this_amendment",
+        "alpha_or_production_claim_allowed"
+      ],
+      "properties": {
+        "amendment_id": {"const": "a_long_full_main_board_restatement_exclusion_policy_20260605"},
+        "status": {"const": "registered_pending_independent_review"},
+        "applies_to_check_id": {"const": "restatement_revision_asof"},
+        "user_decision_route": {"const": "route_a_tolerate_irreducible_restatement_exclusions_with_mandatory_signal_exclusion"},
+        "f_ann_date_asof_disambiguation_rule": {"$ref": "#/$defs/nonEmptyString"},
+        "ambiguous_group_signal_treatment": {"const": "mandatory_exclusion_from_signal_inputs"},
+        "exclusion_list_artifact": {"const": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv"},
+        "max_ambiguous_exclusion_rate_pct": {"const": 0.5},
+        "observed_ambiguous_exclusion_rate_pct": {"type": "number", "minimum": 0, "maximum": 0.5},
+        "cap_rationale": {"$ref": "#/$defs/nonEmptyString"},
+        "below_cap_action": {"const": "pass_only_with_mandatory_signal_input_exclusions_after_independent_review"},
+        "above_cap_action": {"const": "fail_data_not_ready_and_re_review_or_rematerialize_with_more_lineage"},
+        "signal_search_preregistration_must_consume_exclusion_list": {"const": true},
+        "silent_use_of_ambiguous_groups_allowed": {"const": false},
+        "signal_search_authorized_by_this_amendment": {"const": false},
+        "alpha_or_production_claim_allowed": {"const": false}
       }
     },
     "survivorshipPitUniverseThreshold": {

@@ -1,0 +1,1969 @@
+{
+  "schema_name": "a_long_full_main_board_data_integrity_audit_report",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-06T02:56:17+00:00",
+  "artifact_id": "a_long_full_main_board_data_integrity_audit_report_20260605",
+  "source_refs": [
+    "docs/a_long_full_main_board_materialization_execution_summary_20260605.json",
+    "docs/a_long_full_main_board_signal_search_execution_packet_20260605.json",
+    "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+    "docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json",
+    "data/a_long/raw/tushare/main_board_sw_coverage_repair_20260604/",
+    "research/preregistrations/a_long_data_integrity_audit_20260603.json",
+    "docs/system_risk_register.md"
+  ],
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_full_main_board_data_integrity_audit",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "materialized_raw_read_only": true,
+    "reviewed_sw_repair_raw_read_only": true,
+    "provider_call_executed": false,
+    "tushare_call_executed": false,
+    "data_fetch_executed": false,
+    "raw_rows_in_tracked_report": false,
+    "endpoint_results_in_tracked_report": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "execution": {
+    "materialization_summary_ref": "docs/a_long_full_main_board_materialization_execution_summary_20260605.json",
+    "raw_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
+    "endpoint_results_count": 23717,
+    "network_calls_executed": 0,
+    "provider_calls_executed": 0,
+    "self_tests_required": 11,
+    "self_tests_passed": 11,
+    "tracked_report_contains_raw_records": false,
+    "tracked_report_contains_endpoint_results": false,
+    "tracked_report_contains_secret": false,
+    "tracked_report_contains_request_url": false
+  },
+  "full_main_board_boundary": {
+    "board_scope": "main_board_only",
+    "start_date": "20180101",
+    "end_date": "20251231",
+    "active_symbol_count": 3200,
+    "delisted_symbol_count": 187,
+    "candidate_universe_count": 3387,
+    "reviewed_no_industry_exception_count": 191,
+    "active_delisting_shell_symbols": [
+      "600421.SH",
+      "600599.SH",
+      "600636.SH",
+      "600696.SH"
+    ],
+    "benchmark_indices": [
+      "000300.SH",
+      "000852.SH"
+    ],
+    "monthly_as_of_count": 96,
+    "not_full_market_or_cross_board": true
+  },
+  "required_runner_self_tests": [
+    {
+      "fixture_id": "future_ann_date_hard_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "valid_ann_date_rows": 1,
+        "future_ann_date_rows": 1,
+        "missing_or_invalid_ann_date_rows": 0,
+        "ann_date_future_lookahead_violation_rate": 1.0,
+        "ann_date_missing_or_invalid_exclusion_rate_pct": 0.0,
+        "hard_fail": true
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "restated_value_asof_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "duplicate_groups_checked": 1,
+        "restatement_or_latest_only_violation_groups": 1,
+        "hard_fail": true
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "dropped_delisted_member_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "membership_rows_checked": 1,
+        "survivorship_or_terminal_return_violation_rows": 1,
+        "hard_fail": true
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "missing_delisting_terminal_return_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "survivorship": {
+          "membership_rows_checked": 1,
+          "survivorship_or_terminal_return_violation_rows": 1,
+          "hard_fail": true
+        },
+        "return_measurement": {
+          "return_rows_checked": 1,
+          "return_or_benchmark_measurement_violation_rows": 1,
+          "hard_fail": true
+        }
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "benchmark_anchor_mismatch_fail",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "return_rows_checked": 1,
+        "return_or_benchmark_measurement_violation_rows": 1,
+        "hard_fail": true
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "sparse_early_coverage_declares_usable_window",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "metrics": {
+        "threshold_pct": 80.0,
+        "usable_start_year": 2020,
+        "thin_cell_count": 2,
+        "thin_cells": [
+          {
+            "year": 2018,
+            "table": "income",
+            "coverage_pct": 10.0
+          },
+          {
+            "year": 2019,
+            "table": "income",
+            "coverage_pct": 70.0
+          }
+        ],
+        "global_hard_fail": false
+      },
+      "checker_origin": "legacy_preregistration_base_audit"
+    },
+    {
+      "fixture_id": "full_main_board_fundamental_missing_ann_date_column_blocks",
+      "checker_origin": "full_main_board_data_integrity_runner",
+      "target_check_id": "fundamental_pit",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "blocked_missing_required_source",
+      "metrics": {
+        "rows_checked": 88,
+        "valid_ann_date_rows": 88,
+        "missing_or_invalid_ann_date_rows": 0,
+        "missing_or_invalid_ann_date_exclusion_rate_pct": 0.0,
+        "future_ann_date_rows_after_panel_end_excluded": 0,
+        "missing_required_columns_count": 1,
+        "missing_required_columns_sample": [
+          "income_000001_SZ_2018_2025:ann_date"
+        ],
+        "covered_symbol_count_by_table": {
+          "income": 2,
+          "balancesheet": 3,
+          "cashflow": 3,
+          "fina_indicator": 3
+        },
+        "empty_payload_count_by_table": {
+          "income": 0,
+          "balancesheet": 0,
+          "cashflow": 0,
+          "fina_indicator": 0
+        },
+        "ann_date_asof_gating_feasible": false
+      }
+    },
+    {
+      "fixture_id": "full_main_board_restatement_same_ann_date_conflict_fails",
+      "checker_origin": "full_main_board_data_integrity_runner",
+      "target_check_id": "restatement_revision_asof",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "fail_data_not_ready",
+      "metrics": {
+        "period_groups_checked": 96,
+        "groups_with_multiple_ann_dates": 0,
+        "same_ann_date_conflicting_duplicate_groups": 1,
+        "same_ann_date_ambiguous_exclusion_rate_pct": 1.041667,
+        "same_ann_date_ambiguous_exclusion_max_allowed_pct": 0.5,
+        "same_ann_date_ambiguous_exclusion_policy_ref": "a_long_full_main_board_restatement_exclusion_policy_20260605",
+        "same_ann_date_ambiguous_exclusion_cap_rationale": "The ceiling is a small irreducible-lineage tripwire for data-readiness repair, not an alpha-selection threshold: below 0.5 percent the affected records are removed from all signal inputs; at or above 0.5 percent the data route fails and must be re-reviewed or rematerialized. The same 0.5 percent ceiling would be used whether the observed rate were 0.1 percent or 0.4 percent.",
+        "same_ann_date_ambiguous_groups_must_be_excluded_from_signal_inputs": true,
+        "same_ann_date_ambiguous_exclusion_rows_count": 1,
+        "same_ann_date_ambiguous_exclusion_rows_sample": [
+          {
+            "table_id": "income",
+            "symbol": "000001.SZ",
+            "end_date": "20191231",
+            "ann_date": "20200430",
+            "row_count": 2,
+            "differing_fields": "revenue",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          }
+        ],
+        "same_ann_date_ambiguous_exclusion_list_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+        "same_ann_date_conflict_examples": [
+          {
+            "table": "income",
+            "symbol": "000001.SZ",
+            "end_date": "20191231",
+            "ann_date": "20200430",
+            "row_count": 2,
+            "differing_fields": [
+              "revenue"
+            ]
+          }
+        ],
+        "same_ann_date_duplicate_groups_resolved_total": 0,
+        "same_ann_date_duplicate_groups_resolved_by_non_null_preference": 0,
+        "same_ann_date_duplicate_groups_resolved_by_f_ann_date_asof": 0,
+        "same_ann_date_duplicate_resolution_examples": [],
+        "tables_with_f_ann_date_column": [
+          "balancesheet",
+          "cashflow",
+          "fina_indicator",
+          "income"
+        ],
+        "resolution_rule": "Same-ann-date duplicates may resolve only by a narrow nullable-field preference or by valid f_ann_date as-of disambiguation. Future signal code must choose the latest f_ann_date <= as_of, not latest-only."
+      }
+    },
+    {
+      "fixture_id": "full_main_board_survivorship_missing_terminal_return_fails",
+      "checker_origin": "full_main_board_data_integrity_runner",
+      "target_check_id": "survivorship_pit_universe",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "fail_data_not_ready",
+      "metrics": {
+        "active_symbol_count": 2,
+        "delisted_symbol_count": 1,
+        "candidate_universe_count": 3,
+        "missing_symbols_count": 0,
+        "missing_symbols_sample": [],
+        "active_status_failure_count": 0,
+        "active_status_failure_sample": [],
+        "delisted_status_failure_count": 0,
+        "delisted_status_failure_sample": [],
+        "pit_membership_decisions_checked": 261,
+        "invalid_listing_date_rows": 0,
+        "terminal_return_input_failed_count": 1,
+        "terminal_return_input_failed_symbols": [
+          "000666.SZ"
+        ],
+        "delisted_terminal_return_inputs_sample": [
+          {
+            "symbol": "000666.SZ",
+            "delist_date": "20231026",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": null,
+            "last_adj_factor_date": "20231025",
+            "terminal_gap_days": null,
+            "terminal_return_input_available": false,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          }
+        ],
+        "post_panel_delisted_symbols_without_terminal_requirement_count": 0,
+        "post_panel_delisted_symbols_without_terminal_requirement_sample": [],
+        "extended_no_trade_terminal_return_symbols_count": 0,
+        "extended_no_trade_terminal_return_symbols_sample": [],
+        "extended_no_trade_terminal_policy": "If an in-panel delisted symbol has no later daily rows through delist_date, the last available daily+adj_factor row is treated as the terminal no-trade input; future return code must not manufacture a clean exit.",
+        "extended_no_trade_terminal_unverified_count": 0,
+        "extended_no_trade_terminal_unverified_sample": [],
+        "raw_sw_membership_symbol_count": 3,
+        "active_supplemented_sw_symbol_count": 0,
+        "active_supplemented_sw_symbols_verified_from_repair_raw": true,
+        "active_supplemented_sw_invalid_raw_count": 0,
+        "active_supplemented_sw_invalid_raw_sample": [],
+        "active_investable_missing_industry_count": 0,
+        "active_investable_missing_industry_sample": [],
+        "reviewed_no_industry_exception_count": 0,
+        "delisted_no_industry_exception_count": 0,
+        "active_delisting_shell_exception_symbols": [],
+        "industry_normalization_policy": {
+          "silent_industry_fill_allowed": false,
+          "drop_exception_names_from_returns_or_risk_allowed": false,
+          "exclude_exception_symbols_from_industry_neutral_denominators": true,
+          "keep_exception_symbols_in_returns_risk_drawdown_and_coverage": true
+        },
+        "industry_normalization_exclusion_symbols_sample": [],
+        "industry_normalization_exclusion_symbol_count": 0
+      }
+    },
+    {
+      "fixture_id": "full_main_board_return_benchmark_missing_open_fails",
+      "checker_origin": "full_main_board_data_integrity_runner",
+      "target_check_id": "return_benchmark_measurement_basis",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "fail_data_not_ready",
+      "metrics": {
+        "candidate_universe_count": 3,
+        "symbols_checked": 3,
+        "post_panel_listing_symbols_excluded_from_return_shape_count": 0,
+        "post_panel_listing_symbols_excluded_from_return_shape_sample": [],
+        "total_daily_rows": 22,
+        "total_adj_factor_rows": 22,
+        "total_dividend_rows": 3,
+        "symbols_with_empty_daily": 0,
+        "symbols_with_empty_adj_factor": 0,
+        "symbols_with_empty_dividend": 0,
+        "symbols_with_failed_return_input_shape_count": 0,
+        "symbols_with_failed_return_input_shape_sample": [],
+        "symbol_return_inputs_sample": [
+          {
+            "symbol": "000001.SZ",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000666.SZ",
+            "daily_row_count": 6,
+            "adj_factor_row_count": 6,
+            "daily_adj_overlap_count": 6,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "600001.SH",
+            "daily_row_count": 8,
+            "adj_factor_row_count": 8,
+            "daily_adj_overlap_count": 8,
+            "dividend_row_count": 1,
+            "valid_dividend_ex_date_count": 1,
+            "return_input_shape_ok": true
+          }
+        ],
+        "benchmark_inputs": [
+          {
+            "benchmark": "000300.SH",
+            "row_count": 8,
+            "has_open_close": false,
+            "overlap_with_stock_trade_dates": 8
+          },
+          {
+            "benchmark": "000852.SH",
+            "row_count": 8,
+            "has_open_close": true,
+            "overlap_with_stock_trade_dates": 8
+          }
+        ],
+        "benchmarks_with_failed_anchor_input_shape": [
+          "000300.SH"
+        ],
+        "same_anchor_policy": "Future return calculation must use same entry/exit anchors; this audit checks open/close input shape only and does not calculate returns.",
+        "silent_zero_fill_used": false
+      }
+    },
+    {
+      "fixture_id": "full_main_board_temporal_coverage_below_threshold_detected",
+      "checker_origin": "full_main_board_data_integrity_runner",
+      "target_check_id": "temporal_coverage_bias",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "coverage_characterized_full_main_board",
+      "metrics": {
+        "threshold_pct": 80.0,
+        "usable_start_year": 2019,
+        "below_threshold_cell_count": 1,
+        "below_threshold_cells": [
+          {
+            "year": 2018,
+            "table_id": "income",
+            "eligible_symbol_count": 3,
+            "covered_symbol_count": 0,
+            "coverage_pct": 0.0,
+            "status": "below_threshold"
+          }
+        ]
+      }
+    }
+  ],
+  "check_results": [
+    {
+      "check_id": "fundamental_pit",
+      "status": "pass_full_main_board",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "rows_checked": 616268,
+        "valid_ann_date_rows": 612671,
+        "missing_or_invalid_ann_date_rows": 1,
+        "missing_or_invalid_ann_date_exclusion_rate_pct": 0.000162,
+        "future_ann_date_rows_after_panel_end_excluded": 3596,
+        "missing_required_columns_count": 0,
+        "missing_required_columns_sample": [],
+        "covered_symbol_count_by_table": {
+          "income": 3385,
+          "balancesheet": 3386,
+          "cashflow": 3385,
+          "fina_indicator": 3385
+        },
+        "empty_payload_count_by_table": {
+          "income": 2,
+          "balancesheet": 1,
+          "cashflow": 2,
+          "fina_indicator": 0
+        },
+        "ann_date_asof_gating_feasible": true
+      },
+      "findings": [
+        "Raw full-main-board fundamentals include ann_date/end_date for PIT gating checks.",
+        "Invalid or missing ann_date rows are excluded and reported; they are not latest-only filled."
+      ],
+      "allowed_followup": "If this full main-board audit passes, the next separate gate is the frozen A-long signal search. Do not run signal search or claim alpha from this audit report alone."
+    },
+    {
+      "check_id": "restatement_revision_asof",
+      "status": "pass_full_main_board",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "period_groups_checked": 408876,
+        "groups_with_multiple_ann_dates": 172,
+        "same_ann_date_conflicting_duplicate_groups": 1504,
+        "same_ann_date_ambiguous_exclusion_rate_pct": 0.367838,
+        "same_ann_date_ambiguous_exclusion_max_allowed_pct": 0.5,
+        "same_ann_date_ambiguous_exclusion_policy_ref": "a_long_full_main_board_restatement_exclusion_policy_20260605",
+        "same_ann_date_ambiguous_exclusion_cap_rationale": "The ceiling is a small irreducible-lineage tripwire for data-readiness repair, not an alpha-selection threshold: below 0.5 percent the affected records are removed from all signal inputs; at or above 0.5 percent the data route fails and must be re-reviewed or rematerialized. The same 0.5 percent ceiling would be used whether the observed rate were 0.1 percent or 0.4 percent.",
+        "same_ann_date_ambiguous_groups_must_be_excluded_from_signal_inputs": true,
+        "same_ann_date_ambiguous_exclusion_rows_count": 1504,
+        "same_ann_date_ambiguous_exclusion_rows_sample": [
+          {
+            "table_id": "income",
+            "symbol": "600115.SH",
+            "end_date": "20250630",
+            "ann_date": "20250830",
+            "row_count": 2,
+            "differing_fields": "n_income_attr_p",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "income",
+            "symbol": "600115.SH",
+            "end_date": "20230630",
+            "ann_date": "20230831",
+            "row_count": 2,
+            "differing_fields": "n_income_attr_p",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "income",
+            "symbol": "600188.SH",
+            "end_date": "20220331",
+            "ann_date": "20220430",
+            "row_count": 2,
+            "differing_fields": "n_income_attr_p",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "income",
+            "symbol": "600816.SH",
+            "end_date": "20210930",
+            "ann_date": "20211030",
+            "row_count": 2,
+            "differing_fields": "revenue",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "income",
+            "symbol": "600816.SH",
+            "end_date": "20210331",
+            "ann_date": "20210430",
+            "row_count": 2,
+            "differing_fields": "revenue",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "income",
+            "symbol": "600816.SH",
+            "end_date": "20200630",
+            "ann_date": "20200831",
+            "row_count": 2,
+            "differing_fields": "revenue",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "income",
+            "symbol": "600906.SH",
+            "end_date": "20220331",
+            "ann_date": "20220429",
+            "row_count": 2,
+            "differing_fields": "n_income_attr_p",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "income",
+            "symbol": "603607.SH",
+            "end_date": "20220331",
+            "ann_date": "20220428",
+            "row_count": 2,
+            "differing_fields": "n_income_attr_p|revenue",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "balancesheet",
+            "symbol": "001286.SZ",
+            "end_date": "20230930",
+            "ann_date": "20231027",
+            "row_count": 2,
+            "differing_fields": "total_hldr_eqy_exc_min_int|total_liab",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "balancesheet",
+            "symbol": "601696.SH",
+            "end_date": "20240331",
+            "ann_date": "20240430",
+            "row_count": 2,
+            "differing_fields": "total_assets|total_liab",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "balancesheet",
+            "symbol": "603070.SH",
+            "end_date": "20211231",
+            "ann_date": "20220427",
+            "row_count": 2,
+            "differing_fields": "total_assets|total_hldr_eqy_exc_min_int|total_liab",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "balancesheet",
+            "symbol": "002770.SZ",
+            "end_date": "20220331",
+            "ann_date": "20220430",
+            "row_count": 2,
+            "differing_fields": "total_assets|total_hldr_eqy_exc_min_int",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "balancesheet",
+            "symbol": "600260.SH",
+            "end_date": "20220331",
+            "ann_date": "20220430",
+            "row_count": 2,
+            "differing_fields": "total_hldr_eqy_exc_min_int",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "balancesheet",
+            "symbol": "600277.SH",
+            "end_date": "20240630",
+            "ann_date": "20240831",
+            "row_count": 2,
+            "differing_fields": "total_assets",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "cashflow",
+            "symbol": "600241.SH",
+            "end_date": "20241231",
+            "ann_date": "20250409",
+            "row_count": 2,
+            "differing_fields": "n_cashflow_act",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "cashflow",
+            "symbol": "601727.SH",
+            "end_date": "20250630",
+            "ann_date": "20250830",
+            "row_count": 2,
+            "differing_fields": "n_cashflow_act",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "cashflow",
+            "symbol": "603788.SH",
+            "end_date": "20241231",
+            "ann_date": "20250422",
+            "row_count": 2,
+            "differing_fields": "n_cashflow_act",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "cashflow",
+            "symbol": "002699.SZ",
+            "end_date": "20240630",
+            "ann_date": "20240828",
+            "row_count": 2,
+            "differing_fields": "n_cashflow_act",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "fina_indicator",
+            "symbol": "000016.SZ",
+            "end_date": "20240930",
+            "ann_date": "20241031",
+            "row_count": 2,
+            "differing_fields": "roe",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          },
+          {
+            "table_id": "fina_indicator",
+            "symbol": "000016.SZ",
+            "end_date": "20230331",
+            "ann_date": "20230429",
+            "row_count": 2,
+            "differing_fields": "roe",
+            "required_signal_treatment": "exclude_this_table_symbol_period_ann_date_group"
+          }
+        ],
+        "same_ann_date_ambiguous_exclusion_list_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+        "same_ann_date_conflict_examples": [
+          {
+            "table": "income",
+            "symbol": "600115.SH",
+            "end_date": "20250630",
+            "ann_date": "20250830",
+            "row_count": 2,
+            "differing_fields": [
+              "n_income_attr_p"
+            ]
+          },
+          {
+            "table": "income",
+            "symbol": "600115.SH",
+            "end_date": "20230630",
+            "ann_date": "20230831",
+            "row_count": 2,
+            "differing_fields": [
+              "n_income_attr_p"
+            ]
+          },
+          {
+            "table": "income",
+            "symbol": "600188.SH",
+            "end_date": "20220331",
+            "ann_date": "20220430",
+            "row_count": 2,
+            "differing_fields": [
+              "n_income_attr_p"
+            ]
+          },
+          {
+            "table": "income",
+            "symbol": "600816.SH",
+            "end_date": "20210930",
+            "ann_date": "20211030",
+            "row_count": 2,
+            "differing_fields": [
+              "revenue"
+            ]
+          },
+          {
+            "table": "income",
+            "symbol": "600816.SH",
+            "end_date": "20210331",
+            "ann_date": "20210430",
+            "row_count": 2,
+            "differing_fields": [
+              "revenue"
+            ]
+          },
+          {
+            "table": "income",
+            "symbol": "600816.SH",
+            "end_date": "20200630",
+            "ann_date": "20200831",
+            "row_count": 2,
+            "differing_fields": [
+              "revenue"
+            ]
+          },
+          {
+            "table": "income",
+            "symbol": "600906.SH",
+            "end_date": "20220331",
+            "ann_date": "20220429",
+            "row_count": 2,
+            "differing_fields": [
+              "n_income_attr_p"
+            ]
+          },
+          {
+            "table": "income",
+            "symbol": "603607.SH",
+            "end_date": "20220331",
+            "ann_date": "20220428",
+            "row_count": 2,
+            "differing_fields": [
+              "n_income_attr_p",
+              "revenue"
+            ]
+          },
+          {
+            "table": "balancesheet",
+            "symbol": "001286.SZ",
+            "end_date": "20230930",
+            "ann_date": "20231027",
+            "row_count": 2,
+            "differing_fields": [
+              "total_hldr_eqy_exc_min_int",
+              "total_liab"
+            ]
+          },
+          {
+            "table": "balancesheet",
+            "symbol": "601696.SH",
+            "end_date": "20240331",
+            "ann_date": "20240430",
+            "row_count": 2,
+            "differing_fields": [
+              "total_assets",
+              "total_liab"
+            ]
+          },
+          {
+            "table": "balancesheet",
+            "symbol": "603070.SH",
+            "end_date": "20211231",
+            "ann_date": "20220427",
+            "row_count": 2,
+            "differing_fields": [
+              "total_assets",
+              "total_hldr_eqy_exc_min_int",
+              "total_liab"
+            ]
+          },
+          {
+            "table": "balancesheet",
+            "symbol": "002770.SZ",
+            "end_date": "20220331",
+            "ann_date": "20220430",
+            "row_count": 2,
+            "differing_fields": [
+              "total_assets",
+              "total_hldr_eqy_exc_min_int"
+            ]
+          },
+          {
+            "table": "balancesheet",
+            "symbol": "600260.SH",
+            "end_date": "20220331",
+            "ann_date": "20220430",
+            "row_count": 2,
+            "differing_fields": [
+              "total_hldr_eqy_exc_min_int"
+            ]
+          },
+          {
+            "table": "balancesheet",
+            "symbol": "600277.SH",
+            "end_date": "20240630",
+            "ann_date": "20240831",
+            "row_count": 2,
+            "differing_fields": [
+              "total_assets"
+            ]
+          },
+          {
+            "table": "cashflow",
+            "symbol": "600241.SH",
+            "end_date": "20241231",
+            "ann_date": "20250409",
+            "row_count": 2,
+            "differing_fields": [
+              "n_cashflow_act"
+            ]
+          },
+          {
+            "table": "cashflow",
+            "symbol": "601727.SH",
+            "end_date": "20250630",
+            "ann_date": "20250830",
+            "row_count": 2,
+            "differing_fields": [
+              "n_cashflow_act"
+            ]
+          },
+          {
+            "table": "cashflow",
+            "symbol": "603788.SH",
+            "end_date": "20241231",
+            "ann_date": "20250422",
+            "row_count": 2,
+            "differing_fields": [
+              "n_cashflow_act"
+            ]
+          },
+          {
+            "table": "cashflow",
+            "symbol": "002699.SZ",
+            "end_date": "20240630",
+            "ann_date": "20240828",
+            "row_count": 2,
+            "differing_fields": [
+              "n_cashflow_act"
+            ]
+          },
+          {
+            "table": "fina_indicator",
+            "symbol": "000016.SZ",
+            "end_date": "20240930",
+            "ann_date": "20241031",
+            "row_count": 2,
+            "differing_fields": [
+              "roe"
+            ]
+          },
+          {
+            "table": "fina_indicator",
+            "symbol": "000016.SZ",
+            "end_date": "20230331",
+            "ann_date": "20230429",
+            "row_count": 2,
+            "differing_fields": [
+              "roe"
+            ]
+          }
+        ],
+        "same_ann_date_duplicate_groups_resolved_total": 2586,
+        "same_ann_date_duplicate_groups_resolved_by_non_null_preference": 982,
+        "same_ann_date_duplicate_groups_resolved_by_f_ann_date_asof": 1604,
+        "same_ann_date_duplicate_resolution_examples": [
+          {
+            "table": "income",
+            "symbol": "000007.SZ",
+            "end_date": "20211231",
+            "ann_date": "20220430",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000070.SZ",
+            "end_date": "20181231",
+            "ann_date": "20190416",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000070.SZ",
+            "end_date": "20171231",
+            "ann_date": "20180411",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000422.SZ",
+            "end_date": "20231231",
+            "ann_date": "20240413",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000422.SZ",
+            "end_date": "20181231",
+            "ann_date": "20190404",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000422.SZ",
+            "end_date": "20171231",
+            "ann_date": "20180421",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000505.SZ",
+            "end_date": "20231231",
+            "ann_date": "20240330",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000505.SZ",
+            "end_date": "20230630",
+            "ann_date": "20230825",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000506.SZ",
+            "end_date": "20220331",
+            "ann_date": "20220429",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000523.SZ",
+            "end_date": "20181231",
+            "ann_date": "20190430",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000530.SZ",
+            "end_date": "20250630",
+            "ann_date": "20250814",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000547.SZ",
+            "end_date": "20221231",
+            "ann_date": "20230422",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000559.SZ",
+            "end_date": "20231231",
+            "ann_date": "20240430",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000559.SZ",
+            "end_date": "20221231",
+            "ann_date": "20230328",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000595.SZ",
+            "end_date": "20221231",
+            "ann_date": "20230420",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000608.SZ",
+            "end_date": "20230630",
+            "ann_date": "20230826",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000608.SZ",
+            "end_date": "20221231",
+            "ann_date": "20230318",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000698.SZ",
+            "end_date": "20201231",
+            "ann_date": "20210319",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000698.SZ",
+            "end_date": "20191231",
+            "ann_date": "20200410",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          },
+          {
+            "table": "income",
+            "symbol": "000700.SZ",
+            "end_date": "20201231",
+            "ann_date": "20210429",
+            "row_count": 2,
+            "resolved_fields": [
+              "f_ann_date",
+              "n_income_attr_p",
+              "revenue"
+            ],
+            "resolution_rule": "resolved_by_f_ann_date_asof_disambiguation"
+          }
+        ],
+        "tables_with_f_ann_date_column": [
+          "balancesheet",
+          "cashflow",
+          "income"
+        ],
+        "resolution_rule": "Same-ann-date duplicates may resolve only by a narrow nullable-field preference or by valid f_ann_date as-of disambiguation. Future signal code must choose the latest f_ann_date <= as_of, not latest-only."
+      },
+      "findings": [
+        "The audit checks same-ann-date duplicate conflicts and multi-ann-date period groups.",
+        "Latest-known selection must use ann_date / f_ann_date <= as_of; no later restatement is silently used.",
+        "Unresolved same-ann-date groups without a version disambiguator are allowed only below the exclusion-rate cap and must be excluded from signal inputs."
+      ],
+      "allowed_followup": "If this full main-board audit passes, the next separate gate is the frozen A-long signal search. Do not run signal search or claim alpha from this audit report alone."
+    },
+    {
+      "check_id": "survivorship_pit_universe",
+      "status": "pass_full_main_board",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "active_symbol_count": 3200,
+        "delisted_symbol_count": 187,
+        "candidate_universe_count": 3387,
+        "missing_symbols_count": 0,
+        "missing_symbols_sample": [],
+        "active_status_failure_count": 0,
+        "active_status_failure_sample": [],
+        "delisted_status_failure_count": 0,
+        "delisted_status_failure_sample": [],
+        "pit_membership_decisions_checked": 293247,
+        "invalid_listing_date_rows": 0,
+        "terminal_return_input_failed_count": 0,
+        "terminal_return_input_failed_symbols": [],
+        "delisted_terminal_return_inputs_sample": [
+          {
+            "symbol": "000005.SZ",
+            "delist_date": "20240426",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20240305",
+            "last_adj_factor_date": "20240425",
+            "terminal_gap_days": 52,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000018.SZ",
+            "delist_date": "20200107",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20200106",
+            "last_adj_factor_date": "20200106",
+            "terminal_gap_days": 1,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000023.SZ",
+            "delist_date": "20240902",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20240724",
+            "last_adj_factor_date": "20240830",
+            "terminal_gap_days": 40,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000038.SZ",
+            "delist_date": "20230712",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20230711",
+            "last_adj_factor_date": "20230711",
+            "terminal_gap_days": 1,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000040.SZ",
+            "delist_date": "20250430",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20250331",
+            "last_adj_factor_date": "20250429",
+            "terminal_gap_days": 30,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000046.SZ",
+            "delist_date": "20240207",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20231227",
+            "last_adj_factor_date": "20240206",
+            "terminal_gap_days": 42,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000150.SZ",
+            "delist_date": "20230609",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20230427",
+            "last_adj_factor_date": "20230608",
+            "terminal_gap_days": 43,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000413.SZ",
+            "delist_date": "20241011",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20240814",
+            "last_adj_factor_date": "20241010",
+            "terminal_gap_days": 58,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000416.SZ",
+            "delist_date": "20240605",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20240424",
+            "last_adj_factor_date": "20240604",
+            "terminal_gap_days": 42,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000418.SZ",
+            "delist_date": "20190621",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20190507",
+            "last_adj_factor_date": "20190620",
+            "terminal_gap_days": 45,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000502.SZ",
+            "delist_date": "20220627",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20220624",
+            "last_adj_factor_date": "20220624",
+            "terminal_gap_days": 3,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000511.SZ",
+            "delist_date": "20180718",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20180717",
+            "last_adj_factor_date": "20180717",
+            "terminal_gap_days": 1,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000540.SZ",
+            "delist_date": "20230630",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20230518",
+            "last_adj_factor_date": "20230629",
+            "terminal_gap_days": 43,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000584.SZ",
+            "delist_date": "20250711",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20250710",
+            "last_adj_factor_date": "20250710",
+            "terminal_gap_days": 1,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000585.SZ",
+            "delist_date": "20220524",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20220523",
+            "last_adj_factor_date": "20220523",
+            "terminal_gap_days": 1,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000587.SZ",
+            "delist_date": "20230403",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20230202",
+            "last_adj_factor_date": "20230331",
+            "terminal_gap_days": 60,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000606.SZ",
+            "delist_date": "20230706",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20230705",
+            "last_adj_factor_date": "20230705",
+            "terminal_gap_days": 1,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000611.SZ",
+            "delist_date": "20220628",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20220627",
+            "last_adj_factor_date": "20220627",
+            "terminal_gap_days": 1,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000613.SZ",
+            "delist_date": "20220629",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20220628",
+            "last_adj_factor_date": "20220628",
+            "terminal_gap_days": 1,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          },
+          {
+            "symbol": "000616.SZ",
+            "delist_date": "20230823",
+            "terminal_return_required_for_2018_2025_panel": true,
+            "last_trade_date": "20230613",
+            "last_adj_factor_date": "20230822",
+            "terminal_gap_days": 71,
+            "terminal_return_input_available": true,
+            "post_last_trade_daily_rows_count": null,
+            "extended_no_trade_terminal_policy_verified": null
+          }
+        ],
+        "post_panel_delisted_symbols_without_terminal_requirement_count": 4,
+        "post_panel_delisted_symbols_without_terminal_requirement_sample": [
+          "000638.SZ",
+          "002231.SZ",
+          "600355.SH",
+          "603056.SH"
+        ],
+        "extended_no_trade_terminal_return_symbols_count": 3,
+        "extended_no_trade_terminal_return_symbols_sample": [
+          "600485.SH",
+          "600677.SH",
+          "600680.SH"
+        ],
+        "extended_no_trade_terminal_policy": "If an in-panel delisted symbol has no later daily rows through delist_date, the last available daily+adj_factor row is treated as the terminal no-trade input; future return code must not manufacture a clean exit.",
+        "extended_no_trade_terminal_unverified_count": 0,
+        "extended_no_trade_terminal_unverified_sample": [],
+        "raw_sw_membership_symbol_count": 2007,
+        "active_supplemented_sw_symbol_count": 1189,
+        "active_supplemented_sw_symbols_verified_from_repair_raw": true,
+        "active_supplemented_sw_invalid_raw_count": 0,
+        "active_supplemented_sw_invalid_raw_sample": [],
+        "active_investable_missing_industry_count": 0,
+        "active_investable_missing_industry_sample": [],
+        "reviewed_no_industry_exception_count": 191,
+        "delisted_no_industry_exception_count": 187,
+        "active_delisting_shell_exception_symbols": [
+          "600421.SH",
+          "600599.SH",
+          "600636.SH",
+          "600696.SH"
+        ],
+        "industry_normalization_policy": {
+          "silent_industry_fill_allowed": false,
+          "drop_exception_names_from_returns_or_risk_allowed": false,
+          "exclude_exception_symbols_from_industry_neutral_denominators": true,
+          "keep_exception_symbols_in_returns_risk_drawdown_and_coverage": true
+        },
+        "industry_normalization_exclusion_symbols_sample": [
+          "000005.SZ",
+          "000018.SZ",
+          "000023.SZ",
+          "000038.SZ",
+          "000040.SZ",
+          "000046.SZ",
+          "000150.SZ",
+          "000413.SZ",
+          "000416.SZ",
+          "000418.SZ",
+          "000502.SZ",
+          "000511.SZ",
+          "000540.SZ",
+          "000584.SZ",
+          "000585.SZ",
+          "000587.SZ",
+          "000606.SZ",
+          "000611.SZ",
+          "000613.SZ",
+          "000616.SZ"
+        ],
+        "industry_normalization_exclusion_symbol_count": 191
+      },
+      "findings": [
+        "Full main-board active and 2018-2025 delisted symbols stay in the PIT universe.",
+        "Reviewed no-industry exceptions are excluded only from industry-normalization denominators, not returns or risk.",
+        "Delisted names must have terminal daily and adj_factor inputs near delisting.",
+        "Extended no-trade delisted names must have no later daily rows through delist date before the last available row can be accepted as terminal input."
+      ],
+      "allowed_followup": "If this full main-board audit passes, the next separate gate is the frozen A-long signal search. Do not run signal search or claim alpha from this audit report alone."
+    },
+    {
+      "check_id": "return_benchmark_measurement_basis",
+      "status": "pass_full_main_board",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "candidate_universe_count": 3387,
+        "symbols_checked": 3373,
+        "post_panel_listing_symbols_excluded_from_return_shape_count": 14,
+        "post_panel_listing_symbols_excluded_from_return_shape_sample": [
+          "001220.SZ",
+          "001237.SZ",
+          "001257.SZ",
+          "001312.SZ",
+          "001365.SZ",
+          "001393.SZ",
+          "601112.SH",
+          "603284.SH",
+          "603293.SH",
+          "603352.SH",
+          "603402.SH",
+          "603407.SH",
+          "603435.SH",
+          "603459.SH"
+        ],
+        "total_daily_rows": 5874062,
+        "total_adj_factor_rows": 5945470,
+        "total_dividend_rows": 118099,
+        "symbols_with_empty_daily": 0,
+        "symbols_with_empty_adj_factor": 0,
+        "symbols_with_empty_dividend": 0,
+        "symbols_with_failed_return_input_shape_count": 0,
+        "symbols_with_failed_return_input_shape_sample": [],
+        "symbol_return_inputs_sample": [
+          {
+            "symbol": "000001.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 53,
+            "valid_dividend_ex_date_count": 29,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000002.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 59,
+            "valid_dividend_ex_date_count": 33,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000004.SZ",
+            "daily_row_count": 1913,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1913,
+            "dividend_row_count": 29,
+            "valid_dividend_ex_date_count": 5,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000005.SZ",
+            "daily_row_count": 1496,
+            "adj_factor_row_count": 1532,
+            "daily_adj_overlap_count": 1496,
+            "dividend_row_count": 22,
+            "valid_dividend_ex_date_count": 6,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000006.SZ",
+            "daily_row_count": 1900,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1900,
+            "dividend_row_count": 52,
+            "valid_dividend_ex_date_count": 29,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000007.SZ",
+            "daily_row_count": 1885,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1885,
+            "dividend_row_count": 30,
+            "valid_dividend_ex_date_count": 6,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000008.SZ",
+            "daily_row_count": 1887,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1887,
+            "dividend_row_count": 33,
+            "valid_dividend_ex_date_count": 8,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000009.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 45,
+            "valid_dividend_ex_date_count": 22,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000010.SZ",
+            "daily_row_count": 1940,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1940,
+            "dividend_row_count": 28,
+            "valid_dividend_ex_date_count": 4,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000011.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 40,
+            "valid_dividend_ex_date_count": 16,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000012.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 53,
+            "valid_dividend_ex_date_count": 30,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000014.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 50,
+            "valid_dividend_ex_date_count": 26,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000016.SZ",
+            "daily_row_count": 1923,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1923,
+            "dividend_row_count": 49,
+            "valid_dividend_ex_date_count": 25,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000017.SZ",
+            "daily_row_count": 1940,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1940,
+            "dividend_row_count": 27,
+            "valid_dividend_ex_date_count": 4,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000018.SZ",
+            "daily_row_count": 463,
+            "adj_factor_row_count": 490,
+            "daily_adj_overlap_count": 463,
+            "dividend_row_count": 11,
+            "valid_dividend_ex_date_count": 7,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000019.SZ",
+            "daily_row_count": 1874,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1874,
+            "dividend_row_count": 42,
+            "valid_dividend_ex_date_count": 18,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000020.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 29,
+            "valid_dividend_ex_date_count": 5,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000021.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 57,
+            "valid_dividend_ex_date_count": 33,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000023.SZ",
+            "daily_row_count": 1590,
+            "adj_factor_row_count": 1619,
+            "daily_adj_overlap_count": 1590,
+            "dividend_row_count": 39,
+            "valid_dividend_ex_date_count": 20,
+            "return_input_shape_ok": true
+          },
+          {
+            "symbol": "000025.SZ",
+            "daily_row_count": 1942,
+            "adj_factor_row_count": 1942,
+            "daily_adj_overlap_count": 1942,
+            "dividend_row_count": 32,
+            "valid_dividend_ex_date_count": 9,
+            "return_input_shape_ok": true
+          }
+        ],
+        "benchmark_inputs": [
+          {
+            "benchmark": "000300.SH",
+            "row_count": 1942,
+            "has_open_close": true,
+            "overlap_with_stock_trade_dates": 1942
+          },
+          {
+            "benchmark": "000852.SH",
+            "row_count": 1942,
+            "has_open_close": true,
+            "overlap_with_stock_trade_dates": 1942
+          }
+        ],
+        "benchmarks_with_failed_anchor_input_shape": [],
+        "same_anchor_policy": "Future return calculation must use same entry/exit anchors; this audit checks open/close input shape only and does not calculate returns.",
+        "silent_zero_fill_used": false
+      },
+      "findings": [
+        "Daily open/close, adj_factor, dividend-source, and benchmark open/close input shapes are checked.",
+        "No return, benchmark excess, signal, or alpha is calculated in this audit."
+      ],
+      "allowed_followup": "If this full main-board audit passes, the next separate gate is the frozen A-long signal search. Do not run signal search or claim alpha from this audit report alone."
+    },
+    {
+      "check_id": "temporal_coverage_bias",
+      "status": "coverage_characterized_full_main_board",
+      "hard_check": false,
+      "blocks_signal_search": true,
+      "metrics": {
+        "threshold_pct": 80.0,
+        "usable_start_year": 2018,
+        "below_threshold_cell_count": 0,
+        "below_threshold_cells": []
+      },
+      "findings": [
+        "Coverage is characterized by year and table for the full main-board candidate universe.",
+        "Low early coverage narrows or blocks the usable signal-search window; it is not silently ignored."
+      ],
+      "allowed_followup": "If this full main-board audit passes, the next separate gate is the frozen A-long signal search. Do not run signal search or claim alpha from this audit report alone."
+    }
+  ],
+  "coverage_by_year": [
+    {
+      "year": 2018,
+      "table_id": "income",
+      "eligible_symbol_count": 2834,
+      "covered_symbol_count": 2834,
+      "coverage_pct": 100.0,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2018,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 2834,
+      "covered_symbol_count": 2834,
+      "coverage_pct": 100.0,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2018,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 2834,
+      "covered_symbol_count": 2834,
+      "coverage_pct": 100.0,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2018,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 2834,
+      "covered_symbol_count": 2834,
+      "coverage_pct": 100.0,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2019,
+      "table_id": "income",
+      "eligible_symbol_count": 2910,
+      "covered_symbol_count": 2908,
+      "coverage_pct": 99.931271,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2019,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 2910,
+      "covered_symbol_count": 2908,
+      "coverage_pct": 99.931271,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2019,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 2910,
+      "covered_symbol_count": 2908,
+      "coverage_pct": 99.931271,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2019,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 2910,
+      "covered_symbol_count": 2908,
+      "coverage_pct": 99.931271,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2020,
+      "table_id": "income",
+      "eligible_symbol_count": 3044,
+      "covered_symbol_count": 3044,
+      "coverage_pct": 100.0,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2020,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 3044,
+      "covered_symbol_count": 3044,
+      "coverage_pct": 100.0,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2020,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 3044,
+      "covered_symbol_count": 3044,
+      "coverage_pct": 100.0,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2020,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 3044,
+      "covered_symbol_count": 3044,
+      "coverage_pct": 100.0,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2021,
+      "table_id": "income",
+      "eligible_symbol_count": 3156,
+      "covered_symbol_count": 3153,
+      "coverage_pct": 99.904943,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2021,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 3156,
+      "covered_symbol_count": 3153,
+      "coverage_pct": 99.904943,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2021,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 3156,
+      "covered_symbol_count": 3153,
+      "coverage_pct": 99.904943,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2021,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 3156,
+      "covered_symbol_count": 3153,
+      "coverage_pct": 99.904943,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2022,
+      "table_id": "income",
+      "eligible_symbol_count": 3208,
+      "covered_symbol_count": 3204,
+      "coverage_pct": 99.875312,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2022,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 3208,
+      "covered_symbol_count": 3204,
+      "coverage_pct": 99.875312,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2022,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 3208,
+      "covered_symbol_count": 3204,
+      "coverage_pct": 99.875312,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2022,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 3208,
+      "covered_symbol_count": 3204,
+      "coverage_pct": 99.875312,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2023,
+      "table_id": "income",
+      "eligible_symbol_count": 3232,
+      "covered_symbol_count": 3228,
+      "coverage_pct": 99.876238,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2023,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 3232,
+      "covered_symbol_count": 3228,
+      "coverage_pct": 99.876238,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2023,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 3232,
+      "covered_symbol_count": 3228,
+      "coverage_pct": 99.876238,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2023,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 3232,
+      "covered_symbol_count": 3228,
+      "coverage_pct": 99.876238,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2024,
+      "table_id": "income",
+      "eligible_symbol_count": 3222,
+      "covered_symbol_count": 3219,
+      "coverage_pct": 99.90689,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2024,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 3222,
+      "covered_symbol_count": 3219,
+      "coverage_pct": 99.90689,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2024,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 3222,
+      "covered_symbol_count": 3219,
+      "coverage_pct": 99.90689,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2024,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 3222,
+      "covered_symbol_count": 3219,
+      "coverage_pct": 99.90689,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2025,
+      "table_id": "income",
+      "eligible_symbol_count": 3214,
+      "covered_symbol_count": 3207,
+      "coverage_pct": 99.782203,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2025,
+      "table_id": "balancesheet",
+      "eligible_symbol_count": 3214,
+      "covered_symbol_count": 3207,
+      "coverage_pct": 99.782203,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2025,
+      "table_id": "cashflow",
+      "eligible_symbol_count": 3214,
+      "covered_symbol_count": 3207,
+      "coverage_pct": 99.782203,
+      "status": "pass_full_main_board"
+    },
+    {
+      "year": 2025,
+      "table_id": "fina_indicator",
+      "eligible_symbol_count": 3214,
+      "covered_symbol_count": 3207,
+      "coverage_pct": 99.782203,
+      "status": "pass_full_main_board"
+    }
+  ],
+  "decision": {
+    "audit_status": "passed_full_main_board_data_integrity_for_signal_search",
+    "hard_checks_pass": true,
+    "usable_start_year": 2018,
+    "data_can_be_used_for_alpha_now": false,
+    "signal_search_may_be_executed_after_review": true,
+    "signal_search_authorized_by_this_report": false,
+    "alpha_found": false,
+    "plain_result": "Full main-board data audit passed. The next separate gate may run the frozen signal search.",
+    "next_action": "If this report passes independent review, run the separate frozen signal-search gate only when allowed; otherwise fix the failed data checks first."
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "signal_search_executed": false,
+    "signal_search_authorized": false,
+    "alpha_backtest_executed": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "provider_selected": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "result_artifacts": [
+    "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+    "research/results/a_long_full_main_board_data_integrity_audit_20260605/check_summary.csv",
+    "research/results/a_long_full_main_board_data_integrity_audit_20260605/coverage_by_year.csv",
+    "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv"
+  ],
+  "limitations": [
+    "This audit reads already-materialized raw payloads only and executes no provider call.",
+    "This audit does not run signal search, calculate alpha, authorize production, or provide ship-gate evidence.",
+    "Reviewed no-industry names remain in returns/risk/drawdown/coverage and are excluded only from industry-normalization denominators.",
+    "Unresolved restatement duplicate groups in restatement_ambiguous_exclusions.csv must be excluded from future signal inputs."
+  ]
+}

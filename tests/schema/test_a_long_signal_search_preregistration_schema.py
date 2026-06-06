@@ -147,10 +147,32 @@ class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertFalse(industry["silent_industry_fill_allowed"])
         self.assertFalse(industry["manual_industry_fill_allowed"])
 
+    def test_restatement_exclusion_list_is_mandatory_for_future_signal_inputs(self) -> None:
+        policy = self._load_artifact()["search_design"]["restatement_exclusion_policy"]
+
+        self.assertEqual(
+            policy["full_main_board_audit_report_ref"],
+            "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+        )
+        self.assertEqual(
+            policy["exclusion_list_ref"],
+            "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+        )
+        self.assertTrue(policy["mandatory_exclusion_from_signal_inputs"])
+        self.assertEqual(policy["expected_exclusion_group_count"], 1504)
+        self.assertLessEqual(policy["observed_exclusion_rate_pct"], policy["max_registered_exclusion_rate_pct"])
+        self.assertTrue(policy["runner_must_abort_if_exclusion_list_missing"])
+        self.assertTrue(policy["runner_must_abort_if_exclusion_not_applied"])
+        self.assertTrue(policy["excluded_groups_must_be_reported"])
+        self.assertFalse(policy["silent_use_of_ambiguous_groups_allowed"])
+        self.assertFalse(policy["latest_only_fill_allowed"])
+
     def test_scope_creep_is_rejected_by_schema(self) -> None:
         payload = copy.deepcopy(self._load_artifact())
         payload["scope"]["signal_search_authorized_by_this_artifact"] = True
         payload["prohibited_claims"]["validated_alpha"] = True
+        payload["search_design"]["restatement_exclusion_policy"]["silent_use_of_ambiguous_groups_allowed"] = True
+        payload["search_design"]["restatement_exclusion_policy"]["runner_must_abort_if_exclusion_not_applied"] = False
 
         errors = self._validate(payload)
 

@@ -144,6 +144,13 @@ class ALongDataIntegrityAuditPreregistrationTest(unittest.TestCase):
             "action_if_exceeded": "exclude_and_report_affects_usable_window_not_global_fail",
         })
         self.assertEqual(checks["restatement_revision_asof"]["pass_threshold"]["value"], 0)
+        self.assertEqual(checks["restatement_revision_asof"]["non_blocking_tolerance"], {
+            "metric": "same_ann_date_ambiguous_exclusion_rate_pct",
+            "operator": "<=",
+            "value": 0.5,
+            "unit": "percent",
+            "action_if_exceeded": "fail_data_not_ready_and_require_re_review_not_auto_tolerate",
+        })
         self.assertEqual(checks["survivorship_pit_universe"]["pass_threshold"]["value"], 0)
         self.assertEqual(checks["return_benchmark_measurement_basis"]["pass_threshold"]["value"], 0)
         self.assertEqual(checks["temporal_coverage_bias"]["blocking_effect"], "characterize_and_limit_usable_window_not_global_block")
@@ -179,8 +186,9 @@ class ALongDataIntegrityAuditPreregistrationTest(unittest.TestCase):
             "list_date",
             "delist_date",
             "same entry and exit",
-            "terminal / delisting return",
-        ]:
+                "terminal / delisting return",
+                "restatement_ambiguous_exclusions.csv",
+            ]:
             with self.subTest(required_text=required_text):
                 self.assertIn(required_text, joined_sources + "\n" + joined_fields)
 
@@ -194,6 +202,24 @@ class ALongDataIntegrityAuditPreregistrationTest(unittest.TestCase):
                     check["failure_action"],
                     "block_signal_search_until_data_repaired_or_new_reviewed_audit_plan",
                 )
+
+    def test_reviewed_repair_amendment_precommits_restatement_exclusion_policy(self) -> None:
+        amendment = self._load_artifact()["reviewed_repair_amendments"][0]
+
+        self.assertEqual(amendment["amendment_id"], "a_long_full_main_board_restatement_exclusion_policy_20260605")
+        self.assertEqual(amendment["applies_to_check_id"], "restatement_revision_asof")
+        self.assertEqual(amendment["ambiguous_group_signal_treatment"], "mandatory_exclusion_from_signal_inputs")
+        self.assertEqual(amendment["max_ambiguous_exclusion_rate_pct"], 0.5)
+        self.assertLessEqual(amendment["observed_ambiguous_exclusion_rate_pct"], amendment["max_ambiguous_exclusion_rate_pct"])
+        self.assertEqual(
+            amendment["exclusion_list_artifact"],
+            "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+        )
+        self.assertTrue(amendment["signal_search_preregistration_must_consume_exclusion_list"])
+        self.assertFalse(amendment["silent_use_of_ambiguous_groups_allowed"])
+        self.assertFalse(amendment["signal_search_authorized_by_this_amendment"])
+        self.assertFalse(amendment["alpha_or_production_claim_allowed"])
+        self.assertIn("same 0.5 percent ceiling", amendment["cap_rationale"])
 
     def test_decision_policy_blocks_signal_search_until_all_checks_pass(self) -> None:
         decision = self._load_artifact()["decision_policy"]
@@ -257,6 +283,9 @@ class ALongDataIntegrityAuditPreregistrationTest(unittest.TestCase):
         invalid["prohibited_claims"]["a_long_alpha_found"] = True
         invalid["audit_checks"][0]["pass_threshold"]["value"] = 0.01
         invalid["audit_checks"][0]["non_blocking_tolerance"]["value"] = 50
+        invalid["audit_checks"][1]["non_blocking_tolerance"]["value"] = 5
+        invalid["reviewed_repair_amendments"][0]["silent_use_of_ambiguous_groups_allowed"] = True
+        invalid["reviewed_repair_amendments"][0]["max_ambiguous_exclusion_rate_pct"] = 5
         invalid["audit_checks"][4]["pass_threshold"]["value"] = 60
         invalid["audit_checks"][4]["failure_action"] = "block_signal_search_until_data_repaired_or_new_reviewed_audit_plan"
         invalid["audit_as_of_schedule"]["start_as_of"] = "2015-01-31"

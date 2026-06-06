@@ -137,7 +137,9 @@
       "field_requirements": [
         "For duplicate ts_code + end_date records with multiple ann_date values, the as-of record selection must use the latest ann_date <= as_of and must not use a later revised value.",
         "If Tushare exposes only latest revised values for a table/field without pre-restatement lineage, that table/field must be classified latest_only for historical automation.",
-        "f_ann_date may be recorded when available, but ann_date controls public availability unless a later reviewed contract proves a stricter rule."
+        "f_ann_date may be recorded when available, but ann_date controls public availability unless a later reviewed contract proves a stricter rule.",
+        "2026-06-05 reviewed amendment: same-ann-date duplicate rows may resolve only when distinct f_ann_date values provide a deterministic as-of version order; future signal inputs must choose the latest f_ann_date <= as_of, never latest-only.",
+        "2026-06-05 reviewed amendment: same-ann-date duplicate groups that still lack enough lineage after f_ann_date disambiguation must be excluded from signal inputs, listed in restatement_ambiguous_exclusions.csv, and never silently used."
       ],
       "denominator": "All duplicate ts_code + end_date groups in the audited fundamental tables that have more than one ann_date, plus all groups where provider lineage is needed to distinguish original and revised values.",
       "violation_numerator": "Groups where the selected as-of value uses an ann_date after as_of, silently overwrites earlier values with later restatement values, or lacks enough lineage to prove the as-of version.",
@@ -148,7 +150,13 @@
         "value": 0,
         "unit": "fraction"
       },
-      "non_blocking_tolerance": null,
+      "non_blocking_tolerance": {
+        "metric": "same_ann_date_ambiguous_exclusion_rate_pct",
+        "operator": "<=",
+        "value": 0.5,
+        "unit": "percent",
+        "action_if_exceeded": "fail_data_not_ready_and_require_re_review_not_auto_tolerate"
+      },
       "finding_if_unavailable": "If original-versus-revised lineage cannot be proven for a required factor field, record blocked_missing_required_source or fail_data_not_ready before signal search.",
       "failure_action": "block_signal_search_until_data_repaired_or_new_reviewed_audit_plan"
     },
@@ -240,6 +248,26 @@
       "non_blocking_tolerance": null,
       "finding_if_unavailable": "If coverage cannot be measured from PIT eligible symbols, record blocked_missing_required_source for coverage characterization; do not silently treat missing early data as a clean backtest window.",
       "failure_action": "characterize_coverage_and_declare_usable_start_year"
+    }
+  ],
+  "reviewed_repair_amendments": [
+    {
+      "amendment_id": "a_long_full_main_board_restatement_exclusion_policy_20260605",
+      "status": "registered_pending_independent_review",
+      "applies_to_check_id": "restatement_revision_asof",
+      "user_decision_route": "route_a_tolerate_irreducible_restatement_exclusions_with_mandatory_signal_exclusion",
+      "f_ann_date_asof_disambiguation_rule": "When same-ann-date duplicate rows differ only by valid distinct f_ann_date versions, the audit may treat them as resolvable by f_ann_date as-of ordering; future signal code must use the latest f_ann_date <= as_of and must not use latest-only values.",
+      "ambiguous_group_signal_treatment": "mandatory_exclusion_from_signal_inputs",
+      "exclusion_list_artifact": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+      "max_ambiguous_exclusion_rate_pct": 0.5,
+      "observed_ambiguous_exclusion_rate_pct": 0.367838,
+      "cap_rationale": "The ceiling is a small irreducible-lineage tripwire for data-readiness repair, not an alpha-selection threshold: below 0.5 percent the affected records are removed from all signal inputs; at or above 0.5 percent the data route fails and must be re-reviewed or rematerialized. The same 0.5 percent ceiling would be used whether the observed rate were 0.1 percent or 0.4 percent.",
+      "below_cap_action": "pass_only_with_mandatory_signal_input_exclusions_after_independent_review",
+      "above_cap_action": "fail_data_not_ready_and_re_review_or_rematerialize_with_more_lineage",
+      "signal_search_preregistration_must_consume_exclusion_list": true,
+      "silent_use_of_ambiguous_groups_allowed": false,
+      "signal_search_authorized_by_this_amendment": false,
+      "alpha_or_production_claim_allowed": false
     }
   ],
   "required_runner_self_tests": [

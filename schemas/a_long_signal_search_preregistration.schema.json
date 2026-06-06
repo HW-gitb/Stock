@@ -182,6 +182,7 @@
         "allowed_signal_families",
         "blocked_signal_families",
         "industry_policy",
+        "restatement_exclusion_policy",
         "multiple_testing_policy",
         "required_output_diagnostics"
       ],
@@ -208,6 +209,7 @@
           "uniqueItems": true
         },
         "industry_policy": {"$ref": "#/$defs/industryPolicy"},
+        "restatement_exclusion_policy": {"$ref": "#/$defs/restatementExclusionPolicy"},
         "multiple_testing_policy": {"$ref": "#/$defs/multipleTestingPolicy"},
         "required_output_diagnostics": {"$ref": "#/$defs/stringList"}
       }
@@ -335,6 +337,36 @@
         "selection_time_st_or_delisting_name_veto_required": {"const": true},
         "silent_industry_fill_allowed": {"const": false},
         "manual_industry_fill_allowed": {"const": false}
+      }
+    },
+    "restatementExclusionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_main_board_audit_report_ref",
+        "exclusion_list_ref",
+        "mandatory_exclusion_from_signal_inputs",
+        "expected_exclusion_group_count",
+        "observed_exclusion_rate_pct",
+        "max_registered_exclusion_rate_pct",
+        "runner_must_abort_if_exclusion_list_missing",
+        "runner_must_abort_if_exclusion_not_applied",
+        "excluded_groups_must_be_reported",
+        "silent_use_of_ambiguous_groups_allowed",
+        "latest_only_fill_allowed"
+      ],
+      "properties": {
+        "full_main_board_audit_report_ref": {"const": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json"},
+        "exclusion_list_ref": {"const": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv"},
+        "mandatory_exclusion_from_signal_inputs": {"const": true},
+        "expected_exclusion_group_count": {"const": 1504},
+        "observed_exclusion_rate_pct": {"type": "number", "minimum": 0, "maximum": 0.5},
+        "max_registered_exclusion_rate_pct": {"const": 0.5},
+        "runner_must_abort_if_exclusion_list_missing": {"const": true},
+        "runner_must_abort_if_exclusion_not_applied": {"const": true},
+        "excluded_groups_must_be_reported": {"const": true},
+        "silent_use_of_ambiguous_groups_allowed": {"const": false},
+        "latest_only_fill_allowed": {"const": false}
       }
     },
     "multipleTestingPolicy": {

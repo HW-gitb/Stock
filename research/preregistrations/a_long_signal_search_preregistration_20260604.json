@@ -47,6 +47,14 @@
     {
       "path": "research/README.md",
       "role": "routes research-only preregistrations, ledgers, and result artifacts"
+    },
+    {
+      "path": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+      "role": "records the full main-board audit repair result and the mandatory restatement exclusion policy"
+    },
+    {
+      "path": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+      "role": "full exclusion list for unresolved same-ann-date restatement groups; future signal inputs must consume it"
     }
   ],
   "data_gate": {
@@ -136,6 +144,19 @@
       "silent_industry_fill_allowed": false,
       "manual_industry_fill_allowed": false
     },
+    "restatement_exclusion_policy": {
+      "full_main_board_audit_report_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+      "exclusion_list_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+      "mandatory_exclusion_from_signal_inputs": true,
+      "expected_exclusion_group_count": 1504,
+      "observed_exclusion_rate_pct": 0.367838,
+      "max_registered_exclusion_rate_pct": 0.5,
+      "runner_must_abort_if_exclusion_list_missing": true,
+      "runner_must_abort_if_exclusion_not_applied": true,
+      "excluded_groups_must_be_reported": true,
+      "silent_use_of_ambiguous_groups_allowed": false,
+      "latest_only_fill_allowed": false
+    },
     "multiple_testing_policy": {
       "family_list_frozen": true,
       "parameter_sweep_allowed": false,
@@ -147,6 +168,7 @@
       "Report every frozen signal family, not only the winner.",
       "Report monthly and yearly clustered benchmark excess, stock concentration, tail contribution, and drawdown.",
       "Report industry-neutral and non-neutral views separately, with 000666.SZ retained in returns and risk.",
+      "Report the count of restatement_ambiguous_exclusions.csv groups excluded from factor inputs; abort if the exclusion list is missing or not applied.",
       "Report failed / missing-data exclusions and do not fill missing fundamentals with zero or latest values.",
       "Report a plain-language verdict: usable alpha clue, risk-filter-only, or no alpha."
     ]
@@ -191,6 +213,7 @@
     "Independent review must verify this preregistration before any signal-search runner or full-universe data execution.",
     "After clean review and explicit user execute, the next execution package may combine main-board candidate-universe expansion, runner implementation, full-period signal run, summary, tests, and docs in one reviewed big package.",
     "The future execution must consume the approved 191-name no-industry boundary in docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json: no manual fill, no silent default, no dropping those names from returns or risk, and exclusion only from industry-normalization denominators.",
+    "The future execution must consume research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv and exclude every listed ambiguous same-ann-date group from signal inputs; missing or unapplied exclusions must abort the run.",
     "The future run must not use the fixed 9-symbol panel as alpha proof; it is only the data-route proof that justified this preregistration."
   ],
   "limitations": [
