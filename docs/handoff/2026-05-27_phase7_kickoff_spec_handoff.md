@@ -1,5 +1,26 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-06 append: A-long amended full materialization PASS shape
+
+**Changed**:
+- Committed the `fina_indicator` ann_date-only PIT contract repair as `e6aa705 Fix A-long fina_indicator PIT contract`.
+- Ran the reviewed Step 1 materialization retry with `runners/a_long_full_main_board_materialization_packet.py --confirm-independent-review-pass --confirm-post-review-execute`.
+- `docs/a_long_full_main_board_materialization_execution_summary_20260605.json` now records `passed_full_main_board_materialization_shape`: 23,718 endpoint results, 3 new Tushare network calls, 23,715 reused raw payloads, budget not exceeded.
+- Candidate universe matches the reviewed packet: 3,200 active main-board + 187 delisted main-board = 3,387.
+- All 14 table rollups passed, including PIT `namechange_2018_2025`, H-code TR-close `benchmark_index_daily`, statement-table `f_ann_date`, and `fina_indicator` ann_date-only fields.
+
+**Plain result**:
+- This clears only the materialization-shape gate.
+- It is not a data-integrity PASS and not alpha evidence.
+- No audit, signal search, alpha, production, ship-gate, DataHub, broker/order automation, or full-size use is authorized by this summary.
+
+**Next**:
+- Independent review of `docs/a_long_full_main_board_materialization_execution_summary_20260605.json`.
+- After review, the next separate gate is the amended full data-integrity audit.
+- Signal search remains locked until amended full audit PASS + review + separate user `执行`.
+
+---
+
 ## 2026-06-06 append: A-long fina_indicator PIT contract repair
 
 **Changed**:
@@ -12,7 +33,7 @@
 **Plain result**:
 - This repair does not run provider calls, materialization, audit, signal search, alpha, production, ship-gate, or full-size use.
 - A-long still has no valid alpha result.
-- After review / commit, the next separate `执行` may retry the reviewed 23,718-call materialization gate.
+- Superseded by the materialization PASS-shape append above: the next separate gate is now materialization-summary review, then amended full audit.
 
 **Boundaries**:
 - Do not clear reused `fina_indicator` checkpoints merely because they lack `f_ann_date`; the current reviewed request shape is ann_date-only and checkpoint shape validation should decide reuse.

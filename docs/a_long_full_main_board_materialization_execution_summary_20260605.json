@@ -1,7 +1,7 @@
 {
   "schema_name": "a_long_full_main_board_materialization_execution_summary",
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-05T12:17:37+00:00",
+  "generated_at": "2026-06-06T13:29:39+00:00",
   "artifact_id": "a_long_full_main_board_materialization_execution_summary_20260605",
   "packet_ref": "docs/a_long_full_main_board_signal_search_execution_packet_20260605.json",
   "scope": {
@@ -36,12 +36,12 @@
     "raw_output_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
     "raw_output_root_is_gitignored": true,
     "max_total_endpoint_calls": 24000,
-    "planned_total_endpoint_calls": 23717,
-    "base_call_count": 8,
+    "planned_total_endpoint_calls": 23718,
+    "base_call_count": 9,
     "calls_per_symbol": 7,
-    "endpoint_results_count": 23717,
-    "new_network_call_count": 48,
-    "reused_raw_payload_count": 23669,
+    "endpoint_results_count": 23718,
+    "new_network_call_count": 3,
+    "reused_raw_payload_count": 23715,
     "min_seconds_between_network_calls": 1.25,
     "budget_exceeded": false,
     "network_call_attempted": true,
@@ -171,6 +171,16 @@
       "max_row_count": 326
     },
     {
+      "table_id": "security_name_change",
+      "status": "passed_full_main_board_materialization_shape",
+      "calls_total": 1,
+      "calls_success_or_empty": 1,
+      "calls_error": 0,
+      "missing_minimum_fields": [],
+      "min_row_count": 5053,
+      "max_row_count": 5053
+    },
+    {
       "table_id": "income",
       "status": "passed_full_main_board_materialization_shape",
       "calls_total": 3387,
@@ -267,8 +277,8 @@
       "calls_success_or_empty": 2,
       "calls_error": 0,
       "missing_minimum_fields": [],
-      "min_row_count": 1942,
-      "max_row_count": 1942
+      "min_row_count": 1940,
+      "max_row_count": 1940
     }
   ],
   "decision": {

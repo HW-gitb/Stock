@@ -8,6 +8,44 @@
 
 ---
 
+## 2026-06-06 — Claude 审查 (A-long Step-1 amended materialization shape) — **PASS (可提交)**
+
+**Verified**: `passed_full_main_board_materialization_shape`; 23,718 endpoint results = 3 new network calls (`security_name_change` ×1 + `benchmark_index_daily` H-codes ×2) + 23,715 reused; per-table `calls_total` sums to 23,718 exactly. All 14 tables passed shape (incl. namechange + H-code TR benchmark). Hygiene clean: `token_logged=false`, `request_url_logged=false`, no raw rows/URL in the tracked summary, raw under gitignored root. Honest: `data_can_be_used_for_alpha_now=false` (shape ≠ data-integrity ≠ alpha).
+- **Checkpoint-shape reuse is correct (no silent stale reuse)**: the only re-pulls are the changed call_ids — benchmark swapped to NEW H-code call_ids (fresh) + namechange (new) = 3; the statement tables reused already carried `f_ann_date` (original run had it → matches the f_ann_date contract), `fina_indicator` reused as ann_date-only (matches the new contract) → no shape drift, none wrongly reused. R-CHECKPOINT-SHAPE behaved as designed.
+- **Note (minor, not a violation)**: the first sandboxed attempt was blocked because the tushare client tried to write `C:\Users\cnhea\tk.csv` (the library's own token cache in the user's home, OUTSIDE the repo); ran with approved escalation. Repo + tracked summary stay token-free; this is tushare-lib behavior on the user's machine, not a repo-hygiene breach.
+
+**Next**: Step 2 — the amended full data-integrity audit (local raw, no alpha) must PASS its gates (PIT namechange/selection-status source, H-code TR-close benchmark, statement-table f_ann_date + fina_indicator ann_date-only, restatement-exclusion, survivorship, coverage). It is a REAL gate — may surface new data issues. Then Claude review → Step 3 first valid signal search. Shape PASS authorizes none of audit/signal/alpha/production/ship-gate.
+
+---
+
+## 2026-06-06 — Codex 执行 (A-long amended full materialization) — **PASS shape / audit still locked**
+
+**Executed only Step 1 materialization after Claude PASS + commit `e6aa705`; no data-integrity audit, signal search, alpha run, production claim, ship-gate claim, or full-size authorization.**
+
+**Command / execution**:
+- Commit created first: `e6aa705 Fix A-long fina_indicator PIT contract`.
+- Command: `python runners/a_long_full_main_board_materialization_packet.py --confirm-independent-review-pass --confirm-post-review-execute`.
+- First sandboxed attempt stopped before materialization because Tushare tried to write `C:\Users\cnhea\tk.csv`; the same reviewed command then ran with approved escalation.
+
+**Result**:
+- Tracked summary: `docs/a_long_full_main_board_materialization_execution_summary_20260605.json`.
+- Decision: `passed_full_main_board_materialization_shape`.
+- Endpoint results: 23,718 total; 3 new Tushare network calls; 23,715 reused raw payloads; budget not exceeded.
+- Candidate universe: 3,200 active main-board + 187 delisted main-board = 3,387, matching the reviewed execution packet.
+- Table rollup: all 14 tables passed shape, including `security_name_change`, `benchmark_index_daily`, statement-table `f_ann_date`, and `fina_indicator` ann_date-only fields.
+- Tracked summary contains no raw rows, no secret, and no request URL; raw payloads / endpoint manifest stay under gitignored `data/a_long/raw/tushare/full_main_board_signal_search_20260605/`.
+
+**Worked on**:
+- [tracked] `docs/a_long_full_main_board_materialization_execution_summary_20260605.json`: updated by the runner.
+- [tracked] `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`: status / risk / handoff updated for the materialization PASS shape result.
+- [untracked] none expected; raw materialization files are gitignored.
+
+**Next / lock**:
+- Materialization shape PASS is not a data-integrity PASS and not alpha evidence.
+- Next required gate is independent review of the materialization summary, then a separate amended full data-integrity audit. Signal search remains locked until amended full audit PASS + review + separate user `执行`.
+
+---
+
 ## 2026-06-06 — Claude 审查 (A-long fina_indicator ann_date-only PIT contract) — **PASS (可提交)**
 
 The recommended Step-1 preflight probe ran FIRST and correctly caught the issue before any ~8h run: existing Tushare gives `namechange_2018_2025` (5,053 rows) + `H00300.CSI`/`H00852.CSI` full-period close (1,940 each) but `fina_indicator` has NO `f_ann_date`. Codex dispositioned it as a table-specific PIT contract (not latest-fill). Verified:
