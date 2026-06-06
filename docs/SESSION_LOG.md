@@ -8,6 +8,48 @@
 
 ---
 
+## 2026-06-06 — Claude 审查 (A-long Step-2 amended full data-integrity audit) — **PASS (可提交)**
+
+Genuine PASS, traceable to already-reviewed route-A mechanisms (not new weakening):
+- **5 hard checks pass**: `fundamental_pit`; `restatement_revision_asof` — same_ann_date conflicts 1504, rate **0.367838% (IDENTICAL to the prior reviewed PASS** → statement-table data unchanged/reused, nothing silently shifted), ≤ the const-locked 0.5% cap; `selection_time_status_source` (NEW) — `namechange_2018_2025` source present + valid; `survivorship_pit_universe` — terminal_return_input_failed = 0 (route-A post-panel/extended-no-trade); `return_benchmark_measurement_basis` — return-shape failures 0 AND **`benchmarks_with_failed_anchor_input_shape = []`** (the NEW H-code TR-close benchmark validates). `temporal_coverage_bias` characterized, usable_start_year 2018.
+- 12/12 self-tests (incl. the new `selection_time_status_source` fixture). **17 audit tests green re-run in my jsonschema-present env.**
+- Decision honest: `passed_full_main_board_data_integrity_for_signal_search`, `data_can_be_used_for_alpha_now=false`, `signal_search_authorized_by_this_report=false`, `alpha_found=false`. Hygiene clean (sole leak-scan hit = the `tracked_report_contains_request_url` flag name). No provider/network call (local raw only).
+
+**Milestone**: the A-long data + measurement chain is now data-integrity-certified after the full repair series (R-BENCH/R-OVERLAP/R-SIGNAL/R-SPLIT/R-VETO-PIT/O-SIZE/schema-sync/jsonschema-hard/fina_indicator-contract). The previously-FAIL checks pass via reviewed, pre-registered route-A mechanisms — not silent weakening.
+
+**Next**: commit. Then **Step 3 — the FIRST VALID frozen A-long signal search** (`执行` with both `--confirm-*`), allowed only because ledger is unspent + the 1,504-group exclusion CSV is applied + Steps 1-2 passed. That run produces the actual alpha verdict → Claude reviews the REAL output (same-anchor close-to-close, HAC t, BH-FDR, CSI300+CSI1000 robustness, drawdown gate, concentration, size caveat — verified in code, to be checked on the result). No alpha/production/ship-gate authorized before that review.
+
+---
+
+## 2026-06-06 — Codex 执行 (A-long amended full data-integrity audit) — **PASS / signal still locked**
+
+**Executed only Step 2 local raw data-integrity audit after materialization-summary Claude PASS + commit `bf16a7d`; no signal search, alpha run, production claim, ship-gate claim, or full-size authorization.**
+
+**Command / execution**:
+- Commit created first: `bf16a7d Record A-long materialization shape pass`.
+- Command: `python runners/a_long_full_main_board_data_integrity_audit.py`.
+- Runner reads already-materialized gitignored raw payloads only; report records zero provider/network calls.
+
+**Result**:
+- Report: `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json`.
+- Check summary: `research/results/a_long_full_main_board_data_integrity_audit_20260605/check_summary.csv`.
+- Decision: `passed_full_main_board_data_integrity_for_signal_search`.
+- Self-tests: 12/12 passed.
+- Check results: `fundamental_pit`, `restatement_revision_asof`, `selection_time_status_source`, `survivorship_pit_universe`, and `return_benchmark_measurement_basis` passed; `temporal_coverage_bias` is characterized.
+- Hygiene: tracked report contains no raw records, endpoint results, secret, or request URL.
+
+**Worked on**:
+- [tracked] `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json`: updated by the runner.
+- [tracked] `research/results/a_long_full_main_board_data_integrity_audit_20260605/check_summary.csv`: updated by the runner.
+- [tracked] `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`: status / risk / handoff updated for the audit PASS result.
+- [untracked] none.
+
+**Next / lock**:
+- Audit PASS is not alpha evidence and does not authorize signal search by itself.
+- Next required gate is independent review of the audit report. Only after review PASS + commit + separate user `执行` may the frozen signal-search gate run.
+
+---
+
 ## 2026-06-06 — Claude 审查 (A-long Step-1 amended materialization shape) — **PASS (可提交)**
 
 **Verified**: `passed_full_main_board_materialization_shape`; 23,718 endpoint results = 3 new network calls (`security_name_change` ×1 + `benchmark_index_daily` H-codes ×2) + 23,715 reused; per-table `calls_total` sums to 23,718 exactly. All 14 tables passed shape (incl. namechange + H-code TR benchmark). Hygiene clean: `token_logged=false`, `request_url_logged=false`, no raw rows/URL in the tracked summary, raw under gitignored root. Honest: `data_can_be_used_for_alpha_now=false` (shape ≠ data-integrity ≠ alpha).

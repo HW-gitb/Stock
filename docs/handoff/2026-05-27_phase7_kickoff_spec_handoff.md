@@ -1,5 +1,25 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-06 append: A-long amended full audit PASS
+
+**Changed**:
+- Committed the materialization PASS-shape summary as `bf16a7d Record A-long materialization shape pass`.
+- Ran `runners/a_long_full_main_board_data_integrity_audit.py` as Step 2 local raw audit.
+- `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json` now records `passed_full_main_board_data_integrity_for_signal_search`.
+- Audit execution used zero provider/network calls, 12/12 self-tests passed, and six check results are pass/characterized.
+
+**Plain result**:
+- This clears only the amended full data-integrity gate pending review.
+- It is not a signal-search result and not alpha evidence.
+- No production, ship-gate, DataHub, broker/order automation, or full-size use is authorized.
+
+**Next**:
+- Independent review of `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json`.
+- After review PASS + commit, the next separate gate may run the frozen A-long signal search.
+- Do not change families, thresholds, horizons, universe, cost model, or industry policy to rescue the search.
+
+---
+
 ## 2026-06-06 append: A-long amended full materialization PASS shape
 
 **Changed**:

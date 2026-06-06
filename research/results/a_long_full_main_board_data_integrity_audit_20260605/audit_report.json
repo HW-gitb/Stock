@@ -1,7 +1,7 @@
 {
   "schema_name": "a_long_full_main_board_data_integrity_audit_report",
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-06T02:56:17+00:00",
+  "generated_at": "2026-06-06T13:42:55+00:00",
   "artifact_id": "a_long_full_main_board_data_integrity_audit_report_20260605",
   "source_refs": [
     "docs/a_long_full_main_board_materialization_execution_summary_20260605.json",
@@ -36,11 +36,11 @@
   "execution": {
     "materialization_summary_ref": "docs/a_long_full_main_board_materialization_execution_summary_20260605.json",
     "raw_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
-    "endpoint_results_count": 23717,
+    "endpoint_results_count": 23718,
     "network_calls_executed": 0,
     "provider_calls_executed": 0,
-    "self_tests_required": 11,
-    "self_tests_passed": 11,
+    "self_tests_required": 12,
+    "self_tests_passed": 12,
     "tracked_report_contains_raw_records": false,
     "tracked_report_contains_endpoint_results": false,
     "tracked_report_contains_secret": false,
@@ -61,8 +61,8 @@
       "600696.SH"
     ],
     "benchmark_indices": [
-      "000300.SH",
-      "000852.SH"
+      "H00300.CSI",
+      "H00852.CSI"
     ],
     "monthly_as_of_count": 96,
     "not_full_market_or_cross_board": true
@@ -237,10 +237,45 @@
         "tables_with_f_ann_date_column": [
           "balancesheet",
           "cashflow",
-          "fina_indicator",
           "income"
         ],
-        "resolution_rule": "Same-ann-date duplicates may resolve only by a narrow nullable-field preference or by valid f_ann_date as-of disambiguation. Future signal code must choose the latest f_ann_date <= as_of, not latest-only."
+        "tables_without_f_ann_date_column": [
+          "fina_indicator"
+        ],
+        "fina_indicator_pit_contract": "ann_date_only_with_restatement_exclusion_no_latest_fill",
+        "resolution_rule": "Same-ann-date duplicates may resolve only by a narrow nullable-field preference or by valid f_ann_date as-of disambiguation when the table exposes f_ann_date. Tushare fina_indicator is ann_date-only in the current reviewed route; unresolved same-ann-date groups must be excluded, not latest-only filled."
+      }
+    },
+    {
+      "fixture_id": "full_main_board_selection_status_source_missing_fails",
+      "checker_origin": "full_main_board_data_integrity_runner",
+      "target_check_id": "selection_time_status_source",
+      "status": "pass",
+      "detected_expected_violation": true,
+      "observed_check_status": "blocked_missing_required_source",
+      "metrics": {
+        "source_call_id": "namechange_2018_2025",
+        "source_table": "security_name_change",
+        "required_columns": [
+          "end_date",
+          "name",
+          "start_date",
+          "ts_code"
+        ],
+        "missing_columns": [
+          "end_date",
+          "name",
+          "start_date",
+          "ts_code"
+        ],
+        "source_load_failures": [
+          "KeyError"
+        ],
+        "row_count": 0,
+        "parseable_start_date_row_count": 0,
+        "universe_symbol_with_status_history_count": 0,
+        "veto_like_status_row_count": 0,
+        "current_stock_basic_name_veto_allowed": false
       }
     },
     {
@@ -307,7 +342,7 @@
       }
     },
     {
-      "fixture_id": "full_main_board_return_benchmark_missing_open_fails",
+      "fixture_id": "full_main_board_return_benchmark_missing_total_return_close_fails",
       "checker_origin": "full_main_board_data_integrity_runner",
       "target_check_id": "return_benchmark_measurement_basis",
       "status": "pass",
@@ -357,22 +392,29 @@
         ],
         "benchmark_inputs": [
           {
-            "benchmark": "000300.SH",
-            "row_count": 8,
-            "has_open_close": false,
-            "overlap_with_stock_trade_dates": 8
+            "benchmark": "CSI300",
+            "benchmark_code": "H00300.CSI",
+            "row_count": 0,
+            "has_trade_date_close": true,
+            "open_required": false,
+            "overlap_with_stock_trade_dates": 0,
+            "load_error": null
           },
           {
-            "benchmark": "000852.SH",
+            "benchmark": "CSI1000",
+            "benchmark_code": "H00852.CSI",
             "row_count": 8,
-            "has_open_close": true,
-            "overlap_with_stock_trade_dates": 8
+            "has_trade_date_close": true,
+            "open_required": false,
+            "overlap_with_stock_trade_dates": 8,
+            "load_error": null
           }
         ],
         "benchmarks_with_failed_anchor_input_shape": [
-          "000300.SH"
+          "H00300.CSI"
         ],
-        "same_anchor_policy": "Future return calculation must use same entry/exit anchors; this audit checks open/close input shape only and does not calculate returns.",
+        "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+        "same_anchor_policy": "Future return calculation must use stock adj_factor close-to-close and H-code benchmark total-return close-to-close on the same entry/exit anchors; this audit checks input shape only and does not calculate returns.",
         "silent_zero_fill_used": false
       }
     },
@@ -1097,12 +1139,44 @@
           "cashflow",
           "income"
         ],
-        "resolution_rule": "Same-ann-date duplicates may resolve only by a narrow nullable-field preference or by valid f_ann_date as-of disambiguation. Future signal code must choose the latest f_ann_date <= as_of, not latest-only."
+        "tables_without_f_ann_date_column": [
+          "fina_indicator"
+        ],
+        "fina_indicator_pit_contract": "ann_date_only_with_restatement_exclusion_no_latest_fill",
+        "resolution_rule": "Same-ann-date duplicates may resolve only by a narrow nullable-field preference or by valid f_ann_date as-of disambiguation when the table exposes f_ann_date. Tushare fina_indicator is ann_date-only in the current reviewed route; unresolved same-ann-date groups must be excluded, not latest-only filled."
       },
       "findings": [
         "The audit checks same-ann-date duplicate conflicts and multi-ann-date period groups.",
-        "Latest-known selection must use ann_date / f_ann_date <= as_of; no later restatement is silently used.",
+        "Latest-known selection must use ann_date and, where exposed, f_ann_date <= as_of; no later restatement is silently used.",
         "Unresolved same-ann-date groups without a version disambiguator are allowed only below the exclusion-rate cap and must be excluded from signal inputs."
+      ],
+      "allowed_followup": "If this full main-board audit passes, the next separate gate is the frozen A-long signal search. Do not run signal search or claim alpha from this audit report alone."
+    },
+    {
+      "check_id": "selection_time_status_source",
+      "status": "pass_full_main_board",
+      "hard_check": true,
+      "blocks_signal_search": true,
+      "metrics": {
+        "source_call_id": "namechange_2018_2025",
+        "source_table": "security_name_change",
+        "required_columns": [
+          "end_date",
+          "name",
+          "start_date",
+          "ts_code"
+        ],
+        "missing_columns": [],
+        "source_load_failures": [],
+        "row_count": 5053,
+        "parseable_start_date_row_count": 5053,
+        "universe_symbol_with_status_history_count": 869,
+        "veto_like_status_row_count": 2864,
+        "current_stock_basic_name_veto_allowed": false
+      },
+      "findings": [
+        "Selection-time ST / delisting-name veto must be based on PIT name/status history.",
+        "Current or final stock_basic.name is not a valid historical veto source."
       ],
       "allowed_followup": "If this full main-board audit passes, the next separate gate is the frozen A-long signal search. Do not run signal search or claim alpha from this audit report alone."
     },
@@ -1633,24 +1707,31 @@
         ],
         "benchmark_inputs": [
           {
-            "benchmark": "000300.SH",
-            "row_count": 1942,
-            "has_open_close": true,
-            "overlap_with_stock_trade_dates": 1942
+            "benchmark": "CSI300",
+            "benchmark_code": "H00300.CSI",
+            "row_count": 1940,
+            "has_trade_date_close": true,
+            "open_required": false,
+            "overlap_with_stock_trade_dates": 1940,
+            "load_error": null
           },
           {
-            "benchmark": "000852.SH",
-            "row_count": 1942,
-            "has_open_close": true,
-            "overlap_with_stock_trade_dates": 1942
+            "benchmark": "CSI1000",
+            "benchmark_code": "H00852.CSI",
+            "row_count": 1940,
+            "has_trade_date_close": true,
+            "open_required": false,
+            "overlap_with_stock_trade_dates": 1940,
+            "load_error": null
           }
         ],
         "benchmarks_with_failed_anchor_input_shape": [],
-        "same_anchor_policy": "Future return calculation must use same entry/exit anchors; this audit checks open/close input shape only and does not calculate returns.",
+        "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+        "same_anchor_policy": "Future return calculation must use stock adj_factor close-to-close and H-code benchmark total-return close-to-close on the same entry/exit anchors; this audit checks input shape only and does not calculate returns.",
         "silent_zero_fill_used": false
       },
       "findings": [
-        "Daily open/close, adj_factor, dividend-source, and benchmark open/close input shapes are checked.",
+        "Daily close, adj_factor, dividend-source, and H-code total-return benchmark close input shapes are checked.",
         "No return, benchmark excess, signal, or alpha is calculated in this audit."
       ],
       "allowed_followup": "If this full main-board audit passes, the next separate gate is the frozen A-long signal search. Do not run signal search or claim alpha from this audit report alone."
