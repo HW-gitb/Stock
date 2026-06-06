@@ -8,6 +8,57 @@
 
 ---
 
+## 2026-06-06 — Claude 审查 (A-long pre-run ROE / veto / exit-policy fix) — **PASS (可提交)**
+
+**R-ROE-PERIOD fixed** ✓ — `annualized_ytd_roe` (line 634-651) annualizes by end_date suffix (0331×4 / 0630×2 / 0930×(4/3) / 1231×1); non-standard suffix → None → cleanly excluded (no crash, no mis-annualize). Now cross-sectionally period-consistent. Prereg/schema lock `profitability_quality_basis = annualized_ytd_roe...`, the annualization policy, and forbid raw-roe direct cross-section (line 240-245). The other 3 families unchanged/correct.
+**Exit policy refined** ✓ — `resolve_return_dates` (line 910-932): normal → scheduled close; TERMINAL (delist_date ≤ scheduled_exit) → last trade before delisting; NON-terminal missing (halt) → NEXT available tradable close (forward, not the prior backward `max(earlier)`); else missing. `benchmark_exit_date = stock_exit_date` (line 953) → same-anchor preserved on every branch. More correct than the prior version; registered as `MISSING_SCHEDULED_EXIT_POLICY` + prereg-locked (line 269).
+**Optionals** ✓ — `cash_conversion` now excludes |net_income| < 1e7 (registered); selection-time veto now catches suffix-退 names (`烯碳退`, line 742) in addition to ST prefixes / 退市, applied on the PIT namechange name.
+**Verified**: 261 A-long tests OK (1 skip) re-run in my jsonschema-present env.
+
+**Minor (non-blocking)**: annualizing a single YTD ROE (Q1×4 etc.) carries residual seasonality vs a TTM 4-quarter ROE; it fixes the first-order period-mixing and is a registered basis, so acceptable — TTM would be more seasonality-robust if ever revisited. Long non-terminal halts extend a name's holding past the horizon to the next tradable close (rare, same-anchor, acceptable).
+
+**Bottom line**: R-ROE-PERIOD (my one Required from the pre-run full re-audit) is resolved; the 4 frozen families + the whole measurement/PIT/decision chain are clean. The two result-review watch-items (early-window industry-neutral coverage; Tushare delisted-universe completeness) stand. After commit, **Step 3 — the first valid frozen signal search** can run (double-confirm; ledger unspent; exclusion CSV applied) → Claude reviews the real result. No alpha/production/ship-gate authorized before that.
+
+---
+
+## 2026-06-06 — Codex 修复 (A-long pre-run ROE / veto / exit policy) — **READY FOR REVIEW / no signal run**
+
+Implemented the pre-run repair without executing signal search, provider calls, materialization, audit, DataHub, production, ship-gate, or full-size use.
+
+**Changed**:
+- `profitability_quality` no longer ranks raw mixed-period `fina_indicator.roe`; it annualizes YTD ROE by report-period suffix (`0331` x4, `0630` x2, `0930` x4/3, `1231` x1) and the preregistration / execution-summary schema lock the basis.
+- `cash_conversion` now keeps the same-end_date income/cashflow alignment and excludes near-zero net-income denominators below the registered 10,000,000 absolute threshold.
+- Selection-time ST / delisting-name veto now catches suffix delisting names such as `烯碳退`, not only `退...` / `退市...` forms.
+- Missing scheduled stock exits now use the last available close only for verified terminal delisting/no-trade. Non-terminal missing scheduled exits use the next available tradable close, or the return is missing; they are not backfilled to an earlier close.
+- `docs/system_risk_register.md` now states close-to-close total-vs-total instead of the stale open-to-close wording.
+
+**Review boundary**:
+- Step 3 signal search remains locked until this repair gets independent review PASS, commit, and a separate user `执行`.
+- Industry-neutral early-window coverage and Tushare delisted-universe completeness remain result-review watch items, not pre-run code blockers in this slice.
+
+---
+
+## 2026-06-06 — Claude 审查 (A-long alpha-search FULL design+code re-audit, pre-run) — **FAIL / 1 Required (R-ROE-PERIOD) + minors + result-review watch-items**
+
+User asked for a complete final design+code review before the one-shot run. Fresh-lens pass over dimensions not yet deeply examined (factor cross-sectional comparability, cost realism, universe completeness, stat edges), not re-flagging the already-fixed series. One real new finding:
+
+**Required**:
+- **R-ROE-PERIOD — `profitability_quality = roe` (line 635) is NOT cross-sectionally period-consistent — the same A-share YTD-cumulative root that `earnings_stability` was explicitly fixed for, but never applied to ROE.** Tushare `fina_indicator.roe` is the period/YTD ROE (Q1 ≈ ¼ of annual; `roe_yearly` annualized exists but isn't materialized). At fiscal-transition as_ofs (esp. the April annual+Q1 overlap; milder Aug/Oct) names sit on different latest periods, so the ROE ranking is driven by *which report period* a name's latest filing is, not by true profitability — e.g. a late-Q1-filer still showing full-year ROE is spuriously ranked top and selected. ~3/12 of monthly cohorts carry this distortion; it injects a calendar/period artifact into one of the 4 frozen families. (cash_conversion is a same-end_date ratio → period-length cancels, only mild seasonality; balance_sheet_strength is a stock ratio → unaffected; earnings_stability already uses same-period YoY.) **Fix**: verify the `roe` field period semantics, then normalize ROE to a period-consistent basis — TTM ROE from 4 quarters (recommended; uses already-materialized income), or `roe_yearly` (needs re-materialization + a field-contract change), or annualize the YTD roe — and register the chosen basis in the prereg. Codex selects the basis.
+
+**Optional (Codex auto-adjudicates)**:
+- `cash_conversion` excludes only EXACTLY net_income==0 (line 643); near-zero net income still makes the ratio explode (percentile-rank caps impact, but consider a small-denominator guard). cash_conversion also carries mild interim-vs-annual seasonality.
+- `ROUND_TRIP_COST` slippage 5bps/side may be optimistic for the less-liquid smaller main-board names in a ~640-name EW top-quintile; it's a declared fixed assumption, but worth a sensitivity note.
+
+**Watch at result-review (not blockers — verify on the real output)**:
+- Early-window (2018–2020) industry-NEUTRAL coverage: route-A excludes names lacking a PIT SW interval at as_of from the neutral denominator; the diagnostics (`industry_neutral_excluded_2018_2020_observation_share`) must be inspected — if a large share of the early window is excluded, the neutral view is effectively post-SW-2021.
+- Universe completeness rests on Tushare `stock_basic_delisted_D` + the frozen 187 boundary being complete for main-board 2018-2025 delistings; the audit's survivorship check certifies it, but it's a data-completeness assumption.
+
+**Otherwise clean (heavily reviewed across the series, re-confirmed)**: same-anchor close→close total-vs-total (no R-BENCH/R-SPLIT), HAC t over overlapping cohorts, BH-FDR over 32 cells, costs, PIT (ann/f_ann ≤ as_of + restatement-exclusion + namechange PIT veto + industry route-A, terminal anchor follows stock), survivorship (delisted kept + terminal), decision gates (t≥2 + FDR≤0.05 + CSI300&CSI1000 + drawdown≤15% + name/year concentration + ≥48 cohorts), research-only verdict, hygiene, schema + jsonschema-hard, fina_indicator ann_date-only contract, dividends-via-adj_factor (no double-count).
+
+**Bottom line**: fix R-ROE-PERIOD (period-consistent ROE) before the singleton Step-3 run — otherwise the profitability_quality family's verdict is period-artifact-contaminated at ~1/4 of cohorts. The other 3 families + the whole measurement/PIT/decision chain are clean. After R-ROE-PERIOD + a quick re-review, Step 3 (first valid signal search) can run.
+
+---
+
 ## 2026-06-06 — Claude 审查 (A-long Step-2 amended full data-integrity audit) — **PASS (可提交)**
 
 Genuine PASS, traceable to already-reviewed route-A mechanisms (not new weakening):

@@ -268,6 +268,7 @@
         "stock_return_basis",
         "dividend_and_adj_factor_required",
         "same_anchor_required",
+        "missing_scheduled_exit_policy",
         "costs_required",
         "cost_model"
       ],
@@ -283,6 +284,7 @@
         "stock_return_basis": {"const": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close"},
         "dividend_and_adj_factor_required": {"const": true},
         "same_anchor_required": {"const": true},
+        "missing_scheduled_exit_policy": {"const": "terminal_delisting_uses_last_trade_otherwise_next_available_or_missing"},
         "costs_required": {"const": true},
         "cost_model": {"$ref": "#/$defs/nonEmptyString"}
       }
@@ -359,11 +361,21 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "profitability_quality_basis",
+        "profitability_quality_annualization_policy",
+        "raw_fina_indicator_roe_direct_cross_section_allowed",
+        "cash_conversion_min_abs_net_income",
+        "cash_conversion_small_denominator_guard_required",
         "earnings_stability_basis",
         "mixed_ytd_quarter_sequence_allowed",
         "minimum_same_period_yoy_growths"
       ],
       "properties": {
+        "profitability_quality_basis": {"const": "annualized_ytd_roe_from_fina_indicator_roe"},
+        "profitability_quality_annualization_policy": {"const": "0331_x4_0630_x2_0930_x4_over_3_1231_x1"},
+        "raw_fina_indicator_roe_direct_cross_section_allowed": {"const": false},
+        "cash_conversion_min_abs_net_income": {"const": 10000000.0},
+        "cash_conversion_small_denominator_guard_required": {"const": true},
         "earnings_stability_basis": {"const": "same_period_yoy_profit_dedt_growth_volatility"},
         "mixed_ytd_quarter_sequence_allowed": {"const": false},
         "minimum_same_period_yoy_growths": {"const": 3}

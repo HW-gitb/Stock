@@ -1,5 +1,27 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-06 append: A-long pre-run signal-search repair ready for review
+
+**Changed**:
+- Repaired the pre-run A-long signal-search package without running signal search.
+- `profitability_quality` now annualizes `fina_indicator.roe` by report-period suffix before cross-sectional ranking.
+- `cash_conversion` excludes near-zero net-income denominators below the registered 10,000,000 threshold.
+- PIT `namechange` selection-time veto now catches `...退` suffix delisting names.
+- Non-terminal missing scheduled exits now use the next available tradable close or become missing; last-available backfill is reserved for verified terminal delisting/no-trade.
+- Preregistration, execution-summary schema, runner, tests, `CURRENT.md`, `SESSION_LOG.md`, and `system_risk_register.md` were updated to lock the repair.
+
+**Plain result**:
+- This is a pre-run code/design repair only.
+- It does not execute signal search and is not alpha evidence.
+- No production, ship-gate, DataHub, broker/order automation, or full-size use is authorized.
+
+**Next**:
+- Independent review of the pre-run repair.
+- After review PASS + commit, the next separate gate may run the first valid frozen A-long signal search with both confirmation flags.
+- Result-review watch items remain early-window industry-neutral denominator coverage and Tushare delisted-universe completeness.
+
+---
+
 ## 2026-06-06 append: A-long amended full audit PASS
 
 **Changed**:

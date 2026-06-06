@@ -68,7 +68,11 @@ MONTHLY_T_STAT_METHOD = "newey_west_hac_on_monthly_overlapping_cohorts"
 HAC_LAG_RULE = "ceil_horizon_trading_days_div_21_capped_at_monthly_cohort_count_minus_1"
 TRADING_DAYS_PER_MONTH = 21
 EARNINGS_STABILITY_BASIS = "same_period_yoy_profit_dedt_growth_volatility"
+PROFITABILITY_QUALITY_BASIS = "annualized_ytd_roe_from_fina_indicator_roe"
+PROFITABILITY_QUALITY_ANNUALIZATION_POLICY = "0331_x4_0630_x2_0930_x4_over_3_1231_x1"
 MIN_EARNINGS_STABILITY_YOY_GROWTHS = 3
+CASH_CONVERSION_MIN_ABS_NET_INCOME = 10_000_000.0
+MISSING_SCHEDULED_EXIT_POLICY = "terminal_delisting_uses_last_trade_otherwise_next_available_or_missing"
 SUMMARY_ARTIFACT_ID = "a_long_signal_search_execution_summary_20260604"
 FULL_PERIOD_SUFFIX = "2018_2025"
 MIN_MONTHLY_COHORTS = 48
@@ -233,6 +237,16 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
     if design.get("allowed_signal_families") != ALLOWED_SIGNAL_FAMILIES:
         raise ValueError("allowed signal families drifted")
     signal_policy = design.get("signal_family_measurement_policy") or {}
+    if signal_policy.get("profitability_quality_basis") != PROFITABILITY_QUALITY_BASIS:
+        raise ValueError("profitability_quality basis drifted")
+    if signal_policy.get("profitability_quality_annualization_policy") != PROFITABILITY_QUALITY_ANNUALIZATION_POLICY:
+        raise ValueError("profitability_quality annualization policy drifted")
+    if signal_policy.get("raw_fina_indicator_roe_direct_cross_section_allowed") is not False:
+        raise ValueError("raw fina_indicator.roe direct cross-section ranking must remain forbidden")
+    if signal_policy.get("cash_conversion_min_abs_net_income") != CASH_CONVERSION_MIN_ABS_NET_INCOME:
+        raise ValueError("cash_conversion small-denominator guard drifted")
+    if signal_policy.get("cash_conversion_small_denominator_guard_required") is not True:
+        raise ValueError("cash_conversion small-denominator guard must remain required")
     if signal_policy.get("earnings_stability_basis") != EARNINGS_STABILITY_BASIS:
         raise ValueError("earnings_stability basis drifted")
     if signal_policy.get("mixed_ytd_quarter_sequence_allowed") is not False:
@@ -252,6 +266,8 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
         raise ValueError("A-long stock return basis must be adj_factor total return after the close-to-close amendment")
     if measurement_rule.get("dividend_and_adj_factor_required") is not True:
         raise ValueError("close-to-close total-vs-total amendment must require adj_factor total return")
+    if measurement_rule.get("missing_scheduled_exit_policy") != MISSING_SCHEDULED_EXIT_POLICY:
+        raise ValueError("missing scheduled exit policy drifted")
     benchmark_rule = design.get("benchmark_rule") or {}
     if benchmark_rule.get("benchmark_return_basis") != BENCHMARK_RETURN_BASIS:
         raise ValueError("A-long benchmark return basis must be total-return-index same-anchor close-to-close")
@@ -615,6 +631,26 @@ def same_period_yoy_growths_from_ytd_profit(rows: list[dict[str, Any]], *, max_p
     return growths
 
 
+def annualized_ytd_roe(row: dict[str, Any] | None) -> float | None:
+    if not row:
+        return None
+    roe = numeric(row.get("roe"))
+    end_date = normalize_yyyymmdd(row.get("end_date"))
+    if roe is None or end_date is None:
+        return None
+    suffix = end_date[4:]
+    multipliers = {
+        "0331": 4.0,
+        "0630": 2.0,
+        "0930": 4.0 / 3.0,
+        "1231": 1.0,
+    }
+    multiplier = multipliers.get(suffix)
+    if multiplier is None:
+        return None
+    return roe * multiplier
+
+
 def compute_signal_values(
     store: audit.PayloadStore,
     symbol: str,
@@ -632,7 +668,7 @@ def compute_signal_values(
     indicator_row = select_latest_pit_row(indicator_rows, table_id="fina_indicator", as_of=as_of, restatement_exclusions=restatement_exclusions)
 
     values: dict[str, float] = {}
-    roe = numeric(indicator_row.get("roe")) if indicator_row else None
+    roe = annualized_ytd_roe(indicator_row)
     if roe is not None:
         values["profitability_quality"] = roe
 
@@ -640,7 +676,12 @@ def compute_signal_values(
     net_income = numeric(income_row.get("n_income_attr_p")) if income_row else None
     income_end_date = normalize_yyyymmdd(income_row.get("end_date")) if income_row else None
     cash_end_date = normalize_yyyymmdd(cash_row.get("end_date")) if cash_row else None
-    if cashflow is not None and net_income not in (None, 0.0) and income_end_date == cash_end_date:
+    if (
+        cashflow is not None
+        and net_income is not None
+        and abs(net_income) >= CASH_CONVERSION_MIN_ABS_NET_INCOME
+        and income_end_date == cash_end_date
+    ):
         values["cash_conversion"] = cashflow / abs(net_income)
 
     equity = numeric(balance_row.get("total_hldr_eqy_exc_min_int")) if balance_row else None
@@ -698,6 +739,7 @@ def selection_time_name_vetoed(name: str | None) -> bool:
         or upper.startswith("S*ST")
         or upper.startswith("SST")
         or text.startswith("退")
+        or text.endswith("退")
         or "退市" in text
     )
 
@@ -853,33 +895,61 @@ def index_total_return_close_rows(store: audit.PayloadStore, benchmark_code: str
     return out
 
 
+def resolve_return_dates(
+    stock_prices: dict[str, dict[str, float]],
+    trade_dates: list[str],
+    as_of: str,
+    horizon: int,
+    *,
+    delist_date: str | None = None,
+) -> tuple[str | None, str | None, str | None, str]:
+    entry_candidates = [date for date in trade_dates if date > as_of]
+    if not entry_candidates:
+        return None, None, None, "missing_entry_date"
+    entry_date = entry_candidates[0]
+    try:
+        entry_idx = trade_dates.index(entry_date)
+    except ValueError:
+        return None, None, None, "missing_entry_index"
+    exit_idx = entry_idx + horizon
+    if exit_idx >= len(trade_dates):
+        return entry_date, None, None, "missing_scheduled_exit_date"
+    scheduled_exit_date = trade_dates[exit_idx]
+    if entry_date not in stock_prices:
+        return entry_date, scheduled_exit_date, None, "missing_stock_entry_price"
+    if scheduled_exit_date in stock_prices:
+        return entry_date, scheduled_exit_date, scheduled_exit_date, "scheduled_exit"
+
+    if delist_date is not None and delist_date <= scheduled_exit_date:
+        earlier = [date for date in stock_prices if entry_date < date <= scheduled_exit_date]
+        if not earlier:
+            return entry_date, scheduled_exit_date, None, "missing_terminal_last_trade"
+        return entry_date, scheduled_exit_date, max(earlier), "terminal_last_trade_before_delist"
+
+    later = [date for date in stock_prices if date > scheduled_exit_date]
+    if later:
+        return entry_date, scheduled_exit_date, min(later), "next_available_after_missing_scheduled_exit"
+    return entry_date, scheduled_exit_date, None, "missing_non_terminal_exit_price"
+
+
 def compute_return(
     stock_prices: dict[str, dict[str, float]],
     index_prices: dict[str, dict[str, float]],
     trade_dates: list[str],
     as_of: str,
     horizon: int,
+    *,
+    delist_date: str | None = None,
 ) -> tuple[float | None, float | None, str | None, str | None]:
-    entry_candidates = [date for date in trade_dates if date > as_of]
-    if not entry_candidates:
-        return None, None, None, None
-    entry_date = entry_candidates[0]
-    try:
-        entry_idx = trade_dates.index(entry_date)
-    except ValueError:
-        return None, None, None, None
-    exit_idx = entry_idx + horizon
-    if exit_idx >= len(trade_dates):
-        return None, None, entry_date, None
-    exit_date = trade_dates[exit_idx]
-    if entry_date not in stock_prices:
-        return None, None, entry_date, exit_date
-    stock_exit_date = exit_date
-    if stock_exit_date not in stock_prices:
-        earlier = [date for date in stock_prices if entry_date < date <= exit_date]
-        if not earlier:
-            return None, None, entry_date, exit_date
-        stock_exit_date = max(earlier)
+    entry_date, scheduled_exit_date, stock_exit_date, _policy = resolve_return_dates(
+        stock_prices,
+        trade_dates,
+        as_of,
+        horizon,
+        delist_date=delist_date,
+    )
+    if entry_date is None or stock_exit_date is None:
+        return None, None, entry_date, scheduled_exit_date
     benchmark_exit_date = stock_exit_date
     if entry_date not in index_prices or benchmark_exit_date not in index_prices:
         return None, None, entry_date, benchmark_exit_date
@@ -918,6 +988,10 @@ def monthly_cohort_rows(
         "industry_neutral_excluded_observation_share": None,
         "industry_neutral_excluded_2018_2020_observation_count": 0,
         "industry_neutral_excluded_2018_2020_observation_share": None,
+        "return_exit_scheduled_count": 0,
+        "return_exit_terminal_last_trade_count": 0,
+        "return_exit_next_available_count": 0,
+        "return_exit_missing_non_terminal_count": 0,
         "missing_signal_rows": 0,
         "missing_return_rows": 0,
     }
@@ -972,12 +1046,28 @@ def monthly_cohort_rows(
             if symbol not in stock_price_cache:
                 stock_price_cache[symbol] = stock_total_return_close_rows(store, symbol)
             for horizon in HORIZONS:
+                _entry, _scheduled_exit, _resolved_exit, exit_policy = resolve_return_dates(
+                    stock_price_cache[symbol],
+                    context.trade_dates,
+                    as_of,
+                    horizon,
+                    delist_date=context.delist_date_by_symbol.get(symbol),
+                )
+                if exit_policy == "scheduled_exit":
+                    diagnostics["return_exit_scheduled_count"] += 1
+                elif exit_policy == "terminal_last_trade_before_delist":
+                    diagnostics["return_exit_terminal_last_trade_count"] += 1
+                elif exit_policy == "next_available_after_missing_scheduled_exit":
+                    diagnostics["return_exit_next_available_count"] += 1
+                elif exit_policy == "missing_non_terminal_exit_price":
+                    diagnostics["return_exit_missing_non_terminal_count"] += 1
                 stock_ret, _primary_bench_ret, entry_date, exit_date = compute_return(
                     stock_price_cache[symbol],
                     index_prices[PRIMARY_BENCHMARK],
                     context.trade_dates,
                     as_of,
                     horizon,
+                    delist_date=context.delist_date_by_symbol.get(symbol),
                 )
                 if stock_ret is None:
                     diagnostics["missing_return_rows"] += 1
@@ -998,6 +1088,7 @@ def monthly_cohort_rows(
                         context.trade_dates,
                         as_of,
                         horizon,
+                        delist_date=context.delist_date_by_symbol.get(symbol),
                     )
                     row[f"excess_{benchmark_name}"] = None if bench_ret is None else stock_ret - bench_ret
                 rows.append(row)
@@ -1365,9 +1456,15 @@ def build_summary(
             "monthly_t_stat_method": MONTHLY_T_STAT_METHOD,
             "hac_lag_rule": HAC_LAG_RULE,
             "monthly_cohort_count_is_not_independent_n": True,
+            "profitability_quality_basis": PROFITABILITY_QUALITY_BASIS,
+            "profitability_quality_annualization_policy": PROFITABILITY_QUALITY_ANNUALIZATION_POLICY,
+            "raw_fina_indicator_roe_direct_cross_section_allowed": False,
+            "cash_conversion_min_abs_net_income": CASH_CONVERSION_MIN_ABS_NET_INCOME,
+            "cash_conversion_small_denominator_guard_required": True,
             "earnings_stability_basis": EARNINGS_STABILITY_BASIS,
             "mixed_ytd_quarter_sequence_allowed": False,
             "minimum_earnings_stability_yoy_growths": MIN_EARNINGS_STABILITY_YOY_GROWTHS,
+            "missing_scheduled_exit_policy": MISSING_SCHEDULED_EXIT_POLICY,
             "selection_time_status_source": SELECTION_STATUS_SOURCE,
             "current_stock_basic_name_veto_allowed": False,
             "multiple_testing_correction": "benjamini_hochberg_fdr",

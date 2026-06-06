@@ -102,7 +102,7 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
                         "ann_date": "20220430",
                         "f_ann_date": "20220430",
                         "end_date": "20211231",
-                        "n_income_attr_p": 100.0,
+                        "n_income_attr_p": 100000000.0,
                         "revenue": 1000.0,
                     }
                 ]
@@ -127,7 +127,7 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
                         "ann_date": "20220430",
                         "f_ann_date": "20220430",
                         "end_date": "20211231",
-                        "n_cashflow_act": 120.0,
+                        "n_cashflow_act": 120000000.0,
                     }
                 ]
             ),
@@ -162,7 +162,7 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
                         "ann_date": "20220430",
                         "f_ann_date": "20220430",
                         "end_date": "20211231",
-                        "n_income_attr_p": 100.0,
+                        "n_income_attr_p": 100000000.0,
                     }
                 ]
             ),
@@ -174,7 +174,59 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
                         "ann_date": "20220430",
                         "f_ann_date": "20220430",
                         "end_date": "20210930",
-                        "n_cashflow_act": 120.0,
+                        "n_cashflow_act": 120000000.0,
+                    }
+                ]
+            ),
+            runner.call_id_for("fina_indicator", symbol): self._payload([]),
+        }
+        store = audit_runner.PayloadStore(raw_root=Path("."), payloads=payloads)
+
+        values = runner.compute_signal_values(store, symbol, "20220531", set())
+
+        self.assertNotIn("cash_conversion", values)
+
+    def test_profitability_quality_annualizes_ytd_roe_before_ranking(self) -> None:
+        self.assertAlmostEqual(
+            runner.annualized_ytd_roe({"end_date": "20220331", "roe": 2.5}),
+            10.0,
+        )
+        self.assertAlmostEqual(
+            runner.annualized_ytd_roe({"end_date": "20220630", "roe": 4.0}),
+            8.0,
+        )
+        self.assertAlmostEqual(
+            runner.annualized_ytd_roe({"end_date": "20220930", "roe": 6.0}),
+            8.0,
+        )
+        self.assertAlmostEqual(
+            runner.annualized_ytd_roe({"end_date": "20221231", "roe": 9.0}),
+            9.0,
+        )
+
+    def test_cash_conversion_excludes_near_zero_net_income_denominator(self) -> None:
+        symbol = "000001.SZ"
+        payloads = {
+            runner.call_id_for("income", symbol): self._payload(
+                [
+                    {
+                        "ts_code": symbol,
+                        "ann_date": "20220430",
+                        "f_ann_date": "20220430",
+                        "end_date": "20211231",
+                        "n_income_attr_p": runner.CASH_CONVERSION_MIN_ABS_NET_INCOME - 1,
+                    }
+                ]
+            ),
+            runner.call_id_for("balancesheet", symbol): self._payload([]),
+            runner.call_id_for("cashflow", symbol): self._payload(
+                [
+                    {
+                        "ts_code": symbol,
+                        "ann_date": "20220430",
+                        "f_ann_date": "20220430",
+                        "end_date": "20211231",
+                        "n_cashflow_act": 50000000.0,
                     }
                 ]
             ),
@@ -246,11 +298,57 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
             ["20200101", "20200102", "20200103", "20200106"],
             "20200101",
             2,
+            delist_date="20200106",
         )
 
         self.assertEqual((entry, exit_), ("20200102", "20200103"))
         self.assertAlmostEqual(stock_return, -0.2 - runner.ROUND_TRIP_COST)
         self.assertAlmostEqual(benchmark_return, -0.1)
+
+    def test_compute_return_uses_next_available_exit_for_non_terminal_missing_price(self) -> None:
+        stock = {
+            "20200102": {"close": 100.0},
+            "20200107": {"close": 104.0},
+        }
+        index = {
+            "20200102": {"close": 1000.0},
+            "20200107": {"close": 1020.0},
+        }
+
+        stock_return, benchmark_return, entry, exit_ = runner.compute_return(
+            stock,
+            index,
+            ["20200101", "20200102", "20200103", "20200106", "20200107"],
+            "20200101",
+            2,
+        )
+
+        self.assertEqual((entry, exit_), ("20200102", "20200107"))
+        self.assertAlmostEqual(stock_return, 0.04 - runner.ROUND_TRIP_COST)
+        self.assertAlmostEqual(benchmark_return, 0.02)
+
+    def test_compute_return_does_not_backfill_non_terminal_missing_exit(self) -> None:
+        stock = {
+            "20200102": {"close": 100.0},
+            "20200103": {"close": 99.0},
+        }
+        index = {
+            "20200102": {"close": 1000.0},
+            "20200103": {"close": 1010.0},
+            "20200106": {"close": 1020.0},
+        }
+
+        stock_return, benchmark_return, entry, exit_ = runner.compute_return(
+            stock,
+            index,
+            ["20200101", "20200102", "20200103", "20200106"],
+            "20200101",
+            2,
+        )
+
+        self.assertIsNone(stock_return)
+        self.assertIsNone(benchmark_return)
+        self.assertEqual((entry, exit_), ("20200102", "20200106"))
 
     def test_stock_total_return_rows_apply_adj_factor_for_split_safety(self) -> None:
         symbol = "000001.SZ"
@@ -413,6 +511,25 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
 
         self.assertFalse(runner.symbol_vetoed_at_selection_time(context, "600421.SH", "20200131"))
         self.assertTrue(runner.symbol_vetoed_at_selection_time(context, "600421.SH", "20210131"))
+
+    def test_pit_selection_status_veto_catches_delisting_suffix_names(self) -> None:
+        context = runner.SignalContext(
+            symbols=["000511.SZ"],
+            active_symbols=[],
+            delisted_symbols=["000511.SZ"],
+            exception_symbols=set(),
+            as_ofs=["20180629"],
+            trade_dates=["20180629", "20180702"],
+            list_date_by_symbol={"000511.SZ": "19930101"},
+            delist_date_by_symbol={"000511.SZ": "20180718"},
+            selection_status_by_symbol={
+                "000511.SZ": [
+                    {"name": "\u70ef\u78b3\u9000", "start_date": "20180601", "end_date": None}
+                ]
+            },
+        )
+
+        self.assertTrue(runner.symbol_vetoed_at_selection_time(context, "000511.SZ", "20180629"))
 
     def test_select_latest_pit_row_requires_f_ann_date_for_statement_tables_only(self) -> None:
         selected = runner.select_latest_pit_row(

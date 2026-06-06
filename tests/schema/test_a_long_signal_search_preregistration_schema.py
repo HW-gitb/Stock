@@ -100,6 +100,14 @@ class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
             {"profitability_quality", "cash_conversion", "balance_sheet_strength", "earnings_stability"},
         )
         signal_policy = design["signal_family_measurement_policy"]
+        self.assertEqual(signal_policy["profitability_quality_basis"], "annualized_ytd_roe_from_fina_indicator_roe")
+        self.assertEqual(
+            signal_policy["profitability_quality_annualization_policy"],
+            "0331_x4_0630_x2_0930_x4_over_3_1231_x1",
+        )
+        self.assertFalse(signal_policy["raw_fina_indicator_roe_direct_cross_section_allowed"])
+        self.assertEqual(signal_policy["cash_conversion_min_abs_net_income"], 10000000.0)
+        self.assertTrue(signal_policy["cash_conversion_small_denominator_guard_required"])
         self.assertEqual(signal_policy["earnings_stability_basis"], "same_period_yoy_profit_dedt_growth_volatility")
         self.assertFalse(signal_policy["mixed_ytd_quarter_sequence_allowed"])
         self.assertEqual(signal_policy["minimum_same_period_yoy_growths"], 3)
@@ -125,6 +133,10 @@ class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
         self.assertEqual(measurement["stock_return_basis"], "stock_total_return_adj_factor_next_trading_day_close_to_exit_close")
         self.assertTrue(measurement["same_anchor_required"])
         self.assertTrue(measurement["dividend_and_adj_factor_required"])
+        self.assertEqual(
+            measurement["missing_scheduled_exit_policy"],
+            "terminal_delisting_uses_last_trade_otherwise_next_available_or_missing",
+        )
         self.assertEqual(benchmark["primary_benchmark"], "CSI300")
         self.assertEqual(benchmark["secondary_benchmark"], "CSI1000")
         self.assertEqual(benchmark["benchmark_return_basis"], "benchmark_total_return_index_next_trading_day_close_to_same_exit_close")

@@ -109,6 +109,7 @@
       "stock_return_basis": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close",
       "dividend_and_adj_factor_required": true,
       "same_anchor_required": true,
+      "missing_scheduled_exit_policy": "terminal_delisting_uses_last_trade_otherwise_next_available_or_missing",
       "costs_required": true,
       "cost_model": "A-share long-lane close-to-close total-return net return must include commission, sell-side stamp tax where applicable, and a documented conservative slippage assumption."
     },
@@ -130,6 +131,11 @@
       "earnings_stability"
     ],
     "signal_family_measurement_policy": {
+      "profitability_quality_basis": "annualized_ytd_roe_from_fina_indicator_roe",
+      "profitability_quality_annualization_policy": "0331_x4_0630_x2_0930_x4_over_3_1231_x1",
+      "raw_fina_indicator_roe_direct_cross_section_allowed": false,
+      "cash_conversion_min_abs_net_income": 10000000.0,
+      "cash_conversion_small_denominator_guard_required": true,
       "earnings_stability_basis": "same_period_yoy_profit_dedt_growth_volatility",
       "mixed_ytd_quarter_sequence_allowed": false,
       "minimum_same_period_yoy_growths": 3
@@ -189,7 +195,10 @@
       "Report every frozen signal family, not only the winner.",
       "Report monthly benchmark excess with Newey-West HAC t-statistics for overlapping long-horizon cohorts; monthly cohort count is not independent N.",
       "Report yearly contribution, stock concentration, tail contribution, and drawdown.",
+      "For profitability_quality, annualize fina_indicator.roe by reported period suffix before cross-sectional ranking; do not rank raw mixed-period YTD roe directly.",
+      "For cash_conversion, require same-period income/cashflow rows and exclude near-zero net-income denominators below the registered absolute threshold.",
       "For earnings_stability, use same-period YoY profit_dedt growth volatility only; do not mix 3/6/9/12-month YTD cumulative rows.",
+      "For scheduled exit dates without stock prices, use last available close only for verified terminal delisting/no-trade; otherwise use the next available tradable close or mark return missing.",
       "Report both CSI300 and CSI1000 benchmark result cells; candidate-alpha promotion requires the same family/view/horizon to clear both benchmarks.",
       "Use the reviewed close-to-close total-vs-total amendment because total-return benchmark close values are available while same-anchor total-return benchmark open values are unavailable; this is not a silent price-index fallback.",
       "Use fina_indicator as ann_date-only in the current reviewed Tushare route; unresolved same-ann-date groups must be excluded through restatement_ambiguous_exclusions.csv, not latest-filled.",
