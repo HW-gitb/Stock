@@ -8,6 +8,133 @@
 
 ---
 
+## 2026-06-06 — Claude 审查 (A-long signal-search R1/O2 fix delta) — **PASS (可提交)**
+
+**Verdict**: Pass. R1 resolved — the inert year-guard is replaced by a real, triggerable single-year RETURN-contribution guard. With O1/O3/O4 + core already verified sound, the whole signal-search package is now clean. Safe to commit; then the double-gated `执行` runs the real search.
+
+**R1 fix verified (delta only)**:
+- Metric replaced: `max_single_year_positive_return_share` = max single calendar-year share of TOTAL POSITIVE monthly-cohort excess (`yearly_positive_return_contribution[year] += cohort_return` only when `cohort_return > 0`; share = max-year / total-positive). This is the right "dominated by one year" measure (return contribution, not cohort count) and is genuinely triggerable — no structural cap below the threshold (the old cohort-count metric was capped at 0.25).
+- Threshold `MAX_SINGLE_YEAR_POSITIVE_RETURN_SHARE = 0.35`, const-locked in the schema (search_design). Guard ANDed into `decision_from_results`. `total_positive == 0` → share None → guard False, but such a signal has mean ≤ 0 so is not a candidate anyway (no false rejection of a real candidate).
+- 2 new tests exercise the REAL computed metric via `summarize_results` (not a hand-fed flag): a year-dominated fixture (2018=0.10, others 0.001) → share ≈0.96 > 0.35 → guard False; a year-spread fixture (5×0.02) → share 0.20 → guard True.
+- Schema field renamed in BOTH search_design + result_cells (no stale `max_single_year_cohort_share`), so the real-run summary will pass schema validation. 18 tests green (independently run, +1 skip = summary not generated).
+- Change is localized to the single-year metric + constant + summary field + schema + 2 tests. O1/O3/O4 + core (same-anchor / PIT / exclusion / FDR / costs / double-gate / research-only) untouched — they stand from the prior review. Real search still NOT run (no `execution_summary.json`).
+
+**Next**: commit. Then a separate double-gated `执行` (`--confirm-independent-review-pass --confirm-post-review-execute`) runs the real search, writes `research/results/a_long_signal_search_20260604/execution_summary.json`, and auto-spends the singleton ledger → returns for review (the actual alpha verdict). Authorizes no alpha/production/ship-gate/full-size; 12-month forward-live ship gate unchanged.
+
+---
+
+## 2026-06-06 — Codex 修复 (A-long signal-search R1/O2 return-contribution guard)
+
+**Plain result**:
+- Claude 指出的 O2 死门槛已修复。
+- 简单说：现在不能再靠“某一年特别好”伪装成长期 alpha 线索。
+- 真正的 signal search 仍未运行，没有 alpha 结果。
+
+**Fixed**:
+- Replaced the dead cohort-count metric `max_single_year_cohort_share` with `max_single_year_positive_return_share`.
+- `passes_single_year_concentration_guard` now checks max calendar-year share of total positive monthly cohort excess.
+- Added real-summary fixture tests: a year-dominated fixture fails the computed guard; a year-spread fixture passes it.
+
+**Validation**:
+- `python -m unittest tests.test_a_long_full_main_board_signal_search tests.schema.test_a_long_signal_search_execution_summary_schema -v` passed 18 tests; generated-summary validation skipped because the true signal-search summary has not been generated yet.
+- A-long related regression command passed 56 tests; generated-summary validation skipped for the same no-run reason.
+
+**Review state**:
+- Needs Claude re-review of this R1/O2 delta before commit.
+- Still no provider call, no data fetch, no true signal search, no alpha, no production, no ship-gate, and no full-size permission.
+
+---
+
+## 2026-06-06 — Claude 审查 (A-long signal-search optional-hardening re-review) — **Required fix (O2 inert) before commit+run; O1/O3/O4+core PASS**
+
+**Verdict**: O1, O3, O4 are correctly implemented + tested; the core (same-anchor / PIT / exclusion / FDR / costs / research-only) is unchanged and still sound. But **O2's single-year concentration guard is INERT and must be fixed before the singleton run** — it was added to satisfy the registered "not dominated by one year" criterion and does not actually do so.
+
+**Required**:
+- **R1 — O2 single-year guard never triggers (dead guard giving false assurance).** `MAX_SINGLE_YEAR_COHORT_SHARE = 0.35`, and the guard measures max single-year COHORT-COUNT share. A calendar year has ≤12 monthly cohorts, and a candidate already needs ≥48 cohorts (`passes_minimum_monthly_cohorts`), so `single_year_share ≤ 12/48 = 0.25 < 0.35` for ANY candidate → `passes_single_year_concentration_guard` is always True for anything not already rejected by the cohort-minimum. The guard changes no decision; it reports `max_single_year_cohort_share` + a pass flag as if year-robustness were enforced, but it is not (year-dominance is still only partially covered by the clustered t-stat). Because this is the one-shot singleton test and year-robustness is a registered candidate criterion, fix before 执行: measure single-year **RETURN contribution** (max year's share of total positive cohort excess), or require cohorts span ≥K distinct years with a threshold that can actually fire (e.g. ≤0.20). Add a self-test where the REAL computed metric (not a hand-fed flag) rejects a year-dominated fixture.
+
+**Verified sound (O1/O3/O4 + core)**:
+- **O1** correct: `symbol_in_pit_scored_universe` excludes a symbol only at `as_of ≥ delist_date` (and before `list_date`); kept before delisting → holds entered pre-delist still capture the terminal/delisting return via `compute_return`. No survivorship bias reintroduced. Locked by `test_delisted_symbol_leaves_scored_universe_after_delist_date`. `list_date_by_symbol`/`delist_date_by_symbol` genuinely populated from stock_basic.
+- **O3** correct + safe: `spend_ledger_after_success` sets tests_spent_count=1 + logs the outcome + clears planned_tests + schema-validates, called in `run()` only after a valid summary is written; rerun is blocked by `load_and_validate_ledger` (tests_spent==0 precondition). The test uses a TEMP ledger copy and the real ledger is unchanged (git clean) — tests do not spend the singleton.
+- **O4** correct: `count_restatement_exclusion_keys_present` requires all 1,504 exclusion keys to match real raw rows, else abort (`found != expected`). Prevents applying a stale exclusion list to a changed panel. Tested.
+- Core unchanged from prior PASS: same-anchor open→close both legs, PIT ann/f_ann ≤ as_of, exclusion applied in selection, BH-FDR over 16 cells, monthly-clustered t, fixed costs, double-gate, honest research-only verdict. 16 tests green (independently run; +1 skip = summary not generated).
+
+**Next**: fix R1 (O2), re-review the small delta, THEN commit + the double-gated `执行`. O1/O3/O4 need no rework.
+
+**Disposition (2026-06-06) — USER-APPROVED 修改 (R1/O2 fix)**: Codex to fix the inert single-year guard — replace the cohort-COUNT metric with a single-year RETURN-contribution measure (max single year's share of total positive cohort excess), OR require cohorts span ≥K distinct years, with a threshold that can actually fire (cohort-count 0.35 cannot — max achievable is 0.25). Add a self-test where the REAL computed metric (not a hand-fed flag) rejects a year-dominated fixture and accepts a year-spread one. O1/O3/O4 + core stand — no rework. Claude re-reviews only the O2 delta (and confirms the real run still hasn't happened), then commit + double-gated `执行`. No alpha/production/ship-gate authorized by this approval.
+
+---
+
+## 2026-06-06 — Codex 修复 (A-long signal-search runner optional hardening)
+
+**Plain result**:
+- Claude PASS was already safe to commit, but the four Optional items were fixed before commit.
+- Simple meaning: the signal-search runner is cleaner now, but because code changed after Claude PASS, it should go back to Claude for a quick re-review before commit.
+
+**Fixed**:
+- **O1**: delisted symbols now leave the scored PIT cross-section at and after `delist_date`; they are not scored on stale fundamentals after delisting.
+- **O2**: result cells now report `max_single_year_cohort_share` and the decision gate requires `passes_single_year_concentration_guard`, so one-year domination cannot pass silently.
+- **O3**: after a valid true signal-search summary is written, the runner now spends the singleton A-long signal-search ledger automatically. A rerun will then fail the unspent-ledger gate.
+- **O4**: the runner now computes and records restatement exclusion groups expected / found in raw; it aborts if the 1,504 exclusion keys are not fully matched and applied.
+
+**Validation**:
+- `python -m unittest tests.test_a_long_full_main_board_signal_search tests.schema.test_a_long_signal_search_execution_summary_schema -v` passed 16 tests; the generated-summary validation skipped because the true signal-search summary has not been generated yet.
+
+**Review state**:
+- Needs Claude re-review because code and schema changed after the prior PASS.
+- Still no true signal search was run and no alpha result exists.
+
+---
+
+## 2026-06-06 — Claude 审查 (A-long signal-search runner package, pre-execution) — **PASS (可提交)**
+
+**Verdict**: Pass. The signal-search runner faithfully implements the frozen preregistration; the critical same-anchor measurement is correct (the A-short failure mode is absent, test-locked AND schema-locked); the anti-p-hacking machinery is intact; the verdict is research-only and cannot claim production even on a strong positive. Safe to commit. The actual search has NOT run (double-gated); its result will return for review.
+
+**Verified (deep)**:
+- **Same-anchor (SR-MEASURE-001)**: `compute_return` uses entry next-day-OPEN → exit-day-CLOSE for BOTH the stock leg and the benchmark leg, on the SAME entry/exit dates. NOT close-to-close benchmark. Locked by `test_compute_return_uses_same_anchor_and_cost` + schema `same_anchor_open_to_close: const true`. Halted/delisting stocks use last-available price as terminal exit (correct delisting-return handling, not a drop).
+- **PIT**: `select_latest_pit_row` filters ann_date ≤ as_of AND f_ann_date ≤ as_of, picks latest period+version; entry strictly after as_of. No look-ahead.
+- **Restatement exclusion APPLIED**: the 1,504-group CSV is loaded (abort if missing, count-checked == 1,504), and the exclusion keys are skipped inside PIT selection (`test_select_latest_pit_row_applies_restatement_exclusion`). Honors the signal-prereg mandatory-exclusion + abort rules.
+- **191 boundary**: exception symbols kept in returns/risk + non-neutral scoring, excluded only from industry-neutral denominators; non-exception active symbol missing industry → hard raise.
+- **Frozen grid + anti-snoop**: exactly 4 families × 2 views × 2 horizons = 16 cells, all reported; `load_and_validate_preregistration` drift-guards families/horizons/benchmarks/no-sweep/no-rescue/≥48-cohorts (aborts if the prereg was tampered). BH-FDR over all 16 cells; monthly-CLUSTERED t (not pooled stock-months); decision needs t≥2.0 + bh_p≤0.05 + name-concentration ≤0.2. Costs = 2×commission+stamp+2×slippage (fixed, comment says not result-optimized). Total return via adj_factor (no dividend double-count). Double-gate + ledger-unspent + audit-passed preconditions. Honest verdict (`candidate_alpha_clue_research_only` at most; `alpha_found_for_production=False`). Hygiene: aggregate cells only, no per-symbol/raw/secret leak. Tests 12 pass (+1 skip: summary not generated yet); schema authorizes-nothing + const-locks same-anchor/no-sweep/no-rescue/research-only/gates.
+
+**Optional (non-blocking; result is unaffected — safe to run as-is)**:
+- **O1** — delisted-past-delisting names are still scored in the cross-section at as_ofs after their `delist_date` (stale fundamentals), because the scored universe doesn't filter `delist_date > as_of`. Impact is low (percentile is monotonic in raw value → cohort selection order is preserved; these names carry no return so never enter cohorts; only a second-order effect on industry L2-vs-L1 group-size thresholds) and does NOT bias toward false alpha — but for PIT-universe cleanliness the scored set should exclude already-delisted names.
+- **O2** — no explicit single-YEAR concentration guard in `decision_from_results` (prereg says "not dominated by a tiny number of names OR one year"); name-concentration is checked, year-concentration only indirectly via the monthly-clustered t. Add a max-single-year-contribution diagnostic + threshold for full fidelity.
+- **O3 (minor)** — `runner_writes_ledger=False`; the singleton-test spend is deferred post-commit, so the unspent-guard wouldn't block a re-run in the gap. Enforce the spend (or a tight post-run step).
+- **O4 (minor)** — a few `execution_gates` flags (e.g. `restatement_exclusion_list_applied`) are asserted True, not computed; the application is structurally real so accurate, but a computed applied-count would be defense-in-depth.
+
+**Next**: safe to commit. Then a separate double-gated `执行` (`--confirm-independent-review-pass --confirm-post-review-execute`) runs the real search and writes `research/results/a_long_signal_search_20260604/execution_summary.json` → returns for review. This package authorizes no alpha/production/ship-gate/full-size; the unchanged 12-month forward-live ship gate stands.
+
+---
+
+## 2026-06-06 — Codex 实现 (A-long signal-search runner package)
+
+**Plain result**:
+- Built the A-long full main-board signal-search runner package, but did not run the true signal search.
+- Simple meaning: the code needed to look for A-long alpha now exists for review; no alpha result exists yet.
+
+**What changed**:
+- Added `runners/a_long_full_main_board_signal_search.py`.
+- Added `schemas/a_long_signal_search_execution_summary.schema.json`.
+- Added `tests/test_a_long_full_main_board_signal_search.py`.
+- Added `tests/schema/test_a_long_signal_search_execution_summary_schema.py`.
+- Updated `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, `research/README.md`, and the Phase 7 handoff routing.
+
+**Runner locks**:
+- Requires `--confirm-independent-review-pass` and `--confirm-post-review-execute`; otherwise it aborts.
+- Requires the full main-board audit PASS, unspent singleton ledger, mandatory 1,504-row `restatement_ambiguous_exclusions.csv`, and the approved 191-name no-industry boundary.
+- Keeps the 191 no-industry names in returns / risk and excludes them only from industry denominators.
+- Runs only the frozen four families x two horizons x two views; no parameter sweep or rescue slicing.
+- Future summary remains research-only and cannot claim production, ship-gate evidence, full-size permission, provider selection, DataHub, or broker automation.
+
+**Validation so far**:
+- `python -m unittest tests.test_a_long_full_main_board_signal_search tests.schema.test_a_long_signal_search_execution_summary_schema -v` passed 12 tests; the generated-summary validation skipped because the true signal-search summary has not been generated yet.
+
+**Review state**:
+- Needs Claude review before commit.
+- If Claude passes and the user commits, the next separate `执行` may run the frozen signal search and write `research/results/a_long_signal_search_20260604/execution_summary.json`.
+
+---
+
 ## 2026-06-06 — Claude 审查 (A-long full main-board audit R1 route-A preregistered exclusion repair) — **PASS (可提交)**
 
 **Verdict**: Pass. The prior FAIL's Required R1 is genuinely resolved via route A — not lipstick. The audit may now legitimately claim `passed_full_main_board_data_integrity_for_signal_search`. Optionals O1+O2 also resolved. Safe to commit.

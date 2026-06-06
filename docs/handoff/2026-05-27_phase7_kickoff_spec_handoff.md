@@ -3860,3 +3860,70 @@ git diff --check
 1. Claude should review this R1 repair before commit.
 2. If Claude passes and the user commits, the next separate gate may run the frozen signal search.
 3. Do not run signal search before review / commit; this repair is still not alpha evidence.
+
+## 2026-06-06 append: A-long signal-search runner package implemented, not executed
+
+**Plain result**:
+
+- The A-long signal-search runner package now exists for review.
+- No true signal search has run yet, so there is still no A-long alpha result.
+
+**What changed**:
+
+- Added `runners/a_long_full_main_board_signal_search.py`.
+- Added `schemas/a_long_signal_search_execution_summary.schema.json`.
+- Added `tests/test_a_long_full_main_board_signal_search.py`.
+- Added `tests/schema/test_a_long_signal_search_execution_summary_schema.py`.
+- Updated routing docs and `SR-ALONG-DATA-001`.
+
+**Execution locks**:
+
+- The runner aborts unless both independent-review and post-review execute confirmations are passed.
+- It validates the PASS full audit, unspent singleton ledger, mandatory 1,504-row restatement exclusion CSV, approved 191-name no-industry boundary, frozen four signal families, same-anchor net returns, and FDR correction.
+- Future output is research-only. It cannot authorize production, ship-gate evidence, full-size use, provider selection, DataHub, or broker/order automation.
+
+**Next route**:
+
+1. Claude should review the runner, summary schema, tests, and docs.
+2. If Claude passes and the user commits, a later explicit `执行` may run the frozen signal search.
+3. If the signal search later runs, update the singleton ledger and keep any positive result as research-only until forward-live ship gate evidence exists.
+
+## 2026-06-06 append: A-long signal-search runner optional hardening
+
+**Plain result**:
+
+- The optional hardening from Claude's PASS review is implemented.
+- The true signal search still has not run.
+
+**What changed**:
+
+- Delisted names leave the scored PIT cross-section at / after `delist_date`.
+- Result cells now include a single-year concentration diagnostic and gate.
+- Restatement exclusion application now records expected / found raw-key counts and aborts if the 1,504 groups are not fully matched.
+- A valid true signal-search run now writes the singleton ledger spend immediately after the summary.
+
+**Next route**:
+
+1. Claude should re-review the optional hardening.
+2. If Claude passes and the user commits, a later explicit `执行` may run the frozen signal search.
+3. No signal result, alpha, production, ship-gate evidence, or full-size permission exists yet.
+
+## 2026-06-06 append: A-long signal-search R1/O2 return-contribution fix
+
+**Plain result**:
+
+- Claude found the first single-year guard was a dead guard because it counted cohorts.
+- The runner now measures whether one calendar year contributes too much of the positive cohort excess.
+- The true signal search still has not run.
+
+**What changed**:
+
+- Replaced `max_single_year_cohort_share` with `max_single_year_positive_return_share`.
+- `passes_single_year_concentration_guard` now depends on positive-return contribution share, not monthly cohort counts.
+- Added real-summary fixture tests: a year-dominated result is rejected, and a year-spread result is accepted.
+
+**Next route**:
+
+1. Claude should re-review only this R1/O2 delta plus the unchanged no-run state.
+2. If Claude passes and the user commits, a later explicit `执行` may run the frozen signal search.
+3. No signal result, alpha, production, ship-gate evidence, or full-size permission exists yet.
