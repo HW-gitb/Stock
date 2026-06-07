@@ -132,6 +132,57 @@ class ALongLargeCapPureQualitySignalSearchTest(unittest.TestCase):
         self.assertEqual(coverage["thin_bucket_count"], 3)
         self.assertFalse(coverage["passes_minimum_bucket_count"])
 
+    def test_zero_primary_composite_month_is_not_a_size_coverage_violation(self) -> None:
+        diagnostics = {
+            "primary_size_neutral_thin_month_count": 0,
+            "primary_size_neutral_min_bucket_observation_count": 0,
+            "primary_size_neutral_coverage_month_count": 0,
+            "primary_size_neutral_bucket_coverage_by_month": [],
+            "primary_no_cohort_zero_composite_month_count": 0,
+            "primary_no_cohort_zero_composite_months": [],
+        }
+        scored = [
+            {"size_bucket": "q1", "core_quality_composite_percentile_3factor__size_neutral": 0.7},
+            {"size_bucket": "q2", "core_quality_composite_percentile_3factor__size_neutral": 0.6},
+        ]
+
+        runner.update_primary_size_coverage_diagnostics(scored, "20180131", diagnostics)
+
+        self.assertEqual(diagnostics["primary_no_cohort_zero_composite_month_count"], 1)
+        self.assertEqual(diagnostics["primary_no_cohort_zero_composite_months"], ["20180131"])
+        self.assertEqual(diagnostics["primary_size_neutral_thin_month_count"], 0)
+        self.assertEqual(diagnostics["primary_size_neutral_coverage_month_count"], 0)
+        self.assertEqual(diagnostics["primary_size_neutral_bucket_coverage_by_month"], [])
+
+    def test_cohort_forming_month_with_thin_size_bucket_still_fails(self) -> None:
+        diagnostics = {
+            "primary_size_neutral_thin_month_count": 0,
+            "primary_size_neutral_min_bucket_observation_count": 0,
+            "primary_size_neutral_coverage_month_count": 0,
+            "primary_size_neutral_bucket_coverage_by_month": [],
+            "primary_no_cohort_zero_composite_month_count": 0,
+            "primary_no_cohort_zero_composite_months": [],
+        }
+        scored = [
+            {
+                "size_bucket": "q1",
+                "core_quality_composite_percentile_3factor__size_neutral": 0.7,
+                "core_quality_composite_percentile_3factor__industry_size_neutral": 0.6,
+            },
+            {
+                "size_bucket": "q3",
+                "core_quality_composite_percentile_3factor__size_neutral": 0.4,
+                "core_quality_composite_percentile_3factor__industry_size_neutral": 0.3,
+            },
+        ]
+
+        with mock.patch.object(runner, "MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY", 1):
+            runner.update_primary_size_coverage_diagnostics(scored, "20200131", diagnostics)
+
+        self.assertEqual(diagnostics["primary_size_neutral_coverage_month_count"], 1)
+        self.assertEqual(diagnostics["primary_size_neutral_thin_month_count"], 1)
+        self.assertEqual(diagnostics["primary_size_neutral_min_bucket_observation_count"], 0)
+
     def test_decision_uses_only_primary_cell_and_diagnostics_cannot_rescue_failure(self) -> None:
         primary_fail = {
             "cell_id": "core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_504d_CSI300",
@@ -191,6 +242,21 @@ class ALongLargeCapPureQualitySignalSearchTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             runner.validate_pipeline_result_sanity([{"row": 1}], [primary_pass], diagnostics)
+
+    def test_pipeline_sanity_accepts_zero_composite_startup_months_excluded_from_gate(self) -> None:
+        primary_pass = {
+            "cell_id": "core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_504d_CSI300",
+            "diagnostic_role": "primary_decision_cell",
+            "monthly_cohort_count": 1,
+        }
+        diagnostics = {
+            "primary_size_neutral_thin_month_count": 0,
+            "primary_size_neutral_coverage_month_count": 1,
+            "primary_no_cohort_zero_composite_month_count": 3,
+            "primary_no_cohort_zero_composite_months": ["20180131", "20180228", "20180330"],
+        }
+
+        runner.validate_pipeline_result_sanity([{"row": 1}], [primary_pass], diagnostics)
 
 
 if __name__ == "__main__":

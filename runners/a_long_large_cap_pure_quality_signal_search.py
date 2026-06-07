@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -9,11 +10,13 @@ from pathlib import Path
 from statistics import mean, pstdev
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from runners import a_long_full_main_board_signal_search as base
 from runners import a_long_large_cap_market_cap_audit as cap_audit
 
-
-ROOT = Path(__file__).resolve().parents[1]
 
 PACKET_PATH = ROOT / "docs" / "a_long_large_cap_pure_quality_signal_search_execution_packet_20260607.json"
 PACKET_SCHEMA_PATH = ROOT / "schemas" / "a_long_large_cap_pure_quality_signal_search_execution_packet.schema.json"
@@ -639,6 +642,35 @@ def primary_size_neutral_bucket_coverage(scored: list[dict[str, Any]], as_of: st
     }
 
 
+def primary_composite_observation_count(scored: list[dict[str, Any]]) -> int:
+    score_field = f"{PRIMARY_SIGNAL_ID}__{PRIMARY_VIEW}"
+    return sum(1 for item in scored if item.get(score_field) is not None)
+
+
+def update_primary_size_coverage_diagnostics(
+    scored: list[dict[str, Any]],
+    as_of: str,
+    diagnostics: dict[str, Any],
+) -> None:
+    if primary_composite_observation_count(scored) == 0:
+        diagnostics["primary_no_cohort_zero_composite_month_count"] += 1
+        diagnostics["primary_no_cohort_zero_composite_months"].append(as_of)
+        return
+
+    primary_size_coverage = primary_size_neutral_bucket_coverage(scored, as_of)
+    diagnostics["primary_size_neutral_bucket_coverage_by_month"].append(primary_size_coverage)
+    diagnostics["primary_size_neutral_coverage_month_count"] += 1
+    diagnostics["primary_size_neutral_thin_month_count"] += (
+        0 if primary_size_coverage["passes_minimum_bucket_count"] else 1
+    )
+    month_min_bucket_count = min(
+        int(primary_size_coverage[f"{bucket}_count"]) for bucket in SIZE_BUCKETS
+    )
+    current_min = int(diagnostics["primary_size_neutral_min_bucket_observation_count"])
+    if current_min == 0 or month_min_bucket_count < current_min:
+        diagnostics["primary_size_neutral_min_bucket_observation_count"] = month_min_bucket_count
+
+
 def _mean_if_all_present(item: dict[str, Any], fields: list[str]) -> float | None:
     values: list[float] = []
     for field in fields:
@@ -706,7 +738,10 @@ def monthly_cohort_rows(
         "size_neutral_thin_bucket_count": 0,
         "primary_size_neutral_thin_month_count": 0,
         "primary_size_neutral_min_bucket_observation_count": 0,
+        "primary_size_neutral_coverage_month_count": 0,
         "primary_size_neutral_bucket_coverage_by_month": [],
+        "primary_no_cohort_zero_composite_month_count": 0,
+        "primary_no_cohort_zero_composite_months": [],
         "primary_composite_available_observation_count": 0,
         "return_exit_scheduled_count": 0,
         "return_exit_terminal_last_trade_count": 0,
@@ -783,17 +818,7 @@ def monthly_cohort_rows(
         diagnostics["primary_composite_available_observation_count"] += coverage[
             "primary_composite_available_observation_count"
         ]
-        primary_size_coverage = primary_size_neutral_bucket_coverage(scored, as_of)
-        diagnostics["primary_size_neutral_bucket_coverage_by_month"].append(primary_size_coverage)
-        diagnostics["primary_size_neutral_thin_month_count"] += (
-            0 if primary_size_coverage["passes_minimum_bucket_count"] else 1
-        )
-        month_min_bucket_count = min(
-            int(primary_size_coverage[f"{bucket}_count"]) for bucket in SIZE_BUCKETS
-        )
-        current_min = int(diagnostics["primary_size_neutral_min_bucket_observation_count"])
-        if current_min == 0 or month_min_bucket_count < current_min:
-            diagnostics["primary_size_neutral_min_bucket_observation_count"] = month_min_bucket_count
+        update_primary_size_coverage_diagnostics(scored, as_of, diagnostics)
 
         for item in scored:
             symbol = item["symbol"]
@@ -1098,6 +1123,12 @@ def validate_pipeline_result_sanity(rows: list[dict[str, Any]], results: list[di
         raise ValueError(
             "large-cap signal-search pipeline failure: primary size-neutral bucket coverage is thin; "
             "do not emit a verdict or spend ledger"
+        )
+    coverage_month_count = int(diagnostics.get("primary_size_neutral_coverage_month_count") or 0)
+    if coverage_month_count < int(primary.get("monthly_cohort_count") or 0):
+        raise ValueError(
+            "large-cap signal-search pipeline failure: primary size-neutral coverage month count "
+            "is below the primary cohort count"
         )
 
 

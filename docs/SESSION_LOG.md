@@ -8,6 +8,83 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (R-SIZE-GATE-SCOPE fix, uncommitted on HEAD 06b13f7) — **PASS — gate correctly narrowed to cohort-forming months; F2 preserved; no computation change; ready to commit + execute**
+
+Re-reviewed the gate-scope fix (runner + summary-schema diff) + verified independently.
+- **Correctly narrowed**: new `primary_composite_observation_count` + `update_primary_size_coverage_diagnostics` — a zero-primary-composite month returns early into `primary_no_cohort_zero_composite_months` (NOT counted as thin, NOT a coverage row), so the 3 no-data startup months (20180131/0228/0330) no longer trip the gate; a cohort-forming month still computes coverage and a thin bucket (<50) still increments `primary_size_neutral_thin_month_count`, which `validate_pipeline_result_sanity` still hard-fails (F2 preserved). New consistency guard: `coverage_month_count ≥ primary monthly_cohort_count` (coverage ⊇ cohort, holds).
+- **Schema synced**: `primary_size_neutral_bucket_coverage_by_month` minItems 96→1 (forming months only); added `primary_size_neutral_coverage_month_count` (1–96), `primary_no_cohort_zero_composite_month_count` (0–96), `primary_no_cohort_zero_composite_months`; `primary_size_neutral_thin_month_count` stays const 0 and each coverage row still requires all q*_count ≥ 50.
+- **No computation change / no p-hacking**: only the 2 new diagnostic helpers added; factor definitions, composite, neutralization scoring, return measurement, thresholds, the 96 frozen as-of dates, and decision logic are untouched (diff confirms). Also added `sys.path` insert so the script-path invocation no longer fails to import `runners`.
+- 21/21 tests pass in my jsonschema env (+3 new): zero-composite startup month is NOT a violation; cohort-forming thin-bucket month STILL fails; sanity accepts excluded startup months / rejects thin coverage.
+- Independently traced the run shape: the 3 startup months are excluded (no PIT report before ~2018-04-20); late as_ofs (≈2024-01→) have composite scores (counted as coverage months) but no 504d forward return (exit beyond 2025-12 data) so they form no 504d cohort — the coverage≥cohort guard correctly tolerates this. The 504d primary cell will have ≈68 cohorts (≥48).
+
+**Verdict**: PASS. The over-scoped gate is fixed to apply only to cohort-forming months; the no-data startup months are handled as in the prior vetted design (0 cohorts), F2 size-coverage hardening is preserved for real cohort-forming months, and nothing in the alpha computation changed. Sequence: commit → a separate user `执行` runs the search (this time it should complete: ~68 504d primary cohorts, spend the singleton ledger once, write the research-only summary) → Claude independently reviews the candidate/falsified verdict before any conclusion. Immediate next: commit.
+
+---
+
+## 2026-06-07 - Codex repair (R-SIZE-GATE-SCOPE) - **READY FOR REVIEW / not executed / ledger unspent**
+
+Implemented the user-approved narrow repair from Claude's top review entry. This round did not run signal search, did not write `research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json`, did not create a pending summary, did not spend the singleton ledger, and did not change factor definitions, score calculation, neutralization, return measurement, thresholds, the 96 frozen as-of dates, or result interpretation.
+
+**Worked on**:
+- [tracked] `runners/a_long_large_cap_pure_quality_signal_search.py`: fixed direct script-path import by inserting repo root into `sys.path` before package imports. Added cohort-scope diagnostics for primary size-neutral coverage: months with zero `core_quality_composite_percentile_3factor__industry_size_neutral` observations are now recorded as `primary_no_cohort_zero_composite_months` and excluded from the size-bucket hard gate; months with at least one primary composite observation still report q1-q5 size-neutral coverage and still hard-fail before summary / ledger spend if any bucket is below 50. Added a sanity check that size-coverage months cannot be fewer than actual primary cohorts.
+- [tracked] `schemas/a_long_large_cap_pure_quality_signal_search_execution_summary.schema.json`: changed `primary_size_neutral_bucket_coverage_by_month` from fixed 96 rows to cohort-forming rows only, while keeping each reported row hard-gated at q1-q5 >= 50 and `primary_size_neutral_thin_month_count == 0`. Added explicit zero-composite startup diagnostics (`primary_no_cohort_zero_composite_month_count`, `primary_no_cohort_zero_composite_months`) plus `primary_size_neutral_coverage_month_count`.
+- [tracked] `tests/test_a_long_large_cap_pure_quality_signal_search.py`: added regressions that zero-primary-composite startup months are not thin size-coverage violations, cohort-forming thin size buckets still fail, and pipeline sanity accepts zero-composite startup months when coverage months remain valid.
+- [tracked] `tests/schema/test_a_long_large_cap_pure_quality_signal_search_schema.py`: updated the valid summary fixture to 93 cohort-forming size-coverage months plus 3 zero-composite startup months (`20180131`, `20180228`, `20180330`), and kept thin populated-bucket schema rejection.
+- [tracked] `docs/CURRENT.md`, `docs/system_risk_register.md`, and this `docs/SESSION_LOG.md`: updated state/risk handoff for the repair round.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile runners\a_long_large_cap_pure_quality_signal_search.py` - OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\a_long_large_cap_pure_quality_signal_search.py --help` - OK; direct script-path import works.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_long_large_cap_pure_quality_signal_search tests.schema.test_a_long_large_cap_pure_quality_signal_search_schema -v` - 21 tests OK.
+- Read-only local diagnostic (no summary / no ledger write): `primary_size_neutral_thin_month_count = 0`, `primary_size_neutral_coverage_month_count = 93`, `primary_size_neutral_min_bucket_observation_count = 54`, `primary_no_cohort_zero_composite_months = ['20180131', '20180228', '20180330']`, `rows = 73496`, `primary_composite_available_observation_count = 40755`.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "*large_cap*" -v` - 73 tests OK.
+
+**Next / lock**:
+- Claude should review that this is only a gate-scope/import fix and did not change computation. If PASS, user can invoke `提交`; only after commit and a separate user `执行` should the signal search run and spend the singleton ledger.
+
+---
+
+## 2026-06-07 — Claude 审查 (signal-search execution-stop at the size-coverage gate, ledger unspent on HEAD 06b13f7) — **fail-closed was CORRECT; 1 Required (R-SIZE-GATE-SCOPE); USER-APPROVED 2026-06-07 `批准修改` → Codex narrows the gate**
+
+The `执行` attempt stopped at the new primary size-neutral coverage hard gate; **no summary, no ledger spend (`tests_spent_count=0`)** — the fail-closed machinery worked exactly as designed (no false result, no wasted singleton). Codex's diagnosis is correct and I independently confirmed it:
+- The ONLY failing months are 20180131 / 20180228 / 20180330, each with ZERO primary composite coverage in all five size buckets; every populated month has min bucket count 54 (≥50).
+- **Root cause (independently verified)**: the full-main-board fundamental raw covers report PERIODS 2018Q1+ with earliest `ann_date` ≈ 2018-04-20…04-28 (FY2017/Q1-2018 filings). So at as_of 2018-01-31 / 02-28 / 03-30 there is NO PIT financial report (ann_date ≤ as_of) in the window → all three core factors are None → no primary composite → zero size coverage. These are no-data startup months, not thin size-control.
+- The prior vetted full-main-board search used the SAME 96 as-ofs + `minimum_monthly_cohorts ≥ 48`; those empty startup months simply contributed 0 cohorts and the run completed (~93 cohorts). The NEW R-SIZE-COVERAGE hard gate over-scoped by raising on zero-coverage (no-cohort) months — and this over-scope traces to my approval of "hard-gate any thin month" without distinguishing empty-startup from thin-populated. Owning that.
+
+**Required R-SIZE-GATE-SCOPE**: narrow the size-coverage hard gate so it applies ONLY to months that actually form a primary cohort (≥1 primary composite observation). A month with zero primary composite coverage is "no primary cohort this month" → excluded from the primary series (contributes 0 cohorts, exactly the pre-hardening behavior), NOT a size-control violation. A month that DOES form a cohort but has a bucket <50 must still block/flag (this preserves the original F2 intent — do not silently build a cohort from thin coverage). The `minimum_monthly_cohorts ≥ 48` gate remains the protection against too-few months. **Must NOT change** factor definitions, score calculation, neutralization, return measurement, thresholds, the 96 frozen as-of dates, or result interpretation — this is a gate-scope fix only. Re-run after the repair is reviewed + committed + separately executed.
+
+**Verdict**: not a defect in the data or the alpha logic, and NOT alpha/no-alpha evidence — it is a correctly-fail-closed over-strict gate. Fix R-SIZE-GATE-SCOPE (gate-scope only), re-review (confirm the 3 startup months are excluded with 0 cohorts, the run completes with ~93 cohorts, every cohort-forming month still has all 5 buckets ≥50, and no factor/score/measurement/threshold changed), commit, then a separate user `执行`. Ledger stays unspent until a valid summary writes.
+
+**USER-APPROVED 2026-06-07 (`批准修改`)**: the user approved R-SIZE-GATE-SCOPE. Codex is authorized to `修复` the size-coverage gate scope ONLY: count/gate size-bucket coverage only for months that form a primary cohort (≥1 primary composite observation); a zero-primary-composite month is excluded from the primary series with 0 cohorts (pre-hardening behavior), not a thin/violation; a cohort-forming month with any bucket <50 still hard-fails (F2 preserved); update the summary schema accordingly (the per-month coverage array + `primary_size_neutral_thin_month_count==0` must reflect the cohort-forming-only scope, e.g. coverage rows only for cohort-forming months) and the tests (add a fixture with zero-coverage startup months that now passes, and a cohort-forming thin-bucket month that still fails). MUST NOT change factor definitions, score calculation, neutralization, return measurement, thresholds, the 96 frozen as-of dates, the ledger (keep unspent), or result interpretation. This is a `修复` build → Claude re-review → commit → separate user `执行`.
+
+---
+
+## 2026-06-07 - Codex execution attempt after commit `06b13f7` - **STOPPED BEFORE SUMMARY / ledger unspent / repair required before rerun**
+
+After committing the Claude-passed hardening fix as `06b13f7`, Codex executed the next step requested by the user.
+
+**Execution attempts**:
+- Direct documented script form `...\python.exe runners\a_long_large_cap_pure_quality_signal_search.py --confirm-independent-review-pass --confirm-post-review-execute` stopped before runner execution with `ModuleNotFoundError: No module named 'runners'` because script-path execution puts `runners/` rather than repo root on `sys.path`. No summary / pending summary / ledger write happened.
+- Equivalent repo-root module form `...\python.exe -m runners.a_long_large_cap_pure_quality_signal_search --confirm-independent-review-pass --confirm-post-review-execute` reached the runner and stopped at the new hard sanity gate: `ValueError: large-cap signal-search pipeline failure: primary size-neutral bucket coverage is thin; do not emit a verdict or spend ledger`.
+
+**State after stop**:
+- No provider call / network call was executed by the signal-search runner.
+- No `research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json` or `.pending` summary exists.
+- `research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json` remains unspent: `tests_spent_count = 0`, `test_spend_log = []`, `ledger_status = active_planned_test_pending_review`.
+- Worktree was clean immediately after the committed hardening fix before this documentation update.
+
+**Read-only diagnostic**:
+- A no-write diagnostic recomputed only local diagnostics and found exactly 3 failing size-coverage months: `20180131`, `20180228`, and `20180330`.
+- In all 3 months, the primary composite size-neutral coverage was `q1=q2=q3=q4=q5=0`, so these are no-primary-composite startup months rather than thin populated size buckets.
+- The diagnostic produced `rows = 73496`, `primary_composite_available_observation_count = 40755`, and `primary_size_neutral_min_bucket_observation_count = 54` for the populated months.
+
+**Current judgement / next gate**:
+- This is not an alpha result, not a no-alpha result, and not a spent singleton test.
+- The likely issue is that the new R-SIZE-COVERAGE hardening over-scoped the gate by requiring all 96 materialization months to pass primary size-bucket coverage, while the frozen decision cell requires at least 48 valid monthly cohorts and `summarize_results()` skips months with no primary cohort.
+- Do not rerun the signal search until a reviewed repair distinguishes no-primary-composite startup months from true thin size-control months. That repair should change only diagnostics / sanity gating / summary schema / tests; it must not change factor definitions, score calculation, holdings, return measurement, thresholds, or result interpretation.
+
+---
+
 ## 2026-06-07 — Claude 审查 (R-DRIFT-GUARD / R-SIZE-COVERAGE / R-SUMMARY-CONTRACT fix, uncommitted on HEAD 2aaeb90) — **PASS — all 3 hardening Required resolved + independently verified; computation unchanged; ready to commit + execute**
 
 Re-reviewed Codex's hardening fix (full runner + summary-schema diff) and independently adversarially verified it.

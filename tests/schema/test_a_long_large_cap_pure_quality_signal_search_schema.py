@@ -231,6 +231,7 @@ class ALongLargeCapPureQualitySignalSearchSchemaTest(unittest.TestCase):
                 "size_neutral_thin_bucket_count": 0,
                 "primary_size_neutral_thin_month_count": 0,
                 "primary_size_neutral_min_bucket_observation_count": 50,
+                "primary_size_neutral_coverage_month_count": 93,
                 "primary_size_neutral_bucket_coverage_by_month": [
                     {
                         "as_of": "20200131",
@@ -242,8 +243,10 @@ class ALongLargeCapPureQualitySignalSearchSchemaTest(unittest.TestCase):
                         "thin_bucket_count": 0,
                         "passes_minimum_bucket_count": True
                     }
-                    for _index in range(96)
+                    for _index in range(93)
                 ],
+                "primary_no_cohort_zero_composite_month_count": 3,
+                "primary_no_cohort_zero_composite_months": ["20180131", "20180228", "20180330"],
                 "primary_composite_available_observation_count": 40000,
                 "return_exit_scheduled_count": 900,
                 "return_exit_terminal_last_trade_count": 0,
@@ -292,6 +295,8 @@ class ALongLargeCapPureQualitySignalSearchSchemaTest(unittest.TestCase):
     def test_summary_schema_accepts_future_valid_shape(self) -> None:
         payload = self._valid_summary()
 
+        self.assertEqual(payload["execution_diagnostics"]["primary_size_neutral_coverage_month_count"], 93)
+        self.assertEqual(payload["execution_diagnostics"]["primary_no_cohort_zero_composite_month_count"], 3)
         self.assertEqual(self._validate(SUMMARY_SCHEMA_PATH, payload), [])
 
     def test_summary_schema_rejects_production_or_diagnostic_rescue_claims(self) -> None:
