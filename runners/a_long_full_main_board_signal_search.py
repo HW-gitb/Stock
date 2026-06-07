@@ -1174,6 +1174,15 @@ def max_drawdown(values: list[float]) -> float:
 
 def summarize_results(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
+    rows_by_horizon_as_of: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
+    as_ofs_by_horizon: dict[int, set[str]] = defaultdict(set)
+    for row in rows:
+        horizon = row.get("horizon")
+        as_of = row.get("as_of")
+        if isinstance(horizon, int) and isinstance(as_of, str):
+            rows_by_horizon_as_of[(horizon, as_of)].append(row)
+            as_ofs_by_horizon[horizon].add(as_of)
+
     for family in ALLOWED_SIGNAL_FAMILIES:
         for view in ["non_neutral", "industry_neutral"]:
             score_field = f"{family}__{view}"
@@ -1183,13 +1192,10 @@ def summarize_results(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     cohort_returns: list[float] = []
                     selected_symbols: dict[str, int] = defaultdict(int)
                     yearly_positive_return_contribution: dict[str, float] = defaultdict(float)
-                    as_ofs = sorted({row["as_of"] for row in rows if row.get("horizon") == horizon and row.get(score_field) is not None})
-                    for as_of in as_ofs:
+                    for as_of in sorted(as_ofs_by_horizon.get(horizon, set())):
                         cohort = [
-                            row for row in rows
-                            if row.get("as_of") == as_of
-                            and row.get("horizon") == horizon
-                            and row.get(score_field) is not None
+                            row for row in rows_by_horizon_as_of.get((horizon, as_of), [])
+                            if row.get(score_field) is not None
                             and row.get(excess_field) is not None
                         ]
                         if not cohort:

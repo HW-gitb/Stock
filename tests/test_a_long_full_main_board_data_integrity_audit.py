@@ -53,6 +53,39 @@ class ALongFullMainBoardDataIntegrityAuditTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.validate_materialization_summary(summary)
 
+    def test_payload_store_caches_raw_payload_and_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            raw_root = Path(temp_dir)
+            payload_path = raw_root / "payload.json"
+            payload_path.write_text(
+                json.dumps(
+                    {
+                        "columns": ["ts_code"],
+                        "records": [{"ts_code": "000001.SZ"}, "ignored"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            store = runner.PayloadStore(
+                raw_root=raw_root,
+                manifest={
+                    "stock_basic_active_L": {
+                        "call_status": "success",
+                        "raw_payload_ref": str(payload_path),
+                    }
+                },
+            )
+
+            with patch.object(runner, "read_json", wraps=runner.read_json) as read_json:
+                first = store.records("stock_basic_active_L")
+                second = store.records("stock_basic_active_L")
+                columns = store.columns("stock_basic_active_L")
+
+            self.assertIs(first, second)
+            self.assertEqual(first, [{"ts_code": "000001.SZ"}])
+            self.assertEqual(columns, {"ts_code"})
+            self.assertEqual(read_json.call_count, 1)
+
     def test_survivorship_check_fails_missing_terminal_return(self) -> None:
         store, context, repair = runner.build_self_test_store()
         payloads = copy.deepcopy(store.payloads)

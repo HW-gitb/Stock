@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-07 — Codex 执行 / 修复 (A-long Step-3 runtime termination) — **READY FOR REVIEW / no signal result**
+
+After Claude PASS and commit `498ab99`, user gave a separate `执行`. Codex ran the reviewed Step-3 command twice:
+- First foreground run timed out at 120 seconds.
+- Second foreground run timed out at 900 seconds.
+
+**Side-effect check after each timeout**:
+- No Python process left running.
+- No `research/results/a_long_signal_search_20260604/execution_summary.json`.
+- No `research/results/a_long_signal_search_20260604/evidence_report.json`.
+- No pending summary.
+- Singleton ledger remained unspent: `tests_spent_count = 0`, `test_spend_log = []`.
+- Git worktree was clean before the performance repair.
+
+**Cause diagnosed from code**:
+- `PayloadStore.records()` re-read and re-filtered the same raw JSON payload every time a signal/audit path asked for a call_id. The full signal run calls this repeatedly across 3,387 symbols x monthly as-of dates x four fundamental tables / price tables.
+- `summarize_results()` rebuilt cohorts by repeatedly scanning all evaluated rows for every family/view/horizon/benchmark/as_of cell. That is semantically correct but too slow for the full main-board execution path.
+
+**Repair**:
+- `runners/a_long_full_main_board_data_integrity_audit.py::PayloadStore` now caches raw payloads and filtered records by call_id after the first read.
+- `runners/a_long_full_main_board_signal_search.py::summarize_results` now pre-groups evaluated rows by `(horizon, as_of)` and then applies the same score/excess filters inside each group.
+- Added a regression test that `PayloadStore` reads a raw payload once and reuses the cached records / columns.
+
+**Verification**:
+- `python -m unittest tests.test_a_long_full_main_board_data_integrity_audit tests.test_a_long_full_main_board_signal_search -v` — 53 tests OK.
+- `python -m unittest discover -s tests -p '*a_long*' -v` — 263 tests OK, 1 expected skip because no signal summary exists.
+
+**Next / lock**:
+- This is a runtime/termination repair, not an alpha result.
+- Do not rerun Step 3 until this repair receives independent review PASS, is committed, and the user gives a separate `执行`.
+
+---
+
 ## 2026-06-07 — Claude 审查 (A-long Step-3 gate-reader field-mismatch fix) — **PASS (可提交)**
 
 **Verified**: `load_and_validate_audit_report` (line 350) now reads `check_results` (line 376, the schema-locked field) instead of the legacy `checks`, builds a {check_id: item} map, and the gate (line 386-392) requires `selection_time_status_source.status == "pass_full_main_board"` AND `return_benchmark_measurement_basis.metrics.benchmark_return_basis == BENCHMARK_RETURN_BASIS` (H-code TR close-to-close). Both hold in the current valid audit report → the gate now correctly PASSES on it (it genuinely requires the checks PASSED, not merely present). The masking test (which wrongly asserted the current artifact should FAIL the gate) is corrected to assert it validates, plus a regression rejecting a legacy `checks`-only report shape. 56 tests OK (1 skip) re-run in my jsonschema env.

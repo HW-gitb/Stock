@@ -79,6 +79,7 @@ class PayloadStore:
         self.raw_root = raw_root
         self.manifest = manifest or {}
         self.payloads = payloads or {}
+        self._records_cache: dict[str, list[dict[str, Any]]] = {}
 
     def payload(self, call_id: str) -> dict[str, Any]:
         if call_id in self.payloads:
@@ -92,13 +93,18 @@ class PayloadStore:
         if not raw_ref:
             raise ValueError(f"endpoint result lacks raw_payload_ref for {call_id}")
         path = resolve_raw_ref(self.raw_root, str(raw_ref))
-        return read_json(path)
+        self.payloads[call_id] = read_json(path)
+        return self.payloads[call_id]
 
     def records(self, call_id: str) -> list[dict[str, Any]]:
+        if call_id in self._records_cache:
+            return self._records_cache[call_id]
         value = self.payload(call_id).get("records")
         if not isinstance(value, list):
             raise ValueError(f"raw payload records missing for {call_id}")
-        return [row for row in value if isinstance(row, dict)]
+        records = [row for row in value if isinstance(row, dict)]
+        self._records_cache[call_id] = records
+        return records
 
     def columns(self, call_id: str) -> set[str]:
         value = self.payload(call_id).get("columns")
