@@ -1,5 +1,24 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-07 append: A-long large-cap market-cap audit package ready for review
+
+**Changed**:
+- Committed the reviewed 96/96 large-cap market-cap materialization PASS summary in `7d5356c`.
+- Prepared the next local-only audit package without executing it.
+- New package files: `schemas/a_long_large_cap_market_cap_audit_packet.schema.json`, `docs/a_long_large_cap_market_cap_audit_packet_20260607.json`, `runners/a_long_large_cap_market_cap_audit.py`, `schemas/a_long_large_cap_market_cap_audit_report.schema.json`, `tests/schema/test_a_long_large_cap_market_cap_audit_schema.py`, and `tests/test_a_long_large_cap_market_cap_audit.py`.
+- The future audit re-derives each monthly top-500 by `circ_mv`, checks the same 96 as-ofs, shared main-board filter, size-quintile coverage, and bridge to the prior audited full-main-board raw universe.
+
+**Plain result**:
+- This is a review-only package build.
+- It does not run audit, signal search, alpha, production, ship-gate, DataHub, broker/order automation, or full-size logic.
+
+**Next**:
+- Independent review of the audit package.
+- After review PASS + commit, the next separate `执行` may run only the local market-cap audit.
+- Signal search remains locked until the audit result itself passes review and is committed.
+
+---
+
 ## 2026-06-06 append: A-long pre-run signal-search repair ready for review
 
 **Changed**:

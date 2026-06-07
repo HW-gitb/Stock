@@ -1,0 +1,243 @@
+{
+  "schema_name": "a_long_large_cap_market_cap_audit_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-07T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_market_cap_audit_packet_20260607",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_large_cap_market_cap_audit_packet",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "ready_for_later_execution_after_independent_review": true,
+    "actual_audit_requires_post_review_execute_command": true,
+    "local_raw_audit_allowed_after_gates": true,
+    "provider_calls_executed_by_this_artifact": false,
+    "tushare_calls_executed_by_this_artifact": false,
+    "data_fetch_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "signal_search_allowed": false,
+    "alpha_backtest_allowed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_doc_refs": [
+    {
+      "path": "docs/a_long_large_cap_market_cap_materialization_execution_summary_20260607.json",
+      "role": "reviewed PASS materialization result with 96 successful daily_basic circ_mv calls and raw refs"
+    },
+    {
+      "path": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json",
+      "role": "frozen large-cap pure-quality preregistration requiring PIT top-500 by circ_mv and size-neutral quintiles"
+    },
+    {
+      "path": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json",
+      "role": "singleton signal-search ledger; audit must not spend it"
+    },
+    {
+      "path": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+      "role": "prior reviewed full-main-board data-integrity PASS used as the broader raw-data bridge"
+    },
+    {
+      "path": "docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json",
+      "role": "reviewed source of 187 delisted main-board names used in the prior audited full-main-board universe"
+    },
+    {
+      "path": "docs/SESSION_LOG.md",
+      "role": "records the materialization result review PASS and routes this next audit package"
+    }
+  ],
+  "input_boundary": {
+    "materialization_summary_ref": "docs/a_long_large_cap_market_cap_materialization_execution_summary_20260607.json",
+    "market_cap_raw_root": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/",
+    "prior_full_main_board_audit_report_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+    "prior_full_main_board_raw_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
+    "sw_repair_summary_ref": "docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json",
+    "preregistration_ref": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json",
+    "ledger_ref": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json"
+  },
+  "audit_boundary": {
+    "materialization_id": "a_long_large_cap_market_cap_top500_monthly_2018_2025",
+    "selected_market_cap_field": "circ_mv",
+    "universe_size_n": 500,
+    "board_scope": "main_board_only",
+    "main_board_filter_source": "engine.data.a_share_board_scope.is_main_board_ts_code",
+    "monthly_as_of_count": 96,
+    "monthly_as_of_dates": [
+      "20180131",
+      "20180228",
+      "20180330",
+      "20180427",
+      "20180531",
+      "20180629",
+      "20180731",
+      "20180831",
+      "20180928",
+      "20181031",
+      "20181130",
+      "20181228",
+      "20190131",
+      "20190228",
+      "20190329",
+      "20190430",
+      "20190531",
+      "20190628",
+      "20190731",
+      "20190830",
+      "20190930",
+      "20191031",
+      "20191129",
+      "20191231",
+      "20200123",
+      "20200228",
+      "20200331",
+      "20200430",
+      "20200529",
+      "20200630",
+      "20200731",
+      "20200831",
+      "20200930",
+      "20201030",
+      "20201130",
+      "20201231",
+      "20210129",
+      "20210226",
+      "20210331",
+      "20210430",
+      "20210531",
+      "20210630",
+      "20210730",
+      "20210831",
+      "20210930",
+      "20211029",
+      "20211130",
+      "20211231",
+      "20220128",
+      "20220228",
+      "20220331",
+      "20220429",
+      "20220531",
+      "20220630",
+      "20220729",
+      "20220831",
+      "20220930",
+      "20221031",
+      "20221130",
+      "20221230",
+      "20230131",
+      "20230228",
+      "20230331",
+      "20230428",
+      "20230531",
+      "20230630",
+      "20230731",
+      "20230831",
+      "20230928",
+      "20231031",
+      "20231130",
+      "20231229",
+      "20240131",
+      "20240229",
+      "20240329",
+      "20240430",
+      "20240531",
+      "20240628",
+      "20240731",
+      "20240830",
+      "20240930",
+      "20241031",
+      "20241129",
+      "20241231",
+      "20250127",
+      "20250228",
+      "20250331",
+      "20250430",
+      "20250530",
+      "20250630",
+      "20250731",
+      "20250829",
+      "20250930",
+      "20251031",
+      "20251128",
+      "20251231"
+    ],
+    "same_as_materialization_dates": true,
+    "prior_audited_universe_bridge_required": true,
+    "size_bucket_count": 5,
+    "minimum_size_bucket_count_for_primary_percentile": 50,
+    "top500_symbols_written_to_tracked_report": false,
+    "not_signal_search": true
+  },
+  "audit_checks": [
+    {
+      "check_id": "materialization_summary_gate",
+      "hard_check": true,
+      "description": "Validate the reviewed materialization PASS summary, frozen circ_mv field, no-raw/no-top500-summary boundary, and unspent singleton ledger."
+    },
+    {
+      "check_id": "raw_payload_shape_and_refs",
+      "hard_check": true,
+      "description": "Resolve every raw_payload_ref under the approved gitignored market-cap raw root and check required columns, as-of dates, and row counts."
+    },
+    {
+      "check_id": "top500_rederivation_consistency",
+      "hard_check": true,
+      "description": "Re-derive the monthly main-board top-500 by positive circ_mv from raw and compare count/min/max stats to the materialization summary."
+    },
+    {
+      "check_id": "main_board_filter_integrity",
+      "hard_check": true,
+      "description": "Confirm top-500 selection uses the shared main-board filter and excludes ChiNext, STAR, BSE, and other non-main boards."
+    },
+    {
+      "check_id": "prior_full_main_board_universe_bridge",
+      "hard_check": true,
+      "description": "Confirm every re-derived top-500 symbol is covered by the prior audited full-main-board raw universe before any signal scoring package."
+    },
+    {
+      "check_id": "size_quintile_coverage",
+      "hard_check": true,
+      "description": "Confirm each month can form five market-cap quintiles with at least the registered minimum count for the size-neutral percentile view."
+    }
+  ],
+  "output_contract": {
+    "report_schema_ref": "schemas/a_long_large_cap_market_cap_audit_report.schema.json",
+    "report_path": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json",
+    "monthly_coverage_path": "research/results/a_long_large_cap_market_cap_audit_20260607/monthly_coverage.csv",
+    "tracked_report_must_not_contain_raw_rows": true,
+    "tracked_report_must_not_contain_top500_symbols": true,
+    "tracked_report_must_not_contain_secret": true,
+    "tracked_report_must_not_contain_request_url": true,
+    "audit_report_authorizes_signal_search_by_itself": false,
+    "audit_report_authorizes_alpha_or_production": false
+  },
+  "pre_execution_gates": {
+    "requires_independent_review_pass": true,
+    "requires_post_review_user_execute": true,
+    "requires_passed_materialization_summary": true,
+    "requires_market_cap_raw_root_gitignored": true,
+    "requires_prior_full_main_board_audit_pass": true,
+    "requires_unspent_singleton_ledger": true
+  },
+  "prohibited_claims": {
+    "provider_call_executed": false,
+    "signal_search_authorized": false,
+    "signal_search_executed": false,
+    "a_long_alpha_found": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This packet prepares a local-only audit of already-materialized market-cap raw payloads; it does not run the audit by itself.",
+    "The future audit report may record counts and small samples only; it must not write raw rows or complete monthly top-500 symbol lists to tracked outputs.",
+    "A future audit PASS may only allow a later reviewed signal-search package to be built. It does not authorize running signal search by itself.",
+    "No alpha, production, ship-gate evidence, full-size use, DataHub work, provider expansion, or broker/order automation is authorized."
+  ]
+}

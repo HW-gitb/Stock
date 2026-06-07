@@ -8,6 +8,40 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long large-cap market-cap AUDIT package: packet + runner + 2 schemas + 2 tests, uncommitted on HEAD 7d5356c) — **PASS — local-only re-derivation audit, fail-closed, gated + tested; not yet run**
+
+Full read of the runner + packet + both schemas (strictness via grep) + the handoff append + the Codex entry. The handoff edit is a sanctioned APPEND (dated status note) to the phase-7 main handoff, not a rewrite of history — fine. The package is a local-only (no-network) integrity audit of the already-materialized market-cap raw.
+**Correctly gated + scoped:** double-confirm required even though local; pre-run gates = prereg review-passed + circ_mv frozen + universe 500 + size_bucket 5 / min 50, prior full-main-board audit PASS + hard_checks_pass, materialization summary schema-valid + PASS + no-raw/no-top500 + no-secret, singleton ledger UNSPENT (validated, never written). Packet↔runner drift-checked (96 as-ofs, check_ids, boundary).
+**6 hard checks by independent re-derivation from raw:** (1) materialization-summary gate; (2) raw-ref resolves under the gitignored root + columns/as-of/rowcount; (3) top-500 re-derived from raw circ_mv and cross-checked against the summary's stored stats (count/min/max, rounded) — catches summary↔raw drift; (4) main-board filter via the shared `is_main_board_ts_code`; (5) bridge — every re-derived top-500 symbol must sit inside the prior audited full-main-board universe (reconstructed as active-L main-board + 187 delisted = 3387, counts hard-asserted); (6) size-quintile coverage ≥ registered min. Plus 5 runtime self-tests (scope-creep block, raw-ref escape, non-main exclusion, sparse-top500 block, prior-universe-gap detection) that hard-fail the run if any regress.
+**Fail-closed**: the bridge reconstruction can only produce a false FAIL (missing a name → blocks), never a false PASS; large-caps rarely delist, so it should pass cleanly at runtime.
+**Hygiene**: report is count-only (per-month coverage counts + min/max circ_mv + a ≤20 diagnostic sample of any out-of-universe names on failure); no raw rows, no full top-500 lists (runner `_contains_key` guards `records`/`top500_symbols`/`selected_symbols` + schema `additionalProperties:false` ×9 each). Report does not self-authorize signal search.
+Re-ran in my jsonschema env: audit schema + runner tests = **8/8 OK** (Codex's bundled Python lacks jsonschema, so its "8 OK / 48 OK" did not actually validate schemas).
+
+**Verdict**: PASS. A correctly-bounded local re-derivation audit; nothing here runs the audit, spends the ledger, or authorizes signal search. Sequence: commit the package → a separate user `执行` runs the local audit (writes `audit_report.json` + `monthly_coverage.csv`) → Claude reviews the audit RESULT → then (only after audit result PASS) the signal-search package (the ledger-spending registered test, which must reuse the same 96 as-ofs + `is_main_board_ts_code` + top-500-by-circ_mv + the 0.5/0.5 marginal double-neutralization). **Watch-item**: if the bridge check fails at runtime, determine whether it's a reconstruction artifact (a delisted large-cap not in the 187-name set) vs a genuine out-of-universe name. Immediate next: commit this audit package.
+
+---
+
+## 2026-06-07 — Codex 构建 (A-long large-cap local market-cap materialization audit package) — **READY FOR REVIEW / audit not run**
+
+After Claude PASS on the materialization result and commit `7d5356c`, Codex executed only the next build step: prepare the local-only market-cap audit package for the NEW A-long large-cap pure-quality path. No audit execution, signal search, alpha backtest, DataHub work, production claim, ship-gate claim, full-size use, provider expansion, or broker/order automation was run or authorized.
+
+**Worked on**:
+- [untracked] `schemas/a_long_large_cap_market_cap_audit_packet.schema.json`, `docs/a_long_large_cap_market_cap_audit_packet_20260607.json`, `runners/a_long_large_cap_market_cap_audit.py`, and `schemas/a_long_large_cap_market_cap_audit_report.schema.json`: new review-only audit package. The future runner requires `--confirm-independent-review-pass` + `--confirm-post-review-execute`, reads only local gitignored raw, validates the reviewed materialization PASS summary, prior full-main-board audit PASS, unspent large-cap singleton ledger, same 96 as-ofs, shared main-board filter, top-500-by-`circ_mv` re-derivation, bridge to the prior audited full-main-board universe, and size-quintile coverage. Tracked report is count-only: no raw rows, no endpoint results, and no complete monthly top-500 symbol lists.
+- [untracked] `tests/schema/test_a_long_large_cap_market_cap_audit_schema.py` and `tests/test_a_long_large_cap_market_cap_audit.py`: packet/report schema tests, scope-creep rejection, runner self-tests, raw-ref / main-board / prior-universe gate tests, and double-confirmation gate test.
+- [tracked] `docs/README.md`, `research/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`, and this `docs/SESSION_LOG.md`: route the new audit package and lock the no-run / no-signal-search boundary.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_long_large_cap_market_cap_audit tests.schema.test_a_long_large_cap_market_cap_audit_schema -v` — 8 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "*large_cap*" -v` — 48 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -c "from runners import a_long_large_cap_market_cap_audit as r; r.load_and_validate_packet(); print('packet ok')"` — packet ok.
+
+**Next / lock**:
+- Independent review should inspect the full working tree, including all `??` untracked files. Do not run `runners\a_long_large_cap_market_cap_audit.py` until review PASS + commit + a separate user `执行`.
+- If review passes and the package is committed, the later execution command will be:
+  `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\a_long_large_cap_market_cap_audit.py --confirm-independent-review-pass --confirm-post-review-execute`
+
+---
+
 ## 2026-06-07 — Claude 审查 (A-long large-cap market-cap materialization RESULT, docs/...materialization_execution_summary_20260607.json, untracked on HEAD 5ef681a) — **PASS — 96/96 months materialized, complete top-500 every month, ledger unspent, hygiene clean**
 
 Genuine live run: `new_network_call_count=96`, reused=0, both confirm gates true, env precheck passed. Independently recomputed every number from the 96 `endpoint_results` (did not just trust `coverage_rollup`):
