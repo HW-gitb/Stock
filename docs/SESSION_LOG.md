@@ -8,6 +8,62 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long large-cap pure-quality signal-search RESULT, research/results/a_long_large_cap_pure_quality_20260607/, untracked on HEAD d5211f4) — **PASS — genuine FALSIFIED (no large-cap pure-quality alpha), independently re-derived; ledger correctly spent; mechanics clean**
+
+The run completed and the verdict is genuine, not a pipeline artifact: 73,496 evaluated rows, 36 cells with real varied t-stats (−1.11…+5.24), 68 primary cohorts. Schema-valid; ledger correctly spent once (`tests_spent_count=1`, `active_no_new_test_authorized`, `spent_failed_outcome_threshold`); restatement 1504/1504; 000043 exclusion+backfill applied; the 3 no-PIT startup months (20180131/0228/0330) excluded as designed (93 coverage months, 0 thin); no network/raw/secret. I independently checked every cell vs its gates.
+
+**Primary cell (composite / industry_size_neutral / equal_weight / 504d / CSI300): t = 0.91, mean +5.5%, 68 cohorts, drawdown −2.07 → FAILS.** Not remotely significant (t≪2). Falsified — genuine and robust.
+
+**Independent findings:**
+- **Not a size-confound this round**: the composite is weak vs BOTH CSI300 (t=0.91) and CSI1000 (t=0.88) at 504d — unlike the prior all-market run where factors were significant vs CSI1000. The 3-factor equal-weight composite simply has no large-cap edge.
+- **Only `cash_conversion` carries signal** (504d t=2.35 vs CSI300, 4.52 vs CSI1000) — but it is a single-factor DIAGNOSTIC (frozen rules forbid single-factor from defining alpha) AND it fails the drawdown gate (−0.94 / −0.27). `earnings_stability` is significant (t up to 5.24) but fails cohorts<48 (only 32, thin) — same as before. `profitability_quality` and `balance_sheet_strength` have ~no large-cap excess (even slightly negative), which dilutes cash_conversion inside the equal-weight composite → composite t=0.91.
+- **Design observation (not a defect, does not change this verdict)**: the drawdown gate (max_drawdown on cumulative monthly excess ≥ −0.15) is failed by ALL 36 cells including t≥4 ones — summing overlapping 504d-cohort excesses is near-always-fail at −0.15, so the drawdown gate is effectively non-discriminating for 504d overlapping cohorts. The primary fails on t independently (0.91), so the falsified verdict stands regardless; flagging for any FUTURE preregistration's gate calibration.
+
+**Verdict**: PASS on the review — this is an honest, correctly-gated negative. Large-cap pure-quality (the frozen 3-factor equal-weight composite, 504d, CSI300) is FALSIFIED under the frozen rules; the singleton ledger is spent; no rerun / threshold / horizon / benchmark / factor-weight / single-factor rescue without a NEW reviewed preregistration + ledger. The lone research clue (`cash_conversion` at 504d) cannot be cherry-picked into this test — it would require a new prereg (and even then it fails the current drawdown gate, which itself should be reconsidered for overlapping cohorts). No production / ship-gate / full-size use. Next: commit the result + ledger spend.
+
+---
+
+## 2026-06-07 - Codex execution (A-long large-cap pure-quality signal search after commit `d5211f4`) - **VALID RESULT WRITTEN / singleton ledger spent / no alpha under frozen primary rules**
+
+Executed the reviewed A-long large-cap pure-quality signal search after Claude PASS and commit `d5211f4`.
+
+**Command**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\a_long_large_cap_pure_quality_signal_search.py --confirm-independent-review-pass --confirm-post-review-execute`
+
+**Result artifacts**:
+- [tracked/untracked before commit] `research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json` was written.
+- [tracked modified] `research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json` was updated.
+- No `.pending` summary remains.
+
+**Decision**:
+- `research_verdict = falsified_large_cap_pure_quality_under_frozen_rules`.
+- `candidate_alpha_clue_count = 0`.
+- `primary_cell_id = core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_504d_CSI300`.
+- This is research-only no-alpha under the frozen primary rules; it is not production evidence, not ship-gate evidence, and not full-size authorization.
+
+**Primary cell metrics**:
+- `monthly_cohort_count = 68`.
+- `mean_monthly_cohort_net_excess = 0.0552370444`.
+- `monthly_clustered_t_stat = 0.9056692154` with HAC lag 24; fails the frozen `t >= 2.0` gate.
+- `max_drawdown_on_monthly_excess = -2.0732264559`; fails the `>= -0.15` drawdown gate.
+- `max_single_year_positive_return_share = 0.520810527`; fails the `<= 0.35` single-year concentration gate.
+- `passes_minimum_monthly_cohorts = true`, `passes_minimum_top_count = true`, `passes_name_concentration_guard = true`.
+
+**Diagnostics / no rescue**:
+- Execution diagnostics passed the repaired size gate: `primary_size_neutral_thin_month_count = 0`, `primary_size_neutral_coverage_month_count = 93`, `primary_size_neutral_min_bucket_observation_count = 54`, zero-composite startup months `20180131`, `20180228`, `20180330`.
+- Four diagnostic-only cells have HAC t >= 2.0 (`cash_conversion` 504d vs CSI300/CSI1000 and `earnings_stability` 504d vs CSI300/CSI1000), but diagnostics cannot define alpha or rescue the failed primary cell. The diagnostic high-t cells also have drawdown and/or single-year-concentration failures as recorded in the summary.
+
+**Ledger / validation**:
+- The large-cap singleton ledger is now spent: `tests_spent_count = 1`, `ledger_status = active_no_new_test_authorized`, spend status `spent_failed_outcome_threshold`.
+- Actual `execution_summary.json` and the updated ledger both validate against their schemas with 0 errors.
+- No provider/network call was executed; tracked summary says no raw rows, endpoint results, secret, or request URL.
+
+**Next / lock**:
+- Do not rerun, threshold-rescue, horizon-rescue, benchmark-rescue, universe-rescue, diagnostic-rescue, or result-slice this family without a new reviewed preregistration and ledger update.
+- Immediate next gate is independent review of this actual result summary and ledger update before any conclusion beyond the frozen no-alpha result.
+
+---
+
 ## 2026-06-07 — Claude 审查 (R-SIZE-GATE-SCOPE fix, uncommitted on HEAD 06b13f7) — **PASS — gate correctly narrowed to cohort-forming months; F2 preserved; no computation change; ready to commit + execute**
 
 Re-reviewed the gate-scope fix (runner + summary-schema diff) + verified independently.
