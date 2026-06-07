@@ -1,0 +1,597 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_large_cap_pure_quality_preregistration/1.0.0/schema.json",
+  "title": "A-long Large-Cap Pure-Quality Preregistration",
+  "description": "Research-only preregistration for a new A-share long-lane large/mid-cap pure-quality hypothesis after the prior full main-board frozen search returned no alpha. It freezes a single top-500 PIT market-cap universe, one core-quality composite primary cell, CSI300 as the primary benchmark, and a singleton test-budget boundary. It does not fetch daily_basic, run signal search, authorize production use, or prove alpha.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "source_doc_refs",
+    "prior_result_boundary",
+    "data_dependency_gate",
+    "frozen_design",
+    "decision_policy",
+    "planned_test_budget",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_large_cap_pure_quality_preregistration"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_large_cap_pure_quality_20260607"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "source_doc_refs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sourceDocRef"},
+      "minItems": 7,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "docs/SESSION_LOG.md"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "research/results/a_long_signal_search_20260604/execution_summary.json"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json"}},
+            "required": ["path"]
+          }
+        }
+      ]
+    },
+    "prior_result_boundary": {"$ref": "#/$defs/priorResultBoundary"},
+    "data_dependency_gate": {"$ref": "#/$defs/dataDependencyGate"},
+    "frozen_design": {"$ref": "#/$defs/frozenDesign"},
+    "decision_policy": {"$ref": "#/$defs/decisionPolicy"},
+    "planned_test_budget": {"$ref": "#/$defs/plannedTestBudget"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "next_steps": {"$ref": "#/$defs/stringList"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "date8": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "positiveInteger": {"type": "integer", "minimum": 1},
+    "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "registration_status",
+        "research_status",
+        "research_only",
+        "new_hypothesis_not_prior_reslice",
+        "preregistration_review_status",
+        "daily_basic_pull_allowed_by_this_artifact",
+        "market_cap_probe_allowed_by_this_artifact",
+        "signal_search_executed_by_this_artifact",
+        "signal_search_authorized_by_this_artifact",
+        "data_fetch_allowed_by_this_artifact",
+        "provider_call_allowed_by_this_artifact",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_large_cap_pure_quality_preregistration"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "registration_status": {"const": "registered_not_run"},
+        "research_status": {"const": "new_frozen_design_registered_not_run"},
+        "research_only": {"const": true},
+        "new_hypothesis_not_prior_reslice": {"const": true},
+        "preregistration_review_status": {"const": "pending_independent_review"},
+        "daily_basic_pull_allowed_by_this_artifact": {"const": false},
+        "market_cap_probe_allowed_by_this_artifact": {"const": false},
+        "signal_search_executed_by_this_artifact": {"const": false},
+        "signal_search_authorized_by_this_artifact": {"const": false},
+        "data_fetch_allowed_by_this_artifact": {"const": false},
+        "provider_call_allowed_by_this_artifact": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "sourceDocRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role"],
+      "properties": {
+        "path": {"$ref": "#/$defs/nonEmptyString"},
+        "role": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "priorResultBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prior_preregistration_ref",
+        "prior_ledger_ref",
+        "prior_result_ref",
+        "prior_research_verdict",
+        "prior_candidate_alpha_clue_count",
+        "prior_tests_spent_count",
+        "new_design_reason",
+        "old_result_reslice_allowed",
+        "old_single_factor_diagnostic_rescue_allowed",
+        "threshold_relaxation_allowed",
+        "benchmark_rescue_allowed",
+        "horizon_rescue_allowed"
+      ],
+      "properties": {
+        "prior_preregistration_ref": {"const": "research/preregistrations/a_long_signal_search_preregistration_20260604.json"},
+        "prior_ledger_ref": {"const": "research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json"},
+        "prior_result_ref": {"const": "research/results/a_long_signal_search_20260604/execution_summary.json"},
+        "prior_research_verdict": {"const": "no_alpha_found_under_frozen_rules"},
+        "prior_candidate_alpha_clue_count": {"const": 0},
+        "prior_tests_spent_count": {"const": 1},
+        "new_design_reason": {"const": "separate_core_quality_from_size_premium_inside_a_large_mid_cap_pit_universe"},
+        "old_result_reslice_allowed": {"const": false},
+        "old_single_factor_diagnostic_rescue_allowed": {"const": false},
+        "threshold_relaxation_allowed": {"const": false},
+        "benchmark_rescue_allowed": {"const": false},
+        "horizon_rescue_allowed": {"const": false}
+      }
+    },
+    "dataDependencyGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market_cap_source_required_for_future_run",
+        "daily_basic_pull_allowed_now",
+        "daily_basic_probe_allowed_now",
+        "availability_probe_required_before_materialization",
+        "market_cap_field_preference_order",
+        "selected_market_cap_field_status",
+        "selected_market_cap_field_must_be_frozen_before_run",
+        "planned_monthly_as_of_call_count_estimate",
+        "raw_storage_must_be_gitignored",
+        "tracked_summary_must_not_contain_raw_rows",
+        "separate_review_required_before_probe_or_pull",
+        "separate_user_execute_required_before_probe_or_pull"
+      ],
+      "properties": {
+        "market_cap_source_required_for_future_run": {"const": "Tushare daily_basic by trade_date"},
+        "daily_basic_pull_allowed_now": {"const": false},
+        "daily_basic_probe_allowed_now": {"const": false},
+        "availability_probe_required_before_materialization": {"const": true},
+        "market_cap_field_preference_order": {
+          "type": "array",
+          "items": {"enum": ["circ_mv", "total_mv"]},
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "selected_market_cap_field_status": {"const": "pending_probe_not_selected"},
+        "selected_market_cap_field_must_be_frozen_before_run": {"const": true},
+        "planned_monthly_as_of_call_count_estimate": {"type": "integer", "minimum": 90, "maximum": 110},
+        "raw_storage_must_be_gitignored": {"const": true},
+        "tracked_summary_must_not_contain_raw_rows": {"const": true},
+        "separate_review_required_before_probe_or_pull": {"const": true},
+        "separate_user_execute_required_before_probe_or_pull": {"const": true}
+      }
+    },
+    "frozenDesign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "design_id",
+        "hypothesis_text",
+        "universe_rule",
+        "signal_rule",
+        "neutralization_rule",
+        "measurement_rule",
+        "benchmark_rule",
+        "decision_cell",
+        "diagnostic_cells",
+        "anti_p_hacking_controls",
+        "pit_and_hygiene_controls",
+        "required_output_diagnostics"
+      ],
+      "properties": {
+        "design_id": {"const": "a_long_large_cap_pure_quality_v1"},
+        "hypothesis_text": {"$ref": "#/$defs/nonEmptyString"},
+        "universe_rule": {"$ref": "#/$defs/universeRule"},
+        "signal_rule": {"$ref": "#/$defs/signalRule"},
+        "neutralization_rule": {"$ref": "#/$defs/neutralizationRule"},
+        "measurement_rule": {"$ref": "#/$defs/measurementRule"},
+        "benchmark_rule": {"$ref": "#/$defs/benchmarkRule"},
+        "decision_cell": {"$ref": "#/$defs/decisionCell"},
+        "diagnostic_cells": {"$ref": "#/$defs/diagnosticCells"},
+        "anti_p_hacking_controls": {"$ref": "#/$defs/antiPHackingControls"},
+        "pit_and_hygiene_controls": {"$ref": "#/$defs/pitAndHygieneControls"},
+        "required_output_diagnostics": {"$ref": "#/$defs/stringList"}
+      }
+    },
+    "universeRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market_scope",
+        "board_scope",
+        "as_of_frequency",
+        "as_of_selection_rule",
+        "universe_size_n",
+        "universe_size_n_search_allowed",
+        "selection_basis",
+        "market_cap_field_choice_status",
+        "include_later_delisted_names_at_pre_delisting_asofs",
+        "pit_list_delist_required",
+        "selection_time_namechange_veto_required",
+        "reviewed_no_industry_boundary_ref",
+        "st_star_bse_chinext_excluded"
+      ],
+      "properties": {
+        "market_scope": {"const": "A-share"},
+        "board_scope": {"const": "main_board_only"},
+        "as_of_frequency": {"const": "monthly"},
+        "as_of_selection_rule": {"const": "last_open_A_share_trading_day_of_each_calendar_month"},
+        "universe_size_n": {"const": 500},
+        "universe_size_n_search_allowed": {"const": false},
+        "selection_basis": {"const": "top_500_by_pit_market_cap_as_of_each_as_of_date"},
+        "market_cap_field_choice_status": {"const": "circ_mv_preferred_total_mv_fallback_pending_reviewed_probe"},
+        "include_later_delisted_names_at_pre_delisting_asofs": {"const": true},
+        "pit_list_delist_required": {"const": true},
+        "selection_time_namechange_veto_required": {"const": true},
+        "reviewed_no_industry_boundary_ref": {"const": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json"},
+        "st_star_bse_chinext_excluded": {"const": true}
+      }
+    },
+    "signalRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_signal_id",
+        "primary_signal_type",
+        "component_factors",
+        "component_weighting",
+        "percentile_rank_required",
+        "zscore_composite_allowed",
+        "single_factor_pass_can_define_alpha",
+        "earnings_stability_role",
+        "earnings_stability_can_rescue_primary_failure",
+        "factor_measurement_policy"
+      ],
+      "properties": {
+        "primary_signal_id": {"const": "core_quality_composite_percentile_3factor"},
+        "primary_signal_type": {"const": "equal_weight_percentile_composite"},
+        "component_factors": {
+          "type": "array",
+          "items": {"enum": ["profitability_quality", "cash_conversion", "balance_sheet_strength"]},
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "component_weighting": {"const": "equal_weight_one_third_each"},
+        "percentile_rank_required": {"const": true},
+        "zscore_composite_allowed": {"const": false},
+        "single_factor_pass_can_define_alpha": {"const": false},
+        "earnings_stability_role": {"const": "frozen_diagnostic_only_not_primary"},
+        "earnings_stability_can_rescue_primary_failure": {"const": false},
+        "factor_measurement_policy": {"$ref": "#/$defs/factorMeasurementPolicy"}
+      }
+    },
+    "factorMeasurementPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profitability_quality_basis",
+        "profitability_quality_annualization_policy",
+        "raw_fina_indicator_roe_direct_cross_section_allowed",
+        "cash_conversion_min_abs_net_income",
+        "cash_conversion_small_denominator_guard_required",
+        "earnings_stability_basis",
+        "mixed_ytd_quarter_sequence_allowed"
+      ],
+      "properties": {
+        "profitability_quality_basis": {"const": "annualized_ytd_roe_from_fina_indicator_roe"},
+        "profitability_quality_annualization_policy": {"const": "0331_x4_0630_x2_0930_x4_over_3_1231_x1"},
+        "raw_fina_indicator_roe_direct_cross_section_allowed": {"const": false},
+        "cash_conversion_min_abs_net_income": {"const": 10000000.0},
+        "cash_conversion_small_denominator_guard_required": {"const": true},
+        "earnings_stability_basis": {"const": "same_period_yoy_profit_dedt_growth_volatility"},
+        "mixed_ytd_quarter_sequence_allowed": {"const": false}
+      }
+    },
+    "neutralizationRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_view",
+        "primary_percentile_bucket",
+        "industry_basis",
+        "market_cap_bucket_rule",
+        "minimum_bucket_size_for_primary_percentile",
+        "thin_bucket_policy",
+        "non_neutral_view_role",
+        "cap_weighted_view_role"
+      ],
+      "properties": {
+        "primary_view": {"const": "industry_and_size_neutral"},
+        "primary_percentile_bucket": {"const": "industry_x_market_cap_bucket_inside_top_500"},
+        "industry_basis": {"const": "SW_L2_then_SW_L1_if_sample_lt_20"},
+        "market_cap_bucket_rule": {"const": "pit_market_cap_quintile_inside_top_500_per_as_of"},
+        "minimum_bucket_size_for_primary_percentile": {"type": "integer", "minimum": 10},
+        "thin_bucket_policy": {"const": "exclude_from_primary_percentile_denominator_but_retain_in_returns_risk_and_diagnostics"},
+        "non_neutral_view_role": {"const": "diagnostic_only_not_primary"},
+        "cap_weighted_view_role": {"const": "diagnostic_only_not_primary"}
+      }
+    },
+    "measurementRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_horizon_trading_days",
+        "diagnostic_horizons_trading_days",
+        "entry_rule",
+        "stock_return_basis",
+        "benchmark_return_basis",
+        "same_anchor_required",
+        "round_trip_cost",
+        "missing_scheduled_exit_policy",
+        "total_return_required",
+        "price_index_fallback_allowed"
+      ],
+      "properties": {
+        "primary_horizon_trading_days": {"const": 504},
+        "diagnostic_horizons_trading_days": {
+          "type": "array",
+          "items": {"enum": [252]},
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "entry_rule": {"const": "next_trading_day_close_after_as_of"},
+        "stock_return_basis": {"const": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close"},
+        "benchmark_return_basis": {"const": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close"},
+        "same_anchor_required": {"const": true},
+        "round_trip_cost": {"const": 0.0026},
+        "missing_scheduled_exit_policy": {"const": "terminal_delisting_uses_last_trade_otherwise_next_available_or_missing"},
+        "total_return_required": {"const": true},
+        "price_index_fallback_allowed": {"const": false}
+      }
+    },
+    "benchmarkRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_benchmark",
+        "diagnostic_benchmark",
+        "both_benchmark_pass_required",
+        "benchmark_access_probe_ref",
+        "benchmark_access_status",
+        "derived_total_return_open_allowed"
+      ],
+      "properties": {
+        "primary_benchmark": {"const": "CSI300"},
+        "diagnostic_benchmark": {"const": "CSI1000"},
+        "both_benchmark_pass_required": {"const": false},
+        "benchmark_access_probe_ref": {"const": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json"},
+        "benchmark_access_status": {"const": "total_return_close_available_close_to_close_amendment_selected"},
+        "derived_total_return_open_allowed": {"const": false}
+      }
+    },
+    "decisionCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cell_id",
+        "signal",
+        "view",
+        "horizon_trading_days",
+        "benchmark",
+        "top_fraction",
+        "minimum_top_count_per_month",
+        "mean_net_excess_must_be_positive",
+        "minimum_hac_t_stat",
+        "minimum_monthly_cohorts",
+        "minimum_allowed_monthly_excess_drawdown",
+        "name_concentration_guard_max_share",
+        "single_year_positive_return_guard_max_share",
+        "multiple_testing_adjustment_for_decision"
+      ],
+      "properties": {
+        "cell_id": {"const": "primary_core_quality_composite_industry_size_neutral_504d_csi300"},
+        "signal": {"const": "core_quality_composite_percentile_3factor"},
+        "view": {"const": "industry_and_size_neutral"},
+        "horizon_trading_days": {"const": 504},
+        "benchmark": {"const": "CSI300"},
+        "top_fraction": {"const": 0.2},
+        "minimum_top_count_per_month": {"type": "integer", "minimum": 10},
+        "mean_net_excess_must_be_positive": {"const": true},
+        "minimum_hac_t_stat": {"const": 2.0},
+        "minimum_monthly_cohorts": {"type": "integer", "minimum": 48},
+        "minimum_allowed_monthly_excess_drawdown": {"const": -0.15},
+        "name_concentration_guard_max_share": {"const": 0.2},
+        "single_year_positive_return_guard_max_share": {"const": 0.35},
+        "multiple_testing_adjustment_for_decision": {"const": "not_applicable_single_primary_cell"}
+      }
+    },
+    "diagnosticCells": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_csi1000",
+        "report_252d",
+        "report_single_factor_components",
+        "report_earnings_stability",
+        "report_non_neutral",
+        "diagnostics_can_define_alpha"
+      ],
+      "properties": {
+        "report_csi1000": {"const": true},
+        "report_252d": {"const": true},
+        "report_single_factor_components": {"const": true},
+        "report_earnings_stability": {"const": true},
+        "report_non_neutral": {"const": true},
+        "diagnostics_can_define_alpha": {"const": false}
+      }
+    },
+    "antiPHackingControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_budget_units",
+        "parameter_sweep_allowed",
+        "universe_n_search_allowed",
+        "single_factor_winner_take_all_allowed",
+        "quality_acceleration_allowed_this_round",
+        "post_result_rescue_slicing_allowed",
+        "new_ledger_required_before_any_followup"
+      ],
+      "properties": {
+        "test_budget_units": {"const": 1},
+        "parameter_sweep_allowed": {"const": false},
+        "universe_n_search_allowed": {"const": false},
+        "single_factor_winner_take_all_allowed": {"const": false},
+        "quality_acceleration_allowed_this_round": {"const": false},
+        "post_result_rescue_slicing_allowed": {"const": false},
+        "new_ledger_required_before_any_followup": {"const": true}
+      }
+    },
+    "pitAndHygieneControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "restatement_exclusion_list_ref",
+        "restatement_exclusion_required",
+        "expected_restatement_exclusion_group_count",
+        "pit_namechange_required",
+        "current_stock_basic_name_veto_allowed",
+        "survivorship_handling",
+        "tracked_summary_contains_raw_rows_allowed",
+        "tracked_summary_contains_endpoint_results_allowed",
+        "tracked_summary_contains_secret_allowed",
+        "tracked_summary_contains_request_url_allowed"
+      ],
+      "properties": {
+        "restatement_exclusion_list_ref": {"const": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv"},
+        "restatement_exclusion_required": {"const": true},
+        "expected_restatement_exclusion_group_count": {"const": 1504},
+        "pit_namechange_required": {"const": true},
+        "current_stock_basic_name_veto_allowed": {"const": false},
+        "survivorship_handling": {"const": "include_later_delisted_names_until_their_pit_delist_cutoff_and_retain_terminal_returns"},
+        "tracked_summary_contains_raw_rows_allowed": {"const": false},
+        "tracked_summary_contains_endpoint_results_allowed": {"const": false},
+        "tracked_summary_contains_secret_allowed": {"const": false},
+        "tracked_summary_contains_request_url_allowed": {"const": false}
+      }
+    },
+    "decisionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_alpha_research_only",
+        "falsified",
+        "diagnostics_policy",
+        "minimum_forward_live_months_for_ship_gate",
+        "backtest_can_authorize_full_size"
+      ],
+      "properties": {
+        "candidate_alpha_research_only": {"$ref": "#/$defs/stringList"},
+        "falsified": {"$ref": "#/$defs/stringList"},
+        "diagnostics_policy": {"$ref": "#/$defs/stringList"},
+        "minimum_forward_live_months_for_ship_gate": {"const": 12},
+        "backtest_can_authorize_full_size": {"const": false}
+      }
+    },
+    "plannedTestBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ledger_ref",
+        "planned_test_id",
+        "test_budget_units",
+        "signal_search_run_authorized_now",
+        "daily_basic_probe_or_pull_authorized_now",
+        "requires_independent_review_before_any_execution",
+        "requires_user_execute_before_any_execution"
+      ],
+      "properties": {
+        "ledger_ref": {"const": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json"},
+        "planned_test_id": {"const": "a_long_large_cap_pure_quality_20260607"},
+        "test_budget_units": {"const": 1},
+        "signal_search_run_authorized_now": {"const": false},
+        "daily_basic_probe_or_pull_authorized_now": {"const": false},
+        "requires_independent_review_before_any_execution": {"const": true},
+        "requires_user_execute_before_any_execution": {"const": true}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validated_alpha",
+        "prior_no_alpha_reinterpreted",
+        "daily_basic_access_proven",
+        "market_cap_field_selected",
+        "signal_search_authorized",
+        "full_size_allowed",
+        "ship_gate_evidence",
+        "production_ready",
+        "datahub_authorized",
+        "provider_work_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "validated_alpha": {"const": false},
+        "prior_no_alpha_reinterpreted": {"const": false},
+        "daily_basic_access_proven": {"const": false},
+        "market_cap_field_selected": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "full_size_allowed": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "production_ready": {"const": false},
+        "datahub_authorized": {"const": false},
+        "provider_work_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

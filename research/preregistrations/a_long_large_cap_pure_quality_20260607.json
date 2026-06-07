@@ -1,0 +1,274 @@
+{
+  "schema_name": "a_long_large_cap_pure_quality_preregistration",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-07T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_pure_quality_20260607",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_large_cap_pure_quality_preregistration",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "registration_status": "registered_not_run",
+    "research_status": "new_frozen_design_registered_not_run",
+    "research_only": true,
+    "new_hypothesis_not_prior_reslice": true,
+    "preregistration_review_status": "pending_independent_review",
+    "daily_basic_pull_allowed_by_this_artifact": false,
+    "market_cap_probe_allowed_by_this_artifact": false,
+    "signal_search_executed_by_this_artifact": false,
+    "signal_search_authorized_by_this_artifact": false,
+    "data_fetch_allowed_by_this_artifact": false,
+    "provider_call_allowed_by_this_artifact": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_doc_refs": [
+    {
+      "path": "docs/SESSION_LOG.md",
+      "role": "top entry records the user-approved NEW frozen design spec for A-long large-cap pure-quality"
+    },
+    {
+      "path": "research/results/a_long_signal_search_20260604/execution_summary.json",
+      "role": "prior frozen full main-board A-long signal-search result; no alpha found under frozen rules"
+    },
+    {
+      "path": "research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json",
+      "role": "prior singleton ledger; spent on the failed frozen full main-board A-long signal-search test"
+    },
+    {
+      "path": "research/preregistrations/a_long_signal_search_preregistration_20260604.json",
+      "role": "prior frozen design; this artifact is not a rerun or rescue of that design"
+    },
+    {
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "role": "owns research preregistration, multiple-testing, PIT, factor-exposure, and ship-gate guardrails"
+    },
+    {
+      "path": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "role": "records reviewed close-to-close total-return benchmark basis used by current A-long measurement"
+    },
+    {
+      "path": "docs/system_risk_register.md",
+      "role": "durable queue for A-long no-rerun/no-rescue and new-preregistration risk boundaries"
+    },
+    {
+      "path": "research/README.md",
+      "role": "routes research-only preregistration and singleton-ledger artifacts"
+    }
+  ],
+  "prior_result_boundary": {
+    "prior_preregistration_ref": "research/preregistrations/a_long_signal_search_preregistration_20260604.json",
+    "prior_ledger_ref": "research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json",
+    "prior_result_ref": "research/results/a_long_signal_search_20260604/execution_summary.json",
+    "prior_research_verdict": "no_alpha_found_under_frozen_rules",
+    "prior_candidate_alpha_clue_count": 0,
+    "prior_tests_spent_count": 1,
+    "new_design_reason": "separate_core_quality_from_size_premium_inside_a_large_mid_cap_pit_universe",
+    "old_result_reslice_allowed": false,
+    "old_single_factor_diagnostic_rescue_allowed": false,
+    "threshold_relaxation_allowed": false,
+    "benchmark_rescue_allowed": false,
+    "horizon_rescue_allowed": false
+  },
+  "data_dependency_gate": {
+    "market_cap_source_required_for_future_run": "Tushare daily_basic by trade_date",
+    "daily_basic_pull_allowed_now": false,
+    "daily_basic_probe_allowed_now": false,
+    "availability_probe_required_before_materialization": true,
+    "market_cap_field_preference_order": [
+      "circ_mv",
+      "total_mv"
+    ],
+    "selected_market_cap_field_status": "pending_probe_not_selected",
+    "selected_market_cap_field_must_be_frozen_before_run": true,
+    "planned_monthly_as_of_call_count_estimate": 96,
+    "raw_storage_must_be_gitignored": true,
+    "tracked_summary_must_not_contain_raw_rows": true,
+    "separate_review_required_before_probe_or_pull": true,
+    "separate_user_execute_required_before_probe_or_pull": true
+  },
+  "frozen_design": {
+    "design_id": "a_long_large_cap_pure_quality_v1",
+    "hypothesis_text": "In a PIT A-share main-board large/mid-cap tradable universe, a high equal-weight core-quality percentile composite produces positive cost-adjusted excess versus CSI300 over a 504-trading-day hold while passing HAC-t, drawdown, cohort, concentration, PIT, and hygiene gates. If the primary cell fails any gate, A-share large-cap pure-quality is falsified under this frozen design.",
+    "universe_rule": {
+      "market_scope": "A-share",
+      "board_scope": "main_board_only",
+      "as_of_frequency": "monthly",
+      "as_of_selection_rule": "last_open_A_share_trading_day_of_each_calendar_month",
+      "universe_size_n": 500,
+      "universe_size_n_search_allowed": false,
+      "selection_basis": "top_500_by_pit_market_cap_as_of_each_as_of_date",
+      "market_cap_field_choice_status": "circ_mv_preferred_total_mv_fallback_pending_reviewed_probe",
+      "include_later_delisted_names_at_pre_delisting_asofs": true,
+      "pit_list_delist_required": true,
+      "selection_time_namechange_veto_required": true,
+      "reviewed_no_industry_boundary_ref": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+      "st_star_bse_chinext_excluded": true
+    },
+    "signal_rule": {
+      "primary_signal_id": "core_quality_composite_percentile_3factor",
+      "primary_signal_type": "equal_weight_percentile_composite",
+      "component_factors": [
+        "profitability_quality",
+        "cash_conversion",
+        "balance_sheet_strength"
+      ],
+      "component_weighting": "equal_weight_one_third_each",
+      "percentile_rank_required": true,
+      "zscore_composite_allowed": false,
+      "single_factor_pass_can_define_alpha": false,
+      "earnings_stability_role": "frozen_diagnostic_only_not_primary",
+      "earnings_stability_can_rescue_primary_failure": false,
+      "factor_measurement_policy": {
+        "profitability_quality_basis": "annualized_ytd_roe_from_fina_indicator_roe",
+        "profitability_quality_annualization_policy": "0331_x4_0630_x2_0930_x4_over_3_1231_x1",
+        "raw_fina_indicator_roe_direct_cross_section_allowed": false,
+        "cash_conversion_min_abs_net_income": 10000000.0,
+        "cash_conversion_small_denominator_guard_required": true,
+        "earnings_stability_basis": "same_period_yoy_profit_dedt_growth_volatility",
+        "mixed_ytd_quarter_sequence_allowed": false
+      }
+    },
+    "neutralization_rule": {
+      "primary_view": "industry_and_size_neutral",
+      "primary_percentile_bucket": "industry_x_market_cap_bucket_inside_top_500",
+      "industry_basis": "SW_L2_then_SW_L1_if_sample_lt_20",
+      "market_cap_bucket_rule": "pit_market_cap_quintile_inside_top_500_per_as_of",
+      "minimum_bucket_size_for_primary_percentile": 10,
+      "thin_bucket_policy": "exclude_from_primary_percentile_denominator_but_retain_in_returns_risk_and_diagnostics",
+      "non_neutral_view_role": "diagnostic_only_not_primary",
+      "cap_weighted_view_role": "diagnostic_only_not_primary"
+    },
+    "measurement_rule": {
+      "primary_horizon_trading_days": 504,
+      "diagnostic_horizons_trading_days": [
+        252
+      ],
+      "entry_rule": "next_trading_day_close_after_as_of",
+      "stock_return_basis": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close",
+      "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+      "same_anchor_required": true,
+      "round_trip_cost": 0.0026,
+      "missing_scheduled_exit_policy": "terminal_delisting_uses_last_trade_otherwise_next_available_or_missing",
+      "total_return_required": true,
+      "price_index_fallback_allowed": false
+    },
+    "benchmark_rule": {
+      "primary_benchmark": "CSI300",
+      "diagnostic_benchmark": "CSI1000",
+      "both_benchmark_pass_required": false,
+      "benchmark_access_probe_ref": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "benchmark_access_status": "total_return_close_available_close_to_close_amendment_selected",
+      "derived_total_return_open_allowed": false
+    },
+    "decision_cell": {
+      "cell_id": "primary_core_quality_composite_industry_size_neutral_504d_csi300",
+      "signal": "core_quality_composite_percentile_3factor",
+      "view": "industry_and_size_neutral",
+      "horizon_trading_days": 504,
+      "benchmark": "CSI300",
+      "top_fraction": 0.2,
+      "minimum_top_count_per_month": 10,
+      "mean_net_excess_must_be_positive": true,
+      "minimum_hac_t_stat": 2.0,
+      "minimum_monthly_cohorts": 48,
+      "minimum_allowed_monthly_excess_drawdown": -0.15,
+      "name_concentration_guard_max_share": 0.2,
+      "single_year_positive_return_guard_max_share": 0.35,
+      "multiple_testing_adjustment_for_decision": "not_applicable_single_primary_cell"
+    },
+    "diagnostic_cells": {
+      "report_csi1000": true,
+      "report_252d": true,
+      "report_single_factor_components": true,
+      "report_earnings_stability": true,
+      "report_non_neutral": true,
+      "diagnostics_can_define_alpha": false
+    },
+    "anti_p_hacking_controls": {
+      "test_budget_units": 1,
+      "parameter_sweep_allowed": false,
+      "universe_n_search_allowed": false,
+      "single_factor_winner_take_all_allowed": false,
+      "quality_acceleration_allowed_this_round": false,
+      "post_result_rescue_slicing_allowed": false,
+      "new_ledger_required_before_any_followup": true
+    },
+    "pit_and_hygiene_controls": {
+      "restatement_exclusion_list_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+      "restatement_exclusion_required": true,
+      "expected_restatement_exclusion_group_count": 1504,
+      "pit_namechange_required": true,
+      "current_stock_basic_name_veto_allowed": false,
+      "survivorship_handling": "include_later_delisted_names_until_their_pit_delist_cutoff_and_retain_terminal_returns",
+      "tracked_summary_contains_raw_rows_allowed": false,
+      "tracked_summary_contains_endpoint_results_allowed": false,
+      "tracked_summary_contains_secret_allowed": false,
+      "tracked_summary_contains_request_url_allowed": false
+    },
+    "required_output_diagnostics": [
+      "Report the one primary cell separately from every diagnostic cell.",
+      "Report CSI300 primary result and CSI1000 diagnostic result without requiring both benchmarks for the candidate label.",
+      "Report 504d primary result and 252d diagnostic result; 252d cannot rescue primary failure.",
+      "Report the three component factors and earnings_stability as diagnostics; single-factor or earnings_stability success cannot define alpha.",
+      "Report top-500 PIT market-cap coverage, selected market-cap field, thin neutralization-bucket exclusions, and top-count-by-month.",
+      "Report yearly contribution, name concentration, tail excess, and max monthly excess drawdown.",
+      "Report restatement-exclusion application count and abort if the exclusion list is missing or unapplied.",
+      "Report no raw rows, endpoint results, request URL, or secret in any tracked summary."
+    ]
+  },
+  "decision_policy": {
+    "candidate_alpha_research_only": [
+      "A future reviewed run may label the large-cap pure-quality design as a research-only candidate only if the single primary cell is positive net of costs versus CSI300, has HAC t-stat >= 2.0, at least 48 monthly cohorts, monthly excess drawdown no worse than -15%, and passes name / year concentration and PIT-hygiene gates.",
+      "The candidate label remains research-only and cannot authorize production, ship-gate evidence, or full-size manual use."
+    ],
+    "falsified": [
+      "If the primary cell fails any registered gate, A-share large-cap pure-quality is falsified under this frozen design.",
+      "Do not rescue a failed primary cell from CSI1000, 252d, non-neutral, cap-weighted, single-factor, or earnings_stability diagnostics."
+    ],
+    "diagnostics_policy": [
+      "CSI1000, 252d, non-neutral, cap-weighted, single-factor, and earnings_stability cells are reporting diagnostics only.",
+      "Diagnostics may inform a later new preregistration, but only through a new reviewed ledger update and user approval."
+    ],
+    "minimum_forward_live_months_for_ship_gate": 12,
+    "backtest_can_authorize_full_size": false
+  },
+  "planned_test_budget": {
+    "ledger_ref": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json",
+    "planned_test_id": "a_long_large_cap_pure_quality_20260607",
+    "test_budget_units": 1,
+    "signal_search_run_authorized_now": false,
+    "daily_basic_probe_or_pull_authorized_now": false,
+    "requires_independent_review_before_any_execution": true,
+    "requires_user_execute_before_any_execution": true
+  },
+  "prohibited_claims": {
+    "validated_alpha": false,
+    "prior_no_alpha_reinterpreted": false,
+    "daily_basic_access_proven": false,
+    "market_cap_field_selected": false,
+    "signal_search_authorized": false,
+    "full_size_allowed": false,
+    "ship_gate_evidence": false,
+    "production_ready": false,
+    "datahub_authorized": false,
+    "provider_work_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Independent review must validate this preregistration, schema, ledger, tests, and docs before any data probe or signal-search work.",
+    "After review and a separate user execute command, a later packet may probe daily_basic field availability only, freeze circ_mv versus total_mv before materialization, and write no raw rows in tracked summaries.",
+    "Only after the market-cap field is reviewed and frozen may a later reviewed materialization / audit / signal-search implementation be proposed.",
+    "No signal-search runner execution, daily_basic pull, provider call, DataHub work, production claim, ship-gate claim, or full-size use is authorized by this artifact."
+  ],
+  "limitations": [
+    "This artifact registers a design only; it does not execute data access or signal search.",
+    "Market-cap field availability is not proven yet, and the selected market-cap field is not frozen until a later reviewed probe.",
+    "The prior full main-board no-alpha result remains failed under its own frozen rules and is not reinterpreted by this artifact.",
+    "A positive future backtest would still be research-only until the unchanged project ship gate, including at least 12 months of forward-live evidence, is satisfied."
+  ]
+}
