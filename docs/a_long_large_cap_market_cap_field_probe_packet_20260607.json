@@ -1,0 +1,206 @@
+{
+  "schema_name": "a_long_large_cap_market_cap_field_probe_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-07T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_market_cap_field_probe_packet_20260607",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_large_cap_market_cap_field_probe_packet",
+    "packet_status": "execution_packet_recorded_for_review_not_executed",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_calls_executed_by_this_artifact": false,
+    "tushare_calls_executed_by_this_artifact": false,
+    "data_fetch_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "ready_for_later_execution_after_independent_review": true,
+    "actual_tushare_calls_require_post_review_execute_command": true,
+    "network_access_required_for_later_execution": true,
+    "daily_basic_market_cap_field_probe_allowed_after_gates": true,
+    "market_cap_field_freeze_allowed_by_this_artifact": false,
+    "market_cap_materialization_allowed_by_this_artifact": false,
+    "full_market_materialization_allowed": false,
+    "audit_rerun_allowed_by_this_artifact": false,
+    "signal_search_allowed": false,
+    "alpha_backtest_allowed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "a_long_large_cap_pure_quality_20260607",
+      "path": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json",
+      "role": "Reviewed and frozen preregistration requiring a later daily_basic field probe before any market-cap materialization."
+    },
+    {
+      "artifact_id": "a_long_large_cap_pure_quality_program_test_budget_ledger_20260607",
+      "path": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json",
+      "role": "Singleton ledger remains unspent; this packet does not spend the signal-search test."
+    },
+    {
+      "artifact_id": "a_long_large_cap_pure_quality_risk_boundary",
+      "path": "docs/system_risk_register.md",
+      "role": "Durable boundary: no daily_basic probe or pull before a separate reviewed packet and separate user execute command."
+    },
+    {
+      "artifact_id": "a_long_large_cap_prereg_review_pass",
+      "path": "docs/SESSION_LOG.md",
+      "role": "Latest review trail records R-NEUT-BUCKET PASS and the next gate as a separate market-cap probe packet."
+    }
+  ],
+  "probe_boundary": {
+    "probe_id": "a_long_large_cap_daily_basic_market_cap_field_probe_3_dates",
+    "preregistration_ref": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json",
+    "ledger_ref": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json",
+    "api_family": "daily_basic",
+    "method": "daily_basic",
+    "trade_dates": [
+      "20180131",
+      "20211231",
+      "20251231"
+    ],
+    "field_preference_order": [
+      "circ_mv",
+      "total_mv"
+    ],
+    "not_full_96_month_pull": true,
+    "not_signal_search": true,
+    "purpose": "Probe only whether Tushare daily_basic by trade_date returns usable circ_mv / total_mv market-cap fields across early, middle, and late sample anchors before any top-500 materialization is designed.",
+    "pass_does_not_make_data_alpha_ready": true
+  },
+  "probe_calls": [
+    {
+      "call_id": "daily_basic_market_cap_20180131_probe",
+      "table_id": "daily_basic_market_cap_field_probe",
+      "api_family": "daily_basic",
+      "method": "daily_basic",
+      "kwargs": {
+        "trade_date": "20180131",
+        "fields": "ts_code,trade_date,circ_mv,total_mv"
+      },
+      "minimum_fields": ["ts_code", "trade_date", "circ_mv", "total_mv"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_market_cap_field_freeze": false,
+      "authorizes_market_cap_materialization": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false
+    },
+    {
+      "call_id": "daily_basic_market_cap_20211231_probe",
+      "table_id": "daily_basic_market_cap_field_probe",
+      "api_family": "daily_basic",
+      "method": "daily_basic",
+      "kwargs": {
+        "trade_date": "20211231",
+        "fields": "ts_code,trade_date,circ_mv,total_mv"
+      },
+      "minimum_fields": ["ts_code", "trade_date", "circ_mv", "total_mv"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_market_cap_field_freeze": false,
+      "authorizes_market_cap_materialization": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false
+    },
+    {
+      "call_id": "daily_basic_market_cap_20251231_probe",
+      "table_id": "daily_basic_market_cap_field_probe",
+      "api_family": "daily_basic",
+      "method": "daily_basic",
+      "kwargs": {
+        "trade_date": "20251231",
+        "fields": "ts_code,trade_date,circ_mv,total_mv"
+      },
+      "minimum_fields": ["ts_code", "trade_date", "circ_mv", "total_mv"],
+      "raw_parse_allowed_for_summary_shape_only": true,
+      "authorizes_market_cap_field_freeze": false,
+      "authorizes_market_cap_materialization": false,
+      "authorizes_factor_derivation": false,
+      "authorizes_audit_rerun": false,
+      "authorizes_signal_search": false
+    }
+  ],
+  "selection_rule": {
+    "field_preference_order": [
+      "circ_mv",
+      "total_mv"
+    ],
+    "minimum_row_count_per_probe": 1000,
+    "minimum_non_null_ratio_for_selected_field": 0.95,
+    "minimum_positive_ratio_for_selected_field": 0.95,
+    "circ_mv_selected_if_all_probe_dates_pass": true,
+    "total_mv_fallback_selected_only_if_circ_mv_fails_and_total_mv_passes": true,
+    "selection_after_execution_requires_independent_review": true,
+    "selected_field_freezes_before_materialization_only_after_reviewed_result": true
+  },
+  "call_budget": {
+    "max_total_endpoint_calls": 3,
+    "planned_total_endpoint_calls": 3,
+    "retry_count_allowed": 0,
+    "abort_if_budget_exceeded": true
+  },
+  "storage_and_checkpoint_boundary": {
+    "raw_output_root": "data/a_long/raw/tushare/large_cap_market_cap_field_probe_20260607/",
+    "raw_output_root_must_be_gitignored": true,
+    "tracked_summary_path": "docs/a_long_large_cap_market_cap_field_probe_execution_summary_20260607.json",
+    "tracked_summary_must_exclude_raw_rows": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "tracked_summary_must_exclude_secret": true,
+    "checkpoint_resume_allowed": true,
+    "existing_raw_payload_reuse_allowed": true,
+    "overwrite_existing_raw_without_resume_allowed": false,
+    "append_or_versioned_only": true,
+    "raw_retention_authorizes_production_storage": false
+  },
+  "pre_execution_gates": {
+    "independent_review_pass_required": true,
+    "post_review_execute_command_required": true,
+    "environment_precheck_required": true,
+    "tushare_token_presence_required": true,
+    "environment_values_must_not_be_logged": true,
+    "raw_root_gitignore_check_required": true,
+    "exact_trade_dates_required": true,
+    "exact_fields_required": true,
+    "budget_precheck_required": true,
+    "abort_on_budget_or_scope_violation": true,
+    "preregistration_review_pass_required": true,
+    "ledger_unspent_required": true,
+    "no_secret_summary_scan_required": true,
+    "checkpoint_resume_policy_required": true,
+    "no_full_96_month_pull_required": true
+  },
+  "prohibited_claims": {
+    "daily_basic_access_proven": false,
+    "market_cap_field_frozen": false,
+    "market_cap_materialized": false,
+    "a_long_alpha_found": false,
+    "materialization_authorized": false,
+    "audit_authorized": false,
+    "signal_search_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Independent review must verify this packet, schema, runner, and tests before any live daily_basic execution.",
+    "After review and a separate user execute command, run only these three fixed daily_basic trade_date probes.",
+    "If circ_mv passes all frozen coverage rules, the execution summary may recommend circ_mv for later reviewed freeze; if circ_mv fails and total_mv passes, it may recommend total_mv fallback.",
+    "The execution summary itself still does not authorize materialization or signal search; a later reviewed materialization / audit / signal-search package must consume the reviewed field choice.",
+    "Do not expand this packet into the full 96-month daily_basic pull."
+  ],
+  "limitations": [
+    "This packet itself performs no Tushare call, reads no raw rows, and writes no execution summary.",
+    "The later run is three fixed daily_basic probes, not market-cap materialization and not the 96-month universe pull.",
+    "A pass only gives a field-selection recommendation for independent review; it does not freeze the field by itself.",
+    "No signal search, return calculation, factor derivation, audit rerun, DataHub, production, ship-gate evidence, full-size use, or broker/order automation is authorized by this artifact."
+  ]
+}

@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long large-cap daily_basic market-cap field probe package: packet + runner + 2 schemas + 2 tests, uncommitted on HEAD 954c9ab) — **PASS — bounded read-only probe, all gates enforced + tested; not yet run**
+
+Full read of the runner + packet + execution-summary schema + packet schema + both tests (not delta-only). This is the separate reviewed probe the frozen prereg requires before any market-cap materialization. **Scope is correctly bounded and every gate is enforced in code AND exercised by tests:**
+- Exactly 3 fixed `daily_basic(trade_date)` calls (20180131 / 20211231 / 20251231), fields `ts_code,trade_date,circ_mv,total_mv`; budget=3, retry=0, triple-guarded against >3 (call_plan length, pre-loop check, in-loop counter) + schema `maxItems:3`. Explicitly not the 96-month pull, not the signal search.
+- Double-gate: live execution requires `--confirm-independent-review-pass` + `--confirm-post-review-execute` (reuses the vetted `thin_runner` gate); `test_live_execution_requires_review_and_execute_confirmations` proves it raises without both.
+- Pre-run validation: packet shape (all scope / boundary / budget / storage / gates / prohibited fields pinned), prereg (`preregistration_review_status` must be `passed_independent_review_ready_for_freeze` — now consistent across prereg line 15 / schema const / test / runner gate; selected field still `pending_probe_not_selected`; prereg must NOT self-authorize the probe), ledger UNSPENT (`tests_spent_count==0`, empty spend log — the probe does not spend the singleton), raw-root gitignore policy (git check-ignore confirms IGNORED).
+- Secret / leak hygiene: `request_shape_without_token` carries only `{trade_date, fields}`; errors go through `redact_error` (test asserts the fixture token is stripped from `error_message_redacted`); summary `token_logged` / `request_url_logged` const false; raw rows (`records`) live only under the gitignored raw root, never in the tracked summary (test recursively asserts no `records` key in the summary).
+- No over-authorization: the probe RECOMMENDS `circ_mv` (or `total_mv` fallback only if `circ_mv` fails the frozen rule: row_count≥1000, non-null≥0.95, positive≥0.95 across all 3 dates) but FREEZES nothing (`market_cap_field_frozen_by_this_summary` / `*_authorized_by_this_summary` all const false in schema + runner).
+- Resilience: checkpoint reuse makes 0 new calls on a second run (`FailingTushareClient` test); missing-token path records `not_executed_environment_missing` with no calls; `validate_json` raises RuntimeError if jsonschema is absent (no silent skip).
+Schemas are strict (`additionalProperties:false` throughout, const-pinned invariants, `requestShape` enforces no-token). Re-ran in my jsonschema env: packet schema 6/6 + runner 8/8 OK (Codex's bundled Python lacks jsonschema, so its "6 OK" omitted both the runner suite and real schema validation).
+
+**Optional O-LOG-LABEL**: this slice's SESSION_LOG heading reads "Codex 执行" but nothing executed (build only, no provider call) — relabel to build/修复 so a future reader does not infer the probe ran. Codex's call.
+
+**Optional O-COMMIT-HYGIENE (still open from earlier)**: the prior no-alpha slice remains uncommitted (untracked `research/results/a_long_signal_search_20260604/`, old ledger 20260604 spend-flip, old schema-test spent-branch). When committing this probe package, also land the prior no-alpha slice as its own separate scope.
+
+**Verdict**: PASS. The probe package is a correctly-bounded, read-only, double-gated field-availability check with comprehensive enforcement + test coverage. Sequence from here: commit the package (+ the prior no-alpha slice) → a separate user `执行` runs the live 3-call probe (3 free read-only `daily_basic` calls) → Claude reviews the probe result summary → a later reviewed materialization package consumes the recommended field. Running this probe does NOT freeze the field, materialize, spend the ledger, or authorize the signal search.
+
+---
+
+## 2026-06-07 — Codex 构建 (A-long large-cap daily_basic market-cap field probe package) — **READY FOR REVIEW / no provider call**
+
+Built the separate reviewed package that the frozen A-long large-cap pure-quality preregistration requires before any market-cap data access. No `daily_basic` probe, provider call, materialization, audit, signal search, DataHub work, production claim, ship-gate claim, or full-size use was executed or authorized.
+
+**Worked on**:
+- [tracked] `schemas/a_long_large_cap_market_cap_field_probe_packet.schema.json`: new no-access packet schema for the bounded `daily_basic` market-cap field probe.
+- [tracked] `docs/a_long_large_cap_market_cap_field_probe_packet_20260607.json`: fixes exactly three `daily_basic(trade_date=...)` calls (`20180131`, `20211231`, `20251231`) with fields `ts_code,trade_date,circ_mv,total_mv`, 3-call / zero-retry budget, raw gitignored storage, and no-raw tracked summary policy.
+- [tracked] `runners/a_long_large_cap_market_cap_field_probe.py`: later executable runner gated by independent-review PASS plus post-review user `执行`; validates the reviewed preregistration, unspent singleton ledger, fixed packet shape, gitignored raw root, and output schema.
+- [tracked] `schemas/a_long_large_cap_market_cap_field_probe_execution_summary.schema.json`: tracked no-secret summary contract; result can only recommend `circ_mv` or `total_mv` for later review and cannot freeze the field by itself.
+- [tracked] `tests/schema/test_a_long_large_cap_market_cap_field_probe_packet_schema.py` and `tests/test_a_long_large_cap_market_cap_field_probe.py`: schema and fake-client runner coverage.
+- [tracked] `docs/README.md`, `research/README.md`, `docs/CURRENT.md`, and `docs/system_risk_register.md`: route the new package and lock the no-run / no-materialization boundary.
+- [untracked] none intentionally generated for execution; runner tests used temporary summary paths and cleaned `data/a_long/raw/tushare/large_cap_market_cap_field_probe_20260607/unit_test`.
+
+**Frozen behavior**:
+- Probe dates are fixed and not a 96-month pull.
+- Field choice rule is fixed: choose `circ_mv` only if all three probe dates pass row-count >= 1000, non-null ratio >= 0.95, and positive ratio >= 0.95; otherwise choose `total_mv` only if it passes the same gates.
+- The execution summary may mark `field_freeze_ready_for_review`, but `market_cap_field_frozen_by_this_summary` remains false. A later reviewed materialization package must consume the reviewed field choice.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.schema.test_a_long_large_cap_market_cap_field_probe_packet_schema -v` — 6 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_long_large_cap_market_cap_field_probe -v` — 8 tests OK.
+
+**Next / lock**:
+- Return this working tree for independent review. Do not run the real `daily_basic` probe until review PASS + commit + a separate user `执行`.
+- The prior no-alpha result slice remains a separate uncommitted scope and must not be mixed into a commit for this probe package unless the user explicitly requests a multi-scope commit.
+
+---
+
 ## 2026-06-07 — Codex 提交处置 (R-NEUT-BUCKET PASS optionals) — **READY TO COMMIT / no execution**
 
 After Claude PASS on the R-NEUT-BUCKET fix, Codex accepted both trivial Optionals before commit:
