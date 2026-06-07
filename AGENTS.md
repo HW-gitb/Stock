@@ -282,10 +282,10 @@ The user remains the Final Approver.
 Command binding is determined by who the user is addressing:
 
 - `审查` = Codex reviews Claude's current changes independently. Codex must not write business code, runner code, schema, preregistration, ledger, or result artifacts during review.
-- `修复` = Claude implements the approved repair scope and records dispositions. Codex does not perform the repair.
+- `修复` = Claude implements the reviewed repair scope and records dispositions. After a Codex `审查`, the user sends `修复` directly to Claude to authorize repairing the reviewed Required findings; a separate `批准修改` is not required. Codex does not perform the repair, and the Claude `修复` `docs/SESSION_LOG.md` entry records the user-directed authorization for cross-LLM continuity.
 - `执行` = Claude runs the next approved execution slice, including real data/materialization/search only when the project approval gates and user command allow it.
 - `提交` = Claude commits the reviewed working tree as a single coherent commit after Codex review allows it.
-- `批准` / `批准修改` addressed to Codex = Codex must first update or prepend the corresponding `docs/SESSION_LOG.md` finding as `USER-APPROVED`, then reply. Claude performs the repair afterward.
+- `批准` / `批准修改` is NOT required between a Codex `审查` and a Claude `修复` (2026-06-07 update): the user's `修复` directly authorizes repairing the reviewed Required findings, and Claude records that user-directed authorization in `docs/SESSION_LOG.md`. `批准` remains available only for a standalone approval the user explicitly chooses to record (e.g. a strategic or spend decision); when used, the addressed LLM records it in `docs/SESSION_LOG.md` before proceeding.
 
 ## Codex adversarial review standard
 
@@ -306,6 +306,20 @@ Every Codex `审查` must internalize the full deep review and output only the d
 13. Use negative or weak controls when useful to test the gate, but never tune thresholds after seeing the target result.
 14. Separate verdict layers: computation correctness, schema / ledger validity, PIT / data integrity, statistical alpha claim, risk / deployability, and production / ship-gate readiness.
 15. Route material unresolved risks into `docs/system_risk_register.md` or require a fix before Pass. A material finding left only in chat or SESSION_LOG cannot receive a clean Pass.
+
+### Codex review closeout gate
+
+Before Codex replies to any `审查`, Codex must complete this closeout gate and make the result true in repository state:
+
+1. `docs/SESSION_LOG.md` has been prepended with the review verdict, including scope, Required / Optional, material-risk status, verification run, and next step.
+2. Every Required finding has a materiality label. Material means it affects data integrity, PIT safety, schema contract, execution / ledger correctness, security / raw / secret hygiene, ship-gate evidence, or cross-LLM continuity.
+3. Every material Required finding is either fixed in the reviewed slice or recorded in `docs/system_risk_register.md` with status, severity, scope, PIT label, evidence, Required ID, and closure condition. If no register entry is written, the review must state `Register: non-material` or `Register: already covered by <risk id>`.
+4. `git status --short --untracked-files=all`, unstaged diff, staged diff when present, and every intentional untracked file have been included in the scope manifest.
+5. Relevant schema / runner tests and independent artifact recomputation have been run personally where feasible. If a test or recomputation is not feasible, the review must state the exact gap and residual risk.
+6. Guard / mutation checks were attempted for frozen fields, ledgers, approvals, and hygiene gates where feasible; otherwise the review states why not.
+7. The verdict layers are not collapsed: computation, schema / ledger, PIT / data, statistical claim, risk / deployability, and production / ship-gate readiness are separated when relevant.
+8. Final response confirms the register outcome and must not issue Pass while any material Required finding is neither fixed nor registered.
+9. Final response must include one standalone, clear line naming the user's next command to Claude, for example `下一步对 Claude 的命令：**修复**`, `下一步对 Claude 的命令：**提交**`, or `下一步对 Claude 的命令：**执行**`. The command token must be bold; if the command is Latin text, uppercase it.
 
 Codex review output must be concise and decision-first: `verdict`, `Required`, `Optional`, `Options` when useful with at least two options and a recommended option, one-line key risk, and next step. Codex must prepend the review verdict to `docs/SESSION_LOG.md` before replying. If no issue remains, say it is clean; do not invent fixes to appear thorough.
 

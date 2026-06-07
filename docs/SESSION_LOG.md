@@ -8,6 +8,206 @@
 
 ---
 
+## 2026-06-07 — Claude 提交 (cash_conversion design submit + drop `批准修改` gate) — **review-status flipped to passed; committed in two scopes; protocol updated**
+
+Codex re-review PASSED (entry below). Performed the Codex-authorized submit-time steps + the user-directed protocol change, then committed.
+- **Review-status flip (Codex-authorized)**: set `research/preregistrations/a_long_large_cap_cash_conversion_20260607.json` `scope.preregistration_review_status` → `passed_independent_review_ready_for_freeze` (the R-CASH-REVIEW-STATE enum permits it); updated the two affected test assertions; 15/15 schema tests still pass.
+- **Optional O-CASH-CURRENT-TEST-COUNT accepted**: `docs/CURRENT.md` cash_conversion delta updated 13/13 → 15/15.
+- **Protocol change (user-directed, this turn)**: dropped the `批准修改` step between a Codex `审查` and a Claude `修复`. `AGENTS.md` §Short Command Aliases now states the user's `修复` directly authorizes repairing the reviewed Required findings (no separate `批准修改`); `批准` remains only for standalone strategic/spend approvals; the Claude `修复` SESSION_LOG entry records the user-directed authorization for cross-LLM continuity. The separate "Claude implementer judge-before-execute standard" documentation remains deferred to a later round per the user.
+- **Committed in two scopes**: (1) the cash_conversion design slice (prereg/ledger/schema/tests + CURRENT/README/research-README routing + system_risk_register resolved Hot Queue); (2) the AI role-swap closeout + drop-`批准修改` protocol change.
+
+No runner, no data fetch, no signal run; ledger unspent; cash_conversion factor definition unchanged. Next: the signal-search runner slice (reuse the vetted measurement chain + implement the frozen rolling relative-NAV gate + the two-tier verdict) → Codex `审查` → user `执行`.
+
+---
+
+## 2026-06-07 — Codex review (cash_conversion R-CASH-ROUTE + R-CASH-REVIEW-STATE repair re-review) — **PASS / design slice ready for submit-time review-status flip + commit**
+
+**Scope reviewed**: [tracked] `AGENTS.md`, `docs/AI_REVIEW_PROTOCOL.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `research/README.md`. [untracked] `research/preregistrations/a_long_large_cap_cash_conversion_20260607.json`, `research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json`, `schemas/a_long_large_cap_cash_conversion_preregistration.schema.json`, `tests/schema/test_a_long_large_cap_cash_conversion_preregistration_schema.py`. Staged diff: none. Latest commit reviewed from: `bf26f13`.
+
+**Verdict**: Pass. The two USER-APPROVED Required blockers from the prior Codex re-review are fixed. R-CASH-ROUTE is clean: `docs/CURRENT.md` now routes the active A-long path to the NEW diagnostic-derived large-cap `cash_conversion` design slice and blocks re-routing to the falsified full-main-board / large-cap pure-quality routes; `docs/README.md` has a cash_conversion-specific routing row. R-CASH-REVIEW-STATE is clean: the schema can now represent the review-passed preregistration state, and the artifact adds an explicit runner-consumed execution gate requiring that passed state while the current pending state still cannot unlock execution.
+
+**Required**: none.
+
+**Optional**:
+- **O-CASH-CURRENT-TEST-COUNT (non-material docs hygiene; scope `docs/CURRENT.md`; PIT n/a)** — `docs/CURRENT.md` line 9 still says `13/13 schema tests`, while the current cash_conversion schema test module now has 15 tests. This does not affect routing or execution safety, but Claude can update it to `15/15` during the submit-time status flip.
+
+**Commit gate / allowed submit-time state change**:
+- Because Codex PASS is now recorded, Claude may perform the mechanical post-PASS update before commit: set `research/preregistrations/a_long_large_cap_cash_conversion_20260607.json` `scope.preregistration_review_status` from `pending_independent_review` to `passed_independent_review_ready_for_freeze`, and update the corresponding test assertions so the 15/15 tests still pass.
+- This is only a review-state recording step. It does not authorize a runner, data fetch, signal search, ledger spend, factor-definition change, universe change, alpha claim, production claim, ship-gate evidence, full-size use, DataHub work, provider call, or broker/order automation.
+
+**Verification run by Codex**:
+- Bundled Python `jsonschema` import confirmed version `4.26.0`.
+- `python -m unittest tests.schema.test_a_long_large_cap_cash_conversion_preregistration_schema -v` using bundled Python — 15 tests OK.
+- `python -m unittest discover -s tests\schema -p "*cash_conversion*" -v` using bundled Python — 15 tests OK.
+- Independent mutation checks: base preregistration validates with zero schema errors; ledger validates with zero schema errors; current pending review status does not equal the required execution status; passed review status validates; fake review status is rejected; changing the required execution status to pending is rejected; lowering the cohort threshold is rejected; replacing the Option-A benchmark NAV with a plain calendar CSI300 NAV is rejected.
+- Source clue rechecked from `research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json`: cash_conversion 504d CSI300 t `2.3542039804`; CSI1000 t `4.5165136238`; prior composite primary remains falsified with `candidate_alpha_clue_count = 0`.
+- Route greps show no stale `runtime/termination repair`, no stale pure-quality result-review next route, no old `Codex / Claude / 用户三方 review` routing row, and a present cash_conversion README route.
+- Hygiene: `git diff --check` passes; `git check-ignore -v` confirms referenced `data/a_long/raw/` roots are ignored; secret/raw scan found no token value, key-bearing URL, raw row payload, or provider sample leak in the changed/new cash_conversion materials. Matches were protective schema fields, schema `$id`, gitignored raw-root labels, or historical docs/log references.
+
+**Register**: `docs/system_risk_register.md` Hot Queue entry `A-long cash_conversion design re-review blockers` updated from `open` to `resolved` with the verification evidence above and the remaining boundary.
+
+**Next**: Claude `提交`: first do the mechanical post-PASS preregistration status flip (and test/doc-count alignment), rerun the 15 cash_conversion schema tests, then commit this design slice only. The signal-search runner is a later separate slice.
+
+---
+
+## 2026-06-07 — Claude 修复 (cash_conversion R-CASH-ROUTE + R-CASH-REVIEW-STATE per Codex re-review) — **READY FOR RE-REVIEW (Codex) / docs+schema+prereg+test only, no runner/fetch/run, ledger unspent**
+
+Fixed both USER-APPROVED Required from Codex's re-review; agreed with each (my prior R2 was genuinely incomplete, and the review-status const was a real gap). Scope: `docs/CURRENT.md` + `docs/README.md` + cash_conversion schema/prereg/test only — no runner, no data fetch, no signal run, no ledger spend, no factor-definition / universe change.
+- **R-CASH-ROUTE (was an incomplete R2)**: finished the CURRENT.md routing beyond §1 — §4 `docs/AI_REVIEW_PROTOCOL.md` line now points to `AGENTS.md` as canonical for the 2026-06-07 swapped roles (Claude implement / Codex review); §5 review-target line now routes to the cash_conversion design slice → Codex re-review → commit → separate runner slice → separate user execute (removed the stale full-main-board runtime/termination repair route); §5 next-high-value line now routes to the cash_conversion design (removed the already-done large-cap pure-quality result-review route). Added a cash_conversion routing row to `docs/README.md`. Confirmed: stale full-main-board route count 0, stale pure-quality next-work count 0, README cash_conversion row present.
+- **R-CASH-REVIEW-STATE**: the schema pinned `scope.preregistration_review_status` to const `pending_independent_review`, so the design could never represent a review-passed state for a runner to gate on. Changed it to `enum [pending_independent_review, passed_independent_review_ready_for_freeze]`, and added `planned_test_budget.required_preregistration_review_status_for_execution = const "passed_independent_review_ready_for_freeze"` as the explicit runner-consumed execution gate. The artifact stays `pending_independent_review` now (Codex's re-review has not yet passed); after a PASS the implementer flips it to `passed...` and it still schema-validates. New `test_review_status_can_become_passed_and_gates_execution` proves: the passed state validates, the current pending state ≠ the required execution status (so pending cannot unlock execution), and an out-of-enum status is rejected.
+
+**Verification**: 15/15 cash_conversion schema tests pass in my jsonschema env; doc-routing greps confirm the stale routes are gone and the cash_conversion routes are present. No runner, no fetch, no run; ledger unspent; cash_conversion factor definition unchanged. All changes are in the working tree, uncommitted.
+
+**Next**: Codex `审查` (re-review) R-CASH-ROUTE + R-CASH-REVIEW-STATE. After re-review PASS, Claude flips `preregistration_review_status` to `passed...` and `提交` (splitting the prior no-alpha result record from this cash_conversion design as appropriate scopes); the signal-search runner with the frozen rolling relative-NAV gate is the next slice after that.
+
+---
+
+## 2026-06-07 — USER-APPROVED modification for Codex cash_conversion review findings — **APPROVED FOR CLAUDE FIX ONLY**
+
+**Approval**: User sent `批准修改`. The two open Required findings from the latest Codex review are now **USER-APPROVED** for Claude repair:
+- `R-CASH-ROUTE`
+- `R-CASH-REVIEW-STATE`
+
+**Boundary**: approval only. Codex did not repair business/design files, did not add a runner, did not fetch data, did not run signal search, did not spend the singleton ledger, did not commit, and did not make any alpha / production / ship-gate claim.
+
+**Next**: Claude `修复` only these two approved Required blockers. After Claude repair, Codex `审查` again before any commit or execution.
+
+---
+
+## 2026-06-07 — Codex review (repeat cash_conversion re-review after output-command doc rule) — **FAIL / no new repair for open P0 blockers**
+
+**Scope reviewed**: [tracked] `AGENTS.md`, `docs/AI_REVIEW_PROTOCOL.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `research/README.md`. [untracked] `research/preregistrations/a_long_large_cap_cash_conversion_20260607.json`, `research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json`, `schemas/a_long_large_cap_cash_conversion_preregistration.schema.json`, `tests/schema/test_a_long_large_cap_cash_conversion_preregistration_schema.py`. Staged diff: none. Latest commit reviewed from: `bf26f13`.
+
+**Verdict**: Fail. No new Claude repair is present after the prior FAIL entry. R1 exact-threshold const repair remains clean and R3 Option-A rolling relative-NAV gate remains clean, but the two material P0 blockers from the prior Codex re-review remain open and still prevent a PASS, commit, runner slice, execution, ledger spend, or alpha claim.
+
+**Required**:
+1. **R-CASH-ROUTE (USER-APPROVED 2026-06-07; material: cross-LLM continuity / execution routing; PIT: design-only routing)** — still open. `docs/CURRENT.md` still has stale active-route text: line 95 describes `docs/AI_REVIEW_PROTOCOL.md` as the old three-party review/fix/commit workflow, line 123 routes the current alpha-search review target to the old full-main-board runtime/termination repair, and line 132 routes next work to the already-finished large-cap pure-quality result summary / spent ledger. `docs/README.md` lines 17-24 still have no cash_conversion-specific routing row. A fresh LLM can therefore leave the current cash_conversion path and follow stale work.
+2. **R-CASH-REVIEW-STATE (USER-APPROVED 2026-06-07; material: schema / execution gate; PIT: design-only but runner-gate-affecting)** — still open. `schemas/a_long_large_cap_cash_conversion_preregistration.schema.json` line 94 pins `scope.preregistration_review_status` to `pending_independent_review`, and the artifact carries that state at `research/preregistrations/a_long_large_cap_cash_conversion_20260607.json` line 16. Independent mutation to `passed_independent_review_ready_for_freeze` still fails schema validation, so the frozen material cannot yet machine-check a review-passed state.
+
+**Optional**: none.
+
+**Verification run by Codex**:
+- `jsonschema` import confirmed in bundled Python (`4.26.0`).
+- `python -m unittest tests.schema.test_a_long_large_cap_cash_conversion_preregistration_schema -v` using bundled Python — 14 tests OK.
+- `python -m unittest discover -s tests\schema -p "*cash_conversion*" -v` using bundled Python — 14 tests OK.
+- Independent mutation checks: review-passed state still rejected; plain-calendar CSI300 NAV replacement rejected; raised size bucket threshold rejected; lowered cohort threshold rejected.
+- `git diff --check` passes. `git check-ignore -v` confirms the referenced `data/a_long/raw/` roots are gitignored. Secret/raw scan found no token value, request URL, raw row payload, or provider sample leak in the changed/new files; matches were protective schema field names, schema `$id`, gitignored raw path labels, and historical docs/log references.
+- Old-role string check found no stale `Codex = Designer` / `Claude = Independent` protocol text, but did confirm the stale `docs/CURRENT.md` routing above and the missing `docs/README.md` cash_conversion route.
+
+**Register**: already covered by `docs/system_risk_register.md` Hot Queue entry `A-long cash_conversion design re-review blockers` with Required IDs `R-CASH-ROUTE` and `R-CASH-REVIEW-STATE`; no duplicate risk entry added.
+
+**Next**: Claude `修复` only the two open Required blockers. Do not build a runner, fetch `daily_basic`, run signal search, spend the singleton ledger, alter the cash_conversion factor definition, change the universe, or make any alpha / production / ship-gate claim in that repair.
+
+---
+
+## 2026-06-07 — Codex review (cash_conversion R1-R3 repair re-review + protocol closeout docs) — **FAIL / material routing + review-state blockers remain**
+
+**Scope reviewed**: [tracked] `AGENTS.md`, `docs/AI_REVIEW_PROTOCOL.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `research/README.md`. [untracked] `research/preregistrations/a_long_large_cap_cash_conversion_20260607.json`, `research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json`, `schemas/a_long_large_cap_cash_conversion_preregistration.schema.json`, `tests/schema/test_a_long_large_cap_cash_conversion_preregistration_schema.py`. Staged diff: none. Latest commit reviewed from: `bf26f13`.
+
+**Verdict**: Fail. R1 exact-threshold const repair is clean; R3 Option-A rolling relative-NAV risk gate is clean; protocol docs are acceptable as a compatibility pointer to `AGENTS.md`. Two material Required blockers remain before this design slice can be committed or used as the basis for a runner.
+
+**Required**:
+1. **R-CASH-ROUTE (material: cross-LLM continuity / execution routing)** — prior R2 is not fully closed. `docs/CURRENT.md` still contains stale routing: line 95 describes `docs/AI_REVIEW_PROTOCOL.md` as the old three-party review/fix/commit owner; line 123 points the current review target at the old full-main-board runtime repair; line 132 says the next high-value work is review of the already-finished large-cap pure-quality result summary / spent ledger. `docs/README.md` lines 17-24 route pure-quality artifacts but have no cash_conversion-specific route row, so a fresh LLM can miss the current handoff unless it happens to read `research/README.md` deeply. Fix CURRENT §4/§5 and README routing so the next route is cash_conversion design re-review -> commit -> separate runner slice -> separate user execute only.
+2. **R-CASH-REVIEW-STATE (material: schema / ledger / execution-gate correctness)** — the preregistration schema pins `scope.preregistration_review_status` to `pending_independent_review` (`schemas/a_long_large_cap_cash_conversion_preregistration.schema.json` line 94), and the artifact carries the same state (`research/preregistrations/a_long_large_cap_cash_conversion_20260607.json` line 16). I mutated the artifact to `passed_independent_review_ready_for_freeze`; schema validation correctly rejected it, which means the final committed frozen design currently cannot represent a review-passed state. Existing large-cap runner precedent rejects preregs unless they are review-passed. Fix by making the final reviewed cash_conversion material machine-checkable as review-passed (or by adding an equivalent explicit runner-consumed review gate), with schema/tests proving the pending/unreviewed state cannot unlock execution.
+
+**Optional**: none.
+
+**Verification run by Codex**:
+- `jsonschema` in bundled Python confirmed version `4.26.0`.
+- `python -m unittest tests.schema.test_a_long_large_cap_cash_conversion_preregistration_schema -v` using bundled Python — 14 tests OK.
+- `python -m unittest discover -s tests\schema -p "*cash_conversion*" -v` using bundled Python — 14 tests OK.
+- Independent mutation checks: const-threshold raises/lowers fail; calendar CSI300 NAV replacement fails; making the risk gate affect the alpha-clue tier fails; mutating prereg review status to `passed_independent_review_ready_for_freeze` also fails (the R-CASH-REVIEW-STATE evidence).
+- Prior result citation checked from `research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json`: cash_conversion 504d diagnostic is CSI300 `monthly_clustered_t_stat=2.3542039804` and CSI1000 `4.5165136238`, matching the design rationale.
+- `git diff --check` passes. `git check-ignore -v` confirms the referenced raw roots remain covered by `.gitignore:data/a_long/raw/`. Secret/raw scan found only protective field names, schema `$id`, gitignored raw path labels, and historical AGENTS/SESSION_LOG references; no new raw rows, request URL, or token value in the cash_conversion tracked artifacts.
+
+**Register**: material Requireds recorded in `docs/system_risk_register.md` Hot Queue as `A-long cash_conversion design re-review blockers` with status `open`, severity `P0`, Required IDs `R-CASH-ROUTE` and `R-CASH-REVIEW-STATE`, evidence, PIT label, and closure condition.
+
+**Next**: user approval, then Claude `修复` only the two Required blockers above. Do not add a runner, fetch data, run signal search, spend the ledger, or change the cash_conversion factor definition in that repair.
+
+---
+
+## 2026-06-07 — Claude 修复 (cash_conversion design R1-R3 per Codex review) — **READY FOR RE-REVIEW (Codex) / design-only, no runner/fetch/run, ledger unspent**
+
+Fixed all three Required from Codex's review; agreed with each (no overreach). Scope: schema + prereg + tests + `docs/CURRENT.md` only — no runner, no data fetch, no signal run, no ledger spend, no cash_conversion factor-definition change.
+- **R1 (frozen thresholds as exact const)**: the schema now pins `minimum_size_bucket_count_for_primary_percentile`=`const 50`, `minimum_top_count_per_month`=`const 10`, `minimum_monthly_cohorts`=`const 48` (were `minimum`); tests changed `>=` → `==` and a new `test_frozen_decision_thresholds_are_exact_consts` proves raising (999) or lowering each value fails schema validation.
+- **R2 (CURRENT routing drift)**: `docs/CURRENT.md` §1 now routes to this cash_conversion design repair → Codex re-review → commit → a later separate signal-search runner slice; demoted the stale full-main-board Step 0-3 and the already-done large-cap pure-quality result-review routing; updated 协作模式 to the swapped roles (Claude = Designer+Implementer, Codex = Independent Reviewer; ref `bf26f13`).
+- **R3 (NAV gate construction — chose Option A)**: as implementer I selected Codex's recommended Option A and froze it in prereg/schema/tests: the benchmark denominator is a parallel same-as-of-schedule / same-horizon / same-ramp rolling-overlapping CSI300 total-return tranche portfolio (NOT a plain calendar CSI300 NAV), so the relative-NAV drawdown isolates stock selection from benchmark-path mechanics; startup/ramp = average over active tranches only, no idle cash; round-trip cost applied once per STRATEGY tranche entry/exit and NOT to benchmark tranches; `relative_nav_formula = strategy_nav / benchmark_nav`; `primary_risk_metric = max_drawdown_of_relative_nav`. The −15% threshold remains pre-committed (frozen before the run) and still gates only the tradeable-candidate label, not the statistical-alpha-clue verdict.
+
+**Verification**: 14/14 schema tests pass in my jsonschema env (prereg + ledger validate with zero errors; the new const-threshold negative test + the updated risk-gate assertions pass). No factor definition / universe / measurement / horizon / benchmark change; ledger still unspent; no runner added.
+
+**Next**: Codex `审查` (re-review) this design slice. After re-review PASS, Claude `提交` (splitting the prior no-alpha result record from this cash_conversion design as appropriate scopes); the signal-search runner with the frozen rolling relative-NAV gate is the next slice after that.
+
+---
+
+## 2026-06-07 — Codex protocol update (review closeout gate + AI_REVIEW_PROTOCOL stale-role removal) — **DOCS-ONLY / does not resolve the cash_conversion R1-R3 review FAIL below**
+
+User requested durable, cross-session enforcement for the review closeout sequence so future Codex reviews do not depend on this chat window's memory.
+
+**Worked on**:
+- `AGENTS.md`: added `Codex review closeout gate`. Before any Codex `审查` reply, Codex must ensure the review verdict is prepended to `docs/SESSION_LOG.md`; every Required finding has a materiality label; every material Required is fixed or registered in `docs/system_risk_register.md` with scope / PIT / evidence / Required ID / closure condition; staged / unstaged / untracked scope is reviewed; relevant tests/recomputations/guard mutations are run or gaps are stated; and no clean Pass is issued while material findings are neither fixed nor registered.
+- `docs/AI_REVIEW_PROTOCOL.md`: removed the stale Codex-implements / Claude-reviews role map and old short-command expansions. It is now a short compatibility pointer to `AGENTS.md`, which is the single source of truth for roles, command binding, adversarial review, closeout gate, commit, and execution boundaries.
+- `docs/README.md`: updated the routing row so future readers do not expect `docs/AI_REVIEW_PROTOCOL.md` to contain canonical short-command expansions.
+
+**Boundary**:
+- Docs/protocol only. No business code, runner, schema, preregistration, ledger, provider call, materialization, signal search, result artifact, or commit was performed in this update.
+- This entry does **not** resolve the cash_conversion design review FAIL directly below. Claude still needs to repair R1-FROZEN-THRESHOLD-CONST, R2-CURRENT-ROUTE-DRIFT, and R3-NAV-GATE-CONSTRUCTION, then Codex must re-review.
+
+**Register**: no new open system-risk entry needed for this protocol update because the cross-LLM process gap is fixed in-round by `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md`; the unresolved cash_conversion Required findings remain governed by the review FAIL entry below and should be fixed or registered under the new closeout gate during the next review cycle.
+
+**Next**: continue the in-progress Claude repair of R1-R3; do not treat this protocol update as approval to commit or execute the cash_conversion design.
+
+---
+
+## 2026-06-07 — Codex 审查 (NEW diagnostic-derived cash_conversion prereg + singleton ledger + schema/test/docs) — **FAIL / Required fixes pending Claude repair; design-only slice, no runner/run reviewed**
+
+**Scope reviewed**: [tracked] `docs/CURRENT.md`, `docs/SESSION_LOG.md`, `research/README.md`; [untracked] `research/preregistrations/a_long_large_cap_cash_conversion_20260607.json`, `research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json`, `schemas/a_long_large_cap_cash_conversion_preregistration.schema.json`, `tests/schema/test_a_long_large_cap_cash_conversion_preregistration_schema.py`. No staged changes. No business runner / provider call / raw data / result execution in this slice.
+
+**Verdict**: Fail until the Required fixes below are addressed and re-reviewed. The hypothesis framing is mostly sound: cash_conversion is honestly marked as diagnostic-derived in-sample evidence, the old large-cap pure-quality result is not rescued, the new ledger is unspent, data reuse points to the reviewed top-500 market-cap audit and full-main-board audit, and the 13 schema tests pass in a `jsonschema 4.26.0` runtime. I independently re-derived the source clue from `research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json`: `cash_conversion` 504d t = `2.3542039804` vs CSI300 and `4.5165136238` vs CSI1000; the old large-cap ledger is spent and the new cash_conversion ledger is unspent.
+
+**Required fixes (Claude)**:
+- **R1-FROZEN-THRESHOLD-CONST — scope: schema/test; PIT: n/a.** `schemas/a_long_large_cap_cash_conversion_preregistration.schema.json` does not exactly freeze three preregistered gates: `minimum_size_bucket_count_for_primary_percentile`, `minimum_top_count_per_month`, and `minimum_monthly_cohorts` use `minimum` rather than exact `const`, while the tests only assert `>=`. I mutated each to `999` and the artifact still schema-validated with zero errors. Fix these to exact constants (`50`, `10`, `48`) and add negative tests proving raised/lowered mutations fail. This is required because the artifact claims a frozen design and a future runner must not execute under a prereg whose gate values drift.
+- **R2-CURRENT-ROUTE-DRIFT — scope: docs/current routing; PIT: n/a.** `docs/CURRENT.md` top delta points to this cash_conversion design review, but the current P0/P1 and next-step sections still route future work to stale items: actual large-cap pure-quality result review and old full-main-board runtime/termination repair. Fix `docs/CURRENT.md` so the actionable next step is this cash_conversion design repair/re-review/commit, then a separate signal-search runner slice. Remove or demote stale route text that would mislead the next `执行`.
+- **R3-NAV-GATE-CONSTRUCTION — scope: design/risk gate; PIT: benchmark/return construction.** The prereg freezes "rolling overlapping strategy NAV / CSI300" but not enough implementation detail for the new risk gate: benchmark denominator can be implemented as a same-schedule rolling CSI300 tranche portfolio or as a plain calendar CSI300 NAV; startup/ramp/cash handling and cost timing are also not fully pinned. This can materially change the relative-NAV max drawdown and the tradeable-candidate label. Fix by freezing one exact construction in the prereg/schema/tests before any runner exists.
+
+**Options for R3**:
+- **A (recommended)**: benchmark uses the same as-of tranche schedule, active-tranche averaging, holding horizon, startup/ramp convention, and exit dates as the strategy, replacing selected stocks with CSI300 total-return close path; apply costs only to strategy tranches at the frozen timing. This best isolates stock-selection risk from benchmark path mechanics.
+- **B**: benchmark is a plain CSI300 total-return close-to-close NAV over the calendar span; then explicitly freeze start date, end date, startup exposure, whether idle cash exists before enough tranches accumulate, and when the strategy round-trip cost is applied.
+
+**Optional**: none. The in-sample caveat, single-primary-cell / no-FDR framing, no-new-fetch boundary, no-production / no-ship-gate boundary, and singleton ledger discipline are acceptable after the Required fixes.
+
+**Verification run by Codex**:
+- `python -m pip install jsonschema` was already satisfied; import confirmed `jsonschema 4.26.0`.
+- `python -m unittest tests.schema.test_a_long_large_cap_cash_conversion_preregistration_schema -v` — 13 tests OK.
+- `python -m unittest discover -s tests\schema -p "*cash_conversion*" -v` — 13 tests OK.
+- `git check-ignore -v` confirms the referenced raw roots remain covered by `.gitignore:data/a_long/raw/`.
+- JSON syntax checks pass for the new preregistration, ledger, and schema; `git diff --check` reports no whitespace errors.
+
+**Next**: Claude should `修复` only R1-R3 in this design/docs/schema/test scope, without adding a runner, fetching data, running signal search, spending the ledger, or changing the cash_conversion factor definition. Then Codex re-runs `审查`.
+
+---
+
+## 2026-06-07 — Claude 实现 (NEW diagnostic-derived cash_conversion prereg + singleton ledger + schema + schema-test) — **READY FOR REVIEW (Codex) / design slice only, no runner, no run, ledger unspent** — first Claude-implemented slice under the swapped roles
+
+Role swap in effect: Claude now designs+implements, Codex independently reviews. This is the first implemented slice — the frozen-design four-piece for the diagnostic-derived cash_conversion hypothesis (follow-up to the falsified large-cap pure-quality composite, whose strongest single-factor diagnostic was cash_conversion: 504d t=2.3542 vs CSI300, 4.5165 vs CSI1000). NO signal-search runner, NO data fetch, NO execution; the singleton ledger is unspent. The runner (reusing the vetted measurement chain + a new rolling relative-NAV drawdown gate) is the NEXT slice, only after this design is reviewed + committed.
+
+**Files created**:
+- `research/preregistrations/a_long_large_cap_cash_conversion_20260607.json`
+- `research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json` (new singleton, unspent)
+- `schemas/a_long_large_cap_cash_conversion_preregistration.schema.json` (strict: additionalProperties:false throughout, all values const/typed)
+- `tests/schema/test_a_long_large_cap_cash_conversion_preregistration_schema.py`
+
+**Frozen design**: single-factor `cash_conversion` (OCF / |net income|, same period, |NI|≥1e7 — definition unchanged from the diagnostic), percentile-ranked; reuse the reviewed top-500 circ_mv universe + 000043 exclusion + full-main-board PIT fundamentals (no new fetch); marginal 0.5 industry + 0.5 size neutralization; 504d primary / 252d diagnostic; CSI300 primary / CSI1000 diagnostic; same vetted measurement chain (close-to-close total return, same-anchor, cost 0.0026, HAC-t). **Two-tier verdict**: (1) statistical alpha clue = HAC t≥2 + cohorts≥48 + both sub-period halves mean excess>0 + concentration; (2) tradeable candidate = additionally a rolling-overlapping-portfolio relative-NAV (strategy / CSI300) max drawdown ≥ −15%. Single primary cell, no FDR; new singleton ledger (1 test).
+
+**Codex review comments adopted**: (a) conservative framing — vs-CSI300 evidence is single-sample (only this round), not robust cross-benchmark proof; (b) sub-period split by effective 504d-valid-cohort median, NOT natural calendar years; (c) risk gate redone as a real rolling-NAV relative drawdown (not summed overlapping cohort excess), threshold frozen before the run. **My sharpenings on top**: (1) the relative-NAV drawdown gate determines only the tradeable-candidate label, NOT the statistical-alpha-clue verdict, so the −15% threshold is not p-hacking-sensitive (the core finding never depends on it); (2) the rolling-NAV construction is frozen precisely in the prereg (tranche rule / equal-weight basket / overlapping-tranche averaging / per-tranche cost / relative-NAV formula) — it is the one substantial new code path for the later runner; (3) sub-period gate is "both halves mean>0" (a weak directional bar) but each half's HAC-t is reported for honesty.
+
+**Honest caveats frozen into the prereg**: diagnostic-derived in-sample clue (selected from the same sample), vs-CSI300 single-sample, limited effective power (504d over 2018–2025 ≈ 4 independent windows), industry-neutral is effectively SW-L1 on top-500; a positive result is research-only pending forward-live.
+
+**Verification**: 13/13 schema tests pass in my jsonschema env (prereg + ledger validate with zero errors; two-tier decision / single-factor / marginal neutralization / frozen tradeable-tier-only risk gate / median sub-period split / diagnostic-derived-not-rescue / data-reuse / anti-p-hacking / unspent ledger / scope-creep rejection all asserted).
+
+**Next**: Codex `审查` this design slice. After review PASS + commit, the next slice is the signal-search runner (reuse the vetted chain + implement the frozen rolling relative-NAV drawdown gate + the two-tier verdict), which then needs its own review, commit, and a separate user `执行` (spends the singleton once).
+
+---
+
 ## 2026-06-07 — Claude 审查 (A-long large-cap pure-quality signal-search RESULT, research/results/a_long_large_cap_pure_quality_20260607/, untracked on HEAD d5211f4) — **PASS — genuine FALSIFIED (no large-cap pure-quality alpha), independently re-derived; ledger correctly spent; mechanics clean**
 
 The run completed and the verdict is genuine, not a pipeline artifact: 73,496 evaluated rows, 36 cells with real varied t-stats (−1.11…+5.24), 68 primary cohorts. Schema-valid; ledger correctly spent once (`tests_spent_count=1`, `active_no_new_test_authorized`, `spent_failed_outcome_threshold`); restatement 1504/1504; 000043 exclusion+backfill applied; the 3 no-PIT startup months (20180131/0228/0330) excluded as designed (93 coverage months, 0 thin); no network/raw/secret. I independently checked every cell vs its gates.
