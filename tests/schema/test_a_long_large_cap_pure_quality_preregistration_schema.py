@@ -118,6 +118,19 @@ class ALongLargeCapPureQualityPreregistrationSchemaTest(unittest.TestCase):
         self.assertTrue(universe["include_later_delisted_names_at_pre_delisting_asofs"])
         self.assertTrue(universe["pit_list_delist_required"])
         self.assertTrue(universe["selection_time_namechange_veto_required"])
+        self.assertEqual(
+            universe["reviewed_data_quality_exclusion_boundary_ref"],
+            "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+        )
+        exclusion_policy = universe["reviewed_data_quality_exclusion_policy"]
+        self.assertEqual(exclusion_policy["excluded_symbols"], ["000043.SZ"])
+        self.assertEqual(exclusion_policy["affected_as_of_dates"], ["20191129"])
+        self.assertEqual(exclusion_policy["max_excluded_symbols"], 1)
+        self.assertEqual(exclusion_policy["max_excluded_observations"], 1)
+        self.assertTrue(exclusion_policy["drop_excluded_symbols_before_signal_scoring"])
+        self.assertTrue(exclusion_policy["backfill_next_main_board_by_circ_mv"])
+        self.assertTrue(exclusion_policy["materialized_top500_rederivation_unchanged"])
+        self.assertFalse(exclusion_policy["threshold_rescue_allowed"])
         self.assertTrue(universe["st_star_bse_chinext_excluded"])
 
     def test_primary_signal_is_three_factor_percentile_composite_and_earnings_stability_is_diagnostic(self) -> None:
@@ -263,6 +276,7 @@ class ALongLargeCapPureQualityPreregistrationSchemaTest(unittest.TestCase):
         payload["scope"]["signal_search_authorized_by_this_artifact"] = True
         payload["prior_result_boundary"]["old_result_reslice_allowed"] = True
         payload["data_dependency_gate"]["selected_market_cap_field_status"] = "pending_probe_not_selected"
+        payload["frozen_design"]["universe_rule"]["reviewed_data_quality_exclusion_policy"]["backfill_next_main_board_by_circ_mv"] = False
         payload["frozen_design"]["signal_rule"]["zscore_composite_allowed"] = True
         payload["frozen_design"]["neutralization_rule"]["crossed_industry_size_bucket_allowed"] = True
         payload["frozen_design"]["benchmark_rule"]["both_benchmark_pass_required"] = True

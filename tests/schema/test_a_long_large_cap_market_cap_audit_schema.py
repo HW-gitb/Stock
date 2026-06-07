@@ -12,7 +12,9 @@ from runners import a_long_large_cap_market_cap_audit as runner
 
 PACKET_SCHEMA_PATH = Path("schemas/a_long_large_cap_market_cap_audit_packet.schema.json")
 REPORT_SCHEMA_PATH = Path("schemas/a_long_large_cap_market_cap_audit_report.schema.json")
+EXCLUSION_SCHEMA_PATH = Path("schemas/a_long_large_cap_data_quality_exclusion_decision.schema.json")
 PACKET_PATH = Path("docs/a_long_large_cap_market_cap_audit_packet_20260607.json")
+EXCLUSION_PATH = Path("docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json")
 
 
 class ALongLargeCapMarketCapAuditSchemaTest(unittest.TestCase):
@@ -35,8 +37,16 @@ class ALongLargeCapMarketCapAuditSchemaTest(unittest.TestCase):
                     "selected_top500_min_circ_mv": 1000.0,
                     "selected_top500_max_circ_mv": 100000.0,
                     "summary_rederivation_mismatch": False,
+                    "raw_top500_outside_prior_audited_universe_count": 0,
+                    "documented_data_quality_exclusion_count": 0,
+                    "documented_data_quality_exclusion_sample": [],
                     "outside_prior_audited_universe_count": 0,
                     "outside_prior_audited_universe_sample": [],
+                    "signal_universe_count_after_exclusion_backfill": 500,
+                    "signal_universe_complete_after_exclusion_backfill": True,
+                    "signal_universe_backfill_count": 0,
+                    "signal_universe_outside_prior_audited_universe_count": 0,
+                    "signal_universe_outside_prior_audited_universe_sample": [],
                     "size_q1_count": 100,
                     "size_q2_count": 100,
                     "size_q3_count": 100,
@@ -78,6 +88,7 @@ class ALongLargeCapMarketCapAuditSchemaTest(unittest.TestCase):
             "source_refs": [
                 "docs/a_long_large_cap_market_cap_audit_packet_20260607.json",
                 "docs/a_long_large_cap_market_cap_materialization_execution_summary_20260607.json",
+                "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
             ],
             "scope": {
                 "phase": "7a_alpha_validation",
@@ -106,6 +117,7 @@ class ALongLargeCapMarketCapAuditSchemaTest(unittest.TestCase):
                 "materialization_summary_ref": "docs/a_long_large_cap_market_cap_materialization_execution_summary_20260607.json",
                 "market_cap_raw_root": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/",
                 "prior_full_main_board_raw_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
+                "data_quality_exclusion_decision_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
                 "monthly_as_of_count": 96,
                 "months_audited": 96,
                 "network_calls_executed": 0,
@@ -130,6 +142,12 @@ class ALongLargeCapMarketCapAuditSchemaTest(unittest.TestCase):
                 "monthly_as_of_dates": runner.MONTHLY_AS_OF_DATES,
                 "same_as_materialization_dates": True,
                 "prior_audited_universe_count": 3387,
+                "reviewed_data_quality_exclusion_decision_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+                "reviewed_data_quality_exclusion_status": "reviewed_user_approved_bounded_data_quality_exclusion",
+                "reviewed_data_quality_exclusion_symbol_count": 1,
+                "reviewed_data_quality_exclusion_observation_count": 1,
+                "signal_universe_backfill_policy": "drop_documented_exclusions_then_backfill_next_main_board_by_circ_mv",
+                "materialized_top500_summary_unchanged_after_exclusion": True,
                 "size_bucket_count": 5,
                 "minimum_size_bucket_count_for_primary_percentile": 50,
                 "top500_symbols_written_to_tracked_report": False,
@@ -170,13 +188,17 @@ class ALongLargeCapMarketCapAuditSchemaTest(unittest.TestCase):
     def test_packet_and_report_schemas_are_valid(self) -> None:
         packet_schema = self._load_json(PACKET_SCHEMA_PATH)
         report_schema = self._load_json(REPORT_SCHEMA_PATH)
+        exclusion_schema = self._load_json(EXCLUSION_SCHEMA_PATH)
         packet = self._load_json(PACKET_PATH)
+        exclusion = self._load_json(EXCLUSION_PATH)
         report = self._fake_report()
 
         Draft7Validator.check_schema(packet_schema)
         Draft7Validator.check_schema(report_schema)
+        Draft7Validator.check_schema(exclusion_schema)
         self.assertEqual(list(Draft7Validator(packet_schema).iter_errors(packet)), [])
         self.assertEqual(list(Draft7Validator(report_schema).iter_errors(report)), [])
+        self.assertEqual(list(Draft7Validator(exclusion_schema).iter_errors(exclusion)), [])
 
     def test_packet_locks_local_only_audit_boundary(self) -> None:
         packet = self._load_json(PACKET_PATH)
@@ -188,8 +210,27 @@ class ALongLargeCapMarketCapAuditSchemaTest(unittest.TestCase):
         self.assertEqual(packet["audit_boundary"]["selected_market_cap_field"], "circ_mv")
         self.assertEqual(packet["audit_boundary"]["universe_size_n"], 500)
         self.assertEqual(packet["audit_boundary"]["monthly_as_of_count"], 96)
+        self.assertEqual(
+            packet["audit_boundary"]["reviewed_data_quality_exclusion_decision_ref"],
+            "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+        )
+        self.assertEqual(packet["audit_boundary"]["reviewed_data_quality_exclusion_symbol_count"], 1)
+        self.assertEqual(packet["audit_boundary"]["reviewed_data_quality_exclusion_observation_count"], 1)
+        self.assertTrue(packet["audit_boundary"]["materialized_top500_summary_unchanged_after_exclusion"])
         self.assertFalse(packet["audit_boundary"]["top500_symbols_written_to_tracked_report"])
         self.assertEqual([item["check_id"] for item in packet["audit_checks"]], runner.CHECK_IDS)
+
+    def test_data_quality_exclusion_decision_locks_one_reviewed_observation(self) -> None:
+        exclusion = self._load_json(EXCLUSION_PATH)
+
+        self.assertTrue(exclusion["scope"]["user_approved_bounded_exclusion"])
+        self.assertFalse(exclusion["scope"]["signal_search_authorized_by_this_decision"])
+        self.assertEqual(exclusion["decision"]["max_excluded_symbols"], 1)
+        self.assertEqual(exclusion["decision"]["max_excluded_observations"], 1)
+        self.assertEqual(exclusion["reviewed_exclusions"][0]["ts_code"], "000043.SZ")
+        self.assertEqual(exclusion["reviewed_exclusions"][0]["affected_as_of_dates"], ["20191129"])
+        self.assertFalse(exclusion["reviewed_exclusions"][0]["prior_full_audited_fundamentals_available"])
+        self.assertTrue(exclusion["backfill_policy"]["backfill_next_main_board_symbol_by_circ_mv"])
 
     def test_schema_rejects_scope_creep_and_raw_payloads(self) -> None:
         report_schema = self._load_json(REPORT_SCHEMA_PATH)
@@ -210,6 +251,17 @@ class ALongLargeCapMarketCapAuditSchemaTest(unittest.TestCase):
         packet["prohibited_claims"]["signal_search_authorized"] = True
 
         errors = list(Draft7Validator(packet_schema).iter_errors(packet))
+
+        self.assertGreaterEqual(len(errors), 3)
+
+    def test_exclusion_schema_rejects_extra_symbol_or_signal_authorization(self) -> None:
+        exclusion_schema = self._load_json(EXCLUSION_SCHEMA_PATH)
+        exclusion = copy.deepcopy(self._load_json(EXCLUSION_PATH))
+        exclusion["reviewed_exclusions"][0]["ts_code"] = "600000.SH"
+        exclusion["scope"]["signal_search_authorized_by_this_decision"] = True
+        exclusion["decision"]["signal_search_authorized_by_this_decision"] = True
+
+        errors = list(Draft7Validator(exclusion_schema).iter_errors(exclusion))
 
         self.assertGreaterEqual(len(errors), 3)
 

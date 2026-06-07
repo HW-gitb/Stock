@@ -24,6 +24,8 @@ REPORT_SCHEMA_PATH = ROOT / "schemas" / "a_long_large_cap_market_cap_audit_repor
 REPORT_PATH = ROOT / "research" / "results" / "a_long_large_cap_market_cap_audit_20260607" / "audit_report.json"
 MONTHLY_COVERAGE_PATH = ROOT / "research" / "results" / "a_long_large_cap_market_cap_audit_20260607" / "monthly_coverage.csv"
 MATERIALIZATION_SUMMARY_PATH = ROOT / "docs" / "a_long_large_cap_market_cap_materialization_execution_summary_20260607.json"
+DATA_QUALITY_EXCLUSION_DECISION_PATH = ROOT / "docs" / "a_long_large_cap_data_quality_exclusion_decision_20260607.json"
+DATA_QUALITY_EXCLUSION_DECISION_SCHEMA_PATH = ROOT / "schemas" / "a_long_large_cap_data_quality_exclusion_decision.schema.json"
 PREREGISTRATION_PATH = ROOT / "research" / "preregistrations" / "a_long_large_cap_pure_quality_20260607.json"
 LEDGER_PATH = ROOT / "research" / "ledgers" / "a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json"
 PRIOR_FULL_AUDIT_REPORT_PATH = ROOT / "research" / "results" / "a_long_full_main_board_data_integrity_audit_20260605" / "audit_report.json"
@@ -40,6 +42,12 @@ MIN_SIZE_QUINTILE_COUNT = 50
 EXPECTED_ACTIVE_MAIN_BOARD_COUNT = 3200
 EXPECTED_DELISTED_MAIN_BOARD_COUNT = 187
 EXPECTED_PRIOR_AUDITED_UNIVERSE_COUNT = 3387
+DATA_QUALITY_EXCLUSION_DECISION_REF = "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json"
+DATA_QUALITY_EXCLUSION_BACKFILL_POLICY = "drop_documented_exclusions_then_backfill_next_main_board_by_circ_mv"
+EXPECTED_REVIEWED_EXCLUSION_SYMBOLS = {"000043.SZ"}
+EXPECTED_REVIEWED_EXCLUSION_OBSERVATIONS = {("20191129", "000043.SZ")}
+EXPECTED_REVIEWED_EXCLUSION_SYMBOL_COUNT = 1
+EXPECTED_REVIEWED_EXCLUSION_OBSERVATION_COUNT = 1
 SELF_TEST_IDS = [
     "materialization_summary_scope_creep_blocks",
     "missing_raw_ref_blocks",
@@ -191,6 +199,7 @@ def load_and_validate_packet(path: Path = PACKET_PATH) -> dict[str, Any]:
     expected_inputs = {
         "materialization_summary_ref": "docs/a_long_large_cap_market_cap_materialization_execution_summary_20260607.json",
         "market_cap_raw_root": MARKET_CAP_RAW_ROOT_REL.as_posix() + "/",
+        "data_quality_exclusion_decision_ref": DATA_QUALITY_EXCLUSION_DECISION_REF,
         "prior_full_main_board_audit_report_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
         "prior_full_main_board_raw_root": PRIOR_FULL_RAW_ROOT_REL.as_posix() + "/",
         "sw_repair_summary_ref": "docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json",
@@ -208,6 +217,16 @@ def load_and_validate_packet(path: Path = PACKET_PATH) -> dict[str, Any]:
         raise ValueError("packet selected market-cap field must be circ_mv")
     if audit_boundary.get("universe_size_n") != UNIVERSE_SIZE_N:
         raise ValueError("packet universe size drifted")
+    if audit_boundary.get("reviewed_data_quality_exclusion_decision_ref") != DATA_QUALITY_EXCLUSION_DECISION_REF:
+        raise ValueError("packet data-quality exclusion decision ref mismatch")
+    if audit_boundary.get("reviewed_data_quality_exclusion_symbol_count") != EXPECTED_REVIEWED_EXCLUSION_SYMBOL_COUNT:
+        raise ValueError("packet data-quality exclusion symbol count mismatch")
+    if audit_boundary.get("reviewed_data_quality_exclusion_observation_count") != EXPECTED_REVIEWED_EXCLUSION_OBSERVATION_COUNT:
+        raise ValueError("packet data-quality exclusion observation count mismatch")
+    if audit_boundary.get("signal_universe_backfill_policy") != DATA_QUALITY_EXCLUSION_BACKFILL_POLICY:
+        raise ValueError("packet data-quality exclusion backfill policy mismatch")
+    if audit_boundary.get("materialized_top500_summary_unchanged_after_exclusion") is not True:
+        raise ValueError("packet must keep materialized top500 summary unchanged after exclusion")
     if audit_boundary.get("size_bucket_count") != 5:
         raise ValueError("packet size bucket count drifted")
     if audit_boundary.get("minimum_size_bucket_count_for_primary_percentile") != MIN_SIZE_QUINTILE_COUNT:
@@ -286,10 +305,28 @@ def validate_preregistration_and_ledger() -> None:
     if prereg.get("scope", {}).get("preregistration_review_status") != "passed_independent_review_ready_for_freeze":
         raise ValueError("large-cap preregistration is not review-passed")
     gate = prereg.get("data_dependency_gate") or {}
+    universe_rule = prereg.get("frozen_design", {}).get("universe_rule") or {}
     if gate.get("selected_market_cap_field_status") != SELECTED_MARKET_CAP_FIELD:
         raise ValueError("large-cap preregistration must freeze circ_mv")
-    if (prereg.get("frozen_design", {}).get("universe_rule") or {}).get("universe_size_n") != UNIVERSE_SIZE_N:
+    if universe_rule.get("universe_size_n") != UNIVERSE_SIZE_N:
         raise ValueError("large-cap preregistration universe size drifted")
+    exclusion_policy = universe_rule.get("reviewed_data_quality_exclusion_policy") or {}
+    if universe_rule.get("reviewed_data_quality_exclusion_boundary_ref") != DATA_QUALITY_EXCLUSION_DECISION_REF:
+        raise ValueError("large-cap preregistration data-quality exclusion ref mismatch")
+    if exclusion_policy.get("excluded_symbols") != sorted(EXPECTED_REVIEWED_EXCLUSION_SYMBOLS):
+        raise ValueError("large-cap preregistration data-quality excluded symbol drifted")
+    if exclusion_policy.get("affected_as_of_dates") != ["20191129"]:
+        raise ValueError("large-cap preregistration data-quality affected date drifted")
+    if exclusion_policy.get("max_excluded_symbols") != EXPECTED_REVIEWED_EXCLUSION_SYMBOL_COUNT:
+        raise ValueError("large-cap preregistration data-quality exclusion symbol count drifted")
+    if exclusion_policy.get("max_excluded_observations") != EXPECTED_REVIEWED_EXCLUSION_OBSERVATION_COUNT:
+        raise ValueError("large-cap preregistration data-quality exclusion observation count drifted")
+    if exclusion_policy.get("drop_excluded_symbols_before_signal_scoring") is not True:
+        raise ValueError("large-cap preregistration must drop reviewed exclusions before signal scoring")
+    if exclusion_policy.get("backfill_next_main_board_by_circ_mv") is not True:
+        raise ValueError("large-cap preregistration must backfill reviewed exclusions by circ_mv")
+    if exclusion_policy.get("materialized_top500_rederivation_unchanged") is not True:
+        raise ValueError("large-cap preregistration must keep materialized top500 re-derivation unchanged")
     neutralization = prereg.get("frozen_design", {}).get("neutralization_rule") or {}
     if neutralization.get("size_bucket_count") != 5:
         raise ValueError("large-cap preregistration size bucket count drifted")
@@ -335,7 +372,85 @@ def load_prior_audited_universe(prior_raw_root: Path) -> set[str]:
     return universe
 
 
-def select_top500(records: list[dict[str, Any]]) -> list[tuple[str, float]]:
+def load_and_validate_data_quality_exclusion_decision(path: Path = DATA_QUALITY_EXCLUSION_DECISION_PATH) -> dict[str, Any]:
+    decision = read_json(path)
+    validate_json(DATA_QUALITY_EXCLUSION_DECISION_SCHEMA_PATH, decision)
+    if decision.get("schema_name") != "a_long_large_cap_data_quality_exclusion_decision":
+        raise ValueError("data-quality exclusion decision schema_name mismatch")
+    scope = decision.get("scope") or {}
+    for field in [
+        "research_only",
+        "user_approved_bounded_exclusion",
+        "manual_order_only",
+    ]:
+        if scope.get(field) is not True:
+            raise ValueError(f"data-quality exclusion scope.{field} must be true")
+    for field in [
+        "provider_call_executed",
+        "tushare_call_executed",
+        "data_fetch_executed",
+        "signal_search_executed",
+        "signal_search_authorized_by_this_decision",
+        "alpha_backtest_executed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "datahub_allowed",
+        "broker_or_order_automation_allowed",
+    ]:
+        if scope.get(field) is not False:
+            raise ValueError(f"data-quality exclusion scope.{field} must be false")
+
+    exclusions = decision.get("reviewed_exclusions") or []
+    observed_symbols = {item.get("ts_code") for item in exclusions}
+    observed_pairs = {
+        (as_of, item.get("ts_code"))
+        for item in exclusions
+        for as_of in item.get("affected_as_of_dates", [])
+    }
+    if observed_symbols != EXPECTED_REVIEWED_EXCLUSION_SYMBOLS:
+        raise ValueError("data-quality exclusion symbol set drifted")
+    if observed_pairs != EXPECTED_REVIEWED_EXCLUSION_OBSERVATIONS:
+        raise ValueError("data-quality exclusion affected observations drifted")
+
+    policy = decision.get("backfill_policy") or {}
+    if policy.get("drop_excluded_symbol_from_signal_universe") is not True:
+        raise ValueError("data-quality exclusion policy must drop reviewed symbols from signal universe")
+    if policy.get("drop_only_for_affected_as_of_dates") is not True:
+        raise ValueError("data-quality exclusion policy must stay date-bounded")
+    if policy.get("backfill_next_main_board_symbol_by_circ_mv") is not True:
+        raise ValueError("data-quality exclusion policy must backfill by circ_mv")
+    if policy.get("keep_universe_size_n_after_backfill") != UNIVERSE_SIZE_N:
+        raise ValueError("data-quality exclusion policy universe size drifted")
+    if policy.get("keep_materialization_top500_rederivation_unchanged") is not True:
+        raise ValueError("data-quality exclusion policy must keep materialization re-derivation unchanged")
+
+    decision_block = decision.get("decision") or {}
+    if decision_block.get("decision_status") != "reviewed_user_approved_bounded_data_quality_exclusion":
+        raise ValueError("data-quality exclusion decision status mismatch")
+    if decision_block.get("max_excluded_symbols") != EXPECTED_REVIEWED_EXCLUSION_SYMBOL_COUNT:
+        raise ValueError("data-quality exclusion max symbol count drifted")
+    if decision_block.get("max_excluded_observations") != EXPECTED_REVIEWED_EXCLUSION_OBSERVATION_COUNT:
+        raise ValueError("data-quality exclusion max observation count drifted")
+    if decision_block.get("ledger_spent_by_this_decision") is not False:
+        raise ValueError("data-quality exclusion decision must not spend the singleton ledger")
+    if decision_block.get("audit_rerun_required_after_this_decision") is not True:
+        raise ValueError("data-quality exclusion decision must require an audit rerun")
+    if decision_block.get("signal_search_authorized_by_this_decision") is not False:
+        raise ValueError("data-quality exclusion decision must not authorize signal search")
+    return decision
+
+
+def reviewed_exclusions_by_as_of(decision: dict[str, Any]) -> dict[str, set[str]]:
+    exclusions: dict[str, set[str]] = {}
+    for item in decision.get("reviewed_exclusions", []):
+        symbol = str(item["ts_code"])
+        for as_of in item.get("affected_as_of_dates", []):
+            exclusions.setdefault(str(as_of), set()).add(symbol)
+    return exclusions
+
+
+def ranked_main_board_by_market_cap(records: list[dict[str, Any]]) -> list[tuple[str, float]]:
     selected: list[tuple[float, str]] = []
     for row in records:
         symbol = str(row.get("ts_code") or "")
@@ -343,7 +458,29 @@ def select_top500(records: list[dict[str, Any]]) -> list[tuple[str, float]]:
         if value is not None and is_main_board_ts_code(symbol):
             selected.append((value, symbol))
     selected.sort(key=lambda item: item[0], reverse=True)
+    return [(symbol, value) for value, symbol in selected]
+
+
+def select_top500(records: list[dict[str, Any]]) -> list[tuple[str, float]]:
+    selected = ranked_main_board_by_market_cap(records)
     return [(symbol, value) for value, symbol in selected[:UNIVERSE_SIZE_N]]
+
+
+def signal_universe_after_exclusion_backfill(
+    ranked: list[tuple[str, float]],
+    *,
+    as_of: str,
+    reviewed_exclusions: dict[str, set[str]],
+) -> list[tuple[str, float]]:
+    exclusions_for_date = reviewed_exclusions.get(as_of, set())
+    signal_universe: list[tuple[str, float]] = []
+    for symbol, value in ranked:
+        if symbol in exclusions_for_date:
+            continue
+        signal_universe.append((symbol, value))
+        if len(signal_universe) == UNIVERSE_SIZE_N:
+            break
+    return signal_universe
 
 
 def size_quintile_counts(selected: list[tuple[str, float]]) -> dict[str, int]:
@@ -359,7 +496,12 @@ def _round(value: float | None) -> float | None:
     return None if value is None else round(value, 6)
 
 
-def audit_monthly_payloads(summary: dict[str, Any], raw_root: Path, prior_universe: set[str]) -> list[dict[str, Any]]:
+def audit_monthly_payloads(
+    summary: dict[str, Any],
+    raw_root: Path,
+    prior_universe: set[str],
+    reviewed_exclusions: dict[str, set[str]],
+) -> list[dict[str, Any]]:
     monthly_rows: list[dict[str, Any]] = []
     endpoint_results = summary.get("endpoint_results") or []
     if len(endpoint_results) != len(MONTHLY_AS_OF_DATES):
@@ -381,9 +523,21 @@ def audit_monthly_payloads(summary: dict[str, Any], raw_root: Path, prior_univer
         positive_main_board = [
             row for row in main_board_rows if _positive_float(row.get(SELECTED_MARKET_CAP_FIELD)) is not None
         ]
-        selected = select_top500(records)
+        ranked = ranked_main_board_by_market_cap(records)
+        rank_by_symbol = {symbol: idx + 1 for idx, (symbol, _value) in enumerate(ranked)}
+        selected = ranked[:UNIVERSE_SIZE_N]
         selected_symbols = [symbol for symbol, _value in selected]
-        outside_prior = sorted(set(selected_symbols) - prior_universe)
+        raw_outside_prior = sorted(set(selected_symbols) - prior_universe)
+        documented_exclusions = sorted(set(raw_outside_prior) & reviewed_exclusions.get(expected_as_of, set()))
+        unresolved_outside_prior = sorted(set(raw_outside_prior) - set(documented_exclusions))
+        signal_universe = signal_universe_after_exclusion_backfill(
+            ranked,
+            as_of=expected_as_of,
+            reviewed_exclusions=reviewed_exclusions,
+        )
+        signal_universe_symbols = [symbol for symbol, _value in signal_universe]
+        signal_universe_outside_prior = sorted(set(signal_universe_symbols) - prior_universe)
+        backfilled_count = sum(1 for symbol in signal_universe_symbols if rank_by_symbol.get(symbol, 0) > UNIVERSE_SIZE_N)
         quintiles = size_quintile_counts(selected)
         selected_values = [value for _symbol, value in selected]
 
@@ -410,8 +564,16 @@ def audit_monthly_payloads(summary: dict[str, Any], raw_root: Path, prior_univer
                 "selected_top500_min_circ_mv": _round(selected_min),
                 "selected_top500_max_circ_mv": _round(selected_max),
                 "summary_rederivation_mismatch": summary_mismatch,
-                "outside_prior_audited_universe_count": len(outside_prior),
-                "outside_prior_audited_universe_sample": outside_prior[:20],
+                "raw_top500_outside_prior_audited_universe_count": len(raw_outside_prior),
+                "documented_data_quality_exclusion_count": len(documented_exclusions),
+                "documented_data_quality_exclusion_sample": documented_exclusions[:20],
+                "outside_prior_audited_universe_count": len(unresolved_outside_prior),
+                "outside_prior_audited_universe_sample": unresolved_outside_prior[:20],
+                "signal_universe_count_after_exclusion_backfill": len(signal_universe),
+                "signal_universe_complete_after_exclusion_backfill": len(signal_universe) == UNIVERSE_SIZE_N,
+                "signal_universe_backfill_count": backfilled_count,
+                "signal_universe_outside_prior_audited_universe_count": len(signal_universe_outside_prior),
+                "signal_universe_outside_prior_audited_universe_sample": signal_universe_outside_prior[:20],
                 "size_q1_count": quintiles["q1"],
                 "size_q2_count": quintiles["q2"],
                 "size_q3_count": quintiles["q3"],
@@ -450,7 +612,27 @@ def checks_from_monthly_rows(summary: dict[str, Any], monthly_rows: list[dict[st
     )
     summary_mismatch_count = sum(1 for row in monthly_rows if row["summary_rederivation_mismatch"])
     outside_count = sum(row["outside_prior_audited_universe_count"] for row in monthly_rows)
+    raw_outside_count = sum(row["raw_top500_outside_prior_audited_universe_count"] for row in monthly_rows)
+    documented_exclusion_count = sum(row["documented_data_quality_exclusion_count"] for row in monthly_rows)
+    documented_exclusion_pairs = {
+        (row["as_of"], symbol)
+        for row in monthly_rows
+        for symbol in row["documented_data_quality_exclusion_sample"]
+    }
+    documented_exclusion_policy_mismatch = documented_exclusion_pairs != EXPECTED_REVIEWED_EXCLUSION_OBSERVATIONS
+    signal_universe_incomplete_months = sum(
+        not row["signal_universe_complete_after_exclusion_backfill"] for row in monthly_rows
+    )
+    signal_universe_outside_count = sum(row["signal_universe_outside_prior_audited_universe_count"] for row in monthly_rows)
+    signal_universe_backfill_count = sum(row["signal_universe_backfill_count"] for row in monthly_rows)
     size_thin_months = sum(row["minimum_size_quintile_count"] < MIN_SIZE_QUINTILE_COUNT for row in monthly_rows)
+    bridge_pass = (
+        outside_count == 0
+        and documented_exclusion_count == EXPECTED_REVIEWED_EXCLUSION_OBSERVATION_COUNT
+        and not documented_exclusion_policy_mismatch
+        and signal_universe_incomplete_months == 0
+        and signal_universe_outside_count == 0
+    )
 
     checks = [
         make_check(
@@ -503,15 +685,26 @@ def checks_from_monthly_rows(summary: dict[str, Any], monthly_rows: list[dict[st
         ),
         make_check(
             "prior_full_main_board_universe_bridge",
-            "pass_large_cap_market_cap_audit" if outside_count == 0 else "fail_data_not_ready",
+            "pass_large_cap_market_cap_audit" if bridge_pass else "fail_data_not_ready",
             {
                 "prior_audited_universe_count": len(prior_universe),
-                "total_outside_prior_audited_universe_observations": outside_count,
+                "raw_top500_outside_prior_audited_universe_observations": raw_outside_count,
+                "documented_data_quality_exclusion_observations": documented_exclusion_count,
+                "expected_documented_data_quality_exclusion_observations": EXPECTED_REVIEWED_EXCLUSION_OBSERVATION_COUNT,
+                "documented_data_quality_exclusion_policy_mismatch": documented_exclusion_policy_mismatch,
+                "total_unresolved_outside_prior_audited_universe_observations": outside_count,
                 "months_with_outside_prior_universe": sum(row["outside_prior_audited_universe_count"] > 0 for row in monthly_rows),
+                "signal_universe_backfill_observations": signal_universe_backfill_count,
+                "signal_universe_incomplete_month_count": signal_universe_incomplete_months,
+                "signal_universe_outside_prior_audited_universe_observations": signal_universe_outside_count,
             },
-            ["Every re-derived monthly top-500 symbol is inside the prior audited full-main-board raw universe."]
-            if outside_count == 0
-            else ["Some top-500 symbols are outside the prior audited full-main-board raw universe and cannot safely enter signal scoring."],
+            [
+                "Raw top-500 re-derivation contains only the reviewed 000043.SZ / 20191129 data-quality exclusion outside the prior universe; the signal universe drops it, backfills the next main-board name by circ_mv, and bridges to the prior audited raw universe."
+            ]
+            if bridge_pass
+            else [
+                "The raw top-500 universe has an unreviewed prior-universe gap, the documented exclusion policy drifted, or the post-exclusion/backfilled signal universe is incomplete or outside the prior audited raw universe."
+            ],
         ),
         make_check(
             "size_quintile_coverage",
@@ -541,7 +734,7 @@ def decision_from_checks(checks: list[dict[str, Any]]) -> dict[str, Any]:
         "signal_search_authorized_by_this_report": False,
         "alpha_found": False,
         "plain_result": (
-            "Large-cap market-cap universe audit passed: the 96 monthly top-500-by-circ_mv universes are re-derivable from raw, main-board-only, bridge to the prior audited full-main-board raw universe, and have usable size-quintile coverage."
+            "Large-cap market-cap universe audit passed: the 96 monthly top-500-by-circ_mv universes are re-derivable from raw, main-board-only, have usable size-quintile coverage, and bridge to the prior audited full-main-board raw universe after applying the single reviewed 000043.SZ / 20191129 data-quality exclusion plus next-main-board circ_mv backfill for the future signal universe."
             if hard_pass
             else "Large-cap market-cap universe audit failed or is blocked; do not build or run signal search."
         ),
@@ -633,6 +826,7 @@ def build_report(
     summary: dict[str, Any],
     monthly_rows: list[dict[str, Any]],
     prior_universe: set[str],
+    exclusion_decision: dict[str, Any],
     self_tests: list[dict[str, Any]],
     confirm_independent_review_pass: bool,
     confirm_post_review_execute: bool,
@@ -651,6 +845,7 @@ def build_report(
             "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json",
             "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
             "docs/a_long_main_board_sw_coverage_repair_execution_summary_20260604.json",
+            DATA_QUALITY_EXCLUSION_DECISION_REF,
         ],
         "scope": {
             "phase": "7a_alpha_validation",
@@ -679,6 +874,7 @@ def build_report(
             "materialization_summary_ref": "docs/a_long_large_cap_market_cap_materialization_execution_summary_20260607.json",
             "market_cap_raw_root": MARKET_CAP_RAW_ROOT_REL.as_posix() + "/",
             "prior_full_main_board_raw_root": PRIOR_FULL_RAW_ROOT_REL.as_posix() + "/",
+            "data_quality_exclusion_decision_ref": DATA_QUALITY_EXCLUSION_DECISION_REF,
             "monthly_as_of_count": len(MONTHLY_AS_OF_DATES),
             "months_audited": len(monthly_rows),
             "network_calls_executed": 0,
@@ -703,6 +899,12 @@ def build_report(
             "monthly_as_of_dates": list(MONTHLY_AS_OF_DATES),
             "same_as_materialization_dates": True,
             "prior_audited_universe_count": len(prior_universe),
+            "reviewed_data_quality_exclusion_decision_ref": DATA_QUALITY_EXCLUSION_DECISION_REF,
+            "reviewed_data_quality_exclusion_status": exclusion_decision["decision"]["decision_status"],
+            "reviewed_data_quality_exclusion_symbol_count": EXPECTED_REVIEWED_EXCLUSION_SYMBOL_COUNT,
+            "reviewed_data_quality_exclusion_observation_count": EXPECTED_REVIEWED_EXCLUSION_OBSERVATION_COUNT,
+            "signal_universe_backfill_policy": DATA_QUALITY_EXCLUSION_BACKFILL_POLICY,
+            "materialized_top500_summary_unchanged_after_exclusion": True,
             "size_bucket_count": 5,
             "minimum_size_bucket_count_for_primary_percentile": MIN_SIZE_QUINTILE_COUNT,
             "top500_symbols_written_to_tracked_report": False,
@@ -731,8 +933,9 @@ def build_report(
         "limitations": [
             "This audit checks market-cap universe materialization only; it does not calculate signals or returns.",
             "Tracked outputs contain no raw rows and no complete monthly top-500 symbol lists.",
+            "The single reviewed 000043.SZ / 20191129 data-quality exclusion is count-reported in the tracked audit output because it is the explicit bridge repair decision, not a complete universe list.",
             "A PASS can only unlock a later reviewed signal-search package; it does not authorize running signal search by itself.",
-            "Any future signal-search runner must re-derive the universe from the retained raw using the same 96 as-ofs, main-board filter, and top-500-by-circ_mv rule.",
+            "Any future signal-search runner must re-derive the universe from the retained raw using the same 96 as-ofs, main-board filter, and top-500-by-circ_mv rule, then drop the reviewed 000043.SZ / 20191129 exclusion and backfill the next main-board name by circ_mv before scoring.",
         ],
     }
 
@@ -757,8 +960,10 @@ def execute_audit(
     validate_prior_full_audit_report()
     summary = read_json(summary_path)
     validate_materialization_summary(summary)
+    exclusion_decision = load_and_validate_data_quality_exclusion_decision()
+    reviewed_exclusions = reviewed_exclusions_by_as_of(exclusion_decision)
     prior_universe = load_prior_audited_universe(prior_full_raw_root)
-    monthly_rows = audit_monthly_payloads(summary, raw_root, prior_universe)
+    monthly_rows = audit_monthly_payloads(summary, raw_root, prior_universe, reviewed_exclusions)
     self_tests = run_runner_self_tests()
     if any(item["status"] != "pass" for item in self_tests):
         raise RuntimeError("large-cap market-cap audit self-tests failed")
@@ -768,6 +973,7 @@ def execute_audit(
         summary=summary,
         monthly_rows=monthly_rows,
         prior_universe=prior_universe,
+        exclusion_decision=exclusion_decision,
         self_tests=self_tests,
         confirm_independent_review_pass=confirm_independent_review_pass,
         confirm_post_review_execute=confirm_post_review_execute,

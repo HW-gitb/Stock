@@ -1,5 +1,23 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-07 append: A-long large-cap 000043 bridge repair and local audit PASS
+
+**Changed**:
+- Registered the user-approved bounded data-quality exclusion for `000043.SZ` on `20191129`.
+- Added `schemas/a_long_large_cap_data_quality_exclusion_decision.schema.json` and `docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json`.
+- Updated the large-cap preregistration, audit packet/schema, audit runner, and tests so the materialized raw top-500 re-derivation stays unchanged, but the future signal universe drops the documented observation and backfills the next main-board name by `circ_mv`.
+- Reran only the local market-cap audit and regenerated `research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json` plus `monthly_coverage.csv`.
+
+**Plain result**:
+- The repaired local audit now passes: raw top-500 outside-prior observations `1`, documented exclusions `1`, unresolved outside observations `0`, and signal-universe backfill observations `1`.
+- This is data-readiness only. It does not run signal search, spend the large-cap singleton ledger, compute alpha, or authorize production / ship-gate / full-size use.
+
+**Next**:
+- Independent review of this repair and the repaired audit result.
+- After review PASS + commit, the next separate step may build a signal-search package. The audit report itself still does not authorize running signal search.
+
+---
+
 ## 2026-06-07 append: A-long large-cap market-cap audit package ready for review
 
 **Changed**:

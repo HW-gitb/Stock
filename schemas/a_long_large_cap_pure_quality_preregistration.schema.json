@@ -278,6 +278,8 @@
         "pit_list_delist_required",
         "selection_time_namechange_veto_required",
         "reviewed_no_industry_boundary_ref",
+        "reviewed_data_quality_exclusion_boundary_ref",
+        "reviewed_data_quality_exclusion_policy",
         "st_star_bse_chinext_excluded"
       ],
       "properties": {
@@ -293,7 +295,45 @@
         "pit_list_delist_required": {"const": true},
         "selection_time_namechange_veto_required": {"const": true},
         "reviewed_no_industry_boundary_ref": {"const": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json"},
+        "reviewed_data_quality_exclusion_boundary_ref": {"const": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json"},
+        "reviewed_data_quality_exclusion_policy": {"$ref": "#/$defs/dataQualityExclusionPolicy"},
         "st_star_bse_chinext_excluded": {"const": true}
+      }
+    },
+    "dataQualityExclusionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "excluded_symbols",
+        "affected_as_of_dates",
+        "max_excluded_symbols",
+        "max_excluded_observations",
+        "drop_excluded_symbols_before_signal_scoring",
+        "backfill_next_main_board_by_circ_mv",
+        "materialized_top500_rederivation_unchanged",
+        "threshold_rescue_allowed"
+      ],
+      "properties": {
+        "excluded_symbols": {
+          "type": "array",
+          "items": {"const": "000043.SZ"},
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "affected_as_of_dates": {
+          "type": "array",
+          "items": {"const": "20191129"},
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "max_excluded_symbols": {"const": 1},
+        "max_excluded_observations": {"const": 1},
+        "drop_excluded_symbols_before_signal_scoring": {"const": true},
+        "backfill_next_main_board_by_circ_mv": {"const": true},
+        "materialized_top500_rederivation_unchanged": {"const": true},
+        "threshold_rescue_allowed": {"const": false}
       }
     },
     "signalRule": {

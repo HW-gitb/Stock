@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_large_cap_data_quality_exclusion_decision/1.0.0/schema.json",
+  "title": "A-long Large-Cap Data-Quality Exclusion Decision",
+  "description": "Reviewed bounded data-quality exclusion decision for a single A-long large-cap pure-quality market-cap universe bridge gap. It authorizes no signal search, alpha claim, production use, ship-gate evidence, full-size use, DataHub work, provider call, or broker/order automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "source_refs",
+    "reviewed_exclusions",
+    "backfill_policy",
+    "decision",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_large_cap_data_quality_exclusion_decision"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_large_cap_data_quality_exclusion_decision_20260607"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "source_refs": {"$ref": "#/$defs/sourceRefs"},
+    "reviewed_exclusions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {"$ref": "#/$defs/reviewedExclusion"}
+    },
+    "backfill_policy": {"$ref": "#/$defs/backfillPolicy"},
+    "decision": {"$ref": "#/$defs/decision"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "date8": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "role"],
+        "properties": {
+          "path": {"$ref": "#/$defs/nonEmptyString"},
+          "role": {"$ref": "#/$defs/nonEmptyString"}
+        }
+      },
+      "minItems": 4,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "docs/SESSION_LOG.md"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "research/results/a_long_large_cap_market_cap_audit_20260607/monthly_coverage.csv"}},
+            "required": ["path"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json"}},
+            "required": ["path"]
+          }
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "user_approved_bounded_exclusion",
+        "provider_call_executed",
+        "tushare_call_executed",
+        "data_fetch_executed",
+        "signal_search_executed",
+        "signal_search_authorized_by_this_decision",
+        "alpha_backtest_executed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "datahub_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_large_cap_data_quality_exclusion_decision"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "user_approved_bounded_exclusion": {"const": true},
+        "provider_call_executed": {"const": false},
+        "tushare_call_executed": {"const": false},
+        "data_fetch_executed": {"const": false},
+        "signal_search_executed": {"const": false},
+        "signal_search_authorized_by_this_decision": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "datahub_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "reviewedExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts_code",
+        "affected_as_of_dates",
+        "raw_top500_rank",
+        "raw_market_cap_field",
+        "raw_circ_mv_wan",
+        "prior_full_audited_fundamentals_available",
+        "prior_full_raw_payloads_present",
+        "reason_code",
+        "treatment"
+      ],
+      "properties": {
+        "ts_code": {"const": "000043.SZ"},
+        "affected_as_of_dates": {
+          "type": "array",
+          "items": {"const": "20191129"},
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "raw_top500_rank": {"const": 496},
+        "raw_market_cap_field": {"const": "circ_mv"},
+        "raw_circ_mv_wan": {"const": 1336920.7991},
+        "prior_full_audited_fundamentals_available": {"const": false},
+        "prior_full_raw_payloads_present": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["income", "balancesheet", "cashflow", "fina_indicator", "daily", "adj_factor"],
+          "properties": {
+            "income": {"const": false},
+            "balancesheet": {"const": false},
+            "cashflow": {"const": false},
+            "fina_indicator": {"const": false},
+            "daily": {"const": false},
+            "adj_factor": {"const": false}
+          }
+        },
+        "reason_code": {"const": "no_audited_fundamentals_late_2019_restructuring_suspension"},
+        "treatment": {"const": "drop_from_future_signal_universe_for_affected_as_of_and_backfill_next_main_board_by_circ_mv"}
+      }
+    },
+    "backfillPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "drop_excluded_symbol_from_signal_universe",
+        "drop_only_for_affected_as_of_dates",
+        "backfill_next_main_board_symbol_by_circ_mv",
+        "keep_universe_size_n_after_backfill",
+        "keep_materialization_top500_rederivation_unchanged",
+        "audit_must_report_raw_outside_and_documented_exclusion_counts",
+        "future_signal_search_runner_must_enforce"
+      ],
+      "properties": {
+        "drop_excluded_symbol_from_signal_universe": {"const": true},
+        "drop_only_for_affected_as_of_dates": {"const": true},
+        "backfill_next_main_board_symbol_by_circ_mv": {"const": true},
+        "keep_universe_size_n_after_backfill": {"const": 500},
+        "keep_materialization_top500_rederivation_unchanged": {"const": true},
+        "audit_must_report_raw_outside_and_documented_exclusion_counts": {"const": true},
+        "future_signal_search_runner_must_enforce": {"const": true}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_status",
+        "max_excluded_symbols",
+        "max_excluded_observations",
+        "exclusion_symbol_count",
+        "exclusion_observation_count",
+        "ledger_spent_by_this_decision",
+        "audit_rerun_required_after_this_decision",
+        "signal_search_authorized_by_this_decision"
+      ],
+      "properties": {
+        "decision_status": {"const": "reviewed_user_approved_bounded_data_quality_exclusion"},
+        "max_excluded_symbols": {"const": 1},
+        "max_excluded_observations": {"const": 1},
+        "exclusion_symbol_count": {"const": 1},
+        "exclusion_observation_count": {"const": 1},
+        "ledger_spent_by_this_decision": {"const": false},
+        "audit_rerun_required_after_this_decision": {"const": true},
+        "signal_search_authorized_by_this_decision": {"const": false}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_alpha_found",
+        "signal_search_executed",
+        "signal_search_authorized",
+        "alpha_backtest_executed",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "provider_selected",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "a_long_alpha_found": {"const": false},
+        "signal_search_executed": {"const": false},
+        "signal_search_authorized": {"const": false},
+        "alpha_backtest_executed": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "provider_selected": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}

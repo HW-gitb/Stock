@@ -56,6 +56,10 @@
       "role": "reviewed daily_basic field probe result; circ_mv passed all fixed anchors and is frozen for later materialization packets"
     },
     {
+      "path": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+      "role": "reviewed bounded data-quality exclusion for the single 000043.SZ / 20191129 market-cap bridge gap; future signal universe must drop it and backfill the next main-board name by circ_mv"
+    },
+    {
       "path": "docs/system_risk_register.md",
       "role": "durable queue for A-long no-rerun/no-rescue and new-preregistration risk boundaries"
     },
@@ -113,6 +117,21 @@
       "pit_list_delist_required": true,
       "selection_time_namechange_veto_required": true,
       "reviewed_no_industry_boundary_ref": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+      "reviewed_data_quality_exclusion_boundary_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+      "reviewed_data_quality_exclusion_policy": {
+        "excluded_symbols": [
+          "000043.SZ"
+        ],
+        "affected_as_of_dates": [
+          "20191129"
+        ],
+        "max_excluded_symbols": 1,
+        "max_excluded_observations": 1,
+        "drop_excluded_symbols_before_signal_scoring": true,
+        "backfill_next_main_board_by_circ_mv": true,
+        "materialized_top500_rederivation_unchanged": true,
+        "threshold_rescue_allowed": false
+      },
       "st_star_bse_chinext_excluded": true
     },
     "signal_rule": {
@@ -231,6 +250,7 @@
       "Report 504d primary result and 252d diagnostic result; 252d cannot rescue primary failure.",
       "Report the three component factors and earnings_stability as diagnostics; single-factor or earnings_stability success cannot define alpha.",
       "Report top-500 PIT market-cap coverage, selected market-cap field, marginal industry-neutral score coverage, marginal size-neutral quintile coverage, and top-count-by-month.",
+      "Report the reviewed 000043.SZ / 20191129 data-quality exclusion and confirm the future signal universe drops it and backfills the next main-board name by circ_mv before scoring.",
       "Report yearly contribution, name concentration, tail excess, and max monthly excess drawdown.",
       "Report restatement-exclusion application count and abort if the exclusion list is missing or unapplied.",
       "Report no raw rows, endpoint results, request URL, or secret in any tracked summary."
@@ -278,12 +298,14 @@
     "Independent review must validate this preregistration, schema, ledger, tests, and docs before any data probe or signal-search work.",
     "After the reviewed field-probe PASS, circ_mv is the frozen market-cap field for later materialization packets.",
     "A separate reviewed materialization packet must still be prepared and committed before any daily_basic monthly pull.",
+    "The reviewed 000043.SZ / 20191129 data-quality exclusion must be consumed by the local audit and any future signal-search package: drop that observation from scoring and backfill the next main-board name by circ_mv while keeping raw materialized top-500 re-derivation unchanged.",
     "Only after reviewed materialization and a later reviewed audit may a signal-search implementation be proposed.",
     "No signal-search runner execution, daily_basic pull, provider call, DataHub work, production claim, ship-gate claim, or full-size use is authorized by this artifact."
   ],
   "limitations": [
     "This artifact registers a design only; it does not execute data access or signal search.",
     "Market-cap field availability is proven only at the three fixed probe anchors; the later materialization must re-check monthly coverage.",
+    "The 000043.SZ exclusion resolves only one reviewed data-quality bridge observation and cannot be generalized to other symbols, dates, thresholds, horizons, or benchmarks.",
     "The prior full main-board no-alpha result remains failed under its own frozen rules and is not reinterpreted by this artifact.",
     "A positive future backtest would still be research-only until the unchanged project ship gate, including at least 12 months of forward-live evidence, is satisfied."
   ]

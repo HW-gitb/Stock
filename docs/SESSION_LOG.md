@@ -8,6 +8,83 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (R-BRIDGE-000043 fix + RE-RUN audit RESULT, uncommitted on HEAD 7f544ab) — **PASS (both) — bounded exclusion correct + re-run audit now PASSES, independently verified; ready to commit**
+
+Codex implemented the approved fix AND re-ran the local audit during 修复; reviewed both.
+
+**(1) Fix code — PASS.** Full read of the audit runner diff + the new exclusion decision doc + the prereg diff. Precisely implements approved Option 1: `docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json` (strict schema, additionalProperties:false ×8) documents exactly `000043.SZ`/`20191129` (rank 496, all 6 prior-raw payload types absent, reason `no_audited_fundamentals_late_2019_restructuring_suspension`, bounded 1/1, ledger-not-spent, rerun-required). `select_top500` is unchanged → `top500_rederivation_consistency` and the materialization summary stay intact. The bridge subtracts documented exclusions (`unresolved = raw_outside − documented`) and ADDITIONALLY requires the post-exclusion+backfill signal universe to be complete (500) AND fully inside the prior universe — so it verifies the rank-501 backfill is itself scoreable. Hardcoded `EXPECTED_REVIEWED_EXCLUSION_OBSERVATIONS={("20191129","000043.SZ")}` drift-guards against scope creep. The prereg registers the frozen signal-universe exclusion+backfill policy (drop before scoring, backfill next main-board by circ_mv, keep N=500, materialization re-derivation unchanged, no generalization). 24/24 tests pass in my jsonschema env (incl. the drop+backfill path, bridge-pass-after-backfill, and the negative undocumented-outside-fails case).
+
+**(2) Re-run audit RESULT — PASS, independently verified.** Codex re-ran the local audit (generated 11:44Z): decision `passed_large_cap_market_cap_audit_for_signal_package`, hard_pass=true, `signal_search_authorized_by_this_report=false`, 6/6 checks pass, 5/5 self-tests, 0 network calls, ledger unspent (0). I independently recomputed all 96 `monthly_coverage` rows: raw_outside=1, documented_exclusion=1 (exactly 000043.SZ@20191129), unresolved_outside=0, signal universe complete (500) for all 96 months, signal_universe_outside=0, backfill=1 (the single rank-501 replacement on 20191129). Report schema-valid. The bridge now passes genuinely — the one documented exclusion is honored, the backfilled universe is complete and fully inside the prior audited 3387 universe, nothing else drifted.
+
+**Verdict**: PASS on both the fix and the re-run audit result. The large-cap top-500-by-circ_mv monthly universe (2018–2025, 96 as-ofs) is now fully audited and signal-ready, with the single reviewed 000043.SZ/20191129 data-quality exclusion + rank-501 backfill. Nothing here spends the ledger or authorizes signal search. Sequence: commit the fix + the re-run PASS result → then the SIGNAL-SEARCH package (build → review → approve → `执行`; the ledger-spending registered test, which must reuse the same 96 as-ofs + `is_main_board_ts_code` + top-500-by-circ_mv + the 0.5/0.5 marginal double-neutralization + this exclusion/backfill policy). Immediate next: commit.
+
+---
+
+## 2026-06-07 — Codex 修复 (A-long large-cap R-BRIDGE-000043) — **READY FOR REVIEW / repaired audit PASS, no signal search**
+
+Implemented only the user-approved Option 1 from the Claude audit-result review: a bounded data-quality exclusion for `000043.SZ` on `20191129`, with future signal-universe drop plus next-main-board `circ_mv` backfill. No provider call, data fetch, signal search, alpha backtest, ledger spend, DataHub work, production claim, ship-gate claim, full-size use, or broker/order automation was executed or authorized.
+
+**Worked on**:
+- [tracked] `schemas/a_long_large_cap_data_quality_exclusion_decision.schema.json` and `docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json`: new strict decision artifact locking exactly one reviewed exclusion (`000043.SZ` / `20191129`), no audited fundamentals in the prior raw route, no ledger spend, and no signal-search authorization.
+- [tracked] `research/preregistrations/a_long_large_cap_pure_quality_20260607.json` and `schemas/a_long_large_cap_pure_quality_preregistration.schema.json`: freeze the data-quality exclusion/backfill policy into the NEW large-cap preregistration so future signal-search code must drop the reviewed observation and backfill the next main-board name by `circ_mv`.
+- [tracked] `docs/a_long_large_cap_market_cap_audit_packet_20260607.json`, `schemas/a_long_large_cap_market_cap_audit_packet.schema.json`, `runners/a_long_large_cap_market_cap_audit.py`, and `schemas/a_long_large_cap_market_cap_audit_report.schema.json`: audit now consumes the decision artifact, keeps raw top-500 materialization re-derivation unchanged, separately reports raw top-500 outside observations, documented exclusions, unresolved gaps, and post-exclusion/backfilled signal-universe bridge counts.
+- [tracked] `tests/test_a_long_large_cap_market_cap_audit.py`, `tests/schema/test_a_long_large_cap_market_cap_audit_schema.py`, and `tests/schema/test_a_long_large_cap_pure_quality_preregistration_schema.py`: cover the documented exclusion PASS path, unapproved gap FAIL path, decision-artifact schema lock, and prereg backfill policy lock.
+- [tracked] `docs/README.md`, `research/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, and `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the new exclusion decision and repaired audit result; keep signal search locked pending review/commit.
+- [untracked] `research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json` and `research/results/a_long_large_cap_market_cap_audit_20260607/monthly_coverage.csv`: regenerated local audit outputs after the repair.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_long_large_cap_market_cap_audit tests.schema.test_a_long_large_cap_market_cap_audit_schema tests.schema.test_a_long_large_cap_pure_quality_preregistration_schema -v` — 24 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "*large_cap*" -v` — 52 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "*a_long*" -v` — 315 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\a_long_large_cap_market_cap_audit.py --confirm-independent-review-pass --confirm-post-review-execute` — PASS: `passed_large_cap_market_cap_audit_for_signal_package`, `hard_checks_pass=true`, `signal_search_authorized_by_this_report=false`.
+- Repaired bridge metrics in `audit_report.json`: raw top-500 outside-prior observations `1`, documented exclusions `1`, expected documented exclusions `1`, policy mismatch `false`, unresolved outside observations `0`, signal-universe backfill observations `1`, incomplete signal-universe months `0`, signal-universe outside-prior observations `0`.
+- `monthly_coverage.csv` has exactly one documented exclusion row: `20191129`, `000043.SZ`, signal universe count after backfill `500`.
+
+**Next / lock**:
+- Claude should review the full working tree, including the new untracked audit result files and the new decision artifact.
+- If Claude passes and the user later invokes `提交`, commit this repair/result as one reviewed scope.
+- After review PASS + commit, the next separate step may build a signal-search package. Do not run signal search from this audit report; the large-cap singleton ledger remains unspent.
+
+---
+
+## 2026-06-07 — Claude 审查 (A-long large-cap market-cap AUDIT RESULT, research/results/a_long_large_cap_market_cap_audit_20260607/, untracked on HEAD 7f544ab) — **AUDIT IS CORRECT; legitimate FAIL — 1 Required (R-BRIDGE-000043); USER-APPROVED 2026-06-07 `批准修改` → Codex fix Option 1**
+
+The audit ran correctly and its FAIL is genuine, not a tooling bug. Independently recomputed all 96 `monthly_coverage` rows + validated the report against its schema (zero errors) in my jsonschema env. 5 of 6 hard checks PASS, all 5 runtime self-tests PASS, 0 network/provider calls (local-only), ledger still unspent, no leaks (no `records`/`top500_symbols`/`selected_symbols`). The re-derivation matches the materialization summary exactly (no `summary_rederivation_mismatch`, no date mismatch, all 96 months complete top-500, size-quintiles 100 each, main-board 2558–3199). The ONLY failing check is `prior_full_main_board_universe_bridge` with `outside_count = 1`.
+
+**Diagnosis of the 1 outside name (independently traced)**: `000043.SZ` (中航善达 → 招商积余) is in the top-500 at exactly ONE as-of, `20191129`, at **rank 496 of 2876** main-board names (circ_mv ≈ 133.7e4 万 = ~13.4bn) — i.e., a borderline entry whose valuation inflated just before its late-2019 restructuring suspension. It has `daily_basic` data for only 23 months (2018-01…2019-11) then disappears. **It is a genuine gap, not a reconstruction artifact**: the prior full-main-board raw has NO per-symbol files for 000043 (income/balancesheet/cashflow/fina_indicator/daily/adj_factor all absent — a normal name like 000001.SZ has all 7), and 000043 is absent from the prior `stock_basic_active_L` list entirely (neighbors 000042/000045/000048/000049 are present). So 000043 was never a prior-universe constituent and has **no audited fundamentals → the pure-quality composite cannot score it**.
+
+**Required R-BRIDGE-000043 (resolve before any signal search)**: a top-500 name with no audited fundamentals cannot enter the quality signal; the audit correctly blocks. Options for the fix (Claude proposes; Codex selects + implements):
+- **Option 1 (recommended) — documented bounded data-quality exclusion**, mirroring the prior user-approved `000666.SZ` exception: register `000043.SZ` (reason: no audited fundamentals + late-2019 restructuring suspension) as a reviewed bounded exclusion; the audit `prior_full_main_board_universe_bridge` honors documented exclusions (treats them as not-outside) and the future signal-search universe drops it and backfills the next main-board name by circ_mv (rank 501) to keep 500. Keeps the materialization + the frozen "top-500 by circ_mv" rule intact, so `top500_rederivation_consistency` stays PASS (the materialization summary is unchanged). Re-run the audit → expect bridge PASS. Minimal, precedented, PIT-clean.
+- **Option 2 — restrict the top-500 selection to names inside the audited-fundamentals universe** before the cut. More general, but it changes the frozen universe construction AND would make the re-derived top-500 disagree with the already-recorded materialization summary (breaking `top500_rederivation_consistency` unless the materialization is also re-run) — more churn, not recommended.
+- **Option 3 — extend the audited universe**: materialize 000043's fundamentals + re-audit. Impractical for one borderline restructuring-era name with messy 2019 fundamentals; rejected.
+
+This is a bounded universe exception (precedent: 000666.SZ was user-approved), so it needs user approval before Codex implements. **Watch-item (separate, low-priority)**: 000043 being absent from the prior `stock_basic_active_L` despite 招商积余 currently trading hints the prior stock list may have a small completeness gap; not worth reopening the committed prior universe for one borderline name, but noted.
+
+**Verdict**: the audit itself is a PASS (correct, fail-closed, well-tested); the audit RESULT is a legitimate `fail_data_not_ready` on 1 name. NOT a clean go — R-BRIDGE-000043 must be resolved (recommended Option 1) and the audit re-run to PASS before the signal-search package. Nothing here spends the ledger or authorizes signal search.
+
+**USER-APPROVED 2026-06-07 (`批准修改`)**: the user approved Option 1. Codex is authorized to implement the bounded data-quality exclusion of `000043.SZ` (reason: no audited fundamentals + late-2019 restructuring suspension), mirroring the prior reviewed `000666.SZ` exception: register it as a documented reviewed exclusion, have the audit `prior_full_main_board_universe_bridge` honor documented exclusions (treat them as not-outside), and ensure the future signal-search universe drops it and backfills the next main-board name by circ_mv to keep top-500. Keep the materialization summary + the frozen "top-500 by circ_mv" rule unchanged (so `top500_rederivation_consistency` stays PASS), keep the singleton ledger unspent. This is a `修复` build (+ a later `执行` re-run of the local audit) — NOT a signal search. After the fix Codex re-runs the audit; Claude re-reviews the re-run result (expect bridge PASS) before any signal-search package. Do not extend scope beyond this one documented exclusion.
+
+---
+
+## 2026-06-07 — Codex 执行 (A-long large-cap local market-cap audit RESULT) — **FAIL / data not ready — bridge gap: 000043.SZ**
+
+After commit `7f544ab` and the user's separate `执行`, Codex ran only:
+`C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\a_long_large_cap_market_cap_audit.py --confirm-independent-review-pass --confirm-post-review-execute`
+
+**Result**:
+- [untracked] `research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json`
+- [untracked] `research/results/a_long_large_cap_market_cap_audit_20260607/monthly_coverage.csv`
+- Audit status: `fail_data_not_ready`; hard checks pass = `false`; signal search remains unauthorized.
+- Five checks passed: materialization summary gate, raw refs/shape, top-500 re-derivation, main-board filter, and size-quintile coverage.
+- One hard check failed: `prior_full_main_board_universe_bridge`.
+- Narrow failure: exactly one outside-prior-universe observation, `000043.SZ` on `20191129`; it appears in the 2019-11-29 market-cap raw top-500 but is absent from the prior full-main-board active/delisted universe reconstruction and the reviewed 187-name delisted boundary.
+
+**Boundary**:
+- This is not alpha evidence and does not authorize signal search, production, ship-gate evidence, DataHub, broker/order automation, or full-size use.
+- Next step is independent review of the audit result and then a reviewed repair/design decision for the `000043.SZ` bridge gap. Do not build or run signal search until the failed bridge check is resolved and reviewed.
+
+---
+
 ## 2026-06-07 — Claude 审查 (A-long large-cap market-cap AUDIT package: packet + runner + 2 schemas + 2 tests, uncommitted on HEAD 7d5356c) — **PASS — local-only re-derivation audit, fail-closed, gated + tested; not yet run**
 
 Full read of the runner + packet + both schemas (strictness via grep) + the handoff append + the Codex entry. The handoff edit is a sanctioned APPEND (dated status note) to the phase-7 main handoff, not a rewrite of history — fine. The package is a local-only (no-network) integrity audit of the already-materialized market-cap raw.

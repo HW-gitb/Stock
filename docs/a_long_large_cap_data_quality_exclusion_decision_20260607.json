@@ -1,0 +1,104 @@
+{
+  "schema_name": "a_long_large_cap_data_quality_exclusion_decision",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-07T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_data_quality_exclusion_decision_20260607",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_large_cap_data_quality_exclusion_decision",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "user_approved_bounded_exclusion": true,
+    "provider_call_executed": false,
+    "tushare_call_executed": false,
+    "data_fetch_executed": false,
+    "signal_search_executed": false,
+    "signal_search_authorized_by_this_decision": false,
+    "alpha_backtest_executed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "datahub_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_refs": [
+    {
+      "path": "docs/SESSION_LOG.md",
+      "role": "Claude audit-result review records the legitimate 000043.SZ bridge failure and the user's approval of bounded exclusion Option 1"
+    },
+    {
+      "path": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json",
+      "role": "failed local market-cap audit report that found the single prior-universe bridge gap"
+    },
+    {
+      "path": "research/results/a_long_large_cap_market_cap_audit_20260607/monthly_coverage.csv",
+      "role": "failed audit monthly coverage rows identifying 000043.SZ on 20191129 as the only outside-prior-universe observation"
+    },
+    {
+      "path": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json",
+      "role": "frozen large-cap pure-quality preregistration that future signal-search code must update to consume this exclusion and backfill policy"
+    }
+  ],
+  "reviewed_exclusions": [
+    {
+      "ts_code": "000043.SZ",
+      "affected_as_of_dates": [
+        "20191129"
+      ],
+      "raw_top500_rank": 496,
+      "raw_market_cap_field": "circ_mv",
+      "raw_circ_mv_wan": 1336920.7991,
+      "prior_full_audited_fundamentals_available": false,
+      "prior_full_raw_payloads_present": {
+        "income": false,
+        "balancesheet": false,
+        "cashflow": false,
+        "fina_indicator": false,
+        "daily": false,
+        "adj_factor": false
+      },
+      "reason_code": "no_audited_fundamentals_late_2019_restructuring_suspension",
+      "treatment": "drop_from_future_signal_universe_for_affected_as_of_and_backfill_next_main_board_by_circ_mv"
+    }
+  ],
+  "backfill_policy": {
+    "drop_excluded_symbol_from_signal_universe": true,
+    "drop_only_for_affected_as_of_dates": true,
+    "backfill_next_main_board_symbol_by_circ_mv": true,
+    "keep_universe_size_n_after_backfill": 500,
+    "keep_materialization_top500_rederivation_unchanged": true,
+    "audit_must_report_raw_outside_and_documented_exclusion_counts": true,
+    "future_signal_search_runner_must_enforce": true
+  },
+  "decision": {
+    "decision_status": "reviewed_user_approved_bounded_data_quality_exclusion",
+    "max_excluded_symbols": 1,
+    "max_excluded_observations": 1,
+    "exclusion_symbol_count": 1,
+    "exclusion_observation_count": 1,
+    "ledger_spent_by_this_decision": false,
+    "audit_rerun_required_after_this_decision": true,
+    "signal_search_authorized_by_this_decision": false
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "signal_search_executed": false,
+    "signal_search_authorized": false,
+    "alpha_backtest_executed": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "provider_selected": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This decision resolves only the single reviewed 000043.SZ / 20191129 market-cap bridge gap.",
+    "It does not add fundamentals for 000043.SZ and does not reinterpret the prior audited full-main-board universe.",
+    "The materialized top-500 re-derivation remains unchanged; the exclusion applies only to the later signal universe, which must drop the documented observation and backfill the next main-board name by circ_mv.",
+    "The audit must be rerun and independently reviewed before any signal-search package can be built.",
+    "This decision does not authorize signal search, alpha backtest, production, ship-gate evidence, full-size use, DataHub work, provider calls, or broker/order automation."
+  ]
+}
