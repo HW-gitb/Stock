@@ -8,6 +8,104 @@
 
 ---
 
+## 2026-06-07 — Codex 提交处置 (R-NEUT-BUCKET PASS optionals) — **READY TO COMMIT / no execution**
+
+After Claude PASS on the R-NEUT-BUCKET fix, Codex accepted both trivial Optionals before commit:
+- **O-NEUT-FIELD-NAME accepted**: renamed `expected_size_bucket_count_per_as_of` to `expected_names_per_size_bucket` because the value is names per quintile bucket (`500 / 5 = 100`), not the number of buckets.
+- **O-REVIEW-STATUS accepted**: changed `scope.preregistration_review_status` from `pending_independent_review` to `passed_independent_review_ready_for_freeze`; this records the independent review PASS but authorizes no data probe / pull / signal search.
+
+The singleton ledger remains unspent. No `daily_basic` probe / pull, materialization, signal search, provider call, DataHub work, production claim, ship-gate claim, or full-size use was executed or authorized.
+
+Verification remains:
+- `python -m unittest tests.schema.test_a_long_large_cap_pure_quality_preregistration_schema -v` — 12 tests OK.
+- `python -m unittest tests.schema.test_a_long_signal_search_preregistration_schema tests.schema.test_a_long_large_cap_pure_quality_preregistration_schema -v` — 22 tests OK.
+- `python -m unittest discover -s tests -p '*a_long*' -v` — 275 tests OK.
+
+---
+
+## 2026-06-07 — Claude 审查 (R-NEUT-BUCKET fix verification, uncommitted working tree on HEAD 284ef67) — **PASS — Required resolved; prereg ready to freeze; 2 trivial Optionals for Codex**
+
+Verified Codex's R-NEUT-BUCKET fix (it picked the recommended **Option 1 — marginal double-neutralization**). Read the full changed `neutralization_rule` + schema + tests, not just the delta; the rest of the prereg is unchanged (surgical diff: neutralization_rule + one required_output_diagnostics line only). **Fix is correct**: industry leg = percentile within SW-L2 (≥20) else SW-L1 (≥2), matching the vetted `add_industry_neutral_scores` (`industry_l2_min_count=20`, `industry_l1_min_count=2`); size leg = percentile within PIT market-cap quintile (`size_bucket_count=5`, ~100 names each, `minimum_size_bucket_count_for_primary_percentile≥50`); combined by the frozen `0.5*industry + 0.5*size` rule, top-20% by combined score. No thin-bucket collapse — both marginal groups are well-populated on top-500. Crossing is now forbidden at the schema layer (`crossed_industry_size_bucket_allowed: {const false}`) and exercised by the hardened scope-creep test. Schema stays strict (`additionalProperties:false`, all new fields `const`-pinned; `required` array updated). No lingering old-field references anywhere (grep clean). Re-ran both schema tests in my jsonschema env: 12/12 new + 10/10 amended OK (Codex's bundled Python lacks jsonschema). research/README + the Codex SESSION_LOG entry describe the fix accurately.
+
+**Optionals (Codex auto-accept/reject with reason on commit):**
+- **O-NEUT-FIELD-NAME**: `expected_size_bucket_count_per_as_of: 100` is mis-named — its value is names-per-bucket (500/5), while the actual bucket count is `size_bucket_count: 5`. Const-pinned + test-asserted so unambiguous in practice; rename (e.g. `expected_names_per_size_bucket`) for clarity or leave — Codex's call.
+- **O-REVIEW-STATUS**: on commit, consider flipping `scope.preregistration_review_status` from `pending_independent_review` to an independent-review-passed value (+ update the asserting test, currently line ~52) so a future reader/runner sees this prereg as reviewed-and-frozen, not still pending.
+
+**Watch-item for the LATER runner build (not a prereg blocker)**: freeze the missing-leg handling explicitly when implementing — a top-500 name that is `industry_excluded` (no PIT interval membership / approved exception) has no industry-neutral leg, so by the inherited vetted semantics it should be excluded from primary selection but retained in returns/risk/diagnostics; population of this case in a large-cap top-500 universe is near-zero, but the combine rule for a missing leg should be stated in the runner.
+
+**Verdict**: PASS. R-NEUT-BUCKET fully resolved; the frozen design is now internally viable and faithful to the user-approved intent. Nothing here authorizes any execution, daily_basic probe/pull, or signal run. Remaining open hygiene from the prior entry (O-COMMIT-HYGIENE): the prior no-alpha result dir is still untracked and the prior-slice doc/ledger/test changes are still uncommitted — the upcoming commit should land the prior no-alpha slice and this R-NEUT fix as separate scopes. The next milestone after commit is a SEPARATE reviewed daily_basic market-cap field probe (its own review + separate user `执行`) before any materialization/run.
+
+---
+
+## 2026-06-07 — Codex 修复 (NEW A-long large-cap pure-quality R-NEUT-BUCKET) — **READY FOR REVIEW / no data run**
+
+Implemented the user-approved Required fix from Claude's review of commit `284ef67`. No `daily_basic` probe / pull, signal search, materialization, provider call, DataHub work, production claim, ship-gate claim, or full-size use was executed.
+
+**Fix**:
+- Replaced the unviable crossed `(industry × market-cap-quintile)` primary percentile bucket with **marginal double-neutralization**.
+- Primary score construction is now frozen as: industry-neutral percentile score + size-neutral percentile score, combined by `0.5 * industry_neutral + 0.5 * size_neutral`.
+- Industry-neutral leg uses the vetted L2/L1 fallback path: `SW_L2` if count >= 20, else `SW_L1` if count >= 2.
+- Size-neutral leg percentiles the composite within PIT market-cap quintiles inside the top-500 universe: five buckets, expected 100 names each, minimum size-bucket count >= 50.
+- Crossed industry-size buckets are explicitly forbidden by schema and tests; diagnostics must report marginal industry-neutral score coverage and marginal size-quintile coverage.
+
+**Files changed**:
+- `schemas/a_long_large_cap_pure_quality_preregistration.schema.json`
+- `research/preregistrations/a_long_large_cap_pure_quality_20260607.json`
+- `tests/schema/test_a_long_large_cap_pure_quality_preregistration_schema.py`
+- docs status/routing updates as needed
+
+**Verification**:
+- `python -m unittest tests.schema.test_a_long_large_cap_pure_quality_preregistration_schema -v` — 12 tests OK.
+- `python -m unittest tests.schema.test_a_long_signal_search_preregistration_schema tests.schema.test_a_long_large_cap_pure_quality_preregistration_schema -v` — 22 tests OK.
+- `python -m unittest discover -s tests -p '*a_long*' -v` — 275 tests OK.
+
+**Next / lock**:
+- Return for Claude re-review. The singleton ledger remains unspent and pending review.
+- No market-cap field probe, `daily_basic` pull, materialization, signal search, alpha claim, production, ship-gate evidence, or full-size use is authorized before review PASS plus a separate user `执行`.
+
+---
+
+## 2026-06-07 — Claude 审查 (NEW A-long large-cap pure-quality prereg/ledger/schema/tests/docs, commit 284ef67) — **1 Required (R-NEUT-BUCKET); USER-APPROVED 2026-06-07 `批准修改` → Codex to fix (Claude recommends Option 1)**
+
+Reviewed the drafted artifacts against the user-approved frozen-design spec (the handoff entry directly below). Schema + ledger validate with zero errors; 12/12 new + 10/10 amended schema tests pass in my jsonschema env (Codex's bundled Python lacks jsonschema, so I re-ran). Scope gating is comprehensive and schema-enforced (scope-creep payload rejected). **Faithful to the approved spec**: universe (top-500 PIT main-board, no N-search, later-delisted inclusion, namechange selection-veto, restatement 1504), signal (3-factor equal-weight percentile composite — not z-score; ROE annualization 0331×4 / 0630×2 / 0930×4÷3 / 1231×1; cash_conversion 1e7 guard; earnings_stability diagnostic-only), measurement (504d primary / 252d diagnostic, next-trading-day-close entry, close-to-close total-return via adj_factor, same-anchor, cost 0.0026, terminal/halt policy), benchmark (CSI300 primary / CSI1000 diagnostic, both-benchmark gate dropped, H-code TR close, no derived-open), decision gates (HAC t≥2.0, mean excess>0, cohorts≥48, drawdown≥−15%, name/year concentration, single-cell → no FDR), anti-p-hacking (1 test, no sweep / N-search / single-factor-win / quality-accel / rescue-slice, new-ledger-required), and the data-dependency gate (daily_basic by trade_date ≈96 calls, probe-first, circ_mv/total_mv pending, separate review + separate `执行` required before any probe/pull).
+
+**Required R-NEUT-BUCKET (design blocker — fix before freeze)**: `neutralization_rule.primary_percentile_bucket = industry_x_market_cap_bucket_inside_top_500`, crossed with `market_cap_quintile` and `minimum_bucket_size_for_primary_percentile = 10`, is unviable on a 500-name universe. SW-L1 ≈ 31 industries (SW-L2 ≈ 134 → the `<20→L1` fallback fires almost always on top-500), a cap-quintile = 100 names; crossing industry × quintile yields ~3 names per bucket on average — far below the min-10 threshold. The `thin_bucket → exclude` policy then drops the large majority of names from the primary percentile and biases the surviving primary cell toward the 2–4 largest industries → the single decision cell collapses / distorts and its HAC-t is untrustworthy. The existing vetted `add_industry_neutral_scores` is **industry-only** (L2≥20 else L1≥2; no cap dimension) — the crossed size-neutral bucket is the new, unviable part. The ledger `no_silent_rescue_rule` explicitly freezes the neutralization bucket, so this CANNOT be silently fixed at implementation; it must be corrected in the prereg now.
+
+**Options for the fix (Claude proposes ≥2 + recommended; Codex selects the optimal and implements — not routed to the user):**
+- **Option 1 (recommended) — marginal double-neutralization**: keep the existing industry-neutral percentile (L2≥20 else L1, reuse `add_industry_neutral_scores`) AND add a parallel size-neutral percentile of the composite within cap-quintile (each quintile = 100 names), then combine the two neutral scores by a frozen rule (e.g. equal-weight average) and select the top-20% by the combined score. Preserves the approved "industry+size neutral" intent, no thin buckets (both marginal groups are well-populated), minimal new code on top of the vetted path.
+- **Option 2 — continuous residualization**: each as-of, cross-sectionally regress the composite on log(market_cap) (+ industry effect) and percentile the residual across the top-500. Most rigorous joint neutralization, no bucketing; cost = a new regression code path + validation surface not currently in the percentile pipeline.
+- **Option 3 — industry-neutral primary + size-as-diagnostic**: primary view = industry-only (the vetted mechanism verbatim, zero new code), rely on top-500 + the CSI300 large-cap benchmark for size control, and report a size-neutral cap-quintile view as a diagnostic. Simplest, but it relaxes the user-approved "size-neutral primary"; take this only if the user accepts dropping intra-top-500 size-neutrality from the decision cell.
+
+**Optional O-COMMIT-HYGIENE (prior slice, non-blocking)**: the prior no-alpha RESULT dir `research/results/a_long_signal_search_20260604/` is untracked (not gitignored), and the old-ledger spend-flip (0→1, spent_failed) + old schema-test spent-branch + the CURRENT/risk-register no-alpha writeups are uncommitted. The new prereg (already committed in 284ef67) references that prior result, so for traceability the prior no-alpha slice should be committed as its own scope (separate from the new-prereg commit).
+
+**Verdict**: artifacts are well-built and faithful to the approved design except the one Required neutralization-bucket blocker; after the fix (recommended Option 1) the prereg is ready to freeze. Nothing here authorizes any execution, data probe, or daily_basic pull.
+
+**USER-APPROVED 2026-06-07 (`批准修改`)**: the user approved fixing R-NEUT-BUCKET. Codex is authorized to amend the prereg (+ schema / tests / docs as needed) to a viable neutralization scheme and to select the optimal among the three options — Claude recommends **Option 1 (marginal double-neutralization, keeping industry+size neutral)**; the user did NOT elect the size-relaxing Option 3, so keep size in the primary (Option 1 or 2, not 3). This authorizes a `修复` build only: no daily_basic probe/pull, no signal-search run, no execution. Freeze the exact combine rule + group-size thresholds in the prereg, keep the singleton ledger unspent, and return for Claude re-review before any freeze/run.
+
+---
+
+## 2026-06-07 — Claude 交接 (NEW frozen design spec for Codex to draft) — **USER-APPROVED direction: A-long large-cap pure-quality**
+
+New hypothesis after the prior no-alpha (which showed the quality edge was a SIZE premium + high drawdown). Direction = user-proposed + Claude-refined + user-approved. **Codex drafts the prereg/ledger/schema/tests/docs from this spec; Claude reviews the drafted artifacts; this is a NEW hypothesis + NEW ledger, NOT a re-slice of the prior run.**
+
+**Hypothesis**: In a PIT main-board large/mid-cap tradeable universe, a high core-quality COMPOSITE produces positive cost-adjusted excess vs CSI300 over a 504-trading-day hold, surviving HAC-t / drawdown / cohort / concentration / PIT-hygiene gates. If the primary cell fails any gate → A-share large-cap pure-quality is falsified under the frozen rules; NO rescue from the old all-market result or from single-factor / diagnostic cells.
+
+**Frozen design**:
+1. **Universe** — A-share MAIN-BOARD only; monthly as-of (last open trading day); at each as-of take the **top 500 by PIT market cap as of that as-of** (NOT current — avoid look-ahead/survivorship). Market-cap field: prefer `circ_mv` (free-float), fall back to `total_mv` — the choice FIXED in the prereg per the availability probe, frozen before any run. Include names that later delist at their pre-delisting as-ofs (anti-survivorship). Reuse PIT list/delist filter, namechange ST/退市 selection-veto, restatement-exclusion. **No N-search (no top300/500/800) — 500 is fixed.**
+2. **Primary signal** — equal-weight **PERCENTILE** composite (NOT z-score; outlier-robust, consistent with the vetted pipeline) of 3 core-quality factors: `profitability_quality` (annualized-YTD-ROE basis), `cash_conversion`, `balance_sheet_strength`. Percentile each factor within the neutralization bucket, average the 3. `earnings_stability` = FROZEN DIAGNOSTIC only (reported, never in primary pass/fail, never a rescue).
+3. **Primary view (the ONE frozen view)** — industry-neutral + size-neutral: composite percentiled within (industry × market-cap-bucket) inside the top-500; equal-weight top 20%. Non-neutral / cap-weighted = diagnostics.
+4. **Holding** — PRIMARY = **504 trading days only**. 252d = diagnostic (reported, not gated).
+5. **Benchmark** — PRIMARY = **CSI300** (H-code TR close). **CSI1000 = diagnostic ONLY** (the both-benchmark requirement is DROPPED — it doesn't fit a large-cap design).
+6. **Measurement** — reuse the vetted chain verbatim: entry next-trading-day close → 504d exit close, same-anchor close-to-close, total-return via adj_factor, `ROUND_TRIP_COST=0.0026`, terminal/halt exit policy, Newey-West HAC-t (lag by horizon), restatement-exclusion applied.
+7. **Decision gates (the ONE primary cell)** — HAC t ≥ 2.0; mean cohort net excess > 0; monthly cohorts ≥ 48; max monthly-excess drawdown ≥ −0.15; name + single-year concentration guards; no raw/secret/url leak. Single primary cell → no BH-FDR multiple-testing on the decision (FDR only if multiple primary cells exist).
+8. **Anti-p-hacking / scope** — fixed N=500; composite is the single primary (no single-factor-pass = alpha); NO "quality acceleration" this round; no parameter sweep / rescue-slicing; NEW singleton ledger (1 test); **prereg + ledger reviewed BEFORE any data probe/materialization**.
+9. **Data dependency (separate later approval, NOT this slice)** — PIT market cap via `daily_basic` pulled BY trade_date (≈96 monthly-as-of calls, free; confirm `circ_mv`/`total_mv` availability by probe first).
+
+**Build scope for Codex (this slice ONLY)**: new `research/preregistrations/a_long_large_cap_pure_quality_20260607.json` + its schema + a NEW singleton test-budget ledger + schema/tests + `docs/CURRENT.md` / `docs/system_risk_register.md` updates. **NO `daily_basic` pull, NO signal search.** Separate commit (do NOT mix with the prior no-alpha result/ledger/docs). jsonschema must be present so schema validation actually runs. → returns for Claude review.
+
+---
+
+
 ## 2026-06-07 — Claude 审查 (A-long Step-3 runtime/perf fix) — **PASS (可提交)** — behavior-preserving
 
 Step 3 timed out (120s, 900s) — the perf bottleneck I'd predicted (PayloadStore re-reading JSON every call + summarize_results re-scanning all rows per cell). Codex's fix verified **behavior-preserving** (same result, just faster):

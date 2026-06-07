@@ -49,7 +49,7 @@ class ALongLargeCapPureQualityPreregistrationSchemaTest(unittest.TestCase):
         self.assertTrue(scope["research_only"])
         self.assertTrue(scope["manual_order_only"])
         self.assertTrue(scope["new_hypothesis_not_prior_reslice"])
-        self.assertEqual(scope["preregistration_review_status"], "pending_independent_review")
+        self.assertEqual(scope["preregistration_review_status"], "passed_independent_review_ready_for_freeze")
         for field_name in [
             "daily_basic_pull_allowed_by_this_artifact",
             "market_cap_probe_allowed_by_this_artifact",
@@ -141,10 +141,23 @@ class ALongLargeCapPureQualityPreregistrationSchemaTest(unittest.TestCase):
         neutralization = self._load_artifact()["frozen_design"]["neutralization_rule"]
 
         self.assertEqual(neutralization["primary_view"], "industry_and_size_neutral")
-        self.assertEqual(neutralization["primary_percentile_bucket"], "industry_x_market_cap_bucket_inside_top_500")
+        self.assertEqual(neutralization["neutralization_method"], "marginal_double_neutralization")
+        self.assertEqual(
+            neutralization["primary_score_construction"],
+            "equal_weight_average_of_marginal_industry_neutral_and_marginal_size_neutral_percentile_scores",
+        )
+        self.assertEqual(neutralization["industry_neutral_score_rule"], "percentile_composite_within_industry_l2_fallback_l1")
+        self.assertEqual(neutralization["size_neutral_score_rule"], "percentile_composite_within_market_cap_quintile")
+        self.assertEqual(neutralization["combined_score_rule"], "0_5_industry_neutral_percentile_plus_0_5_size_neutral_percentile")
+        self.assertFalse(neutralization["crossed_industry_size_bucket_allowed"])
         self.assertEqual(neutralization["industry_basis"], "SW_L2_then_SW_L1_if_sample_lt_20")
-        self.assertEqual(neutralization["market_cap_bucket_rule"], "pit_market_cap_quintile_inside_top_500_per_as_of")
-        self.assertGreaterEqual(neutralization["minimum_bucket_size_for_primary_percentile"], 10)
+        self.assertEqual(neutralization["industry_l2_min_count"], 20)
+        self.assertEqual(neutralization["industry_l1_min_count"], 2)
+        self.assertEqual(neutralization["size_bucket_rule"], "pit_market_cap_quintile_inside_top_500_per_as_of")
+        self.assertEqual(neutralization["size_bucket_count"], 5)
+        self.assertEqual(neutralization["expected_names_per_size_bucket"], 100)
+        self.assertGreaterEqual(neutralization["minimum_size_bucket_count_for_primary_percentile"], 50)
+        self.assertIn("do_not_cross_industry_and_size_buckets", neutralization["thin_bucket_policy"])
         self.assertEqual(neutralization["non_neutral_view_role"], "diagnostic_only_not_primary")
         self.assertEqual(neutralization["cap_weighted_view_role"], "diagnostic_only_not_primary")
 
@@ -246,6 +259,7 @@ class ALongLargeCapPureQualityPreregistrationSchemaTest(unittest.TestCase):
         payload["prior_result_boundary"]["old_result_reslice_allowed"] = True
         payload["data_dependency_gate"]["selected_market_cap_field_status"] = "circ_mv"
         payload["frozen_design"]["signal_rule"]["zscore_composite_allowed"] = True
+        payload["frozen_design"]["neutralization_rule"]["crossed_industry_size_bucket_allowed"] = True
         payload["frozen_design"]["benchmark_rule"]["both_benchmark_pass_required"] = True
         payload["prohibited_claims"]["validated_alpha"] = True
 
