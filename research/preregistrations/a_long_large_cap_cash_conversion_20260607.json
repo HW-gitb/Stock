@@ -1,0 +1,369 @@
+{
+  "schema_name": "a_long_large_cap_cash_conversion_preregistration",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-07T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_cash_conversion_20260607",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_large_cap_cash_conversion_preregistration",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "registration_status": "registered_not_run",
+    "research_status": "new_frozen_design_registered_not_run",
+    "research_only": true,
+    "diagnostic_derived_not_prior_rescue": true,
+    "new_hypothesis_not_prior_reslice": true,
+    "preregistration_review_status": "passed_independent_review_ready_for_freeze",
+    "reuses_reviewed_materialized_market_cap_universe": true,
+    "new_data_fetch_required": false,
+    "signal_search_executed_by_this_artifact": false,
+    "signal_search_authorized_by_this_artifact": false,
+    "data_fetch_allowed_by_this_artifact": false,
+    "provider_call_allowed_by_this_artifact": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_doc_refs": [
+    {
+      "path": "docs/SESSION_LOG.md",
+      "role": "records the user-approved diagnostic-derived cash_conversion design direction and Codex's review comments adopted into this draft"
+    },
+    {
+      "path": "research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json",
+      "role": "prior falsified large-cap pure-quality result; surfaced cash_conversion as the strongest single-factor diagnostic (504d t=2.3542 vs CSI300, 4.5165 vs CSI1000); this design is a new hypothesis, not a rescue of that result"
+    },
+    {
+      "path": "research/results/a_long_signal_search_20260604/execution_summary.json",
+      "role": "prior full main-board result; cash_conversion was significant 504d vs CSI1000 but not clean vs CSI300, so the vs-CSI300 evidence is single-sample"
+    },
+    {
+      "path": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json",
+      "role": "reviewed PASS market-cap audit; the reused top-500 circ_mv monthly universe with the 000043 exclusion/backfill"
+    },
+    {
+      "path": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+      "role": "prior reviewed full-main-board data-integrity PASS; source of the reused PIT fundamentals and restatement exclusion list"
+    },
+    {
+      "path": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+      "role": "reviewed bounded 000043.SZ / 20191129 data-quality exclusion reused unchanged by this design"
+    },
+    {
+      "path": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "role": "grounds the close-to-close total-return CSI300 / CSI1000 benchmark route reused by this design"
+    },
+    {
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "role": "owns research preregistration, multiple-testing, PIT, factor-exposure, and ship-gate guardrails"
+    },
+    {
+      "path": "research/README.md",
+      "role": "routes research-only preregistration and singleton-ledger artifacts"
+    }
+  ],
+  "diagnostic_derivation": {
+    "derived_from_diagnostic": true,
+    "is_prior_quality_rescue": false,
+    "primary_source_observation": "cash_conversion single-factor diagnostic at 504d in the top-500 large-cap run: t=2.3542 vs CSI300, t=4.5165 vs CSI1000; the 3-factor composite primary was falsified (t=0.91 vs CSI300)",
+    "secondary_source_observation": "prior full-main-board run: cash_conversion 504d significant vs CSI1000 (t 2.5-3.8) but not clean vs CSI300",
+    "economic_rationale": "earnings-quality / low-accruals anomaly (Sloan 1996): earnings backed by operating cash flow are more persistent and less manipulated, so high cash-conversion names should outperform over long holds",
+    "evidence_status": "persistent_in_sample_clue_not_robust_out_of_sample_proof",
+    "vs_csi300_evidence_is_single_sample": true,
+    "in_sample_clue_requires_forward_live_for_validation": true,
+    "selected_for_test_because_of_prior_diagnostic": true,
+    "no_factor_definition_search_motivated_by_prior_result": true,
+    "old_result_reslice_allowed": false,
+    "old_composite_or_diagnostic_relabel_as_pass_allowed": false
+  },
+  "prior_result_boundary": {
+    "prior_preregistration_ref": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json",
+    "prior_ledger_ref": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json",
+    "prior_result_ref": "research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json",
+    "prior_research_verdict": "falsified_large_cap_pure_quality_under_frozen_rules",
+    "prior_candidate_alpha_clue_count": 0,
+    "prior_tests_spent_count": 1,
+    "new_design_reason": "test_diagnostic_derived_cash_conversion_earnings_quality_as_standalone_primary",
+    "old_result_reslice_allowed": false,
+    "old_single_factor_diagnostic_rescue_allowed": false,
+    "threshold_relaxation_allowed": false,
+    "benchmark_rescue_allowed": false,
+    "horizon_rescue_allowed": false
+  },
+  "data_reuse": {
+    "no_new_provider_call_required": true,
+    "no_new_daily_basic_pull_required": true,
+    "market_cap_audit_report_ref": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json",
+    "market_cap_universe_status": "reviewed_passed_top_500_circ_mv_monthly_2018_2025",
+    "market_cap_raw_root": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/",
+    "full_main_board_audit_report_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+    "full_main_board_raw_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
+    "selected_market_cap_field": "circ_mv",
+    "reuses_data_quality_exclusion_decision_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+    "monthly_as_of_count": 96,
+    "raw_storage_must_stay_gitignored": true,
+    "tracked_summary_must_not_contain_raw_rows": true,
+    "separate_review_required_before_signal_run": true,
+    "separate_user_execute_required_before_signal_run": true
+  },
+  "frozen_design": {
+    "design_id": "a_long_large_cap_cash_conversion_v1",
+    "hypothesis_text": "In a PIT A-share main-board top-500 large-cap universe (reusing the reviewed circ_mv materialization and the 000043 exclusion), high cash_conversion (operating cash flow backing reported earnings, an earnings-quality / low-accruals signal) produces positive cost-adjusted excess versus CSI300 over a 504-trading-day hold, surviving HAC-t, cohort, sub-period, concentration, and PIT-hygiene gates (the statistical-alpha-clue tier). Tradeability additionally requires the strategy's rolling-overlapping-portfolio relative-NAV drawdown versus CSI300 to be no worse than -15% (the tradeable-candidate tier). cash_conversion was surfaced as an in-sample diagnostic in the falsified large-cap pure-quality run; this is a diagnostic-derived new hypothesis, not a rescue, and even a positive result is an in-sample research clue pending forward-live evidence. If the single primary cell fails the statistical-alpha-clue gates, large-cap cash_conversion is falsified under this frozen design.",
+    "universe_rule": {
+      "market_scope": "A-share",
+      "board_scope": "main_board_only",
+      "as_of_frequency": "monthly",
+      "as_of_selection_rule": "last_open_A_share_trading_day_of_each_calendar_month",
+      "universe_size_n": 500,
+      "universe_size_n_search_allowed": false,
+      "selection_basis": "top_500_by_pit_market_cap_as_of_each_as_of_date",
+      "market_cap_field_choice_status": "circ_mv_reviewed_probe_passed_frozen_for_materialization",
+      "include_later_delisted_names_at_pre_delisting_asofs": true,
+      "pit_list_delist_required": true,
+      "selection_time_namechange_veto_required": true,
+      "reviewed_no_industry_boundary_ref": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+      "reviewed_data_quality_exclusion_boundary_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+      "reviewed_data_quality_exclusion_policy": {
+        "excluded_symbols": [
+          "000043.SZ"
+        ],
+        "affected_as_of_dates": [
+          "20191129"
+        ],
+        "max_excluded_symbols": 1,
+        "max_excluded_observations": 1,
+        "drop_excluded_symbols_before_signal_scoring": true,
+        "backfill_next_main_board_by_circ_mv": true,
+        "materialized_top500_rederivation_unchanged": true,
+        "threshold_rescue_allowed": false
+      },
+      "st_star_bse_chinext_excluded": true
+    },
+    "signal_rule": {
+      "primary_signal_id": "cash_conversion_percentile",
+      "primary_signal_type": "single_factor_percentile",
+      "primary_factor": "cash_conversion",
+      "primary_factor_definition": "operating_cash_flow_n_cashflow_act_div_abs_net_income_attr_parent_same_period",
+      "factor_definition_unchanged_from_diagnostic": true,
+      "factor_definition_change_allowed": false,
+      "cash_conversion_min_abs_net_income": 10000000.0,
+      "cash_conversion_small_denominator_guard_required": true,
+      "cash_conversion_same_period_end_date_required": true,
+      "percentile_rank_required": true,
+      "zscore_allowed": false,
+      "multi_factor_composite_allowed": false,
+      "single_factor_winner_take_all_from_prior_result_allowed": false,
+      "diagnostic_factors": [
+        "profitability_quality",
+        "balance_sheet_strength",
+        "earnings_stability"
+      ],
+      "diagnostic_factor_can_rescue_primary_failure": false
+    },
+    "neutralization_rule": {
+      "primary_view": "industry_and_size_neutral",
+      "neutralization_method": "marginal_double_neutralization",
+      "primary_score_construction": "equal_weight_average_of_marginal_industry_neutral_and_marginal_size_neutral_percentile_scores",
+      "industry_neutral_score_rule": "percentile_within_industry_l2_fallback_l1",
+      "size_neutral_score_rule": "percentile_within_market_cap_quintile",
+      "combined_score_rule": "0_5_industry_neutral_percentile_plus_0_5_size_neutral_percentile",
+      "crossed_industry_size_bucket_allowed": false,
+      "industry_basis": "SW_L2_then_SW_L1_if_sample_lt_20",
+      "industry_neutral_is_effectively_l1_on_top_500": true,
+      "industry_l2_min_count": 20,
+      "industry_l1_min_count": 2,
+      "size_bucket_rule": "pit_market_cap_quintile_inside_top_500_per_as_of",
+      "size_bucket_count": 5,
+      "expected_names_per_size_bucket": 100,
+      "minimum_size_bucket_count_for_primary_percentile": 50,
+      "size_coverage_gate_applies_to_cohort_forming_months_only": true,
+      "non_neutral_view_role": "diagnostic_only_not_primary",
+      "cap_weighted_view_role": "diagnostic_only_not_primary"
+    },
+    "measurement_rule": {
+      "primary_horizon_trading_days": 504,
+      "diagnostic_horizons_trading_days": [
+        252
+      ],
+      "entry_rule": "next_trading_day_close_after_as_of",
+      "stock_return_basis": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close",
+      "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+      "same_anchor_required": true,
+      "round_trip_cost": 0.0026,
+      "missing_scheduled_exit_policy": "terminal_delisting_uses_last_trade_otherwise_next_available_or_missing",
+      "total_return_required": true,
+      "price_index_fallback_allowed": false
+    },
+    "benchmark_rule": {
+      "primary_benchmark": "CSI300",
+      "diagnostic_benchmark": "CSI1000",
+      "both_benchmark_pass_required": false,
+      "benchmark_access_probe_ref": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "benchmark_access_status": "total_return_close_available_close_to_close_amendment_selected",
+      "derived_total_return_open_allowed": false
+    },
+    "decision_cell": {
+      "cell_id": "primary_cash_conversion_industry_size_neutral_504d_csi300",
+      "signal": "cash_conversion_percentile",
+      "view": "industry_and_size_neutral",
+      "horizon_trading_days": 504,
+      "benchmark": "CSI300",
+      "top_fraction": 0.2,
+      "minimum_top_count_per_month": 10,
+      "decision_is_two_tier": true,
+      "statistical_alpha_clue_gates": {
+        "mean_net_excess_must_be_positive": true,
+        "minimum_hac_t_stat": 2.0,
+        "minimum_monthly_cohorts": 48,
+        "name_concentration_guard_max_share": 0.2,
+        "single_year_positive_return_guard_max_share": 0.35,
+        "sub_period_both_halves_mean_excess_positive_required": true
+      },
+      "tradeable_candidate_gates": {
+        "risk_gate_metric": "rolling_overlapping_portfolio_relative_nav_max_drawdown_vs_csi300",
+        "minimum_allowed_relative_nav_drawdown": -0.15,
+        "absolute_nav_drawdown_is_diagnostic_only": true,
+        "risk_gate_affects_tradeable_label_only_not_alpha_clue": true
+      },
+      "multiple_testing_adjustment_for_decision": "not_applicable_single_primary_cell"
+    },
+    "sub_period_robustness": {
+      "split_rule": "median_split_of_valid_504d_entry_cohorts_into_two_equal_halves",
+      "natural_calendar_year_split_allowed": false,
+      "requires_both_halves_mean_excess_positive": true,
+      "report_each_half_hac_t_stat": true,
+      "rationale": "504d holds need a complete forward exit, so late entries (about 2024 onward) cannot form 504d cohorts; split by effective 504d-valid entry cohorts at their median, not by natural calendar years"
+    },
+    "risk_gate": {
+      "method": "rolling_overlapping_monthly_tranche_portfolio_nav",
+      "tranche_rule": "at_each_as_of_enter_an_equal_weight_basket_of_the_selected_top_fraction_held_for_the_primary_horizon",
+      "tranche_weighting": "equal_weight_within_basket",
+      "portfolio_combination": "equal_weight_average_of_active_overlapping_tranches",
+      "startup_ramp_convention": "average_over_active_tranches_only_no_idle_cash_position",
+      "benchmark_construction": "option_a_parallel_same_as_of_schedule_horizon_and_ramp_holding_csi300_total_return_instead_of_selected_basket",
+      "benchmark_nav_basis": "same_schedule_rolling_overlapping_csi300_total_return_tranche_portfolio",
+      "cost_application": "round_trip_cost_applied_once_per_strategy_tranche_entry_exit",
+      "cost_applied_to_benchmark_tranches": false,
+      "strategy_nav_basis": "total_return_net_of_round_trip_cost",
+      "relative_nav_formula": "strategy_nav_divided_by_benchmark_nav",
+      "primary_risk_metric": "max_drawdown_of_relative_nav",
+      "minimum_allowed_relative_nav_drawdown": -0.15,
+      "relative_drawdown_threshold_rationale": "frozen before observing cash_conversion's NAV; -0.15 is a pre-committed bound on the relative (excess) equity curve, roughly one CSI300-scale relative setback, not tuned to this factor; because the benchmark is the same-schedule CSI300 tranche portfolio, this drawdown isolates stock selection from benchmark-path mechanics",
+      "threshold_frozen_before_run": true,
+      "absolute_strategy_nav_drawdown_role": "diagnostic_only",
+      "summed_overlapping_cohort_excess_drawdown_as_gate_allowed": false,
+      "risk_gate_affects_tradeable_label_only_not_alpha_clue": true
+    },
+    "diagnostic_cells": {
+      "report_csi1000": true,
+      "report_252d": true,
+      "report_single_factor_diagnostics": true,
+      "report_non_neutral": true,
+      "report_cap_weighted": true,
+      "report_absolute_nav_drawdown": true,
+      "report_each_sub_period_half": true,
+      "diagnostics_can_define_alpha": false
+    },
+    "anti_p_hacking_controls": {
+      "test_budget_units": 1,
+      "parameter_sweep_allowed": false,
+      "universe_n_search_allowed": false,
+      "factor_definition_search_allowed": false,
+      "multi_factor_composite_search_allowed": false,
+      "post_result_rescue_slicing_allowed": false,
+      "risk_gate_threshold_frozen_before_run": true,
+      "new_ledger_required_before_any_followup": true
+    },
+    "pit_and_hygiene_controls": {
+      "restatement_exclusion_list_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+      "restatement_exclusion_required": true,
+      "expected_restatement_exclusion_group_count": 1504,
+      "pit_namechange_required": true,
+      "current_stock_basic_name_veto_allowed": false,
+      "survivorship_handling": "include_later_delisted_names_until_their_pit_delist_cutoff_and_retain_terminal_returns",
+      "tracked_summary_contains_raw_rows_allowed": false,
+      "tracked_summary_contains_endpoint_results_allowed": false,
+      "tracked_summary_contains_secret_allowed": false,
+      "tracked_summary_contains_request_url_allowed": false
+    },
+    "required_output_diagnostics": [
+      "Report the one primary cell and its two-tier verdict: statistical-alpha-clue gates separately from the tradeable-candidate relative-NAV-drawdown gate.",
+      "Report the full-sample HAC t-stat and each sub-period half's mean excess and HAC t-stat; both halves' mean excess must be positive for the alpha-clue tier.",
+      "Report the rolling-overlapping-portfolio relative-NAV (strategy / CSI300) max drawdown and, as diagnostics only, the absolute strategy NAV max drawdown.",
+      "Report CSI300 primary and CSI1000 diagnostic without requiring both benchmarks for the alpha-clue label.",
+      "Report 504d primary and 252d diagnostic; 252d cannot rescue primary failure.",
+      "Report profitability_quality, balance_sheet_strength, and earnings_stability as diagnostics; no diagnostic factor can define alpha or rescue the primary.",
+      "Report top-500 PIT market-cap coverage, marginal industry-neutral coverage, marginal size-neutral quintile coverage for cohort-forming months, and top-count-by-month.",
+      "Report the reviewed 000043.SZ / 20191129 data-quality exclusion and confirm the signal universe drops it and backfills the next main-board name by circ_mv before scoring.",
+      "Report yearly contribution, name concentration, and tail excess.",
+      "Report restatement-exclusion application count and abort if the exclusion list is missing or unapplied.",
+      "Report no raw rows, endpoint results, request URL, or secret in any tracked summary."
+    ]
+  },
+  "decision_policy": {
+    "statistical_alpha_clue": [
+      "A future reviewed run may label large-cap cash_conversion as a research-only statistical alpha clue only if the single primary cell is positive net of costs versus CSI300, has HAC t-stat >= 2.0, at least 48 monthly cohorts, both sub-period halves with positive mean excess, and passes name / year concentration and PIT-hygiene gates.",
+      "The statistical-alpha-clue tier does not require the relative-NAV-drawdown gate; it is a statistical finding only."
+    ],
+    "tradeable_candidate_research_only": [
+      "A statistical alpha clue is additionally labeled a research-only tradeable candidate only if the rolling-overlapping-portfolio relative-NAV (strategy / CSI300) max drawdown is no worse than -15%.",
+      "If the alpha-clue tier passes but the relative-NAV-drawdown gate fails, the result is a statistical alpha clue but NOT a tradeable candidate.",
+      "Even a tradeable-candidate label is research-only and cannot authorize production, ship-gate evidence, or full-size manual use."
+    ],
+    "falsified": [
+      "If the primary cell fails any statistical-alpha-clue gate, large-cap cash_conversion is falsified under this frozen design.",
+      "Do not rescue a failed primary cell from CSI1000, 252d, non-neutral, cap-weighted, diagnostic factors, threshold, horizon, or benchmark changes."
+    ],
+    "diagnostics_policy": [
+      "CSI1000, 252d, non-neutral, cap-weighted, single diagnostic factors, and the absolute-NAV drawdown are reporting diagnostics only.",
+      "Diagnostics may inform a later new preregistration, but only through a new reviewed ledger update and user approval."
+    ],
+    "in_sample_clue_caveat": [
+      "cash_conversion was selected because it was the strongest diagnostic in the same large-cap sample, so even a passing result here is an in-sample research clue, not independent out-of-sample proof.",
+      "The vs-CSI300 evidence is single-sample (only the top-500 run); the cross-benchmark vs-CSI1000 evidence is two-sample.",
+      "Real validation requires the unchanged forward-live ship gate."
+    ],
+    "minimum_forward_live_months_for_ship_gate": 12,
+    "backtest_can_authorize_full_size": false
+  },
+  "planned_test_budget": {
+    "ledger_ref": "research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json",
+    "planned_test_id": "a_long_large_cap_cash_conversion_20260607",
+    "test_budget_units": 1,
+    "signal_search_run_authorized_now": false,
+    "new_data_fetch_authorized_now": false,
+    "requires_independent_review_before_any_execution": true,
+    "requires_user_execute_before_any_execution": true,
+    "required_preregistration_review_status_for_execution": "passed_independent_review_ready_for_freeze"
+  },
+  "prohibited_claims": {
+    "validated_alpha": false,
+    "in_sample_clue_is_out_of_sample_proof": false,
+    "prior_falsified_result_reinterpreted": false,
+    "cash_conversion_proven": false,
+    "new_data_fetch_authorized": false,
+    "signal_search_authorized": false,
+    "full_size_allowed": false,
+    "ship_gate_evidence": false,
+    "production_ready": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Independent review (now Codex) must validate this preregistration, schema, ledger, tests, and docs before any signal-search work.",
+    "After review PASS and commit, a separate signal-search runner slice may be implemented that reuses the vetted measurement chain and the reviewed top-500 universe and adds the rolling-overlapping-portfolio relative-NAV drawdown gate.",
+    "The signal-search runner execution still requires its own independent review, commit, and a separate user execute; it spends the new singleton ledger exactly once.",
+    "No signal-search runner execution, new data fetch, provider call, DataHub work, production claim, ship-gate claim, or full-size use is authorized by this artifact."
+  ],
+  "limitations": [
+    "This artifact registers a design only; it executes no signal search and fetches no data.",
+    "cash_conversion is a diagnostic-derived in-sample clue; a positive result is research-only and the vs-CSI300 evidence is single-sample.",
+    "Statistical power is limited: 504d holds over 2018-2025 give roughly four non-overlapping windows, so the HAC t-stat rests on a short effective sample.",
+    "Industry neutralization is effectively SW-L1 (sector) level on the top-500 because SW-L2 groups rarely reach the minimum count.",
+    "The relative-NAV-drawdown threshold is a pre-committed bound, not an optimized value, and gates only the tradeable-candidate label, not the alpha-clue verdict.",
+    "A positive future backtest remains research-only until the unchanged project ship gate, including at least 12 months of forward-live evidence, is satisfied."
+  ]
+}

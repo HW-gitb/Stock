@@ -1,0 +1,60 @@
+{
+  "schema_name": "program_test_budget_ledger",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-07T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607",
+  "ledger_status": "active_planned_test_pending_review",
+  "family_id": "a_long_large_cap_cash_conversion_v1",
+  "lane_id": "a_long_research",
+  "singleton_scope": {
+    "protected_decision": "Whether the diagnostic-derived single-factor cash_conversion produces a research-only earnings-quality alpha clue (and a tradeable candidate) versus CSI300 in the reviewed PIT top-500 large-cap universe under one frozen primary cell.",
+    "applies_to": [
+      "research/preregistrations/a_long_large_cap_cash_conversion_20260607.json",
+      "The future reviewed A-long large-cap cash_conversion signal-search execution package that may be executed only after independent review and explicit user execute."
+    ],
+    "does_not_authorize": [
+      "No signal-search run is authorized by this ledger before independent review and an explicit user execute command.",
+      "No reinterpretation of the prior falsified large-cap pure-quality result, no old-result reslice, no relabeling the prior cash_conversion diagnostic as a pass, no factor-definition search, no multi-factor composite search, no production use, no ship-gate evidence, no full-size manual use, no provider expansion, no DataHub work, and no broker / order automation.",
+      "No new daily_basic pull or provider call is authorized; this design reuses the already-reviewed top-500 materialization, audit, and full-main-board fundamentals."
+    ]
+  },
+  "creation_reason": {
+    "triggering_preflight_ref": "research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json",
+    "triggering_preregistration_ref": "research/preregistrations/a_long_large_cap_cash_conversion_20260607.json",
+    "reason": "The large-cap pure-quality composite was falsified, but cash_conversion was its strongest single-factor diagnostic (504d t=2.3542 vs CSI300, 4.5165 vs CSI1000), with an earnings-quality / low-accruals economic basis and persistence vs CSI1000 across two universes. Per the prior design's diagnostics policy, this diagnostic motivates a new pre-committed hypothesis tested on a new singleton ledger; it is not a rescue of the falsified composite and the vs-CSI300 evidence is single-sample."
+  },
+  "budget_policy": {
+    "ledger_cardinality": "singleton_program_level",
+    "tests_spent_count": 0,
+    "tests_available_without_new_review": 0,
+    "next_test_requires_reviewed_preregistration": true,
+    "next_test_requires_user_approval": true,
+    "spend_rule": "The first reviewed A-long large-cap cash_conversion primary-cell signal-search execution spends one planned test regardless of falsified, statistical-alpha-clue, or tradeable-candidate result.",
+    "no_silent_rescue_rule": "If the future primary cell fails or is diagnostic-only, do not rerun with changed factor definition, universe N, market-cap field, neutralization, holding period, benchmark, top fraction, cost model, statistical threshold, sub-period rule, or risk-gate threshold without a new reviewed preregistration and ledger update."
+  },
+  "test_spend_log": [],
+  "planned_tests": [
+    {
+      "test_id": "a_long_large_cap_cash_conversion_20260607",
+      "planned_status": "planned_not_reviewed",
+      "created_at": "2026-06-07T00:00:00+08:00",
+      "planned_preregistration_ref": "research/preregistrations/a_long_large_cap_cash_conversion_20260607.json",
+      "planned_result_ref": "research/results/a_long_large_cap_cash_conversion_20260607/execution_summary.json",
+      "promotion_relevant": true,
+      "expected_tests_spent": 1,
+      "approval_status": "user_approved_pending_review",
+      "design_summary": "Single primary cell: reviewed PIT top-500 main-board circ_mv universe, single-factor cash_conversion (OCF / |net income|, same period, |net income| >= 1e7, unchanged definition), industry-and-size-neutral marginal-double view, 504d, CSI300 primary; two-tier verdict (statistical alpha clue by HAC t>=2 / cohorts>=48 / both sub-period halves mean>0 / concentration; tradeable candidate additionally by relative-NAV drawdown vs CSI300 >= -15%).",
+      "review_boundary": [
+        "This planned test is a diagnostic-derived new hypothesis, not a rerun, rescue, or reinterpretation of the falsified large-cap pure-quality composite.",
+        "The preregistration and ledger authorize no new data fetch, no signal search, no provider call, no DataHub work, no production use, no ship-gate evidence, and no full-size manual use.",
+        "cash_conversion was selected because it was the strongest in-sample diagnostic; even a passing result is an in-sample research clue, with single-sample vs-CSI300 evidence, requiring forward-live validation.",
+        "Diagnostics such as CSI1000, 252d, non-neutral, cap-weighted, single diagnostic factors, and the absolute-NAV drawdown cannot define alpha or rescue a failed primary cell."
+      ]
+    }
+  ],
+  "next_required_actions": [
+    "Independent review (Codex) must validate the new preregistration, schema, ledger, tests, and docs.",
+    "After review PASS and commit, a separate signal-search runner slice may be implemented (reusing the vetted measurement chain plus the rolling relative-NAV drawdown gate); its execution needs its own review, commit, and a separate user execute and spends this singleton once.",
+    "If the future primary cell is falsified, record it as failed under the frozen single-primary-cell rules and do not rescue from diagnostics without a new reviewed preregistration and ledger update."
+  ]
+}
