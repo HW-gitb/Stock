@@ -1,0 +1,3939 @@
+{
+  "schema_name": "a_long_large_cap_market_cap_materialization_execution_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-07T09:15:00+00:00",
+  "artifact_id": "a_long_large_cap_market_cap_materialization_execution_summary_20260607",
+  "packet_ref": "docs/a_long_large_cap_market_cap_materialization_packet_20260607.json",
+  "preregistration_ref": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json",
+  "ledger_ref": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json",
+  "field_probe_summary_ref": "docs/a_long_large_cap_market_cap_field_probe_execution_summary_20260607.json",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_large_cap_market_cap_materialization_execution",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_call_executed": true,
+    "tushare_call_executed": true,
+    "data_fetch_executed": true,
+    "raw_payload_available_in_gitignored_path": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_top500_symbols": false,
+    "tracked_summary_contains_secret": false,
+    "market_cap_field_freeze_already_reviewed": true,
+    "market_cap_materialization_executed": true,
+    "audit_rerun_executed": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "execution": {
+    "summary_path": "docs/a_long_large_cap_market_cap_materialization_execution_summary_20260607.json",
+    "raw_output_root": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/",
+    "raw_output_root_is_gitignored": true,
+    "max_total_endpoint_calls": 96,
+    "planned_total_endpoint_calls": 96,
+    "endpoint_results_count": 96,
+    "new_network_call_count": 96,
+    "reused_raw_payload_count": 0,
+    "budget_exceeded": false,
+    "network_call_attempted": true,
+    "environment_precheck_passed": true,
+    "independent_review_confirmed": true,
+    "post_review_execute_confirmed": true,
+    "token_logged": false,
+    "request_url_logged": false
+  },
+  "materialization_boundary": {
+    "materialization_id": "a_long_large_cap_market_cap_top500_monthly_2018_2025",
+    "method": "daily_basic",
+    "selected_market_cap_field": "circ_mv",
+    "monthly_as_of_count": 96,
+    "monthly_as_of_dates": [
+      "20180131",
+      "20180228",
+      "20180330",
+      "20180427",
+      "20180531",
+      "20180629",
+      "20180731",
+      "20180831",
+      "20180928",
+      "20181031",
+      "20181130",
+      "20181228",
+      "20190131",
+      "20190228",
+      "20190329",
+      "20190430",
+      "20190531",
+      "20190628",
+      "20190731",
+      "20190830",
+      "20190930",
+      "20191031",
+      "20191129",
+      "20191231",
+      "20200123",
+      "20200228",
+      "20200331",
+      "20200430",
+      "20200529",
+      "20200630",
+      "20200731",
+      "20200831",
+      "20200930",
+      "20201030",
+      "20201130",
+      "20201231",
+      "20210129",
+      "20210226",
+      "20210331",
+      "20210430",
+      "20210531",
+      "20210630",
+      "20210730",
+      "20210831",
+      "20210930",
+      "20211029",
+      "20211130",
+      "20211231",
+      "20220128",
+      "20220228",
+      "20220331",
+      "20220429",
+      "20220531",
+      "20220630",
+      "20220729",
+      "20220831",
+      "20220930",
+      "20221031",
+      "20221130",
+      "20221230",
+      "20230131",
+      "20230228",
+      "20230331",
+      "20230428",
+      "20230531",
+      "20230630",
+      "20230731",
+      "20230831",
+      "20230928",
+      "20231031",
+      "20231130",
+      "20231229",
+      "20240131",
+      "20240229",
+      "20240329",
+      "20240430",
+      "20240531",
+      "20240628",
+      "20240731",
+      "20240830",
+      "20240930",
+      "20241031",
+      "20241129",
+      "20241231",
+      "20250127",
+      "20250228",
+      "20250331",
+      "20250430",
+      "20250530",
+      "20250630",
+      "20250731",
+      "20250829",
+      "20250930",
+      "20251031",
+      "20251128",
+      "20251231"
+    ],
+    "universe_size_n": 500,
+    "board_scope": "main_board_only",
+    "top_500_selection_written_to_tracked_summary": false,
+    "not_signal_search": true
+  },
+  "coverage_rollup": {
+    "months_with_success": 96,
+    "months_with_complete_top500": 96,
+    "min_main_board_row_count": 2558,
+    "min_selected_top500_count": 500,
+    "selected_market_cap_field": "circ_mv"
+  },
+  "endpoint_results": [
+    {
+      "call_id": "daily_basic_market_cap_20180131",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180131",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20180131",
+      "row_count": 3263,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2588,
+        "main_board_positive_selected_field_count": 2588,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1315421.7964,
+        "top500_max_market_cap": 201669934.9792,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20180131.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20180228",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180228",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20180228",
+      "row_count": 3227,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2558,
+        "main_board_positive_selected_field_count": 2558,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1276796.3374,
+        "top500_max_market_cap": 179831345.7635,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20180228.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20180330",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180330",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20180330",
+      "row_count": 3249,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2576,
+        "main_board_positive_selected_field_count": 2576,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1296534.72,
+        "top500_max_market_cap": 164193837.4363,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20180330.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20180427",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180427",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20180427",
+      "row_count": 3272,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2590,
+        "main_board_positive_selected_field_count": 2590,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1266210.015,
+        "top500_max_market_cap": 161767327.5234,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20180427.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20180531",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180531",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20180531",
+      "row_count": 3302,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2615,
+        "main_board_positive_selected_field_count": 2615,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1264939.0015,
+        "top500_max_market_cap": 152600512.2971,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20180531.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20180629",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180629",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20180629",
+      "row_count": 3325,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2629,
+        "main_board_positive_selected_field_count": 2629,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1151943.3408,
+        "top500_max_market_cap": 143433697.0707,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20180629.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20180731",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180731",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20180731",
+      "row_count": 3396,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2684,
+        "main_board_positive_selected_field_count": 2684,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1169193.4676,
+        "top500_max_market_cap": 152330900.0845,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20180731.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20180831",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180831",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20180831",
+      "row_count": 3440,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2726,
+        "main_board_positive_selected_field_count": 2726,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1105777.0273,
+        "top500_max_market_cap": 146669043.6212,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20180831.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20180928",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180928",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20180928",
+      "row_count": 3470,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2750,
+        "main_board_positive_selected_field_count": 2750,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1094572.5747,
+        "top500_max_market_cap": 155566246.635,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20180928.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20181031",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20181031",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20181031",
+      "row_count": 3481,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2762,
+        "main_board_positive_selected_field_count": 2762,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 998760.0,
+        "top500_max_market_cap": 151791675.6595,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20181031.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20181130",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20181130",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20181130",
+      "row_count": 3538,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2808,
+        "main_board_positive_selected_field_count": 2808,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1066242.3497,
+        "top500_max_market_cap": 143703309.2833,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20181130.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20181228",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20181228",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20181228",
+      "row_count": 3551,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2815,
+        "main_board_positive_selected_field_count": 2815,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1051569.1869,
+        "top500_max_market_cap": 142624860.4331,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20181228.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20190131",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20190131",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20190131",
+      "row_count": 3569,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2830,
+        "main_board_positive_selected_field_count": 2830,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1066581.2602,
+        "top500_max_market_cap": 152600512.2971,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20190131.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20190228",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20190228",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20190228",
+      "row_count": 3571,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2831,
+        "main_board_positive_selected_field_count": 2831,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1296507.2179,
+        "top500_max_market_cap": 155027022.2099,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20190228.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20190329",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20190329",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20190329",
+      "row_count": 3567,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2825,
+        "main_board_positive_selected_field_count": 2825,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1430555.8756,
+        "top500_max_market_cap": 150174002.3842,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20190329.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20190430",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20190430",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20190430",
+      "row_count": 3554,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2804,
+        "main_board_positive_selected_field_count": 2804,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1374642.36,
+        "top500_max_market_cap": 156644695.4852,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20190430.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20190531",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20190531",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20190531",
+      "row_count": 3601,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2844,
+        "main_board_positive_selected_field_count": 2844,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1303320.8592,
+        "top500_max_market_cap": 151252451.2344,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20190531.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20190628",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20190628",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20190628",
+      "row_count": 3614,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2853,
+        "main_board_positive_selected_field_count": 2853,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1328362.6913,
+        "top500_max_market_cap": 158801593.1855,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20190628.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20190731",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20190731",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20190731",
+      "row_count": 3648,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2858,
+        "main_board_positive_selected_field_count": 2858,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1324354.625,
+        "top500_max_market_cap": 152061287.872,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20190731.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20190830",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20190830",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20190830",
+      "row_count": 3662,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2868,
+        "main_board_positive_selected_field_count": 2868,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1307905.3927,
+        "top500_max_market_cap": 145320982.5585,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20190830.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20190930",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20190930",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20190930",
+      "row_count": 3672,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2869,
+        "main_board_positive_selected_field_count": 2869,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1310215.0676,
+        "top500_max_market_cap": 149095553.5341,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20190930.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20191031",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20191031",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20191031",
+      "row_count": 3684,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2874,
+        "main_board_positive_selected_field_count": 2874,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1342350.0347,
+        "top500_max_market_cap": 159340817.6105,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20191031.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20191129",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20191129",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20191129",
+      "row_count": 3715,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2876,
+        "main_board_positive_selected_field_count": 2876,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1323124.3642,
+        "top500_max_market_cap": 156105471.0601,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20191129.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20191231",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20191231",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20191231",
+      "row_count": 3742,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2886,
+        "main_board_positive_selected_field_count": 2886,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1478441.2138,
+        "top500_max_market_cap": 158531980.9729,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20191231.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20200123",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20200123",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20200123",
+      "row_count": 3761,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2893,
+        "main_board_positive_selected_field_count": 2893,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1505804.395,
+        "top500_max_market_cap": 154218185.5723,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20200123.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20200228",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20200228",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20200228",
+      "row_count": 3784,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2898,
+        "main_board_positive_selected_field_count": 2898,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1535365.5545,
+        "top500_max_market_cap": 142894472.6457,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20200228.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20200331",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20200331",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20200331",
+      "row_count": 3790,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2896,
+        "main_board_positive_selected_field_count": 2896,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1412021.882,
+        "top500_max_market_cap": 139563575.58,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20200331.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20200430",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20200430",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20200430",
+      "row_count": 3772,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2871,
+        "main_board_positive_selected_field_count": 2871,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1490516.4932,
+        "top500_max_market_cap": 158996955.546,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20200430.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20200529",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20200529",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20200529",
+      "row_count": 3814,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2905,
+        "main_board_positive_selected_field_count": 2905,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1517130.9738,
+        "top500_max_market_cap": 171671991.348,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20200529.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20200630",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20200630",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20200630",
+      "row_count": 3836,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2907,
+        "main_board_positive_selected_field_count": 2907,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1622422.9963,
+        "top500_max_market_cap": 183766663.7664,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20200630.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20200731",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20200731",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20200731",
+      "row_count": 3895,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2923,
+        "main_board_positive_selected_field_count": 2923,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1866847.8975,
+        "top500_max_market_cap": 210812602.4004,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20200731.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20200831",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20200831",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20200831",
+      "row_count": 3951,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2942,
+        "main_board_positive_selected_field_count": 2942,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1925323.6388,
+        "top500_max_market_cap": 224419736.97,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20200831.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20200930",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20200930",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20200930",
+      "row_count": 4016,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2973,
+        "main_board_positive_selected_field_count": 2973,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1766982.0048,
+        "top500_max_market_cap": 209596602.93,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20200930.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20201030",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20201030",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20201030",
+      "row_count": 4045,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2986,
+        "main_board_positive_selected_field_count": 2986,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1781754.0,
+        "top500_max_market_cap": 209787544.9956,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20201030.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20201130",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20201130",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20201130",
+      "row_count": 4068,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 2994,
+        "main_board_positive_selected_field_count": 2994,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1898612.1031,
+        "top500_max_market_cap": 215300997.1398,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20201130.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20201231",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20201231",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20201231",
+      "row_count": 4118,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3014,
+        "main_board_positive_selected_field_count": 3014,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1959116.7813,
+        "top500_max_market_cap": 250988320.44,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20201231.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20210129",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20210129",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20210129",
+      "row_count": 4151,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3024,
+        "main_board_positive_selected_field_count": 3024,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1881310.3192,
+        "top500_max_market_cap": 265834066.0404,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20210129.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20210226",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20210226",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20210226",
+      "row_count": 4178,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3032,
+        "main_board_positive_selected_field_count": 3032,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1953255.051,
+        "top500_max_market_cap": 266663156.5884,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20210226.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20210331",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20210331",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20210331",
+      "row_count": 4216,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3042,
+        "main_board_positive_selected_field_count": 3042,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1941559.6968,
+        "top500_max_market_cap": 252370138.02,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20210331.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20210430",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20210430",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20210430",
+      "row_count": 4240,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3030,
+        "main_board_positive_selected_field_count": 3030,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1944600.2907,
+        "top500_max_market_cap": 252091262.1084,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20210430.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20210531",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20210531",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20210531",
+      "row_count": 4312,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3075,
+        "main_board_positive_selected_field_count": 3075,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2059200.0,
+        "top500_max_market_cap": 278624672.04,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20210531.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20210630",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20210630",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20210630",
+      "row_count": 4359,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3085,
+        "main_board_positive_selected_field_count": 3085,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2087057.2919,
+        "top500_max_market_cap": 258362201.526,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20210630.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20210730",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20210730",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20210730",
+      "row_count": 4407,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3091,
+        "main_board_positive_selected_field_count": 3091,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2108542.0408,
+        "top500_max_market_cap": 210914354.4222,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20210730.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20210831",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20210831",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20210831",
+      "row_count": 4450,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3106,
+        "main_board_positive_selected_field_count": 3106,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2254033.5628,
+        "top500_max_market_cap": 195715617.24,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20210831.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20210930",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20210930",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20210930",
+      "row_count": 4481,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3105,
+        "main_board_positive_selected_field_count": 3105,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2282072.3401,
+        "top500_max_market_cap": 229884197.4,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20210930.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20211029",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20211029",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20211029",
+      "row_count": 4521,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3120,
+        "main_board_positive_selected_field_count": 3120,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2243809.9805,
+        "top500_max_market_cap": 229391767.8624,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20211029.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20211130",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20211130",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20211130",
+      "row_count": 4630,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3123,
+        "main_board_positive_selected_field_count": 3123,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2355715.5574,
+        "top500_max_market_cap": 242542902.6306,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20211130.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20211231",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20211231",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20211231",
+      "row_count": 4669,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3127,
+        "main_board_positive_selected_field_count": 3127,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2407593.5065,
+        "top500_max_market_cap": 257520549.0,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20211231.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20220128",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20220128",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20220128",
+      "row_count": 4705,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3136,
+        "main_board_positive_selected_field_count": 3136,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2124108.7312,
+        "top500_max_market_cap": 237044524.86,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20220128.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20220228",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20220228",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20220228",
+      "row_count": 4724,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3141,
+        "main_board_positive_selected_field_count": 3141,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2255998.5339,
+        "top500_max_market_cap": 224909654.112,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20220228.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20220331",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20220331",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20220331",
+      "row_count": 4756,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3142,
+        "main_board_positive_selected_field_count": 3142,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2055080.2015,
+        "top500_max_market_cap": 215940401.82,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20220331.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20220429",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20220429",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20220429",
+      "row_count": 4767,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3127,
+        "main_board_positive_selected_field_count": 3127,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1858317.2035,
+        "top500_max_market_cap": 229680693.3564,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20220429.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20220531",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20220531",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20220531",
+      "row_count": 4779,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3126,
+        "main_board_positive_selected_field_count": 3126,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2018872.784,
+        "top500_max_market_cap": 226621851.7134,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20220531.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20220630",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20220630",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20220630",
+      "row_count": 4806,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3125,
+        "main_board_positive_selected_field_count": 3125,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2177010.1603,
+        "top500_max_market_cap": 256892450.1,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20220630.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20220729",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20220729",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20220729",
+      "row_count": 4837,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3134,
+        "main_board_positive_selected_field_count": 3134,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2181449.2515,
+        "top500_max_market_cap": 238481615.1432,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20220729.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20220831",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20220831",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20220831",
+      "row_count": 4899,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3149,
+        "main_board_positive_selected_field_count": 3149,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2114818.9238,
+        "top500_max_market_cap": 241692456.72,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20220831.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20220930",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20220930",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20220930",
+      "row_count": 4937,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3151,
+        "main_board_positive_selected_field_count": 3151,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1961626.5757,
+        "top500_max_market_cap": 235223038.05,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20220930.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20221031",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20221031",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20221031",
+      "row_count": 4966,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3159,
+        "main_board_positive_selected_field_count": 3159,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1953548.1689,
+        "top500_max_market_cap": 169586703.0,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20221031.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20221130",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20221130",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20221130",
+      "row_count": 5007,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3166,
+        "main_board_positive_selected_field_count": 3166,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2147895.6,
+        "top500_max_market_cap": 200866028.22,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20221130.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20221230",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20221230",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20221230",
+      "row_count": 5061,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3169,
+        "main_board_positive_selected_field_count": 3169,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2057422.3208,
+        "top500_max_market_cap": 216945360.06,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20221230.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20230131",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20230131",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20230131",
+      "row_count": 5065,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3169,
+        "main_board_positive_selected_field_count": 3169,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2215629.2147,
+        "top500_max_market_cap": 231863965.1328,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20230131.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20230228",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20230228",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20230228",
+      "row_count": 5093,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3175,
+        "main_board_positive_selected_field_count": 3175,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2281621.3392,
+        "top500_max_market_cap": 227841619.7772,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20230228.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20230331",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20230331",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20230331",
+      "row_count": 5127,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3188,
+        "main_board_positive_selected_field_count": 3188,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2264706.0593,
+        "top500_max_market_cap": 228627999.6,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20230331.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20230428",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20230428",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20230428",
+      "row_count": 5131,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3178,
+        "main_board_positive_selected_field_count": 3178,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2278251.6045,
+        "top500_max_market_cap": 221156135.0856,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20230428.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20230531",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20230531",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20230531",
+      "row_count": 5164,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3184,
+        "main_board_positive_selected_field_count": 3184,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2209495.2405,
+        "top500_max_market_cap": 204622059.642,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20230531.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20230630",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20230630",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20230630",
+      "row_count": 5205,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3179,
+        "main_board_positive_selected_field_count": 3179,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2221812.9511,
+        "top500_max_market_cap": 212423047.98,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20230630.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20230731",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20230731",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20230731",
+      "row_count": 5233,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3178,
+        "main_board_positive_selected_field_count": 3178,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2289863.2871,
+        "top500_max_market_cap": 236238045.8724,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20230731.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20230831",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20230831",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20230831",
+      "row_count": 5265,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3179,
+        "main_board_positive_selected_field_count": 3179,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2125115.5479,
+        "top500_max_market_cap": 232019733.66,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20230831.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20230928",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20230928",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20230928",
+      "row_count": 5282,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3180,
+        "main_board_positive_selected_field_count": 3180,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2156655.1969,
+        "top500_max_market_cap": 225933455.319,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20230928.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20231031",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20231031",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20231031",
+      "row_count": 5297,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3186,
+        "main_board_positive_selected_field_count": 3186,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2063624.6055,
+        "top500_max_market_cap": 211616568.9924,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20231031.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20231130",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20231130",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20231130",
+      "row_count": 5312,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3190,
+        "main_board_positive_selected_field_count": 3190,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2070777.0873,
+        "top500_max_market_cap": 225047835.87,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20231130.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20231229",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20231229",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20231229",
+      "row_count": 5329,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3193,
+        "main_board_positive_selected_field_count": 3193,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2040722.361,
+        "top500_max_market_cap": 216819740.28,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20231229.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20240131",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20240131",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20240131",
+      "row_count": 5344,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3199,
+        "main_board_positive_selected_field_count": 3199,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1819377.1795,
+        "top500_max_market_cap": 201608441.1198,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20240131.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20240229",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20240229",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20240229",
+      "row_count": 5347,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3196,
+        "main_board_positive_selected_field_count": 3196,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2029709.0307,
+        "top500_max_market_cap": 212925527.1,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20240229.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20240329",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20240329",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20240329",
+      "row_count": 5356,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3198,
+        "main_board_positive_selected_field_count": 3198,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2008391.0619,
+        "top500_max_market_cap": 213917923.362,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20240329.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20240430",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20240430",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20240430",
+      "row_count": 5301,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3146,
+        "main_board_positive_selected_field_count": 3146,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2044597.513,
+        "top500_max_market_cap": 214181724.9,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20240430.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20240531",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20240531",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20240531",
+      "row_count": 5341,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3182,
+        "main_board_positive_selected_field_count": 3182,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2055456.4275,
+        "top500_max_market_cap": 207077926.341,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20240531.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20240628",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20240628",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20240628",
+      "row_count": 5338,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3174,
+        "main_board_positive_selected_field_count": 3174,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1897319.4724,
+        "top500_max_market_cap": 184333208.9742,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20240628.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20240731",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20240731",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20240731",
+      "row_count": 5334,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3167,
+        "main_board_positive_selected_field_count": 3167,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1877307.8806,
+        "top500_max_market_cap": 178540880.9184,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20240731.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20240830",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20240830",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20240830",
+      "row_count": 5339,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3165,
+        "main_board_positive_selected_field_count": 3165,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 1776401.36,
+        "top500_max_market_cap": 181293210.2982,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20240830.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20240930",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20240930",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20240930",
+      "row_count": 5345,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3165,
+        "main_board_positive_selected_field_count": 3165,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2172911.5136,
+        "top500_max_market_cap": 219583375.44,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20240930.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20241031",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20241031",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20241031",
+      "row_count": 5349,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3162,
+        "main_board_positive_selected_field_count": 3162,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2218125.0,
+        "top500_max_market_cap": 191920643.6862,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20241031.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20241129",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20241129",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20241129",
+      "row_count": 5364,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3167,
+        "main_board_positive_selected_field_count": 3167,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2220630.4905,
+        "top500_max_market_cap": 191663123.1372,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20241129.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20241231",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20241231",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20241231",
+      "row_count": 5370,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3164,
+        "main_board_positive_selected_field_count": 3164,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2181375.0,
+        "top500_max_market_cap": 191444544.72,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20241231.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20250127",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20250127",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20250127",
+      "row_count": 5382,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3174,
+        "main_board_positive_selected_field_count": 3174,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2128725.3121,
+        "top500_max_market_cap": 183875528.9516,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20250127.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20250228",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20250228",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20250228",
+      "row_count": 5383,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3169,
+        "main_board_positive_selected_field_count": 3169,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2188865.3271,
+        "top500_max_market_cap": 188528909.6262,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20250228.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20250331",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20250331",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20250331",
+      "row_count": 5393,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3170,
+        "main_board_positive_selected_field_count": 3170,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2235461.7648,
+        "top500_max_market_cap": 196092476.58,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20250331.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20250430",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20250430",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20250430",
+      "row_count": 5360,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3147,
+        "main_board_positive_selected_field_count": 3147,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2129903.4398,
+        "top500_max_market_cap": 194333799.66,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20250430.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20250530",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20250530",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20250530",
+      "row_count": 5384,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3164,
+        "main_board_positive_selected_field_count": 3164,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2156800.216,
+        "top500_max_market_cap": 191193305.16,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20250530.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20250630",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20250630",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20250630",
+      "row_count": 5405,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3175,
+        "main_board_positive_selected_field_count": 3175,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2226936.6153,
+        "top500_max_market_cap": 204635669.3171,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20250630.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20250731",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20250731",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20250731",
+      "row_count": 5409,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3176,
+        "main_board_positive_selected_field_count": 3176,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2327230.4979,
+        "top500_max_market_cap": 203826832.6795,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20250731.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20250829",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20250829",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20250829",
+      "row_count": 5414,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3175,
+        "main_board_positive_selected_field_count": 3175,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2542631.9431,
+        "top500_max_market_cap": 224109435.9655,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20250829.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20250930",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20250930",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20250930",
+      "row_count": 5423,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3174,
+        "main_board_positive_selected_field_count": 3174,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2625194.7491,
+        "top500_max_market_cap": 212935888.5883,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20250930.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20251031",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20251031",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20251031",
+      "row_count": 5432,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3179,
+        "main_board_positive_selected_field_count": 3179,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2559274.2636,
+        "top500_max_market_cap": 254118391.7785,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20251031.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20251128",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20251128",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20251128",
+      "row_count": 5433,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3176,
+        "main_board_positive_selected_field_count": 3176,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2542355.1,
+        "top500_max_market_cap": 256672345.4647,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20251128.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20251231",
+      "table_id": "daily_basic_market_cap_monthly",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20251231",
+        "fields": "ts_code,trade_date,circ_mv"
+      },
+      "call_status": "success",
+      "trade_date": "20251231",
+      "row_count": 5458,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv"
+      ],
+      "minimum_fields_missing": [],
+      "top500_main_board_stats": {
+        "main_board_row_count": 3182,
+        "main_board_positive_selected_field_count": 3182,
+        "selected_top500_count": 500,
+        "selected_top500_complete": true,
+        "selected_market_cap_field": "circ_mv",
+        "top500_min_market_cap": 2641844.3646,
+        "top500_max_market_cap": 245179553.8767,
+        "top500_symbols_written_to_tracked_summary": false
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/daily_basic_market_cap_20251231.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "tracked_summary_excludes_top500_symbols": true,
+      "error_class": null,
+      "error_message_redacted": null
+    }
+  ],
+  "decision": {
+    "market_cap_materialization_status": "passed_market_cap_materialization_shape",
+    "raw_market_cap_materialization_shape_available": true,
+    "selected_market_cap_field": "circ_mv",
+    "audit_rerun_authorized_by_this_summary": false,
+    "signal_search_authorized_by_this_summary": false,
+    "plain_result": "daily_basic monthly circ_mv materialization produced enough main-board positive rows for top-500 selection on all 96 as-of dates.",
+    "next_action": "Send the execution summary for independent review; if passed, a later audit package may consume the raw market-cap payloads."
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "audit_passed": false,
+    "signal_search_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This summary records monthly daily_basic market-cap materialization shape and counts only.",
+    "Raw rows stay under gitignored data/a_long/raw/ and are not included in the tracked summary.",
+    "Tracked summary does not include the 96 monthly top-500 symbol lists.",
+    "A materialization pass is not an audit pass and does not authorize signal search, alpha, production, ship-gate evidence, full-size use, DataHub, or broker/order automation."
+  ]
+}

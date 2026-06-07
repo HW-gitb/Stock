@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long large-cap market-cap materialization RESULT, docs/...materialization_execution_summary_20260607.json, untracked on HEAD 5ef681a) — **PASS — 96/96 months materialized, complete top-500 every month, ledger unspent, hygiene clean**
+
+Genuine live run: `new_network_call_count=96`, reused=0, both confirm gates true, env precheck passed. Independently recomputed every number from the 96 `endpoint_results` (did not just trust `coverage_rollup`):
+- All 96 calls `call_status=success`; no `minimum_fields_missing` on any call; 96 unique sorted as-of dates.
+- Every month forms a COMPLETE main-board top-500 by positive `circ_mv` (`complete_top500 = 96/96`, min `selected_top500_count = 500`).
+- Main-board row counts range 2558 (early 2018) → 3199 (2025) — plausible main-board growth (excl ChiNext/STAR/BSE); min positive-`circ_mv` main-board rows = 2558, far above the 500 needed. Full `daily_basic` row_count 3227–5458 (matches the probe's 3263/4669/5458 ballpark).
+- Decision: `passed_market_cap_materialization_shape`, `shape_available=true`.
+- Hygiene: tracked summary has no raw rows, no top-500 symbol lists, no secret, token/url not logged (recursive check finds no `records`/`top500_symbols`/`selected_symbols` keys anywhere); 96 raw payloads under the gitignored raw root (confirmed IGNORED).
+- Singleton ledger still UNSPENT (`tests_spent_count=0`, `active_planned_test_pending_review`) — materialization correctly does not spend it.
+- Summary validates against its schema with zero errors in my jsonschema env.
+
+**Verdict**: PASS — the main-board top-500-by-`circ_mv` monthly universe (2018–2025, 96 as-ofs) is materialized and shape-verified; raw retained for later universe re-derivation. Nothing here authorizes audit, signal search, or spends the ledger. Sequence: commit this result → next reviewed AUDIT package consumes the raw → then (only after audit PASS) the signal-search package (the ledger-spending registered test, which must reuse the same 96 as-ofs + `is_main_board_ts_code` + top-500-by-`circ_mv` derivation). Immediate next: commit this materialization execution summary.
+
+---
+
 ## 2026-06-07 — Claude 审查 (A-long large-cap monthly market-cap materialization package: circ_mv freeze + packet + runner + 2 schemas + 2 tests, uncommitted on HEAD 9db5011) — **PASS — circ_mv freeze correct, 96-call materialization bounded + gated + tested; not yet run**
 
 Full read of the runner + packet + execution-summary schema + the prereg/ledger/probe-test diffs (not delta-only). **circ_mv freeze is correct and consistent**: prereg `selected_market_cap_field_status: circ_mv`, `market_cap_field_choice_status: circ_mv_reviewed_probe_passed_frozen_for_materialization`, points to the reviewed probe summary; the prereg schema const + test were updated to match; `prohibited_claims` swapped the now-true `market_cap_field_selected` for `market_cap_materialized:false`. **Ledger NOT spent** (text-only edits; `tests_spent_count=0`, empty spend log — runner re-checks this as a gate). The probe-runner test was correctly decoupled (setUp patches `PREREGISTRATION_PATH` to a temp pending-probe fixture, tearDown stops the patch) so the historical probe tests stay valid now that the real prereg is frozen to circ_mv.
