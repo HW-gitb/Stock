@@ -8,6 +8,19 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long Step-3 runtime/perf fix) — **PASS (可提交)** — behavior-preserving
+
+Step 3 timed out (120s, 900s) — the perf bottleneck I'd predicted (PayloadStore re-reading JSON every call + summarize_results re-scanning all rows per cell). Codex's fix verified **behavior-preserving** (same result, just faster):
+- **PayloadStore cache** (`data_integrity_audit.py` line 82/96/106): `payload()` caches the parsed JSON by call_id (read once), `records()` caches the filtered list. Deterministic same data; callers build NEW item dicts (no mutation of cached rows/lists) → no cache-corruption risk. Regression test asserts read-once + cache-reuse.
+- **`summarize_results` pre-grouping** (line 1177-1200): buckets rows by `(horizon, as_of)` once, then the cohort filter (line 1196-1200) is the IDENTICAL `score_field not None AND excess_field not None` over the bucket instead of a full scan; sort/top-N/mean-excess/HAC unchanged → identical cohorts, selection, returns. Not a result change, just no redundant scans.
+- **263 A-long tests OK (1 skip)** re-run in my jsonschema env — including the summarize cohort-grid + year-concentration tests that would fail if grouping changed cohort membership.
+
+**Safety held again**: the two timeouts left NO `execution_summary.json` / pending summary, ledger unspent (`tests_spent_count=0`), no orphan process. A slow run did not waste the singleton.
+
+**Bottom line**: the perf fix removes the redundant re-reads (the bottleneck) without changing the computation; Step 3 should now complete in minutes, not time out. Chain remains clean. After commit, **re-run Step 3** (double-confirm; ledger unspent; exclusion CSV applied) → it should finally produce `execution_summary.json` → Claude reviews the REAL alpha result. No alpha/production/ship-gate authorized before that.
+
+---
+
 ## 2026-06-07 — Codex 执行 / 修复 (A-long Step-3 runtime termination) — **READY FOR REVIEW / no signal result**
 
 After Claude PASS and commit `498ab99`, user gave a separate `执行`. Codex ran the reviewed Step-3 command twice:
