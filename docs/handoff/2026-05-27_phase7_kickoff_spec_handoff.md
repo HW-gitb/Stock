@@ -1,5 +1,24 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-07 append: A-long large-cap signal-search package ready for review
+
+**Changed**:
+- Committed the reviewed `000043.SZ` bridge repair and repaired market-cap audit PASS in `b7f4cb4`.
+- Prepared the next review-only large-cap pure-quality signal-search package without executing it.
+- New package files: `schemas/a_long_large_cap_pure_quality_signal_search_execution_packet.schema.json`, `docs/a_long_large_cap_pure_quality_signal_search_execution_packet_20260607.json`, `runners/a_long_large_cap_pure_quality_signal_search.py`, `schemas/a_long_large_cap_pure_quality_signal_search_execution_summary.schema.json`, `tests/schema/test_a_long_large_cap_pure_quality_signal_search_schema.py`, and `tests/test_a_long_large_cap_pure_quality_signal_search.py`.
+- The future runner reuses the reviewed full-main-board PIT fundamentals / returns / benchmark route, consumes the repaired large-cap market-cap audit PASS, applies the reviewed `000043.SZ` / `20191129` drop-plus-backfill policy, and evaluates one frozen primary cell: 504d CSI300 industry-size-neutral three-factor percentile composite.
+
+**Plain result**:
+- This is a review-only package build.
+- It did not run signal search, read raw payloads during build, spend the large-cap singleton ledger, compute alpha, or authorize production / ship-gate / full-size use.
+- CSI1000, 252d, non-neutral, cap-weighted, single-factor, and `earnings_stability` cells are diagnostics only and cannot rescue the single primary cell.
+
+**Next**:
+- Independent review of the signal-search package.
+- After review PASS + commit, a separate user `执行` may run only `runners/a_long_large_cap_pure_quality_signal_search.py` with both confirmation flags. That future run would write the research-only summary and spend the large-cap singleton ledger exactly once.
+
+---
+
 ## 2026-06-07 append: A-long large-cap 000043 bridge repair and local audit PASS
 
 **Changed**:

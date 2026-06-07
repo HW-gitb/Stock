@@ -8,6 +8,52 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long large-cap pure-quality SIGNAL-SEARCH package: packet + runner + 2 schemas + 2 tests, uncommitted on HEAD b7f4cb4) — **PASS — faithful to frozen prereg, reuses vetted measurement, R1-class guarded; ready to commit + execute (spends ledger)**
+
+Deepest review of the session — this is the test that spends the singleton ledger and yields the alpha verdict. Full read of the runner + packet + summary schema; ran 12/12 tests in my jsonschema env; confirmed all reused `base.*` constants resolve to the correct frozen values.
+
+**Faithful to the frozen prereg** — `load_and_validate_preregistration` drift-guards EVERY frozen parameter (N=500, circ_mv, exclusion+backfill policy, 3-factor composite, earnings_stability diagnostic-only, ROE basis/annualization, cash 1e7 guard, earnings_stability basis, marginal_double_neutralization, 0.5/0.5 combine, crossed forbidden, min_size_bucket 50, 504d/252d, cost 0.0026, stock/benchmark TR basis, CSI300/CSI1000, both-benchmark false, cell_id, HAC 2.0, cohorts 48, drawdown −0.15). Same drift-guards on packet, ledger (unspent), market-cap audit (PASS + bridge resolved: unresolved=0/documented=1/backfill=1), full-main-board audit, restatement (1504).
+
+**Reuses the vetted measurement core** (genuine `base` imports, not reimplemented): compute_return (same-anchor close-to-close total-return), resolve_return_dates (terminal/halt), stock/index total-return-close, newey_west HAC-t (lag rule), percentile_scores, add_industry_neutral_scores (L2≥20 else L1), compute_signal_values (PIT fundamentals + restatement), symbol_vetoed_at_selection_time (PIT namechange), max_drawdown — with the correct frozen constants confirmed at runtime.
+
+**No R1-class bug** — `row["excess_{benchmark}"]` is set INSIDE the per-benchmark loop (both CSI300 + CSI1000 populated) and `rows.append` runs once per (item,horizon) after the loop; `validate_pipeline_result_sanity` hard-fails on empty rows or 0 primary cohorts BEFORE any verdict/ledger spend. Composite math correct: per-factor combine ≡ composite combine (linearity), 0.5·industry + 0.5·size. 36 result cells (16 composite-views + 4 cap-weighted + 16 single-factor diagnostics), exactly one primary (composite / industry_size_neutral / equal_weight / 504d / CSI300); diagnostics cannot rescue (decision reads the single primary only).
+
+**Universe** — reuses the audit's ranked + exclusion/backfill, then independently re-verifies every signal name is inside the prior audited fundamental-data universe (`allowed_symbols = context.symbols`), raising if any outside / month incomplete / exclusion≠1 / backfill≠1 — fail-closed, consistent with the audit.
+
+**Ledger discipline** — pending-summary → spend → final-summary; the spend re-loads the ledger requiring tests_spent_count==0, plus a no-overwrite guard on the summary → double-spend impossible; spends exactly once, status keyed to verdict.
+
+**Hygiene** — summary is count/stat-only (no raw rows, no endpoint results, no top-500 symbol lists); schema strict (additionalProperties:false ×9, result_cells min=max=36).
+
+**Optional O-DUP-COMPUTE (trivial)**: `compute_return` is called once for the primary benchmark to get stock_ret (~line 627) and again for CSI300 inside the per-benchmark loop (~line 648) — one redundant in-memory call per (item,horizon). No correctness impact; the run is small (≤~96k rows, prices cached) so no timeout risk; Codex may capture the line-627 primary bench return and skip the duplicate, or leave it.
+
+**Verdict**: PASS. The package faithfully implements the frozen large-cap pure-quality design, reuses the vetted measurement chain, and is guarded against the prior false-no-alpha failure mode. Nothing here spends the ledger or runs the search. Sequence: commit → a separate user `执行` runs the search (spends the singleton ledger once, writes the research-only summary) → Claude independently reviews the candidate/falsified verdict (recompute cells, check every t≥2 cell against its gates, size-confound vs CSI1000) before any conclusion. Immediate next: commit the package.
+
+---
+
+## 2026-06-07 — Codex 构建 (A-long large-cap pure-quality SIGNAL-SEARCH package) — **READY FOR REVIEW / not executed, ledger unspent**
+
+After Claude PASS on the `000043.SZ` / `20191129` bridge repair + repaired local market-cap audit result, Codex committed that reviewed scope as `b7f4cb4` (`Repair A-long large-cap audit bridge`). Under the user's `提交并执行下一步`, Codex then executed only the next build step: prepare the reviewed large-cap pure-quality signal-search package. No provider call, data fetch, raw-payload read during build, signal-search execution, alpha backtest, execution summary, ledger spend, DataHub work, production claim, ship-gate claim, full-size use, or broker/order automation was run or authorized.
+
+**Worked on**:
+- [new] `schemas/a_long_large_cap_pure_quality_signal_search_execution_packet.schema.json` and `docs/a_long_large_cap_pure_quality_signal_search_execution_packet_20260607.json`: review-only execution packet. It locks local-raw-only future execution, the reviewed large-cap market-cap audit PASS, the reviewed `000043.SZ` drop/backfill policy, unspent singleton ledger, full-main-board audit / restatement / benchmark-route gates, and the single primary decision cell.
+- [new] `runners/a_long_large_cap_pure_quality_signal_search.py`: future executable runner requiring `--confirm-independent-review-pass` + `--confirm-post-review-execute`. It reuses the repaired full-main-board signal-search measurement functions for PIT fundamentals, annualized YTD ROE, same-period YoY `profit_dedt` earnings-stability, stock adjusted-close total return, total-return benchmark close, terminal exit anchoring, HAC t-statistics, and pending-summary -> ledger -> final-summary spend ordering. New large-cap logic re-derives the 96 monthly top-500 `circ_mv` universe from reviewed local market-cap raw, drops the reviewed `000043.SZ` observation and backfills the next main-board symbol by `circ_mv`, computes the three-factor percentile composite, applies marginal industry + size neutralization, and evaluates the single 504d CSI300 primary cell.
+- [new] `schemas/a_long_large_cap_pure_quality_signal_search_execution_summary.schema.json`: future tracked summary contract with exactly 36 cells: composite views across equal-weight diagnostics, cap-weighted composite diagnostics, and single-factor / `earnings_stability` diagnostics. The only primary decision cell is `core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_504d_CSI300`.
+- [new] `tests/schema/test_a_long_large_cap_pure_quality_signal_search_schema.py` and `tests/test_a_long_large_cap_pure_quality_signal_search.py`: lock packet/schema strictness, no scope creep, current gate artifact validation, 36-cell design, single primary cell, CSI1000 diagnostic-only status, three-component composite construction, size-neutral minimum bucket behavior, and no diagnostic rescue.
+- [tracked docs] `docs/README.md`, `research/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, and `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md`: route the new package and update the next gate to independent review before execution.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile runners\a_long_large_cap_pure_quality_signal_search.py` — OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_long_large_cap_pure_quality_signal_search tests.schema.test_a_long_large_cap_pure_quality_signal_search_schema -v` — 12 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "*large_cap*" -v` — 64 tests OK.
+
+**Next / lock**:
+- Claude should review the full working tree, especially the new packet/schema/runner/tests and whether the runner faithfully implements the frozen preregistration.
+- Do not run `runners\a_long_large_cap_pure_quality_signal_search.py` until independent review PASS + commit + a separate user `执行`.
+- If review passes and the package is committed, the later execution command will be:
+  `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\a_long_large_cap_pure_quality_signal_search.py --confirm-independent-review-pass --confirm-post-review-execute`
+
+---
+
 ## 2026-06-07 — Claude 审查 (R-BRIDGE-000043 fix + RE-RUN audit RESULT, uncommitted on HEAD 7f544ab) — **PASS (both) — bounded exclusion correct + re-run audit now PASSES, independently verified; ready to commit**
 
 Codex implemented the approved fix AND re-ran the local audit during 修复; reviewed both.

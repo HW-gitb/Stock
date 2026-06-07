@@ -1,0 +1,305 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_long_large_cap_pure_quality_signal_search_execution_packet/1.0.0/schema.json",
+  "title": "A-long Large-cap Pure-quality Signal-search Execution Packet",
+  "description": "Reviewed execution packet for the A-long large-cap pure-quality signal search. The packet itself executes no provider call, reads no raw payload, runs no signal search, spends no ledger, and authorizes no production or ship-gate claim.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "source_artifact_refs",
+    "execution_boundary",
+    "signal_plan",
+    "output_contract",
+    "pre_execution_gates",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_long_large_cap_pure_quality_signal_search_execution_packet"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {"const": "a_long_large_cap_pure_quality_signal_search_execution_packet_20260607"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sourceArtifactRef"},
+      "minItems": 8
+    },
+    "execution_boundary": {"$ref": "#/$defs/executionBoundary"},
+    "signal_plan": {"$ref": "#/$defs/signalPlan"},
+    "output_contract": {"$ref": "#/$defs/outputContract"},
+    "pre_execution_gates": {"$ref": "#/$defs/preExecutionGates"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "next_steps": {"$ref": "#/$defs/stringList"},
+    "limitations": {"$ref": "#/$defs/stringList"}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "dateKey": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "stringList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "minItems": 1
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "path", "role"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/nonEmptyString"},
+        "path": {"$ref": "#/$defs/nonEmptyString"},
+        "role": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "packet_status",
+        "lane_id",
+        "market",
+        "research_only",
+        "ready_for_later_execution_after_independent_review",
+        "actual_signal_search_requires_post_review_execute_command",
+        "local_raw_read_only",
+        "large_cap_signal_search_allowed_after_gates",
+        "provider_calls_executed_by_this_artifact",
+        "tushare_calls_executed_by_this_artifact",
+        "data_fetch_executed_by_this_artifact",
+        "raw_payloads_read_by_this_artifact",
+        "signal_search_executed_by_this_artifact",
+        "alpha_backtest_executed_by_this_artifact",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {"const": "7a_alpha_validation"},
+        "purpose": {"const": "a_long_large_cap_pure_quality_signal_search_execution_packet"},
+        "packet_status": {"const": "execution_packet_recorded_for_review_not_executed"},
+        "lane_id": {"const": "a_long"},
+        "market": {"const": "A-share"},
+        "research_only": {"const": true},
+        "ready_for_later_execution_after_independent_review": {"const": true},
+        "actual_signal_search_requires_post_review_execute_command": {"const": true},
+        "local_raw_read_only": {"const": true},
+        "large_cap_signal_search_allowed_after_gates": {"const": true},
+        "provider_calls_executed_by_this_artifact": {"const": false},
+        "tushare_calls_executed_by_this_artifact": {"const": false},
+        "data_fetch_executed_by_this_artifact": {"const": false},
+        "raw_payloads_read_by_this_artifact": {"const": false},
+        "signal_search_executed_by_this_artifact": {"const": false},
+        "alpha_backtest_executed_by_this_artifact": {"const": false},
+        "datahub_allowed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "ship_gate_claim_allowed": {"const": false},
+        "full_size_manual_use_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "manual_order_only": {"const": true}
+      }
+    },
+    "executionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preregistration_ref",
+        "ledger_ref",
+        "market_cap_audit_report_ref",
+        "market_cap_materialization_summary_ref",
+        "market_cap_raw_root",
+        "full_main_board_raw_root",
+        "full_main_board_audit_report_ref",
+        "restatement_exclusion_list_ref",
+        "benchmark_route_ref",
+        "data_quality_exclusion_decision_ref",
+        "monthly_as_of_count",
+        "monthly_as_of_dates",
+        "board_scope",
+        "selected_market_cap_field",
+        "universe_size_n",
+        "reviewed_data_quality_exclusion_policy",
+        "top500_symbols_written_to_tracked_summary",
+        "provider_call_required_for_future_execution",
+        "ledger_spend_required_if_signal_executes"
+      ],
+      "properties": {
+        "preregistration_ref": {"const": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json"},
+        "ledger_ref": {"const": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json"},
+        "market_cap_audit_report_ref": {"const": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json"},
+        "market_cap_materialization_summary_ref": {"const": "docs/a_long_large_cap_market_cap_materialization_execution_summary_20260607.json"},
+        "market_cap_raw_root": {"const": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/"},
+        "full_main_board_raw_root": {"const": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/"},
+        "full_main_board_audit_report_ref": {"const": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json"},
+        "restatement_exclusion_list_ref": {"const": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv"},
+        "benchmark_route_ref": {"const": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json"},
+        "data_quality_exclusion_decision_ref": {"const": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json"},
+        "monthly_as_of_count": {"const": 96},
+        "monthly_as_of_dates": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/dateKey"},
+          "minItems": 96,
+          "maxItems": 96
+        },
+        "board_scope": {"const": "main_board_only"},
+        "selected_market_cap_field": {"const": "circ_mv"},
+        "universe_size_n": {"const": 500},
+        "reviewed_data_quality_exclusion_policy": {"const": "drop_documented_exclusions_then_backfill_next_main_board_by_circ_mv"},
+        "top500_symbols_written_to_tracked_summary": {"const": false},
+        "provider_call_required_for_future_execution": {"const": false},
+        "ledger_spend_required_if_signal_executes": {"const": true}
+      }
+    },
+    "signalPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_signal_id",
+        "component_factors",
+        "diagnostic_factors",
+        "primary_view",
+        "neutralization_method",
+        "combined_score_rule",
+        "crossed_industry_size_bucket_allowed",
+        "primary_horizon_trading_days",
+        "diagnostic_horizons_trading_days",
+        "primary_benchmark",
+        "diagnostic_benchmark",
+        "secondary_benchmark_required_for_candidate_alpha",
+        "stock_return_basis",
+        "benchmark_return_basis",
+        "round_trip_cost",
+        "minimum_monthly_cohorts",
+        "minimum_hac_t_stat",
+        "minimum_allowed_monthly_excess_drawdown",
+        "max_top_symbol_selection_share",
+        "max_single_year_positive_return_share",
+        "multiple_testing_adjustment_for_decision",
+        "diagnostics_can_define_alpha",
+        "post_result_rescue_slicing_allowed"
+      ],
+      "properties": {
+        "primary_signal_id": {"const": "core_quality_composite_percentile_3factor"},
+        "component_factors": {
+          "type": "array",
+          "items": {"enum": ["profitability_quality", "cash_conversion", "balance_sheet_strength"]},
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "diagnostic_factors": {
+          "type": "array",
+          "items": {"enum": ["profitability_quality", "cash_conversion", "balance_sheet_strength", "earnings_stability"]},
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "primary_view": {"const": "industry_size_neutral"},
+        "neutralization_method": {"const": "marginal_double_neutralization"},
+        "combined_score_rule": {"const": "0_5_industry_neutral_percentile_plus_0_5_size_neutral_percentile"},
+        "crossed_industry_size_bucket_allowed": {"const": false},
+        "primary_horizon_trading_days": {"const": 504},
+        "diagnostic_horizons_trading_days": {
+          "type": "array",
+          "items": {"const": 252},
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "primary_benchmark": {"const": "CSI300"},
+        "diagnostic_benchmark": {"const": "CSI1000"},
+        "secondary_benchmark_required_for_candidate_alpha": {"const": false},
+        "stock_return_basis": {"const": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close"},
+        "benchmark_return_basis": {"const": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close"},
+        "round_trip_cost": {"const": 0.0026},
+        "minimum_monthly_cohorts": {"const": 48},
+        "minimum_hac_t_stat": {"const": 2.0},
+        "minimum_allowed_monthly_excess_drawdown": {"const": -0.15},
+        "max_top_symbol_selection_share": {"const": 0.2},
+        "max_single_year_positive_return_share": {"const": 0.35},
+        "multiple_testing_adjustment_for_decision": {"const": "not_applicable_single_primary_cell"},
+        "diagnostics_can_define_alpha": {"const": false},
+        "post_result_rescue_slicing_allowed": {"const": false}
+      }
+    },
+    "outputContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary_schema_ref",
+        "summary_path",
+        "tracked_summary_must_not_contain_raw_rows",
+        "tracked_summary_must_not_contain_endpoint_results",
+        "tracked_summary_must_not_contain_secret",
+        "tracked_summary_must_not_contain_request_url"
+      ],
+      "properties": {
+        "summary_schema_ref": {"const": "schemas/a_long_large_cap_pure_quality_signal_search_execution_summary.schema.json"},
+        "summary_path": {"const": "research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json"},
+        "tracked_summary_must_not_contain_raw_rows": {"const": true},
+        "tracked_summary_must_not_contain_endpoint_results": {"const": true},
+        "tracked_summary_must_not_contain_secret": {"const": true},
+        "tracked_summary_must_not_contain_request_url": {"const": true}
+      }
+    },
+    "preExecutionGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independent_review_pass_required",
+        "post_review_execute_command_required",
+        "preregistration_review_pass_required",
+        "large_cap_market_cap_audit_pass_required",
+        "full_main_board_audit_pass_required",
+        "unspent_singleton_ledger_required",
+        "restatement_exclusion_list_required",
+        "benchmark_total_return_close_route_required",
+        "no_existing_summary_overwrite_required"
+      ],
+      "properties": {
+        "independent_review_pass_required": {"const": true},
+        "post_review_execute_command_required": {"const": true},
+        "preregistration_review_pass_required": {"const": true},
+        "large_cap_market_cap_audit_pass_required": {"const": true},
+        "full_main_board_audit_pass_required": {"const": true},
+        "unspent_singleton_ledger_required": {"const": true},
+        "restatement_exclusion_list_required": {"const": true},
+        "benchmark_total_return_close_route_required": {"const": true},
+        "no_existing_summary_overwrite_required": {"const": true}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_call_executed",
+        "signal_search_executed",
+        "a_long_alpha_found",
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "provider_call_executed": {"const": false},
+        "signal_search_executed": {"const": false},
+        "a_long_alpha_found": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false},
+        "datahub_authorized": {"const": false},
+        "broker_or_order_automation_authorized": {"const": false}
+      }
+    }
+  }
+}
