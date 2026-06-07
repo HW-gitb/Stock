@@ -267,33 +267,47 @@ Stock/
 
 ## Multi-LLM Review Protocol
 
-Codex acts as the Designer + Implementer.
+Codex acts as the Independent Reviewer.
 
-Claude acts as the Independent Reviewer.
+Claude acts as the Designer + Implementer.
 
 The user remains the Final Approver.
 
-Detailed review workflow is defined in `docs/AI_REVIEW_PROTOCOL.md`.
+`AGENTS.md` remains the highest-level project rule. If `docs/AI_REVIEW_PROTOCOL.md`, older handoff text, or an older SESSION_LOG entry conflicts with this role split, `AGENTS.md` wins.
 
-Codex-to-Claude review handoff lives in the top SESSION_LOG entry written by Codex after each `执行` / `修复`; no separate review packet file (as of 2026-05-25).
-
-`AGENTS.md` remains the highest-level project rule. If `docs/AI_REVIEW_PROTOCOL.md` conflicts with this file, `AGENTS.md` wins.
+2026-06-07 one-time exception: the user explicitly authorized Codex to land this `AGENTS.md` protocol update and commit it. After that exception, Codex must not use `修复` / `提交` / `执行` to write business implementation changes; Claude owns implementation and execution.
 
 ## Short Command Aliases
 
-This project supports short command aliases defined in `docs/AI_REVIEW_PROTOCOL.md`.
-Detailed command expansions live only in `docs/AI_REVIEW_PROTOCOL.md` to avoid drift.
+Command binding is determined by who the user is addressing:
 
-Common aliases:
-- `执行` = Codex executes the next approved smallest task and prepends a SESSION_LOG entry. Does not commit.
-- `审查` = Claude reviews the current uncommitted working tree using the top SESSION_LOG entry plus `docs/AI_REVIEW_PROTOCOL.md` mandatory fast path; Claude must not directly modify business code.
-- `批准修改` = User approves pending Required fixes only. Optional suggestions are not user-approved — Codex disposes of them during `修复` (see `docs/AI_REVIEW_PROTOCOL.md` §修复).
-- `修复` = Codex repairs user-approved Required fixes + disposes of each Optional suggestion from the latest Claude review (accept / accept with modification / reject + reason). Records dispositions in SESSION_LOG. Does not commit.
-- `提交` = Codex commits the reviewed working tree as a single coherent commit after Claude `审查` returns Pass. Not used during `执行` / `修复`. See `docs/AI_REVIEW_PROTOCOL.md` §Commit Timing Rule.
+- `审查` = Codex reviews Claude's current changes independently. Codex must not write business code, runner code, schema, preregistration, ledger, or result artifacts during review.
+- `修复` = Claude implements the approved repair scope and records dispositions. Codex does not perform the repair.
+- `执行` = Claude runs the next approved execution slice, including real data/materialization/search only when the project approval gates and user command allow it.
+- `提交` = Claude commits the reviewed working tree as a single coherent commit after Codex review allows it.
+- `批准` / `批准修改` addressed to Codex = Codex must first update or prepend the corresponding `docs/SESSION_LOG.md` finding as `USER-APPROVED`, then reply. Claude performs the repair afterward.
 
-Claude 审查 fast path lives in `docs/AI_REVIEW_PROTOCOL.md §Review Continuity Without Packet` / `§Working Tree Completeness Guard`: before any verdict, Claude must run `git status --short`, inspect `git diff`, read every `??` untracked file body, and read `docs/SESSION_LOG.md` top 1-3 entries. `docs/AI_REVIEW_PROTOCOL.md` owns the full mandatory steps and staged-change add-on.
+## Codex adversarial review standard
 
-`AGENTS.md` remains the highest-level project rule. If any alias conflicts with `AGENTS.md`, `AGENTS.md` wins.
+Every Codex `审查` must internalize the full deep review and output only the decision-level result. Before giving a verdict, Codex must:
+
+1. Freeze a review scope manifest: `git status --short --untracked-files=all`, staged / unstaged / untracked files, intended artifacts, producer-to-consumer chain, and claimed design goal.
+2. Read the whole changed data flow, not just the diff: design intent, schemas, runner or consumer code, tests, docs, ledgers, and generated artifacts that participate in the claim.
+3. Use a Python runtime where `jsonschema` is installed and importable. If missing, run `python -m pip install jsonschema` for that review runtime before schema or project tests; do not accept silent schema-skip behavior.
+4. Run the relevant schema and runner tests personally; do not rely on Claude's test report.
+5. Independently recompute or re-derive key artifact numbers from raw/source inputs where feasible: t-stat, cohort count, top-N, coverage, min/max dates, pass/fail gates, and ledger spend.
+6. Verify guards with adversarial inputs where feasible: corrupted frozen fields, empty sets, duplicated execution, exhausted ledger, pending approvals, bad schema fields, and boundary dates should fail loudly.
+7. Check lineage, PIT, and consumption points end to end: each value must come from the promised source, use the promised as-of semantics, avoid look-ahead / survivorship leakage, and be read by the downstream consumer under the documented field name.
+8. Check invariants and side effects: a fix must not weaken unrelated contracts, skip existing checks, mutate immutable artifacts silently, or leave partial result / pending state after failure.
+9. Check hygiene and security: no token, secret, provider URL, raw row, non-gitignored raw payload, large cache, or unapproved provider sample may enter tracked files; no silent scope expansion beyond the reviewed slice.
+10. Check authorization gates: double-confirm, singleton ledger, unspent test budget, research-only / no-ship boundary, and no-provider-call / no-run constraints must be constants or otherwise hard to bypass.
+11. Calibrate evidence statistically and economically: effective sample size, overlapping cohorts, HAC / clustered significance, concentration, drawdown, cost, liquidity, time-series / cross-section / distribution slices, and plausible magnitude must match the claim.
+12. Mark diagnostic-derived hypotheses explicitly. In-sample leads may become new preregistered hypotheses only through a new ledger and user approval; they are not independent out-of-sample proof.
+13. Use negative or weak controls when useful to test the gate, but never tune thresholds after seeing the target result.
+14. Separate verdict layers: computation correctness, schema / ledger validity, PIT / data integrity, statistical alpha claim, risk / deployability, and production / ship-gate readiness.
+15. Route material unresolved risks into `docs/system_risk_register.md` or require a fix before Pass. A material finding left only in chat or SESSION_LOG cannot receive a clean Pass.
+
+Codex review output must be concise and decision-first: `verdict`, `Required`, `Optional`, `Options` when useful with at least two options and a recommended option, one-line key risk, and next step. Codex must prepend the review verdict to `docs/SESSION_LOG.md` before replying. If no issue remains, say it is clean; do not invent fixes to appear thorough.
 
 ## 交接记录
 
