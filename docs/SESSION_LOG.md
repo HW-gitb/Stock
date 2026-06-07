@@ -8,6 +8,46 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long Step-3 gate-reader field-mismatch fix) — **PASS (可提交)**
+
+**Verified**: `load_and_validate_audit_report` (line 350) now reads `check_results` (line 376, the schema-locked field) instead of the legacy `checks`, builds a {check_id: item} map, and the gate (line 386-392) requires `selection_time_status_source.status == "pass_full_main_board"` AND `return_benchmark_measurement_basis.metrics.benchmark_return_basis == BENCHMARK_RETURN_BASIS` (H-code TR close-to-close). Both hold in the current valid audit report → the gate now correctly PASSES on it (it genuinely requires the checks PASSED, not merely present). The masking test (which wrongly asserted the current artifact should FAIL the gate) is corrected to assert it validates, plus a regression rejecting a legacy `checks`-only report shape. 56 tests OK (1 skip) re-run in my jsonschema env.
+
+**Safety held**: this latent gate-reader bug was surfaced by the real Step-3 run, which BLOCKED before computation — no `execution_summary.json`, no pending summary, ledger unspent (`tests_spent_count=0`). So a one-shot singleton was not wasted on a gate bug; the safety net worked exactly as intended. (Process echo of the jsonschema-skip lesson: a test must assert the CURRENT valid artifact PASSES its gate, not just that some input fails — that flavor of mis-asserting test masked the field drift.)
+
+**Bottom line**: gate-reader fixed; the data/measurement/PIT/decision chain remains clean (R-ROE-PERIOD etc. all resolved). After commit, **re-run Step 3** (double-confirm; ledger unspent; exclusion CSV applied) — the gate will now let it compute → produce `execution_summary.json` → Claude reviews the REAL alpha result. No alpha/production/ship-gate authorized before that.
+
+---
+
+## 2026-06-07 — Codex 执行 / 修复 (A-long Step-3 gate-reader field mismatch) — **READY FOR REVIEW / no signal result**
+
+User executed Step 3 after commit `1623761`. The runner stopped before signal computation with `ValueError: full audit must pass PIT selection-time name/status source check`.
+
+**Cause**:
+- Current audit report `research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json` uses schema-locked `check_results`.
+- `runners/a_long_full_main_board_signal_search.py::load_and_validate_audit_report` still read the legacy `checks` field, so it saw an empty check map and blocked the gate.
+- Existing test coverage incorrectly expected the current gate artifact to fail, masking the field-shape drift.
+
+**Repair**:
+- Runner now requires `check_results`, validates it is a list of objects, and checks `selection_time_status_source` / `return_benchmark_measurement_basis` from that current field.
+- Tests now assert the current gate artifacts validate successfully and add a regression that rejects a legacy `checks`-only audit-report shape.
+
+**Side-effect check**:
+- No `research/results/a_long_signal_search_20260604/execution_summary.json`.
+- No `research/results/a_long_signal_search_20260604/evidence_report.json`.
+- No pending summary.
+- Signal-search ledger remains unspent: `tests_spent_count = 0`, `test_spend_log = []`.
+
+**Verification**:
+- `python -m unittest tests.test_a_long_full_main_board_signal_search -v` — 39 tests OK.
+- `python -m unittest tests.schema.test_a_long_signal_search_execution_summary_schema tests.schema.test_a_long_signal_search_preregistration_schema tests.test_a_long_full_main_board_data_integrity_audit -v` — 27 tests OK, 1 expected skip because no signal summary exists.
+- `python -m unittest discover -s tests -p '*a_long*' -v` — 262 tests OK, 1 expected skip.
+
+**Next / lock**:
+- This is an execution-gate code repair, not an alpha result.
+- Do not rerun Step 3 until this repair receives independent review PASS, is committed, and the user gives a separate `执行`.
+
+---
+
 ## 2026-06-06 — Claude 审查 (A-long pre-run ROE / veto / exit-policy fix) — **PASS (可提交)**
 
 **R-ROE-PERIOD fixed** ✓ — `annualized_ytd_roe` (line 634-651) annualizes by end_date suffix (0331×4 / 0630×2 / 0930×(4/3) / 1231×1); non-standard suffix → None → cleanly excluded (no crash, no mis-annualize). Now cross-sectionally period-consistent. Prereg/schema lock `profitability_quality_basis = annualized_ytd_roe...`, the annualization policy, and forbid raw-roe direct cross-section (line 240-245). The other 3 families unchanged/correct.

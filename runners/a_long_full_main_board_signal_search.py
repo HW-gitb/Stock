@@ -373,7 +373,16 @@ def load_and_validate_audit_report(path: Path = AUDIT_REPORT_PATH) -> dict[str, 
         raise ValueError("audit universe count drifted")
     if boundary.get("reviewed_no_industry_exception_count") != EXPECTED_NO_INDUSTRY_EXCEPTION_COUNT:
         raise ValueError("audit no-industry exception count drifted")
-    checks = {item.get("check_id"): item for item in report.get("checks", [])}
+    check_results = report.get("check_results")
+    if not isinstance(check_results, list):
+        raise ValueError("full audit report lacks check_results")
+    checks: dict[str, dict[str, Any]] = {}
+    for item in check_results:
+        if not isinstance(item, dict):
+            raise ValueError("full audit report check_results must contain objects")
+        check_id = item.get("check_id")
+        if isinstance(check_id, str):
+            checks[check_id] = item
     status_check = checks.get("selection_time_status_source")
     if not status_check or status_check.get("status") != "pass_full_main_board":
         raise ValueError("full audit must pass PIT selection-time name/status source check")

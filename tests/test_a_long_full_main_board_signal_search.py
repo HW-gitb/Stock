@@ -39,8 +39,30 @@ class ALongFullMainBoardSignalSearchTest(unittest.TestCase):
         self.assertEqual(prereg["artifact_id"], "a_long_signal_search_preregistration_20260604")
         self.assertIn(ledger["budget_policy"]["tests_spent_count"], {0, 1})
         self.assertEqual(len(exclusions), runner.EXPECTED_RESTATEMENT_EXCLUSION_GROUP_COUNT)
-        with self.assertRaisesRegex(ValueError, "PIT selection-time"):
-            runner.load_and_validate_audit_report()
+        audit_report = runner.load_and_validate_audit_report()
+        self.assertEqual(
+            audit_report["decision"]["audit_status"],
+            "passed_full_main_board_data_integrity_for_signal_search",
+        )
+        checks = {item["check_id"]: item for item in audit_report["check_results"]}
+        self.assertEqual(
+            checks["selection_time_status_source"]["status"],
+            "pass_full_main_board",
+        )
+        self.assertEqual(
+            checks["return_benchmark_measurement_basis"]["metrics"]["benchmark_return_basis"],
+            runner.BENCHMARK_RETURN_BASIS,
+        )
+
+    def test_audit_report_rejects_legacy_checks_field_shape(self) -> None:
+        payload = copy.deepcopy(runner.read_json(runner.AUDIT_REPORT_PATH))
+        payload["checks"] = payload.pop("check_results")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "legacy_audit_report.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "lacks check_results"):
+                runner.load_and_validate_audit_report(path)
 
     def test_restatement_exclusion_csv_count_is_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
