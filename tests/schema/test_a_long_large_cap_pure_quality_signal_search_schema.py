@@ -219,7 +219,38 @@ class ALongLargeCapPureQualitySignalSearchSchemaTest(unittest.TestCase):
                 "as_of_count": 96,
                 "target_large_cap_universe_size": 500,
                 "large_cap_universe_observations": 48000,
+                "scored_pit_universe_excluded_before_list_count": 0,
+                "scored_pit_universe_excluded_after_delist_count": 0,
+                "selection_time_name_vetoed_observation_count": 0,
+                "selection_time_name_vetoed_symbol_count": 0,
+                "industry_neutral_excluded_observation_count": 0,
+                "industry_neutral_excluded_symbol_count": 0,
+                "industry_neutral_excluded_observation_share": 0.0,
+                "industry_neutral_excluded_2018_2020_observation_count": 0,
+                "industry_neutral_excluded_2018_2020_observation_share": 0.0,
+                "size_neutral_thin_bucket_count": 0,
+                "primary_size_neutral_thin_month_count": 0,
+                "primary_size_neutral_min_bucket_observation_count": 50,
+                "primary_size_neutral_bucket_coverage_by_month": [
+                    {
+                        "as_of": "20200131",
+                        "q1_count": 50,
+                        "q2_count": 50,
+                        "q3_count": 50,
+                        "q4_count": 50,
+                        "q5_count": 50,
+                        "thin_bucket_count": 0,
+                        "passes_minimum_bucket_count": True
+                    }
+                    for _index in range(96)
+                ],
                 "primary_composite_available_observation_count": 40000,
+                "return_exit_scheduled_count": 900,
+                "return_exit_terminal_last_trade_count": 0,
+                "return_exit_next_available_count": 0,
+                "return_exit_missing_non_terminal_count": 0,
+                "missing_signal_rows": 0,
+                "missing_return_rows": 0,
                 "full_main_board_endpoint_results_count": 23718,
                 "evaluated_stock_return_rows": 1000,
                 "result_cell_count": 36
@@ -273,6 +304,30 @@ class ALongLargeCapPureQualitySignalSearchSchemaTest(unittest.TestCase):
         invalid["prohibited_claims"]["ship_gate_evidence"] = True
 
         self.assertGreaterEqual(len(self._validate(SUMMARY_SCHEMA_PATH, invalid)), 6)
+
+    def test_summary_schema_rejects_raw_injected_execution_diagnostics(self) -> None:
+        invalid = copy.deepcopy(self._valid_summary())
+        invalid["execution_diagnostics"]["raw_rows"] = [{"ts_code": "000001.SZ"}]
+
+        self.assertGreaterEqual(len(self._validate(SUMMARY_SCHEMA_PATH, invalid)), 1)
+
+    def test_summary_schema_rejects_duplicate_or_wrong_primary_role(self) -> None:
+        invalid = copy.deepcopy(self._valid_summary())
+        invalid["result_cells"][1]["diagnostic_role"] = "primary_decision_cell"
+
+        self.assertGreaterEqual(len(self._validate(SUMMARY_SCHEMA_PATH, invalid)), 1)
+
+    def test_summary_schema_rejects_thin_primary_size_bucket_coverage(self) -> None:
+        invalid = copy.deepcopy(self._valid_summary())
+        invalid["execution_diagnostics"]["primary_size_neutral_thin_month_count"] = 1
+        invalid["execution_diagnostics"]["primary_size_neutral_min_bucket_observation_count"] = 49
+        invalid["execution_diagnostics"]["primary_size_neutral_bucket_coverage_by_month"][0]["q2_count"] = 49
+        invalid["execution_diagnostics"]["primary_size_neutral_bucket_coverage_by_month"][0]["thin_bucket_count"] = 1
+        invalid["execution_diagnostics"]["primary_size_neutral_bucket_coverage_by_month"][0][
+            "passes_minimum_bucket_count"
+        ] = False
+
+        self.assertGreaterEqual(len(self._validate(SUMMARY_SCHEMA_PATH, invalid)), 4)
 
 
 if __name__ == "__main__":

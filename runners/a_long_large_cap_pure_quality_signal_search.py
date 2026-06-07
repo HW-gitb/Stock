@@ -19,6 +19,7 @@ PACKET_PATH = ROOT / "docs" / "a_long_large_cap_pure_quality_signal_search_execu
 PACKET_SCHEMA_PATH = ROOT / "schemas" / "a_long_large_cap_pure_quality_signal_search_execution_packet.schema.json"
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "a_long_large_cap_pure_quality_signal_search_execution_summary.schema.json"
 PREREGISTRATION_PATH = ROOT / "research" / "preregistrations" / "a_long_large_cap_pure_quality_20260607.json"
+PREREGISTRATION_SCHEMA_PATH = ROOT / "schemas" / "a_long_large_cap_pure_quality_preregistration.schema.json"
 LEDGER_PATH = ROOT / "research" / "ledgers" / "a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json"
 LEDGER_SCHEMA_PATH = ROOT / "schemas" / "program_test_budget_ledger.schema.json"
 MARKET_CAP_AUDIT_REPORT_PATH = (
@@ -52,6 +53,7 @@ UNIVERSE_SIZE_N = 500
 MONTHLY_AS_OF_DATES = cap_audit.MONTHLY_AS_OF_DATES
 SELECTED_MARKET_CAP_FIELD = "circ_mv"
 EXPECTED_RESTATEMENT_EXCLUSION_GROUP_COUNT = base.EXPECTED_RESTATEMENT_EXCLUSION_GROUP_COUNT
+SIZE_BUCKETS = [f"q{index}" for index in range(1, 6)]
 
 
 @dataclass(frozen=True)
@@ -193,6 +195,7 @@ def load_and_validate_packet(path: Path = PACKET_PATH) -> dict[str, Any]:
 
 def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict[str, Any]:
     prereg = read_json(path)
+    validate_json(PREREGISTRATION_SCHEMA_PATH, prereg)
     if prereg.get("schema_name") != "a_long_large_cap_pure_quality_preregistration":
         raise ValueError("large-cap preregistration schema_name mismatch")
     scope = prereg.get("scope") or {}
@@ -210,6 +213,7 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
         "signal_search_authorized_by_this_artifact",
         "data_fetch_allowed_by_this_artifact",
         "provider_call_allowed_by_this_artifact",
+        "datahub_allowed",
         "production_use_allowed",
         "ship_gate_claim_allowed",
         "full_size_manual_use_allowed",
@@ -220,10 +224,24 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
 
     design = prereg.get("frozen_design") or {}
     universe = design.get("universe_rule") or {}
+    if universe.get("board_scope") != "main_board_only":
+        raise ValueError("large-cap board scope drifted")
+    if universe.get("as_of_selection_rule") != "last_open_A_share_trading_day_of_each_calendar_month":
+        raise ValueError("large-cap as-of selection rule drifted")
     if universe.get("universe_size_n") != UNIVERSE_SIZE_N:
         raise ValueError("large-cap universe size drifted")
+    if universe.get("universe_size_n_search_allowed") is not False:
+        raise ValueError("large-cap universe size search must remain forbidden")
+    if universe.get("selection_basis") != "top_500_by_pit_market_cap_as_of_each_as_of_date":
+        raise ValueError("large-cap universe selection basis drifted")
     if universe.get("market_cap_field_choice_status") != "circ_mv_reviewed_probe_passed_frozen_for_materialization":
         raise ValueError("large-cap market-cap field status drifted")
+    if universe.get("include_later_delisted_names_at_pre_delisting_asofs") is not True:
+        raise ValueError("large-cap PIT delisted-name inclusion drifted")
+    if universe.get("pit_list_delist_required") is not True:
+        raise ValueError("large-cap PIT list/delist requirement drifted")
+    if universe.get("selection_time_namechange_veto_required") is not True:
+        raise ValueError("large-cap PIT namechange veto requirement drifted")
     if universe.get("reviewed_data_quality_exclusion_boundary_ref") != cap_audit.DATA_QUALITY_EXCLUSION_DECISION_REF:
         raise ValueError("large-cap data-quality exclusion ref drifted")
     exclusion_policy = universe.get("reviewed_data_quality_exclusion_policy") or {}
@@ -231,49 +249,111 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
         raise ValueError("large-cap data-quality exclusion symbol drifted")
     if exclusion_policy.get("affected_as_of_dates") != ["20191129"]:
         raise ValueError("large-cap data-quality exclusion date drifted")
+    if exclusion_policy.get("max_excluded_symbols") != 1:
+        raise ValueError("large-cap data-quality exclusion symbol cap drifted")
+    if exclusion_policy.get("max_excluded_observations") != 1:
+        raise ValueError("large-cap data-quality exclusion observation cap drifted")
     if exclusion_policy.get("drop_excluded_symbols_before_signal_scoring") is not True:
         raise ValueError("large-cap signal universe must drop reviewed exclusions")
     if exclusion_policy.get("backfill_next_main_board_by_circ_mv") is not True:
         raise ValueError("large-cap signal universe must backfill by circ_mv")
+    if exclusion_policy.get("materialized_top500_rederivation_unchanged") is not True:
+        raise ValueError("large-cap materialized top500 rederivation boundary drifted")
+    if exclusion_policy.get("threshold_rescue_allowed") is not False:
+        raise ValueError("large-cap threshold rescue must remain forbidden")
+    if universe.get("st_star_bse_chinext_excluded") is not True:
+        raise ValueError("large-cap board/status exclusion boundary drifted")
 
     signal = design.get("signal_rule") or {}
     if signal.get("primary_signal_id") != PRIMARY_SIGNAL_ID:
         raise ValueError("large-cap primary signal drifted")
+    if signal.get("primary_signal_type") != "equal_weight_percentile_composite":
+        raise ValueError("large-cap primary signal type drifted")
     if signal.get("component_factors") != COMPONENT_FACTORS:
         raise ValueError("large-cap component factors drifted")
+    if signal.get("component_weighting") != "equal_weight_one_third_each":
+        raise ValueError("large-cap component weighting drifted")
+    if signal.get("percentile_rank_required") is not True:
+        raise ValueError("large-cap percentile-rank requirement drifted")
+    if signal.get("zscore_composite_allowed") is not False:
+        raise ValueError("large-cap z-score composite must remain forbidden")
+    if signal.get("single_factor_pass_can_define_alpha") is not False:
+        raise ValueError("large-cap single-factor rescue must remain forbidden")
     if signal.get("earnings_stability_role") != "frozen_diagnostic_only_not_primary":
         raise ValueError("earnings_stability must remain diagnostic only")
+    if signal.get("earnings_stability_can_rescue_primary_failure") is not False:
+        raise ValueError("earnings_stability rescue must remain forbidden")
     policy = signal.get("factor_measurement_policy") or {}
     if policy.get("profitability_quality_basis") != base.PROFITABILITY_QUALITY_BASIS:
         raise ValueError("profitability quality basis drifted")
     if policy.get("profitability_quality_annualization_policy") != base.PROFITABILITY_QUALITY_ANNUALIZATION_POLICY:
         raise ValueError("profitability quality annualization policy drifted")
+    if policy.get("raw_fina_indicator_roe_direct_cross_section_allowed") is not False:
+        raise ValueError("raw fina_indicator ROE ranking must remain forbidden")
     if policy.get("cash_conversion_min_abs_net_income") != base.CASH_CONVERSION_MIN_ABS_NET_INCOME:
         raise ValueError("cash conversion denominator guard drifted")
+    if policy.get("cash_conversion_small_denominator_guard_required") is not True:
+        raise ValueError("cash conversion small-denominator guard drifted")
     if policy.get("earnings_stability_basis") != base.EARNINGS_STABILITY_BASIS:
         raise ValueError("earnings stability basis drifted")
+    if policy.get("mixed_ytd_quarter_sequence_allowed") is not False:
+        raise ValueError("mixed YTD quarter sequence must remain forbidden")
 
     neutral = design.get("neutralization_rule") or {}
+    if neutral.get("primary_view") != "industry_and_size_neutral":
+        raise ValueError("large-cap preregistered primary view drifted")
     if neutral.get("neutralization_method") != "marginal_double_neutralization":
         raise ValueError("large-cap neutralization method drifted")
+    if neutral.get("primary_score_construction") != "equal_weight_average_of_marginal_industry_neutral_and_marginal_size_neutral_percentile_scores":
+        raise ValueError("large-cap primary score construction drifted")
+    if neutral.get("industry_neutral_score_rule") != "percentile_composite_within_industry_l2_fallback_l1":
+        raise ValueError("large-cap industry-neutral score rule drifted")
+    if neutral.get("size_neutral_score_rule") != "percentile_composite_within_market_cap_quintile":
+        raise ValueError("large-cap size-neutral score rule drifted")
     if neutral.get("combined_score_rule") != "0_5_industry_neutral_percentile_plus_0_5_size_neutral_percentile":
         raise ValueError("large-cap combined score rule drifted")
     if neutral.get("crossed_industry_size_bucket_allowed") is not False:
         raise ValueError("crossed industry-size buckets must remain forbidden")
+    if neutral.get("industry_basis") != "SW_L2_then_SW_L1_if_sample_lt_20":
+        raise ValueError("large-cap industry basis drifted")
+    if neutral.get("industry_l2_min_count") != 20:
+        raise ValueError("large-cap industry L2 minimum drifted")
+    if neutral.get("industry_l1_min_count") != 2:
+        raise ValueError("large-cap industry L1 fallback minimum drifted")
+    if neutral.get("size_bucket_rule") != "pit_market_cap_quintile_inside_top_500_per_as_of":
+        raise ValueError("large-cap size bucket rule drifted")
+    if neutral.get("size_bucket_count") != len(SIZE_BUCKETS):
+        raise ValueError("large-cap size bucket count drifted")
+    if neutral.get("expected_names_per_size_bucket") != UNIVERSE_SIZE_N // len(SIZE_BUCKETS):
+        raise ValueError("large-cap expected size bucket count drifted")
     if neutral.get("minimum_size_bucket_count_for_primary_percentile") != MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY:
         raise ValueError("large-cap size bucket minimum drifted")
+    if neutral.get("non_neutral_view_role") != "diagnostic_only_not_primary":
+        raise ValueError("large-cap non-neutral diagnostic role drifted")
+    if neutral.get("cap_weighted_view_role") != "diagnostic_only_not_primary":
+        raise ValueError("large-cap cap-weighted diagnostic role drifted")
 
     measurement = design.get("measurement_rule") or {}
     if measurement.get("primary_horizon_trading_days") != PRIMARY_HORIZON:
         raise ValueError("large-cap primary horizon drifted")
     if measurement.get("diagnostic_horizons_trading_days") != [DIAGNOSTIC_HORIZON]:
         raise ValueError("large-cap diagnostic horizon drifted")
+    if measurement.get("entry_rule") != "next_trading_day_close_after_as_of":
+        raise ValueError("large-cap entry rule drifted")
     if measurement.get("round_trip_cost") != base.ROUND_TRIP_COST:
         raise ValueError("large-cap round-trip cost drifted")
     if measurement.get("stock_return_basis") != base.STOCK_RETURN_BASIS:
         raise ValueError("large-cap stock return basis drifted")
     if measurement.get("benchmark_return_basis") != base.BENCHMARK_RETURN_BASIS:
         raise ValueError("large-cap benchmark return basis drifted")
+    if measurement.get("same_anchor_required") is not True:
+        raise ValueError("large-cap same-anchor requirement drifted")
+    if measurement.get("missing_scheduled_exit_policy") != base.MISSING_SCHEDULED_EXIT_POLICY:
+        raise ValueError("large-cap missing scheduled exit policy drifted")
+    if measurement.get("total_return_required") is not True:
+        raise ValueError("large-cap total-return requirement drifted")
+    if measurement.get("price_index_fallback_allowed") is not False:
+        raise ValueError("large-cap price-index fallback must remain forbidden")
 
     benchmark = design.get("benchmark_rule") or {}
     if benchmark.get("primary_benchmark") != PRIMARY_BENCHMARK:
@@ -282,16 +362,90 @@ def load_and_validate_preregistration(path: Path = PREREGISTRATION_PATH) -> dict
         raise ValueError("large-cap diagnostic benchmark drifted")
     if benchmark.get("both_benchmark_pass_required") is not False:
         raise ValueError("large-cap CSI1000 must remain diagnostic")
+    if benchmark.get("benchmark_access_probe_ref") != display_path(base.BENCHMARK_ACCESS_PROBE_SUMMARY_PATH):
+        raise ValueError("large-cap benchmark access probe ref drifted")
+    if benchmark.get("benchmark_access_status") != base.BENCHMARK_ACCESS_STATUS:
+        raise ValueError("large-cap benchmark access status drifted")
+    if benchmark.get("derived_total_return_open_allowed") is not False:
+        raise ValueError("derived total-return open must remain forbidden")
 
     cell = design.get("decision_cell") or {}
     if cell.get("cell_id") != "primary_core_quality_composite_industry_size_neutral_504d_csi300":
         raise ValueError("large-cap primary cell id drifted")
+    if cell.get("signal") != PRIMARY_SIGNAL_ID:
+        raise ValueError("large-cap primary cell signal drifted")
+    if cell.get("view") != "industry_and_size_neutral":
+        raise ValueError("large-cap primary cell view drifted")
+    if cell.get("horizon_trading_days") != PRIMARY_HORIZON:
+        raise ValueError("large-cap primary cell horizon drifted")
+    if cell.get("benchmark") != PRIMARY_BENCHMARK:
+        raise ValueError("large-cap primary cell benchmark drifted")
+    if cell.get("top_fraction") != TOP_FRACTION:
+        raise ValueError("large-cap top fraction drifted")
+    if cell.get("minimum_top_count_per_month") != MIN_TOP_COUNT:
+        raise ValueError("large-cap minimum top count drifted")
+    if cell.get("mean_net_excess_must_be_positive") is not True:
+        raise ValueError("large-cap mean excess positivity gate drifted")
     if cell.get("minimum_hac_t_stat") != 2.0:
         raise ValueError("large-cap HAC threshold drifted")
     if cell.get("minimum_monthly_cohorts") != MIN_MONTHLY_COHORTS:
         raise ValueError("large-cap minimum cohort count drifted")
     if cell.get("minimum_allowed_monthly_excess_drawdown") != MIN_ALLOWED_MONTHLY_EXCESS_DRAWDOWN:
         raise ValueError("large-cap drawdown threshold drifted")
+    if cell.get("name_concentration_guard_max_share") != MAX_TOP_SYMBOL_SELECTION_SHARE:
+        raise ValueError("large-cap name concentration guard drifted")
+    if cell.get("single_year_positive_return_guard_max_share") != MAX_SINGLE_YEAR_POSITIVE_RETURN_SHARE:
+        raise ValueError("large-cap single-year concentration guard drifted")
+    if cell.get("multiple_testing_adjustment_for_decision") != "not_applicable_single_primary_cell":
+        raise ValueError("large-cap multiple-testing decision policy drifted")
+
+    diagnostics = design.get("diagnostic_cells") or {}
+    for field in [
+        "report_csi1000",
+        "report_252d",
+        "report_single_factor_components",
+        "report_earnings_stability",
+        "report_non_neutral",
+    ]:
+        if diagnostics.get(field) is not True:
+            raise ValueError(f"large-cap diagnostic reporting gate drifted: {field}")
+    if diagnostics.get("diagnostics_can_define_alpha") is not False:
+        raise ValueError("large-cap diagnostics must not define alpha")
+
+    anti = design.get("anti_p_hacking_controls") or {}
+    if anti.get("test_budget_units") != 1:
+        raise ValueError("large-cap test budget units drifted")
+    for field in [
+        "parameter_sweep_allowed",
+        "universe_n_search_allowed",
+        "single_factor_winner_take_all_allowed",
+        "quality_acceleration_allowed_this_round",
+        "post_result_rescue_slicing_allowed",
+    ]:
+        if anti.get(field) is not False:
+            raise ValueError(f"large-cap anti-p-hacking control drifted: {field}")
+    if anti.get("new_ledger_required_before_any_followup") is not True:
+        raise ValueError("large-cap new-ledger follow-up rule drifted")
+
+    hygiene = design.get("pit_and_hygiene_controls") or {}
+    if hygiene.get("restatement_exclusion_list_ref") != display_path(base.RESTATEMENT_EXCLUSION_LIST_PATH):
+        raise ValueError("large-cap restatement exclusion list ref drifted")
+    if hygiene.get("restatement_exclusion_required") is not True:
+        raise ValueError("large-cap restatement exclusion requirement drifted")
+    if hygiene.get("expected_restatement_exclusion_group_count") != EXPECTED_RESTATEMENT_EXCLUSION_GROUP_COUNT:
+        raise ValueError("large-cap restatement exclusion group count drifted")
+    if hygiene.get("pit_namechange_required") is not True:
+        raise ValueError("large-cap PIT namechange requirement drifted")
+    if hygiene.get("current_stock_basic_name_veto_allowed") is not False:
+        raise ValueError("current stock_basic name veto must remain forbidden")
+    for field in [
+        "tracked_summary_contains_raw_rows_allowed",
+        "tracked_summary_contains_endpoint_results_allowed",
+        "tracked_summary_contains_secret_allowed",
+        "tracked_summary_contains_request_url_allowed",
+    ]:
+        if hygiene.get(field) is not False:
+            raise ValueError(f"large-cap tracked summary hygiene drifted: {field}")
     return prereg
 
 
@@ -442,7 +596,7 @@ def load_large_cap_signal_universes(
 
 
 def add_size_neutral_scores(items: list[dict[str, Any]], family: str) -> dict[str, int]:
-    valid_count_by_bucket: dict[str, int] = {}
+    valid_count_by_bucket: dict[str, int] = {bucket: 0 for bucket in SIZE_BUCKETS}
     by_bucket: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in items:
         if item.get(family) is None:
@@ -450,7 +604,8 @@ def add_size_neutral_scores(items: list[dict[str, Any]], family: str) -> dict[st
         bucket = item.get("size_bucket")
         if bucket:
             by_bucket[str(bucket)].append(item)
-    for bucket, bucket_items in by_bucket.items():
+    for bucket in SIZE_BUCKETS:
+        bucket_items = by_bucket.get(bucket, [])
         valid_count_by_bucket[bucket] = len(bucket_items)
         if len(bucket_items) < MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY:
             continue
@@ -460,6 +615,28 @@ def add_size_neutral_scores(items: list[dict[str, Any]], family: str) -> dict[st
                 item[f"{family}__size_neutral"] = item["_size_percentile"]
             item.pop("_size_percentile", None)
     return valid_count_by_bucket
+
+
+def primary_size_neutral_bucket_coverage(scored: list[dict[str, Any]], as_of: str) -> dict[str, Any]:
+    counts = {bucket: 0 for bucket in SIZE_BUCKETS}
+    score_field = f"{PRIMARY_SIGNAL_ID}__size_neutral"
+    for item in scored:
+        if item.get(score_field) is None:
+            continue
+        bucket = item.get("size_bucket")
+        if bucket in counts:
+            counts[str(bucket)] += 1
+    thin_bucket_count = sum(1 for count in counts.values() if count < MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY)
+    return {
+        "as_of": as_of,
+        "q1_count": counts["q1"],
+        "q2_count": counts["q2"],
+        "q3_count": counts["q3"],
+        "q4_count": counts["q4"],
+        "q5_count": counts["q5"],
+        "thin_bucket_count": thin_bucket_count,
+        "passes_minimum_bucket_count": thin_bucket_count == 0,
+    }
 
 
 def _mean_if_all_present(item: dict[str, Any], fields: list[str]) -> float | None:
@@ -527,6 +704,9 @@ def monthly_cohort_rows(
         "industry_neutral_excluded_2018_2020_observation_count": 0,
         "industry_neutral_excluded_2018_2020_observation_share": None,
         "size_neutral_thin_bucket_count": 0,
+        "primary_size_neutral_thin_month_count": 0,
+        "primary_size_neutral_min_bucket_observation_count": 0,
+        "primary_size_neutral_bucket_coverage_by_month": [],
         "primary_composite_available_observation_count": 0,
         "return_exit_scheduled_count": 0,
         "return_exit_terminal_last_trade_count": 0,
@@ -603,6 +783,17 @@ def monthly_cohort_rows(
         diagnostics["primary_composite_available_observation_count"] += coverage[
             "primary_composite_available_observation_count"
         ]
+        primary_size_coverage = primary_size_neutral_bucket_coverage(scored, as_of)
+        diagnostics["primary_size_neutral_bucket_coverage_by_month"].append(primary_size_coverage)
+        diagnostics["primary_size_neutral_thin_month_count"] += (
+            0 if primary_size_coverage["passes_minimum_bucket_count"] else 1
+        )
+        month_min_bucket_count = min(
+            int(primary_size_coverage[f"{bucket}_count"]) for bucket in SIZE_BUCKETS
+        )
+        current_min = int(diagnostics["primary_size_neutral_min_bucket_observation_count"])
+        if current_min == 0 or month_min_bucket_count < current_min:
+            diagnostics["primary_size_neutral_min_bucket_observation_count"] = month_min_bucket_count
 
         for item in scored:
             symbol = item["symbol"]
@@ -888,15 +1079,25 @@ def decision_from_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def validate_pipeline_result_sanity(rows: list[dict[str, Any]], results: list[dict[str, Any]]) -> None:
+def validate_pipeline_result_sanity(rows: list[dict[str, Any]], results: list[dict[str, Any]], diagnostics: dict[str, Any]) -> None:
     if not rows:
         raise ValueError(
             "large-cap signal-search pipeline failure: no evaluated return rows; do not emit a verdict or spend ledger"
         )
-    primary = next((item for item in results if item.get("diagnostic_role") == "primary_decision_cell"), None)
-    if primary is None or int(primary.get("monthly_cohort_count") or 0) == 0:
+    primary_cells = [item for item in results if item.get("diagnostic_role") == "primary_decision_cell"]
+    if len(primary_cells) != 1:
+        raise ValueError("large-cap signal-search pipeline failure: result set must contain exactly one primary cell")
+    primary = primary_cells[0]
+    if primary.get("cell_id") != f"{PRIMARY_SIGNAL_ID}_{PRIMARY_VIEW}_equal_weight_{PRIMARY_HORIZON}d_{PRIMARY_BENCHMARK}":
+        raise ValueError("large-cap signal-search pipeline failure: primary cell identity drifted")
+    if int(primary.get("monthly_cohort_count") or 0) == 0:
         raise ValueError(
             "large-cap signal-search pipeline failure: primary cell has zero cohorts; do not emit a verdict or spend ledger"
+        )
+    if int(diagnostics.get("primary_size_neutral_thin_month_count") or 0) != 0:
+        raise ValueError(
+            "large-cap signal-search pipeline failure: primary size-neutral bucket coverage is thin; "
+            "do not emit a verdict or spend ledger"
         )
 
 
@@ -928,7 +1129,7 @@ def build_summary(
         restatement_exclusions=restatement_exclusions,
     )
     results = summarize_results(rows)
-    validate_pipeline_result_sanity(rows, results)
+    validate_pipeline_result_sanity(rows, results, diagnostics)
     decision = decision_from_results(results)
     return {
         "schema_name": "a_long_large_cap_pure_quality_signal_search_execution_summary",

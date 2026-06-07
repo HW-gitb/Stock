@@ -53,7 +53,45 @@
       "type": "array",
       "items": {"$ref": "#/$defs/resultCell"},
       "minItems": 36,
-      "maxItems": 36
+      "maxItems": 36,
+      "allOf": [
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_252d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_252d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_504d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_504d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_non_neutral_equal_weight_252d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_non_neutral_equal_weight_252d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_non_neutral_equal_weight_504d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_non_neutral_equal_weight_504d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_neutral_equal_weight_252d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_neutral_equal_weight_252d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_neutral_equal_weight_504d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_neutral_equal_weight_504d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_size_neutral_equal_weight_252d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_size_neutral_equal_weight_252d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_size_neutral_equal_weight_504d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_size_neutral_equal_weight_504d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_cap_weighted_252d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_cap_weighted_252d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_cap_weighted_504d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_cap_weighted_504d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "profitability_quality_industry_size_neutral_equal_weight_252d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "profitability_quality_industry_size_neutral_equal_weight_252d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "profitability_quality_industry_size_neutral_equal_weight_504d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "profitability_quality_industry_size_neutral_equal_weight_504d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "cash_conversion_industry_size_neutral_equal_weight_252d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "cash_conversion_industry_size_neutral_equal_weight_252d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "cash_conversion_industry_size_neutral_equal_weight_504d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "cash_conversion_industry_size_neutral_equal_weight_504d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "balance_sheet_strength_industry_size_neutral_equal_weight_252d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "balance_sheet_strength_industry_size_neutral_equal_weight_252d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "balance_sheet_strength_industry_size_neutral_equal_weight_504d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "balance_sheet_strength_industry_size_neutral_equal_weight_504d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "earnings_stability_industry_size_neutral_equal_weight_252d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "earnings_stability_industry_size_neutral_equal_weight_252d_CSI1000"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "earnings_stability_industry_size_neutral_equal_weight_504d_CSI300"}}}},
+        {"contains": {"type": "object", "required": ["cell_id"], "properties": {"cell_id": {"const": "earnings_stability_industry_size_neutral_equal_weight_504d_CSI1000"}}}}
+      ]
     },
     "decision": {"$ref": "#/$defs/decision"},
     "ledger_update_required_after_commit": {"$ref": "#/$defs/ledgerUpdate"},
@@ -289,12 +327,31 @@
     },
     "executionDiagnostics": {
       "type": "object",
-      "additionalProperties": true,
+      "additionalProperties": false,
       "required": [
         "as_of_count",
         "target_large_cap_universe_size",
         "large_cap_universe_observations",
+        "scored_pit_universe_excluded_before_list_count",
+        "scored_pit_universe_excluded_after_delist_count",
+        "selection_time_name_vetoed_observation_count",
+        "selection_time_name_vetoed_symbol_count",
+        "industry_neutral_excluded_observation_count",
+        "industry_neutral_excluded_symbol_count",
+        "industry_neutral_excluded_observation_share",
+        "industry_neutral_excluded_2018_2020_observation_count",
+        "industry_neutral_excluded_2018_2020_observation_share",
+        "size_neutral_thin_bucket_count",
+        "primary_size_neutral_thin_month_count",
+        "primary_size_neutral_min_bucket_observation_count",
+        "primary_size_neutral_bucket_coverage_by_month",
         "primary_composite_available_observation_count",
+        "return_exit_scheduled_count",
+        "return_exit_terminal_last_trade_count",
+        "return_exit_next_available_count",
+        "return_exit_missing_non_terminal_count",
+        "missing_signal_rows",
+        "missing_return_rows",
         "full_main_board_endpoint_results_count",
         "evaluated_stock_return_rows",
         "result_cell_count"
@@ -303,10 +360,58 @@
         "as_of_count": {"const": 96},
         "target_large_cap_universe_size": {"const": 500},
         "large_cap_universe_observations": {"type": "integer", "minimum": 0},
+        "scored_pit_universe_excluded_before_list_count": {"type": "integer", "minimum": 0},
+        "scored_pit_universe_excluded_after_delist_count": {"type": "integer", "minimum": 0},
+        "selection_time_name_vetoed_observation_count": {"type": "integer", "minimum": 0},
+        "selection_time_name_vetoed_symbol_count": {"type": "integer", "minimum": 0},
+        "industry_neutral_excluded_observation_count": {"type": "integer", "minimum": 0},
+        "industry_neutral_excluded_symbol_count": {"type": "integer", "minimum": 0},
+        "industry_neutral_excluded_observation_share": {"$ref": "#/$defs/nullableNumber"},
+        "industry_neutral_excluded_2018_2020_observation_count": {"type": "integer", "minimum": 0},
+        "industry_neutral_excluded_2018_2020_observation_share": {"$ref": "#/$defs/nullableNumber"},
+        "size_neutral_thin_bucket_count": {"type": "integer", "minimum": 0},
+        "primary_size_neutral_thin_month_count": {"const": 0},
+        "primary_size_neutral_min_bucket_observation_count": {"type": "integer", "minimum": 50},
+        "primary_size_neutral_bucket_coverage_by_month": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/sizeBucketCoverage"},
+          "minItems": 96,
+          "maxItems": 96
+        },
         "primary_composite_available_observation_count": {"type": "integer", "minimum": 0},
+        "return_exit_scheduled_count": {"type": "integer", "minimum": 0},
+        "return_exit_terminal_last_trade_count": {"type": "integer", "minimum": 0},
+        "return_exit_next_available_count": {"type": "integer", "minimum": 0},
+        "return_exit_missing_non_terminal_count": {"type": "integer", "minimum": 0},
+        "missing_signal_rows": {"type": "integer", "minimum": 0},
+        "missing_return_rows": {"type": "integer", "minimum": 0},
         "full_main_board_endpoint_results_count": {"const": 23718},
         "evaluated_stock_return_rows": {"type": "integer", "minimum": 1},
         "result_cell_count": {"const": 36}
+      }
+    },
+    "sizeBucketCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "as_of",
+        "q1_count",
+        "q2_count",
+        "q3_count",
+        "q4_count",
+        "q5_count",
+        "thin_bucket_count",
+        "passes_minimum_bucket_count"
+      ],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "q1_count": {"type": "integer", "minimum": 50},
+        "q2_count": {"type": "integer", "minimum": 50},
+        "q3_count": {"type": "integer", "minimum": 50},
+        "q4_count": {"type": "integer", "minimum": 50},
+        "q5_count": {"type": "integer", "minimum": 50},
+        "thin_bucket_count": {"const": 0},
+        "passes_minimum_bucket_count": {"const": true}
       }
     },
     "resultCell": {
@@ -375,7 +480,38 @@
         "passes_name_concentration_guard": {"type": "boolean"},
         "passes_single_year_concentration_guard": {"type": "boolean"},
         "passes_drawdown_guard": {"type": "boolean"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["diagnostic_role"],
+            "properties": {"diagnostic_role": {"const": "primary_decision_cell"}}
+          },
+          "then": {
+            "required": ["cell_id", "signal_id", "view", "weighting", "horizon_trading_days", "benchmark"],
+            "properties": {
+              "cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_504d_CSI300"},
+              "signal_id": {"const": "core_quality_composite_percentile_3factor"},
+              "view": {"const": "industry_size_neutral"},
+              "weighting": {"const": "equal_weight"},
+              "horizon_trading_days": {"const": 504},
+              "benchmark": {"const": "CSI300"}
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["cell_id"],
+            "properties": {"cell_id": {"const": "core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_504d_CSI300"}}
+          },
+          "then": {
+            "properties": {"diagnostic_role": {"const": "primary_decision_cell"}}
+          },
+          "else": {
+            "properties": {"diagnostic_role": {"const": "diagnostic_only"}}
+          }
+        }
+      ]
     },
     "decision": {
       "type": "object",

@@ -8,6 +8,78 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (R-DRIFT-GUARD / R-SIZE-COVERAGE / R-SUMMARY-CONTRACT fix, uncommitted on HEAD 2aaeb90) — **PASS — all 3 hardening Required resolved + independently verified; computation unchanged; ready to commit + execute**
+
+Re-reviewed Codex's hardening fix (full runner + summary-schema diff) and independently adversarially verified it.
+- **R-DRIFT-GUARD (F1) — fixed + verified**: `load_and_validate_preregistration` now `validate_json`s the prereg against its schema AND asserts every frozen field equals the runner constant, incl. the previously-missing `top_fraction` / `minimum_top_count_per_month` / `mean_net_excess_must_be_positive` / `name_concentration_guard_max_share` / `single_year_positive_return_guard_max_share` (plus universe / signal / neutralization / measurement / benchmark / diagnostics / anti-p-hacking / hygiene fields). I re-ran the third reviewer's class of attack myself: corrupting each of those fields in a temp prereg now makes the execution gate raise ValueError (real prereg still accepted). The monkeypatch that previously passed now fails.
+- **R-SIZE-COVERAGE (F2) — fixed**: `add_size_neutral_scores` initializes all 5 quintiles (empty=0=thin); new `primary_size_neutral_bucket_coverage` reports per-quintile per-month coverage (the prereg's required diagnostic); `validate_pipeline_result_sanity` now HARD-FAILS if any month's primary size quintile is thin (<50) → no verdict/ledger-spend; schema enforces `primary_size_neutral_thin_month_count == 0` + a 96-item per-month coverage array with every q*_count ≥ 50.
+- **R-SUMMARY-CONTRACT (F3) — fixed**: summary `executionDiagnostics.additionalProperties` is now `false` with explicit keys (raw injection now schema-rejected); `result_cells` pins all 36 cell_ids via `contains` and binds `diagnostic_role == primary_decision_cell` ⇔ the single 504d/CSI300 composite cell_id (exactly-one-primary enforced).
+- **Computation unchanged / no p-hacking**: the diff touches only validation, coverage reporting, the sanity gate, and the schema — no change to factor definitions, composite, neutralization scoring, measurement, or decision logic (confirmed: no other function signatures changed; `add_size_neutral_scores` scoring behavior identical, only the count is now complete). New `base.MISSING_SCHEDULED_EXIT_POLICY` / `base.BENCHMARK_ACCESS_STATUS` refs resolve. 18/18 tests pass in my jsonschema env.
+
+**Heads-up (not a defect)**: the size-coverage hard gate means a real run will RAISE (before any ledger spend) if any month has a size quintile <50 names with a composite size-neutral score. Expected to pass on top-500 (≈100/bucket, light filtering); if it does trigger it is a genuine "size-control not maintainable that month" finding to review, not something to bypass by loosening the threshold.
+
+**Verdict**: PASS. All three approved hardening Required are correctly implemented and independently verified; the frozen-design integrity gate is now complete, the official summary contract is tight, and no computed value or design changed. Sequence: commit the fix → a separate user `执行` runs the search (spends the singleton ledger once, writes the research-only summary) → Claude independently reviews the candidate/falsified verdict (recompute every t≥2 cell vs its gates, size-confound vs CSI1000, effective-N caveat) before any conclusion. Immediate next: commit.
+
+---
+
+## 2026-06-07 — Codex 修复 (A-long large-cap pure-quality signal-search pre-execution hardening) — **READY FOR REVIEW / not executed, ledger unspent**
+
+Implemented only the user-approved contract/gate-hardening repairs from the third-reviewer + Claude-agreed findings. No signal search, provider call, data fetch, raw-payload execution read, summary write, ledger spend, alpha claim, production claim, ship-gate claim, full-size use, DataHub work, or broker/order automation was run or authorized.
+
+**Worked on**:
+- [tracked] `runners/a_long_large_cap_pure_quality_signal_search.py`: `load_and_validate_preregistration()` now validates the preregistration schema and drift-guards the frozen decision gates that were previously unchecked (`top_fraction`, minimum top count, mean-positive gate, name concentration, single-year positive-return concentration), plus the surrounding frozen universe / signal / neutralization / measurement / benchmark / anti-rescue / PIT-hygiene controls. Size-neutral scoring now counts all five PIT market-cap quintiles including empty buckets, reports primary per-month bucket coverage, and `validate_pipeline_result_sanity()` aborts before verdict / summary / ledger spend if any primary month has a thin size-neutral bucket or if the primary cell identity/count drifts.
+- [tracked] `schemas/a_long_large_cap_pure_quality_signal_search_execution_summary.schema.json`: `execution_diagnostics` is now closed (`additionalProperties:false`) with explicit diagnostic keys, includes per-month primary size-quintile coverage, requires the 36 frozen result cell ids, and binds the only `primary_decision_cell` role to the 504d CSI300 industry-size-neutral composite cell.
+- [tracked] `tests/test_a_long_large_cap_pure_quality_signal_search.py` and `tests/schema/test_a_long_large_cap_pure_quality_signal_search_schema.py`: added regression tests for corrupted preregistration decision gates, all-five-bucket size coverage, thin primary size coverage abort, raw-injected execution diagnostics rejection, duplicate / wrong primary role rejection, and thin size-bucket summary rejection.
+- [tracked] `docs/CURRENT.md`, `docs/system_risk_register.md`, and this `docs/SESSION_LOG.md`: updated the current state and durable risk queue to keep execution blocked pending independent review.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile runners\a_long_large_cap_pure_quality_signal_search.py` — OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_long_large_cap_pure_quality_signal_search tests.schema.test_a_long_large_cap_pure_quality_signal_search_schema -v` — 18 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "*large_cap*" -v` — 70 tests OK.
+
+**Next / lock**:
+- Independent review should verify this repair, especially that the prior monkeypatch-style preregistration drift now fails, raw-injected diagnostics now fail schema validation, and duplicate primary roles now fail.
+- Do not execute `runners\a_long_large_cap_pure_quality_signal_search.py` until review PASS + commit + separate user `执行`. The large-cap singleton ledger remains unspent.
+
+---
+
+## 2026-06-07 — Claude 复核 (third-reviewer findings on the signal-search package) — **AGREE: 3 Required contract/gate-hardening items; USER-APPROVED 2026-06-07 `批准修改` → Codex fix all 3; do NOT execute until fixed (this run spends the singleton ledger)**
+
+A third reviewer flagged 3 P1s on the signal-search package; I independently verified all three are REAL and agree they must be fixed before the ledger-spending execute. They are CONTRACT / GATE-completeness gaps, NOT computation bugs — the runner currently computes correctly and writes no raw, and the third reviewer also confirms the PIT / ROE / cashflow / same-anchor / HAC / veto / no-R1 chain is clean (matching my deep review). My prior "GO" over-claimed gate completeness; this entry supersedes it to FIX-FIRST.
+
+**Required R-DRIFT-GUARD (F1)**: `load_and_validate_preregistration` does NOT validate the prereg against its schema (only checks `schema_name`) and omits drift-checks for the frozen `decision_cell` thresholds `top_fraction` (0.2), `minimum_top_count_per_month` (10), `mean_net_excess_must_be_positive` (true), `name_concentration_guard_max_share` (0.2), `single_year_positive_return_guard_max_share` (0.35) — it guards cell_id / hac_t / cohorts / drawdown but not these. The runner runs on its own constants, so the prereg can drift undetected (their monkeypatch confirmed; I confirmed the missing checks + the absent prereg-schema validation). Fix: validate the prereg against its schema at runtime AND assert each runner constant equals the prereg's frozen value (TOP_FRACTION, MIN_TOP_COUNT, both concentration shares, mean>0). Verification-only; changes no computed value.
+
+**Required R-SIZE-COVERAGE (F2)**: `add_size_neutral_scores` counts only buckets with ≥1 valid value, so an entirely-empty size quintile is not flagged thin; there is no per-month/per-bucket hard requirement (only an aggregate `size_neutral_thin_bucket_count`); and the prereg's required_output_diagnostic "report marginal size-neutral quintile coverage" is only aggregated, not produced per-quintile. Practical risk on top-500 is low (buckets rarely thin) but the size-control claim must be per-month verifiable. Fix: count all 5 quintiles (empty=0=thin), report per-quintile coverage as the prereg requires, and add a hard size-coverage gate for primary months (or at minimum surface per-month coverage for the result review).
+
+**Required R-SUMMARY-CONTRACT (F3)**: summary schema `executionDiagnostics.additionalProperties` is `true` (the only loose object of 10; raw_rows injectable and still schema-valid — I confirmed line 292), and the schema does not enforce exactly one `diagnostic_role == primary_decision_cell`. The runner writes no raw and produces exactly one primary, but the official post-ledger-spend artifact contract must forbid scope creep. Fix: `executionDiagnostics.additionalProperties:false` with explicit diagnostic keys, and constrain result_cells to exactly one primary role.
+
+**All three fixes are SAFE — verification / contract hardening only — and must NOT change any computed value, factor, threshold value, or the frozen design.** This is distinct from the design limitations in the entry below (statistical power / no value-growth orthogonalization / L1-level industry neutralization), which must NOT be changed (changing those after seeing data = p-hacking). Sequence: user approves → Codex `修复` (harden the three) → Claude re-reviews (re-run schema/runner tests in my jsonschema env, confirm the monkeypatch now fails) → commit → only then `执行`. Do not execute before the fixes land.
+
+**USER-APPROVED 2026-06-07 (`批准修改`)**: the user approved fixing all three. Codex is authorized to `修复` R-DRIFT-GUARD + R-SIZE-COVERAGE + R-SUMMARY-CONTRACT as verification/contract hardening ONLY — validate the prereg against its schema at runtime + assert each runner constant equals the prereg's frozen value; count all 5 size quintiles (empty=thin) + report per-quintile coverage + add/surface a per-month size-coverage gate; tighten `executionDiagnostics` to additionalProperties:false with explicit keys + enforce exactly-one-primary in the summary schema. MUST NOT change any computed value, factor definition, threshold value, the frozen design, or the materialization/audit; keep the singleton ledger unspent. Add/extend tests so a corrupted prereg (the third reviewer's monkeypatch) and a raw-injected summary now FAIL. This is a `修复` build (no execution); after it Codex returns for Claude re-review before commit, then a separate user `执行` runs the search.
+
+---
+
+## 2026-06-07 — Claude 深审 (pre-execution full design+code review at user request) — **GO on computation (factors/measurement/stats re-verified from source) — SUPERSEDED on gate-completeness by the cross-check above (FIX-FIRST); design limitations below remain interpretation caveats, not changes**
+
+User asked for a maximal-depth review of the whole alpha test (design + code) before executing. I re-read the base layer I had been trusting as "vetted" and verified it from source:
+- **Factors (the quality core) — all sound + PIT**: `profitability_quality`=annualized YTD ROE (0331×4/0630×2/0930×4÷3/1231×1, period-consistent units); `cash_conversion`=op-cashflow/|net income| with same-period (`end_date` match) + ≥1e7 denominator guards; `balance_sheet_strength`=(equity−liab)/assets (monotone in equity ratio, low-leverage=high); `earnings_stability`=−std(same-period YoY `profit_dedt` growth) (diagnostic-only). Each via `select_latest_pit_row` (ann_date≤as_of) + restatement exclusion. `percentile_scores` direction consistent (higher quality→higher percentile).
+- **Measurement — correct**: `resolve_return_dates` = next-trading-day-after-as_of entry, +horizon trading-day exit, terminal=last-trade-before-delist, halt=next-available; `compute_return` sets `benchmark_exit_date = stock_exit_date` (**same-anchor**), close-to-close total return (stock adj_factor / TR index close), `ROUND_TRIP_COST` on the stock leg only, all-prices>0 guard. `newey_west_hac_t_stat` = Bartlett, lag=ceil(horizon/21)=24 for 504d, correctly inflates SE for overlap; `max_drawdown` on cumulative monthly excess.
+- **No R1-class bug** in either base or large-cap `monthly_cohort_rows` (excess set inside the per-benchmark loop, append once per item/horizon). Large-cap runner faithfully reuses all of the above + adds correct universe/composite/0.5-0.5-neutralization/decision logic; structural sanity guard + single-spend ledger present.
+
+**Code verdict: clean, no bugs, safe to execute.**
+
+**Design is sound for its hypothesis, with honest LIMITATIONS to apply when interpreting the result (NOT reasons to change the frozen design — changing a pre-committed design after seeing the data would be p-hacking, which this whole apparatus exists to prevent):**
+1. **Limited effective statistical power** — 504d (2yr) holds over 2018–2025 ≈ ~4 non-overlapping windows; 96 overlapping monthly cohorts + HAC-t (lag 24) correctly widen the SE, but a t≥2 "pass" rests on a short effective sample. A positive must be treated as a research clue needing the unchanged forward-live ship gate, not strong proof.
+2. **Industry-neutralization is effectively L1 (sector) level on top-500** — SW-L2 groups rarely reach the ≥20 threshold in a 500-name universe, so the industry leg falls back to L1; residual sub-industry tilts can survive.
+3. **No value/growth/momentum orthogonalization** — the composite is industry+size neutral only; a positive could partly reflect a value/growth tilt correlated with quality. Legitimate for the stated hypothesis, but not "quality orthogonal to all factors." A value-neutral variant would be a NEW prereg + ledger, not a mid-stream edit.
+4. **Minor**: cost 0.26% round-trip is plausible (slightly optimistic) for low-turnover large-caps; `cash_conversion`/`earnings_stability` use `abs(.)` denominators that are odd for the rare loss-making large-cap — negligible at top-500.
+
+The prior size-confound IS addressed (top-500 universe + CSI300 primary + size-neutral leg).
+
+**Verdict**: GO — design + code are sound and ready. The limitations are how to READ the result (especially a positive), not pre-execution changes. Execution will spend the singleton ledger once and produce a genuine candidate/falsified verdict; I will independently recompute the result (every t≥2 cell vs its gates, size-confound vs CSI1000, effective-N caveat) before any conclusion.
+
+---
+
 ## 2026-06-07 — Claude 审查 (A-long large-cap pure-quality SIGNAL-SEARCH package: packet + runner + 2 schemas + 2 tests, uncommitted on HEAD b7f4cb4) — **PASS — faithful to frozen prereg, reuses vetted measurement, R1-class guarded; ready to commit + execute (spends ledger)**
 
 Deepest review of the session — this is the test that spends the singleton ledger and yields the alpha verdict. Full read of the runner + packet + summary schema; ran 12/12 tests in my jsonschema env; confirmed all reused `base.*` constants resolve to the correct frozen values.

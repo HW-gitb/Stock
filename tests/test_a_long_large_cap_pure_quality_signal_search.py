@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import unittest
 from unittest import mock
 
@@ -67,10 +68,23 @@ class ALongLargeCapPureQualitySignalSearchTest(unittest.TestCase):
         with mock.patch.object(runner, "MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY", 2):
             counts = runner.add_size_neutral_scores(items, "profitability_quality")
 
-        self.assertEqual(counts, {"q1": 2, "q2": 1})
+        self.assertEqual(counts, {"q1": 2, "q2": 1, "q3": 0, "q4": 0, "q5": 0})
         self.assertIn("profitability_quality__size_neutral", items[0])
         self.assertIn("profitability_quality__size_neutral", items[1])
         self.assertNotIn("profitability_quality__size_neutral", items[2])
+
+    def test_preregistration_validation_rejects_decision_gate_drift(self) -> None:
+        prereg = copy.deepcopy(runner.read_json(runner.PREREGISTRATION_PATH))
+        cell = prereg["frozen_design"]["decision_cell"]
+        cell["top_fraction"] = 0.9
+        cell["minimum_top_count_per_month"] = 99
+        cell["mean_net_excess_must_be_positive"] = False
+        cell["name_concentration_guard_max_share"] = 0.01
+        cell["single_year_positive_return_guard_max_share"] = 0.01
+
+        with mock.patch.object(runner, "read_json", return_value=prereg):
+            with self.assertRaises(ValueError):
+                runner.load_and_validate_preregistration()
 
     def test_composite_score_requires_all_three_components_and_combines_marginal_scores(self) -> None:
         complete = {
@@ -100,6 +114,23 @@ class ALongLargeCapPureQualitySignalSearchTest(unittest.TestCase):
         self.assertAlmostEqual(complete["core_quality_composite_percentile_3factor__size_neutral"], 0.5)
         self.assertAlmostEqual(complete["core_quality_composite_percentile_3factor__industry_size_neutral"], 0.55)
         self.assertNotIn("core_quality_composite_percentile_3factor__industry_size_neutral", missing)
+
+    def test_primary_size_neutral_bucket_coverage_counts_all_five_buckets(self) -> None:
+        scored = [
+            {"size_bucket": "q1", "core_quality_composite_percentile_3factor__size_neutral": 0.7},
+            {"size_bucket": "q3", "core_quality_composite_percentile_3factor__size_neutral": 0.4},
+        ]
+
+        with mock.patch.object(runner, "MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY", 1):
+            coverage = runner.primary_size_neutral_bucket_coverage(scored, "20200131")
+
+        self.assertEqual(coverage["q1_count"], 1)
+        self.assertEqual(coverage["q2_count"], 0)
+        self.assertEqual(coverage["q3_count"], 1)
+        self.assertEqual(coverage["q4_count"], 0)
+        self.assertEqual(coverage["q5_count"], 0)
+        self.assertEqual(coverage["thin_bucket_count"], 3)
+        self.assertFalse(coverage["passes_minimum_bucket_count"])
 
     def test_decision_uses_only_primary_cell_and_diagnostics_cannot_rescue_failure(self) -> None:
         primary_fail = {
@@ -149,6 +180,17 @@ class ALongLargeCapPureQualitySignalSearchTest(unittest.TestCase):
         self.assertEqual(decision["research_verdict"], "candidate_alpha_clue_research_only")
         self.assertEqual(decision["candidate_alpha_clue_count"], 1)
         self.assertFalse(decision["secondary_benchmark_required_for_candidate_alpha"])
+
+    def test_pipeline_sanity_rejects_thin_primary_size_neutral_coverage(self) -> None:
+        primary_pass = {
+            "cell_id": "core_quality_composite_percentile_3factor_industry_size_neutral_equal_weight_504d_CSI300",
+            "diagnostic_role": "primary_decision_cell",
+            "monthly_cohort_count": 50,
+        }
+        diagnostics = {"primary_size_neutral_thin_month_count": 1}
+
+        with self.assertRaises(ValueError):
+            runner.validate_pipeline_result_sanity([{"row": 1}], [primary_pass], diagnostics)
 
 
 if __name__ == "__main__":
