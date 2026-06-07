@@ -1,9 +1,9 @@
 {
   "schema_name": "program_test_budget_ledger",
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-04T00:00:00Z",
+  "generated_at": "2026-06-07T02:47:36+00:00",
   "artifact_id": "a_long_signal_search_program_test_budget_ledger_20260604",
-  "ledger_status": "active_planned_test_pending_review",
+  "ledger_status": "active_no_new_test_authorized",
   "family_id": "a_long_quality_cashflow_signal_search_v1",
   "lane_id": "a_long_research",
   "singleton_scope": {
@@ -25,36 +25,29 @@
   },
   "budget_policy": {
     "ledger_cardinality": "singleton_program_level",
-    "tests_spent_count": 0,
+    "tests_spent_count": 1,
     "tests_available_without_new_review": 0,
     "next_test_requires_reviewed_preregistration": true,
     "next_test_requires_user_approval": true,
     "spend_rule": "The first reviewed A-long signal-search execution spends one planned test regardless of pass, risk-filter-only, or fail result.",
     "no_silent_rescue_rule": "If the future result fails or is risk-filter-only, do not rerun with changed signal families, thresholds, holding periods, benchmark, universe, cost model, or industry policy without a new reviewed preregistration and ledger update."
   },
-  "test_spend_log": [],
-  "planned_tests": [
+  "test_spend_log": [
     {
       "test_id": "a_long_signal_search_preregistration_20260604",
-      "planned_status": "planned_not_reviewed",
-      "created_at": "2026-06-04T00:00:00Z",
-      "planned_preregistration_ref": "research/preregistrations/a_long_signal_search_preregistration_20260604.json",
-      "planned_result_ref": "research/results/a_long_signal_search_20260604/evidence_report.json",
+      "preregistration_ref": "research/preregistrations/a_long_signal_search_preregistration_20260604.json",
+      "result_ref": "research/results/a_long_signal_search_20260604/execution_summary.json",
+      "status": "spent_failed_outcome_threshold",
+      "tests_spent": 1,
       "promotion_relevant": true,
-      "expected_tests_spent": 1,
-      "approval_status": "pending_user_approval",
-      "design_summary": "Research-only A-long main-board quality / cashflow / balance-sheet / earnings-stability signal search, gated by the fixed-panel audit pass but requiring a future reviewed execution package before any run.",
-      "review_boundary": [
-        "The fixed 9-symbol panel is route proof only and must not be reported as alpha proof.",
-      "Future execution must use a reviewed main-board candidate universe and preserve PIT list / delist / terminal return handling.",
-      "Future execution must consume the approved 191-name no-industry boundary: no manual industry fill, no silent default, no dropping boundary names from returns/risk, and denominator-only exclusion for industry normalization.",
-      "No provider expansion, DataHub work, production use, ship-gate claim, full-size manual use, or broker / order automation."
-      ]
+      "result_summary": "research_verdict=no_alpha_found_under_frozen_rules; candidate_alpha_clue_count=0; production_ready=false; ship_gate_evidence=false; full_size_allowed=false",
+      "allowed_followup": "No rerun, threshold change, family change, horizon change, benchmark change, or rescue slicing without a new reviewed preregistration and ledger update. Positive clues remain research-only until forward-live ship-gate evidence exists."
     }
   ],
+  "planned_tests": [],
   "next_required_actions": [
-    "Independent review must pass the preregistration before any signal-search runner or data execution package.",
-    "The user must explicitly execute the future reviewed run package.",
-    "If approved later, execute the reviewed full main-board packet with checkpoint/resume; the data-integrity audit must pass before the frozen signal search runs."
+    "Do not rerun or rescue this A-long signal search without a new reviewed preregistration and ledger update.",
+    "If the result is no-alpha, treat it as failed under the frozen rules.",
+    "If the result is a research clue, route it to forward-live validation; do not treat it as production or ship-gate evidence."
   ]
 }

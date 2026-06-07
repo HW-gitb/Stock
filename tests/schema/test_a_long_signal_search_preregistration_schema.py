@@ -204,22 +204,31 @@ class ALongSignalSearchPreregistrationSchemaTest(unittest.TestCase):
 
         self.assertGreaterEqual(len(errors), 2)
 
-    def test_ledger_registers_one_pending_test_without_authorizing_run(self) -> None:
+    def test_ledger_records_singleton_test_state(self) -> None:
         artifact = self._load_artifact()
         ledger = self._load_ledger()
 
         self.assertEqual(artifact["planned_test_budget"]["ledger_ref"], str(LEDGER_ARTIFACT_PATH).replace("\\", "/"))
         self.assertFalse(artifact["planned_test_budget"]["signal_search_run_authorized_now"])
         self.assertEqual(ledger["lane_id"], "a_long_research")
-        self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
         self.assertEqual(ledger["budget_policy"]["tests_available_without_new_review"], 0)
-        self.assertEqual(ledger["test_spend_log"], [])
-        self.assertEqual(len(ledger["planned_tests"]), 1)
-        planned = ledger["planned_tests"][0]
-        self.assertEqual(planned["planned_status"], "planned_not_reviewed")
-        self.assertEqual(planned["approval_status"], "pending_user_approval")
-        self.assertIn("fixed 9-symbol panel is route proof only", planned["review_boundary"][0])
+        if ledger["budget_policy"]["tests_spent_count"] == 0:
+            self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
+            self.assertEqual(ledger["test_spend_log"], [])
+            self.assertEqual(len(ledger["planned_tests"]), 1)
+            planned = ledger["planned_tests"][0]
+            self.assertEqual(planned["planned_status"], "planned_not_reviewed")
+            self.assertEqual(planned["approval_status"], "pending_user_approval")
+            self.assertIn("fixed 9-symbol panel is route proof only", planned["review_boundary"][0])
+        else:
+            self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
+            self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
+            self.assertEqual(ledger["planned_tests"], [])
+            self.assertEqual(len(ledger["test_spend_log"]), 1)
+            spent = ledger["test_spend_log"][0]
+            self.assertEqual(spent["test_id"], "a_long_signal_search_preregistration_20260604")
+            self.assertEqual(spent["status"], "spent_failed_outcome_threshold")
+            self.assertIn("execution_summary.json", spent["result_ref"])
 
 
 if __name__ == "__main__":

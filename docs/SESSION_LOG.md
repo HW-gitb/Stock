@@ -105,6 +105,62 @@ New hypothesis after the prior no-alpha (which showed the quality edge was a SIZ
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long Step-3 frozen signal-search RESULT) — **PASS — genuine no-alpha, correctly gated**
+
+**Genuine full run, not a pipeline failure** (cf. the earlier 0-cohort false-no-alpha): 522 PIT-vetoed symbols, 417,407 evaluated return rows, 32 real cells with real t/cohort/drawdown numbers. `validate_pipeline_result_sanity` would have hard-failed an empty pipeline; it didn't. 43 tests OK in my jsonschema env; hygiene clean (sole leak hit = the flag name); restatement exclusions applied 1504/1504; ledger correctly spent (`tests_spent_count=1`, `spent_failed_outcome_threshold`).
+
+**0 candidates independently re-derived** (my recompute matches the runner): every t≥2 positive-mean cell fails exactly one frozen gate —
+- level factors (profitability_quality / cash_conversion / balance_sheet_strength) @ 504d (and cash @252d) **vs CSI1000** have t 2.5–3.8, BH-FDR pass, 68–83 cohorts — but **fail the drawdown gate (<−15%)**;
+- earnings_stability has the highest t (4.9–5.7 @504d) but only 32–44 cohorts → **fails the ≥48 minimum**;
+- **no CSI300 (large-cap) cell has clean significant excess** (only earnings_stability reaches t≈2 there, and it fails cohort-min + FDR).
+So no (family,view,horizon) clears t≥2 + FDR≤0.05 + ≥48 cohorts + drawdown≥−15% + concentration on BOTH CSI300 and CSI1000.
+
+**O-SIZE vindicated by the data**: the significant excess is concentrated vs CSI1000 (small/mid), not CSI300 (large) → it's largely a size/EW-tilt premium, not quality alpha vs the primary benchmark; the both-benchmark robustness gate correctly excluded it. (Watch-items resolved: early-window 2018-2020 industry-neutral exclusion 26.8% — thinner but valid; selection veto active on 522 names.)
+
+**Interpretation**: not noise (the factors beat small-cap with high significance), but not usable alpha under the frozen rules — the edge is size-premium + high-drawdown + (for earnings_stability) thin-cohort, all correctly rejected. The rigorous pipeline did its job: it returned an honest negative instead of a spurious clue.
+
+**No rescue**: ledger is spent + the prereg forbids rescuing this by changing thresholds/families/horizons/benchmark/universe. Any further A-long test = a NEW reviewed preregistration (a new hypothesis — e.g. risk-managed/size-neutral construction, or different factors — not a re-slice of this one). No alpha/production/ship-gate/full-size authorized.
+
+---
+
+## 2026-06-07 — Codex 执行 (A-long Step-3 frozen signal search) — **NO-ALPHA / READY FOR RESULT REVIEW**
+
+After Claude PASS on the runtime/perf fix and commit `2214648`, user gave a separate `提交并执行下一步`. Codex committed the review log first, then ran:
+
+`python runners/a_long_full_main_board_signal_search.py --confirm-independent-review-pass --confirm-post-review-execute`
+
+**Result**:
+- Summary: `research/results/a_long_signal_search_20260604/execution_summary.json`.
+- Decision: `no_alpha_found_under_frozen_rules`.
+- Plain result: `Signal search found no usable alpha clue under the frozen rules.`
+- Candidate alpha clue count: `0`.
+- Result cells: `32`.
+- Evaluated stock-return rows: `417407`.
+- Monthly as-of count: `96`.
+- Ledger: `research/ledgers/a_long_signal_search_program_test_budget_ledger_20260604.json` now records `tests_spent_count = 1`, `ledger_status = active_no_new_test_authorized`, and spend status `spent_failed_outcome_threshold`.
+
+**Why no-alpha despite some positive cells**:
+- The strongest CSI1000 cells did not clear all frozen gates. Examples: `earnings_stability / industry_neutral / 504d / CSI1000` had t `5.6970889838` but only `32` monthly cohorts (<48). `cash_conversion / industry_neutral / 504d / CSI1000` had t `3.8469203562` and 71 cohorts but failed drawdown (`-0.4415189845` < `-0.15`).
+- The best CSI300 cells also failed frozen gates / FDR / drawdown / cohort count. Example: `earnings_stability / industry_neutral / 504d / CSI300` had t `2.1367878051`, but only 32 cohorts, BH-FDR `0.086974012`, and drawdown `-0.1676850888`.
+- Therefore no same family/view/horizon cleared both CSI300 and CSI1000 robustness plus minimum cohorts, FDR, drawdown, and concentration gates.
+
+**Hygiene / gates**:
+- No provider/network call.
+- Tracked summary contains no raw rows, endpoint results, secret, or request URL.
+- Restatement exclusions fully applied: expected `1504`, found `1504`.
+- No production, ship-gate, full-size, DataHub, or broker/order authorization.
+
+**Verification**:
+- `python -m unittest tests.schema.test_a_long_signal_search_execution_summary_schema -v` — 4 tests OK.
+- `python -m unittest tests.schema.test_a_long_signal_search_preregistration_schema tests.schema.test_a_long_signal_search_execution_summary_schema tests.test_a_long_full_main_board_signal_search -v` — 53 tests OK after updating the ledger lifecycle test for spent state.
+- `python -m unittest discover -s tests -p '*a_long*' -v` — 263 tests OK.
+
+**Next / lock**:
+- This is the actual frozen Step-3 result and it failed the registered alpha threshold.
+- Do not rerun, rescue-slice, change thresholds, change families, change horizons, or reinterpret this as production / ship-gate evidence without a new reviewed preregistration and ledger update.
+- Next required gate is independent review of the real result summary and ledger update.
+
+---
 
 ## 2026-06-07 — Claude 审查 (A-long Step-3 runtime/perf fix) — **PASS (可提交)** — behavior-preserving
 
