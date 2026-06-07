@@ -10,7 +10,7 @@
     "protected_decision": "Whether the new A-long PIT top-500 large/mid-cap core-quality composite produces a research-only pure-quality alpha clue versus CSI300 under one frozen primary cell.",
     "applies_to": [
       "research/preregistrations/a_long_large_cap_pure_quality_20260607.json",
-      "The future reviewed market-cap field availability probe that may freeze circ_mv or total_mv before any materialization.",
+      "The reviewed market-cap field availability probe result that froze circ_mv for later materialization.",
       "The future reviewed A-long large-cap pure-quality materialization / audit / signal-search execution package that may be executed only after independent review and explicit user execute."
     ],
     "does_not_authorize": [
@@ -48,14 +48,14 @@
       "review_boundary": [
         "This planned test is a new hypothesis, not a rerun, rescue, or reinterpretation of the prior no-alpha A-long signal search.",
         "The preregistration and ledger authorize no daily_basic probe, no market-cap materialization, no signal search, no provider call, no DataHub work, no production use, no ship-gate evidence, and no full-size manual use.",
-        "A later reviewed probe must confirm daily_basic field availability and freeze circ_mv or total_mv before any materialization or signal-search run.",
+        "The reviewed field probe confirmed circ_mv; a later reviewed materialization package must still pass before audit or signal-search work.",
         "Diagnostics such as CSI1000, 252d, single factors, earnings_stability, non-neutral, or cap-weighted views cannot define alpha or rescue a failed primary cell."
       ]
     }
   ],
   "next_required_actions": [
     "Independent review must validate the new preregistration, schema, ledger, tests, and docs.",
-    "After review and a separate user execute command, the next step may be only a bounded daily_basic market-cap field availability probe; no signal search is authorized now.",
+    "After review and a separate user execute command, the next step may be only the bounded daily_basic monthly market-cap materialization; no audit or signal search is authorized now.",
     "If the future primary cell fails, record it as failed under the frozen large-cap pure-quality rules and do not rescue from diagnostics without a new reviewed preregistration and ledger update."
   ]
 }

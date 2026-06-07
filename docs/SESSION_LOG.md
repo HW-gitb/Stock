@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long large-cap monthly market-cap materialization package: circ_mv freeze + packet + runner + 2 schemas + 2 tests, uncommitted on HEAD 9db5011) — **PASS — circ_mv freeze correct, 96-call materialization bounded + gated + tested; not yet run**
+
+Full read of the runner + packet + execution-summary schema + the prereg/ledger/probe-test diffs (not delta-only). **circ_mv freeze is correct and consistent**: prereg `selected_market_cap_field_status: circ_mv`, `market_cap_field_choice_status: circ_mv_reviewed_probe_passed_frozen_for_materialization`, points to the reviewed probe summary; the prereg schema const + test were updated to match; `prohibited_claims` swapped the now-true `market_cap_field_selected` for `market_cap_materialized:false`. **Ledger NOT spent** (text-only edits; `tests_spent_count=0`, empty spend log — runner re-checks this as a gate). The probe-runner test was correctly decoupled (setUp patches `PREREGISTRATION_PATH` to a temp pending-probe fixture, tearDown stops the patch) so the historical probe tests stay valid now that the real prereg is frozen to circ_mv.
+
+**Materialization package is correctly bounded and every gate is enforced in code AND exercised by tests:**
+- Exactly 96 `daily_basic(trade_date, fields=ts_code,trade_date,circ_mv)` calls on the fixed month-end open trading dates 2018–2025 (verified 96, unique, sorted; packet↔runner drift-checked); budget=96, retry=0, triple-guarded (call_plan length, pre-loop, in-loop counter) + schema `maxItems:96`. 1.25s min spacing between live calls (paces the API, avoids the prior timeout failure mode).
+- Double-gate (`--confirm-independent-review-pass` + `--confirm-post-review-execute`, vetted `thin_runner` gate; test proves it raises without both); plus pre-run gates: prereg must freeze circ_mv + point to the probe summary, probe summary must be `circ_mv_ready_for_reviewed_freeze` (and must NOT itself authorize materialization), singleton ledger unspent, raw-root under the approved path + gitignored.
+- Top-500 selection (`top500_stats`): main-board filter via the shared vetted `is_main_board_ts_code` (excludes ChiNext 300/301, STAR 688/689, BSE 8/4/920/.BJ; keeps SH/SZ main incl. 002/003) → positive-circ_mv descending → top 500, PIT by construction (daily_basic only returns stocks trading that as-of). Decision requires all 96 months to reach ≥500 positive main-board rows and a complete top-500.
+- Leak hygiene: `request_shape_without_token` carries only {trade_date, fields}; errors via `redact_error`; summary `token_logged`/`request_url_logged` false; raw rows live only under the gitignored raw root; the tracked summary stores per-month COUNTS / min-max circ_mv only — NO raw rows and NO top-500 symbol lists (runner test recursively asserts no `records`/`top500_symbols`/`selected_symbols`; schema `additionalProperties:false` ×10, `endpoint_results maxItems:96`, no field admits raw rows or a symbol list). The later signal search re-derives the universe from the retained raw, so omitting the symbol lists costs nothing.
+- Resilience: checkpoint reuse (0 new calls on a fully-cached re-run), missing-token → `not_executed_environment_missing` with no calls, `validate_json` raises if jsonschema absent.
+Re-ran in my jsonschema env: probe runner 8 + prereg schema 12 + materialization packet schema 6 + materialization runner 8 = **34/34 OK** (Codex's bundled Python lacks jsonschema, so its "34 OK" / "303 OK" did not actually validate schemas).
+
+**Watch-item for the LATER signal-search build (not a blocker now)**: the signal search for this design must reuse these EXACT 96 as-of dates + the same `is_main_board_ts_code` + top-500-by-circ_mv derivation from the retained raw, or the measured universe won't match the materialized one. Both currently derive from the same reviewed trade calendar, which is the right shared source.
+
+**Verdict**: PASS. The circ_mv freeze is sound and the 96-call materialization is a correctly-bounded, read-only, double-gated pull that only records shape/coverage counts and recommends nothing beyond "shape available for a later audit." It does NOT run audit, signal search, or spend the ledger. Sequence: commit the package → a separate user `执行` runs the live 96-call materialization (~2–3 min with pacing) → Claude reviews the materialization result summary → a later reviewed AUDIT package consumes the raw → then (only after audit) the signal-search package (the ledger-spending registered test). Immediate next: commit this package.
+
+---
+
+## 2026-06-07 — Codex 构建 (A-long large-cap monthly daily_basic market-cap materialization package) — **READY FOR REVIEW / no 96-call materialization**
+
+After Claude PASS on the 3-call market-cap field-probe result, Codex committed that reviewed result in `9db5011` (`Record A-long large-cap market-cap field probe result`). Then, under the user's `提交并执行下一步`, Codex executed only the next build step: freeze `circ_mv` in the large-cap preregistration and prepare the bounded monthly market-cap materialization package. No 96-call `daily_basic` materialization, audit rerun, signal search, alpha backtest, DataHub work, production claim, ship-gate claim, full-size use, or broker/order automation was run or authorized.
+
+**Worked on**:
+- [tracked] `research/preregistrations/a_long_large_cap_pure_quality_20260607.json` and `schemas/a_long_large_cap_pure_quality_preregistration.schema.json`: freeze `data_dependency_gate.selected_market_cap_field_status = circ_mv`, point to `docs/a_long_large_cap_market_cap_field_probe_execution_summary_20260607.json`, and keep signal / production claims closed.
+- [tracked] `research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json`: update text only; singleton signal-search spend remains `0` and `test_spend_log` remains empty.
+- [tracked] `schemas/a_long_large_cap_market_cap_materialization_packet.schema.json` and `docs/a_long_large_cap_market_cap_materialization_packet_20260607.json`: new review-only packet fixing 96 month-end open trading dates from 2018-2025, `daily_basic` fields `ts_code,trade_date,circ_mv`, 96-call / zero-retry budget, gitignored raw root, and no raw rows / no top-500 symbol lists in tracked summaries.
+- [tracked] `runners/a_long_large_cap_market_cap_materialization.py`: later executable runner with independent-review + post-review execute gates, prereg / probe-summary / unspent-ledger checks, raw-root gitignore enforcement, checkpoint reuse, schema validation, 96-call budget enforcement, and main-board top-500 shape checks.
+- [tracked] `schemas/a_long_large_cap_market_cap_materialization_execution_summary.schema.json`, `tests/schema/test_a_long_large_cap_market_cap_materialization_packet_schema.py`, and `tests/test_a_long_large_cap_market_cap_materialization.py`: no-raw summary contract plus schema/fake-client runner tests.
+- [tracked] `tests/test_a_long_large_cap_market_cap_field_probe.py`: decouple historical field-probe runner tests from the current preregistration state by using a temporary pending-probe prereg fixture; this keeps old probe tests valid after `circ_mv` is frozen.
+- [tracked] `docs/README.md`, `research/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, and this `docs/SESSION_LOG.md`: route the new package and lock the no-run / no-audit / no-search boundary.
+
+**Frozen behavior**:
+- The materialization package can only call `daily_basic(trade_date=..., fields=ts_code,trade_date,circ_mv)` for the fixed 96 as-of dates listed in the packet.
+- A later execution summary can only record materialization shape and coverage counts. It cannot authorize audit, signal search, alpha, production, ship-gate evidence, full-size use, DataHub, or broker/order automation.
+- The tracked summary intentionally excludes raw rows and the 96 monthly top-500 symbol lists. Raw payloads must stay under `data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/`, which is covered by `.gitignore`.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_long_large_cap_market_cap_field_probe tests.schema.test_a_long_large_cap_pure_quality_preregistration_schema tests.schema.test_a_long_large_cap_market_cap_materialization_packet_schema tests.test_a_long_large_cap_market_cap_materialization -v` — 34 tests OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s tests -p "*a_long*" -v` — 303 tests OK.
+
+**Next / lock**:
+- Independent review should inspect the full working tree, new untracked files, docs, and tests. Do not run the 96-call materialization until review PASS + commit + a separate user `执行`.
+- If review passes and the package is committed, the later execution command will be:
+  `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe runners\a_long_large_cap_market_cap_materialization.py --confirm-independent-review-pass --confirm-post-review-execute`
+
+---
+
 ## 2026-06-07 — Claude 审查 (A-long large-cap daily_basic market-cap field probe RESULT, docs/...execution_summary_20260607.json, untracked on HEAD 0236f51) — **PASS — circ_mv confirmed available across all 3 anchors; recommend freezing circ_mv; ledger unspent, hygiene clean**
 
 Genuine live run (not a dry run): `new_network_call_count=3`, `reused=0`, both confirm gates true, `environment_precheck_passed`. Independently sanity-checked the result:

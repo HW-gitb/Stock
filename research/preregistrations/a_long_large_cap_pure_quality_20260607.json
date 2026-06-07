@@ -52,6 +52,10 @@
       "role": "records reviewed close-to-close total-return benchmark basis used by current A-long measurement"
     },
     {
+      "path": "docs/a_long_large_cap_market_cap_field_probe_execution_summary_20260607.json",
+      "role": "reviewed daily_basic field probe result; circ_mv passed all fixed anchors and is frozen for later materialization packets"
+    },
+    {
       "path": "docs/system_risk_register.md",
       "role": "durable queue for A-long no-rerun/no-rescue and new-preregistration risk boundaries"
     },
@@ -79,11 +83,13 @@
     "daily_basic_pull_allowed_now": false,
     "daily_basic_probe_allowed_now": false,
     "availability_probe_required_before_materialization": true,
+    "availability_probe_completed_before_materialization": true,
+    "market_cap_field_probe_execution_summary_ref": "docs/a_long_large_cap_market_cap_field_probe_execution_summary_20260607.json",
     "market_cap_field_preference_order": [
       "circ_mv",
       "total_mv"
     ],
-    "selected_market_cap_field_status": "pending_probe_not_selected",
+    "selected_market_cap_field_status": "circ_mv",
     "selected_market_cap_field_must_be_frozen_before_run": true,
     "planned_monthly_as_of_call_count_estimate": 96,
     "raw_storage_must_be_gitignored": true,
@@ -102,7 +108,7 @@
       "universe_size_n": 500,
       "universe_size_n_search_allowed": false,
       "selection_basis": "top_500_by_pit_market_cap_as_of_each_as_of_date",
-      "market_cap_field_choice_status": "circ_mv_preferred_total_mv_fallback_pending_reviewed_probe",
+      "market_cap_field_choice_status": "circ_mv_reviewed_probe_passed_frozen_for_materialization",
       "include_later_delisted_names_at_pre_delisting_asofs": true,
       "pit_list_delist_required": true,
       "selection_time_namechange_veto_required": true,
@@ -259,7 +265,7 @@
     "validated_alpha": false,
     "prior_no_alpha_reinterpreted": false,
     "daily_basic_access_proven": false,
-    "market_cap_field_selected": false,
+    "market_cap_materialized": false,
     "signal_search_authorized": false,
     "full_size_allowed": false,
     "ship_gate_evidence": false,
@@ -270,13 +276,14 @@
   },
   "next_steps": [
     "Independent review must validate this preregistration, schema, ledger, tests, and docs before any data probe or signal-search work.",
-    "After review and a separate user execute command, a later packet may probe daily_basic field availability only, freeze circ_mv versus total_mv before materialization, and write no raw rows in tracked summaries.",
-    "Only after the market-cap field is reviewed and frozen may a later reviewed materialization / audit / signal-search implementation be proposed.",
+    "After the reviewed field-probe PASS, circ_mv is the frozen market-cap field for later materialization packets.",
+    "A separate reviewed materialization packet must still be prepared and committed before any daily_basic monthly pull.",
+    "Only after reviewed materialization and a later reviewed audit may a signal-search implementation be proposed.",
     "No signal-search runner execution, daily_basic pull, provider call, DataHub work, production claim, ship-gate claim, or full-size use is authorized by this artifact."
   ],
   "limitations": [
     "This artifact registers a design only; it does not execute data access or signal search.",
-    "Market-cap field availability is not proven yet, and the selected market-cap field is not frozen until a later reviewed probe.",
+    "Market-cap field availability is proven only at the three fixed probe anchors; the later materialization must re-check monthly coverage.",
     "The prior full main-board no-alpha result remains failed under its own frozen rules and is not reinterpreted by this artifact.",
     "A positive future backtest would still be research-only until the unchanged project ship gate, including at least 12 months of forward-live evidence, is satisfied."
   ]

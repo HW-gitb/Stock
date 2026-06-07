@@ -55,8 +55,17 @@ class ALongLargeCapMarketCapFieldProbeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.raw_root = runner.RAW_ROOT / "unit_test"
         shutil.rmtree(self.raw_root, ignore_errors=True)
+        self.prereg_tmp = tempfile.TemporaryDirectory()
+        prereg = json.loads(runner.PREREGISTRATION_PATH.read_text(encoding="utf-8"))
+        prereg["data_dependency_gate"]["selected_market_cap_field_status"] = "pending_probe_not_selected"
+        self.prereg_path = Path(self.prereg_tmp.name) / "a_long_large_cap_pure_quality_pending_probe.json"
+        self.prereg_path.write_text(json.dumps(prereg, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.prereg_patch = mock.patch.object(runner, "PREREGISTRATION_PATH", self.prereg_path)
+        self.prereg_patch.start()
 
     def tearDown(self) -> None:
+        self.prereg_patch.stop()
+        self.prereg_tmp.cleanup()
         shutil.rmtree(self.raw_root, ignore_errors=True)
 
     def test_fake_client_recommends_circ_mv_and_writes_no_raw_rows_to_summary(self) -> None:

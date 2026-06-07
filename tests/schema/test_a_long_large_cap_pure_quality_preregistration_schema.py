@@ -89,8 +89,13 @@ class ALongLargeCapPureQualityPreregistrationSchemaTest(unittest.TestCase):
         self.assertFalse(gate["daily_basic_pull_allowed_now"])
         self.assertFalse(gate["daily_basic_probe_allowed_now"])
         self.assertTrue(gate["availability_probe_required_before_materialization"])
+        self.assertTrue(gate["availability_probe_completed_before_materialization"])
+        self.assertEqual(
+            gate["market_cap_field_probe_execution_summary_ref"],
+            "docs/a_long_large_cap_market_cap_field_probe_execution_summary_20260607.json",
+        )
         self.assertEqual(gate["market_cap_field_preference_order"], ["circ_mv", "total_mv"])
-        self.assertEqual(gate["selected_market_cap_field_status"], "pending_probe_not_selected")
+        self.assertEqual(gate["selected_market_cap_field_status"], "circ_mv")
         self.assertTrue(gate["selected_market_cap_field_must_be_frozen_before_run"])
         self.assertEqual(gate["planned_monthly_as_of_call_count_estimate"], 96)
         self.assertTrue(gate["raw_storage_must_be_gitignored"])
@@ -108,7 +113,7 @@ class ALongLargeCapPureQualityPreregistrationSchemaTest(unittest.TestCase):
         self.assertEqual(universe["selection_basis"], "top_500_by_pit_market_cap_as_of_each_as_of_date")
         self.assertEqual(
             universe["market_cap_field_choice_status"],
-            "circ_mv_preferred_total_mv_fallback_pending_reviewed_probe",
+            "circ_mv_reviewed_probe_passed_frozen_for_materialization",
         )
         self.assertTrue(universe["include_later_delisted_names_at_pre_delisting_asofs"])
         self.assertTrue(universe["pit_list_delist_required"])
@@ -257,7 +262,7 @@ class ALongLargeCapPureQualityPreregistrationSchemaTest(unittest.TestCase):
         payload["scope"]["daily_basic_pull_allowed_by_this_artifact"] = True
         payload["scope"]["signal_search_authorized_by_this_artifact"] = True
         payload["prior_result_boundary"]["old_result_reslice_allowed"] = True
-        payload["data_dependency_gate"]["selected_market_cap_field_status"] = "circ_mv"
+        payload["data_dependency_gate"]["selected_market_cap_field_status"] = "pending_probe_not_selected"
         payload["frozen_design"]["signal_rule"]["zscore_composite_allowed"] = True
         payload["frozen_design"]["neutralization_rule"]["crossed_industry_size_bucket_allowed"] = True
         payload["frozen_design"]["benchmark_rule"]["both_benchmark_pass_required"] = True

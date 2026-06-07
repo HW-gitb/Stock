@@ -66,6 +66,13 @@
             "properties": {"path": {"const": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json"}},
             "required": ["path"]
           }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"path": {"const": "docs/a_long_large_cap_market_cap_field_probe_execution_summary_20260607.json"}},
+            "required": ["path"]
+          }
         }
       ]
     },
@@ -187,6 +194,8 @@
         "daily_basic_pull_allowed_now",
         "daily_basic_probe_allowed_now",
         "availability_probe_required_before_materialization",
+        "availability_probe_completed_before_materialization",
+        "market_cap_field_probe_execution_summary_ref",
         "market_cap_field_preference_order",
         "selected_market_cap_field_status",
         "selected_market_cap_field_must_be_frozen_before_run",
@@ -201,6 +210,10 @@
         "daily_basic_pull_allowed_now": {"const": false},
         "daily_basic_probe_allowed_now": {"const": false},
         "availability_probe_required_before_materialization": {"const": true},
+        "availability_probe_completed_before_materialization": {"const": true},
+        "market_cap_field_probe_execution_summary_ref": {
+          "const": "docs/a_long_large_cap_market_cap_field_probe_execution_summary_20260607.json"
+        },
         "market_cap_field_preference_order": {
           "type": "array",
           "items": {"enum": ["circ_mv", "total_mv"]},
@@ -208,7 +221,7 @@
           "maxItems": 2,
           "uniqueItems": true
         },
-        "selected_market_cap_field_status": {"const": "pending_probe_not_selected"},
+        "selected_market_cap_field_status": {"const": "circ_mv"},
         "selected_market_cap_field_must_be_frozen_before_run": {"const": true},
         "planned_monthly_as_of_call_count_estimate": {"type": "integer", "minimum": 90, "maximum": 110},
         "raw_storage_must_be_gitignored": {"const": true},
@@ -275,7 +288,7 @@
         "universe_size_n": {"const": 500},
         "universe_size_n_search_allowed": {"const": false},
         "selection_basis": {"const": "top_500_by_pit_market_cap_as_of_each_as_of_date"},
-        "market_cap_field_choice_status": {"const": "circ_mv_preferred_total_mv_fallback_pending_reviewed_probe"},
+        "market_cap_field_choice_status": {"const": "circ_mv_reviewed_probe_passed_frozen_for_materialization"},
         "include_later_delisted_names_at_pre_delisting_asofs": {"const": true},
         "pit_list_delist_required": {"const": true},
         "selection_time_namechange_veto_required": {"const": true},
@@ -588,7 +601,7 @@
         "validated_alpha",
         "prior_no_alpha_reinterpreted",
         "daily_basic_access_proven",
-        "market_cap_field_selected",
+        "market_cap_materialized",
         "signal_search_authorized",
         "full_size_allowed",
         "ship_gate_evidence",
@@ -601,7 +614,7 @@
         "validated_alpha": {"const": false},
         "prior_no_alpha_reinterpreted": {"const": false},
         "daily_basic_access_proven": {"const": false},
-        "market_cap_field_selected": {"const": false},
+        "market_cap_materialized": {"const": false},
         "signal_search_authorized": {"const": false},
         "full_size_allowed": {"const": false},
         "ship_gate_evidence": {"const": false},
