@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-06-07 — Claude 审查 (A-long large-cap daily_basic market-cap field probe RESULT, docs/...execution_summary_20260607.json, untracked on HEAD 0236f51) — **PASS — circ_mv confirmed available across all 3 anchors; recommend freezing circ_mv; ledger unspent, hygiene clean**
+
+Genuine live run (not a dry run): `new_network_call_count=3`, `reused=0`, both confirm gates true, `environment_precheck_passed`. Independently sanity-checked the result:
+- 3 fixed `daily_basic(trade_date)` probes succeeded: 20180131 → 3263 rows, 20211231 → 4669, 20251231 → 5458 (plausible full A-share counts that grow over the sample; `daily_basic` by trade_date returns all boards, which is the right superset for a field-availability check — main-board top-500 filtering happens later in materialization).
+- `circ_mv` AND `total_mv` are 100% non-null and 100% positive on all three dates (`passes_selection_rule=true` for both); `circ_mv` is the preferred free-float field and passes, so the decision is `circ_mv_ready_for_reviewed_freeze`, recommended `circ_mv`, `fallback_used=false`.
+- Recommends but does NOT freeze: `market_cap_field_frozen_by_this_summary` / `*_authorized_by_this_summary` all false; the prereg's `selected_market_cap_field_status` is still `pending_probe_not_selected`.
+- Hygiene clean: `tracked_summary_contains_raw_rows=false`, `secret=false`, `token_logged=false`, `request_url_logged=false`; the only "token" strings in the summary are protective field names (`request_shape_without_token` ×3, `token_logged`) — no secret value; no `records` key (raw rows live only under the gitignored raw root, confirmed git-ignored; 3 raw files present there).
+- Singleton ledger untouched/unspent (`tests_spent_count=0`, `active_planned_test_pending_review`) — the probe correctly does not spend the signal-search test.
+- Summary validates against its schema with zero errors in my jsonschema env.
+
+3 anchors spanning 2018/2021/2025 are adequate go/no-go evidence that `circ_mv` is available throughout the sample (`circ_mv` is a long-standing core `daily_basic` field; the 96-call materialization will re-verify coverage).
+
+**Verdict**: PASS — `circ_mv` is confirmed usable; the recommended market-cap field for the frozen design is **`circ_mv`** (free-float), no `total_mv` fallback needed. Next slice (separate review + build): freeze `circ_mv` in the prereg (`selected_market_cap_field_status` → `circ_mv`) and draft the bounded `daily_basic` main-board top-500 materialization package (≈96 monthly as-of calls per the `data_dependency_gate`) → Claude review → user approve → separate user `执行`. No materialization, audit, signal search, ledger spend, or field freeze is authorized yet by this probe result. Immediate next: commit this probe execution summary.
+
+---
+
 ## 2026-06-07 — Claude 审查 (A-long large-cap daily_basic market-cap field probe package: packet + runner + 2 schemas + 2 tests, uncommitted on HEAD 954c9ab) — **PASS — bounded read-only probe, all gates enforced + tested; not yet run**
 
 Full read of the runner + packet + execution-summary schema + packet schema + both tests (not delta-only). This is the separate reviewed probe the frozen prereg requires before any market-cap materialization. **Scope is correctly bounded and every gate is enforced in code AND exercised by tests:**

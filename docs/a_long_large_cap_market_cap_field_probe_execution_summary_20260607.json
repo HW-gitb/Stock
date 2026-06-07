@@ -1,0 +1,243 @@
+{
+  "schema_name": "a_long_large_cap_market_cap_field_probe_execution_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-07T07:07:31+00:00",
+  "artifact_id": "a_long_large_cap_market_cap_field_probe_execution_summary_20260607",
+  "packet_ref": "docs/a_long_large_cap_market_cap_field_probe_packet_20260607.json",
+  "preregistration_ref": "research/preregistrations/a_long_large_cap_pure_quality_20260607.json",
+  "ledger_ref": "research/ledgers/a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_large_cap_market_cap_field_probe_execution",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "research_only": true,
+    "provider_family": "tushare_existing_account",
+    "provider_call_executed": true,
+    "tushare_call_executed": true,
+    "data_fetch_executed": true,
+    "raw_payload_available_in_gitignored_path": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_secret": false,
+    "market_cap_field_freeze_executed": false,
+    "market_cap_materialization_executed": false,
+    "audit_rerun_executed": false,
+    "signal_search_executed": false,
+    "alpha_backtest_executed": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "execution": {
+    "summary_path": "docs/a_long_large_cap_market_cap_field_probe_execution_summary_20260607.json",
+    "raw_output_root": "data/a_long/raw/tushare/large_cap_market_cap_field_probe_20260607/",
+    "raw_output_root_is_gitignored": true,
+    "max_total_endpoint_calls": 3,
+    "planned_total_endpoint_calls": 3,
+    "endpoint_results_count": 3,
+    "new_network_call_count": 3,
+    "reused_raw_payload_count": 0,
+    "budget_exceeded": false,
+    "network_call_attempted": true,
+    "environment_precheck_passed": true,
+    "independent_review_confirmed": true,
+    "post_review_execute_confirmed": true,
+    "token_logged": false,
+    "request_url_logged": false
+  },
+  "probe_boundary": {
+    "probe_id": "a_long_large_cap_daily_basic_market_cap_field_probe_3_dates",
+    "method": "daily_basic",
+    "trade_dates": [
+      "20180131",
+      "20211231",
+      "20251231"
+    ],
+    "field_preference_order": [
+      "circ_mv",
+      "total_mv"
+    ],
+    "minimum_row_count_per_probe": 1000,
+    "minimum_non_null_ratio_for_selected_field": 0.95,
+    "minimum_positive_ratio_for_selected_field": 0.95,
+    "not_full_96_month_pull": true,
+    "not_signal_search": true
+  },
+  "endpoint_results": [
+    {
+      "call_id": "daily_basic_market_cap_20180131_probe",
+      "table_id": "daily_basic_market_cap_field_probe",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20180131",
+        "fields": "ts_code,trade_date,circ_mv,total_mv"
+      },
+      "call_status": "success",
+      "row_count": 3263,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv",
+        "total_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv",
+        "total_mv"
+      ],
+      "minimum_fields_missing": [],
+      "market_cap_field_stats": {
+        "circ_mv": {
+          "present_in_columns": true,
+          "non_null_count": 3263,
+          "positive_count": 3263,
+          "non_null_ratio": 1.0,
+          "positive_ratio": 1.0,
+          "passes_selection_rule": true
+        },
+        "total_mv": {
+          "present_in_columns": true,
+          "non_null_count": 3263,
+          "positive_count": 3263,
+          "non_null_ratio": 1.0,
+          "positive_ratio": 1.0,
+          "passes_selection_rule": true
+        }
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_field_probe_20260607/daily_basic_market_cap_20180131_probe.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20211231_probe",
+      "table_id": "daily_basic_market_cap_field_probe",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20211231",
+        "fields": "ts_code,trade_date,circ_mv,total_mv"
+      },
+      "call_status": "success",
+      "row_count": 4669,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv",
+        "total_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv",
+        "total_mv"
+      ],
+      "minimum_fields_missing": [],
+      "market_cap_field_stats": {
+        "circ_mv": {
+          "present_in_columns": true,
+          "non_null_count": 4669,
+          "positive_count": 4669,
+          "non_null_ratio": 1.0,
+          "positive_ratio": 1.0,
+          "passes_selection_rule": true
+        },
+        "total_mv": {
+          "present_in_columns": true,
+          "non_null_count": 4669,
+          "positive_count": 4669,
+          "non_null_ratio": 1.0,
+          "positive_ratio": 1.0,
+          "passes_selection_rule": true
+        }
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_field_probe_20260607/daily_basic_market_cap_20211231_probe.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    },
+    {
+      "call_id": "daily_basic_market_cap_20251231_probe",
+      "table_id": "daily_basic_market_cap_field_probe",
+      "api_family": "daily_basic",
+      "request_shape_without_token": {
+        "trade_date": "20251231",
+        "fields": "ts_code,trade_date,circ_mv,total_mv"
+      },
+      "call_status": "success",
+      "row_count": 5458,
+      "columns": [
+        "ts_code",
+        "trade_date",
+        "circ_mv",
+        "total_mv"
+      ],
+      "minimum_fields_present": [
+        "ts_code",
+        "trade_date",
+        "circ_mv",
+        "total_mv"
+      ],
+      "minimum_fields_missing": [],
+      "market_cap_field_stats": {
+        "circ_mv": {
+          "present_in_columns": true,
+          "non_null_count": 5458,
+          "positive_count": 5458,
+          "non_null_ratio": 1.0,
+          "positive_ratio": 1.0,
+          "passes_selection_rule": true
+        },
+        "total_mv": {
+          "present_in_columns": true,
+          "non_null_count": 5458,
+          "positive_count": 5458,
+          "non_null_ratio": 1.0,
+          "positive_ratio": 1.0,
+          "passes_selection_rule": true
+        }
+      },
+      "raw_payload_ref": "data/a_long/raw/tushare/large_cap_market_cap_field_probe_20260607/daily_basic_market_cap_20251231_probe.json",
+      "checkpoint_status": "written_new_raw",
+      "tracked_summary_excludes_raw_rows": true,
+      "error_class": null,
+      "error_message_redacted": null
+    }
+  ],
+  "decision": {
+    "market_cap_field_probe_status": "circ_mv_ready_for_reviewed_freeze",
+    "recommended_market_cap_field": "circ_mv",
+    "fallback_used": false,
+    "field_freeze_ready_for_review": true,
+    "market_cap_field_frozen_by_this_summary": false,
+    "market_cap_materialization_authorized_by_this_summary": false,
+    "audit_rerun_authorized_by_this_summary": false,
+    "signal_search_authorized_by_this_summary": false,
+    "plain_result": "daily_basic returned usable circ_mv across all fixed probe dates.",
+    "next_action": "Send the execution summary for independent review; if passed, a later materialization packet may freeze circ_mv."
+  },
+  "prohibited_claims": {
+    "a_long_alpha_found": false,
+    "daily_basic_full_history_materialized": false,
+    "market_cap_field_frozen": false,
+    "market_cap_materialized": false,
+    "audit_passed": false,
+    "signal_search_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This summary records only three fixed daily_basic field probes.",
+    "Raw rows stay under gitignored data/a_long/raw/ and are not included in the tracked summary.",
+    "The result can only recommend a market-cap field for independent review; it does not freeze the field by itself.",
+    "No market-cap materialization, audit rerun, signal search, alpha backtest, DataHub, production, ship-gate, full-size use, or broker/order automation is authorized."
+  ]
+}
