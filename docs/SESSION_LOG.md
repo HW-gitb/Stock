@@ -8,6 +8,88 @@
 
 ---
 
+## 2026-06-08 - Codex `审查` (low_volatility runner repair re-review) - **PASS**
+
+**Scope reviewed**: tracked/unstaged `docs/CURRENT.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`; untracked `runners/a_long_large_cap_low_volatility_signal_search.py`, `schemas/a_long_large_cap_low_volatility_signal_search_execution_summary.schema.json`, `tests/test_a_long_large_cap_low_volatility_signal_search.py`, `tests/schema/test_a_long_large_cap_low_volatility_signal_search_schema.py`. No staged files. Codex made no runner/schema/test business-code edits; only review closeout docs were updated.
+
+**Verdict**: PASS. Both prior Required findings are fixed. This authorizes Claude commit of the low_volatility runner slice only. It does not authorize signal-search execution, ledger spend, result write, alpha claim, production claim, ship-gate evidence, full-size use, DataHub work, provider call, or broker/order automation before Claude commit plus a separate user `执行`.
+
+**Required**: none.
+
+**Optional**: none.
+
+**Register outcome**: `R-LOWVOL-LEDGER-GATE` and `R-LOWVOL-SUMMARY-SCHEMA-INVARIANTS` are marked resolved in `docs/system_risk_register.md`. The low_vol singleton ledger remains unspent; target result summary and pending file do not exist.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; `py_compile` OK; low_vol runner+schema suite 56/56 OK; cash_conversion runner regression 24/24 OK; full `python -m unittest discover tests/schema -v` = 591/591 OK; `git diff --check` OK. Direct adversarial probes: the real ledger is accepted with `tests_spent_count=0`; planted `closed_superseded`, `tests_spent_count=1`, `expected_tests_spent=2`, wrong prereg ref, wrong result ref, and wrong approval status are all rejected. A valid summary fixture has 0 schema errors; planted cell-id/metadata mismatch, verdict/flag contradiction, startup count mismatch, startup union mismatch, result-cell-count mismatch, and tradeable-without-drawdown-pass are rejected by schema and by `validate_summary_internal_consistency()`. I intentionally did not run `build_summary()` / full low_vol signal search, because that would preview the singleton alpha test before the separate user `执行`.
+
+**Next**: Claude `提交` the reviewed runner slice. After that, a separate user `执行` is required before any signal search or ledger spend.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-LOWVOL-LEDGER-GATE + R-LOWVOL-SUMMARY-SCHEMA-INVARIANTS) — **DONE, ready for re-`审查`**
+
+**Authorization & judgment**: user `修复` after the Codex `审查` FAIL below (two open-P0 Required, no Optional). Judged both per the implementer standard: both are correct, in scope (the runner slice owns its execution gate + tracked-summary contract), and necessary (genuine pre-execution hardening). No pushback. Note both gaps also exist in the already-executed/closed cash_conversion runner, but that ledger is spent and that line is closed, so retrofitting it is out of scope; I fixed only the low_volatility slice. No frozen design value, threshold, factor, universe, or ledger content changed — only read-side validation was strengthened.
+
+**R-LOWVOL-LEDGER-GATE — fixed**: `load_and_validate_ledger()` now additionally hard-checks `ledger_status == "active_planned_test_pending_review"`, `planned_tests[0].planned_preregistration_ref == display_path(PREREGISTRATION_PATH)`, `planned_result_ref == display_path(SUMMARY_PATH)`, `expected_tests_spent == 1`, and `approval_status == "user_approved_pending_review"`. So a schema-valid but non-active (`closed_superseded`), multi-spend (`expected_tests_spent=2`), or misrouted (wrong prereg/result ref) ledger can no longer unlock execution; the gate now proves THIS exact user-approved singleton maps to THIS prereg producing THIS result and spends exactly one test. The spend path (`spend_ledger_after_success` reloads via this gate) still passes on the real unspent ledger.
+
+**R-LOWVOL-SUMMARY-SCHEMA-INVARIANTS — fixed at two layers**:
+- Schema (durable tracked contract): added 28 `cell_id` -> (`signal_id`, `view`, `weighting`, `horizon_trading_days`, `benchmark`) `if/then` pins, so a result cell whose metadata contradicts its `cell_id` is rejected. Added `decision` `allOf` `if/then`: `research_verdict` <-> `is_statistical_alpha_clue`; `is_statistical_alpha_clue` fixes `statistical_alpha_clue_count` (1/0) and `primary_cell_passed_statistical_gates`, and false forces `is_tradeable_candidate` false; `is_tradeable_candidate` <-> (`is_statistical_alpha_clue` AND `relative_nav_drawdown_gate_passed`) and fixes `tradeable_candidate_count`. Verified the falsified, clue-and-tradeable, and clue-but-NOT-tradeable shapes all still validate clean (no over-constraint).
+- Runner producer guard: new `validate_summary_internal_consistency(summary)`, called in `run()` after `validate_json` and before any write/spend. It enforces the count==list-length invariants that JSON Schema draft-07 cannot express (`primary_no_cohort_zero_score_month_count`, `primary_incomplete_size_coverage_month_count`, `trailing_window_startup_excluded_month_count` each == len of its list), that `trailing_window_startup_excluded_months` is exactly the sorted union of the zero-score + incomplete lists, and `result_cell_count == len(result_cells)`; it re-checks cell-id<->metadata and decision consistency as defense in depth.
+
+**Optional dispositions**: none (Codex raised no Optional).
+
+**Scope**: the 4 low_vol files (runner, summary schema, 2 test files) + this log + `docs/CURRENT.md` §0 + the `docs/system_risk_register.md` entry (status open -> in_progress with the repair disposition). No durable route-doc pointers (deferred to post-PASS commit). No runner execution, no fetch, no ledger spend.
+
+**Verification (self)**: `py_compile` OK; low_vol runner+schema suite 56/56 (added 5 ledger-gate mutation tests, 5 internal-consistency tests, 3 schema-rejection/acceptance tests); full `tests/schema` discovery 591/591; cash_conversion runner regression 24/24. Direct probes: the hardened ledger gate still accepts the real unspent ledger (`active_planned_test_pending_review`, `tests_spent_count=0`) and rejects planted `closed_superseded` / `expected_tests_spent=2` / wrong-ref mutations; the schema now returns errors for a contradictory `cell_id` and a contradictory `research_verdict` (0 errors on the valid fixture); the post-spend ledger deep copy is still schema-valid; no `research/results/a_long_large_cap_low_volatility_20260608/` artifact exists; `git status` shows only the 4 new files + 3 doc edits; `git diff --check` clean.
+
+**Next**: Codex re-`审查` of the hardened runner + summary schema + 2 test files (+ the register/log edits). After PASS, Claude `提交`, then a separate user `执行` spends the singleton once. No `提交` / `执行` now.
+
+---
+
+## 2026-06-08 - Codex `审查` (low_volatility signal-search runner slice) - **FAIL / Required before commit**
+
+**Scope reviewed**: unstaged/tracked `docs/CURRENT.md`, `docs/SESSION_LOG.md`; untracked `runners/a_long_large_cap_low_volatility_signal_search.py`, `schemas/a_long_large_cap_low_volatility_signal_search_execution_summary.schema.json`, `tests/test_a_long_large_cap_low_volatility_signal_search.py`, `tests/schema/test_a_long_large_cap_low_volatility_signal_search_schema.py`. No staged files. Codex made no runner/schema/test business-code edits; only recorded this review and the open risk-register item.
+
+**Verdict**: FAIL. The runner slice is close, but two execution-before-search blockers remain. Do not commit this runner slice and do not `执行` until both are repaired and re-reviewed.
+
+**Required**:
+- R-LOWVOL-LEDGER-GATE [scope=runner execution gate, PIT=process-only singleton ledger / no market-data PIT]: `load_and_validate_ledger()` accepts semantically unsafe but schema-valid ledgers. My planted checks showed it accepts `ledger_status=closed_superseded`, accepts `expected_tests_spent=2`, and accepts wrong `planned_preregistration_ref` / `planned_result_ref` while still allowing the executable gate. The runner must hard-check active ledger status, the exact planned prereg/result refs, `expected_tests_spent=1`, and any other fields needed to prove this exact singleton is the one being spent.
+- R-LOWVOL-SUMMARY-SCHEMA-INVARIANTS [scope=execution-summary schema/tests, PIT=tracked result contract / no market-data PIT]: the new summary schema accepts internally contradictory tracked results. My planted checks showed zero schema errors for a non-primary result cell whose expected `cell_id` carried the wrong `signal_id` / benchmark metadata; zero errors for `research_verdict=statistical_alpha_clue_research_only` contradicting `is_statistical_alpha_clue=false`, count fields, and primary-pass flags; and zero errors for startup/incomplete month count fields contradicting their date lists. The schema/tests must reject these before a tracked summary can be considered valid.
+
+**Optional**: none.
+
+**Register outcome**: both material findings are registered as open P0 in `docs/system_risk_register.md` under `A-long low_volatility signal-search runner pre-execution blockers`. The open P0 blocks commit and execution until fixed.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; `py_compile` for the new runner OK; new low_vol runner+schema tests 43/43 OK; cash_conversion runner regression 24/24 OK; full `python -m unittest discover tests/schema -v` = 588/588 OK. Extra adversarial probes produced the two Required findings above. Confirmed no `research/results/a_long_large_cap_low_volatility_20260608/execution_summary.json` or `.pending` exists; `git diff --check` OK; hygiene scan found no new token value, key-bearing provider URL, raw payload leak, or secret in the reviewed new low_vol files. I intentionally did not run the full low_vol signal search or compute result numbers, because that would preview the singleton test before the separate user `执行`.
+
+**Next**: Claude `修复` R-LOWVOL-LEDGER-GATE and R-LOWVOL-SUMMARY-SCHEMA-INVARIANTS only. After repair, request Codex `审查` again. No `提交` and no `执行` now.
+
+---
+
+## 2026-06-08 — Claude `起草` (low_volatility signal-search runner slice) — **DONE, pending `审查`**
+
+**Authorization & judgment**: user directed continuing per live state (low_volatility design slice committed `71c652f`, review-passed prereg + UNSPENT singleton); the registered next step is the signal-search RUNNER slice. Built it as the deliverable. The runner does NOT execute or fetch; execution still needs its own `审查` + commit + a separate user `执行`.
+
+**Built (4 new files, mirrors the cash_conversion runner package exactly, swapping only the signal):**
+- `runners/a_long_large_cap_low_volatility_signal_search.py` — reuses the `base` (full-main-board) measurement chain + `cap_audit` top-500 universe + the same rolling relative-NAV risk gate, two-tier verdict, sub-period median split, and frozen gates as cash_conversion. Only the SIGNAL differs.
+- `schemas/a_long_large_cap_low_volatility_signal_search_execution_summary.schema.json` — 28 result cells (vs cash_conversion's 32: only 2 diagnostic factors), trailing-window diagnostics, no restatement fields, `result_cell_count` const 28.
+- `tests/test_a_long_large_cap_low_volatility_signal_search.py` (33) + `tests/schema/test_a_long_large_cap_low_volatility_signal_search_schema.py` (10).
+
+**Key frozen design decisions a reviewer should scrutinize:**
+- **Signal = price-only.** `low_volatility` = negative trailing 252-trading-day realized volatility of daily adj_factor total-return closes (`base.stock_total_return_close_rows` = close×adj_factor). Sample stdev (ddof=1, `statistics.stdev`), min 120 valid daily returns. The trailing window is the last 252 GLOBAL trade-calendar days `<= as_of`; daily returns are taken only between calendar-adjacent dates where BOTH closes exist and are positive, so a suspension breaks the pair instead of spanning the gap. No look-ahead: window is `<= as_of`, entry is the next trading day, so trailing lookback and forward horizon are disjoint axes.
+- **Restatement exclusion DROPPED** with explicit reason (price-only signal has no fundamental-restatement dependency). `load_full_main_board_sources` therefore skips `load_restatement_exclusions` / `count_restatement_exclusion_keys_present`; it still validates the full-main-board audit PASS, benchmark route amendment, materialization manifest, and PIT context unchanged.
+- **Diagnostics (cannot rescue / define alpha):** `idiosyncratic_volatility_vs_csi300_low` = −stdev of OLS residuals of stock daily returns on CSI300 daily returns over the trailing window (None when market variance is 0); `downside_semideviation_low` = −sqrt(Σ min(r,0)²/(n−1)), target 0. Idio requires ≥120 paired returns; it is a subset of the stock returns, so no symbol ever has a diagnostic without the primary.
+- **Startup exclusion reuses the cash_conversion size-coverage mechanism**: early-panel months where most names lack a full 252d trailing window produce thin/zero size quintiles, so they are excluded from cohort formation exactly like cash_conversion's startup months. They are additionally reported as `trailing_window_startup_excluded_months` (union of zero-score + incomplete-size months), and `validate_pipeline_result_sanity` hard-fails if any leaks into the primary cohort. Codex's design-slice feasibility note found ~90/96 months have ≥120-return coverage.
+- Same frozen `-15%` relative-NAV drawdown tradeable gate (identical bar, two-tier verdict), same HAC-t / cohort / concentration / sub-period clue gates, same 504d-vs-CSI300 primary cell, same top-500 PIT circ_mv universe + reviewed 000043 exclusion/backfill.
+
+**Verification (self):** `jsonschema 4.26.0` import OK; `py_compile` runner OK; new runner+schema tests 43/43; full `tests/schema` discovery 588/588 (was 578 + new 10); cash_conversion runner suite still 24/24. The runner-unit `test_review_gate_artifacts_and_unspent_ledger` runs my prereg/ledger/market-cap-audit validators against the REAL committed artifacts and passes (my frozen-field checks match the committed prereg/ledger). Simulated the post-success ledger-spend transformation on a deep copy and validated it against `program_test_budget_ledger.schema.json` (spend path is schema-safe) — the real ledger on disk is still UNSPENT (`tests_spent_count=0`, spend_log=0). No `research/results/a_long_large_cap_low_volatility_20260608/` artifact exists; `git status` shows only the 4 new untracked files (no data, no ledger write, no scope creep). Could not run the full pipeline (no `执行`, and it would spend the ledger), so the summary↔schema match rests on the hand-built 28-cell schema fixture (validated clean) plus the field-by-field reconciliation; full-run numbers are a `执行`-time verification.
+
+**Scope**: 4 new files + this log + `docs/CURRENT.md` §0. Durable route-doc pointers (`docs/README.md`, `research/README.md`, `docs/CURRENT.md` §1/§5) are deferred to the post-PASS commit per the v2 route-doc convention. No runner execution, no fetch, no ledger spend.
+
+**Next**: Codex `审查` of the runner + summary schema + 2 test files. After PASS, Claude `提交` (runner slice), then a separate user `执行` spends the singleton once. No `执行` now (ledger unspent).
+
+---
+
 ## 2026-06-08 — Claude `提交` (low_volatility design slice + residual stale-test fix) — **DONE (local master, 2 scopes)**
 
 **Authorization**: user `提交` after Codex `审查` PASS (entry below; no Required, one non-material Optional O-SRC-WORDING). Re-read SESSION_LOG top + git status before committing.
