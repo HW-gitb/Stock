@@ -8,6 +8,62 @@
 
 ---
 
+## 2026-06-08 — Claude `提交` (low_volatility design slice + residual stale-test fix) — **DONE (local master, 2 scopes)**
+
+**Authorization**: user `提交` after Codex `审查` PASS (entry below; no Required, one non-material Optional O-SRC-WORDING). Re-read SESSION_LOG top + git status before committing.
+
+**Post-PASS mechanical steps**: flipped the low_volatility prereg `preregistration_review_status` pending → `passed_independent_review_ready_for_freeze` and aligned the two schema-test assertions; tightened O-SRC-WORDING (the `docs/SESSION_LOG.md` source-ref role now says "the independent-review verdict for this slice", not "Codex review comments adopted"). No frozen gate, threshold, factor, universe, or ledger value changed.
+
+**Committed as two scopes (local master, no push)**:
+- Scope A — residual post-exec stale-test fix: `tests/schema/test_a_long_large_cap_cash_conversion_preregistration_schema.py` and `..._pure_quality_...` now assert the real spent committed ledger state.
+- Scope B — low_volatility design slice: prereg (review-passed) + bespoke schema + UNSPENT singleton ledger + schema tests, plus `docs/CURRENT.md` §0 + this log.
+
+**State after commit**: the low_volatility design is frozen and review-passed; its singleton ledger is UNSPENT (`tests_spent_count=0`). Full `tests/schema` 578/578.
+
+**Next**: build the low_volatility signal-search RUNNER slice (reuses the vetted measurement chain + the reviewed full-main-board daily close series, adds the relative-NAV drawdown gate), then Codex `审查`, then Claude `提交`, then a separate user `执行` spends the singleton once. No `执行` now (no runner; ledger unspent).
+
+---
+
+## 2026-06-08 - Codex `审查` (low_volatility design slice + stale schema-test repair) - **PASS**
+
+**Scope reviewed**: unstaged/tracked `docs/CURRENT.md`, `docs/SESSION_LOG.md`, `tests/schema/test_a_long_large_cap_cash_conversion_preregistration_schema.py`, `tests/schema/test_a_long_large_cap_pure_quality_preregistration_schema.py`; untracked `research/preregistrations/a_long_large_cap_low_volatility_20260608.json`, `schemas/a_long_large_cap_low_volatility_preregistration.schema.json`, `research/ledgers/a_long_large_cap_low_volatility_program_test_budget_ledger_20260608.json`, `tests/schema/test_a_long_large_cap_low_volatility_preregistration_schema.py`. No staged files.
+
+**Verdict**: PASS. No Required finding. The low_volatility prereg is a new research-only frozen design, not a rescue/reslice of cash_conversion; singleton ledger is unspent; no runner, signal search, provider call, data fetch, DataHub, production, ship-gate, full-size, or order automation is authorized by this slice. The two stale prereg-schema test repairs correctly reflect the already-spent cash_conversion and pure_quality ledgers.
+
+**Required**: none.
+
+**Optional**:
+- O-SRC-WORDING [scope=preregistration source/provenance, PIT=N/A]: `source_doc_refs[docs/SESSION_LOG.md].role` can be tightened before commit because it currently says Codex review comments were adopted into the draft. Not material: the review verdict now exists in this log, the artifact's frozen gates do not depend on that phrase, and the low-volatility literature premise was independently spot-checked.
+
+**Register outcome**: no material P0/P1 finding; no `docs/system_risk_register.md` update needed.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK. Ran `python -m unittest tests.schema.test_a_long_large_cap_low_volatility_preregistration_schema -v` = 15/15 OK; ran cash_conversion + pure_quality prereg schema tests = 27/27 OK; ran full `python -m unittest discover tests/schema -v` = 578/578 OK. Direct Draft7 validation passed for the low-vol prereg and ledger; planted bad mutations for signal authorization, provider call, bad review status, risk-gate relaxation, trailing-window change, idiosyncratic-vs-total search, wrong benchmark, both-benchmark gate, old-result reslice, and restatement flip all failed schema validation. Independent raw-read feasibility check through existing runner readers: full-main-board manifest 23,718 payloads, 3,387 audited symbols, 96 complete top-500 months, 48,000 large-cap observations, 1 reviewed 000043 exclusion/backfill, 0 outside-prior-universe observations; existing `daily` + `adj_factor` close route gives trailing >=120-return coverage for 90/96 months, with early 2018 startup months naturally excluded. `git diff --check` passes; raw roots are gitignored; hygiene scan found no new raw rows, token value, key-bearing provider URL, or secret in the reviewed new/changed low-vol files.
+
+**Next**: Claude may do the mechanical post-PASS flip to `passed_independent_review_ready_for_freeze`, optionally tighten O-SRC-WORDING, then `提交`. Do not `执行` yet; a separate low-vol runner slice still needs implementation, review, commit, and a separate user `执行`.
+
+---
+
+## 2026-06-08 — Claude `起草` (low_volatility design slice) + residual post-exec test fix — **DONE, pending `审查`**
+
+**Authorization & judgment**: user `起草` after I recommended `low_volatility` as the next candidate (externally-literature-motivated; targets the drawdown axis the cash_conversion clue died on; A-share low-risk-anomaly literature reports it large-cap-robust and low-turnover). Two concerns in this working tree, to be reviewed together and committed as TWO scopes.
+
+**(1) low_volatility design slice (NEW, the deliverable)** — mirrors the cash_conversion design-slice pattern; four new files, 15/15 schema tests:
+- `research/preregistrations/a_long_large_cap_low_volatility_20260608.json` — one frozen primary cell: `low_volatility` = negative trailing 252-trading-day realized volatility of daily adj_factor total returns, percentile-ranked, marginal 0.5 industry + 0.5 size neutral, 504d vs CSI300, top-500 PIT circ_mv with the reviewed 000043 exclusion. Two-tier verdict held to the SAME frozen -15% relative-NAV drawdown gate cash_conversion failed (identical bar, not relaxed).
+- Honest provenance: `hypothesis_provenance` records low_volatility is EXTERNALLY literature-motivated and NOT derived from an in-sample diagnostic of a prior run, so it does not carry cash_conversion's in-sample-factor-selection caveat (cleaner provenance); but it is a single 2018-2025-period test selected at the program level after three prior spent singletons, so it still needs forward-live.
+- Frozen design decisions made explicit: total volatility (no idio-vs-total search), 252d trailing window (no window search), min 120 valid daily returns, startup months without a sufficient trailing window excluded from cohort formation (analogous to the size-coverage gate), and the fundamental restatement-ambiguity exclusion is DROPPED with an explicit reason because the signal is price-only.
+- Data feasibility verified: trailing volatility is computed from the already-materialized `daily_<symbol>` close series in the full-main-board raw root (`stock_total_return_close_rows` reads the `daily` call), so `new_data_fetch_required: false` holds; no provider call.
+- `schemas/a_long_large_cap_low_volatility_preregistration.schema.json` (bespoke, all frozen consts), `research/ledgers/a_long_large_cap_low_volatility_program_test_budget_ledger_20260608.json` (UNSPENT singleton: `tests_spent_count=0`, one planned test, `user_approved_pending_review`), `tests/schema/test_a_long_large_cap_low_volatility_preregistration_schema.py`. Draft `preregistration_review_status: pending_independent_review` (flips to passed at the post-PASS commit).
+
+**(2) residual post-exec stale-test fix** — running the full `tests/schema` suite surfaced 2 PRE-EXISTING failures unrelated to the low-vol draft: the cash_conversion and pure_quality prereg-schema tests still asserted their singleton ledgers were UNSPENT, but both lines were executed and their ledgers are spent. This is a residual of `R-CASH-POST-EXEC-TEST-STATE`: that repair updated the runner test but missed these two prereg-schema design-slice tests, and the post-exec review ran only the runner + summary modules (not full schema discovery), so it was missed. Updated both `test_ledger_registers_one_*` methods to assert the real spent committed state (`active_no_new_test_authorized`, `tests_spent_count=1`, one spend-log entry, `planned_tests=[]`). Full `tests/schema` suite now 578/578.
+
+**Scope**: 4 new low-vol files + 2 edited schema-test methods + this log + `docs/CURRENT.md` §0. Durable `README` / `research/README` pointers are deferred to the post-PASS commit (per the v2 route-doc convention: pointers reflect committed reality, live state stays in SESSION_LOG top + §0). No runner, no execution, no fetch, no ledger spend; the low-vol ledger is unspent.
+
+**Verification (self)**: low-vol schema test 15/15; full `tests/schema` discovery 578/578; daily-close feasibility confirmed from the materialized `daily_<symbol>` bars; `docs/CURRENT.md` < 150 lines.
+
+**Next**: Codex `审查` of (1) the low_volatility design slice and (2) the residual stale-test fix. After PASS, flip the prereg to `passed_independent_review_ready_for_freeze` and Claude `提交` (two scopes: the stale-test fix, then the low-vol design slice). A separate low-vol signal-search RUNNER slice, its own review, and a separate user `执行` come later and spend the new singleton once. No `执行` now (no runner yet; ledger unspent).
+
+---
+
 ## 2026-06-08 — Claude `提交` (cash_conversion post-execution closeout) — **DONE (local master)**
 
 **Authorization**: user `提交`, after Codex re-`审查` PASS (entry below; both Required findings `resolved`). Re-read SESSION_LOG top + git status before committing per discipline.

@@ -1,0 +1,394 @@
+{
+  "schema_name": "a_long_large_cap_low_volatility_preregistration",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-08T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_low_volatility_20260608",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_large_cap_low_volatility_preregistration",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "registration_status": "registered_not_run",
+    "research_status": "new_frozen_design_registered_not_run",
+    "research_only": true,
+    "externally_motivated_not_prior_rescue": true,
+    "new_hypothesis_not_prior_reslice": true,
+    "preregistration_review_status": "passed_independent_review_ready_for_freeze",
+    "reuses_reviewed_materialized_market_cap_universe": true,
+    "reuses_reviewed_full_main_board_daily_close_series": true,
+    "new_data_fetch_required": false,
+    "signal_search_executed_by_this_artifact": false,
+    "signal_search_authorized_by_this_artifact": false,
+    "data_fetch_allowed_by_this_artifact": false,
+    "provider_call_allowed_by_this_artifact": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_doc_refs": [
+    {
+      "path": "docs/SESSION_LOG.md",
+      "role": "records the user-approved literature-motivated low_volatility design direction and the independent-review verdict for this slice"
+    },
+    {
+      "path": "research/results/a_long_large_cap_cash_conversion_20260607/execution_summary.json",
+      "role": "immediate-prior result: a research-only statistical alpha clue that FAILED the tradeable tier on the relative-NAV drawdown gate; this motivates testing a signal whose thesis is downside risk, but low_volatility is an externally-motivated NEW hypothesis, not a rescue or reslice of cash_conversion"
+    },
+    {
+      "path": "research/results/a_long_large_cap_pure_quality_20260607/execution_summary.json",
+      "role": "prior falsified large-cap pure-quality composite; one of three prior spent singletons on this large-cap top-500 universe"
+    },
+    {
+      "path": "research/results/a_long_signal_search_20260604/execution_summary.json",
+      "role": "prior full main-board no_alpha result; one of three prior spent singletons"
+    },
+    {
+      "path": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json",
+      "role": "reviewed PASS market-cap audit; the reused top-500 circ_mv monthly universe with the 000043 exclusion/backfill"
+    },
+    {
+      "path": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+      "role": "prior reviewed full-main-board data-integrity PASS; source of the reused PIT daily adj_factor total-return close series from which trailing realized volatility is computed (no new fetch)"
+    },
+    {
+      "path": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+      "role": "reviewed bounded 000043.SZ / 20191129 data-quality exclusion reused unchanged by this design"
+    },
+    {
+      "path": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "role": "grounds the close-to-close total-return CSI300 / CSI1000 benchmark route reused by this design"
+    },
+    {
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "role": "owns research preregistration, multiple-testing, PIT, factor-exposure, and ship-gate guardrails"
+    },
+    {
+      "path": "research/README.md",
+      "role": "routes research-only preregistration and singleton-ledger artifacts"
+    }
+  ],
+  "hypothesis_provenance": {
+    "externally_literature_motivated": true,
+    "derived_from_in_sample_diagnostic_of_prior_run": false,
+    "targets_prior_drawdown_failure_mode": true,
+    "economic_rationale": "Low-volatility / low-risk anomaly (Blitz-van Vliet; Frazzini-Pedersen betting-against-beta; Bali lottery-demand): leverage- and lottery-constrained investors overpay for high-volatility, high-attention names, so low-volatility stocks earn higher risk-adjusted returns. China A-share evidence (Robeco 'The Volatility Effect in China'; behavioral beta-anomaly studies) finds the low-risk premium is driven by volatility rather than beta, is behaviorally (lottery-demand / idiosyncratic-volatility) rather than leverage driven, remains strong in the largest and most liquid names, and exhibits low turnover.",
+    "literature_claims_large_cap_robust": true,
+    "literature_claims_low_turnover": true,
+    "evidence_status": "external_literature_plus_failure_mode_motivated_in_sample_period_test_not_out_of_sample_proof",
+    "vs_csi300_evidence_is_single_historical_period": true,
+    "in_sample_period_not_forward": true,
+    "requires_forward_live_for_validation": true,
+    "program_level_selection_after_three_prior_spent_singletons_acknowledged": true,
+    "no_factor_definition_search": true,
+    "no_trailing_window_search": true,
+    "no_idiosyncratic_vs_total_vol_search": true,
+    "old_result_reslice_allowed": false,
+    "prior_clue_or_diagnostic_relabel_as_pass_allowed": false
+  },
+  "prior_result_boundary": {
+    "prior_preregistration_ref": "research/preregistrations/a_long_large_cap_cash_conversion_20260607.json",
+    "prior_ledger_ref": "research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json",
+    "prior_result_ref": "research/results/a_long_large_cap_cash_conversion_20260607/execution_summary.json",
+    "prior_research_verdict": "statistical_alpha_clue_research_only",
+    "prior_statistical_alpha_clue_count": 1,
+    "prior_tradeable_candidate_count": 0,
+    "prior_tests_spent_count": 1,
+    "new_design_reason": "test_externally_motivated_low_volatility_premium_targeting_the_drawdown_failure_mode_under_a_new_singleton",
+    "is_rescue_of_prior_clue": false,
+    "old_result_reslice_allowed": false,
+    "old_single_factor_diagnostic_rescue_allowed": false,
+    "threshold_relaxation_allowed": false,
+    "benchmark_rescue_allowed": false,
+    "horizon_rescue_allowed": false
+  },
+  "data_reuse": {
+    "no_new_provider_call_required": true,
+    "no_new_daily_basic_pull_required": true,
+    "no_new_daily_bar_pull_required": true,
+    "market_cap_audit_report_ref": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json",
+    "market_cap_universe_status": "reviewed_passed_top_500_circ_mv_monthly_2018_2025",
+    "market_cap_raw_root": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/",
+    "full_main_board_audit_report_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+    "full_main_board_raw_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
+    "daily_close_series_source": "full_main_board_raw_root_daily_call_close_times_adj_factor",
+    "selected_market_cap_field": "circ_mv",
+    "reuses_data_quality_exclusion_decision_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+    "monthly_as_of_count": 96,
+    "raw_storage_must_stay_gitignored": true,
+    "tracked_summary_must_not_contain_raw_rows": true,
+    "separate_review_required_before_signal_run": true,
+    "separate_user_execute_required_before_signal_run": true
+  },
+  "frozen_design": {
+    "design_id": "a_long_large_cap_low_volatility_v1",
+    "hypothesis_text": "In a PIT A-share main-board top-500 large-cap universe (reusing the reviewed circ_mv materialization, the 000043 exclusion, and the reviewed full-main-board daily adj_factor total-return close series), low_volatility (the negative of each name's trailing 252-trading-day realized volatility of daily total returns, an externally-motivated low-risk-anomaly signal) produces positive cost-adjusted excess versus CSI300 over a 504-trading-day hold, surviving HAC-t, cohort, sub-period, concentration, and PIT-hygiene gates (the statistical-alpha-clue tier). Tradeability additionally requires the strategy's rolling-overlapping-portfolio relative-NAV drawdown versus CSI300 to be no worse than -15% (the tradeable-candidate tier) - the same gate the cash_conversion clue failed, kept frozen and unchanged so low_volatility is held to the identical bar. low_volatility is motivated by external A-share low-risk-anomaly literature and by the observation that three prior frozen tests cleared or failed on the drawdown / tradeability axis; it is NOT derived from an in-sample diagnostic of a prior run, so it does not carry cash_conversion's in-sample-factor-selection caveat, but it is still tested on a single historical period (2018-2025) and a positive result is a research clue pending forward-live evidence. If the single primary cell fails the statistical-alpha-clue gates, large-cap low_volatility is falsified under this frozen design.",
+    "universe_rule": {
+      "market_scope": "A-share",
+      "board_scope": "main_board_only",
+      "as_of_frequency": "monthly",
+      "as_of_selection_rule": "last_open_A_share_trading_day_of_each_calendar_month",
+      "universe_size_n": 500,
+      "universe_size_n_search_allowed": false,
+      "selection_basis": "top_500_by_pit_market_cap_as_of_each_as_of_date",
+      "market_cap_field_choice_status": "circ_mv_reviewed_probe_passed_frozen_for_materialization",
+      "include_later_delisted_names_at_pre_delisting_asofs": true,
+      "pit_list_delist_required": true,
+      "selection_time_namechange_veto_required": true,
+      "reviewed_no_industry_boundary_ref": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+      "reviewed_data_quality_exclusion_boundary_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+      "reviewed_data_quality_exclusion_policy": {
+        "excluded_symbols": [
+          "000043.SZ"
+        ],
+        "affected_as_of_dates": [
+          "20191129"
+        ],
+        "max_excluded_symbols": 1,
+        "max_excluded_observations": 1,
+        "drop_excluded_symbols_before_signal_scoring": true,
+        "backfill_next_main_board_by_circ_mv": true,
+        "materialized_top500_rederivation_unchanged": true,
+        "threshold_rescue_allowed": false
+      },
+      "st_star_bse_chinext_excluded": true
+    },
+    "signal_rule": {
+      "primary_signal_id": "low_volatility_percentile",
+      "primary_signal_type": "single_factor_percentile",
+      "primary_factor": "low_volatility",
+      "primary_factor_definition": "negative_trailing_252_trading_day_realized_volatility_of_daily_adj_factor_total_returns_as_of_each_as_of_date",
+      "volatility_estimator": "sample_standard_deviation_of_daily_simple_total_returns",
+      "trailing_window_trading_days": 252,
+      "trailing_window_search_allowed": false,
+      "realized_vol_min_valid_daily_returns": 120,
+      "small_sample_trailing_window_guard_required": true,
+      "low_volatility_is_high_score_direction": true,
+      "idiosyncratic_or_total_vol_choice": "total_volatility_frozen_no_search",
+      "idiosyncratic_or_total_vol_search_allowed": false,
+      "factor_definition_change_allowed": false,
+      "percentile_rank_required": true,
+      "zscore_allowed": false,
+      "multi_factor_composite_allowed": false,
+      "single_factor_winner_take_all_from_prior_result_allowed": false,
+      "insufficient_trailing_window_months_excluded_from_cohorts": true,
+      "trailing_window_coverage_gate_applies_to_cohort_forming_months_only": true,
+      "diagnostic_factors": [
+        "idiosyncratic_volatility_vs_csi300_low",
+        "downside_semideviation_low"
+      ],
+      "diagnostic_factor_can_rescue_primary_failure": false
+    },
+    "neutralization_rule": {
+      "primary_view": "industry_and_size_neutral",
+      "neutralization_method": "marginal_double_neutralization",
+      "primary_score_construction": "equal_weight_average_of_marginal_industry_neutral_and_marginal_size_neutral_percentile_scores",
+      "industry_neutral_score_rule": "percentile_within_industry_l2_fallback_l1",
+      "size_neutral_score_rule": "percentile_within_market_cap_quintile",
+      "combined_score_rule": "0_5_industry_neutral_percentile_plus_0_5_size_neutral_percentile",
+      "crossed_industry_size_bucket_allowed": false,
+      "industry_basis": "SW_L2_then_SW_L1_if_sample_lt_20",
+      "industry_neutral_is_effectively_l1_on_top_500": true,
+      "industry_l2_min_count": 20,
+      "industry_l1_min_count": 2,
+      "size_bucket_rule": "pit_market_cap_quintile_inside_top_500_per_as_of",
+      "size_bucket_count": 5,
+      "expected_names_per_size_bucket": 100,
+      "minimum_size_bucket_count_for_primary_percentile": 50,
+      "size_coverage_gate_applies_to_cohort_forming_months_only": true,
+      "non_neutral_view_role": "diagnostic_only_not_primary",
+      "cap_weighted_view_role": "diagnostic_only_not_primary"
+    },
+    "measurement_rule": {
+      "primary_horizon_trading_days": 504,
+      "diagnostic_horizons_trading_days": [
+        252
+      ],
+      "trailing_volatility_lookback_and_forward_horizon_are_distinct_axes": true,
+      "entry_rule": "next_trading_day_close_after_as_of",
+      "stock_return_basis": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close",
+      "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+      "same_anchor_required": true,
+      "round_trip_cost": 0.0026,
+      "missing_scheduled_exit_policy": "terminal_delisting_uses_last_trade_otherwise_next_available_or_missing",
+      "total_return_required": true,
+      "price_index_fallback_allowed": false
+    },
+    "benchmark_rule": {
+      "primary_benchmark": "CSI300",
+      "diagnostic_benchmark": "CSI1000",
+      "both_benchmark_pass_required": false,
+      "benchmark_access_probe_ref": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "benchmark_access_status": "total_return_close_available_close_to_close_amendment_selected",
+      "derived_total_return_open_allowed": false
+    },
+    "decision_cell": {
+      "cell_id": "primary_low_volatility_industry_size_neutral_504d_csi300",
+      "signal": "low_volatility_percentile",
+      "view": "industry_and_size_neutral",
+      "horizon_trading_days": 504,
+      "benchmark": "CSI300",
+      "top_fraction": 0.2,
+      "minimum_top_count_per_month": 10,
+      "decision_is_two_tier": true,
+      "statistical_alpha_clue_gates": {
+        "mean_net_excess_must_be_positive": true,
+        "minimum_hac_t_stat": 2.0,
+        "minimum_monthly_cohorts": 48,
+        "name_concentration_guard_max_share": 0.2,
+        "single_year_positive_return_guard_max_share": 0.35,
+        "sub_period_both_halves_mean_excess_positive_required": true
+      },
+      "tradeable_candidate_gates": {
+        "risk_gate_metric": "rolling_overlapping_portfolio_relative_nav_max_drawdown_vs_csi300",
+        "minimum_allowed_relative_nav_drawdown": -0.15,
+        "absolute_nav_drawdown_is_diagnostic_only": true,
+        "risk_gate_affects_tradeable_label_only_not_alpha_clue": true
+      },
+      "multiple_testing_adjustment_for_decision": "not_applicable_single_primary_cell"
+    },
+    "sub_period_robustness": {
+      "split_rule": "median_split_of_valid_504d_entry_cohorts_into_two_equal_halves",
+      "natural_calendar_year_split_allowed": false,
+      "requires_both_halves_mean_excess_positive": true,
+      "report_each_half_hac_t_stat": true,
+      "rationale": "504d holds need a complete forward exit and the trailing 252d volatility window removes the earliest as-ofs, so cohorts are bounded at both ends; split the valid 504d-forming entry cohorts at their median into two equal halves, not by natural calendar years."
+    },
+    "risk_gate": {
+      "method": "rolling_overlapping_monthly_tranche_portfolio_nav",
+      "tranche_rule": "at_each_as_of_enter_an_equal_weight_basket_of_the_selected_top_fraction_held_for_the_primary_horizon",
+      "tranche_weighting": "equal_weight_within_basket",
+      "portfolio_combination": "equal_weight_average_of_active_overlapping_tranches",
+      "startup_ramp_convention": "average_over_active_tranches_only_no_idle_cash_position",
+      "benchmark_construction": "option_a_parallel_same_as_of_schedule_horizon_and_ramp_holding_csi300_total_return_instead_of_selected_basket",
+      "benchmark_nav_basis": "same_schedule_rolling_overlapping_csi300_total_return_tranche_portfolio",
+      "cost_application": "round_trip_cost_applied_once_per_strategy_tranche_entry_exit",
+      "cost_applied_to_benchmark_tranches": false,
+      "strategy_nav_basis": "total_return_net_of_round_trip_cost",
+      "relative_nav_formula": "strategy_nav_divided_by_benchmark_nav",
+      "primary_risk_metric": "max_drawdown_of_relative_nav",
+      "minimum_allowed_relative_nav_drawdown": -0.15,
+      "relative_drawdown_threshold_rationale": "frozen at the identical -0.15 bound the cash_conversion clue failed, unchanged and pre-committed before observing low_volatility's NAV; because the benchmark is the same-schedule CSI300 tranche portfolio, this drawdown isolates stock selection from benchmark-path mechanics, and holding low_volatility to the same bar is the point of the test (its thesis is precisely a better downside profile).",
+      "threshold_frozen_before_run": true,
+      "absolute_strategy_nav_drawdown_role": "diagnostic_only",
+      "summed_overlapping_cohort_excess_drawdown_as_gate_allowed": false,
+      "risk_gate_affects_tradeable_label_only_not_alpha_clue": true
+    },
+    "diagnostic_cells": {
+      "report_csi1000": true,
+      "report_252d": true,
+      "report_single_factor_diagnostics": true,
+      "report_non_neutral": true,
+      "report_cap_weighted": true,
+      "report_absolute_nav_drawdown": true,
+      "report_each_sub_period_half": true,
+      "report_trailing_window_coverage": true,
+      "diagnostics_can_define_alpha": false
+    },
+    "anti_p_hacking_controls": {
+      "test_budget_units": 1,
+      "parameter_sweep_allowed": false,
+      "universe_n_search_allowed": false,
+      "factor_definition_search_allowed": false,
+      "trailing_window_search_allowed": false,
+      "idiosyncratic_vs_total_vol_search_allowed": false,
+      "multi_factor_composite_search_allowed": false,
+      "post_result_rescue_slicing_allowed": false,
+      "risk_gate_threshold_frozen_before_run": true,
+      "new_ledger_required_before_any_followup": true
+    },
+    "pit_and_hygiene_controls": {
+      "restatement_exclusion_required": false,
+      "restatement_exclusion_not_applicable_reason": "low_volatility_signal_is_price_only_with_no_fundamental_restatement_dependency_so_the_fundamental_restatement_ambiguity_exclusion_does_not_apply_to_signal_scoring",
+      "pit_namechange_required": true,
+      "current_stock_basic_name_veto_allowed": false,
+      "survivorship_handling": "include_later_delisted_names_until_their_pit_delist_cutoff_and_retain_terminal_returns",
+      "trailing_window_uses_only_pre_as_of_daily_returns": true,
+      "no_look_ahead_in_trailing_window_required": true,
+      "tracked_summary_contains_raw_rows_allowed": false,
+      "tracked_summary_contains_endpoint_results_allowed": false,
+      "tracked_summary_contains_secret_allowed": false,
+      "tracked_summary_contains_request_url_allowed": false
+    },
+    "required_output_diagnostics": [
+      "Report the one primary cell and its two-tier verdict: statistical-alpha-clue gates separately from the tradeable-candidate relative-NAV-drawdown gate.",
+      "Report the full-sample HAC t-stat and each sub-period half's mean excess and HAC t-stat; both halves' mean excess must be positive for the alpha-clue tier.",
+      "Report the rolling-overlapping-portfolio relative-NAV (strategy / CSI300) max drawdown and, as diagnostics only, the absolute strategy NAV max drawdown.",
+      "Report CSI300 primary and CSI1000 diagnostic without requiring both benchmarks for the alpha-clue label.",
+      "Report 504d primary and 252d diagnostic forward horizons; the 252d forward horizon is distinct from the 252d trailing volatility lookback and cannot rescue a primary failure.",
+      "Report idiosyncratic_volatility_vs_csi300_low and downside_semideviation_low as diagnostics; no diagnostic factor can define alpha or rescue the primary.",
+      "Report the trailing-window coverage per as-of and the startup months excluded from cohort formation for insufficient trailing history, and confirm those excluded months are disjoint from the primary cohort as-of set.",
+      "Report top-500 PIT market-cap coverage, marginal industry-neutral coverage, and marginal size-neutral quintile coverage for cohort-forming months, and top-count-by-month.",
+      "Report the reviewed 000043.SZ / 20191129 data-quality exclusion and confirm the signal universe drops it and backfills the next main-board name by circ_mv before scoring.",
+      "Report yearly contribution, name concentration, and tail excess.",
+      "Report no raw rows, endpoint results, request URL, or secret in any tracked summary."
+    ]
+  },
+  "decision_policy": {
+    "statistical_alpha_clue": [
+      "A future reviewed run may label large-cap low_volatility as a research-only statistical alpha clue only if the single primary cell is positive net of costs versus CSI300, has HAC t-stat >= 2.0, at least 48 monthly cohorts, both sub-period halves with positive mean excess, and passes name / year concentration and PIT-hygiene gates.",
+      "The statistical-alpha-clue tier does not require the relative-NAV-drawdown gate; it is a statistical finding only."
+    ],
+    "tradeable_candidate_research_only": [
+      "A statistical alpha clue is additionally labeled a research-only tradeable candidate only if the rolling-overlapping-portfolio relative-NAV (strategy / CSI300) max drawdown is no worse than -15%.",
+      "If the alpha-clue tier passes but the relative-NAV-drawdown gate fails, the result is a statistical alpha clue but NOT a tradeable candidate.",
+      "Even a tradeable-candidate label is research-only and cannot authorize production, ship-gate evidence, or full-size manual use."
+    ],
+    "falsified": [
+      "If the primary cell fails any statistical-alpha-clue gate, large-cap low_volatility is falsified under this frozen design.",
+      "Do not rescue a failed primary cell from CSI1000, 252d, non-neutral, cap-weighted, diagnostic factors, an alternative trailing window, idiosyncratic-volatility, threshold, horizon, or benchmark changes."
+    ],
+    "diagnostics_policy": [
+      "CSI1000, 252d, non-neutral, cap-weighted, idiosyncratic-volatility, downside-semideviation, and the absolute-NAV drawdown are reporting diagnostics only.",
+      "Diagnostics may inform a later new preregistration, but only through a new reviewed ledger update and user approval."
+    ],
+    "provenance_caveat": [
+      "low_volatility is externally literature-motivated and is NOT derived from an in-sample diagnostic of a prior run, so it does not carry cash_conversion's in-sample-factor-selection bias; this is a cleaner provenance.",
+      "It is nonetheless tested on a single historical period (2018-2025) and was selected at the program level after three prior spent singletons, so the singleton ledger and a new reviewed preregistration bound but do not eliminate program-level multiple testing.",
+      "Real validation requires the unchanged forward-live ship gate; an in-sample pass is a research clue only."
+    ],
+    "minimum_forward_live_months_for_ship_gate": 12,
+    "backtest_can_authorize_full_size": false
+  },
+  "planned_test_budget": {
+    "ledger_ref": "research/ledgers/a_long_large_cap_low_volatility_program_test_budget_ledger_20260608.json",
+    "planned_test_id": "a_long_large_cap_low_volatility_20260608",
+    "test_budget_units": 1,
+    "signal_search_run_authorized_now": false,
+    "new_data_fetch_authorized_now": false,
+    "requires_independent_review_before_any_execution": true,
+    "requires_user_execute_before_any_execution": true,
+    "required_preregistration_review_status_for_execution": "passed_independent_review_ready_for_freeze"
+  },
+  "prohibited_claims": {
+    "validated_alpha": false,
+    "in_sample_clue_is_out_of_sample_proof": false,
+    "prior_falsified_or_clue_result_reinterpreted": false,
+    "low_volatility_proven": false,
+    "new_data_fetch_authorized": false,
+    "signal_search_authorized": false,
+    "full_size_allowed": false,
+    "ship_gate_evidence": false,
+    "production_ready": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Independent review (now Codex) must validate this preregistration, schema, ledger, tests, and docs before any signal-search work.",
+    "After review PASS and commit, a separate signal-search runner slice may be implemented that reuses the vetted measurement chain, the reviewed top-500 universe, and the reviewed full-main-board daily close series for trailing volatility, and adds the rolling-overlapping-portfolio relative-NAV drawdown gate.",
+    "The signal-search runner execution still requires its own independent review, commit, and a separate user execute; it spends the new singleton ledger exactly once.",
+    "No signal-search runner execution, new data fetch, provider call, DataHub work, production claim, ship-gate claim, or full-size use is authorized by this artifact."
+  ],
+  "limitations": [
+    "This artifact registers a design only; it executes no signal search and fetches no data.",
+    "low_volatility is externally literature-motivated rather than in-sample-diagnostic-derived, so it avoids cash_conversion's factor-selection caveat, but it is still tested on a single 2018-2025 historical period and a positive result is research-only pending forward-live evidence.",
+    "It was chosen at the program level after three prior spent singletons; the new singleton ledger bounds but does not eliminate program-level multiple testing.",
+    "Statistical power is limited: 504d holds plus the trailing 252d volatility window bound cohorts at both ends, so the HAC t-stat rests on a short effective sample (roughly 2019-2023 entry cohorts).",
+    "Industry neutralization is effectively SW-L1 (sector) level on the top-500 because SW-L2 groups rarely reach the minimum count; a residual low-volatility-sector tilt (for example banks / utilities) is controlled but may not be fully removed.",
+    "There are two distinct 252-trading-day axes: the trailing volatility lookback used to build the signal and the 252d diagnostic forward holding horizon; they must not be conflated.",
+    "The relative-NAV-drawdown threshold is a pre-committed bound, not an optimized value, and gates only the tradeable-candidate label, not the alpha-clue verdict.",
+    "A positive future backtest remains research-only until the unchanged project ship gate, including at least 12 months of forward-live evidence, is satisfied."
+  ]
+}
