@@ -8,6 +8,167 @@
 
 ---
 
+## 2026-06-08 — Codex `审查` (Route-doc stability convention in `AGENTS.md`) — **PASS**
+
+**Verdict**: PASS. The new `AGENTS.md` route-doc stability convention is appropriate, narrowly scoped, and consistent with the existing role split / closeout rules. It codifies the recurring rule that durable startup route docs state only commit-stable facts while live review / commit / execute state is read from the latest `docs/SESSION_LOG.md` verdict.
+
+**Scope reviewed**: unstaged/untracked working tree with two scopes present: (1) the already Codex-PASS'd A-long large-cap `cash_conversion` runner slice and route docs, still awaiting Claude commit; (2) the new `AGENTS.md` convention plus this Claude handoff entry in `docs/SESSION_LOG.md`. Current status includes modified `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `research/README.md`, and four untracked runner/schema/test files for the PASS'd runner slice. No staged files. Codex made no business-code / runner / schema / preregistration / ledger / result edits during this review; only this review closeout was prepended and the prior non-substantive line-count typo in the resolved risk-register entry was corrected from 114 to 149.
+
+**Required**: none.
+
+**Optional**: none.
+
+**Register outcome**: no new material risk. The `cash_conversion` runner pre-execution P0 remains `resolved`; the line-count typo correction is documentation hygiene only and does not change the prior PASS or execution boundary.
+
+**Verification (Codex)**: `AGENTS.md` convention is a single top-level routing rule, not a parallel role map; `docs/AI_REVIEW_PROTOCOL.md` still correctly delegates source of truth to `AGENTS.md`; route docs already use the stable `SESSION_LOG`-verdict gate wording; no open P0 found by register scan. Bundled Python `jsonschema` 4.26.0 import OK; runner/schema tests for the waiting runner slice still pass 29/29; singleton ledger remains unspent (`tests_spent_count=0`, spend log=0); target cash_conversion `execution_summary.json` and `.pending` do not exist; `docs/CURRENT.md` is 149 lines; `git diff --check` OK.
+
+**Next**: Claude `提交` in two separate commits: first the already-PASS'd runner slice, then the `AGENTS.md` route-doc stability convention / review-closeout docs. After commit, the next user command is separate `执行` for the runner.
+
+---
+
+## 2026-06-08 — Claude (route-doc stability convention → `AGENTS.md`) — **separate scope, ready for `审查`**
+
+**What**: added a **Route-doc 稳定性约定** to `AGENTS.md §文档路由`: durable startup-routing docs (`docs/CURRENT.md` / `docs/README.md` / `research/README.md`) state only commit-stable facts and delegate the live review/commit/execute gate to the latest `docs/SESSION_LOG.md` verdict; transient cycle state (`UNCOMMITTED` / `in re-review` / "next gate is `审查`") lives only in `SESSION_LOG`. Author (implementer) writes by it; reviewer (Codex) checks by it.
+
+**Why (user-directed `加`)**: 3rd recurrence of the same root cause — durable route docs encoding transient review-cycle state that goes stale on commit (`R-CURRENT-POST-COMMIT-ROUTE` → `R-CASH-RUNNER-ROUTING-STALE` → `R-CASH-POST-PASS-ROUTE-STABILITY`). The user judged this a documentation issue, not a one-off; one standing line codifies the fix. Single convention line, no new section (real recurring problem, not protocol self-proliferation).
+
+**Status / scope**: this convention was added AFTER Codex's PASS of the runner slice (entry below), so it is a NEW, not-yet-reviewed scope. The working tree now holds two scopes — (1) the cash_conversion runner package (Codex-PASS'd below, ready to commit) and (2) this `AGENTS.md` convention (needs its own `审查`). They commit as **two separate commits**. No code/runner/schema/ledger/data touched here; singleton ledger remains unspent.
+
+**Note on Codex's PASS verification**: the PASS entry below states "`docs/CURRENT.md` is 114 lines"; the actual working-tree `docs/CURRENT.md` is **149 lines** (verified `wc -l` + `git diff --stat` shows only ~10 changed lines, no large deletion). Codex's route scan and PASS verdict are sound (no transient terms, tests pass, ledger unspent); the 114 figure appears to be a mismeasure and does not change the PASS or indicate lost content.
+
+**Next**: Codex `审查` the `AGENTS.md` convention (the runner slice already PASS'd); then Claude `提交` as two commits (runner slice; then the convention); then a separate user `执行` for the runner.
+
+---
+
+## 2026-06-08 — Codex `审查` (cash_conversion runner slice route-stability re-review) — **PASS**
+
+**Verdict**: PASS. The remaining `R-CASH-POST-PASS-ROUTE-STABILITY` blocker is fixed, and the full A-long large-cap `cash_conversion` signal-search runner slice is clean for Claude `提交`. This PASS authorizes commit only; it does not run signal search, spend the singleton ledger, or authorize any alpha / production / ship-gate / full-size claim.
+
+**Scope reviewed**: current unstaged/untracked working tree for the runner slice and route docs: `runners/a_long_large_cap_cash_conversion_signal_search.py`, `schemas/a_long_large_cap_cash_conversion_signal_search_execution_summary.schema.json`, `tests/test_a_long_large_cap_cash_conversion_signal_search.py`, `tests/schema/test_a_long_large_cap_cash_conversion_signal_search_schema.py`, `docs/CURRENT.md`, `docs/README.md`, `research/README.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`. No business-code / runner / schema / preregistration / ledger / result edits were made by Codex during review; only this review closeout and the risk-register resolution were recorded.
+
+**Required**: none.
+
+**Optional**: none.
+
+**Register outcome**: `docs/system_risk_register.md` Hot Queue entry for `R-CASH-LEDGER-SCHEMA-GATE` / `R-CASH-RUNNER-ROUTING-STALE` / `R-CASH-POST-PASS-ROUTE-STABILITY` is now marked `resolved`. No open P0 remains for this runner slice before commit.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; `py_compile` OK; runner tests 20/20 OK; summary schema tests 9/9 OK; route scan across `docs/CURRENT.md`, `docs/README.md`, and `research/README.md` finds no stale transient terms (`UNCOMMITTED`, `re-review loop`, `Next gate is Codex`, `尚未构建`, `未提交`); stable gate wording is present in all three route docs and points live state to latest `SESSION_LOG` verdict. Adversarial schema-invalid ledger (missing `artifact_id` + extra field) is rejected by `load_and_validate_ledger()`. Real singleton ledger remains unspent (`tests_spent_count=0`, planned tests=1, spend log=0). Target `execution_summary.json` and `.pending` do not exist. `docs/CURRENT.md` is 114 lines. `git diff --check` OK.
+
+**Next**: Claude `提交` this reviewed slice. After that, the next user command is separate `执行`.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-CASH-POST-PASS-ROUTE-STABILITY) — **DONE, ready for re-review**
+
+**Authorization & judgment**: user `修复`. Per `AGENTS.md §Claude implementer standard` I judged the finding valid — it is the same class as the earlier `R-CURRENT-POST-COMMIT-ROUTE`: durable startup-routing docs must not encode transient review-cycle state that goes stale the instant the tree is committed. My previous repair over-encoded `UNCOMMITTED` / `in the Codex re-review loop` / `Next gate is Codex 审查 again` into durable rows; if committed after a future PASS those would misroute a fresh agent back to review instead of the post-commit user `执行`.
+
+**R-CASH-POST-PASS-ROUTE-STABILITY (Required) — fixed (Codex's Recommended option)**: replaced the transient wording with commit-stable wording in all three durable route docs:
+- `docs/CURRENT.md` §0 Latest Delta runner bullet + §1 (Phase / P0 / 执行锁) + §5 route.
+- `docs/README.md` runner-package row.
+- `research/README.md` runner-package bullet.
+The new wording states only commit-stable facts — runner package built (lists the 4 files); singleton ledger unspent; no signal-search run / no result — plus the stable gate rule: the live review/commit gate is the latest `docs/SESSION_LOG.md` verdict; before a Codex PASS there is no commit/execute; after PASS + Claude `提交` the next user command is a separate `执行` (spends the singleton once). No row now predicts the current review state, so committing this tree leaves the routing accurate.
+
+**Scope**: docs-only (the three route docs). Did NOT touch the runner / summary schema / tests (the code findings were fixed last round and Codex confirmed them), the `docs/system_risk_register.md` open-finding tracker (Codex's closure condition names only CURRENT/README/research-README; the register entry is resolved by Codex on PASS), or anything executable. Singleton ledger remains unspent (`tests_spent_count=0`), no signal search run, no result dir.
+
+**Verification (self, jsonschema env)**: transient-wording scan (`UNCOMMITTED` / `re-review loop` / `Next gate is Codex` / `未提交` / `未执行`) across `docs/CURRENT.md`, `docs/README.md`, `research/README.md` returns empty; `docs/CURRENT.md` line count 149 (< 150); `python -m unittest` both modules → 29/29 still pass; ledger `tests_spent_count=0`.
+
+**Next**: Codex `审查` again — re-review the commit-stable routing. Do NOT `提交` and do NOT `执行` before a Codex PASS re-review.
+
+---
+
+## 2026-06-08 — Codex `审查` (cash_conversion runner slice re-review) — **FAIL: Required route-stability repair**
+
+**Verdict**: FAIL. `R-CASH-LEDGER-SCHEMA-GATE` is fixed, and the prior stale "runner not built" routing is fixed. The runner/schema tests and the adversarial ledger guard pass, and there is no evidence of accidental execution. One process-critical Required remains before this slice can be committed.
+
+**Required**:
+- `R-CASH-POST-PASS-ROUTE-STABILITY` (scope: `docs/CURRENT.md`, `docs/README.md`, `research/README.md`, `docs/system_risk_register.md`; PIT label: process-only routing / no market-data PIT): the mandatory route docs still encode transient pre-PASS state (`in the Codex re-review loop`, `UNCOMMITTED`, `Next gate is Codex 审查 again`). If Codex later passes and Claude commits exactly that tree, those statements become stale immediately and can route the next fresh agent back to review instead of the intended post-commit user `执行`. Fix the docs to use commit-stable wording: runner package built; ledger unspent; no execution/result; latest `SESSION_LOG` review verdict controls the live gate; before PASS no commit/execute; after PASS + Claude commit the next user command is separate `执行`.
+
+**Optional**: none.
+
+**Options for Claude**:
+- Recommended: remove `UNCOMMITTED` / `re-review loop` / "Next gate is Codex 审查 again" from durable routing rows and replace with state-neutral wording that delegates the live gate to latest `SESSION_LOG`.
+- Alternative: keep one clearly temporary note only in `SESSION_LOG`, while `docs/CURRENT.md`, `docs/README.md`, and `research/README.md` describe the runner package and execution locks without predicting the current review state.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; `py_compile` OK; runner tests 20/20 OK; summary schema tests 9/9 OK; adversarial schema-invalid ledger (missing `artifact_id` + extra field) is rejected by `load_and_validate_ledger()`; real ledger remains unspent (`tests_spent_count=0`, planned tests=1, spend log=0); target `execution_summary.json` and `.pending` do not exist; `git diff --check` OK. Route scan still finds transient state text in `docs/CURRENT.md`, `docs/README.md`, and `research/README.md`.
+
+**Next**: Claude `修复` only. Do not `提交` and do not `执行` before a Codex PASS re-review.
+
+---
+
+## 2026-06-08 — Claude `修复` (cash_conversion runner slice: R-CASH-LEDGER-SCHEMA-GATE + R-CASH-RUNNER-ROUTING-STALE + O-CASH-NAV-EDGE-TESTS) — **DONE, ready for re-review**
+
+**Authorization & judgment**: user `修复` (directly authorizes repairing the reviewed findings; no `批准修改` step). Per `AGENTS.md §Claude implementer standard` I judged all three findings before implementing and confirmed each is valid — no pushback.
+
+**R-CASH-LEDGER-SCHEMA-GATE (Required) — fixed**: `load_and_validate_ledger()` now calls `validate_json(LEDGER_SCHEMA_PATH, ledger)` as its first step, before any bespoke field check, so a schema-invalid ledger (missing required field / extra property) cannot pass the pre-execute gate or reach ledger spend. Added negative unit test `test_ledger_validation_rejects_schema_invalid_ledger` (drops `artifact_id`, adds an extra field → rejected). Confirmed the REAL ledger still passes (the existing real-artifact drift-guard test runs through the new validate-first path).
+
+**R-CASH-RUNNER-ROUTING-STALE (Required) — fixed**: routing now points future agents to the built runner package, pending re-review:
+- `docs/CURRENT.md`: new §0 Latest Delta bullet (runner package built + in re-review loop, UNCOMMITTED, ledger unspent, no execution, lists the 4 files); §1 Phase / P0 / 执行锁 changed from "runner 尚未构建" to "已构建,待复审"; §5 route lists the runner + summary schema + tests. Trimmed the fully-superseded 2026-06-07 ROLE-SWAP design bullet to keep CURRENT at 149 lines (< 150).
+- `docs/README.md`: new routing row for the runner package (BUILT, in re-review, uncommitted, unspent, no execution) listing runner + summary schema + both tests.
+- `research/README.md`: new bullet describing the runner package and its boundaries.
+
+**O-CASH-NAV-EDGE-TESTS (Optional) — accepted**: added three adversarial NAV-gate tests — empty basket (no entry-date close → tranche skipped), no full-horizon window (entry without a scheduled exit → tranche skipped), and terminal/suspension price gap (later checkpoint carries the last close, relative NAV flat, no crash).
+
+**Scope**: only the runner's `load_and_validate_ledger`, the two test files, and the routing docs were touched. No change to frozen design values, factor definition, measurement, thresholds, universe, or ledger contents. Singleton ledger remains unspent (`tests_spent_count=0`), no signal search run, no result dir.
+
+**Verification (self, jsonschema env)**: `py_compile` OK; `python -m unittest` on both modules → **29/29 pass** (20 runner + 9 schema), including the real prereg/ledger/market-cap-audit drift-guard, the R1 negative ledger test, and the 3 NAV edge tests; `docs/CURRENT.md` line count 149; no `尚未构建` left; routing rows list the new runner/schema/tests.
+
+**Next**: Codex `审查` again — re-review the repaired runner slice (`load_and_validate_ledger` schema-first gate + the routing updates + NAV edge tests). Do NOT `提交` and do NOT `执行` before re-review PASS.
+
+---
+
+## 2026-06-08 — Codex review (A-long large-cap `cash_conversion` signal-search runner slice) — **FAIL / Required fixes before commit or execute**
+
+**Scope reviewed**: Claude's uncommitted runner slice: `runners/a_long_large_cap_cash_conversion_signal_search.py`, `schemas/a_long_large_cap_cash_conversion_signal_search_execution_summary.schema.json`, `tests/test_a_long_large_cap_cash_conversion_signal_search.py`, `tests/schema/test_a_long_large_cap_cash_conversion_signal_search_schema.py`, plus the route owner docs that must point future agents to this slice. Codex made no business-code / runner / schema / preregistration / ledger / result edits during review; only this review closeout and the risk register are updated.
+
+**Verdict**: Fail. The factor family, primary cell, two-tier decision, no-fetch boundary, PIT source reuse, main-board top-500 bridge, benchmark route, HAC policy, and no-production claims are broadly aligned with the frozen preregistration. Two material blockers remain before this can be committed or executed.
+
+**Required**:
+1. **R-CASH-LEDGER-SCHEMA-GATE (material: singleton ledger / schema-first execution correctness; PIT: process + execution ledger, no market-data PIT)** — `load_and_validate_ledger()` reads `research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json` and hand-checks a few fields, but never validates the ledger against `schemas/program_test_budget_ledger.schema.json` before treating it as an executable unspent singleton. Codex adversarial mutation removed required `artifact_id` and added an extra field; `load_and_validate_ledger()` still passed, while `validate_json(LEDGER_SCHEMA_PATH, payload)` correctly failed. Fix: call ledger schema validation at the start of `load_and_validate_ledger()` before bespoke checks, and add a negative unit test proving a schema-invalid ledger cannot pass the pre-execute gate or reach ledger spend.
+2. **R-CASH-RUNNER-ROUTING-STALE (material: cross-LLM continuity / execution routing; PIT: process-only, no market data)** — the new runner/schema/tests are not routed from `docs/README.md` or `research/README.md`, and `docs/CURRENT.md` still says the `cash_conversion` runner slice is "尚未构建" / design-only. `docs/SESSION_LOG.md` top knows the runner was built, but mandatory startup routing still points future agents to the old state. Fix after the code repair: update the routing rows and CURRENT snapshot to say the runner package exists but is pending Codex re-review / no execution / ledger unspent, and list the new runner, output schema, and tests.
+
+**Optional**:
+- **O-CASH-NAV-EDGE-TESTS (test hardening, not a current blocker by itself)** — add adversarial coverage for the new rolling relative-NAV risk gate around empty baskets, missing benchmark checkpoints, and no-trade / terminal-exit style price gaps. Existing NAV tests cover a normal continuous-price case only; broader fixtures would make the tradeable-label gate easier to audit after future repairs.
+
+**Verification run by Codex**:
+- Bundled Python `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`; `jsonschema` import confirmed version `4.26.0`.
+- `python -m py_compile runners\a_long_large_cap_cash_conversion_signal_search.py` — OK.
+- `python -m unittest tests.test_a_long_large_cap_cash_conversion_signal_search -v` — 16 tests OK.
+- `python -m unittest tests.schema.test_a_long_large_cap_cash_conversion_signal_search_schema -v` — 9 tests OK.
+- Independent bad-ledger guard check: schema-invalid ledger with missing `artifact_id` + extra property passed current `load_and_validate_ledger()` but failed `validate_json(LEDGER_SCHEMA_PATH, ...)`, confirming `R-CASH-LEDGER-SCHEMA-GATE`.
+- Route scan: `docs/README.md` / `research/README.md` route only the preregistration/design material for this cash_conversion path; `docs/CURRENT.md` still says the runner is not built.
+
+**Register**: `docs/system_risk_register.md` Hot Queue now has an open P0 entry for `R-CASH-LEDGER-SCHEMA-GATE` / `R-CASH-RUNNER-ROUTING-STALE`. No signal-search execution, ledger spend, result write, alpha claim, production claim, ship-gate evidence, full-size use, DataHub work, or broker/order automation is authorized until repair PASS + commit + separate user `执行`.
+
+**Next**: Claude `修复` these two Required findings, then Codex `审查` again. Do not `提交` and do not `执行` this runner slice before re-review PASS.
+
+---
+
+## 2026-06-08 — Claude build (A-long large-cap `cash_conversion` signal-search runner slice) — **READY FOR `审查`**
+
+**What was built (4 new untracked files, no commit yet)**:
+- `runners/a_long_large_cap_cash_conversion_signal_search.py` — the runner.
+- `schemas/a_long_large_cap_cash_conversion_signal_search_execution_summary.schema.json` — strict output contract (additionalProperties:false throughout, const-pinned design values, 32 result cells).
+- `tests/test_a_long_large_cap_cash_conversion_signal_search.py` — runner unit tests (16).
+- `tests/schema/test_a_long_large_cap_cash_conversion_signal_search_schema.py` — schema tests (9).
+
+**Design (reuses the vetted measurement chain; faithful to the frozen `research/preregistrations/a_long_large_cap_cash_conversion_20260607.json`)**:
+- Single factor `cash_conversion`, primary score field `cash_conversion__industry_size_neutral` (marginal 0.5 industry + 0.5 size). One primary cell (`cash_conversion_industry_size_neutral_equal_weight_504d_CSI300`) + 31 diagnostic cells (CSI1000 / 252d / non-neutral / industry-neutral / size-neutral / cap-weighted + the 3 diagnostic factors). 32 total.
+- Two-tier verdict: tier1 statistical-alpha-clue = mean>0 + HAC t≥2 + cohorts≥48 + name/year concentration + **both median-split sub-period halves mean excess >0**; tier2 tradeable-candidate = tier1 AND rolling relative-NAV drawdown ≥ −15%.
+- Risk gate (NEW logic): rolling overlapping monthly tranche portfolio valued on the monthly as-of grid; each active strategy tranche = equal-weight basket total-return multiple minus the full round-trip cost once; benchmark = Option-A parallel same-schedule CSI300 tranches with NO cost; `relative_nav = strategy/benchmark`; max drawdown on the relative-NAV **levels** via own `max_drawdown_on_levels` (NOT `base.max_drawdown` summed-excess, which the prereg forbids as a gate). Gates the tradeable label only, not the alpha clue.
+
+**Judgment calls for the reviewer to weigh**:
+1. **Self-contained**: imports only `base` + `cap_audit`; does NOT depend on the falsified pure-quality runner; duplicates the large-cap universe-load + size-neutral helpers (factor-specialized). Trade-off: avoids coupling to a closed path vs ~150 duplicated lines (a shared-module refactor is the alternative).
+2. **No separate execution packet**: the runner drift-guards directly against the frozen prereg + ledger + market-cap audit + full-main-board audit, and gates execution on `--confirm-independent-review-pass` + `--confirm-post-review-execute`. (Pure-quality had a packet; judged redundant with the comprehensive prereg.)
+3. **NAV cost convention**: full round-trip cost applied as a flat per-tranche haircut at every checkpoint (consistent with `base`'s additive net-of-cost return; near-immaterial to the relative-NAV drawdown shape). Monthly valuation granularity (matches the monthly rebalance cadence; reuses existing total-return closes).
+
+**NOT done (gated)**: no signal-search run, no ledger spend, no data fetch — the singleton ledger is unspent (`tests_spent_count=0`, empty spend log) and no result dir exists. Execution is the user's separate `执行` AFTER Codex `审查` PASS + Claude `提交`.
+
+**Verification (self, in jsonschema env)**: `py_compile` OK; `--help` import OK (base + cap_audit load); `python -m unittest` on both new modules → **25/25 pass**, including the drift-guard test that loads the REAL prereg/ledger/market-cap-audit and confirms the frozen field expectations match, the two-tier decision (all four falsified/clue/tradeable paths), `max_drawdown_on_levels`, the median sub-period split, the rolling relative-NAV construction, and schema accept/reject (incl. rejecting a summed-excess drawdown gate and benchmark-cost).
+
+**Next**: Codex `审查` this runner slice (runner + summary schema + tests) against the frozen prereg and the vetted measurement chain. Then Claude `提交`, then a separate user `执行` (spends the singleton once, produces the cash_conversion final verdict).
+
+---
+
 ## 2026-06-08 — Claude `提交` (protocol/routing closeout) — **COMMITTED (local master, no push)**
 
 Per Codex's PASS re-review (entry below: `R-CURRENT-POST-COMMIT-ROUTE` fixed, `O-CURRENT-LENGTH` resolved, Required none) and the user's `提交`, committed the protocol/routing closeout as one coherent commit: `AGENTS.md` (§Claude implementer judge-before-execute standard + `修复` binding ref), `docs/AI_REVIEW_PROTOCOL.md` (`批准` / `批准修改` line synced to AGENTS.md), `docs/CURRENT.md` (inserted the missing `Claude 提交` gate in the cash_conversion runner-slice route at lines 9 / 20 / 95, dropped the stale design-review next gate, squashed two falsified superseded sagas to SESSION_LOG pointers, 179→149 lines), `docs/system_risk_register.md` (Hot Queue drift marked `resolved`), `docs/SESSION_LOG.md` (this entry + the Codex PASS and Claude 修复 entries). No business code / runner / schema / preregistration / ledger / data fetch / signal search / result artifact in this commit, per Codex's instruction.
