@@ -247,28 +247,27 @@ class ALongLargeCapPureQualityPreregistrationSchemaTest(unittest.TestCase):
         self.assertFalse(controls["tracked_summary_contains_secret_allowed"])
         self.assertFalse(controls["tracked_summary_contains_request_url_allowed"])
 
-    def test_ledger_registers_one_pending_singleton_test_without_execution_authorization(self) -> None:
+    def test_ledger_is_spent_singleton_in_committed_post_execution_state(self) -> None:
+        # The pure-quality singleton was spent by the reviewed user-executed signal search (falsified),
+        # so the design-slice unspent/pending shape no longer holds. The spent ledger still schema-validates.
         artifact = self._load_artifact()
         ledger = self._load_ledger()
 
         self.assertEqual(artifact["planned_test_budget"]["ledger_ref"], str(LEDGER_ARTIFACT_PATH).replace("\\", "/"))
         self.assertFalse(artifact["planned_test_budget"]["signal_search_run_authorized_now"])
         self.assertFalse(artifact["planned_test_budget"]["daily_basic_probe_or_pull_authorized_now"])
-        self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
+        self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
         self.assertEqual(ledger["lane_id"], "a_long_research")
         self.assertEqual(ledger["family_id"], "a_long_large_cap_pure_quality_v1")
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
+        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
         self.assertEqual(ledger["budget_policy"]["tests_available_without_new_review"], 0)
-        self.assertEqual(ledger["test_spend_log"], [])
-        self.assertEqual(len(ledger["planned_tests"]), 1)
-        planned = ledger["planned_tests"][0]
-        self.assertEqual(planned["test_id"], "a_long_large_cap_pure_quality_20260607")
-        self.assertEqual(planned["planned_status"], "planned_not_reviewed")
-        self.assertEqual(planned["approval_status"], "user_approved_pending_review")
-        self.assertEqual(planned["expected_tests_spent"], 1)
-        self.assertIn("new hypothesis", planned["review_boundary"][0])
-        self.assertIn("daily_basic", planned["review_boundary"][1])
-        self.assertIn("Diagnostics", planned["review_boundary"][3])
+        self.assertEqual(ledger["planned_tests"], [])
+        self.assertEqual(len(ledger["test_spend_log"]), 1)
+        spent = ledger["test_spend_log"][0]
+        self.assertEqual(spent["test_id"], "a_long_large_cap_pure_quality_20260607")
+        self.assertEqual(spent["status"], "spent_failed_outcome_threshold")
+        self.assertEqual(spent["tests_spent"], 1)
+        self.assertIn("rerun", spent["allowed_followup"])
 
     def test_scope_creep_is_rejected_by_schema(self) -> None:
         payload = copy.deepcopy(self._load_artifact())
