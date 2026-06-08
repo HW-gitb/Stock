@@ -15,6 +15,8 @@
 - `docs/SESSION_LOG.md` 顶部 1-3 条：最新跨 LLM 交接、review verdict、pending Optional。
 - `docs/AI_REVIEW_PROTOCOL.md`：review 流程和短命令。
 
+**Route-doc 稳定性约定**：durable 启动路由文档(`docs/CURRENT.md` / `docs/README.md` / `research/README.md`)只写**提交无关的稳定事实**(存在什么、锁了什么);实时的 review / commit / execute 闸一律以 `docs/SESSION_LOG.md` 最新 verdict 为准。**禁止**把瞬态周期状态(`UNCOMMITTED`、`in re-review`、"下一步又是 `审查`")写进 durable 行——那只放 `SESSION_LOG`。这样这些文档即使被提交也不会立刻过期、把新窗口误导回 review 而非"提交后等用户单独 `执行`"。作者(implementer)按此写、审查者(Codex)按此核。
+
 ## 项目背景
 
 构建 4 套股票分析系统：A 股短线、美股短线、A 股长线、美股长线。每套包含筛选、分析、回测、复盘四组件，共享同一套 engine，通过 preset 配置区分市场和周期。
