@@ -20,19 +20,42 @@ class ALongLargeCapPureQualitySignalSearchTest(unittest.TestCase):
                 confirm_post_review_execute=False,
             )
 
-    def test_current_review_gate_artifacts_validate_without_running_signal(self) -> None:
+    def test_review_gate_artifacts_and_spent_ledger_in_committed_state(self) -> None:
+        # State-independent gate artifacts still validate.
         packet = runner.load_and_validate_packet()
         prereg = runner.load_and_validate_preregistration()
-        ledger = runner.load_and_validate_ledger()
         audit_report = runner.load_and_validate_market_cap_audit_report()
 
         self.assertEqual(packet["artifact_id"], "a_long_large_cap_pure_quality_signal_search_execution_packet_20260607")
         self.assertEqual(prereg["artifact_id"], "a_long_large_cap_pure_quality_20260607")
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
         self.assertEqual(
             audit_report["decision"]["audit_status"],
             "passed_large_cap_market_cap_audit_for_signal_package",
         )
+        # Post-execution committed state: the singleton ledger is schema-valid and spent, and the
+        # unspent runtime gate now correctly refuses it (the spent singleton cannot be re-run).
+        real_ledger = runner.read_json(runner.LEDGER_PATH)
+        self.assertEqual(real_ledger["family_id"], "a_long_large_cap_pure_quality_v1")
+        self.assertEqual(real_ledger["budget_policy"]["tests_spent_count"], 1)
+        self.assertEqual(real_ledger["ledger_status"], "active_no_new_test_authorized")
+        self.assertEqual(real_ledger["test_spend_log"][0]["status"], "spent_failed_outcome_threshold")
+        with self.assertRaises(ValueError):
+            runner.load_and_validate_ledger()
+
+    def test_load_and_validate_ledger_accepts_unspent_fixture(self) -> None:
+        # The runtime gate accepts an unspent singleton ledger. A synthetic unspent fixture keeps this
+        # coverage stable in the committed post-execution (spent) state.
+        unspent = copy.deepcopy(runner.read_json(runner.LEDGER_PATH))
+        unspent["budget_policy"]["tests_spent_count"] = 0
+        unspent["budget_policy"]["tests_available_without_new_review"] = 0
+        unspent["test_spend_log"] = []
+        unspent["planned_tests"] = [
+            {"test_id": runner.PLANNED_TEST_ID, "planned_status": "planned_not_reviewed"}
+        ]
+        with mock.patch.object(runner, "read_json", return_value=unspent):
+            validated = runner.load_and_validate_ledger()
+        self.assertEqual(validated["budget_policy"]["tests_spent_count"], 0)
+        self.assertEqual(validated["test_spend_log"], [])
 
     def test_result_specs_lock_single_primary_and_36_cells(self) -> None:
         specs = runner.result_specs()

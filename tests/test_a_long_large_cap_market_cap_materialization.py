@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
@@ -66,6 +67,25 @@ class ALongLargeCapMarketCapMaterializationTest(unittest.TestCase):
     def setUp(self) -> None:
         self.raw_root = runner.RAW_ROOT / "unit_test"
         shutil.rmtree(self.raw_root, ignore_errors=True)
+        # The shared large-cap pure-quality singleton ledger has since been spent; the materialization
+        # pre-execution gate requires it unspent (materialization legitimately ran before that spend).
+        # Inject a synthetic unspent ledger ONLY for the gate's ledger read so these fake-client tests
+        # still exercise the materialization logic; every other read passes through unchanged and the
+        # production gate is left intact.
+        real_read_json = runner.read_json
+
+        def _read_json_unspent_ledger(path, *args, **kwargs):
+            data = real_read_json(path, *args, **kwargs)
+            if Path(path) == runner.LEDGER_PATH:
+                data = copy.deepcopy(data)
+                data.setdefault("budget_policy", {})["tests_spent_count"] = 0
+                data["budget_policy"]["tests_available_without_new_review"] = 0
+                data["test_spend_log"] = []
+            return data
+
+        ledger_patch = mock.patch.object(runner, "read_json", side_effect=_read_json_unspent_ledger)
+        ledger_patch.start()
+        self.addCleanup(ledger_patch.stop)
 
     def tearDown(self) -> None:
         shutil.rmtree(self.raw_root, ignore_errors=True)

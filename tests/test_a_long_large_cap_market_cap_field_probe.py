@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
@@ -62,6 +63,25 @@ class ALongLargeCapMarketCapFieldProbeTest(unittest.TestCase):
         self.prereg_path.write_text(json.dumps(prereg, ensure_ascii=False, indent=2), encoding="utf-8")
         self.prereg_patch = mock.patch.object(runner, "PREREGISTRATION_PATH", self.prereg_path)
         self.prereg_patch.start()
+        # The shared large-cap pure-quality singleton ledger has since been spent; the field-probe
+        # pre-execution gate requires it unspent (the probe legitimately ran before that spend).
+        # Inject a synthetic unspent ledger ONLY for the gate's ledger read so these fake-client tests
+        # still exercise the probe logic; every other read passes through unchanged and the production
+        # gate is left intact.
+        real_read_json = runner.read_json
+
+        def _read_json_unspent_ledger(path, *args, **kwargs):
+            data = real_read_json(path, *args, **kwargs)
+            if Path(path) == runner.LEDGER_PATH:
+                data = copy.deepcopy(data)
+                data.setdefault("budget_policy", {})["tests_spent_count"] = 0
+                data["budget_policy"]["tests_available_without_new_review"] = 0
+                data["test_spend_log"] = []
+            return data
+
+        ledger_patch = mock.patch.object(runner, "read_json", side_effect=_read_json_unspent_ledger)
+        ledger_patch.start()
+        self.addCleanup(ledger_patch.stop)
 
     def tearDown(self) -> None:
         self.prereg_patch.stop()
