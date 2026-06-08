@@ -22,9 +22,40 @@ class ALongLargeCapLowVolatilitySignalSearchTest(unittest.TestCase):
                 confirm_post_review_execute=False,
             )
 
-    def test_review_gate_artifacts_and_unspent_ledger(self) -> None:
-        # The committed design slice is review-passed and the singleton ledger is still UNSPENT, so the
-        # runtime gate must accept it (the runner has not been executed yet).
+    def _unspent_ledger_fixture(self) -> dict:
+        # Synthetic unspent singleton (deep-copied from the real ledger, spend reversed, planned test
+        # rebuilt) so the acceptance path and the per-field guards stay testable in the committed
+        # post-execution (spent) state.
+        ledger = copy.deepcopy(runner.read_json(runner.LEDGER_PATH))
+        ledger["ledger_status"] = "active_planned_test_pending_review"
+        ledger["budget_policy"]["tests_spent_count"] = 0
+        ledger["budget_policy"]["tests_available_without_new_review"] = 0
+        ledger["test_spend_log"] = []
+        ledger["planned_tests"] = [
+            {
+                "test_id": runner.PLANNED_TEST_ID,
+                "planned_status": "planned_not_reviewed",
+                "created_at": "2026-06-08T00:00:00+00:00",
+                "planned_preregistration_ref": runner.display_path(runner.PREREGISTRATION_PATH),
+                "planned_result_ref": runner.display_path(runner.SUMMARY_PATH),
+                "promotion_relevant": True,
+                "expected_tests_spent": 1,
+                "approval_status": "user_approved_pending_review",
+                "design_summary": "Synthetic unspent fixture for the load_and_validate_ledger acceptance path.",
+                "review_boundary": ["Synthetic fixture; not a real planned test."],
+            }
+        ]
+        return ledger
+
+    def _mutated_ledger(self, mutate) -> dict:
+        ledger = self._unspent_ledger_fixture()
+        mutate(ledger)
+        return ledger
+
+    def test_review_gate_artifacts_and_spent_ledger_in_committed_state(self) -> None:
+        # Post-execution committed state: prereg + market-cap audit still validate; the real singleton
+        # ledger is schema-valid and SPENT, and the runtime gate now correctly REFUSES it (the spent
+        # singleton cannot be re-run).
         prereg = runner.load_and_validate_preregistration()
         audit_report = runner.load_and_validate_market_cap_audit_report()
         self.assertEqual(prereg["artifact_id"], "a_long_large_cap_low_volatility_20260608")
@@ -36,17 +67,25 @@ class ALongLargeCapLowVolatilitySignalSearchTest(unittest.TestCase):
             audit_report["decision"]["audit_status"],
             "passed_large_cap_market_cap_audit_for_signal_package",
         )
-        ledger = runner.load_and_validate_ledger()
-        self.assertEqual(ledger["family_id"], "a_long_large_cap_low_volatility_v1")
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
-        self.assertEqual(ledger["test_spend_log"], [])
-        self.assertEqual(ledger["planned_tests"][0]["test_id"], runner.PLANNED_TEST_ID)
+        real_ledger = runner.read_json(runner.LEDGER_PATH)
+        runner.validate_json(runner.LEDGER_SCHEMA_PATH, real_ledger)
+        self.assertEqual(real_ledger["family_id"], "a_long_large_cap_low_volatility_v1")
+        self.assertEqual(real_ledger["budget_policy"]["tests_spent_count"], 1)
+        self.assertEqual(real_ledger["ledger_status"], "active_no_new_test_authorized")
+        self.assertEqual(real_ledger["test_spend_log"][0]["status"], "spent_failed_outcome_threshold")
+        with self.assertRaises(ValueError):
+            runner.load_and_validate_ledger()
 
-    def test_load_and_validate_ledger_rejects_spent_ledger(self) -> None:
-        # The runtime gate must refuse an already-spent singleton ledger (the singleton cannot be re-run).
-        spent = copy.deepcopy(runner.read_json(runner.LEDGER_PATH))
-        spent["budget_policy"]["tests_spent_count"] = 1
-        with mock.patch.object(runner, "read_json", return_value=spent):
+    def test_load_and_validate_ledger_accepts_unspent_fixture(self) -> None:
+        fixture = self._unspent_ledger_fixture()
+        with mock.patch.object(runner, "read_json", return_value=fixture):
+            validated = runner.load_and_validate_ledger()
+        self.assertEqual(validated["budget_policy"]["tests_spent_count"], 0)
+        self.assertEqual(validated["test_spend_log"], [])
+
+    def test_load_and_validate_ledger_rejects_spent_count(self) -> None:
+        ledger = self._mutated_ledger(lambda l: l["budget_policy"].__setitem__("tests_spent_count", 1))
+        with mock.patch.object(runner, "read_json", return_value=ledger):
             with self.assertRaises(ValueError):
                 runner.load_and_validate_ledger()
 
@@ -58,11 +97,6 @@ class ALongLargeCapLowVolatilitySignalSearchTest(unittest.TestCase):
         with mock.patch.object(runner, "read_json", return_value=ledger):
             with self.assertRaises(ValueError):
                 runner.load_and_validate_ledger()
-
-    def _mutated_ledger(self, mutate) -> dict:
-        ledger = copy.deepcopy(runner.read_json(runner.LEDGER_PATH))
-        mutate(ledger)
-        return ledger
 
     def test_ledger_rejects_non_active_status(self) -> None:
         ledger = self._mutated_ledger(lambda l: l.__setitem__("ledger_status", "closed_superseded"))

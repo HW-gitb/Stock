@@ -22,8 +22,10 @@
 - **禁止**在这些 durable 行重述会漂移的状态:瞬态周期词(`UNCOMMITTED` / `in re-review` / "下一步是 `审查`" / 在飞的 `PASS`·`FAIL`)、ledger 计数、pending gate、verdict 度量(t 值 / drawdown / cohort 数)。
 - **terminal 终态可留,但低频 + 指针化**:不会再变的事实(路径已关闭、singleton 已花、最终 verdict 已定)可写**一行指针**(例:"`cash_conversion` 已执行 → `statistical_alpha_clue`(非 tradeable),见 `research/results/.../execution_summary.json`"),但**绝不**把度量 / pending 在三处重复。
 - **漂移自检**:写每句 durable 路由前问"这句在下一次 commit / execute 之后还成立吗?"——不成立 → 只进 `SESSION_LOG` + `CURRENT §0`。
+- **状态转变过时是真正的复发根因**:此类 drift 已被 Codex 抓 ≥5 次(`R-CURRENT-POST-COMMIT-ROUTE` → `R-CASH-*-ROUTE-*` → `R-LOWVOL-ROUTE-LEDGER-STATUS-DRIFT`)。机制不是"复审周期瞬态词",而是:一行**写时正确**,但它描述的线**后来执行/花掉 ledger**,该行没被回扫就变错;且每轮只更新"当前线",**兄弟行的过时悄悄累积**。`research/README.md` 的 "Current result / ledger status" 节最易中招。
+- **机器强制 (v2.2)**:仅靠"记得遵守"在多 LLM / 跨会话下必然失守,所以必须跑机器校验——`tests/test_route_doc_ledger_status_consistency.py` 读每个 `*_program_test_budget_ledger_*.json` 的真实 `tests_spent_count`,若已花(>0)而任一 route-doc 行(`research/README.md` / `docs/README.md` / `docs/CURRENT.md`)仍以 "zero spent / one pending / planned not-reviewed / spends this singleton once / no valid … result" 等未花措辞引用该已花线,则 FAIL。引用不只按 ledger 文件名判断,还必须覆盖该线的 preregistration / result / runner / schema / packet aliases,否则 contract 行、runner 行、兄弟行会逃过检查。**每次 `执行` / 收尾、以及改任何 route-doc 行后必跑此测试再交 `审查`**;它把"状态转变过时"从事后人肉抓变成过不了测试。
 
-这样"会过时的"只有 `SESSION_LOG` 顶部 + `CURRENT §0` 两处(本来每轮都更新),其余路由对状态转变天然免疫。作者(implementer)按此写、审查者(Codex)按此核。
+这样"会过时的"只有 `SESSION_LOG` 顶部 + `CURRENT §0` 两处(本来每轮都更新),其余路由对状态转变天然免疫,且由 `test_route_doc_ledger_status_consistency` 机器兜底。作者(implementer)按此写、审查者(Codex)按此核。
 
 ## 项目背景
 

@@ -8,6 +8,103 @@
 
 ---
 
+## 2026-06-08 - Codex `修复` + `提交` (user-authorized route-doc stale-state prevention) - **DONE**
+
+**Authorization**: user explicitly authorized Codex to fix the recurring stale state / handoff drift even though the default role split makes Codex the independent reviewer. Scope kept to process/docs/tests only; no business runner logic, frozen design values, result metrics, ledger values, execution summaries, provider calls, DataHub, production, ship-gate, full-size, or broker/order boundary changed.
+
+**Fixed root gap (`R-LOWVOL-ROUTE-CONTRACT-DRIFT-GUARD-GAP`)**:
+- Cleaned the remaining stale durable route rows in `research/README.md`: the market-cap field probe / materialization / audit rows are now historical closed-line provenance; the bottom warning no longer says the full-main-board signal run still awaits Claude review / commit / execution after it already closed.
+- Hardened `tests/test_route_doc_ledger_status_consistency.py` from ledger-filename-only detection to spent-line alias detection. A spent line is now matched through ledger, preregistration, result, runner, schema, or packet references.
+- Added an adversarial guard test proving a contract-style stale row naming only runner/schema files, with no ledger filename, is caught.
+- Updated `AGENTS.md` Route-doc stability convention from v2.1 to v2.2 to make alias-based guard execution mandatory after each `执行` / closeout and after any route-doc edit.
+- Updated `research/README.md` route-doc convention note, `docs/CURRENT.md`, and `docs/system_risk_register.md` so the current state is the completed user-authorized closeout, with no stale repair-wait routing.
+
+**Verification (Codex, bundled Python, jsonschema present)**: `jsonschema` 4.26.0 import OK. Stale scan across `research/README.md` / `docs/README.md` / `docs/CURRENT.md` for the known unspent/future-spend/rerun-required phrases returns no matches. `python -m unittest tests.test_route_doc_ledger_status_consistency -v` = 3/3 OK, including the no-ledger-filename adversarial fixture. Low_vol route+runner+schema+prereg suite = 75/75 OK. `tests.test_a_long_large_cap_cash_conversion_signal_search` = 24/24 OK. Full `tests/schema` discover = 591/591 OK. `git diff --check` clean.
+
+**Next**: no further `执行` for this spent low_volatility singleton. The low_volatility / cash_conversion / pure_quality / full-main-board lines remain closed/spent; any new A-long candidate needs a new reviewed preregistration + ledger.
+
+---
+
+## 2026-06-08 - Codex `审查` (low_volatility route-doc repair re-review) - **FAIL / Required before commit**
+
+**Scope reviewed**: Claude repair for `R-LOWVOL-ROUTE-LEDGER-STATUS-DRIFT`: `research/README.md` route-doc repair, new `tests/test_route_doc_ledger_status_consistency.py`, `AGENTS.md` v2.1 route-doc convention, `docs/CURRENT.md`, `docs/system_risk_register.md`, prior low_vol result/ledger/test closeout. Codex made no runner/schema/ledger/result business-code edits; only review closeout/risk/current docs were updated.
+
+**Verdict**: FAIL. The original stale rows in `research/README.md` "Current result / ledger status" are fixed, and the low_vol execution artifact remains clean. But the repair did not cover the same stale-state class in `research/README.md` Contracts / runner rows, and the new guard has a false-negative because it only checks lines that explicitly mention a spent ledger filename.
+
+**Required**:
+- R-LOWVOL-ROUTE-CONTRACT-DRIFT-GUARD-GAP [scope=`research/README.md` Contracts / runner route rows + `tests/test_route_doc_ledger_status_consistency.py`; PIT=process-only cross-LLM routing / no market-data PIT]: after the fix, `research/README.md` still contains stale route rows for already closed/spent A-long lines: the full-main-board runner row still says the singleton ledger was reverted to unspent and "A rerun still requires..."; the large-cap audit / pure-quality signal-search / full-main-board signal-search contract rows still say they validate an unspent singleton ledger or that future execution will spend the singleton once. The real ledgers are all spent (`a_long_signal_search`, pure_quality, cash_conversion, low_volatility all `tests_spent_count=1`, `active_no_new_test_authorized`). The new guard passes anyway because it only flags stale phrases on lines that contain a ledger file name; my planted contract-style stale line without a ledger filename produced `false_negative_for_contract_style_line=True`. Fix the remaining stale route rows and harden the guard so it catches contract/runner rows tied to spent lines even when the line names schemas/runners/results rather than the ledger file.
+
+**Optional**: none.
+
+**Register outcome**: `R-LOWVOL-ROUTE-CONTRACT-DRIFT-GUARD-GAP` is registered as open P0 in `docs/system_risk_register.md`. It blocks the current low_volatility post-exec closeout commit until fixed and re-reviewed. It does not authorize rerun, threshold/window/estimator/horizon/benchmark/universe change, diagnostic rescue, provider calls, DataHub, production, ship-gate evidence, full-size use, or broker/order automation.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; `git diff --check` OK; no low_vol `.pending` summary exists. Low_vol + route-doc guard + low_vol schema/prereg tests 74/74 OK; cash_conversion regression 24/24 OK; full `tests/schema` 591/591 OK. Direct ledger check: the four executed A-long signal-search ledgers are spent once and `active_no_new_test_authorized`. Direct stale scan still finds `research/README.md` contract/runner rows with `unspent singleton ledger`, `future execution reads`, `spends the singleton ledger exactly once`, and `A rerun still requires`. Guard false-negative probe confirms a contract-style stale line without the ledger filename is not detected. Independent raw/source recomputation of the low_vol result still matches the written summary: 28 result cells, 69,822 evaluated rows, 23,718 endpoint refs, primary 65 cohorts, mean `0.0891977643`, HAC t `0.898357922`, p `0.3689947618`, sub-period means `-0.0381914213` / `0.2127266716`, rolling relative-NAV drawdown `-0.2506905955`, decision `falsified_large_cap_low_volatility_under_frozen_rules`.
+
+**Next**: Claude `修复` only `R-LOWVOL-ROUTE-CONTRACT-DRIFT-GUARD-GAP`, then Codex `审查` again. No `提交` and no further `执行` now.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-LOWVOL-ROUTE-LEDGER-STATUS-DRIFT) — **DONE, ready for re-`审查`**
+
+**Authorization & judgment**: user `修复` after the Codex `审查` FAIL below (one open-P0 Required, no Optional). Judged it per the implementer standard: correct (the rows are factually stale), in scope (`research/README.md` route docs I edited this round), necessary (a future LLM could read a closed/spent A-long ledger as unspent/pending and misroute). No pushback. Documentation-only repair — no runner logic, frozen design value, result metric, ledger, or execution summary touched.
+
+**R-LOWVOL-ROUTE-LEDGER-STATUS-DRIFT — fixed at root (v2 stable pointers)**: the `research/README.md` "Current result / ledger status" section still described three already-executed A-long lines as pending / zero-spent. Converted them, plus the matching stale full-main-board result row, to stable terminal-state pointers that state the terminal fact and delegate the spend count / metrics to `docs/CURRENT.md` §0 + `docs/SESSION_LOG.md` + each `execution_summary.json`:
+- `a_long_signal_search_program_test_budget_ledger_20260604.json`: "one pending / zero spent" → SPENT (line executed → `no_alpha_found_under_frozen_rules`).
+- `a_long_large_cap_pure_quality_program_test_budget_ledger_20260607.json`: "zero spent" → SPENT (line executed → `falsified_large_cap_pure_quality_under_frozen_rules`).
+- `a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json`: "zero spent / first execution spends once" → SPENT (line executed → `statistical_alpha_clue_research_only`, NOT tradeable).
+- `research/results/a_long_signal_search_20260604/execution_summary.json` result row: "no valid A-long alpha result exists" → EXECUTED / closed → `no_alpha_found_under_frozen_rules` (the earlier invalid zero-cohort summary was reverted; the later valid run produced no_alpha). This sibling row was the same drift class and would otherwise contradict the ledger fix above.
+
+These four are now terminal-state (executed/spent are stable facts that do not drift); the prereg-status runner rows (already "EXECUTED" pointers) and the contracts section were already correct. Did not touch the murkier "stale" 23,717-materialization / R1-audit rows (not part of this finding) or change any artifact.
+
+**Optional dispositions**: none (Codex raised no Optional).
+
+**Prevention (folded into this round per the user decision「全套并入本轮」, after the user asked why this drift keeps recurring across ≥5 flags)**: root cause is structural, not carelessness — (a) `research/README.md`'s "Current result / ledger status" rows restate mutable spend-state that the v2 convention forbids but that was never applied/swept to this section; (b) each transition only updates the ACTIVE line, so siblings that executed in earlier rounds silently rot; (c) the convention was a "remember-to" rule with NO mechanical enforcement, so drift was only caught reactively in Codex review, round after round. Fixes folded in: (1) NEW `tests/test_route_doc_ledger_status_consistency.py` reads every `*program_test_budget_ledger*.json`'s real `tests_spent_count` and FAILS if any route doc (`research/README.md` / `docs/README.md` / `docs/CURRENT.md`) describes a SPENT ledger with unspent/pending phrasing — mechanical enforcement that runs before review, every round, LLM-independent (passes now; I verified it flags a planted stale row); (2) a v2 pointer-convention note on that `research/README.md` section header; (3) `AGENTS.md` v2 convention hardened with the explicit state-transition-staleness failure mode + the mandatory guard run on every `执行`/closeout and after any route-doc edit.
+
+**Scope**: `research/README.md` (4 stale rows → pointers + section convention note) + NEW `tests/test_route_doc_ledger_status_consistency.py` + `AGENTS.md` v2 convention + `docs/system_risk_register.md` (entry open → in_progress + repair/prevention note) + `docs/CURRENT.md` §0/§1/header + this log. No runner logic, frozen value, result metric, ledger, or execution summary changed.
+
+**Verification (self)**: the new guard passes and provably flags a planted stale row; `research/README.md` scan for `zero spent` / `pending test` / `planned not-reviewed` / `no valid A-long alpha result` / `first reviewed signal-search execution spends` returns no matches (all four executed A-long lines now read SPENT/EXECUTED with pointers to the live source); low_vol runner+schema+prereg-schema, the new route-doc guard, full `tests/schema`, and cash_conversion suites all green; `git diff --check` clean; result dir unchanged (only the tracked summary).
+
+**Next**: Codex re-`审查` of the route-doc repair + the prevention (guard test + AGENTS.md v2.1 convention + section note) against the executed result + spent ledger. After PASS, Claude `提交`. The singleton is spent; there is no further `执行` for this ledger.
+
+---
+
+## 2026-06-08 - Codex `审查` (low_volatility post-execution closeout) - **FAIL / Required before commit**
+
+**Scope reviewed**: current post-execution low_volatility closeout working tree: `research/results/a_long_large_cap_low_volatility_20260608/execution_summary.json`, spent singleton ledger, post-exec stale-test fixes, `docs/CURRENT.md`, `docs/README.md`, `research/README.md`, and this log. Codex made no runner/schema/ledger/result business-code edits; only review closeout/risk docs were updated.
+
+**Verdict**: FAIL. The low_volatility execution result and ledger spend are internally clean, but the route-doc closeout is not yet clean enough to commit because `research/README.md` still carries stale "zero spent / planned" current ledger rows for already executed A-long signal-search lines.
+
+**Required**:
+- R-LOWVOL-ROUTE-LEDGER-STATUS-DRIFT [scope=`research/README.md` current result / ledger routing; PIT=process-only cross-LLM continuity / no market-data PIT]: `research/README.md` lines in the current ledger-status section still say the full-main-board, large-cap pure-quality, and cash_conversion ledgers record one pending / not-reviewed test and zero spent tests, even though repo artifacts and `docs/CURRENT.md` / `SESSION_LOG` record those lines as executed/closed with spent singleton ledgers. This directly contradicts the v2 route-doc single-live-state convention and can misroute a future LLM toward a closed ledger. Fix the stale current-state rows (or convert them to stable pointers to `CURRENT` §0 + the execution summaries) before commit; do not change runner logic, frozen design values, result metrics, or ledgers as part of this route-doc repair.
+
+**Optional**: none.
+
+**Register outcome**: `R-LOWVOL-ROUTE-LEDGER-STATUS-DRIFT` is registered as open P0 in `docs/system_risk_register.md`. It blocks the current low_volatility post-exec closeout commit until fixed and re-reviewed. It does not authorize rerun, threshold / window / benchmark / universe changes, diagnostic rescue, provider calls, DataHub, production, ship-gate evidence, full-size use, or broker/order automation.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; `py_compile` OK; low_vol runner + summary schema + prereg schema tests 72/72 OK; cash_conversion runner regression 24/24 OK; full `tests/schema` 591/591 OK; `git diff --check` OK. Direct schema/guard probes: low_vol summary validates against its schema with 0 errors; spent low_vol ledger validates against `program_test_budget_ledger.schema.json` with 0 errors; `validate_summary_internal_consistency()` passes on the written summary; the real spent ledger is rejected by runtime `load_and_validate_ledger()`; a synthetic unspent singleton fixture is accepted; planted verdict and cell-metadata contradictions are rejected by both schema and producer guard; no `.pending` summary exists; tracked summary suspicious-string scan found no token / secret / request URL hit. Independent raw/source recomputation (no `run()`, no write, no ledger touch) exactly matches the written summary: 28 result cells, 69,822 evaluated rows, 23,718 full-main-board endpoint refs, primary 504d/CSI300 low_volatility cell 65 cohorts, mean net excess `0.0891977643`, HAC t `0.898357922`, p `0.3689947618`, positive months `44`, sub-period means `-0.0381914213` / `0.2127266716`, rolling relative-NAV drawdown `-0.2506905955`, absolute drawdown `-0.2318620203`, decision `falsified_large_cap_low_volatility_under_frozen_rules`, and startup exclusions `20180131`-`20180629`.
+
+**Next**: Claude `修复` only `R-LOWVOL-ROUTE-LEDGER-STATUS-DRIFT`, then Codex `审查` again. No `提交` and no further `执行` now.
+
+---
+
+## 2026-06-08 — Claude `执行` (low_volatility signal search) — **EXECUTED → falsified, ledger SPENT, pending `审查`**
+
+**Authorization**: user `执行` after the runner slice was committed (`20bd22e`, Codex re-`审查` PASS). Pre-execution checks: working tree clean, no open/in_progress/blocked P0 in `docs/system_risk_register.md`, both local raw roots present (full-main-board 23,718-payload manifest, 96-month market-cap). Ran `runners/a_long_large_cap_low_volatility_signal_search.py --confirm-independent-review-pass --confirm-post-review-execute` (local raw read only, no network).
+
+**Result — `falsified_large_cap_low_volatility_under_frozen_rules`** (`research/results/a_long_large_cap_low_volatility_20260608/execution_summary.json`): the single primary cell (low_volatility, industry-size-neutral, equal-weight, 504d, CSI300) had POSITIVE mean net excess (`+0.0892` over 504d, 65 cohorts, 44/65 positive months) but failed TWO statistical-alpha-clue gates: HAC t `0.898` (< 2.0, p `0.369`), and sub-period robustness FALSE — first half mean `-0.0382` (t `-0.33`), second half `+0.2127` (t `+4.37`). So the apparent edge is entirely second-half / regime-driven, not stable across the period — exactly the failure the sub-period gate exists to catch. Concentration guards passed (top-name `1.2%`, single-year `34.0%` <= 35%). The tradeable risk gate would also have failed (relative-NAV max drawdown `-0.2507` > `-0.15`; absolute `-0.2319`), but the clue tier failed first, so the verdict is falsified (not even a clue). 28 result cells, 69,822 evaluated rows, 6 startup months excluded (2018-01→06, insufficient trailing window), 90 size-coverage months, min bucket 92, hygiene clean (no raw/endpoint/secret/url, no network).
+
+**Plain reading**: large-cap low-volatility does NOT show a stable low-risk-anomaly edge vs CSI300 on 2018-2025 main-board top-500 under the frozen single-cell design. The positive average is not robust (t<1) and is essentially a second-half (≈2023+) artifact; the downside profile is also poor (relative drawdown -25%). External low-risk-anomaly literature did not translate into a frozen, in-sample, single-period A-share clue here. Falsified.
+
+**Ledger**: SPENT — `tests_spent_count=1`, `ledger_status=active_no_new_test_authorized`, spend status `spent_failed_outcome_threshold`, `planned_tests=[]`. No rerun / threshold / trailing-window / estimator / horizon / benchmark / universe change / diagnostic rescue without a NEW reviewed prereg+ledger or forward-live.
+
+**Post-execution closeout (this round)**: (1) residual stale-test fix — the runner ledger tests and the design-slice prereg-schema test (`test_ledger_registers_one_unspent_pending_singleton_test`) asserted an UNSPENT ledger; both now assert the committed SPENT state (the runtime gate REJECTS the spent real ledger; a synthetic unspent fixture preserves the acceptance path + per-field guard coverage). Full `tests/schema` 591/591, low_vol runner 44/44, cash_conversion 24/24. (2) route-doc pointers: `docs/CURRENT.md` §0/§1/§5 (+ header), `docs/README.md`, and `research/README.md` now carry low_volatility as the 4th falsified/closed A-long line as stable pointers (verdict/metrics live in §0 + this log + the execution summary, not duplicated).
+
+**Verification (self)**: independently confirmed from the summary that the verdict logic holds (t `0.898` < 2.0 AND sub-period both-halves False → falsified); the 6 trailing-window startup-excluded months are disjoint from the 65 primary cohorts; ledger spent exactly once; `validate_summary_internal_consistency` invariants hold; no raw/secret in the tracked summary; `git diff --check` clean.
+
+**Next**: Codex `审查` of the executed result + spent ledger + post-exec stale-test fixes + route-doc pointers. After PASS, Claude `提交`. The singleton is spent; there is no further `执行` for this ledger. Any further A-long candidate needs a new reviewed prereg + ledger.
+
+---
+
 ## 2026-06-08 - Codex `审查` (low_volatility runner repair re-review) - **PASS**
 
 **Scope reviewed**: tracked/unstaged `docs/CURRENT.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`; untracked `runners/a_long_large_cap_low_volatility_signal_search.py`, `schemas/a_long_large_cap_low_volatility_signal_search_execution_summary.schema.json`, `tests/test_a_long_large_cap_low_volatility_signal_search.py`, `tests/schema/test_a_long_large_cap_low_volatility_signal_search_schema.py`. No staged files. Codex made no runner/schema/test business-code edits; only review closeout docs were updated.

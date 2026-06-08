@@ -1,9 +1,9 @@
 {
   "schema_name": "program_test_budget_ledger",
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-08T00:00:00+00:00",
+  "generated_at": "2026-06-08T09:29:22+00:00",
   "artifact_id": "a_long_large_cap_low_volatility_program_test_budget_ledger_20260608",
-  "ledger_status": "active_planned_test_pending_review",
+  "ledger_status": "active_no_new_test_authorized",
   "family_id": "a_long_large_cap_low_volatility_v1",
   "lane_id": "a_long_research",
   "singleton_scope": {
@@ -25,36 +25,29 @@
   },
   "budget_policy": {
     "ledger_cardinality": "singleton_program_level",
-    "tests_spent_count": 0,
+    "tests_spent_count": 1,
     "tests_available_without_new_review": 0,
     "next_test_requires_reviewed_preregistration": true,
     "next_test_requires_user_approval": true,
     "spend_rule": "The first reviewed A-long large-cap low_volatility primary-cell signal-search execution spends one planned test regardless of falsified, statistical-alpha-clue, or tradeable-candidate result.",
     "no_silent_rescue_rule": "If the future primary cell fails or is diagnostic-only, do not rerun with changed factor definition, trailing window, volatility estimator, universe N, market-cap field, neutralization, holding period, benchmark, top fraction, cost model, statistical threshold, sub-period rule, or risk-gate threshold without a new reviewed preregistration and ledger update."
   },
-  "test_spend_log": [],
-  "planned_tests": [
+  "test_spend_log": [
     {
       "test_id": "a_long_large_cap_low_volatility_20260608",
-      "planned_status": "planned_not_reviewed",
-      "created_at": "2026-06-08T00:00:00+00:00",
-      "planned_preregistration_ref": "research/preregistrations/a_long_large_cap_low_volatility_20260608.json",
-      "planned_result_ref": "research/results/a_long_large_cap_low_volatility_20260608/execution_summary.json",
+      "preregistration_ref": "research/preregistrations/a_long_large_cap_low_volatility_20260608.json",
+      "result_ref": "research/results/a_long_large_cap_low_volatility_20260608/execution_summary.json",
+      "status": "spent_failed_outcome_threshold",
+      "tests_spent": 1,
       "promotion_relevant": true,
-      "expected_tests_spent": 1,
-      "approval_status": "user_approved_pending_review",
-      "design_summary": "One frozen primary cell: low_volatility (negative trailing 252-trading-day realized volatility of daily adj_factor total returns), percentile-ranked, marginal 0.5 industry + 0.5 size neutralization, 504d hold versus CSI300, top-500 PIT circ_mv universe with the reviewed 000043 exclusion. Two-tier verdict: statistical-alpha-clue gates (positive mean net excess, HAC t >= 2.0, >= 48 monthly cohorts, both median sub-period halves positive, concentration guards) then the rolling-overlapping relative-NAV drawdown >= -15% gate for the tradeable-candidate label. Startup months without a sufficient trailing volatility window are excluded from cohort formation. Reuses the vetted measurement chain and the reviewed full-main-board daily close series; fetches nothing.",
-      "review_boundary": [
-        "This planned test is not authorized to run until Codex independent review PASS, Claude commit, and a separate explicit user execute.",
-        "No new data fetch, provider call, daily-bar pull, DataHub work, production claim, ship-gate evidence, full-size use, or broker / order automation is authorized.",
-        "If executed and the primary cell fails, treat low_volatility as falsified under the frozen single-primary-cell rules; no rerun, threshold / window / estimator / horizon / benchmark / universe change, or diagnostic rescue without a new reviewed preregistration and ledger.",
-        "Even a passing in-sample result is research-only and routes to forward-live validation, not production or ship-gate evidence."
-      ]
+      "result_summary": "research_verdict=falsified_large_cap_low_volatility_under_frozen_rules; statistical_alpha_clue_count=0; tradeable_candidate_count=0; production_ready=false; ship_gate_evidence=false; full_size_allowed=false",
+      "allowed_followup": "No rerun, factor-definition change, trailing-window change, volatility-estimator change, idiosyncratic-vs-total search, horizon change, benchmark change, universe change, diagnostic rescue, or result slicing without a new reviewed preregistration and ledger. Positive clues remain research-only until forward-live ship-gate evidence exists."
     }
   ],
+  "planned_tests": [],
   "next_required_actions": [
-    "Codex independent review of this preregistration, its schema, this ledger, the schema tests, and the route docs before any signal-search work.",
-    "After review PASS and Claude commit, a separate signal-search runner slice may be built; its execution requires its own review, commit, and a separate user execute and spends this singleton exactly once.",
-    "Do not run, fetch, or rescue without the reviewed path above."
+    "Do not rerun or rescue this large-cap low_volatility signal search without a new reviewed preregistration and ledger update.",
+    "If the result is falsified, treat it as failed under the frozen single-primary-cell rules.",
+    "If the result is a research clue or tradeable candidate, route it to forward-live validation; do not treat it as production or ship-gate evidence."
   ]
 }

@@ -257,7 +257,10 @@ class ALongLargeCapLowVolatilityPreregistrationSchemaTest(unittest.TestCase):
         self.assertTrue(controls["risk_gate_threshold_frozen_before_run"])
         self.assertTrue(controls["new_ledger_required_before_any_followup"])
 
-    def test_ledger_registers_one_unspent_pending_singleton_test(self) -> None:
+    def test_ledger_registers_spent_singleton_after_execution(self) -> None:
+        # Post-execution committed state: the frozen preregistration's run / fetch gates stay off, and
+        # the singleton ledger is now spent exactly once (the low_volatility signal search executed and
+        # was falsified). This replaces the pre-execution unspent assertion now that the ledger is spent.
         artifact = self._load_artifact()
         ledger = self._load_ledger()
 
@@ -266,18 +269,17 @@ class ALongLargeCapLowVolatilityPreregistrationSchemaTest(unittest.TestCase):
         )
         self.assertFalse(artifact["planned_test_budget"]["signal_search_run_authorized_now"])
         self.assertFalse(artifact["planned_test_budget"]["new_data_fetch_authorized_now"])
-        self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
+        self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
         self.assertEqual(ledger["lane_id"], "a_long_research")
         self.assertEqual(ledger["family_id"], "a_long_large_cap_low_volatility_v1")
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
+        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
         self.assertEqual(ledger["budget_policy"]["tests_available_without_new_review"], 0)
-        self.assertEqual(ledger["test_spend_log"], [])
-        self.assertEqual(len(ledger["planned_tests"]), 1)
-        planned = ledger["planned_tests"][0]
-        self.assertEqual(planned["test_id"], "a_long_large_cap_low_volatility_20260608")
-        self.assertEqual(planned["planned_status"], "planned_not_reviewed")
-        self.assertEqual(planned["approval_status"], "user_approved_pending_review")
-        self.assertEqual(planned["expected_tests_spent"], 1)
+        self.assertEqual(ledger["planned_tests"], [])
+        self.assertEqual(len(ledger["test_spend_log"]), 1)
+        spend = ledger["test_spend_log"][0]
+        self.assertEqual(spend["test_id"], "a_long_large_cap_low_volatility_20260608")
+        self.assertEqual(spend["status"], "spent_failed_outcome_threshold")
+        self.assertEqual(spend["tests_spent"], 1)
 
     def test_frozen_decision_thresholds_are_exact_consts(self) -> None:
         base = self._load_artifact()
