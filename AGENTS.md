@@ -15,7 +15,15 @@
 - `docs/SESSION_LOG.md` 顶部 1-3 条：最新跨 LLM 交接、review verdict、pending Optional。
 - `docs/AI_REVIEW_PROTOCOL.md`：review 流程和短命令。
 
-**Route-doc 稳定性约定**：durable 启动路由文档(`docs/CURRENT.md` / `docs/README.md` / `research/README.md`)只写**提交无关的稳定事实**(存在什么、锁了什么);实时的 review / commit / execute 闸一律以 `docs/SESSION_LOG.md` 最新 verdict 为准。**禁止**把瞬态周期状态(`UNCOMMITTED`、`in re-review`、"下一步又是 `审查`")写进 durable 行——那只放 `SESSION_LOG`。这样这些文档即使被提交也不会立刻过期、把新窗口误导回 review 而非"提交后等用户单独 `执行`"。作者(implementer)按此写、审查者(Codex)按此核。
+**Route-doc 稳定性约定 (v2)**：**单一 live-state 真相源 = `docs/SESSION_LOG.md` 顶部最新 verdict + artifact 本身**(ledger 的 `tests_spent_count`、`research/results/.../execution_summary.json`)。
+
+- `docs/CURRENT.md` **§0 Latest Delta** 是**唯一**允许重述当前态的短摘要(每轮更新,可含 pending / 下一步)。
+- 其余 durable 路由(`docs/README.md`、`research/README.md`、`docs/CURRENT.md` §1/§5)只写**稳定身份 + 指针**——存在什么 artifact、什么设计、文件在哪、anti-rescue / singleton 等不变规则——并指向真相源。
+- **禁止**在这些 durable 行重述会漂移的状态:瞬态周期词(`UNCOMMITTED` / `in re-review` / "下一步是 `审查`" / 在飞的 `PASS`·`FAIL`)、ledger 计数、pending gate、verdict 度量(t 值 / drawdown / cohort 数)。
+- **terminal 终态可留,但低频 + 指针化**:不会再变的事实(路径已关闭、singleton 已花、最终 verdict 已定)可写**一行指针**(例:"`cash_conversion` 已执行 → `statistical_alpha_clue`(非 tradeable),见 `research/results/.../execution_summary.json`"),但**绝不**把度量 / pending 在三处重复。
+- **漂移自检**:写每句 durable 路由前问"这句在下一次 commit / execute 之后还成立吗?"——不成立 → 只进 `SESSION_LOG` + `CURRENT §0`。
+
+这样"会过时的"只有 `SESSION_LOG` 顶部 + `CURRENT §0` 两处(本来每轮都更新),其余路由对状态转变天然免疫。作者(implementer)按此写、审查者(Codex)按此核。
 
 ## 项目背景
 

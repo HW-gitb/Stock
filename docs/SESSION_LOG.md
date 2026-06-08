@@ -8,6 +8,81 @@
 
 ---
 
+## 2026-06-08 — Claude `提交` (cash_conversion post-execution closeout) — **DONE (local master)**
+
+**Authorization**: user `提交`, after Codex re-`审查` PASS (entry below; both Required findings `resolved`). Re-read SESSION_LOG top + git status before committing per discipline.
+
+**Committed (one scope = post-execution closeout of the cash_conversion line)**: the executed result `research/results/a_long_large_cap_cash_conversion_20260607/execution_summary.json`, the SPENT singleton ledger, the post-execution test fix (two stable tests; 33/33), and the v2 route-doc simplification — `AGENTS.md` route-doc convention v1→v2 plus the five cash_conversion route pointers (`docs/README.md`, `research/README.md`, `docs/CURRENT.md` §1/§5/header), with the full terminal verdict kept only in `CURRENT` §0 + artifacts. Local master only, no push.
+
+**State after commit**: the `cash_conversion` research line is DONE — verdict `statistical_alpha_clue_research_only` (research-only in-sample clue, NOT tradeable; relative-NAV drawdown -18.2% > -15%). Singleton ledger spent; no rerun / threshold-horizon-benchmark-universe change / diagnostic rescue / production / ship-gate / full-size without a NEW reviewed preregistration + ledger or forward-live evidence.
+
+**Next**: no pending command. A further A-long candidate would require a new reviewed prereg + ledger (new singleton). No `执行` remains for this ledger.
+
+---
+
+## 2026-06-08 — Codex `审查` (cash_conversion post-execution test + route-doc v2 repair) — **PASS**
+
+**Verdict**: PASS. Both prior Required findings are fixed. The executed `cash_conversion` result and spent ledger remain schema-valid and independently reproducible; the post-execution test suite now passes in the committed spent-ledger state; and route docs now follow the v2 single-live-state-source convention instead of duplicating mutable ledger/verdict/pending state across multiple durable docs.
+
+**Scope reviewed**: current working tree with `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `research/README.md`, `research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json`, `research/results/a_long_large_cap_cash_conversion_20260607/execution_summary.json`, and `tests/test_a_long_large_cap_cash_conversion_signal_search.py`. Codex made no runner/schema/preregistration/ledger/result edits; review closeout only prepended this entry and marked the existing risk-register item resolved.
+
+**Required**: none.
+
+**Optional**: none.
+
+**Register outcome**: `R-CASH-POST-EXEC-TEST-STATE` and `R-CASH-POST-EXEC-ROUTE-STABILITY` are marked `resolved` in `docs/system_risk_register.md`. This PASS authorizes Claude commit of the result + spent ledger + post-exec test/route-doc repair only. It does not authorize rerun, threshold / horizon / benchmark / universe change, diagnostic rescue, production claim, ship-gate evidence, full-size use, DataHub work, or broker/order automation.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; runner tests 24/24 OK; summary schema tests 9/9 OK; direct schema validation passes for the spent ledger and `research/results/a_long_large_cap_cash_conversion_20260607/execution_summary.json`; direct guard check rejects the real spent ledger and accepts a synthetic unspent fixture; tracked-result hygiene scan found no URL/token/secret/raw rows beyond explicit `false` flags; `git diff --check` OK; `docs/CURRENT.md` is 100 lines. Durable-zone route scan found no prohibited stale current-state terms or duplicated metrics in the cash_conversion runner rows of `docs/README.md`, `research/README.md`, or `docs/CURRENT.md` §1/§5; full current state is only in `docs/CURRENT.md` §0 plus artifacts and top `SESSION_LOG`. Independent local raw/source recomputation exactly matches the written summary: 32 cells, 73,496 evaluated rows, 23,718 endpoint results, primary `cash_conversion_industry_size_neutral_equal_weight_504d_CSI300` has 68 cohorts, mean net excess `0.0969677306`, HAC t `2.468541032`, p `0.0135665098`, `20180330` absent and first cohort `20180427`; sub-period means are `0.0785869134` and `0.1153485478`; rolling relative-NAV drawdown is `-0.1821726051`, so the frozen verdict remains `statistical_alpha_clue_research_only` but NOT tradeable.
+
+**Next**: Claude `提交`. The singleton is already spent; there is no next `执行` for this ledger.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-CASH-POST-EXEC-TEST-STATE + R-CASH-POST-EXEC-ROUTE-STABILITY) — **DONE, ready for re-`审查`**
+
+**Authorization & judgment**: user `修复`, then user approved Option A (`按 A 起草落地`). Both findings valid. Codex independently reproduced every result number, so the executed result itself is correct; the two issues are post-execution STATE, not the result: the test suite assumed an unspent ledger, and the durable route docs still carried pre-execution wording. Per the user's v2 decision I fixed the route issue at its ROOT CAUSE (state-duplication across route docs) rather than re-syncing the stale wording a 4th time — see the route section below.
+
+**R-CASH-POST-EXEC-TEST-STATE — fixed**: replaced `test_current_review_gate_artifacts_validate_without_running_signal` (which called `load_and_validate_ledger()` on the now-spent real ledger and failed) with two stable tests:
+- `test_review_gate_artifacts_and_spent_ledger_in_committed_state`: prereg + market-cap audit still validate; the real ledger is schema-valid and spent (`tests_spent_count=1`, `active_no_new_test_authorized`, spend status `spent_passed_research_continue_only`); and `load_and_validate_ledger()` now correctly RAISES on the spent ledger (the singleton cannot be re-run).
+- `test_load_and_validate_ledger_accepts_unspent_fixture`: a synthetic unspent ledger fixture (deep-copied from the real ledger, spend reversed, planned-test rebuilt) proves the gate ACCEPTS an unspent ledger. So the runtime rule (a real execution requires an unspent ledger) is preserved on both sides. 33/33 tests pass in the post-execution state.
+
+**R-CASH-POST-EXEC-ROUTE-STABILITY — fixed at root cause (v2 route-doc convention)**: this was the 4th route-staleness flag (`R-CURRENT-POST-COMMIT-ROUTE` → `R-CASH-RUNNER-ROUTING-STALE` → `R-CASH-POST-PASS-ROUTE-STABILITY` → this). Root cause is state-duplication: the same mutable work-state (built / committed / executed / `tests_spent_count` / verdict / tradeable-or-not) was restated across 5 durable route docs, so each transition (commit / execute / spend) needed 5 synced edits and one was always missed. Instead of re-syncing the stale wording again, I removed the duplication:
+- (1) Upgraded the `AGENTS.md` route-doc convention v1→v2: the single live-state source is `docs/SESSION_LOG.md` top + the artifacts (ledger `tests_spent_count`, `execution_summary.json`); `docs/CURRENT.md` §0 Latest Delta is the ONLY place that restates current state; `docs/README.md` / `research/README.md` / `docs/CURRENT.md` §1/§5 are STABLE POINTERS that name the artifact+design and point to that source — they must not restate周期词 / ledger counts / pending-gate / verdict metrics. Drift-test: "will this line be false after the next commit/execute?"
+- (2) Converted the cash_conversion wording in `docs/CURRENT.md` §1 (Phase / P0 / 执行锁) + §5, `docs/README.md` (runner row), and `research/README.md` (runner bullet) from post-execution metrics to stable pointers: they now name the runner (`527ac58`, EXECUTED) + design (single-factor OCF/|NI|, two-tier) and point to §0 + SESSION_LOG + the execution summary for the verdict and spend state — no restated HAC t / drawdown / `tests_spent_count` / verdict label / commit-pending status.
+- The full terminal verdict (`statistical_alpha_clue_research_only`; HAC t 2.47, 68 cohorts, +9.7% mean excess, both sub-period halves positive; NOT tradeable, relative-NAV drawdown -18.2% > -15%; singleton SPENT) now lives in exactly ONE restatement place — `docs/CURRENT.md` §0 — plus the artifacts. After the next commit/execute only §0 needs touching; the pointers stay true. `docs/CURRENT.md` stays < 150 lines.
+
+**Scope**: the two test files; the `AGENTS.md` route-doc convention (v1→v2); and the five route-doc locations converted to pointers (`docs/CURRENT.md` §1 Phase/P0 + §1 执行锁 + §5, `docs/README.md` runner row, `research/README.md` runner bullet). `docs/CURRENT.md` §0 keeps the full terminal verdict (one restatement place). No change to the runner's computation, the written result summary, the spent ledger contents (the spend is the real execution's), the frozen preregistration, or any verdict gate.
+
+**Verification (self)**: `python -m unittest` both modules → 33/33; `docs/CURRENT.md` < 150 lines; route scan confirms the five pointers carry no mutable metrics/status/verdict (they point to §0 + SESSION_LOG + the execution summary) and the full verdict appears once, in §0. Ledger spent and result summary unchanged; both remain schema-valid.
+
+**Next**: Codex re-`审查` of the post-execution test fix + the v2 route-doc simplification (`AGENTS.md` convention + the five pointers) + the executed result/spent ledger. Then Claude `提交` the cash_conversion result + spent ledger + this repair together. The singleton is spent, so there is no further `执行`.
+
+---
+
+## 2026-06-08 — Codex `审查` (cash_conversion execution summary + spent ledger) — **FAIL**
+
+**Verdict**: FAIL. The execution result and spent ledger are schema-valid and the key result numbers independently reproduce from local raw/source, but this post-execution state is not commit-ready: the runner test suite fails after the singleton ledger is spent, and durable routing docs still tell the next agent that the ledger is unspent with no execution / no result.
+
+**Scope reviewed**: current working tree with modified `research/ledgers/a_long_large_cap_cash_conversion_program_test_budget_ledger_20260607.json`, untracked `research/results/a_long_large_cap_cash_conversion_20260607/execution_summary.json`, current runner/tests/schema, and route docs (`docs/README.md`, `docs/CURRENT.md`, `research/README.md`). Codex made no runner/schema/preregistration/ledger/result edits; review closeout only prepended this entry and registered the open findings in `docs/system_risk_register.md`.
+
+**Required**:
+- `R-CASH-POST-EXEC-TEST-STATE` (material: singleton ledger execution-state / test-contract correctness; scope `tests/test_a_long_large_cap_cash_conversion_signal_search.py` plus runner fixture/test harness as needed; PIT label `process-only ledger state, no market-data PIT`): make the targeted runner test suite pass in the committed post-execution state while preserving the runtime rule that a real execution requires an unspent ledger. Current failure: `test_current_review_gate_artifacts_validate_without_running_signal` calls `load_and_validate_ledger()` against the now-spent real ledger and errors with `ValueError: cash_conversion singleton signal-search test was already spent`.
+- `R-CASH-POST-EXEC-ROUTE-STABILITY` (material: cross-LLM routing / execution safety; scope `docs/CURRENT.md`, `docs/README.md`, `research/README.md`, and any current-state risk-register wording Claude chooses to supersede; PIT label `process-only route state, no market-data PIT`): update durable routing from pre-execution wording to post-execution truth. It must state that `execution_summary.json` exists, the singleton ledger is spent (`tests_spent_count=1`, `active_no_new_test_authorized`), the verdict is `statistical_alpha_clue_research_only`, there is no tradeable candidate because relative NAV drawdown failed, and no rerun/rescue/production/ship-gate/full-size use is authorized without a new reviewed preregistration/ledger or forward-live route.
+
+**Optional**: none.
+
+**Options for Claude**:
+- Recommended: adjust the current-state test to validate real post-execution ledger schema/result status, and use a copied/synthetic unspent ledger fixture for pre-execution `load_and_validate_ledger()` gate tests; then update the three route docs to the spent-result state.
+- Alternative: split pre-execution gate tests into a dedicated fixture-only test module and add a separate post-execution artifact test that validates the committed ledger/result pair; this is slightly broader but keeps runtime code untouched.
+
+**Register outcome**: open P0s recorded in `docs/system_risk_register.md` as `R-CASH-POST-EXEC-TEST-STATE` and `R-CASH-POST-EXEC-ROUTE-STABILITY`. Do not `提交` the result/ledger until both are repaired and Codex re-review passes. No rerun, threshold/horizon/benchmark/universe change, diagnostic rescue, production claim, ship-gate evidence, full-size use, DataHub work, or broker/order automation is authorized.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; `py_compile` OK; summary schema tests 9/9 OK; direct schema validation passes for both `research/results/a_long_large_cap_cash_conversion_20260607/execution_summary.json` and the spent ledger. Runner tests fail 1/23 exactly at the post-execution real-ledger assumption above. Hygiene scan found no URL/token/secret/raw rows in the tracked result/ledger. Independent local raw/source recomputation exactly matches the written summary: 32 cells, 73,496 evaluated rows, primary `cash_conversion_industry_size_neutral_equal_weight_504d_CSI300` has 68 cohorts, mean net excess `0.0969677306`, HAC t `2.468541032`, p `0.0135665098`, max single-year positive share `0.3232407094`, `20180330` absent and first cohort `20180427`; sub-period means are `0.0785869134` and `0.1153485478`; rolling relative NAV drawdown is `-0.1821726051`, so the statistical clue passes but tradeable label fails. Route scan shows stale pre-execution wording in `docs/README.md`, `docs/CURRENT.md`, and `research/README.md`.
+
+**Next**: Claude `修复` only. After repair, Codex re-`审查`; do not `提交` before PASS.
+
+---
+
 ## 2026-06-08 — Codex `审查` (R-CASH-INCOMPLETE-MONTH-CONSUMPTION consumer-path repair) — **PASS**
 
 **Verdict**: PASS. The material consumer-path bug is fixed: `20180330` is still reported as an incomplete size-coverage startup/ramp month, but it no longer enters the primary industry-size-neutral decision cohort or primary selections. The frozen 50-observation minimum, factor definition, universe, horizons, benchmarks, costs, HAC/statistical gates, sub-period rule, and verdict thresholds remain unchanged.
