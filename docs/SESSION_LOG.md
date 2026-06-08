@@ -8,6 +8,121 @@
 
 ---
 
+## 2026-06-08 — Claude `提交` + `执行` (ep_value signal-search runner slice, post-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交并执行下一步` after Codex re-`审查` PASS (entry below; `R-EP-SUMMARY-SCHEMA-INVARIANTS` resolved, no Required, no Optional). Re-read SESSION_LOG top + git status + the live register before acting per discipline; confirmed Codex set the register entry to `resolved` and the working tree is the review-passed slice.
+
+**Committed (one scope = ep_value signal-search runner slice, local master, no push)**: `runners/a_long_large_cap_ep_value_signal_search.py` + `schemas/a_long_large_cap_ep_value_signal_search_execution_summary.schema.json` (hardened with the per-`cell_id` pins + decision invariants) + `tests/test_a_long_large_cap_ep_value_signal_search.py` + `tests/schema/test_a_long_large_cap_ep_value_signal_search_schema.py`, plus `docs/CURRENT.md` §0/§1/§5/header, `docs/system_risk_register.md` (`R-EP-SUMMARY-SCHEMA-INVARIANTS` → resolved), and this log. The earlier test-only fix (`7cbe7f4`) is a separate committed scope.
+
+**Then `执行`**: ran the committed runner with `--confirm-independent-review-pass --confirm-post-review-execute` (result + spent-ledger state recorded in the post-execution entry appended after the run; verdict + spent ledger live in `research/results/a_long_large_cap_ep_value_20260608/execution_summary.json` + the ledger). The post-execution result + spent ledger + any post-exec stale-test flip are a SEPARATE scope routed to Codex `审查` before the result commit.
+
+**Next**: see the post-execution result entry (appended above this line after the run) for the verdict and the routing of the result-closeout scope.
+
+---
+
+## 2026-06-08 — Codex `审查` (R-EP-SUMMARY-SCHEMA-INVARIANTS re-review / ep_value runner slice) — **PASS**
+
+**Scope reviewed**: the pending A-long large-cap `ep_value` signal-search runner slice after Claude's schema repair: `runners/a_long_large_cap_ep_value_signal_search.py`, `schemas/a_long_large_cap_ep_value_signal_search_execution_summary.schema.json`, `tests/test_a_long_large_cap_ep_value_signal_search.py`, `tests/schema/test_a_long_large_cap_ep_value_signal_search_schema.py`, plus `docs/CURRENT.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, current git status, and the committed EP preregistration / singleton ledger. No signal search was executed; no result artifact exists; the singleton ledger remains unspent.
+
+**Verdict**: PASS. `R-EP-SUMMARY-SCHEMA-INVARIANTS` is fixed in the reviewed working tree.
+
+**Required**: none.
+
+**Optional**: none.
+
+**Register outcome**: `R-EP-SUMMARY-SCHEMA-INVARIANTS` is updated to `resolved` in `docs/system_risk_register.md` with this re-review evidence. The resolution becomes durable when Claude commits this reviewed slice.
+
+**Independent checks performed**: bundled Python `jsonschema` import OK (`4.26.0`); `py_compile` OK; targeted EP runner + EP summary schema + EP prereg schema + route-doc guard suites **65/65 OK**; full `unittest discover` **1097/1097 OK** under the approved Tushare token-cache permission path; independent jsonschema probes now reject the previous planted bad artifacts (`bad_nonprimary_cell_schema_errors=3`, `bad_decision_schema_errors=1`, `bad_tradeable_schema_errors=3`); all 28 expected result `cell_id` metadata pins were individually flipped and produced zero misses (`cell_pin_misses=0`); an extra contradiction where clue+drawdown pass but `is_tradeable_candidate=false` is rejected (`bad_missing_tradeable_schema_errors=1`); sensitive scan found only no-secret flag names / tests, no actual token / URL / raw rows; target `execution_summary.json` and `.pending` are absent; ledger remains `active_planned_test_pending_review`, `tests_spent_count=0`, `planned_tests=1`, `test_spend_log=0`; `git diff --check` clean except CRLF warnings on modified docs.
+
+**Boundary**: this PASS authorizes Claude to commit the reviewed runner/schema/tests/docs slice only. It does not authorize signal-search execution, ledger spend, provider fetch, result metric, alpha claim, production claim, ship-gate evidence, full-size use, DataHub work, or broker/order automation. Execution still requires the next separate user `执行` after Claude commit.
+
+**Next**: User command to Claude: **提交**.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-EP-SUMMARY-SCHEMA-INVARIANTS on the ep_value runner slice) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` FAIL (entry below) raised one P0 Required finding, `R-EP-SUMMARY-SCHEMA-INVARIANTS`. Re-read SESSION_LOG top + git status before acting; the finding is schema-contract-only (runner guard was already accepted).
+
+**Required finding fixed**: the EP execution-summary JSON Schema accepted internally contradictory tracked summaries that the runner-side `validate_summary_internal_consistency()` would reject — for a schema-first project the committed schema must reject them by itself. Mirrored the already-resolved low_volatility schema pattern.
+
+**Changed (schema + schema tests only; no runner / frozen-design / ledger / result-logic change):**
+- `schemas/a_long_large_cap_ep_value_signal_search_execution_summary.schema.json`: added per-`cell_id` `if/then` pins for all 28 result cells (each pins `signal_id` / `view` / `weighting` / `horizon_trading_days` / `benchmark`), so a non-primary cell can no longer keep its `cell_id` while carrying wrong metadata; added `decision` `allOf` `if/then` tying `research_verdict` <-> `is_statistical_alpha_clue`, the count fields to their booleans, `primary_cell_passed_statistical_gates == is_statistical_alpha_clue`, and `is_tradeable_candidate` <-> (`is_statistical_alpha_clue` AND `relative_nav_drawdown_gate_passed`).
+- `tests/schema/test_a_long_large_cap_ep_value_signal_search_schema.py`: added three adversarial tests reproducing Codex's exact planted artifacts (non-primary cell_id<->metadata mismatch; falsified verdict with clue true; tradeable true with clue/gate false) — each must now fail schema validation.
+
+**Verification (the schema ALONE now rejects the planted artifacts)**: schema JSON parse + `Draft7Validator.check_schema` OK; EP summary-schema + runner + prereg-schema + route-doc guard **65/65 OK** (was 62; +3 adversarial); full `unittest discover` **1097/1097 OK**; the valid summary and the two-tier clue+tradeable summary still validate with zero errors (no over-constraint). Producer-side `validate_summary_internal_consistency()` left unchanged as defense in depth for the count==list-length invariant draft-07 cannot express. Register P0 `R-EP-SUMMARY-SCHEMA-INVARIANTS` moved to `in_progress` with the repair detail; closure flips to `resolved` on Codex re-`审查` PASS.
+
+**Boundary**: no runner result logic, frozen design value, ledger, signal-search execution, provider fetch, or production / ship-gate / full-size / broker boundary touched. Singleton ledger remains UNSPENT; no result artifact exists. Uncommitted (awaits re-`审查`).
+
+**Next**: Codex re-`审查` of the ep_value runner slice (now with the hardened summary schema). After PASS → Claude `提交`; then a separate user `执行` spends the singleton once.
+
+---
+
+## 2026-06-08 — Codex `审查` (a_long_large_cap_ep_value signal-search runner slice) — **FAIL**
+
+**Scope reviewed**: pending EP runner slice and route state: `runners/a_long_large_cap_ep_value_signal_search.py`, `schemas/a_long_large_cap_ep_value_signal_search_execution_summary.schema.json`, `tests/test_a_long_large_cap_ep_value_signal_search.py`, `tests/schema/test_a_long_large_cap_ep_value_signal_search_schema.py`, plus `docs/CURRENT.md`, `docs/SESSION_LOG.md`, current git status, and the committed EP preregistration / singleton ledger. No signal search was executed; no result artifact exists; the EP singleton ledger remains unspent.
+
+**Verdict**: FAIL. The runner-side consistency guard is strong, but the tracked execution-summary JSON Schema is not strong enough for this schema-first project.
+
+**Required**:
+- `R-EP-SUMMARY-SCHEMA-INVARIANTS` (scope: EP execution-summary schema + schema tests; PIT label: execution-summary contract / no market-data PIT): the EP schema accepts internally contradictory tracked summaries. Independent jsonschema probes returned **0 errors** for all three planted bad artifacts: a non-primary result cell kept expected `cell_id = ep_value_non_neutral_equal_weight_252d_CSI300` while carrying wrong `benchmark` / `horizon_trading_days` / `view`; `decision.research_verdict = falsified_large_cap_ep_value_under_frozen_rules` while `is_statistical_alpha_clue = true`, clue count = 1, and primary gates pass; and `is_tradeable_candidate = true` while clue/drawdown gates are false. This is material because downstream/schema-only artifact validation can accept a hand-mutated or corrupted result even though `validate_summary_internal_consistency()` would reject runner-produced output.
+
+**Options for Claude**:
+- Recommended: mirror the already-resolved low_volatility pattern: add per-`cell_id` `if/then` pins for all 28 EP result cells (`signal_id`, `view`, `weighting`, `horizon_trading_days`, `benchmark`) and add `decision` `if/then` invariants tying verdict, clue bool, counts, primary-pass flag, tradeable bool, and drawdown gate; add schema-level adversarial tests for the three planted contradictions above.
+- Alternative: generate the same cell identity / decision invariant block from the frozen test helper or runner constants to reduce manual duplication, but the final committed JSON Schema must still reject the bad artifacts by itself.
+
+**Optional**: none. I am not raising runner/PIT/ledger findings after this pass; `select_recent_pit_rows()` and EP TTM rollover use announcement-date gating and restatement exclusions, the ledger gate checks the active unspent singleton state, and no output artifact exists.
+
+**Register outcome**: opened `R-EP-SUMMARY-SCHEMA-INVARIANTS` in `docs/system_risk_register.md` as P0 before replying.
+
+**Verification**: bundled Python `jsonschema` import available; `py_compile` OK; targeted EP runner + EP summary schema + EP prereg schema + route-doc guard suites **62/62 OK**; full `unittest discover` rerun outside the sandbox after the Tushare token-cache permission false positive **1094/1094 OK**; `git diff --check` clean except CRLF warnings for existing modified docs; sensitive scan found only no-secret flag names / tests, no URL/token/raw rows; `execution_summary.json` and `.pending` are absent. The failing evidence is the independent jsonschema adversarial probe described above.
+
+**Next**: User command to Claude: **修复**.
+
+---
+
+## 2026-06-08 — Claude `修` (pre-existing post-execution test drift in pure_quality + market-cap probe/materialization) — **DONE (local master, separate scope)**
+
+**Authorization & judgment**: user `修` after I flagged 16 pre-existing full-suite failures (unrelated to the ep_value runner slice) while verifying that slice. Root cause: the shared large-cap pure-quality singleton ledger was spent on 2026-06-07, but three test modules still assumed it unspent — a post-execution test drift never flipped (the same class of issue fixed for low_volatility/cash_conversion). NOT caused by the ep_value work; committed as a separate test-only scope.
+
+**Failures fixed (16 → 0; test-only, no runner / schema / business / production-gate change):**
+- `tests/test_a_long_large_cap_pure_quality_signal_search.py` (1): the gate test called `load_and_validate_ledger()` and asserted `tests_spent_count==0`, both now false. Flipped to assert the committed SPENT state (`tests_spent_count=1`, `active_no_new_test_authorized`, `spent_failed_outcome_threshold`) and that the unspent runtime gate now correctly refuses; added a synthetic-unspent-fixture acceptance test (mirrors the cash_conversion post-execution pattern).
+- `tests/test_a_long_large_cap_market_cap_materialization.py` (8) + `tests/test_a_long_large_cap_market_cap_field_probe.py` (7): their fake-client tests invoke the runner whose `validate_preregistration_*_ledger` gate reads the real (now-spent) pure-quality ledger and refuses (re-materialization/probe after the singleton spend stays blocked — correct). Added a setUp patcher wrapping `read_json` to return an UNSPENT ledger ONLY for `LEDGER_PATH` (every other read passes through), so the fake-client logic is still exercised without weakening the production gate.
+
+**Why test-side, not a runner-gate change**: the materialization/probe gates' "pure-quality ledger unspent" precondition is now permanently false but semantically still correct (those one-time steps legitimately ran before the spend; re-running should be a deliberately re-reviewed act). Flipping the tests to a synthetic unspent fixture restores green without relaxing a real safety gate — same approach as the documented low_volatility/cash_conversion post-execution flips.
+
+**Verification**: the 3 modules `30/30` OK; full `unittest discover` **1094/1094 OK** (was 1093 with 16 failures; +1 from splitting the pure-quality gate test into spent-state + unspent-fixture). `git status` before the fix confirmed the only non-test working-tree changes were the uncommitted ep_value runner slice, so this fix is isolated.
+
+**Committed (one scope = the 3 test files only, local master, no push)**: does not touch the pending ep_value runner slice (still uncommitted, awaiting `审查`) or any runner/schema/doc-state file.
+
+**Next**: unchanged — Codex `审查` of the ep_value runner slice; then Claude `提交`; then a separate user `执行`.
+
+---
+
+## 2026-06-08 — Claude `建 runner` (ep_value signal-search RUNNER slice) — **DONE, pending `审查`**
+
+**Authorization & judgment**: user `建 runner` after the ep_value design slice was committed review-passed (`2cb65cf`). Built the signal-search runner that the design's `next_steps` authorize: reuses the vetted measurement chain + the reviewed top-500 circ_mv universe + the full-main-board PIT income fundamentals + the 1,504-group restatement exclusion list (no new fetch); computes TTM-EP / PIT circ_mv with non-positive-earnings names excluded; adds the rolling-overlapping relative-NAV drawdown gate. Hardened from the start (the same hardenings the low_volatility runner needed mid-review) to pre-empt a repeat Codex FAIL.
+
+**Built (4 new untracked files; clones the cash_conversion fundamental+restatement skeleton + the low_volatility runner hardenings):**
+- `runners/a_long_large_cap_ep_value_signal_search.py` — strict `load_and_validate_preregistration` (≈110 frozen-field checks vs the committed prereg) + hardened `load_and_validate_ledger` (asserts `active_planned_test_pending_review`, exact planned prereg/result refs, `expected_tests_spent=1`, `approval_status=user_approved_pending_review`, empty spend log) + `validate_summary_internal_consistency` (cell_id↔metadata, verdict↔clue↔counts, tradeable↔clue∧drawdown-gate, count==list-length) + double-confirm flags + pending→ledger→final summary write/spend.
+- `schemas/a_long_large_cap_ep_value_signal_search_execution_summary.schema.json` — 28 result cells (16 EP views + 4 cap-weighted + 8 diagnostic) with 28 cell-id `contains` pins + primary-cell `if/then`; EP search_design fields (earnings_basis / ttm_rollover_rule / denominator_field / non_positive exclusion / earnings_basis_search_executed / denominator_field_search_executed); 2 EP diagnostic counters; verdict enum `falsified_large_cap_ep_value_under_frozen_rules` / `statistical_alpha_clue_research_only`.
+- `tests/test_a_long_large_cap_ep_value_signal_search.py` — 33 tests incl. EP-specific `ttm_rollover` (annual passthrough / interim rollover arithmetic / missing→None), `ep_signal_values` (scored / non_positive_earnings / insufficient_ttm / no_circ_mv via a fake PIT store), and `validate_summary_internal_consistency` accept+reject.
+- `tests/schema/test_a_long_large_cap_ep_value_signal_search_schema.py` — 9 tests (valid shape, two-tier clue+tradeable, production/rescue rejects, earnings-basis/denominator search rejects, verdict/cell-count/duplicate-primary/thin-coverage rejects).
+
+**Key decisions a reviewer should scrutinize:**
+- EP = TTM net income attributable to parent (`income.n_income_attr_p` YTD rollover: latest YTD + prior-FY annual − prior-year same-period YTD, all PIT + restatement-excluded) / PIT `circ_mv`. Non-positive TTM earnings → excluded from EP scoring (D(EP<0) separation), not bottom-ranked; counted in `ep_non_positive_earnings_excluded_observation_count`. Insufficient rollover history → `ep_insufficient_ttm_coverage_observation_count`, excluded.
+- circ_mv denominator is an earnings-to-free-float yield; only the cross-sectional percentile is used, so the circ_mv unit scale and the NI-vs-circ_mv unit mismatch are rank-invariant (noted in code + limitations).
+- Diagnostics `book_to_market` (`balancesheet.total_hldr_eqy_exc_min_int`/circ_mv) and `cash_flow_to_price` (`cashflow.n_cashflow_act` TTM/circ_mv) report-only; cannot rescue. All three fields confirmed materialized (base.compute_signal_values reads the same fields).
+- Frozen-reused: marginal 0.5 industry + 0.5 size neutral, 504d/CSI300 primary + 252d/CSI1000 diagnostics, HAC-t≥2.0, ≥48 cohorts, both sub-period halves positive, concentration guards, the same `-15%` relative-NAV drawdown tradeable gate, round_trip_cost 0.0026.
+
+**Verification (internal)**: `py_compile` OK; EP runner 33 + EP schema 9 + EP prereg-schema 15 + route-doc guard = **62/62 OK**; reconciled every runner prereg/ledger field-check against the committed prereg + ledger by reading both files (not memory). Full `unittest discover` ran 1093 tests with **16 failures — all PRE-EXISTING and unrelated** (`test_a_long_large_cap_pure_quality_signal_search` ×1, `test_a_long_large_cap_market_cap_field_probe` ×7, `test_a_long_large_cap_market_cap_materialization` ×8): they stem from the pure-quality singleton ledger being spent while those tests/runner still assert it unspent (post-execution drift from a prior session). `git status` shows the working tree is ONLY the 4 new EP files (zero existing files modified), so these failures reproduce identically on HEAD `2cb65cf` and are not caused by this slice. Not fixed here (separate scope; flagged for a future post-execution test-flip).
+
+**Boundary**: no signal-search execution, no provider fetch, no result metric, no ledger spend. Singleton ledger remains UNSPENT (`tests_spent_count=0`). Uncommitted (awaits Codex PASS then Claude `提交`).
+
+**Next**: Codex `审查` of this ep_value runner slice (runner + summary schema + the two test files). After review PASS → Claude `提交`; then a separate user `执行` spends the singleton exactly once. No `执行` now (runner not yet reviewed/committed).
+
+---
+
 ## 2026-06-08 — Codex `审查` (a_long_large_cap_ep_value_20260608 repeat review / no new Claude change) — **PASS**
 
 **Scope reviewed**: same uncommitted EP design slice already reviewed below: `research/preregistrations/a_long_large_cap_ep_value_20260608.json`, `research/ledgers/a_long_large_cap_ep_value_program_test_budget_ledger_20260608.json`, `schemas/a_long_large_cap_ep_value_preregistration.schema.json`, `tests/schema/test_a_long_large_cap_ep_value_preregistration_schema.py`, `docs/CURRENT.md`, and `docs/SESSION_LOG.md`. No new Claude commit or post-PASS closeout is present since the prior Codex PASS; `git log` still ends at `5df59ea`.
