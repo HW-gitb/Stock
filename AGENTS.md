@@ -282,7 +282,7 @@ The user remains the Final Approver.
 Command binding is determined by who the user is addressing:
 
 - `审查` = Codex reviews Claude's current changes independently. Codex must not write business code, runner code, schema, preregistration, ledger, or result artifacts during review.
-- `修复` = Claude implements the reviewed repair scope and records dispositions. After a Codex `审查`, the user sends `修复` directly to Claude to authorize repairing the reviewed Required findings; a separate `批准修改` is not required. Codex does not perform the repair, and the Claude `修复` `docs/SESSION_LOG.md` entry records the user-directed authorization for cross-LLM continuity.
+- `修复` = Claude implements the reviewed repair scope and records dispositions, after judging the reviewed findings per the **Claude implementer standard** below (judge before executing; surface a wrong instruction rather than blindly implement). After a Codex `审查`, the user sends `修复` directly to Claude to authorize repairing the reviewed Required findings; a separate `批准修改` is not required. Codex does not perform the repair, and the Claude `修复` `docs/SESSION_LOG.md` entry records the user-directed authorization for cross-LLM continuity.
 - `执行` = Claude runs the next approved execution slice, including real data/materialization/search only when the project approval gates and user command allow it.
 - `提交` = Claude commits the reviewed working tree as a single coherent commit after Codex review allows it.
 - `批准` / `批准修改` is NOT required between a Codex `审查` and a Claude `修复` (2026-06-07 update): the user's `修复` directly authorizes repairing the reviewed Required findings, and Claude records that user-directed authorization in `docs/SESSION_LOG.md`. `批准` remains available only for a standalone approval the user explicitly chooses to record (e.g. a strategic or spend decision); when used, the addressed LLM records it in `docs/SESSION_LOG.md` before proceeding.
@@ -322,6 +322,19 @@ Before Codex replies to any `审查`, Codex must complete this closeout gate and
 9. Final response must include one standalone, clear line naming the user's next command to Claude, for example `下一步对 Claude 的命令：**修复**`, `下一步对 Claude 的命令：**提交**`, or `下一步对 Claude 的命令：**执行**`. The command token must be bold; if the command is Latin text, uppercase it.
 
 Codex review output must be concise and decision-first: `verdict`, `Required`, `Optional`, `Options` when useful with at least two options and a recommended option, one-line key risk, and next step. Codex must prepend the review verdict to `docs/SESSION_LOG.md` before replying. If no issue remains, say it is clean; do not invent fixes to appear thorough.
+
+## Claude implementer standard
+
+When the user sends `修复` (or any implementation of a Codex-reviewed Required / Options / fix), Claude must judge the instruction before writing code — `修复` does not make Claude a blind executor. Because the `批准修改` step has been dropped, the user's `修复` is itself the authorization, so this judgment is the main safeguard between review and change.
+
+1. Read the actual reviewed finding(s) in `docs/SESSION_LOG.md` (and any cited code, schema, or artifact). Do not infer the change from the command word alone.
+2. Independently verify each Required is correct, sound, in scope, and necessary. For an Options finding, the implementer selects the optimal option and states why; do not auto-defer to the reviewer's recommendation.
+3. If any reviewed item is wrong, harmful, out of scope, or based on a misunderstanding, STOP and surface it to the user (Final Approver) with the reason and a better alternative. Do not silently implement something believed wrong, and do not silently refuse.
+4. Implement only the reviewed scope. No scope creep. Do not change frozen design values, factor definitions, measurement, thresholds, the universe, or the ledger unless that exact change is the reviewed fix.
+5. Record Optional dispositions (accept / reject + reason) and run the relevant schema / runner tests in a `jsonschema`-present environment before handing back for `审查`.
+6. The Claude `修复` `docs/SESSION_LOG.md` entry must record which findings were fixed, any item pushed back on with its reason, the disposition of each Optional, and the user-directed authorization (since `批准修改` is no longer a separate step).
+
+This judge-before-execute duty is symmetric to the Codex adversarial review standard; "reviewed" or "Required" does not remove Claude's responsibility to catch a wrong instruction before it lands.
 
 ## 交接记录
 

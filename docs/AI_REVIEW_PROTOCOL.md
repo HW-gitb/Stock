@@ -15,7 +15,7 @@ Current binding lives in `AGENTS.md`:
 - User = final approver.
 - `审查` addressed to Codex = independent adversarial review, with no business-code edits.
 - `修复` / `执行` / `提交` addressed to Claude = implementation, execution, and commit work.
-- `批准` / `批准修改` addressed to Codex = Codex first records the matching finding as `USER-APPROVED` in `docs/SESSION_LOG.md`, then Claude repairs afterward.
+- `批准` / `批准修改` is NOT required between a Codex `审查` and a Claude `修复` (2026-06-07 update): the user's `修复` directly authorizes repairing the reviewed Required findings, and Claude records that user-directed authorization in `docs/SESSION_LOG.md`. `批准` remains only for a standalone strategic / spend approval the user explicitly chooses to record.
 
 The old Codex-implements / Claude-reviews workflow has been removed from this file to prevent stale cross-session instructions.
 

@@ -8,6 +8,135 @@
 
 ---
 
+## 2026-06-08 — Claude `提交` (protocol/routing closeout) — **COMMITTED (local master, no push)**
+
+Per Codex's PASS re-review (entry below: `R-CURRENT-POST-COMMIT-ROUTE` fixed, `O-CURRENT-LENGTH` resolved, Required none) and the user's `提交`, committed the protocol/routing closeout as one coherent commit: `AGENTS.md` (§Claude implementer judge-before-execute standard + `修复` binding ref), `docs/AI_REVIEW_PROTOCOL.md` (`批准` / `批准修改` line synced to AGENTS.md), `docs/CURRENT.md` (inserted the missing `Claude 提交` gate in the cash_conversion runner-slice route at lines 9 / 20 / 95, dropped the stale design-review next gate, squashed two falsified superseded sagas to SESSION_LOG pointers, 179→149 lines), `docs/system_risk_register.md` (Hot Queue drift marked `resolved`), `docs/SESSION_LOG.md` (this entry + the Codex PASS and Claude 修复 entries). No business code / runner / schema / preregistration / ledger / data fetch / signal search / result artifact in this commit, per Codex's instruction.
+
+**Process note (transparency for next actor)**: while staging I briefly mis-edited the register to `awaiting re-review`, reasoning from stale pre-compaction context that said Codex's last verdict was FAIL. On re-reading the `docs/SESSION_LOG.md` top I found Codex had since re-reviewed and PASSED, so I reverted the register to the accurate `resolved` state before committing. No erroneous state was committed; lesson logged: confirm the current Codex verdict from the live SESSION_LOG top before touching the register, not from carried context.
+
+**Next**: the cash_conversion signal-search runner slice — Claude builds (reuse the vetted measurement chain + frozen two-tier verdict + rolling relative-NAV Option-A drawdown gate + median sub-period split) → Codex `审查` → Claude `提交` → separate user `执行` (spends the singleton once, produces the cash_conversion final verdict). No data fetch / signal search until that runner is built, reviewed, and separately executed.
+
+---
+
+## 2026-06-08 — Codex review (CURRENT route residual re-review) — **PASS / ready to commit**
+
+**Scope reviewed**: working tree has unstaged `AGENTS.md`, `docs/AI_REVIEW_PROTOCOL.md`, `docs/CURRENT.md`, `docs/SESSION_LOG.md`, and `docs/system_risk_register.md`; staged diff none; untracked none. This re-review focused on Claude's latest `docs/CURRENT.md` route-residual repair plus the already-reviewed protocol docs still present in the same working tree. No business code / runner / schema / preregistration / ledger / data / execution artifact was changed by Claude in this latest repair or by Codex during review closeout.
+
+**Verdict**: Pass. `R-CURRENT-POST-COMMIT-ROUTE` is fixed. `docs/CURRENT.md` now has one consistent current route: the cash_conversion design is already committed; next work is the signal-search runner slice; flow is Claude build -> Codex review -> Claude commit -> separate user execute. The stale "Next gate: Codex `审查` this design slice" route is gone, and the earlier protocol drift remains fixed in `docs/AI_REVIEW_PROTOCOL.md`.
+
+**Required**: none.
+
+**Optional**: `O-CURRENT-LENGTH` accepted and resolved. `docs/CURRENT.md` is now 149 lines, under the stated `<150` snapshot target, while preserving current route, falsified-path boundaries, and owner links.
+
+**Verification run by Codex**:
+- Bundled Python `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`; `jsonschema` import confirmed version `4.26.0`.
+- `python -m unittest tests.schema.test_a_long_large_cap_cash_conversion_preregistration_schema -v` — 15 tests OK.
+- `python -m unittest discover -s tests\schema -p "*cash_conversion*" -v` — 15 tests OK.
+- `docs/CURRENT.md` authoritative line count via `[System.IO.File]::ReadAllLines(...)` — 149.
+- Stale-route scans in `docs/CURRENT.md`: no `Next gate:` match; no direct `Codex 审查 -> user 执行` route without Claude commit; route-gate scan shows `Claude 提交` at lines 9 / 20 / 95.
+- `git diff --check` and `git diff --cached --check` passed.
+- `git check-ignore -v` confirmed the referenced `data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/` and `data/a_long/raw/tushare/full_main_board_signal_search_20260605/` roots are gitignored.
+- Secret/raw scan over the reviewed diff found no token value, key-bearing URL, raw payload, or provider sample leak; matches were historical context / no-raw wording.
+
+**Register**: `docs/system_risk_register.md` Hot Queue entry `Post-role-swap protocol / CURRENT routing drift` updated to `resolved` for this working tree. The next Claude commit must include the resolved register entry; if it is omitted or split away from the fix, reopen the risk.
+
+**Next**: Claude `提交` this docs/protocol closeout as one coherent commit. No `执行`, no signal search, no runner/schema/preregistration/ledger/data changes in this commit.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-CURRENT-POST-COMMIT-ROUTE residual + O-CURRENT-LENGTH) — **DONE, ready for re-review**
+
+**Authorization & judgment**: user `修复` (new binding: the user's `修复` directly authorizes repairing the reviewed Required findings; no `批准修改` needed). Per `AGENTS.md §Claude implementer standard` I independently judged Codex's findings before executing and confirmed both valid: CURRENT line 9 did omit the `Claude 提交` gate; line 10 did carry a stale "Next gate: Codex `审查`"; the file was 179 lines, above the stated `<150` target.
+
+**Scope of this repair**: `docs/CURRENT.md` only (plus this log entry). No business code / runner / schema / preregistration / ledger / data fetch / signal search / result artifact touched, per Codex's "修复 only the CURRENT route residual". (`AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/system_risk_register.md` remain modified in the working tree from the prior already-PASS protocol round — not re-touched here.)
+
+**R-CURRENT-POST-COMMIT-ROUTE (Required) — fixed**:
+- Line 9 (top Latest Delta): route now reads `Claude builds → Codex 审查 → Claude 提交 → user 执行` (inserted the missing `提交` gate).
+- Line 10 (2026-06-07 ROLE SWAP bullet): removed the stale "Next gate: Codex `审查` this design slice ..." and marked the bullet superseded by the 2026-06-08 top entry (design committed `63f5048` / `f35f786`; live next gate is the runner slice, not another design review).
+- Consistency sweep (same finding class, within the authorized route-residual scope): found a third stale-route instance at old line 104 (`build → Codex 审查 → user 执行`, missing `提交`, and fully redundant with line 95's correct route + §1's `cfb4058` record); removed it.
+- Verified: the three remaining route statements (lines 9, 20, 95) all carry `Claude 提交 →`; grep for `build → Codex` / `审查` → user` returns no matches.
+
+**O-CURRENT-LENGTH (Optional) — accepted**:
+- Squashed the two fully-superseded saga blocks into one pointer bullet each — large-cap pure-quality (old lines 11–21) and full-main-board frozen signal search (old lines 22–41) — each pointing to `docs/SESSION_LOG.md` + the commit log and preserving the FALSIFIED verdicts, key metrics, committed-repair list, and the "do NOT re-route without a new reviewed prereg+ledger" boundary. Standing context (US active-only + forward, A-short `risk_filter_only`, 000666 SW exception, main-board-only scope) and the current cash_conversion route kept.
+- `docs/CURRENT.md` 179 → 149 lines (< 150 target).
+
+**Verification**: `wc -l docs/CURRENT.md` = 149; stale-route grep empty; route-gate grep shows `提交 →` at lines 9 / 20 / 95; §5 P1-US → P2 seam renders clean after the line-104 removal.
+
+**Next**: Codex `审查` re-review of the CURRENT route-residual repair. NOT `执行`, NOT `提交` (commit only after re-review PASS).
+
+---
+
+## 2026-06-08 — Codex review (R-PROTOCOL / R-CURRENT routing repair re-review) — **FAIL / CURRENT route residual**
+
+**Scope reviewed**: working tree had unstaged `AGENTS.md`, `docs/AI_REVIEW_PROTOCOL.md`, `docs/CURRENT.md`, `docs/SESSION_LOG.md`, and `docs/system_risk_register.md`; staged diff none; untracked none. Reviewed startup docs and active cash_conversion owner artifacts without using old chat context as authority. Latest commits at review start: `f35f786`, `63f5048`, `bf26f13`. Codex closeout prepends this verdict and updates `docs/system_risk_register.md`; no business code / runner / schema / preregistration / ledger / data / execution artifact was changed by Codex.
+
+**Verdict**: Fail. `R-PROTOCOL-APPROVAL-GATE-DRIFT` is fixed: `docs/AI_REVIEW_PROTOCOL.md` now matches `AGENTS.md` and no longer requires Codex to record `USER-APPROVED` before Claude repairs. `R-CURRENT-POST-COMMIT-ROUTE` is only partially fixed: `docs/CURRENT.md` still contains contradictory next-step routing in the mandatory startup snapshot.
+
+**Required**:
+1. **R-CURRENT-POST-COMMIT-ROUTE (material: cross-LLM continuity / next-step routing; PIT: process-only / no market data)** — `docs/CURRENT.md` line 9 correctly says the design is committed and next is a signal-search runner slice, but it omits the required `Claude 提交` gate between Codex `审查` and user `执行`. `docs/CURRENT.md` line 10 still says "Next gate: Codex `审查` this design slice", which is stale because commits `63f5048` / `f35f786` already closed the design/protocol submit cycle. Because `docs/CURRENT.md` is required startup reading, this can make a fresh LLM either skip the commit gate before execution or repeat a completed design review path.
+
+**Optional**:
+- **O-CURRENT-LENGTH (docs hygiene, not blocking by itself)** — authoritative line count is 179, above the file's stated `<150` snapshot target. While fixing the Required route residual, trim or squash stale historical bullets if it can be done without losing the current route.
+
+**Verification run by Codex**:
+- Bundled Python `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`; `jsonschema` import confirmed version `4.26.0`.
+- `python -m unittest tests.schema.test_a_long_large_cap_cash_conversion_preregistration_schema -v` — 15 tests OK.
+- `python -m unittest discover -s tests\schema -p "*cash_conversion*" -v` — 15 tests OK.
+- `git diff --check` and `git diff --cached --check` passed.
+- `git check-ignore -v` confirmed the referenced `data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/` and `data/a_long/raw/tushare/full_main_board_signal_search_20260605/` roots are gitignored.
+- Secret/raw scan over the reviewed diff found no token value, key-bearing URL, raw payload, or provider sample leak; matches were historical context / no-raw wording.
+
+**Register**: `docs/system_risk_register.md` Hot Queue kept open and narrowed: protocol drift is fixed in working tree; CURRENT route residual remains open.
+
+**Next**: Claude `修复` only the CURRENT route residual. Do not touch business code, runner, schema, preregistration, ledger, data fetch, signal search, or result artifacts in that repair.
+
+---
+
+## 2026-06-08 — Claude 修复 (R-PROTOCOL-APPROVAL-GATE-DRIFT + R-CURRENT-POST-COMMIT-ROUTE per Codex review) — **READY FOR RE-REVIEW (Codex) / docs-only**
+
+User authorized via `修复` (no separate `批准修改`, per the 2026-06-07 protocol). Judged both Required per the §Claude implementer standard; both are real docs-routing drifts, fixed; no item pushed back; no Optional. Scope: `docs/AI_REVIEW_PROTOCOL.md` + `docs/CURRENT.md` only — no business code / runner / schema / preregistration / ledger / data / execution.
+- **R-PROTOCOL-APPROVAL-GATE-DRIFT**: `docs/AI_REVIEW_PROTOCOL.md` line 18 still said `批准`/`批准修改` to Codex = Codex records `USER-APPROVED` then Claude repairs, which contradicts the committed AGENTS.md binding. Rewrote it to match: `批准修改` is not required between a Codex `审查` and a Claude `修复`; the user's `修复` authorizes directly and Claude records the user-directed authorization in SESSION_LOG; `批准` remains only for standalone strategic/spend approvals. Confirmed: stale line count 0.
+- **R-CURRENT-POST-COMMIT-ROUTE**: `docs/CURRENT.md` still routed to the cash_conversion design re-review/submit cycle, but `63f5048`/`f35f786` already committed it. Updated the 最后更新 header, added a 2026-06-08 Latest Delta top bullet recording the commit + protocol updates, and rewrote §1 Phase / P0-P1 / 执行锁 and §5 routes so the next gate is the cash_conversion signal-search runner slice (build → Codex `审查` → user `执行`), not another design cycle; both falsified routes stay closed. Confirmed: stale "design slice 修到 re-review" count 0; design-committed `63f5048` present; runner-slice route present.
+
+**Verification**: docs-only routing fix, no schema/runner/test impact; grep confirms the stale protocol line and stale CURRENT routing are gone and the post-commit runner routing is in. No ledger/factor/universe change. Working tree uncommitted.
+
+**Next**: Codex `审查` (re-review) the two routing fixes, then Claude `提交`. After that, the cash_conversion signal-search runner slice is the next build.
+
+---
+
+## 2026-06-08 — Codex review (Claude AGENTS.md §Claude implementer standard docs-only slice) — **FAIL / protocol and CURRENT routing drift**
+
+**Scope reviewed**: working tree before closeout had unstaged `AGENTS.md` and `docs/SESSION_LOG.md`; staged diff none; untracked none. Reviewed `AGENTS.md`, `docs/AI_REVIEW_PROTOCOL.md`, `docs/CURRENT.md`, `docs/README.md`, `docs/system_risk_register.md`, top `docs/SESSION_LOG.md`, `research/README.md`, and the active cash_conversion preregistration / ledger / schema / schema tests. Latest commits at review start: `f35f786`, `63f5048`, `bf26f13`. Codex closeout additionally edits this entry and registers the material findings in `docs/system_risk_register.md`.
+
+**Verdict**: Fail. The new `AGENTS.md` Claude implementer standard itself is directionally correct: it makes Claude judge reviewed findings before implementing, preserves no-scope-creep, requires Optional disposition, and does not authorize runner / schema / preregistration / ledger / data / execution work. However, two existing routing documents still contradict or lag the post-commit protocol state, so a fresh LLM can follow the wrong command flow or repeat a completed design gate.
+
+**Required**:
+1. **R-PROTOCOL-APPROVAL-GATE-DRIFT (material: cross-LLM command routing; PIT: process-only / no market data)** — `docs/AI_REVIEW_PROTOCOL.md` still says `批准` / `批准修改` addressed to Codex means Codex records `USER-APPROVED` and then Claude repairs. This conflicts with `AGENTS.md` lines 285 and 288, where the current binding is that user `修复` directly authorizes repair after Codex review and `批准修改` is not required between review and fix. Because `docs/AI_REVIEW_PROTOCOL.md` is mandatory startup reading, this stale line can recreate the dropped gate.
+2. **R-CURRENT-POST-COMMIT-ROUTE (material: cross-LLM continuity / next-step routing; PIT: process-only / no market data)** — `docs/CURRENT.md` still describes the cash_conversion design slice as awaiting Codex review / Claude submit (`Latest Delta`, phase target, and §5 route). But `63f5048` / `f35f786` plus the top SESSION_LOG entry show the design was already submitted and committed; the next real work after this protocol-doc review is a separate signal-search runner slice, not another design repair/re-review/submit cycle.
+
+**Optional**: none.
+
+**Verification run by Codex**:
+- Default `python` is not on PATH, so Codex used bundled Python `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`.
+- `jsonschema` import confirmed version `4.26.0`.
+- `python -m unittest tests.schema.test_a_long_large_cap_cash_conversion_preregistration_schema -v` with bundled Python — 15 tests OK.
+- `python -m unittest discover -s tests\schema -p "*cash_conversion*" -v` with bundled Python — 15 tests OK.
+- `git diff --check` and `git diff --cached --check` passed.
+- `git check-ignore -v` confirmed the referenced `data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/` and `data/a_long/raw/tushare/full_main_board_signal_search_20260605/` roots are gitignored.
+- Secret/raw scan over the reviewed docs + cash_conversion artifacts found no token value, key-bearing URL, raw payload, or provider sample leak; matches were schema ids, protective no-raw fields, gitignored raw-root labels, or historical log references.
+
+**Register**: material findings recorded in `docs/system_risk_register.md` Hot Queue as `Post-role-swap protocol / CURRENT routing drift` with Required IDs `R-PROTOCOL-APPROVAL-GATE-DRIFT` and `R-CURRENT-POST-COMMIT-ROUTE`.
+
+**Next**: Claude `修复` only the two docs-routing blockers above. Do not touch business code, runner, schema, preregistration, ledger, data fetch, signal search, or result artifacts in that repair.
+
+---
+
+## 2026-06-08 — Claude 实现 (AGENTS.md §Claude implementer standard: judge-before-execute on `修复`) — **READY FOR REVIEW (Codex) / docs-only, uncommitted**
+
+Wrote the previously-deferred implementer standard into `AGENTS.md`, symmetric to §Codex adversarial review standard. On `修复`, Claude must: read the actual reviewed findings in SESSION_LOG (not infer from the command word); independently verify each Required is correct / in-scope / necessary; select the optimal Options option with reason (no auto-defer to the reviewer); STOP and surface to the user any item that is wrong / harmful / out-of-scope / misunderstood rather than blindly implement or silently refuse; implement only the reviewed scope (no creep, no changing frozen values unless that is the fix); record Optional dispositions + verify in a jsonschema env; and record the user-directed authorization in SESSION_LOG (since `批准修改` was dropped). Also updated the `修复` alias line to reference this standard. This makes judge-before-execute a durable cross-LLM rule rather than memory- or in-context-dependent. Docs-only; no code / schema / runner / data / ledger change. Next: Codex `审查`, then `提交`.
+
+---
+
 ## 2026-06-07 — Claude 提交 (cash_conversion design submit + drop `批准修改` gate) — **review-status flipped to passed; committed in two scopes; protocol updated**
 
 Codex re-review PASSED (entry below). Performed the Codex-authorized submit-time steps + the user-directed protocol change, then committed.
