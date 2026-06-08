@@ -8,15 +8,228 @@
 
 ---
 
+## 2026-06-08 — Claude `提交` (ep_value result-closeout + route-doc drift root fix, post-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required, no Optional; the four route-doc drift entries marked `resolved`; boundary = commit the closeout/process-fix tree only). Re-read SESSION_LOG top + git status + register before committing per discipline.
+
+**Committed (one closeout scope, local master, no push)**: EP execution result `research/results/a_long_large_cap_ep_value_20260608/execution_summary.json` (**`falsified_large_cap_ep_value_under_frozen_rules`**, 5th closed large-cap line) + spent singleton ledger + flipped post-exec EP tests (`tests/test_a_long_large_cap_ep_value_signal_search.py`, `tests/schema/test_a_long_large_cap_ep_value_preregistration_schema.py`); plus the route-doc drift ROOT FIX — `tests/test_route_doc_ledger_status_consistency.py` (whole-doc CURRENT transient-gate + synonyms incl 执行, §1/§5 metric scan, README alias-scoped regex), `AGENTS.md` route-doc v3, `.githooks/pre-commit` (finds both Claude's and Codex's python), and `docs/CURRENT.md` / `docs/system_risk_register.md` (four entries → resolved) / this log. First commit to run through the new pre-commit hook.
+
+**State after commit**: `ep_value` line CLOSED (falsified, singleton spent). Five A-long large-cap single-factor lines all executed/closed. Route-doc drift class closed mechanically (whole-doc + synonym + README-alias + working hook) + behaviorally (AGENTS v3).
+
+**Next**: the next A-long research step is a NEW reviewed batch prereg + ledger (the 9-factor + composite BH-FDR design discussed; draft archived under `docs/`). No further single-factor solo without a new reviewed prereg+ledger.
+
+---
+
+## 2026-06-08 — Codex `审查` (R-ROUTEDOC-PRECOMMIT-STILL-FAILOPEN re-review / ep_value closeout) — **PASS**
+
+**Scope reviewed**: current uncommitted EP result-closeout + route-doc drift root-fix tree: `.githooks/pre-commit`, `AGENTS.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, `tests/test_route_doc_ledger_status_consistency.py`, EP runner/schema tests, spent EP ledger, and `research/results/a_long_large_cap_ep_value_20260608/execution_summary.json`. No signal search, provider call, data fetch, runner rewrite, schema expansion, ledger spend, production claim, ship-gate claim, full-size claim, DataHub work, or broker/order automation was executed in this review.
+
+**Verdict**: PASS. `R-ROUTEDOC-PRECOMMIT-STILL-FAILOPEN` is fixed, and the prior route-doc/current/README synonym guard chain is clean in the reviewed tree.
+
+**Required**: none.
+
+**Optional**: none.
+
+**Independent checks performed**: bundled Python `jsonschema` import OK (`4.26.0`); route-doc guard **11/11 OK**; targeted EP prereg/schema/runner + route-doc guard **61/61 OK**; `git config --get core.hooksPath` = `.githooks`; default `C:\Program Files\Git\bin\sh.exe .githooks/pre-commit` actually ran the 11 guard tests and exited 0; stripped-PATH Git `sh` (`HOME=/nonexistent`, empty `LOCALAPPDATA`/`USERPROFILE`) also ran the 11 guard tests and exited 0, proving the `/c/Users/*/.cache/codex-runtimes/*/dependencies/python/python.exe` fallback works instead of warning-exiting. Direct route probes: README alias-scoped no-space / next-command / who-executes variants are caught; real README/CURRENT transient-gate and durable-metric violations are all zero. EP artifact validation: execution summary schema errors 0; ledger `tests_spent_count=1`, `active_no_new_test_authorized`, `spent_failed_outcome_threshold`; primary cell `ep_value_industry_size_neutral_equal_weight_504d_CSI300` has 56 cohorts, HAC t `2.1664747864`, p `0.0302749245`, single-year concentration guard false, relative-NAV drawdown `-0.1930115543` with drawdown gate false, and decision counts `0/0` across 28 result cells. Full `unittest discover` under sandbox ran **1085 tests** with only the known 6 Tushare `C:\Users\cnhea\tk.csv` permission errors; those 6 Phase 6 classes passed under approved non-sandbox rerun (**21/21 OK**). `git diff --check` clean except CRLF warnings.
+
+**Register outcome**: the four related route-doc drift entries (`R-EP-CURRENT-DURABLE-METRIC-DUPLICATION`, `R-EP-CURRENT-GATE-SYNONYM-GUARD-GAP`, `R-ROUTEDOC-README-SYNONYM-GUARD` / `R-ROUTEDOC-PRECOMMIT-PYTHON-DISCOVERY`, `R-ROUTEDOC-PRECOMMIT-STILL-FAILOPEN`) are marked `resolved` with this PASS evidence in `docs/system_risk_register.md`.
+
+**Boundary**: this PASS authorizes Claude to commit the reviewed result-closeout/process-fix tree only. It does not authorize rerun, threshold / horizon / benchmark / universe / factor-definition rescue, provider fetch, production use, ship-gate evidence, full-size use, DataHub work, or broker/order automation.
+
+**Next**: User command to Claude: **提交**.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-ROUTEDOC-PRECOMMIT-STILL-FAILOPEN — hook now finds Codex's python too) — **DONE, pending re-`审查`**
+
+**Authorization & live-state**: user `修复` after Codex re-`审查` confirmed `R-ROUTEDOC-README-SYNONYM-GUARD` FIXED (all no-space + synonym variants caught; real docs clean) but FAILed the hook: in Codex's actual Git `sh` env it WARNING-EXITED (did not run the guard) instead of blocking. Re-read SESSION_LOG top + git status before acting.
+
+**Root cause (a real cross-LLM fact worth recording)**: **Claude and Codex run DIFFERENT Python interpreters** — Claude's is `…\AppData\Local\Programs\Python\Python313\python.exe`; Codex's is the bundled runtime `…\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`. My prior hook fallback only knew Claude's locations, so it found python when I tested (in Claude's env) but warning-exited under Codex. My earlier "hook exit 0" claim was from the WRONG environment — the same verification-environment error I just acknowledged, now repeated specifically for the hook. Lesson reinforced: prove enforcement in the environment that will actually run it, not the convenient one.
+
+**Fixed (process-only; hook + comments):**
+- `.githooks/pre-commit` `find_python` now globs `/c/Users/*/` for BOTH `…/.cache/codex-runtimes/*/dependencies/python/python.exe` (Codex) AND `…/AppData/Local/Programs/Python/Python*/python.exe` (Claude), plus the env-var bases — so the guard actually runs in either environment. Fail-open with a warning remains ONLY as a last resort if no interpreter is found anywhere.
+- Proof: the Codex-runtime python runs the guard (`Ran 11 tests … OK`); `C:\Program Files\Git\bin\sh.exe .githooks/pre-commit` now prints the 11 route-doc tests and exits 0 under BOTH default PATH AND a STRIPPED PATH (`HOME=/nonexistent`, empty `LOCALAPPDATA`/`USERPROFILE`, forcing the `/c/Users/*` glob incl the codex-runtime path) — no warning-exit.
+- Optional (Codex flagged comment drift): cleaned the guard-test comments — `route-doc v2` → `v3`; README transient mechanism now described as the alias-scoped regex scan, not `SPENT_CONTRADICTING_PHRASES`.
+
+**Verification**: route-doc guard **11/11 OK**; full suite **1106/1106**; hook runs the 11 tests + exit 0 under both default and stripped-PATH Git `sh`. Register entry `R-ROUTEDOC-PRECOMMIT-STILL-FAILOPEN` carries the repair detail; closure flips to `resolved` on Codex re-`审查` PASS.
+
+**Boundary**: process-only (git hook + test comments). EP result / spent ledger / runner / schema unchanged; closeout still uncommitted, awaiting re-`审查`.
+
+**Next**: Codex re-`审查` of the ep_value result-closeout + route-doc-drift root fix; then Claude `提交`.
+
+---
+
+## 2026-06-08 — Codex `审查` (R-ROUTEDOC README/hook repair re-review) — **FAIL / Required**
+
+**Scope reviewed**: current uncommitted tree after Claude `修复`: `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `research/README.md`, `tests/test_route_doc_ledger_status_consistency.py`, `.githooks/pre-commit`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, EP spent ledger, EP result artifact, and current `git status` (latest commit `d6bedfd`).
+
+**Verdict**: FAIL with one Required. `R-ROUTEDOC-README-SYNONYM-GUARD` is fixed: independent Unicode-escape probes on a spent alias caught `待Codex审查`, `下一条命令是 Claude 提交`, `下一步对 Claude 的命令：提交`, `由 Codex 审，随后 Claude 提交`, `谁审查`, `谁提交`, `谁执行`, and `Claude 执行`; real `docs/README.md` / `research/README.md` and `docs/CURRENT.md` have zero current transient-gate violations. The remaining blocker is the hook: it still does not run the guard in the actual local Git `sh` environment.
+
+**Required R-ROUTEDOC-PRECOMMIT-STILL-FAILOPEN** (scope `.githooks/pre-commit`, `AGENTS.md`; PIT `process-only commit guard / no market-data PIT`; severity `P1`): running `C:\Program Files\Git\bin\sh.exe .githooks/pre-commit` exits `0` but prints `pre-commit WARNING: no Python found on PATH or in known Windows locations; route-doc guard NOT run.` That is not a working second door; it silently allows a commit without executing `tests.test_route_doc_ledger_status_consistency`. The fallback search only checks `$HOME/AppData/Local`, `$LOCALAPPDATA`, and `$USERPROFILE/AppData/Local` Python installs, but this machine has no such Python; the actual available interpreter is `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`, which Git `sh` sees as executable at `/c/Users/cnhea/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe`. Fix: make the hook find that real interpreter (or another verified repo-local/Codex-runtime interpreter) and prove the hook output includes the 11 route-doc tests running and passing under default Git `sh`; do not claim hook success if it only warning-exits. Keep fail-open only as a clearly documented last-resort fallback, not the normal path on this machine. Do not change runner logic, frozen design values, result metrics, ledgers, execution summaries, provider access, DataHub, production, ship-gate, full-size, or broker/order boundaries.
+
+**Optional**: comments in `tests/test_route_doc_ledger_status_consistency.py` still say "Per AGENTS.md route-doc v2" and mention `SPENT_CONTRADICTING_PHRASES` as the README transient mechanism even though the code now uses the alias-scoped regex. This is comment drift only; clean it opportunistically if touching the guard.
+
+**Verification**: bundled Python `jsonschema` import OK (`4.26.0`); route-doc guard **11/11 OK**; targeted EP prereg/schema/runner + route-doc guard **61/61 OK**; direct schema validation of EP preregistration, spent ledger, and execution summary **0 errors**; EP summary has 28 result cells and primary id `ep_value_industry_size_neutral_equal_weight_504d_CSI300`; ledger is `active_no_new_test_authorized`, `tests_spent_count=1`, one spend log, zero planned tests. Full `python -m unittest` under sandbox ran **1085 tests** with only the known 6 Tushare `C:\Users\cnhea\tk.csv` permission errors; the same 6 classes passed under approved non-sandbox rerun (**21/21 OK**). `git diff --check` clean except CRLF warnings. Default Git hook execution failed the actual guard-run requirement as above.
+
+**Next**: User command to Claude: **修复**.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-ROUTEDOC-README-SYNONYM-GUARD + R-ROUTEDOC-PRECOMMIT-PYTHON-DISCOVERY) — **DONE, pending re-`审查`**
+
+**Authorization & live-state correction**: user said `提交`, but re-reading SESSION_LOG top + git status showed Codex re-`审查` had **FAILed** the route-doc hardening with two Required — so `提交` is blocked (can't commit a FAILed scope). Concretely, my own `.githooks/pre-commit` would also have blocked the commit: Git runs hooks with a minimal PATH where `python` isn't found, so the hook exited 1 ("python not found") on a real commit. The live-state-correct action is `修复`, done here.
+
+**Fixed (process-only; NO runner / result / ledger / frozen-design change):**
+- `R-ROUTEDOC-README-SYNONYM-GUARD`: README transient detection was literal-substring via `SPENT_CONTRADICTING_PHRASES`, so it missed `待Codex审查` (no space) and the synonyms (`下一条命令` / `谁执行` / `由 Codex 审` / `Claude 提交` / `Claude 执行`). Replaced with an **alias-scoped REGEX** scan (`_readme_alias_scoped_transient_violations` / `_alias_scoped_transient_hits`) applying the SAME `STRICT_TRANSIENT_GATE_PATTERNS + CURRENT_ONLY_SYNONYM_PATTERNS` regex as CURRENT, but ONLY to README lines that reference a spent-ledger alias (so review-process prose is never flagged). Reverted the weak literals; added a real-README-clean test, a planted-variant test (no-space + all synonyms incl 执行 — all caught), and a benign-prose-without-alias test (not flagged).
+- `R-ROUTEDOC-PRECOMMIT-PYTHON-DISCOVERY`: the hook tried only `python`/`python3` → in Git's minimal hook PATH none resolve → it BLOCKED every commit (the round-2 brick problem, now Codex-confirmed). Fixed: discover Python via PATH (`python`/`python3`/`py`), then fall back to `$HOME` / `$LOCALAPPDATA` / `$USERPROFILE` `…/Programs/Python/Python*/python.exe` (real path here `…\Python313\python.exe`); if truly none, **fail-OPEN with a loud warning** so it never bricks commits (the tracked test is the primary defense). Proven: ran the hook through Git `sh.exe` under a STRIPPED PATH (python removed) → it finds the fallback and exits 0 on the clean tree; exits 1 only on a real guard failure.
+- Optional: `AGENTS.md` label `Route-doc 稳定性约定 (v2)` → `(v3)`; v2.4 note updated to describe the alias-scoped regex + hook discovery.
+
+**Verification**: route-doc guard **11/11 OK**; full suite **1106/1106**; hook exit 0 under stripped-PATH Git `sh`; `docs/CURRENT.md` 149 lines. Register entry carries the repair detail; closure flips to `resolved` on Codex re-`审查` PASS.
+
+**Boundary**: process-only (route docs + guard test + AGENTS convention + git hook). EP result / spent ledger / runner / schema unchanged; closeout still uncommitted, awaiting re-`审查`.
+
+**Next**: Codex re-`审查` of the ep_value result-closeout + route-doc-drift root fix; then Claude `提交`.
+
+---
+
+## 2026-06-08 — Codex `审查` (route-doc root-fix hardening re-review) — **FAIL / Required**
+
+**Scope reviewed**: current uncommitted route-doc drift hardening after Claude `修复`: `AGENTS.md`, `docs/CURRENT.md`, `docs/README.md`, `research/README.md`, `tests/test_route_doc_ledger_status_consistency.py`, `.githooks/pre-commit`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, spent EP ledger/result closeout files, `git status --short --untracked-files=all`, and latest commit `d6bedfd`.
+
+**Verdict**: FAIL with two Required. The `CURRENT` header/§0 stale gate wording is now cleaned, `AGENTS.md` no longer tells writers to put non-settled gate state into `CURRENT §0`, and the route-doc unit tests pass. The remaining blockers are both enforcement gaps in the attempted root fix: the README alias-scoped guard still misses same-meaning gate synonyms, and the new pre-commit hook is not executable on this Windows/Git environment because it cannot find Python.
+
+**Required R-ROUTEDOC-README-SYNONYM-GUARD** (scope `tests/test_route_doc_ledger_status_consistency.py`, `AGENTS.md`; PIT `process-only cross-LLM routing / no market-data PIT`; severity `P1`): README whole-doc scanning was correctly avoided to prevent process-prose false positives, but the replacement alias-scoped README scan only checks `SPENT_CONTRADICTING_PHRASES` literal substrings. Independent Unicode-escape probes on a spent-ledger alias showed `待 Codex 审查` with a space is caught, but `待Codex审查`, `下一条命令是 Claude 提交`, `由 Codex 审，随后 Claude 提交`, `谁执行`, and `Claude 执行` all return no violations. That leaves the same synonym leak able to relocate from `CURRENT` into `docs/README.md` / `research/README.md` spent-line rows. Fix: make alias-scoped README detection use the same conceptual strict+synonym regex coverage as `CURRENT` (or a shared normalized matcher), including no-space `待Codex`; add planted alias-row tests for the listed variants and a benign README-process-prose test so broad process descriptions still do not false-positive.
+
+**Required R-ROUTEDOC-PRECOMMIT-PYTHON-DISCOVERY** (scope `.githooks/pre-commit`; PIT `process-only commit guard / no market-data PIT`; severity `P1`): the tracked hook chooses only `python` or `python3` (`.githooks/pre-commit:13-16`). In the actual local Git `sh` environment, `command -v python`, `python3`, `py`, `python.exe`, `python3.exe`, and `py.exe` all return empty, and `C:\Program Files\Git\bin\sh.exe .githooks/pre-commit` exits 1 with `pre-commit BLOCKED: python not found on PATH`. This makes the "second door" block normal commits instead of running the guard, contradicting the repair's verification claim. Fix: make the hook discover a real local Python in this environment before commit (for example by validating `python` / `python3` / `py` when present and falling back to the known Codex bundled Python path via `USERPROFILE`/`cygpath` if appropriate), then re-run the hook through Git `sh` and prove it exits 0 on the current tree.
+
+**Optional**: rename the visible `Route-doc 稳定性约定 (v2)` label in `AGENTS.md` to match the now v2.4/v3 semantics. This is cosmetic as long as the normative text stays clear.
+
+**Verification**: bundled Python `jsonschema` import OK (`4.26.0`); targeted EP schema/runner + route-doc guard **59/59 OK**; route-doc guard alone **9/9 OK**; `git diff --check` clean except CRLF warnings; full `python -m unittest` under sandbox ran **1083 tests** with only the known Tushare `C:\Users\cnhea\tk.csv` permission errors in 6 Phase-6 classes, and the same 6 classes passed under approved non-sandbox rerun (**21/21 OK**). Direct Git hook check failed as above. README alias-synonym probe failed as above.
+
+**Next**: User command to Claude: **修复**.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-EP-CURRENT-GATE-SYNONYM-GUARD-GAP + user-requested gap-close: README scan + pre-commit hook) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex re-`审查` FAIL (entry below) found two holes the round-2 fix left, and after the user explicitly asked me to also close the residual gaps I had honestly flagged (synonym leak / cross-file / unskippable). This is the route-doc-drift class's root fix, hardened on three axes at once.
+
+**Fixed:**
+- **AGENTS.md self-check contradiction** (`R-EP-CURRENT-GATE-SYNONYM-GUARD-GAP` part 1): L24 still said non-settled route text may go to `SESSION_LOG + CURRENT §0`, contradicting the v3 rule (§0 = settled only). Rewrote it: review/commit-cycle gate text → ONLY `docs/SESSION_LOG.md` top, never `CURRENT` incl §0.
+- **Synonym guard gap** (part 2): the whole-doc scan caught literal phrases but a same-meaning synonym (`下一条命令是 Claude 提交` / `由 Codex 审,随后 Claude 提交`) returned violations=0. Added `docs/CURRENT.md`-only synonym patterns (`下一条命令` / `下一步…命令` / `谁审|谁提交|谁复审` / `由 Codex 审` / `随后 Claude 提交` / `Claude 提交`) + an adversarial test that all six planted lines (literal + synonym) are caught. Reworded the CURRENT header so it delegates the gate without itself naming trigger words.
+- **Gap 2 — cross-file (user-requested)**: extended the strict transient-gate scan to `research/README.md` + `docs/README.md` (not just CURRENT). `pending`/`awaiting` narrowed to require a review/commit object so process prose like "pending Optional disposition" does NOT false-positive (proven by a README-safety test). So the drift can no longer relocate to a different FILE either.
+- **Gap 3 — unskippable (user-requested)**: added `.githooks/pre-commit` + `git config core.hooksPath .githooks`, so the route-doc guard runs on every commit and a drifted CURRENT cannot be committed even if someone forgets to run the test. Emergency `--no-verify` needs user approval (project policy).
+
+**Why this should end the recurrence (honest)**: the class recurred because every prior fix was scoped to a *location* or a *literal phrase*, so the same writing habit relocated/re-worded the drift. This round attacks all three escape routes at once — location (whole-doc + both READMEs), phrasing (synonyms), and enforcement (pre-commit hook) — plus the behavioral rule in AGENTS.md v3. Residual that remains honestly: a totally novel synonym not in the list could still slip (phrase-lists are finite); the backstops there are Codex review + the AGENTS.md rule. But the structural relocation driver is closed.
+
+**Verification**: route-doc guard **9/9 OK**; full suite **1104/1104**; `.githooks/pre-commit` exits 0 on the clean tree and blocks on guard failure; `docs/CURRENT.md` 149 lines. **User-directed refinement (same round, user acting as reviewer):** (1) added `执行` synonyms (`Claude 执行` / `谁执行` / `待执行`) — the user flagged I'd missed them; (2) **corrected the README approach** — the whole-doc strict+synonym scan is now `docs/CURRENT.md`-ONLY (a README whole-scan false-positives on legit review-process prose like "pending Optional disposition"); README transient drift is instead caught by the **alias-scoped** spent-line scan (transient phrases added to `SPENT_CONTRADICTING_PHRASES`, firing only on rows referencing a SPENT line's alias), proven by a new spent-alias-catch test + the README-safety test; (3) `AGENTS.md` now states the layers explicitly — tracked test = PRIMARY (run before `提交`/`审查`), `.githooks/pre-commit` = secondary local door (Git hooks don't auto-apply cross-env), Codex + the convention = concept-level backstop. Register `R-EP-CURRENT-GATE-SYNONYM-GUARD-GAP` carries the repair detail; closure flips to `resolved` on Codex re-`审查` PASS.
+
+**Boundary**: process-only (route docs + guard + AGENTS.md convention + git hook). EP result / spent ledger / runner / schema unchanged; closeout still uncommitted, awaiting re-`审查`.
+
+**Next**: Codex re-`审查` of the ep_value result-closeout + route-doc-drift root fix; then Claude `提交`. Next research step is the pre-registered batch + BH-FDR multi-factor round (new prereg+ledger).
+
+---
+
+## 2026-06-08 — Codex `审查` (R-EP-CURRENT-TRANSIENT-GATE-WORDING round-2 repair) — **FAIL / Required**
+
+**Scope reviewed**: current uncommitted EP result-closeout closeout after Claude `修复`: `AGENTS.md`, `docs/CURRENT.md`, `tests/test_route_doc_ledger_status_consistency.py`, spent EP ledger + post-exec EP tests + `research/results/a_long_large_cap_ep_value_20260608/execution_summary.json`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, `git status --short --untracked-files=all` (latest commit `d6bedfd`; untracked intentional result summary only).
+
+**Verdict**: FAIL with one Required. The current `docs/CURRENT.md` no longer contains the previously flagged `result-closeout 待 Codex 审查` / `before result commit` wording, and the EP artifact / spent ledger / recomputed result remain clean. The remaining blocker is that the root convention and the new whole-doc guard still leave a concrete synonym hole for the same cross-LLM gate drift class.
+
+**Required R-EP-CURRENT-GATE-SYNONYM-GUARD-GAP** (scope `AGENTS.md`, `tests/test_route_doc_ledger_status_consistency.py`, optionally `docs/CURRENT.md` header wording; PIT `process-only cross-LLM routing / no market-data PIT`; severity `P1`): `AGENTS.md:24` still says a route sentence that will not remain true after the next commit/execute should go to `SESSION_LOG + CURRENT §0`, directly conflicting with `AGENTS.md:20` and `AGENTS.md:28`, which say review/commit-cycle gate state must live only in `SESSION_LOG` top and `CURRENT §0` only carries settled facts. The new guard catches the exact old phrases, but an adversarial planted line with the same meaning — `下一条命令是 Claude 提交` / `由 Codex 审，随后 Claude 提交` — returns `violations=0`. Fix: rewrite the self-check sentence so non-settled workflow gate text goes only to `SESSION_LOG.md` top; if a short settled fact is worth repeating, it may go to `CURRENT §0`. Add adversarial guard coverage for Chinese next-command / who-reviews / who-commits synonyms (for example `下一条命令`, `下一步对 Claude 的命令`, `谁审`, `谁提交`, `由 Codex 审`, `Claude 提交`) and rephrase any current stable delegation line if needed so the guard remains precise. Do not change runner logic, frozen design values, result metrics, ledger values, execution-summary values, provider access, DataHub, production, ship-gate, full-size, or broker/order boundaries.
+
+**Optional**: rename the visible route-doc label from `(v2)` to `(v3)` or `(v2.3)` for clarity, but this is not required if the normative text is internally consistent.
+
+**Register outcome**: already covered under in-progress P1 `R-EP-CURRENT-DURABLE-METRIC-DUPLICATION`; updated risk register with this round-2 synonym/AGENTS contradiction follow-up.
+
+**Verification**: bundled Python `jsonschema` import OK (`4.26.0`); targeted EP prereg/schema/runner + route-doc guard **57/57 OK**; full `unittest discover -s tests` with approved Tushare token-cache permission **1102/1102 OK**; direct jsonschema validation of EP execution summary + spent ledger **0 errors**; read-only recomputation of `build_summary()` with a synthetic unspent ledger exactly matched written `decision`, primary cell, 28 result cells, risk gate, sub-period robustness, and execution diagnostics; `.pending` summary absent; `git diff --check` clean except CRLF warnings; stale scan of `docs/CURRENT.md` for the listed old transient phrases returns no matches. The failing evidence is the planted synonym guard probe above (`violations=0`) plus the contradictory AGENTS self-check line.
+
+**Next**: User command to Claude: **修复**.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-EP-CURRENT-TRANSIENT-GATE-WORDING — root-cause fix for the recurring route-doc drift) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex re-`审查` FAIL (entry below): the §1/§5 metric repair worked, but the SAME drift class remained as live-gate wording in `docs/CURRENT.md` header (line 2) `result-closeout 待 Codex 审查` and §0 (line 9) `routed to Codex 审查 before the result commit`, which my §1/§5-only guard could not see. User (rightly) escalated: this class has recurred too many times.
+
+**Root cause (named, so it stops recurring)**: it is a **writing-habit** defect, not a Codex defect — Codex has caught every instance BEFORE any stale doc was committed (the safety net works). It recurred because every prior fix was **location-scoped** (fix this phrase here + guard this section/ledger-filename), while the bad habit — narrating the transient review/commit-cycle position into a DURABLE doc — was never constrained, so the drift just relocated to the next un-guarded spot (`research/README` → contract rows → §1/§5 → header/§0). The `AGENTS.md` route-doc v2 convention even **blessed** the loophole: it allowed §0 to contain `pending`, so `待 Codex 审查` in §0 looked compliant.
+
+**Fixed (docs + guard + convention only; NO runner / result / ledger / execution-summary / frozen-design change):**
+- `docs/CURRENT.md` header (line 2) + §0 (line 9): removed all live-gate wording (`待 Codex 审查` / routed-to / before-commit). Header now states settled status + delegates the live gate explicitly to `docs/SESSION_LOG.md` top; §0 ends at the settled verdict. §0 keeps the EP metrics (allowed live-restatement zone).
+- `tests/test_route_doc_ledger_status_consistency.py`: added a **WHOLE-DOCUMENT** transient-gate scan over ALL of `docs/CURRENT.md` (header / preamble / §0 / any section) that fails on `待 Codex` / `待审查` / `pending` / `awaiting` / `routed to Codex` / `result-closeout` / `before … commit` / `uncommitted`, plus an adversarial planted header/§0/§5 test. This is **location-independent** — the drift can no longer relocate to a new section. (The §1/§5 metric scan from round 1 stays.)
+- `AGENTS.md`: amended the route-doc convention to **v3** — CURRENT carries only SETTLED facts; the review/commit-cycle gate (pending / before-commit / who-reviews-next / routed-to / uncommitted) lives ONLY in `docs/SESSION_LOG.md` top, never in CURRENT incl §0/header. Closes the v2 §0-pending loophole; documents the whole-doc guard.
+
+**Verification**: route-doc guard **7/7 OK** (the new whole-doc transient-gate check passes on the cleaned CURRENT and catches planted header/§0/§5 lines; §1/§5 metric check + spent-ledger-alias checks still pass). `docs/CURRENT.md` 149 lines. Register `R-EP-CURRENT-DURABLE-METRIC-DUPLICATION` carries the round-2 follow-up; closure flips to `resolved` on Codex re-`审查` PASS. Full-suite confirmation below.
+
+**Boundary**: process-only (route docs + guard test + AGENTS.md convention). EP result + spent ledger unchanged; closeout still uncommitted, awaiting re-`审查`.
+
+**Next**: Codex re-`审查` of the ep_value result-closeout (now whole-doc route-doc-v3-clean); then Claude `提交`. Next research step is the pre-registered batch + BH-FDR multi-factor round (new prereg+ledger).
+
+---
+
+## 2026-06-08 — Codex `审查` (R-EP-CURRENT-DURABLE-METRIC-DUPLICATION repair re-review) — **FAIL / Required**
+
+**Scope reviewed**: current uncommitted EP result-closeout repair after Claude `修复`: `docs/CURRENT.md`, `tests/test_route_doc_ledger_status_consistency.py`, spent EP ledger/test flips/result artifact, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, and `git status` (latest commit `d6bedfd`).
+
+**Verdict**: FAIL. The EP artifact, spent ledger, and post-exec test flip remain consistent, and the §1/§5 metric-duplication repair itself works. The remaining blocker is the same state-drift class moved to the CURRENT header/§0 live-gate wording and not covered by the new guard.
+
+**Required R-EP-CURRENT-TRANSIENT-GATE-WORDING** (scope `docs/CURRENT.md`, `tests/test_route_doc_ledger_status_consistency.py`; PIT `process-only cross-LLM routing / no market-data PIT`; severity `P1`): `docs/CURRENT.md:2` still says `result-closeout 待 Codex 审查`; `docs/CURRENT.md:9` says the result-closeout is routed to Codex review before result commit. If Codex PASSes and Claude then commits this tree, those statements become stale immediately. The new guard scans only §1/§5 for metric restatements, so it does not catch header/preamble or §0 transient gate phrases. Fix: remove hard-coded pending-review / before-commit wording from `docs/CURRENT.md` header and §0, delegate the live gate to `docs/SESSION_LOG.md` top, and extend the route-doc guard with an adversarial planted line for header/§0 transient phrases (`待 Codex`, `PENDING`, `result-closeout`, `before result commit`, etc.). Do not touch runner logic, frozen design values, result metrics, ledger values, execution summary values, provider access, DataHub, production, ship-gate, full-size, or broker/order boundaries.
+
+**Optional**: none.
+
+**Verification**: bundled Python `jsonschema` import OK (`4.26.0`); targeted EP prereg/schema/runner + route-doc guard tests **55/55 OK**; full `unittest discover -s tests` passed under approved token-cache permission **1100/1100 OK** after sandbox-only `C:\Users\cnhea\tk.csv` PermissionError; `git diff --check` clean except CRLF warnings. Direct stale scan flags `docs/CURRENT.md:2` and `docs/CURRENT.md:9` as the live-gate wording that would drift.
+
+**Register outcome**: existing P1 `R-EP-CURRENT-DURABLE-METRIC-DUPLICATION` remains `in_progress`; this finding is the same cross-LLM route-doc drift class, now specifically the header/§0 transient-gate residue.
+
+**Next**: User command to Claude: **修复**.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-EP-CURRENT-DURABLE-METRIC-DUPLICATION on the ep_value result-closeout) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` FAIL (entry below) on the EP result-closeout raised one P1 Required, `R-EP-CURRENT-DURABLE-METRIC-DUPLICATION`. Re-read SESSION_LOG top + git status + the live register before acting (the user's literal `提交` was blocked because the closeout was at Codex FAIL — committing a FAILed scope is not allowed, so the live-state-correct action is `修复` first). The result artifact / spent ledger / recomputed metrics were already confirmed clean by Codex; this is process-only route-doc v2 hygiene.
+
+**Required finding fixed (docs + guard only; NO runner / result / ledger / execution-summary / frozen-design change):**
+- `docs/CURRENT.md` §1 (lines 19-20) and §5: rewrote the durable pointer zones to stable terminal pointers — removed the restated EP metrics (`mean +0.108` / `HAC t 2.17` / single-year concentration `0.378 > 0.35`) and the transient `result-closeout ... 待 Codex 审查` wording. §1 now states only the five-line executed/closed status + the next batch+FDR goal; §5 lists the five closed lines by commit ref and delegates verdicts/metrics/ledger state to §0 + this log + each `execution_summary.json`. §0 (the allowed live-restatement zone) keeps the full EP metrics unchanged.
+- `tests/test_route_doc_ledger_status_consistency.py`: extended the guard with a §1/§5 durable-pointer-zone scan that fails on backtick-wrapped decimals, `HAC t`, `mean net excess`, or cohort-count restatement, plus an adversarial planted-metric test. §0 and §3 (standing strategy conclusions, which legitimately carry numbers) are intentionally exempt — so the drift class now fails automatically next time, as Codex required.
+
+**Verification**: route-doc guard **5/5 OK** (the new durable-metric check passes on the cleaned §1/§5 and catches the planted line; the existing spent-ledger-alias checks still pass); `docs/CURRENT.md` 149 lines. Register P1 `R-EP-CURRENT-DURABLE-METRIC-DUPLICATION` moved to `in_progress` with repair detail; closure flips to `resolved` on Codex re-`审查` PASS. Full-suite confirmation below.
+
+**Boundary**: process-only (route docs + guard test). No runner logic, frozen design value, ledger, result metric, execution summary, provider access, or production / ship-gate / full-size / broker boundary touched. The EP result + spent ledger are unchanged; the closeout is still uncommitted, awaiting re-`审查`.
+
+**Next**: Codex re-`审查` of the ep_value result-closeout (now route-doc-v2-clean); then Claude `提交` of the closeout. No further A-long candidate without a new reviewed prereg + ledger — the next step is the pre-registered batch + BH-FDR multi-factor round.
+
+---
+
+## 2026-06-08 — Codex `审查` (ep_value result-closeout: result artifact + spent ledger + post-exec docs/tests) — **FAIL / Required**
+
+**Scope reviewed**: current working tree after Claude `提交` + `执行`: `research/results/a_long_large_cap_ep_value_20260608/execution_summary.json`, spent `research/ledgers/a_long_large_cap_ep_value_program_test_budget_ledger_20260608.json`, `docs/CURRENT.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `tests/test_a_long_large_cap_ep_value_signal_search.py`, `tests/schema/test_a_long_large_cap_ep_value_preregistration_schema.py`, plus the committed runner/schema/preregistration and current `git status`.
+
+**Verdict**: FAIL with one Required process/doc fix. The EP result artifact and singleton-ledger spend are internally consistent; the blocking issue is route-doc v2 discipline in the closeout docs.
+
+**Required R-EP-CURRENT-DURABLE-METRIC-DUPLICATION** (scope `docs/CURRENT.md`; PIT `process-only cross-LLM routing / no market-data PIT`; severity `P1`): `docs/CURRENT.md` §1 line 19 repeats EP result metrics outside §0 (`mean +0.108`, `HAC t 2.17`, `0.378 > 0.35`) and §5 line 95 keeps transient closeout-routing wording. `AGENTS.md` route-doc v2 says §0 + top `SESSION_LOG` + artifacts are the live-state sources; durable zones like §1/§5 should be stable pointers and must not restate t-stat/drawdown/cohort/concentration metrics or pending closeout state. Fix: rewrite `docs/CURRENT.md` durable sections outside §0 as stable terminal pointers only, delegate metrics to §0 / `SESSION_LOG` / `execution_summary.json`, and extend the route-doc guard so this class fails automatically next time. Do not change runner logic, frozen design values, result metrics, ledger values, execution summary values, provider access, DataHub, production, ship-gate, full-size, or broker/order boundaries.
+
+**Optional**: none.
+
+**Register outcome**: added open P1 risk `R-EP-CURRENT-DURABLE-METRIC-DUPLICATION` to `docs/system_risk_register.md`. The prior P0 `R-EP-SUMMARY-SCHEMA-INVARIANTS` remains resolved.
+
+**Verification**: bundled Python `jsonschema` import OK (`4.26.0`); targeted EP prereg/schema/runner tests **50/50 OK**; full `unittest discover -s tests` initially hit sandbox-only `C:\Users\cnhea\tk.csv` write errors, then passed with approved token-cache permission **1098/1098 OK**; direct schema validation for `execution_summary.json` and spent ledger returned zero errors; independent local raw/source recomputation of `build_summary()` (mocking only the pre-run unspent ledger gate, no write/no spend/no provider call) exactly matched the written decision, primary cell, all 28 result cells, sub-period robustness, risk gate, and execution diagnostics; `.pending` summary absent; `git diff --check` clean except CRLF warnings; hygiene scan found only protective no-secret/no-raw flags, endpoint count labels, and historical log text, not an actual token/URL/raw-row leak.
+
+**Next**: User command to Claude: **修复**.
+
+---
+
 ## 2026-06-08 — Claude `提交` + `执行` (ep_value signal-search runner slice, post-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交并执行下一步` after Codex re-`审查` PASS (entry below; `R-EP-SUMMARY-SCHEMA-INVARIANTS` resolved, no Required, no Optional). Re-read SESSION_LOG top + git status + the live register before acting per discipline; confirmed Codex set the register entry to `resolved` and the working tree is the review-passed slice.
 
 **Committed (one scope = ep_value signal-search runner slice, local master, no push)**: `runners/a_long_large_cap_ep_value_signal_search.py` + `schemas/a_long_large_cap_ep_value_signal_search_execution_summary.schema.json` (hardened with the per-`cell_id` pins + decision invariants) + `tests/test_a_long_large_cap_ep_value_signal_search.py` + `tests/schema/test_a_long_large_cap_ep_value_signal_search_schema.py`, plus `docs/CURRENT.md` §0/§1/§5/header, `docs/system_risk_register.md` (`R-EP-SUMMARY-SCHEMA-INVARIANTS` → resolved), and this log. The earlier test-only fix (`7cbe7f4`) is a separate committed scope.
 
-**Then `执行`**: ran the committed runner with `--confirm-independent-review-pass --confirm-post-review-execute` (result + spent-ledger state recorded in the post-execution entry appended after the run; verdict + spent ledger live in `research/results/a_long_large_cap_ep_value_20260608/execution_summary.json` + the ledger). The post-execution result + spent ledger + any post-exec stale-test flip are a SEPARATE scope routed to Codex `审查` before the result commit.
+**Then `执行`** (ran the committed runner with `--confirm-independent-review-pass --confirm-post-review-execute`): result `research/results/a_long_large_cap_ep_value_20260608/execution_summary.json` = **`falsified_large_cap_ep_value_under_frozen_rules`** (NOT a clue, NOT tradeable). The primary 504d/CSI300 industry-size-neutral cell had positive mean net excess (`+0.1083926024`, 56 cohorts, 42/56 positive months, HAC t `2.1664747864` ≥ 2.0, p `0.0302749245`) and both median sub-period halves positive (1st `+0.0898911709` / t `1.21`, 2nd `+0.1268940340` / t `3.23`), but **fails the single-year positive-return concentration guard** (`max_single_year_positive_return_share = 0.3778935938` > `0.35`) — the apparent edge is too concentrated in one year to be a statistical-alpha clue. The tradeable risk gate would also fail (relative-NAV max drawdown `-0.1930115543` > `-0.15`; absolute `-0.2386704691`) but the clue tier failed first. EP hygiene: 2,288 non-positive-TTM-earnings exclusions + 7,165 insufficient-TTM-coverage exclusions; 34,345 EP-scored observations; 73,492 evaluated return rows. Singleton ledger now SPENT (`tests_spent_count=1`, `active_no_new_test_authorized`, `spent_failed_outcome_threshold`). `ep_value` is the 5th falsified/closed A-long line.
 
-**Next**: see the post-execution result entry (appended above this line after the run) for the verdict and the routing of the result-closeout scope.
+**Post-execution closeout prepared (uncommitted, SEPARATE scope routed to Codex `审查` before the result commit)**: flipped the now-stale `test_review_gate_artifacts_and_unspent_ledger_accepted` to assert the committed SPENT state + a synthetic-unspent-fixture acceptance test (same low_volatility/cash_conversion post-exec pattern); updated `docs/CURRENT.md` §0/header/§1/§5 to the executed-falsified spent state. Uncommitted result-closeout = the result artifact + spent ledger + flipped runner test + CURRENT updates + this log. NO rerun / threshold / earnings-basis / denominator / horizon / benchmark / universe change / diagnostic rescue without a NEW reviewed prereg+ledger or forward-live.
+
+**Next**: Codex `审查` of the ep_value result-closeout (result artifact + spent ledger + post-exec test flip + route docs); then Claude `提交` of the closeout. No further A-long candidate without a new reviewed prereg + ledger.
 
 ---
 
