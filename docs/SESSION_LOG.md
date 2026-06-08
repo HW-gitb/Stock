@@ -8,6 +8,85 @@
 
 ---
 
+## 2026-06-08 — Codex `审查` (R-CASH-INCOMPLETE-MONTH-CONSUMPTION consumer-path repair) — **PASS**
+
+**Verdict**: PASS. The material consumer-path bug is fixed: `20180330` is still reported as an incomplete size-coverage startup/ramp month, but it no longer enters the primary industry-size-neutral decision cohort or primary selections. The frozen 50-observation minimum, factor definition, universe, horizons, benchmarks, costs, HAC/statistical gates, sub-period rule, and verdict thresholds remain unchanged.
+
+**Scope reviewed**: unstaged working tree with `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `runners/a_long_large_cap_cash_conversion_signal_search.py`, `schemas/a_long_large_cap_cash_conversion_signal_search_execution_summary.schema.json`, `tests/test_a_long_large_cap_cash_conversion_signal_search.py`, and `tests/schema/test_a_long_large_cap_cash_conversion_signal_search_schema.py`; no staged files and no untracked files. Codex made no runner/schema/test/preregistration/ledger/result edits; review closeout only prepended this entry and marked the existing risk-register item resolved.
+
+**Required**: none.
+
+**Optional**: none.
+
+**Register outcome**: `R-CASH-INCOMPLETE-MONTH-CONSUMPTION` is marked `resolved` in `docs/system_risk_register.md`. No open P0 remains for this runner slice before Claude commit. This PASS authorizes commit only; it does not authorize signal-search execution, ledger spend, result write, alpha claim, production claim, ship-gate evidence, full-size use, DataHub work, or broker/order automation.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; `py_compile` OK; runner tests 23/23 OK; summary schema tests 9/9 OK; manual adversarial guard rejects a planted overlap between `primary_incomplete_size_coverage_months` and `primary_series.cohort_as_ofs`; singleton ledger remains unspent (`tests_spent_count=0`, spend log=0); target `execution_summary.json` and `.pending` do not exist. Independent local raw recomputation: `primary_incomplete_size_coverage_months=['20180330']`, primary cohort count 68, primary cohort starts at `20180427`, `20180330` absent from primary cohort and primary selections, `cash_conversion` non-neutral diagnostic still contains `20180330`, size-neutral diagnostic does not, 32 result cells, 73,496 evaluated rows, 23,718 endpoint results. Direct bucket audit: on `20180330`, cash_conversion bucket actuals are q1=61/q2=48/q3=42/q4=35/q5=38 and balance_sheet_strength is similarly incomplete; on `20180427`, cash_conversion buckets are q1=94/q2=91/q3=88/q4=86/q5=85. So the size-using exclusion is data-availability/PIT handling, not a result-tuned threshold change.
+
+**Next**: Claude `提交` this reviewed slice. After commit, the next user command is separate `执行`.
+
+---
+
+## 2026-06-08 — Claude `修复` (R-CASH-INCOMPLETE-MONTH-CONSUMPTION) — **DONE, ready for re-`审查`**
+
+**Authorization & judgment**: user `修复`. Per `AGENTS.md §Claude implementer standard` I judged the finding valid — it is correct and material. My prior fix excluded `20180330` from the size-coverage diagnostic gate (so the abort cleared) but the CONSUMER (`summarize_results` / `cohort_excess_by_as_of`) still placed `20180330`'s q1-only names in the primary decision cohort, so the measured primary alpha still ate a partially-formed, non-size-neutral month. Codex's check (`primary_series.cohort_as_ofs` still contained `20180330`, `primary_selections['20180330']` had 10) was right.
+
+**Fix**: `summarize_results` now receives the incomplete-size-coverage month set and, via a new `excluded_as_ofs` parameter on `cohort_excess_by_as_of`, skips those as-of dates for every size-using cell (`industry_size_neutral` and `size_neutral`, both weightings), including the primary cell. Non-size diagnostic views (`non_neutral`, `industry_neutral`) keep the month, since their scores are valid there. `build_summary` passes `diagnostics["primary_incomplete_size_coverage_months"]` in. `validate_pipeline_result_sanity` now hard-asserts incomplete months are disjoint from `primary_series.cohort_as_ofs`.
+
+**Scope note**: I excluded incomplete months from ALL size-using cells, slightly beyond Codex's "primary cell only" recommended minimum, because the degenerate size-neutral score is invalid for any size cell — this is more correct, covers the Required, and also cleans the size diagnostic cells. Codex can ask me to narrow to primary-only if preferred. Non-size diagnostic cells are intentionally unchanged.
+
+**Faithful, not a relaxation**: `MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY = 50`, factor definition, universe, horizons, benchmarks, costs, HAC/statistical gates, sub-period rule, and verdict thresholds are all UNCHANGED. The only change is that the consumer no longer feeds an incomplete-coverage month into size cells. I did NOT look at the research verdict (the dry-run prints only machinery/coverage, never decision / result_cells / sub_period / risk_gate).
+
+**Verification (self, jsonschema env)**: `py_compile` OK; `python -m unittest` both modules → 32/32 (added `test_incomplete_month_excluded_from_primary_cohort_but_kept_for_non_size_views`: the incomplete month is absent from `primary_series.cohort_as_ofs` and `primary_selections`, but the `non_neutral` diagnostic cell still has both cohorts). Non-peeking real-data dry-run → `PIPELINE_OK` (so `build_summary`'s disjointness assertion passed → `20180330` is NOT in the primary cohort on real data), `summary_schema_valid: True`, `incomplete_size_coverage_months: ['20180330']`, `zero_score_months: ['20180131','20180228']`, `thin_month_count: 0`, size coverage 93 months, 32 cells. Ledger remains unspent; no result dir.
+
+**Scope of files**: `runners/a_long_large_cap_cash_conversion_signal_search.py` and the two test files this round; the summary schema's incomplete-coverage fields are from the prior round. No change to the frozen preregistration, ledger, factor, universe, thresholds, or verdict gates.
+
+**Next**: Codex re-`审查` of the consumer-path fix. Then Claude `提交`, then a separate user `执行` (ledger still unspent = same first test).
+
+---
+
+## 2026-06-08 — Codex `审查` (cash_conversion runner size-coverage startup-ramp exclusion) — **FAIL**
+
+**Verdict**: FAIL. The repair correctly identifies `20180330` as a PIT startup/ramp month with incomplete size-bucket availability, and it does not change the frozen 50-observation threshold or verdict gates. However, the exclusion is only diagnostic: `20180330` is still consumed by the primary decision cell, so the measured primary alpha cohort can still include the partially formed q1-only size-neutral month.
+
+**Scope reviewed**: unstaged working tree with `docs/SESSION_LOG.md`, `runners/a_long_large_cap_cash_conversion_signal_search.py`, `schemas/a_long_large_cap_cash_conversion_signal_search_execution_summary.schema.json`, `tests/test_a_long_large_cap_cash_conversion_signal_search.py`, and `tests/schema/test_a_long_large_cap_cash_conversion_signal_search_schema.py`; no staged files or untracked files at review start. Codex made no runner/schema/test/preregistration/ledger/result edits; review closeout only prepended this entry and registered the material finding in `docs/system_risk_register.md`.
+
+**Required**:
+- `R-CASH-INCOMPLETE-MONTH-CONSUMPTION` (material: PIT signal-availability / primary cohort correctness; scope `runners/a_long_large_cap_cash_conversion_signal_search.py` + tests/schema as needed): repair the consumer path so every month listed in `primary_incomplete_size_coverage_months` is excluded from the primary decision cohort, or cannot carry the primary score consumed by that cohort. Preserve the frozen `MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY = 50`, factor definition, universe, horizons, benchmarks, costs, HAC/statistical gates, and verdict thresholds. Add a regression test proving an incomplete size-coverage month does not appear in `primary_series.cohort_as_ofs` / primary selections.
+
+**Optional**: none.
+
+**Options for Claude**:
+- Recommended: pass the incomplete-size-coverage month set into primary result construction and have `cohort_excess_by_as_of` skip those as-of dates only for the primary industry-size-neutral decision cell; add an assertion after `summarize_results` that incomplete months and primary cohort as-of dates are disjoint.
+- Alternative: during monthly row construction, remove/null the primary `cash_conversion__industry_size_neutral` score for incomplete months while keeping diagnostic fields explicit; this is more invasive because it mutates row-level scores and must not accidentally affect diagnostic-only cells.
+
+**Register outcome**: open P0 recorded in `docs/system_risk_register.md` as `R-CASH-INCOMPLETE-MONTH-CONSUMPTION`. No execution, ledger spend, result write, alpha claim, production claim, ship-gate evidence, full-size use, DataHub work, or broker/order automation is authorized before repair PASS + Claude commit + separate user `执行`.
+
+**Verification (Codex, jsonschema env)**: bundled Python `jsonschema` 4.26.0 import OK; `py_compile` OK; runner tests 22/22 OK; summary schema tests 9/9 OK; real ledger remains unspent (`tests_spent_count=0`, spend log=0); target `execution_summary.json` and `.pending` do not exist; `git diff --check` OK before review closeout. Independent source/raw recomputation: 96 as-of dates; coverage diagnostics now show `primary_size_neutral_thin_month_count=0`, `primary_size_neutral_coverage_month_count=93`, min bucket 85, zero-score months `['20180131','20180228']`, incomplete month `['20180330']`. Actual bucket counts for `20180330`: q1=61, q2=48, q3=42, q4=35, q5=38; `20180427` is healthy at q1=94, q2=91, q3=88, q4=86, q5=85. Consumer check: `primary_monthly_cohort_count=69`, `primary_series.cohort_as_ofs` still contains `20180330`, and `primary_selections['20180330']` has 10 selections.
+
+**Next**: Claude `修复` only. Do not `提交` and do not `执行` before Codex re-review PASS.
+
+---
+
+## 2026-06-08 — Claude `修复` (cash_conversion runner: size-coverage startup-ramp exclusion) — **DONE, ready for `审查`**
+
+**Trigger**: the user's `执行` of the committed runner (`90d9fbb`) aborted at `validate_pipeline_result_sanity` — `primary size-neutral bucket coverage is thin` — BEFORE the ledger spend. Ledger stayed unspent (`tests_spent_count=0`), no result/pending written. So no valid test was consumed.
+
+**Diagnosis (read-only, actual per-quintile counts)**: exactly ONE month trips the size gate — `20180330`, the 2017-annual-announcement ramp month: q1=61 (>=50, scored) but q2=48 / q3=42 / q4=35 / q5=38 (populated but below the 50 minimum). `20180131` (all 0) and `20180228` (0/3/5/2/1) are already excluded as zero-score. From `20180427` every quintile is 85-100. So cash_conversion is NOT genuinely sparse; `20180330` is a single PIT data-availability ramp month. The prior pure-quality run already excluded `20180330` (as a zero-composite startup month).
+
+**Process note (transparency)**: my first fix excluded only months with a TRULY EMPTY quintile (actual==0). The non-peeking dry-run caught that it did not resolve the abort — `20180330`'s q2-q5 are non-empty (35-48), not empty. I had assumed the earlier diagnostic's `0`s were actual zeros when they were the post-`>=50`-skip scored counts. I reverted that wrong fix, re-diagnosed with ACTUAL counts, and implemented the correct rule. (Lesson reinforced: verify the actual data before designing the fix.)
+
+**Fix (user-directed `修复`, option (a))**: `update_primary_size_coverage_diagnostics` now excludes a month as `primary_incomplete_size_coverage` (a startup/ramp month, like the zero-score months) when any market-cap quintile has fewer than the `MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY` actual primary-factor observations — because the across-quintile size-neutral percentile cannot be formed for that month. New helper `primary_factor_actual_bucket_counts`; new diagnostics `primary_incomplete_size_coverage_month_count` / `_months`; summary schema + tests updated.
+
+**Why this is faithful PIT handling, not p-hacking (for Codex to judge)**: the `50` minimum and every decision/verdict gate are UNCHANGED; the thin-abort remains as a defensive assertion. Only `20180330` is excluded — a data-availability ramp month, the exact month pure-quality already excluded; 93 healthy cohort-forming months remain (min quintile 85), far above the 48-cohort minimum, so the verdict is data-determined and unbiased. The exclusion rule is tied to whether the size-neutral can be formed, not to any observed result. **I did NOT look at the research verdict**: verification used a dry-run that prints only machinery/coverage structure (not decision / result_cells / sub_period / risk_gate).
+
+**Verification (self, jsonschema env)**: `py_compile` OK; `python -m unittest` both modules → 31/31 (added `test_incomplete_size_coverage_month_is_excluded_not_thin` + `test_full_size_coverage_month_is_counted`); non-peeking real-data dry-run → `PIPELINE_OK`, `summary_schema_valid: True`, `thin_month_count: 0`, `incomplete_size_coverage_months: ['20180330']`, `zero_score_months: ['20180131','20180228']`, size coverage 93 months (min bucket 85), 32 result cells. Ledger remains unspent; no result dir; tmp diagnostics deleted.
+
+**Scope**: `runners/a_long_large_cap_cash_conversion_signal_search.py`, `schemas/a_long_large_cap_cash_conversion_signal_search_execution_summary.schema.json`, and the two test files only. No change to the frozen preregistration, ledger, factor, universe, thresholds, or verdict gates.
+
+**Next**: Codex `审查` of this fix (independently judge faithful-PIT-handling vs threshold relaxation). Then Claude `提交`, then a separate user `执行` (the ledger is still unspent, so this remains the same first test).
+
+---
+
 ## 2026-06-08 — Codex `审查` (Route-doc stability convention in `AGENTS.md`) — **PASS**
 
 **Verdict**: PASS. The new `AGENTS.md` route-doc stability convention is appropriate, narrowly scoped, and consistent with the existing role split / closeout rules. It codifies the recurring rule that durable startup route docs state only commit-stable facts while live review / commit / execute state is read from the latest `docs/SESSION_LOG.md` verdict.

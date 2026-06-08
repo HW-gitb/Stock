@@ -339,6 +339,86 @@ class ALongLargeCapCashConversionSignalSearchTest(unittest.TestCase):
         self.assertEqual(result["relative_nav_checkpoint_count"], 2)
         self.assertEqual(result["relative_nav_max_drawdown"], 0.0)
 
+    def _coverage_diagnostics(self) -> dict:
+        return {
+            "primary_size_neutral_thin_month_count": 0,
+            "primary_size_neutral_min_bucket_observation_count": 0,
+            "primary_size_neutral_coverage_month_count": 0,
+            "primary_size_neutral_bucket_coverage_by_month": [],
+            "primary_no_cohort_zero_score_month_count": 0,
+            "primary_no_cohort_zero_score_months": [],
+            "primary_incomplete_size_coverage_month_count": 0,
+            "primary_incomplete_size_coverage_months": [],
+        }
+
+    def test_incomplete_size_coverage_month_is_excluded_not_thin(self) -> None:
+        # Startup ramp: q1 populated >= min, q2-q5 populated but below min (non-empty) -> the
+        # across-quintile size-neutral cannot be formed -> excluded as incomplete, NOT thin.
+        diagnostics = self._coverage_diagnostics()
+        scored = [
+            {"size_bucket": "q1", "cash_conversion": 1.0, "cash_conversion__industry_size_neutral": 0.6}
+            for _ in range(2)
+        ]
+        for bucket in ["q2", "q3", "q4", "q5"]:
+            scored.append({"size_bucket": bucket, "cash_conversion": 1.0})  # 1 each, below min -> not scored
+        with mock.patch.object(runner, "MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY", 2):
+            runner.update_primary_size_coverage_diagnostics(scored, "20180330", diagnostics)
+        self.assertEqual(diagnostics["primary_incomplete_size_coverage_month_count"], 1)
+        self.assertEqual(diagnostics["primary_incomplete_size_coverage_months"], ["20180330"])
+        self.assertEqual(diagnostics["primary_size_neutral_thin_month_count"], 0)
+        self.assertEqual(diagnostics["primary_size_neutral_coverage_month_count"], 0)
+
+    def test_full_size_coverage_month_is_counted(self) -> None:
+        # All five quintiles populated >= min -> a valid size-neutral cohort-forming month.
+        diagnostics = self._coverage_diagnostics()
+        scored = []
+        for bucket in runner.SIZE_BUCKETS:
+            for _ in range(2):
+                scored.append(
+                    {
+                        "size_bucket": bucket,
+                        "cash_conversion": 1.0,
+                        "cash_conversion__size_neutral": 0.5,
+                        "cash_conversion__industry_size_neutral": 0.5,
+                    }
+                )
+        with mock.patch.object(runner, "MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY", 2):
+            runner.update_primary_size_coverage_diagnostics(scored, "20200115", diagnostics)
+        self.assertEqual(diagnostics["primary_incomplete_size_coverage_month_count"], 0)
+        self.assertEqual(diagnostics["primary_size_neutral_coverage_month_count"], 1)
+        self.assertEqual(diagnostics["primary_size_neutral_thin_month_count"], 0)
+
+    def test_incomplete_month_excluded_from_primary_cohort_but_kept_for_non_size_views(self) -> None:
+        def row(as_of: str, symbol: str, score: float, excess: float) -> dict:
+            return {
+                "as_of": as_of,
+                "symbol": symbol,
+                "horizon": runner.PRIMARY_HORIZON,
+                "market_cap": 1.0,
+                "cash_conversion__industry_size_neutral": score,
+                "cash_conversion__non_neutral": score,
+                f"excess_{runner.PRIMARY_BENCHMARK}": excess,
+            }
+
+        rows = []
+        for i in range(15):
+            rows.append(row("20180330", f"INC{i}", 0.10 * i, 0.02))  # incomplete startup-ramp month
+            rows.append(row("20200131", f"OK{i}", 0.10 * i, 0.01))  # normal month
+
+        results, primary_series, primary_selections = runner.summarize_results(rows, {"20180330"})
+
+        # The incomplete month must NOT be consumed by the primary (industry_size_neutral) cohort.
+        self.assertNotIn("20180330", primary_series["cohort_as_ofs"])
+        self.assertIn("20200131", primary_series["cohort_as_ofs"])
+        self.assertNotIn("20180330", primary_selections)
+        # But a non-size diagnostic cell still consumes it (both as-ofs).
+        non_neutral = next(
+            cell
+            for cell in results
+            if cell["cell_id"] == "cash_conversion_non_neutral_equal_weight_504d_CSI300"
+        )
+        self.assertEqual(non_neutral["monthly_cohort_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

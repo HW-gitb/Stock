@@ -353,6 +353,8 @@
         "primary_size_neutral_bucket_coverage_by_month",
         "primary_no_cohort_zero_score_month_count",
         "primary_no_cohort_zero_score_months",
+        "primary_incomplete_size_coverage_month_count",
+        "primary_incomplete_size_coverage_months",
         "primary_factor_available_observation_count",
         "return_exit_scheduled_count",
         "return_exit_terminal_last_trade_count",
@@ -389,6 +391,13 @@
         },
         "primary_no_cohort_zero_score_month_count": {"type": "integer", "minimum": 0, "maximum": 96},
         "primary_no_cohort_zero_score_months": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "maxItems": 96,
+          "uniqueItems": true
+        },
+        "primary_incomplete_size_coverage_month_count": {"type": "integer", "minimum": 0, "maximum": 96},
+        "primary_incomplete_size_coverage_months": {
           "type": "array",
           "items": {"type": "string", "pattern": "^[0-9]{8}$"},
           "maxItems": 96,

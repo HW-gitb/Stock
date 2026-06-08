@@ -650,6 +650,20 @@ def primary_observation_count(scored: list[dict[str, Any]]) -> int:
     return sum(1 for item in scored if item.get(score_field) is not None)
 
 
+def primary_factor_actual_bucket_counts(scored: list[dict[str, Any]]) -> dict[str, int]:
+    """Actual primary-factor-non-null observations per market-cap quintile (before the
+    minimum-count scoring skip), used to decide whether the across-quintile size-neutral score
+    can be formed for the month."""
+    counts = {bucket: 0 for bucket in SIZE_BUCKETS}
+    for item in scored:
+        if item.get(PRIMARY_FACTOR) is None:
+            continue
+        bucket = item.get("size_bucket")
+        if bucket in counts:
+            counts[str(bucket)] += 1
+    return counts
+
+
 def update_primary_size_coverage_diagnostics(
     scored: list[dict[str, Any]],
     as_of: str,
@@ -658,6 +672,20 @@ def update_primary_size_coverage_diagnostics(
     if primary_observation_count(scored) == 0:
         diagnostics["primary_no_cohort_zero_score_month_count"] += 1
         diagnostics["primary_no_cohort_zero_score_months"].append(as_of)
+        return
+
+    # The industry-and-size-neutral primary needs a within-quintile percentile in EVERY market-cap
+    # quintile. A point-in-time startup/ramp month where some quintile has fewer than the minimum
+    # primary-factor observations (e.g. before annual fundamentals have broadly landed -- only the
+    # earliest-reporting large caps are populated) cannot form an across-quintile size-neutral
+    # score, so it is not a size-neutral cohort-forming month and is excluded, exactly like the
+    # zero-score startup months (and as the prior pure-quality run already excluded 2018-03). This
+    # is PIT data availability, not a threshold relaxation: the minimum and every decision gate are
+    # unchanged, and the minimum-monthly-cohorts gate still protects against too few valid months.
+    actual_bucket_counts = primary_factor_actual_bucket_counts(scored)
+    if min(actual_bucket_counts.values()) < MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY:
+        diagnostics["primary_incomplete_size_coverage_month_count"] += 1
+        diagnostics["primary_incomplete_size_coverage_months"].append(as_of)
         return
 
     primary_size_coverage = primary_size_neutral_bucket_coverage(scored, as_of)
@@ -705,6 +733,8 @@ def monthly_cohort_rows(
         "primary_size_neutral_bucket_coverage_by_month": [],
         "primary_no_cohort_zero_score_month_count": 0,
         "primary_no_cohort_zero_score_months": [],
+        "primary_incomplete_size_coverage_month_count": 0,
+        "primary_incomplete_size_coverage_months": [],
         "primary_factor_available_observation_count": 0,
         "return_exit_scheduled_count": 0,
         "return_exit_terminal_last_trade_count": 0,
@@ -931,6 +961,7 @@ def cohort_excess_by_as_of(
     excess_field: str,
     horizon: int,
     weighting: str,
+    excluded_as_ofs: set[str] = frozenset(),
 ) -> dict[str, Any]:
     cohort_returns: list[float] = []
     cohort_as_ofs: list[str] = []
@@ -939,6 +970,8 @@ def cohort_excess_by_as_of(
     monthly_top_counts: list[int] = []
     selections_by_as_of: dict[str, list[str]] = {}
     for as_of in sorted(as_ofs_by_horizon.get(horizon, set())):
+        if as_of in excluded_as_ofs:
+            continue
         cohort = [
             row
             for row in rows_by_horizon_as_of.get((horizon, as_of), [])
@@ -973,7 +1006,9 @@ def cohort_excess_by_as_of(
 
 def summarize_results(
     rows: list[dict[str, Any]],
+    incomplete_size_coverage_months: set[str] = frozenset(),
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None, dict[str, list[str]]]:
+    incomplete_size_coverage_months = set(incomplete_size_coverage_months)
     results: list[dict[str, Any]] = []
     rows_by_horizon_as_of: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
     as_ofs_by_horizon: dict[int, set[str]] = defaultdict(set)
@@ -995,6 +1030,14 @@ def summarize_results(
         benchmark_name = str(spec["benchmark"])
         score_field = f"{signal_id}__{view}"
         excess_field = f"excess_{benchmark_name}"
+        # Incomplete-size-coverage (startup-ramp) months cannot form a valid across-quintile
+        # size-neutral score, so they are excluded from any size-using cell (industry_size_neutral /
+        # size_neutral), including the primary decision cohort. Non-size diagnostic views keep them.
+        view_excluded_as_ofs = (
+            incomplete_size_coverage_months
+            if view in ("industry_size_neutral", "size_neutral")
+            else frozenset()
+        )
         agg = cohort_excess_by_as_of(
             rows_by_horizon_as_of,
             as_ofs_by_horizon,
@@ -1002,6 +1045,7 @@ def summarize_results(
             excess_field=excess_field,
             horizon=horizon,
             weighting=weighting,
+            excluded_as_ofs=view_excluded_as_ofs,
         )
         cohort_returns = agg["cohort_returns"]
         selected_symbols = agg["selected_symbols"]
@@ -1383,6 +1427,13 @@ def validate_pipeline_result_sanity(
             "cash_conversion signal-search pipeline failure: primary size-neutral coverage month count "
             "is below the primary cohort count"
         )
+    incomplete_months = set(diagnostics.get("primary_incomplete_size_coverage_months") or [])
+    primary_cohort_as_ofs = set((primary_series or {}).get("cohort_as_ofs") or [])
+    if incomplete_months & primary_cohort_as_ofs:
+        raise ValueError(
+            "cash_conversion signal-search pipeline failure: an incomplete size-coverage month "
+            "leaked into the primary decision cohort"
+        )
 
 
 def build_summary(
@@ -1413,7 +1464,9 @@ def build_summary(
         large_cap_universes=large_cap_universes,
         restatement_exclusions=restatement_exclusions,
     )
-    results, primary_series, primary_selections = summarize_results(rows)
+    results, primary_series, primary_selections = summarize_results(
+        rows, set(diagnostics["primary_incomplete_size_coverage_months"])
+    )
     validate_pipeline_result_sanity(rows, results, diagnostics, primary_series)
     sub_period = sub_period_robustness(primary_series)
     csi300_prices = base.index_total_return_close_rows(store, BENCHMARKS[PRIMARY_BENCHMARK])

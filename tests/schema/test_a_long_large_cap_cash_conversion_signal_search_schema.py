@@ -210,8 +210,10 @@ class ALongLargeCapCashConversionSignalSearchSchemaTest(unittest.TestCase):
                     }
                     for _index in range(93)
                 ],
-                "primary_no_cohort_zero_score_month_count": 3,
-                "primary_no_cohort_zero_score_months": ["20180131", "20180228", "20180330"],
+                "primary_no_cohort_zero_score_month_count": 2,
+                "primary_no_cohort_zero_score_months": ["20180131", "20180228"],
+                "primary_incomplete_size_coverage_month_count": 1,
+                "primary_incomplete_size_coverage_months": ["20180330"],
                 "primary_factor_available_observation_count": 40000,
                 "return_exit_scheduled_count": 900,
                 "return_exit_terminal_last_trade_count": 0,
