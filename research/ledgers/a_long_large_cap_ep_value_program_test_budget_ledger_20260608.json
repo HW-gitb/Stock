@@ -1,0 +1,60 @@
+{
+  "schema_name": "program_test_budget_ledger",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-08T00:00:00+00:00",
+  "artifact_id": "a_long_large_cap_ep_value_program_test_budget_ledger_20260608",
+  "ledger_status": "active_planned_test_pending_review",
+  "family_id": "a_long_large_cap_ep_value_v1",
+  "lane_id": "a_long_research",
+  "singleton_scope": {
+    "protected_decision": "Whether the externally-literature-motivated single-factor ep_value (trailing-twelve-month net income attributable to parent over PIT circ_mv) produces a research-only value-premium alpha clue (and a tradeable candidate) versus CSI300 in the reviewed PIT top-500 large-cap universe under one frozen primary cell.",
+    "applies_to": [
+      "research/preregistrations/a_long_large_cap_ep_value_20260608.json",
+      "The future reviewed A-long large-cap ep_value signal-search execution package that may be executed only after independent review and explicit user execute."
+    ],
+    "does_not_authorize": [
+      "No signal-search run is authorized by this ledger before independent review and an explicit user execute command.",
+      "No reinterpretation of any prior falsified or research-only-clue result, no old-result reslice, no relabeling a prior diagnostic as a pass, no factor-definition search, no earnings-basis search, no denominator-field search, no multi-factor composite search, no production use, no ship-gate evidence, no full-size manual use, no provider expansion, no DataHub work, and no broker / order automation.",
+      "No new daily_basic pull, daily-bar pull, or provider call is authorized; this design reuses the already-reviewed top-500 materialization, audit, full-main-board PIT income fundamentals, and restatement exclusion list."
+    ]
+  },
+  "creation_reason": {
+    "triggering_preflight_ref": "research/results/a_long_large_cap_low_volatility_20260608/execution_summary.json",
+    "triggering_preregistration_ref": "research/preregistrations/a_long_large_cap_ep_value_20260608.json",
+    "reason": "Four prior frozen large-cap singletons are spent and closed (full-main-board no_alpha; large-cap pure-quality falsified; cash_conversion a statistical alpha clue that was not tradeable; low_volatility falsified). External China value-premium literature (CH-3 Liu-Stambaugh-Yuan: EP is the dominant China value factor and subsumes book-to-market in larger, non-shell names) motivates testing ep_value as a distinct value-factor family not covered by the prior quality / low-volatility searches, on a new singleton ledger. It is externally motivated, not derived from an in-sample diagnostic of a prior run, and not a rescue of any prior result; it is tested on a single 2018-2025 historical period, the vs-CSI300 evidence is single-period, and being the fifth program-level large-cap factor tested it carries elevated multiple-testing risk that requires forward-live validation."
+  },
+  "budget_policy": {
+    "ledger_cardinality": "singleton_program_level",
+    "tests_spent_count": 0,
+    "tests_available_without_new_review": 0,
+    "next_test_requires_reviewed_preregistration": true,
+    "next_test_requires_user_approval": true,
+    "spend_rule": "The first reviewed A-long large-cap ep_value primary-cell signal-search execution spends one planned test regardless of falsified, statistical-alpha-clue, or tradeable-candidate result.",
+    "no_silent_rescue_rule": "If the future primary cell fails or is diagnostic-only, do not rerun with changed factor definition, earnings basis, denominator field, TTM rollover, universe N, market-cap field, neutralization, holding period, benchmark, top fraction, cost model, statistical threshold, sub-period rule, or risk-gate threshold without a new reviewed preregistration and ledger update."
+  },
+  "test_spend_log": [],
+  "planned_tests": [
+    {
+      "test_id": "a_long_large_cap_ep_value_20260608",
+      "planned_status": "planned_not_reviewed",
+      "created_at": "2026-06-08T00:00:00+00:00",
+      "planned_preregistration_ref": "research/preregistrations/a_long_large_cap_ep_value_20260608.json",
+      "planned_result_ref": "research/results/a_long_large_cap_ep_value_20260608/execution_summary.json",
+      "promotion_relevant": true,
+      "expected_tests_spent": 1,
+      "approval_status": "user_approved_pending_review",
+      "design_summary": "One frozen primary cell: ep_value (trailing-twelve-month net income attributable to parent over PIT circ_mv, the China value factor per CH-3), percentile-ranked with non-positive-earnings names excluded, marginal 0.5 industry + 0.5 size neutralization, 504d hold versus CSI300, top-500 PIT circ_mv universe with the reviewed 000043 exclusion. Two-tier verdict: statistical-alpha-clue gates (positive mean net excess, HAC t >= 2.0, >= 48 monthly cohorts, both median sub-period halves positive, concentration guards) then the rolling-overlapping relative-NAV drawdown >= -15% gate for the tradeable-candidate label. Months without sufficient EP earnings coverage are excluded from cohort formation. Reuses the vetted measurement chain, the reviewed top-500 universe, and the reviewed full-main-board PIT income fundamentals + restatement exclusion list; fetches nothing.",
+      "review_boundary": [
+        "This planned test is not authorized to run until Codex independent review PASS, Claude commit, and a separate explicit user execute.",
+        "No new data fetch, provider call, daily-bar pull, DataHub work, production claim, ship-gate evidence, full-size use, or broker / order automation is authorized.",
+        "If executed and the primary cell fails, treat ep_value as falsified under the frozen single-primary-cell rules; no rerun, threshold / earnings-basis / denominator / horizon / benchmark / universe change, or diagnostic rescue without a new reviewed preregistration and ledger.",
+        "Even a passing in-sample result is research-only and routes to forward-live validation, not production or ship-gate evidence; as the fifth program-level large-cap factor, multiple-testing risk is elevated."
+      ]
+    }
+  ],
+  "next_required_actions": [
+    "Codex independent review of this preregistration, its schema, this ledger, the schema tests, and the route docs before any signal-search work.",
+    "After review PASS and Claude commit, a separate signal-search runner slice may be built; its execution requires its own review, commit, and a separate user execute and spends this singleton exactly once.",
+    "Do not run, fetch, or rescue without the reviewed path above."
+  ]
+}

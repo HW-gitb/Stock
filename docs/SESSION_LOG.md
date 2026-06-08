@@ -8,6 +8,81 @@
 
 ---
 
+## 2026-06-08 — Codex `审查` (a_long_large_cap_ep_value_20260608 repeat review / no new Claude change) — **PASS**
+
+**Scope reviewed**: same uncommitted EP design slice already reviewed below: `research/preregistrations/a_long_large_cap_ep_value_20260608.json`, `research/ledgers/a_long_large_cap_ep_value_program_test_budget_ledger_20260608.json`, `schemas/a_long_large_cap_ep_value_preregistration.schema.json`, `tests/schema/test_a_long_large_cap_ep_value_preregistration_schema.py`, `docs/CURRENT.md`, and `docs/SESSION_LOG.md`. No new Claude commit or post-PASS closeout is present since the prior Codex PASS; `git log` still ends at `5df59ea`.
+
+**Verdict**: PASS remains valid.
+
+**Required**: none against the EP preregistration / schema / singleton ledger design.
+
+**Submit gate for Claude**: the working tree is not yet post-PASS-closed. Before committing this slice, Claude must mechanically flip `scope.preregistration_review_status` to `passed_independent_review_ready_for_freeze`, keep `tests_spent_count=0`, update the route state so `docs/CURRENT.md` no longer says the active EP design is pending Codex review, and avoid any runner, execution, provider fetch, result metric, alpha claim, production claim, ship-gate claim, full-size claim, or broker/order boundary change.
+
+**Independent checks performed**: bundled Python `jsonschema` import OK (`4.26.0`); targeted EP schema tests `15/15` OK; route-doc guard `3/3` OK; full `tests/schema` discovery `606/606` OK; direct schema validation of the preregistration and ledger returned zero errors; direct frozen-field mutations for signal authorization, denominator change, restatement-disable, t-stat relaxation, diagnostic rescue, and production claim were rejected; source refs are present; ledger remains `active_planned_test_pending_review` with `tests_spent_count=0` and one planned test; raw source roots exist and are gitignored; restatement exclusion CSV count is `1504`; full-main-board audit lineage includes PIT announcement-date fields and `n_income_attr_p`; `git diff --check` exited cleanly apart from PowerShell CRLF warnings.
+
+**Risk register outcome**: no new P0/P1 risk registered. The only live process risk is a pre-commit state boundary, handled by the submit gate above: this reviewed design is not executable until Claude's post-PASS commit and later a separately reviewed runner plus separate user `执行`.
+
+**Next**: User command to Claude: **提交**.
+
+---
+
+## 2026-06-08 — Codex `审查` (a_long_large_cap_ep_value_20260608 preregistration slice) — **PASS**
+
+**Scope reviewed**: new A-long large-cap `ep_value` preregistration packet only: `research/preregistrations/a_long_large_cap_ep_value_20260608.json`, `research/ledgers/a_long_large_cap_ep_value_program_test_budget_ledger_20260608.json`, `schemas/a_long_large_cap_ep_value_preregistration.schema.json`, `tests/schema/test_a_long_large_cap_ep_value_preregistration_schema.py`, plus live route state in `docs/CURRENT.md` and this log. No business runner, provider fetch, materialization, signal search, ledger spend, production / ship-gate claim, full-size usage, or order-execution change was reviewed as implemented.
+
+**Verdict**: PASS.
+
+**Required**: none.
+
+**Optional / post-PASS closeout**:
+- O1: At the submit step, Claude should do only the mechanical post-PASS closeout in the same commit: flip `preregistration_review_status` to `passed_independent_review_ready_for_freeze`, keep the singleton ledger unspent, and add stable durable route pointers only if required by the v2 route-doc convention. Do not add runner execution, provider fetch, result metrics, or alpha claims in this commit.
+
+**Independent checks performed**: `jsonschema` import OK (`4.26.0`); targeted EP schema tests `15/15` OK; full `tests/schema` discovery `606/606` OK; route-doc consistency guard `3/3` OK; direct schema validation of the preregistration and ledger returned zero errors; planted scope / denominator / restatement / threshold / diagnostic-rescue / production-claim mutations were rejected; raw source roots for large-cap market-cap and full-main-board materialization are gitignored; restatement exclusion CSV count is `1504`; full-main-board lineage includes `n_income_attr_p` and PIT announcement-date fields; `git diff --check` exited cleanly apart from PowerShell CRLF warnings.
+
+**Risk register outcome**: no new P0/P1 risk introduced. The remaining material risk is correctly bounded in the design: `ep_value` is a research-only, externally motivated value hypothesis and not alpha evidence, production readiness, trade approval, or ship-gate evidence.
+
+**Next**: User command to Claude: **提交**.
+
+---
+
+## 2026-06-08 — Claude `提交` (ep_value design slice, post-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交` after Codex `审查` PASS (entries below; no Required, no Optional; repeat-review PASS confirmed). Re-read SESSION_LOG top + git status before committing per discipline.
+
+**Post-PASS mechanical steps (exactly the Codex submit gate)**: flipped the ep_value prereg `preregistration_review_status` pending → `passed_independent_review_ready_for_freeze`; aligned the two EP prereg-schema test methods (now assert the review-passed state, with the pending variant still schema-valid); updated `docs/CURRENT.md` §0/§1/§5/header so the EP design reads review-passed/committed rather than pending-review. Kept the singleton ledger UNSPENT (`tests_spent_count=0`); no runner, execution, fetch, result metric, alpha/production/ship-gate/full-size claim, or ledger value changed.
+
+**Committed (one scope = ep_value design slice, local master, no push)**: prereg (review-passed) + bespoke schema + UNSPENT singleton ledger + prereg-schema tests, plus `docs/CURRENT.md` §0/§1/§5/header + this log. Durable `docs/README.md` / `research/README.md` prereg pointer rows are deferred to the ep_value execution closeout (matching the low_volatility pattern, where the research/README entry is written in its executed-state wording).
+
+**State after commit**: the ep_value design is frozen and review-passed; its singleton ledger is UNSPENT. Four prior large-cap lines remain closed/spent; ep_value is the fifth, with multiple-testing risk flagged in the prereg.
+
+**Next**: build the ep_value signal-search RUNNER slice (reuses the vetted measurement chain + the reviewed top-500 universe + the full-main-board PIT income fundamentals + restatement exclusion list; computes TTM-EP / circ_mv with non-positive earnings excluded; adds the relative-NAV drawdown gate), then Codex `审查`, then Claude `提交`, then a separate user `执行` spends the singleton once. No `执行` now (no runner; ledger unspent).
+
+---
+
+## 2026-06-08 — Claude `起草` (ep_value design slice) — **DONE, pending `审查`**
+
+**Authorization & judgment**: user `起草` after I recommended `ep_value` as the next A-long large-cap candidate. Rationale: with four large-cap lines closed (full-main-board no_alpha, pure-quality falsified, cash_conversion clue-not-tradeable, low_volatility falsified), the next-strongest literature-backed large-cap candidate is the EP (earnings-to-price) value factor — per CH-3 (Liu-Stambaugh-Yuan), EP is the dominant China value factor and subsumes book-to-market in larger / non-shell names, and it is a DISTINCT factor family (value) not covered by the prior quality / risk tests. New singleton ledger required; runner + execution come only after this design PASSes.
+
+**Built (4 new files; blends the cash_conversion fundamental+restatement skeleton with low_volatility's externally-motivated provenance):**
+- `research/preregistrations/a_long_large_cap_ep_value_20260608.json` — one frozen primary cell: `ep_value` = trailing-twelve-month net income attributable to parent / PIT circ_mv, percentile-ranked, marginal 0.5 industry + 0.5 size neutral, 504d vs CSI300, top-500 PIT circ_mv with the reviewed 000043 exclusion. Two-tier verdict held to the SAME frozen `-15%` relative-NAV drawdown gate. Draft `preregistration_review_status: pending_independent_review` (flips to passed at the post-PASS commit).
+- `schemas/a_long_large_cap_ep_value_preregistration.schema.json` (bespoke, all frozen consts), `research/ledgers/a_long_large_cap_ep_value_program_test_budget_ledger_20260608.json` (UNSPENT singleton, `tests_spent_count=0`), `tests/schema/test_a_long_large_cap_ep_value_preregistration_schema.py` (15/15).
+
+**Key frozen design decisions a reviewer should scrutinize:**
+- **EP is fundamental**, so unlike price-only low_volatility it REUSES the restatement machinery: `restatement_exclusion_required: true`, `restatement_exclusion_list_ref` = the 1,504-group full-main-board list, `expected_restatement_exclusion_group_count: 1504` — same as cash_conversion. Earnings are PIT (`ann_date <= as_of`).
+- **Earnings basis = TTM** net income attributable to parent (frozen rollover: latest PIT YTD + prior FY annual − prior-year same-period YTD, all PIT + restatement-excluded), NOT raw latest-YTD (cross-sectionally incomparable) and NOT annualized-YTD (seasonality-biased) — both noted as rejected alternatives. No earnings-basis search.
+- **Denominator = PIT circ_mv** (the already-materialized universe-selection field), reused for the signal so `new_data_fetch_required: false`. Honest caveat: circ_mv is free-float, so on names with large restricted-share blocks this is an earnings-to-free-float yield, not earnings-to-total-equity; total_mv was NOT materialized so using it would require a new fetch. No denominator-field search.
+- **Negative/zero TTM earnings excluded from EP scoring** (the CH-3 D(EP<0) separation), not bottom-ranked; reported as a count. The EP percentile is over profitable large-caps only.
+- **Diagnostics**: `book_to_market` (book equity / circ_mv — the value factor CH-3 says EP subsumes) and `cash_flow_to_price`; both diagnostic-only, neither can rescue, plus an EP-vs-BM comparison output.
+- **Provenance honesty**: externally-motivated (cleaner than cash_conversion, NO in-sample-factor-selection caveat), a distinct value family NOT in the full-main-board 4 families — BUT it is the **5th** program-level large-cap factor tested (`cumulative_prior_spent_singletons_on_large_cap_program: 4`), so accumulating multiple testing is explicitly flagged in provenance + decision_policy + limitations; even a passing in-sample result is weak and needs forward-live.
+
+**Verification (self)**: EP prereg validates against its bespoke schema (0 errors); EP ledger validates against `program_test_budget_ledger.schema.json` (0 errors); `tests.schema.test_a_long_large_cap_ep_value_preregistration_schema` 15/15; full `tests/schema` discovery 606/606; route-doc guard 3/3 (the EP ledger is UNSPENT, so it is not described as spent anywhere). Planted mutations (earnings-basis/denominator/threshold drift, scope creep, restatement-off) fail schema validation. `docs/CURRENT.md` < 150 lines.
+
+**Scope**: 4 new EP files + this log + `docs/CURRENT.md` §0/§1/§5/header. Durable `docs/README.md` / `research/README.md` pointers are deferred to the post-PASS commit (v2 route-doc convention: pointers reflect committed reality; live state stays in `SESSION_LOG` top + §0). No runner, no execution, no fetch, no ledger spend.
+
+**Next**: Codex `审查` of the ep_value design slice. After PASS, flip the prereg to `passed_independent_review_ready_for_freeze` and Claude `提交`; a separate ep_value signal-search RUNNER slice, its own review, and a separate user `执行` come later and spend the new singleton once. No `执行` now (no runner yet; ledger unspent).
+
+---
+
 ## 2026-06-08 - Codex `修复` + `提交` (user-authorized route-doc stale-state prevention) - **DONE**
 
 **Authorization**: user explicitly authorized Codex to fix the recurring stale state / handoff drift even though the default role split makes Codex the independent reviewer. Scope kept to process/docs/tests only; no business runner logic, frozen design values, result metrics, ledger values, execution summaries, provider calls, DataHub, production, ship-gate, full-size, or broker/order boundary changed.
