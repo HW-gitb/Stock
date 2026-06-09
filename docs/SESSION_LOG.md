@@ -8,6 +8,132 @@
 
 ---
 
+## 2026-06-09 — Claude `提交` (A-long large-cap value-yield FORWARD PAPER-tracking design slice, post re-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required, no Optional before commit). Re-read SESSION_LOG top + Codex verdict + git status before committing.
+
+**Post-PASS mechanical steps (within the Codex boundary)**: flipped the spec `scope.preregistration_review_status` `pending_independent_review` → `passed_independent_review_ready_for_freeze` (the schema enum already accepted both; spec still validates); marked both register entries `A-long large-cap value-yield route-doc mutable unspent state` and `... forward paper-tracking design governance/routing gaps` `in_progress` → `resolved` with the PASS evidence. No construction / threshold / window / ledger-budget value changed at commit.
+
+**Committed (one scope = value-yield FORWARD PAPER-tracking DESIGN slice, local master, no push)**: `research/preregistrations/a_long_large_cap_value_yield_forward_paper_tracking_20260609.json` (review-passed, PAPER-only, 3 tracked constructions but ONE frozen primary promotion = `value_yield_composite_cf_sales`, 2 singles diagnostic-only, family decision rule forbids best-of-three) + `schemas/a_long_large_cap_value_yield_forward_paper_tracking.schema.json` (all-frozen, generated-from-spec const pins) + UNSPENT singleton ledger `research/ledgers/a_long_large_cap_value_yield_forward_paper_tracking_program_test_budget_ledger_20260609.json` + `tests/schema/test_a_long_large_cap_value_yield_forward_paper_tracking_schema.py` (26) + the route-doc fixes (`research/README.md` + `docs/README.md` durable pointers; `tests/test_route_doc_ledger_status_consistency.py` location-independent mutable-spend-state guard, 14/14) + `docs/system_risk_register.md` (both VY entries resolved) + this log.
+
+**State after commit**: the value-yield forward PAPER-tracking design is frozen and review-passed; its singleton ledger is unspent (live state in the ledger file + this log). PAPER-only: it authorizes no data fetch, capture run, real money, signal search, production, ship-gate, or full-size. Paper evidence can never satisfy the live-normalized ship gate.
+
+**Next**: a separate capture-runner slice (its own `起草` → `审查` → `提交`, with a hardened `load_and_validate_ledger()` and per-run user fetch authorization) implements the monthly snapshot + backfill-as-mature capture over the frozen construction. Real-money forward-live remains a future, separately-reviewed decision gated on the paper window's outcome (promote only if the composite's OOS alpha persists AND its relative-NAV drawdown is no worse than −15%). No capture / fetch / real money now.
+
+---
+
+## 2026-06-09 — Codex re-`审查` (R-VY-ROUTE-MUTABLE-UNSPENT repair) — **PASS**
+
+**Scope reviewed**: current uncommitted value-yield forward PAPER-tracking design/route repair: `research/README.md`, `tests/test_route_doc_ledger_status_consistency.py`, `tests/schema/test_a_long_large_cap_value_yield_forward_paper_tracking_schema.py`, plus the active design/ledger/schema files `research/preregistrations/a_long_large_cap_value_yield_forward_paper_tracking_20260609.json`, `schemas/a_long_large_cap_value_yield_forward_paper_tracking.schema.json`, `research/ledgers/a_long_large_cap_value_yield_forward_paper_tracking_program_test_budget_ledger_20260609.json`, and route pointers in `docs/README.md`. No data fetch, capture run, signal search, ledger spend, production / ship-gate / full-size claim, DataHub work, or broker/order automation was executed.
+
+**Verdict**: PASS. No Required findings. `R-VY-ROUTE-MUTABLE-UNSPENT` is fixed: the durable `research/README.md` ledger row no longer says `UNSPENT` and now delegates live spend state to the ledger file + `docs/SESSION_LOG.md` top. The new mutable-spend-state guard is location-independent over `research/README.md`, `docs/README.md`, and `docs/CURRENT.md` §1/§5, and catches planted `UNSPENT`, `tests_spent_count=0`, `未花`, and `尚未花` rows while allowing terminal `SPENT` / `tests_spent_count=1` and benign prose.
+
+**Required**: none.
+
+**Optional**: none before commit. The earlier ledger exact-ref Optional is adequately covered for this design slice by positive assertions in the schema test; the future capture-runner still needs its own hardened `load_and_validate_ledger()` before any capture/decision run.
+
+**Independent verification**: bundled Python `jsonschema` import OK (`4.26.0`). Route-doc guard **14/14 OK**; forward-paper schema tests **26/26 OK**. Direct route scan found zero mutable-spend-state hits in `docs/README.md`, `research/README.md`, and `docs/CURRENT.md`. Direct schema validation returned spec errors `0` and ledger errors `0`; `planned_test_budget.ledger_ref` exists; ledger family matches the spec; roles remain `cash_flow_to_circ_mv=diagnostic_supporting_only`, `sales_to_circ_mv=diagnostic_supporting_only`, `value_yield_composite_cf_sales=primary_promotion_construction`; planned result ref and `expected_tests_spent=1` match the intended single promotion decision. Full `unittest discover` under sandbox ran **1201 tests** with only the known 6 Tushare `C:\Users\cnhea\tk.csv` permission errors; the same 6 Phase6 classes passed under approved non-sandbox rerun (**21/21 OK**), giving the claimed total **1222/1222**. `git diff --check` clean except LF/CRLF warnings.
+
+**Register**: no new material findings. The registered `R-VY-ROUTE-MUTABLE-UNSPENT` risk is fixed in the working tree and should be marked resolved by Claude as part of the reviewed commit closeout.
+
+**Next user command to Claude**: **提交**.
+
+---
+
+## 2026-06-09 — Claude `修复` (R-VY-ROUTE-MUTABLE-UNSPENT on the forward paper-tracking slice) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex re-`审查` **FAIL** (entry below): the budget/selection fix is substantively correct, but my new `research/README.md` value-yield ledger row wrote `UNSPENT` — a MUTABLE ledger state in a durable route doc (guaranteed to go stale on spend; violates route-doc v3). This is the SAME route-doc-state-duplication class I have a standing memory about — I walked into it again. Re-read SESSION_LOG top + Codex Required + git status before acting.
+
+**Fixed (route-doc + guard only; no construction / threshold / window / ledger-budget value changed):**
+- `R-VY-ROUTE-MUTABLE-UNSPENT`: removed `UNSPENT` from the `research/README.md` value-yield ledger row and reworded it as a stable pointer that delegates live spend state to the ledger file + `docs/SESSION_LOG.md` top.
+- **Behavior + location-independent guard cure** (the lesson from the recurring drift class: don't just patch the one spot — change behavior + make the guard location-independent): added `MUTABLE_LEDGER_STATE_PATTERNS` + `_find_mutable_ledger_state_violations` to `tests/test_route_doc_ledger_status_consistency.py`, scanning `research/README.md` + `docs/README.md` (whole) + `docs/CURRENT.md` §1/§5 for mutable spend-state tokens (`\bUNSPENT\b` case-sensitive, `tests_spent_count=0`, `未花`/`尚未花`) regardless of which ledger is referenced. Terminal `SPENT` / `tests_spent_count=1` and lowercase prose are NOT flagged (case-sensitive UNSPENT + =0-only metric). 3 new guard tests: real-docs clean, planted mutable rows caught, terminal/prose ignored.
+- Optional `O-VY-LEDGER-EXACT-REF-TEST` partly addressed: strengthened the forward-paper schema test with exact positive ledger-ref assertions (planned_preregistration_ref → the spec, planned_result_ref, test_id, promotion_relevant). Adversarial misroute REJECTION is deferred to the future capture-runner's hardened `load_and_validate_ledger()` (noted in-test).
+
+**Verification**: route-doc guard **14/14** (was 11; +3 mutable-state tests); forward-paper schema tests **26/26**; full suite **1222/1222** (was 1219; +3). The mutable-unspent scan confirms the real durable route docs are now clean.
+
+**Boundary**: route-doc wording + guard + one test assertion only. No frozen construction / threshold / horizon / benchmark / universe / drawdown-floor / ledger-budget value changed; still PAPER-only, no fetch / capture / real money / promotion. Uncommitted (research/README + guard test + forward-paper schema test + register + this log), awaiting re-`审查`.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then a separate capture-runner slice.
+
+---
+
+## 2026-06-09 — Codex re-`审查` (A-long large-cap value-yield FORWARD PAPER-tracking repair) — **FAIL / Required**
+
+**Verdict**: FAIL / not commit-safe yet. `R-VY-PAPER-FAMILY-BUDGET` is substantively fixed: the design now has exactly one promotion-eligible construction (`value_yield_composite_cf_sales`), both single yields are diagnostic-only, a family decision rule forbids best-of-three cherry-picking, and a new singleton ledger exists. `R-VY-ROUTE-POINTER` is partly fixed: route pointers now exist. The remaining blocker is that one durable route row restates mutable ledger state.
+
+**Scope reviewed**: `research/preregistrations/a_long_large_cap_value_yield_forward_paper_tracking_20260609.json`, `schemas/a_long_large_cap_value_yield_forward_paper_tracking.schema.json`, `tests/schema/test_a_long_large_cap_value_yield_forward_paper_tracking_schema.py`, `research/ledgers/a_long_large_cap_value_yield_forward_paper_tracking_program_test_budget_ledger_20260609.json`, `docs/README.md`, `research/README.md`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, and the route-doc guard.
+
+**Required**:
+- **R-VY-ROUTE-MUTABLE-UNSPENT** (scope: `research/README.md` durable ledger row + route-doc guard if needed; PIT label: cross-LLM route-state drift / no market-data PIT): `research/README.md` now contains a stable pointer to the new ledger, but the row says **`UNSPENT`**. That is a mutable ledger state in a durable route doc. `AGENTS.md` v3 says durable route docs (`docs/README.md`, `research/README.md`, `CURRENT` §1/§5) should contain stable identity + pointers and must not restate drifting ledger state; `research/README.md` itself says not to restate mutable spend/pending state. This exact class has repeatedly caused stale handoffs after later execution/spend. Fix by removing `UNSPENT` and any equivalent mutable spend-state wording from the durable route row; phrase it as a stable pointer to the ledger and delegate live spend state to the ledger file + `SESSION_LOG` top. Add or extend guard coverage if needed so an unspent-ledger route row cannot introduce `UNSPENT` / `tests_spent_count=0` / pending-spend prose again.
+
+**Optional**:
+- **O-VY-LEDGER-EXACT-REF-TEST** (scope: schema tests / future capture-runner gate; PIT label: singleton-ledger semantic routing / no market-data PIT): the current ledger contents are correct, but the generic ledger schema accepts mutations like wrong `planned_preregistration_ref`, wrong `family_id`, or `expected_tests_spent=2`. The current schema test asserts some of this for the real file, but not all misroute fields adversarially. Either add exact-ref assertions now or ensure the future capture runner has a hardened `load_and_validate_ledger()` for this ledger before any capture/decision run.
+
+**Independent verification**: bundled Python `jsonschema` import OK (`4.26.0`). Targeted forward-paper schema tests **26/26 OK**. Route-doc guard **11/11 OK**, but it does not catch this unspent-row mutable-state case. Full `unittest discover` under sandbox ran **1198 tests** with only the known 6 Tushare `C:\Users\cnhea\tk.csv` permission errors; the same 6 Phase6 classes passed under approved non-sandbox rerun (**21/21 OK**), giving the claimed total **1219/1219**. Direct schema validation: spec errors `0`, ledger errors `0`, all source refs exist, ledger ref exists. Mutation probes on the spec rejected promotion-role drift, diagnostics-can-promote, best-of-three flip, primary-construction drift, ledger-ref drift, capture authorization, and provider authorization. Direct route scan found `UNSPENT` only on the new value-yield ledger row in `research/README.md`.
+
+**Register**: added `R-VY-ROUTE-MUTABLE-UNSPENT` to `docs/system_risk_register.md` as an open P1 queue item.
+
+**Next user command to Claude**: **修复** — remove mutable unspent ledger state from durable route docs and add guard/test coverage if needed; do not change construction/threshold/window values.
+
+---
+
+## 2026-06-09 — Claude `修复` (R-VY-PAPER-FAMILY-BUDGET + R-VY-ROUTE-POINTER on the forward paper-tracking slice) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` **FAIL** (entry below): two governance/routing gaps — (1) 3 promotion-relevant constructions with no ledger / no family selection rule = a post-window best-of-three cherry-pick; (2) no durable route-doc pointer for the new design. Re-read SESSION_LOG top + Codex Required + git status before acting.
+
+**Fixed (governance + routing only; no construction / threshold / window value changed):**
+- `R-VY-PAPER-FAMILY-BUDGET`: froze exactly ONE primary promotion construction — `value_yield_composite_cf_sales` (`promotion_role=primary_promotion_construction`); the two single yields are `promotion_role=diagnostic_supporting_only` and CANNOT independently promote. Added a schema-pinned `family_decision_rule` (`promotion_eligible_construction_count=1`, single_primary = the composite, `best_of_three_post_window_selection_forbidden`, `single_factor_only_pursuit_requires_new_reviewed_preregistration`) and rewired `outcome_routing` to decide on the composite only. ADDED a singleton program-level ledger `research/ledgers/a_long_large_cap_value_yield_forward_paper_tracking_program_test_budget_ledger_20260609.json` (family `a_long_large_cap_value_yield_forward_paper_v1`, UNSPENT, ONE forward-paper promotion decision; interim monthly captures do not spend it) referenced by a new `planned_test_budget` block. Net: exactly one frozen promotion decision for the family, no multiplicity / cherry-pick.
+- `R-VY-ROUTE-POINTER`: added stable identity pointer rows for the design + ledger to `research/README.md` (prereg/schema/tests row + ledger row) and `docs/README.md` (routing-table row) — durable boundary wording only (no pending/review/commit-cycle phrasing, no metrics, no live gate), so the route-doc guard stays green.
+- Optional `O-VY-VIEW-ALIAS` addressed: added a `view_field_suffix_alias` mapping in `neutralization_rule` (semantic `industry_and_size_neutral` → runner/result field suffix `__industry_size_neutral`) so the future capture-runner slice is unambiguous.
+
+**Verification**: schema REGENERATED from the spec (throwaway recursive const-pin generator, deleted) so the new fields (`promotion_role`, `family_decision_rule`, `planned_test_budget`, `view_field_suffix_alias`) are const-pinned; the new ledger validates against `schemas/program_test_budget_ledger.schema.json` as an unspent singleton; forward-paper schema tests **26/26** (was 18; +8 — single-primary/no-cherry-pick anchor, ledger-unspent-singleton + spec ledger_ref match, and adversarial rejects of single-factor-marked-primary, diagnostics-can-promote flip, cherry-pick-guard flip, primary-construction drift, promotion-eligible-count drift, test-budget-units drift); route-doc guard **11/11**; full suite **1219/1219** (was 1211; +8).
+
+**Boundary**: governance/routing + one new UNSPENT ledger only. No construction / horizon / benchmark / universe / threshold / drawdown-floor value changed; still PAPER-only, no fetch / capture / real money / promotion authorized. Uncommitted (5 files: spec, schema, schema test, new ledger, + README×2 and register + this log), awaiting re-`审查`.
+
+**Next**: Codex re-`审查` of the forward paper-tracking design slice; then Claude `提交`; then a separate capture-runner slice (its own review/commit, per-run fetch authorization).
+
+---
+
+## 2026-06-09 — Codex `审查` (A-long large-cap value-yield FORWARD PAPER-tracking design slice) — **FAIL / Required**
+
+**Verdict**: FAIL / not commit-safe yet. The design is directionally sound as PAPER-only forward validation: it correctly blocks data fetch, capture run, real money, production, ship-gate, full-size, DataHub, and broker/order automation; it also correctly states paper evidence cannot satisfy the live-normalized ship gate. However, two governance/routing gaps must be fixed before this design slice is committed.
+
+**Scope reviewed**: `research/preregistrations/a_long_large_cap_value_yield_forward_paper_tracking_20260609.json`, `schemas/a_long_large_cap_value_yield_forward_paper_tracking.schema.json`, `tests/schema/test_a_long_large_cap_value_yield_forward_paper_tracking_schema.py`, the upstream batch result `research/results/a_long_large_cap_batch_factor_search_20260609/execution_summary.json`, `docs/ALPHA_VALIDATION_ACTION_GUIDE.md`, `docs/README.md`, `research/README.md`, `docs/CURRENT.md`, and current `research/ledgers/`.
+
+**Required**:
+- **R-VY-PAPER-FAMILY-BUDGET** (scope: preregistration/schema/tests plus a new ledger or equivalent frozen family gate; PIT label: statistical-governance / forward paper decision / no market-data PIT): the spec tracks three promotion-relevant constructions (`cash_flow_to_circ_mv`, `sales_to_circ_mv`, and `value_yield_composite_cf_sales`) and routes a successful paper read toward a future real-money forward-live artifact, but there is no corresponding singleton/program-level ledger and no frozen family-level selection/multiplicity rule. That leaves a "best of three" promotion option after the forward window. Fix by either (recommended) adding a singleton ledger for the whole value-yield forward-paper family plus a schema-pinned family decision rule, or freezing exactly one primary construction and making the other two diagnostics only. If all three remain promotion-eligible, the paper read must predefine the multiple-construction correction/selection rule and forbid post-window cherry-picking.
+- **R-VY-ROUTE-POINTER** (scope: docs routing + tests if route guard needs extension; PIT label: cross-LLM continuity / no market-data PIT): the new spec cites `research/README.md` as a route source, but `docs/README.md` and `research/README.md` do not yet contain a stable pointer to this new forward-paper design. `rg` finds the new artifact only in `docs/SESSION_LOG.md`, not in the durable route docs. Fix by adding stable identity/pointer rows for the new design (and ledger if added) to the route docs without live gate wording, metrics duplication, or pending/commit-cycle phrasing, then rerun the route-doc guard.
+
+**Optional**:
+- **O-VY-VIEW-ALIAS** (scope: preregistration/schema prose; PIT label: implementation contract / no market-data PIT): clarify the semantic label `industry_and_size_neutral` versus runner/result field suffix `industry_size_neutral`. Existing batch runners already use this semantic/internal-name split, so I am not blocking on it, but the future capture-runner slice will be less error-prone if the mapping is explicit.
+
+**Independent verification**: bundled Python `jsonschema` import OK (`4.26.0`). Targeted new schema tests **18/18 OK**. Route-doc guard **11/11 OK**. Full `unittest discover` under sandbox ran **1190 tests** with only the known 6 Tushare `C:\Users\cnhea\tk.csv` permission errors; the same 6 Phase6 classes passed under approved non-sandbox rerun (**21/21 OK**). Source-ref existence check passed. Upstream batch-result reconciliation matched the spec: verdict `batch_statistical_alpha_clue_research_only`; surviving clues exactly `cash_flow_to_circ_mv` and `sales_to_circ_mv`; rounded t / mean / relative-NAV drawdown / non-tradeable flags match the prereg summary. `research/ledgers/` currently has no `value_yield` ledger candidate. Route probe: no `a_long_large_cap_value_yield_forward_paper_tracking` mention in `docs/README.md` or `research/README.md`.
+
+**Register**: added the two Required findings to `docs/system_risk_register.md` as an open P1 queue item.
+
+**Next user command to Claude**: **修复** — add the family budget/selection guard and durable route pointers, then rerun targeted schema tests + route-doc guard + full suite.
+
+---
+
+## 2026-06-09 — Claude `起草` (A-long large-cap value-yield FORWARD PAPER-tracking design slice) — **DONE, pending `审查`**
+
+**Authorization**: user `起草` after the batch closeout found 2 research-only clues (`cash_flow_to_circ_mv` / `sales_to_circ_mv`, NOT tradeable). User answered the design forks: (1) **paper forward-tracking FIRST** (frozen construction, monthly OOS capture, no real money — the rational gate before risking capital on a basket that breached the in-sample −15% drawdown); (2) track **both single factors + a cash-flow/sales 2-factor equal-weight value composite** (the dilution-free blend never tested standalone in-sample). Followed design→runner split: this slice is the SPEC + schema + tests (capture runner is a later slice).
+
+**Grounding (Explore of existing forward-live machinery)**: ship gate = monthly alpha t≥2.0, Sharpe≥1.0, max DD≤15%, ≥12 months, **live-normalized + position-reconciled + reviewed** (`docs/ALPHA_VALIDATION_ACTION_GUIDE.md §1`; `schemas/forward_live_evidence.schema.json`; `runners/aggregate_execution_reports.py` rejects paper). A-short's `runners/forward_tracker.py` (capture + backfill-as-mature) is the capture pattern to reuse. **A-long has NO ongoing forward data path today** (only the bounded 2018-2025 materialization) — forward capture is a real new build + per-run fetch authorization.
+
+**Drafted (one scope = forward PAPER-tracking DESIGN slice; 3 untracked files, NOT committed):**
+- `research/preregistrations/a_long_large_cap_value_yield_forward_paper_tracking_20260609.json` — frozen spec, `preregistration_review_status=pending_independent_review`. Reuses the batch's frozen universe / marginal-double-neutral / size-coverage gate / measurement chain unchanged. 3 tracked constructions (cash_flow_to_circ_mv, sales_to_circ_mv, value_yield_composite_cf_sales = equal-weight mean of the two factors' industry_size_neutral percentiles, weights frozen). Basket: industry_size_neutral / equal_weight / top_fraction 0.2 / 504d primary / CSI300 / round_trip 0.0026 + interim diagnostic horizons [21,63,126,252]. Forward window: OUT-OF-SAMPLE only, start floor `20260630` (after in-sample cutoff 20251231 AND the freeze), monthly cadence, snapshot+backfill-as-mature, ≥12 monthly cohorts for a paper read. Decision: **paper CANNOT satisfy the ship gate** (live-normalized required); paper read = OOS persistence + relative-NAV drawdown recheck vs the −15% floor; outcome routes to a NEW reviewed real-money forward-live artifact ONLY if OOS alpha persists AND drawdown ≤ −15% is no longer breached. Scope locks: paper / no real money / no fetch / no capture-run / no production / ship-gate / full-size / broker — all authorized=false; manual-only.
+- `schemas/a_long_large_cap_value_yield_forward_paper_tracking.schema.json` — all-frozen draft-07, **generated from the spec** (throwaway recursive const-pin generator, deleted): every design value const-pinned (`additionalProperties:false` throughout, fixed-length arrays), only `generated_at`, the review-status enum, and prose fields (limitations / roles / rationale / why_paper_first) flexible.
+- `tests/schema/test_a_long_large_cap_value_yield_forward_paper_tracking_schema.py` (18) — spec validates + review-status flip validates + prose flexible; adversarial rejects of extra field, dropped required field, real_money_committed=true, paper_satisfies_ship_gate=true, data_fetch=true, top_fraction / drawdown-floor / ship-gate-threshold drift, construction-definition drift, dropped construction, clue-id drift, start-floor drift, prohibited-claim flip, bad review status.
+
+**Verification**: spec validates against the generated schema (self-check in generator); schema test 18/18; full suite **1211/1211**; route-doc guard 11/11.
+
+**Boundary**: design-only, 3 untracked files, NOT committed. Authorizes no data fetch, no capture run, no real money, no signal search, no production/ship-gate/full-size. Uncommitted, awaiting `审查`.
+
+**Next**: Codex `审查` of the forward paper-tracking design slice; then Claude `提交`; then a separate capture-runner slice (its own review/commit) implements the monthly snapshot+backfill capture (each pull needs its own fetch authorization). Real-money forward-live remains a future, separately-reviewed decision gated on the paper window's outcome.
+
+---
+
 ## 2026-06-09 — Claude post-execution stale-test fix (batch ledger spent-state) — **DONE (local master)**
 
 **Why**: at the batch `执行` closeout (`68ffc99`) I committed the now-SPENT batch ledger but the pre-commit hook only runs the route-doc guard, not the full suite, so two committed tests that asserted the ledger is UNSPENT were left stale and HEAD had 2 failing tests (`test_a_long_large_cap_batch_factor_search_signal_search.PreregLedgerIntegrationTests.test_real_ledger_validates_unspent` ERROR; `test_a_long_large_cap_batch_factor_search_preregistration_schema...test_ledger_validates_and_is_one_unspent_pending_singleton` FAIL). Lesson: after an execution writes a spent ledger, run the FULL suite before committing the closeout, not just the route-doc guard. (Same class as `7cbe7f4`.)

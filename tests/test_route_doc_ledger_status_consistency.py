@@ -341,6 +341,57 @@ def _readme_alias_scoped_transient_violations() -> list[str]:
     return violations
 
 
+# MUTABLE ledger spend-state in a durable route doc. The spent-state scan above only fires on a SPENT
+# ledger's alias, so an ACTIVE (unspent) ledger row that restates "UNSPENT" / "tests_spent_count=0" / 未花
+# escapes it — yet that wording is GUARANTEED to go stale the moment the ledger is spent
+# (R-VY-ROUTE-MUTABLE-UNSPENT). Per AGENTS.md route-doc v3, durable route docs (research/README,
+# docs/README, CURRENT §1/§5) carry stable identity + pointers and delegate live spend state to the
+# ledger file + docs/SESSION_LOG.md top. This scan is location-independent and ledger-status-independent:
+# it forbids mutable unspent-state tokens in those durable zones regardless of which ledger. Terminal
+# state (`SPENT`, `tests_spent_count=1`) is NOT flagged — only the mutable / will-drift form. `UNSPENT`
+# is matched case-sensitively so lowercase prose ("a ledger may start unspent") is not a false positive.
+MUTABLE_LEDGER_STATE_PATTERNS = [
+    re.compile(r"\bUNSPENT\b"),
+    re.compile(r"tests_spent_count\s*=\s*0\b"),
+    re.compile(r"未花"),
+    re.compile(r"尚未花"),
+]
+MUTABLE_STATE_README_DOCS = [
+    ROOT / "research" / "README.md",
+    ROOT / "docs" / "README.md",
+]
+
+
+def _mutable_state_hits(numbered_lines: list[tuple[int, str]]) -> list[tuple[int, str, str]]:
+    hits: list[tuple[int, str, str]] = []
+    for lineno, line in numbered_lines:
+        for pat in MUTABLE_LEDGER_STATE_PATTERNS:
+            if pat.search(line):
+                hits.append((lineno, pat.pattern, line))
+                break
+    return hits
+
+
+def _find_mutable_ledger_state_violations() -> list[str]:
+    violations: list[str] = []
+    for path in MUTABLE_STATE_README_DOCS:
+        if not path.exists():
+            continue
+        rel = _relative(path)
+        for lineno, pattern, line in _mutable_state_hits(_numbered_lines(path)):
+            violations.append(
+                f"{rel}:{lineno} restates MUTABLE ledger spend-state (matched /{pattern}/) in a durable "
+                f"route doc — delegate live spend state to the ledger file + docs/SESSION_LOG.md top: {line.strip()[:90]}"
+            )
+    for lineno, line in _current_durable_pointer_lines():
+        for _ln, pattern, hit_line in _mutable_state_hits([(lineno, line)]):
+            violations.append(
+                f"docs/CURRENT.md:{lineno} (§1/§5 durable zone) restates MUTABLE ledger spend-state "
+                f"(matched /{pattern}/): {hit_line.strip()[:90]}"
+            )
+    return violations
+
+
 class RouteDocLedgerStatusConsistencyTest(unittest.TestCase):
     def test_ledgers_are_discoverable(self) -> None:
         spent = _ledger_spent_map()
@@ -468,6 +519,38 @@ class RouteDocLedgerStatusConsistencyTest(unittest.TestCase):
             len(hits),
             len(planted),
             "every spent-alias row variant (no-space + synonyms incl 执行) must be caught",
+        )
+
+    def test_no_durable_route_doc_restates_mutable_unspent_state(self) -> None:
+        violations = _find_mutable_ledger_state_violations()
+        self.assertEqual(
+            violations,
+            [],
+            "a durable route doc (research/README, docs/README, CURRENT §1/§5) restates a MUTABLE ledger "
+            "spend-state (UNSPENT / tests_spent_count=0 / 未花) that is guaranteed to go stale on spend; "
+            "phrase the row as a stable pointer and delegate live spend state to the ledger file + "
+            "docs/SESSION_LOG.md top:\n" + "\n".join(violations),
+        )
+
+    def test_mutable_unspent_guard_catches_planted_rows(self) -> None:
+        planted = [
+            (1, "- `..._forward_paper_tracking_program_test_budget_ledger_20260609.json` - singleton ledger. UNSPENT: budgets one decision."),
+            (2, "- ledger row stating tests_spent_count=0 in a durable index."),
+            (3, "- 该 family ledger 未花,等首次决策。"),
+        ]
+        hits = _mutable_state_hits(planted)
+        self.assertEqual(len(hits), len(planted), "every planted mutable-unspent row must be caught")
+
+    def test_mutable_unspent_guard_ignores_terminal_spent_and_prose(self) -> None:
+        benign = [
+            (1, "- ledger SPENT: tests_spent_count=1, status spent_passed_research_continue_only, planned_tests=[]."),
+            (2, "- a new ledger may start with no spent tests when it only registers a planned test."),
+            (3, "- the spend count / status live in docs/CURRENT.md §0 + docs/SESSION_LOG.md + the execution summary."),
+        ]
+        self.assertEqual(
+            _mutable_state_hits(benign),
+            [],
+            "terminal spent-state and delegating prose must not be flagged as mutable unspent state",
         )
 
     def test_alias_scoped_transient_ignores_prose_without_alias(self) -> None:

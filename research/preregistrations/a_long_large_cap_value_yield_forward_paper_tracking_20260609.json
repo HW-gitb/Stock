@@ -1,0 +1,274 @@
+{
+  "schema_name": "a_long_large_cap_value_yield_forward_paper_tracking",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-09T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_value_yield_forward_paper_tracking_20260609",
+  "scope": {
+    "phase": "7b_forward_validation",
+    "purpose": "a_long_large_cap_value_yield_forward_paper_tracking_design",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "registration_status": "registered_not_run",
+    "research_status": "new_frozen_forward_paper_tracking_design_registered_not_run",
+    "research_only": true,
+    "evidence_level": "paper",
+    "is_forward_paper_tracking": true,
+    "is_real_money_forward_live": false,
+    "real_money_committed": false,
+    "paper_evidence_satisfies_ship_gate": false,
+    "preregistration_review_status": "passed_independent_review_ready_for_freeze",
+    "reuses_in_sample_frozen_construction": true,
+    "out_of_sample_only": true,
+    "new_data_fetch_required": true,
+    "data_fetch_allowed_by_this_artifact": false,
+    "provider_call_allowed_by_this_artifact": false,
+    "signal_search_authorized_by_this_artifact": false,
+    "capture_run_authorized_by_this_artifact": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_doc_refs": [
+    {
+      "path": "research/results/a_long_large_cap_batch_factor_search_20260609/execution_summary.json",
+      "role": "the executed batch result this paper-tracking validates: batch_statistical_alpha_clue_research_only, the 2 surviving research-only clues cash_flow_to_circ_mv and sales_to_circ_mv (both NOT tradeable in-sample)"
+    },
+    {
+      "path": "research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json",
+      "role": "the reviewed in-sample batch preregistration whose frozen factor definitions, universe, neutralization, measurement, and risk gate this paper-tracking design reuses unchanged"
+    },
+    {
+      "path": "schemas/forward_live_evidence.schema.json",
+      "role": "the EVENTUAL real-money / live-normalized forward-live evidence contract; this PAPER design cannot produce it, but a future promotion to real-money forward-live would target it"
+    },
+    {
+      "path": "runners/aggregate_execution_reports.py",
+      "role": "the existing ship-gate evidence aggregator (monthly alpha t-stat >= 2.0, Sharpe >= 1.0, max drawdown <= 15%, forward-live >= 12 months, live-normalized only); paper evidence is explicitly rejected by it, documenting why this design cannot self-promote to ship gate"
+    },
+    {
+      "path": "runners/forward_tracker.py",
+      "role": "the A-short weekly forward capture + backfill-as-mature pattern reused (adapted to monthly A-long cohorts) by the future capture-runner slice"
+    },
+    {
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "role": "owns the ship-gate four-metric + 12-month-live contract and the paper-vs-live-normalized evidence-type lock this design respects"
+    },
+    {
+      "path": "research/README.md",
+      "role": "routes research-only forward-validation artifacts"
+    }
+  ],
+  "provenance": {
+    "derived_from_executed_batch_clues": true,
+    "batch_research_verdict": "batch_statistical_alpha_clue_research_only",
+    "batch_runner_commit": "50d94e3",
+    "batch_closeout_commit": "68ffc99",
+    "surviving_clue_factor_ids": ["cash_flow_to_circ_mv", "sales_to_circ_mv"],
+    "in_sample_clue_summary": [
+      {"factor_id": "cash_flow_to_circ_mv", "in_sample_hac_t": 5.61, "in_sample_mean_net_excess": 0.1884, "in_sample_relative_nav_max_drawdown": -0.1805, "in_sample_tradeable": false},
+      {"factor_id": "sales_to_circ_mv", "in_sample_hac_t": 3.99, "in_sample_mean_net_excess": 0.1454, "in_sample_relative_nav_max_drawdown": -0.1710, "in_sample_tradeable": false}
+    ],
+    "why_paper_first": "Both clues passed the in-sample statistical-alpha-clue gates but FAILED the -15% relative-NAV drawdown tradeable gate (-0.1805 / -0.1710), so committing real capital toward the ship gate is premature. Paper forward-tracking is the rational intermediate: it confirms out-of-sample whether the statistical alpha persists AND whether the relative-NAV drawdown stays worse than -15%, at zero capital risk, before any real-money forward-live decision.",
+    "fdr_cannot_uncount_prior_singletons": true,
+    "program_level_test_index_at_least": 6,
+    "in_sample_is_candidate_generation_only": true,
+    "real_validation_requires_forward": true,
+    "no_in_sample_rescue_or_reslice": true
+  },
+  "frozen_construction": {
+    "construction_id": "a_long_large_cap_value_yield_forward_paper_tracking_v1",
+    "reuses_batch_frozen_rules_unchanged": true,
+    "universe_rule": {
+      "market_scope": "A-share",
+      "board_scope": "main_board_only",
+      "as_of_frequency": "monthly",
+      "as_of_selection_rule": "last_open_A_share_trading_day_of_each_calendar_month",
+      "universe_size_n": 500,
+      "selection_basis": "top_500_by_pit_circ_mv_as_of_each_as_of_date",
+      "selected_market_cap_field": "circ_mv",
+      "reuses_reviewed_data_quality_exclusion_boundary_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+      "pit_list_delist_required": true,
+      "selection_time_namechange_veto_required": true,
+      "include_later_delisted_names_at_pre_delisting_asofs": true,
+      "universe_size_n_search_allowed": false
+    },
+    "neutralization_rule": {
+      "primary_view": "industry_and_size_neutral",
+      "neutralization_method": "marginal_double_neutralization",
+      "combined_score_rule": "0_5_industry_neutral_percentile_plus_0_5_size_neutral_percentile",
+      "view_field_suffix_alias": {
+        "semantic_label": "industry_and_size_neutral",
+        "runner_result_field_suffix": "industry_size_neutral",
+        "note": "the semantic design label 'industry_and_size_neutral' maps to the runner/result score-field suffix '__industry_size_neutral' (same view; the existing batch runner uses this semantic-vs-internal-name split). The capture-runner slice must use the field suffix."
+      },
+      "industry_basis": "SW_L2_then_SW_L1_if_sample_lt_20",
+      "size_bucket_rule": "pit_market_cap_quintile_inside_top_500_per_as_of",
+      "size_bucket_count": 5,
+      "minimum_size_bucket_count_for_primary_percentile": 50,
+      "size_coverage_gate_applies_to_cohort_forming_months_only": true
+    },
+    "tracked_constructions": [
+      {
+        "construction_id": "cash_flow_to_circ_mv",
+        "kind": "single_factor",
+        "promotion_role": "diagnostic_supporting_only",
+        "definition": "ttm_n_cashflow_act_div_pit_circ_mv",
+        "input_fields": ["cashflow.n_cashflow_act", "circ_mv"],
+        "ttm_required": true,
+        "high_value_is_high_score": true,
+        "canonical_label_disclaimer": "free_float_operating_cash_flow_yield"
+      },
+      {
+        "construction_id": "sales_to_circ_mv",
+        "kind": "single_factor",
+        "promotion_role": "diagnostic_supporting_only",
+        "definition": "ttm_revenue_div_pit_circ_mv",
+        "input_fields": ["income.revenue", "circ_mv"],
+        "ttm_required": true,
+        "high_value_is_high_score": true,
+        "canonical_label_disclaimer": "free_float_sales_yield"
+      },
+      {
+        "construction_id": "value_yield_composite_cf_sales",
+        "kind": "two_factor_equal_weight_composite",
+        "promotion_role": "primary_promotion_construction",
+        "definition": "equal_weight_mean_of_cash_flow_to_circ_mv_and_sales_to_circ_mv_industry_size_neutral_percentile_scores",
+        "input_fields": ["cash_flow_to_circ_mv__industry_size_neutral", "sales_to_circ_mv__industry_size_neutral"],
+        "ttm_required": true,
+        "high_value_is_high_score": true,
+        "weights_frozen_before_run": true,
+        "weight_search_allowed": false,
+        "rationale": "the dilution-free 2-value-factor blend never tested standalone in-sample (the in-sample family-balanced composite was diluted by the dead profitability / low-risk / momentum families); equal-weight across the two surviving value yields, frozen",
+        "canonical_label_disclaimer": "free_float_value_yield_composite_not_a_canonical_index"
+      }
+    ],
+    "basket_rule": {
+      "view": "industry_and_size_neutral",
+      "weighting": "equal_weight",
+      "top_fraction": 0.2,
+      "minimum_top_count_per_month": 10,
+      "primary_horizon_trading_days": 504,
+      "primary_benchmark": "CSI300",
+      "diagnostic_benchmark": "CSI1000",
+      "interim_read_horizons_trading_days": [21, 63, 126, 252],
+      "interim_horizons_are_diagnostic_only": true,
+      "entry_rule": "next_trading_day_close_after_as_of",
+      "stock_return_basis": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close",
+      "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+      "round_trip_cost": 0.0026,
+      "monthly_overlapping_cohorts": true,
+      "parameter_search_allowed": false
+    }
+  },
+  "forward_window": {
+    "out_of_sample_only": true,
+    "in_sample_data_cutoff": "20251231",
+    "forward_window_start_floor": "20260630",
+    "forward_window_start_rule": "first_open_A_share_month_end_on_or_after_the_reviewed_freeze_commit_date_and_not_before_the_start_floor",
+    "no_as_of_before_start_floor_may_count": true,
+    "capture_cadence": "monthly",
+    "capture_pattern": "monthly_snapshot_at_month_end_as_of_then_backfill_relative_returns_as_each_horizon_matures",
+    "minimum_monthly_cohorts_for_a_paper_read": 12,
+    "primary_metric_matures_after_trading_days": 504,
+    "interim_metrics_give_earlier_read": true,
+    "rolling_relative_nav_updates_each_month_regardless_of_hold_completion": true
+  },
+  "evidence_and_decision_rule": {
+    "evidence_level": "paper",
+    "paper_evidence_cannot_satisfy_ship_gate": true,
+    "ship_gate_requires_live_normalized_reviewed_12_month": true,
+    "ship_gate_thresholds_for_reference_only": {
+      "monthly_alpha_t_stat_min": 2.0,
+      "sharpe_min": 1.0,
+      "max_drawdown_max": 0.15,
+      "forward_live_months_min": 12,
+      "evidence_level_required": "live_normalized",
+      "source_ref": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md"
+    },
+    "paper_read_per_construction": {
+      "persistence_check": "out_of_sample_mean_relative_excess_stays_positive_with_consistent_HAC_t_direction_on_matured_and_interim_cohorts",
+      "tradeability_recheck": "rolling_overlapping_relative_nav_max_drawdown_vs_csi300_over_the_forward_window",
+      "tradeable_drawdown_floor": -0.15
+    },
+    "outcome_routing": {
+      "promotion_decided_on_single_primary_construction_only": "value_yield_composite_cf_sales",
+      "diagnostics_inform_drivers_but_cannot_promote": true,
+      "promote_to_real_money_forward_live_design_if": "the_single_primary_promotion_construction_value_yield_composite_cf_sales_shows_persistent_out_of_sample_alpha_AND_its_rolling_relative_nav_max_drawdown_is_no_worse_than_-0.15_over_the_paper_window",
+      "stay_research_only_or_drop_if": "the_primary_promotion_construction_out_of_sample_alpha_decays_or_its_relative_nav_drawdown_stays_worse_than_-0.15",
+      "best_of_three_post_window_selection_forbidden": true,
+      "single_factor_only_promotion_requires_new_reviewed_preregistration": true,
+      "promotion_requires_new_reviewed_real_money_forward_live_artifact": true,
+      "paper_window_does_not_authorize_real_money_by_itself": true
+    },
+    "anti_p_hacking_controls": {
+      "construction_frozen_before_forward_window": true,
+      "no_parameter_search_during_forward_window": true,
+      "no_factor_definition_change": true,
+      "no_horizon_or_benchmark_or_universe_change": true,
+      "no_threshold_relaxation": true,
+      "no_drop_then_recombine": true,
+      "new_reviewed_artifact_required_before_any_change_or_real_money": true
+    }
+  },
+  "data_path_dependency": {
+    "a_long_has_no_ongoing_forward_data_path_today": true,
+    "in_sample_panel_was_bounded_2018_2025_materialization": true,
+    "forward_capture_needs_ongoing_monthly_pit_pull": "monthly top-500 circ_mv (daily_basic) + PIT cashflow.n_cashflow_act + income.revenue (TTM) + main-board daily close/adj_factor + CSI300/CSI1000 total-return close, point-in-time at each forward month-end",
+    "forward_universe_must_be_frozen_pit_at_each_as_of_and_capture_real_delist_halt_merger_outcomes": true,
+    "this_artifact_authorizes_no_fetch_or_capture_run": true,
+    "ongoing_pulls_require_separate_reviewed_authorization_and_a_capture_runner_slice": true,
+    "capture_runner_is_a_separate_future_slice": true
+  },
+  "family_decision_rule": {
+    "promotion_eligible_construction_count": 1,
+    "single_primary_promotion_construction": "value_yield_composite_cf_sales",
+    "diagnostic_supporting_construction_ids": ["cash_flow_to_circ_mv", "sales_to_circ_mv"],
+    "diagnostics_can_independently_promote": false,
+    "best_of_three_post_window_selection_forbidden": true,
+    "post_window_cherry_pick_across_constructions_forbidden": true,
+    "multiple_construction_selection_rule": "single_pre_declared_primary_promotion_construction_no_post_window_selection",
+    "single_factor_only_pursuit_requires_new_reviewed_preregistration": true,
+    "rationale": "Only the diversified 2-factor value composite is promotion-eligible; the two single yields are diagnostic supporting reads that explain drivers but cannot independently trigger a real-money forward-live promotion. This removes the best-of-three multiplicity / post-window cherry-pick: there is exactly ONE frozen promotion decision for the whole value-yield forward-paper family, budgeted by one singleton ledger."
+  },
+  "planned_test_budget": {
+    "ledger_ref": "research/ledgers/a_long_large_cap_value_yield_forward_paper_tracking_program_test_budget_ledger_20260609.json",
+    "family_id": "a_long_large_cap_value_yield_forward_paper_v1",
+    "test_budget_units": 1,
+    "forward_paper_family_is_one_promotion_decision": true,
+    "promotion_decision_spends_the_singleton": true,
+    "interim_monthly_captures_do_not_spend_the_singleton": true,
+    "requires_independent_review_before_capture": true,
+    "requires_user_authorization_before_each_fetch": true,
+    "required_preregistration_review_status_for_capture": "passed_independent_review_ready_for_freeze"
+  },
+  "planned_next_slices": [
+    "After this design is independent-review PASSED and committed, a separate capture-runner slice (its own review/commit) implements the monthly snapshot + backfill-as-mature capture over the frozen construction, writing a paper forward-tracking accumulator summary; it authorizes no real money and produces paper (not ship-gate) evidence.",
+    "Each forward monthly data pull requires its own per-run data-fetch authorization (no standing fetch authorization is granted here).",
+    "Only if the paper window shows persistent out-of-sample alpha AND a relative-NAV drawdown no worse than -15% may a NEW reviewed real-money forward-live artifact (targeting schemas/forward_live_evidence.schema.json) be proposed."
+  ],
+  "prohibited_claims": {
+    "paper_is_ship_gate_evidence": false,
+    "alpha_validated": false,
+    "tradeable_candidate_confirmed": false,
+    "in_sample_clue_is_out_of_sample_proof": false,
+    "real_money_authorized": false,
+    "data_fetch_authorized": false,
+    "capture_run_authorized": false,
+    "production_ready": false,
+    "full_size_allowed": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "limitations": [
+    "This artifact registers a frozen forward PAPER-tracking design only; it runs no capture, fetches no data, and commits no real money.",
+    "Paper evidence is explicitly NOT ship-gate evidence: the project ship gate requires live-normalized, position-reconciled, reviewed, >= 12-month forward-live evidence (docs/ALPHA_VALIDATION_ACTION_GUIDE.md; aggregate_execution_reports.py rejects paper).",
+    "Both tracked single factors failed the -15% relative-NAV drawdown tradeable gate in-sample; the paper window's main job is to recheck whether that breach persists out-of-sample before any real-money commitment.",
+    "The 504-trading-day primary hold means the primary metric matures slowly; interim horizons (21/63/126/252d) and the monthly rolling relative-NAV are early reads only, not the primary decision.",
+    "BH-FDR controlled within-batch multiple testing but cannot uncount the five prior spent singletons; these clues remain the program-level 6th-or-later test, and only forward evidence (ultimately live-normalized) can validate them.",
+    "A-long has no ongoing forward data pipeline today; forward capture is a separate gated build and each monthly pull needs its own data-fetch authorization.",
+    "All denominators are circulating market cap (circ_mv), a free-float yield; the construction ids are not canonical index ratios."
+  ]
+}

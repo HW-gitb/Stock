@@ -1,0 +1,62 @@
+{
+  "schema_name": "program_test_budget_ledger",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-09T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_value_yield_forward_paper_tracking_program_test_budget_ledger_20260609",
+  "ledger_status": "active_planned_test_pending_review",
+  "family_id": "a_long_large_cap_value_yield_forward_paper_v1",
+  "lane_id": "a_long_research",
+  "singleton_scope": {
+    "protected_decision": "promotion of the A-long large-cap value-yield clues (cash_flow_to_circ_mv / sales_to_circ_mv) from in-sample research to a real-money forward-live design, decided ONLY on the single frozen primary promotion construction value_yield_composite_cf_sales",
+    "applies_to": [
+      "the whole value-yield forward-paper family: cash_flow_to_circ_mv, sales_to_circ_mv, value_yield_composite_cf_sales",
+      "the single forward-paper promotion decision (promote to real-money forward-live design vs stay research-only / drop)"
+    ],
+    "does_not_authorize": [
+      "data fetch or provider call",
+      "forward capture run",
+      "real-money commitment or live trading",
+      "ship-gate evidence, production use, or full-size manual use",
+      "broker or order automation",
+      "best-of-three cherry-pick across the three constructions",
+      "single-factor-only promotion without a new reviewed preregistration"
+    ]
+  },
+  "creation_reason": {
+    "triggering_preflight_ref": "research/results/a_long_large_cap_batch_factor_search_20260609/execution_summary.json",
+    "triggering_preregistration_ref": "research/preregistrations/a_long_large_cap_value_yield_forward_paper_tracking_20260609.json",
+    "reason": "The executed batch found 2 research-only clues (cash_flow_to_circ_mv, sales_to_circ_mv), both NOT tradeable in-sample. This singleton budgets the forward PAPER-tracking family as exactly ONE promotion decision so there is no post-window best-of-three selection: only the diversified value_yield_composite_cf_sales is promotion-eligible; the two single yields are diagnostic supporting reads."
+  },
+  "budget_policy": {
+    "ledger_cardinality": "singleton_program_level",
+    "tests_spent_count": 0,
+    "tests_available_without_new_review": 0,
+    "next_test_requires_reviewed_preregistration": true,
+    "next_test_requires_user_approval": true,
+    "spend_rule": "The one forward-paper promotion decision is spent when the paper window concludes with a promote / stay-research-only / drop verdict on the single frozen primary promotion construction; it is not spent by interim monthly captures.",
+    "no_silent_rescue_rule": "No best-of-three cherry-pick, no single-factor-only promotion, no construction / horizon / benchmark / universe / threshold change, and no real-money commitment without a NEW reviewed preregistration and ledger."
+  },
+  "test_spend_log": [],
+  "planned_tests": [
+    {
+      "test_id": "a_long_large_cap_value_yield_forward_paper_promotion_decision_20260609",
+      "planned_status": "planned_not_reviewed",
+      "created_at": "2026-06-09T00:00:00+08:00",
+      "planned_preregistration_ref": "research/preregistrations/a_long_large_cap_value_yield_forward_paper_tracking_20260609.json",
+      "planned_result_ref": "research/results/a_long_large_cap_value_yield_forward_paper_tracking_20260609/paper_read_summary.json",
+      "promotion_relevant": true,
+      "expected_tests_spent": 1,
+      "approval_status": "user_approved_pending_review",
+      "design_summary": "One forward PAPER-tracking promotion decision for the A-long large-cap value-yield family. Three constructions are tracked (cash_flow_to_circ_mv, sales_to_circ_mv, value_yield_composite_cf_sales) but only the composite is the frozen primary promotion construction; the two single yields are diagnostic supporting reads and cannot independently promote. Promote to a NEW reviewed real-money forward-live design ONLY if the composite shows persistent out-of-sample alpha AND a rolling relative-NAV max drawdown no worse than -0.15 over the paper window; otherwise stay research-only or drop. Paper evidence cannot satisfy the live-normalized ship gate.",
+      "review_boundary": [
+        "This planned test authorizes no data fetch, no forward capture run, no real money, no signal search, no production / ship-gate / full-size / DataHub / broker work.",
+        "The capture runner is a separate future slice with its own independent review, commit, and per-run fetch authorization; this ledger only freezes the single forward-paper promotion decision and forbids best-of-three selection."
+      ]
+    }
+  ],
+  "next_required_actions": [
+    "Independent review (Codex) of the forward PAPER-tracking design slice (spec + schema + ledger + tests) before any capture work.",
+    "After review PASS and commit, a separate capture-runner slice implements monthly snapshot + backfill-as-mature capture over the frozen construction; each forward data pull needs its own user fetch authorization.",
+    "Do not select the best of the three constructions after the forward window; only the composite primary promotion construction is promotion-eligible, and promotion requires a NEW reviewed real-money forward-live preregistration and ledger."
+  ]
+}

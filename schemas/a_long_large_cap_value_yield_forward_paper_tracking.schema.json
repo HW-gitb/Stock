@@ -1,0 +1,1246 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.local/a_long_large_cap_value_yield_forward_paper_tracking.schema.json",
+  "title": "A-long large-cap value-yield forward PAPER-tracking design",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "scope",
+    "source_doc_refs",
+    "provenance",
+    "frozen_construction",
+    "forward_window",
+    "evidence_and_decision_rule",
+    "data_path_dependency",
+    "family_decision_rule",
+    "planned_test_budget",
+    "planned_next_slices",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "a_long_large_cap_value_yield_forward_paper_tracking"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_id": {
+      "const": "a_long_large_cap_value_yield_forward_paper_tracking_20260609"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "registration_status",
+        "research_status",
+        "research_only",
+        "evidence_level",
+        "is_forward_paper_tracking",
+        "is_real_money_forward_live",
+        "real_money_committed",
+        "paper_evidence_satisfies_ship_gate",
+        "preregistration_review_status",
+        "reuses_in_sample_frozen_construction",
+        "out_of_sample_only",
+        "new_data_fetch_required",
+        "data_fetch_allowed_by_this_artifact",
+        "provider_call_allowed_by_this_artifact",
+        "signal_search_authorized_by_this_artifact",
+        "capture_run_authorized_by_this_artifact",
+        "datahub_allowed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7b_forward_validation"
+        },
+        "purpose": {
+          "const": "a_long_large_cap_value_yield_forward_paper_tracking_design"
+        },
+        "lane_id": {
+          "const": "a_long"
+        },
+        "market": {
+          "const": "A-share"
+        },
+        "registration_status": {
+          "const": "registered_not_run"
+        },
+        "research_status": {
+          "const": "new_frozen_forward_paper_tracking_design_registered_not_run"
+        },
+        "research_only": {
+          "const": true
+        },
+        "evidence_level": {
+          "const": "paper"
+        },
+        "is_forward_paper_tracking": {
+          "const": true
+        },
+        "is_real_money_forward_live": {
+          "const": false
+        },
+        "real_money_committed": {
+          "const": false
+        },
+        "paper_evidence_satisfies_ship_gate": {
+          "const": false
+        },
+        "preregistration_review_status": {
+          "type": "string",
+          "enum": [
+            "pending_independent_review",
+            "passed_independent_review_ready_for_freeze"
+          ]
+        },
+        "reuses_in_sample_frozen_construction": {
+          "const": true
+        },
+        "out_of_sample_only": {
+          "const": true
+        },
+        "new_data_fetch_required": {
+          "const": true
+        },
+        "data_fetch_allowed_by_this_artifact": {
+          "const": false
+        },
+        "provider_call_allowed_by_this_artifact": {
+          "const": false
+        },
+        "signal_search_authorized_by_this_artifact": {
+          "const": false
+        },
+        "capture_run_authorized_by_this_artifact": {
+          "const": false
+        },
+        "datahub_allowed": {
+          "const": false
+        },
+        "production_use_allowed": {
+          "const": false
+        },
+        "ship_gate_claim_allowed": {
+          "const": false
+        },
+        "full_size_manual_use_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        }
+      }
+    },
+    "source_doc_refs": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "role"
+          ],
+          "properties": {
+            "path": {
+              "const": "research/results/a_long_large_cap_batch_factor_search_20260609/execution_summary.json"
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "role"
+          ],
+          "properties": {
+            "path": {
+              "const": "research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json"
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "role"
+          ],
+          "properties": {
+            "path": {
+              "const": "schemas/forward_live_evidence.schema.json"
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "role"
+          ],
+          "properties": {
+            "path": {
+              "const": "runners/aggregate_execution_reports.py"
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "role"
+          ],
+          "properties": {
+            "path": {
+              "const": "runners/forward_tracker.py"
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "role"
+          ],
+          "properties": {
+            "path": {
+              "const": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md"
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "role"
+          ],
+          "properties": {
+            "path": {
+              "const": "research/README.md"
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "derived_from_executed_batch_clues",
+        "batch_research_verdict",
+        "batch_runner_commit",
+        "batch_closeout_commit",
+        "surviving_clue_factor_ids",
+        "in_sample_clue_summary",
+        "why_paper_first",
+        "fdr_cannot_uncount_prior_singletons",
+        "program_level_test_index_at_least",
+        "in_sample_is_candidate_generation_only",
+        "real_validation_requires_forward",
+        "no_in_sample_rescue_or_reslice"
+      ],
+      "properties": {
+        "derived_from_executed_batch_clues": {
+          "const": true
+        },
+        "batch_research_verdict": {
+          "const": "batch_statistical_alpha_clue_research_only"
+        },
+        "batch_runner_commit": {
+          "const": "50d94e3"
+        },
+        "batch_closeout_commit": {
+          "const": "68ffc99"
+        },
+        "surviving_clue_factor_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "const": "cash_flow_to_circ_mv"
+            },
+            {
+              "const": "sales_to_circ_mv"
+            }
+          ]
+        },
+        "in_sample_clue_summary": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "factor_id",
+                "in_sample_hac_t",
+                "in_sample_mean_net_excess",
+                "in_sample_relative_nav_max_drawdown",
+                "in_sample_tradeable"
+              ],
+              "properties": {
+                "factor_id": {
+                  "const": "cash_flow_to_circ_mv"
+                },
+                "in_sample_hac_t": {
+                  "const": 5.61
+                },
+                "in_sample_mean_net_excess": {
+                  "const": 0.1884
+                },
+                "in_sample_relative_nav_max_drawdown": {
+                  "const": -0.1805
+                },
+                "in_sample_tradeable": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "factor_id",
+                "in_sample_hac_t",
+                "in_sample_mean_net_excess",
+                "in_sample_relative_nav_max_drawdown",
+                "in_sample_tradeable"
+              ],
+              "properties": {
+                "factor_id": {
+                  "const": "sales_to_circ_mv"
+                },
+                "in_sample_hac_t": {
+                  "const": 3.99
+                },
+                "in_sample_mean_net_excess": {
+                  "const": 0.1454
+                },
+                "in_sample_relative_nav_max_drawdown": {
+                  "const": -0.171
+                },
+                "in_sample_tradeable": {
+                  "const": false
+                }
+              }
+            }
+          ]
+        },
+        "why_paper_first": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fdr_cannot_uncount_prior_singletons": {
+          "const": true
+        },
+        "program_level_test_index_at_least": {
+          "const": 6
+        },
+        "in_sample_is_candidate_generation_only": {
+          "const": true
+        },
+        "real_validation_requires_forward": {
+          "const": true
+        },
+        "no_in_sample_rescue_or_reslice": {
+          "const": true
+        }
+      }
+    },
+    "frozen_construction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "construction_id",
+        "reuses_batch_frozen_rules_unchanged",
+        "universe_rule",
+        "neutralization_rule",
+        "tracked_constructions",
+        "basket_rule"
+      ],
+      "properties": {
+        "construction_id": {
+          "const": "a_long_large_cap_value_yield_forward_paper_tracking_v1"
+        },
+        "reuses_batch_frozen_rules_unchanged": {
+          "const": true
+        },
+        "universe_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "market_scope",
+            "board_scope",
+            "as_of_frequency",
+            "as_of_selection_rule",
+            "universe_size_n",
+            "selection_basis",
+            "selected_market_cap_field",
+            "reuses_reviewed_data_quality_exclusion_boundary_ref",
+            "pit_list_delist_required",
+            "selection_time_namechange_veto_required",
+            "include_later_delisted_names_at_pre_delisting_asofs",
+            "universe_size_n_search_allowed"
+          ],
+          "properties": {
+            "market_scope": {
+              "const": "A-share"
+            },
+            "board_scope": {
+              "const": "main_board_only"
+            },
+            "as_of_frequency": {
+              "const": "monthly"
+            },
+            "as_of_selection_rule": {
+              "const": "last_open_A_share_trading_day_of_each_calendar_month"
+            },
+            "universe_size_n": {
+              "const": 500
+            },
+            "selection_basis": {
+              "const": "top_500_by_pit_circ_mv_as_of_each_as_of_date"
+            },
+            "selected_market_cap_field": {
+              "const": "circ_mv"
+            },
+            "reuses_reviewed_data_quality_exclusion_boundary_ref": {
+              "const": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json"
+            },
+            "pit_list_delist_required": {
+              "const": true
+            },
+            "selection_time_namechange_veto_required": {
+              "const": true
+            },
+            "include_later_delisted_names_at_pre_delisting_asofs": {
+              "const": true
+            },
+            "universe_size_n_search_allowed": {
+              "const": false
+            }
+          }
+        },
+        "neutralization_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "primary_view",
+            "neutralization_method",
+            "combined_score_rule",
+            "view_field_suffix_alias",
+            "industry_basis",
+            "size_bucket_rule",
+            "size_bucket_count",
+            "minimum_size_bucket_count_for_primary_percentile",
+            "size_coverage_gate_applies_to_cohort_forming_months_only"
+          ],
+          "properties": {
+            "primary_view": {
+              "const": "industry_and_size_neutral"
+            },
+            "neutralization_method": {
+              "const": "marginal_double_neutralization"
+            },
+            "combined_score_rule": {
+              "const": "0_5_industry_neutral_percentile_plus_0_5_size_neutral_percentile"
+            },
+            "view_field_suffix_alias": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "semantic_label",
+                "runner_result_field_suffix",
+                "note"
+              ],
+              "properties": {
+                "semantic_label": {
+                  "const": "industry_and_size_neutral"
+                },
+                "runner_result_field_suffix": {
+                  "const": "industry_size_neutral"
+                },
+                "note": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "industry_basis": {
+              "const": "SW_L2_then_SW_L1_if_sample_lt_20"
+            },
+            "size_bucket_rule": {
+              "const": "pit_market_cap_quintile_inside_top_500_per_as_of"
+            },
+            "size_bucket_count": {
+              "const": 5
+            },
+            "minimum_size_bucket_count_for_primary_percentile": {
+              "const": 50
+            },
+            "size_coverage_gate_applies_to_cohort_forming_months_only": {
+              "const": true
+            }
+          }
+        },
+        "tracked_constructions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "construction_id",
+                "kind",
+                "promotion_role",
+                "definition",
+                "input_fields",
+                "ttm_required",
+                "high_value_is_high_score",
+                "canonical_label_disclaimer"
+              ],
+              "properties": {
+                "construction_id": {
+                  "const": "cash_flow_to_circ_mv"
+                },
+                "kind": {
+                  "const": "single_factor"
+                },
+                "promotion_role": {
+                  "const": "diagnostic_supporting_only"
+                },
+                "definition": {
+                  "const": "ttm_n_cashflow_act_div_pit_circ_mv"
+                },
+                "input_fields": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": [
+                    {
+                      "const": "cashflow.n_cashflow_act"
+                    },
+                    {
+                      "const": "circ_mv"
+                    }
+                  ]
+                },
+                "ttm_required": {
+                  "const": true
+                },
+                "high_value_is_high_score": {
+                  "const": true
+                },
+                "canonical_label_disclaimer": {
+                  "const": "free_float_operating_cash_flow_yield"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "construction_id",
+                "kind",
+                "promotion_role",
+                "definition",
+                "input_fields",
+                "ttm_required",
+                "high_value_is_high_score",
+                "canonical_label_disclaimer"
+              ],
+              "properties": {
+                "construction_id": {
+                  "const": "sales_to_circ_mv"
+                },
+                "kind": {
+                  "const": "single_factor"
+                },
+                "promotion_role": {
+                  "const": "diagnostic_supporting_only"
+                },
+                "definition": {
+                  "const": "ttm_revenue_div_pit_circ_mv"
+                },
+                "input_fields": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": [
+                    {
+                      "const": "income.revenue"
+                    },
+                    {
+                      "const": "circ_mv"
+                    }
+                  ]
+                },
+                "ttm_required": {
+                  "const": true
+                },
+                "high_value_is_high_score": {
+                  "const": true
+                },
+                "canonical_label_disclaimer": {
+                  "const": "free_float_sales_yield"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "construction_id",
+                "kind",
+                "promotion_role",
+                "definition",
+                "input_fields",
+                "ttm_required",
+                "high_value_is_high_score",
+                "weights_frozen_before_run",
+                "weight_search_allowed",
+                "rationale",
+                "canonical_label_disclaimer"
+              ],
+              "properties": {
+                "construction_id": {
+                  "const": "value_yield_composite_cf_sales"
+                },
+                "kind": {
+                  "const": "two_factor_equal_weight_composite"
+                },
+                "promotion_role": {
+                  "const": "primary_promotion_construction"
+                },
+                "definition": {
+                  "const": "equal_weight_mean_of_cash_flow_to_circ_mv_and_sales_to_circ_mv_industry_size_neutral_percentile_scores"
+                },
+                "input_fields": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": [
+                    {
+                      "const": "cash_flow_to_circ_mv__industry_size_neutral"
+                    },
+                    {
+                      "const": "sales_to_circ_mv__industry_size_neutral"
+                    }
+                  ]
+                },
+                "ttm_required": {
+                  "const": true
+                },
+                "high_value_is_high_score": {
+                  "const": true
+                },
+                "weights_frozen_before_run": {
+                  "const": true
+                },
+                "weight_search_allowed": {
+                  "const": false
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "canonical_label_disclaimer": {
+                  "const": "free_float_value_yield_composite_not_a_canonical_index"
+                }
+              }
+            }
+          ]
+        },
+        "basket_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "view",
+            "weighting",
+            "top_fraction",
+            "minimum_top_count_per_month",
+            "primary_horizon_trading_days",
+            "primary_benchmark",
+            "diagnostic_benchmark",
+            "interim_read_horizons_trading_days",
+            "interim_horizons_are_diagnostic_only",
+            "entry_rule",
+            "stock_return_basis",
+            "benchmark_return_basis",
+            "round_trip_cost",
+            "monthly_overlapping_cohorts",
+            "parameter_search_allowed"
+          ],
+          "properties": {
+            "view": {
+              "const": "industry_and_size_neutral"
+            },
+            "weighting": {
+              "const": "equal_weight"
+            },
+            "top_fraction": {
+              "const": 0.2
+            },
+            "minimum_top_count_per_month": {
+              "const": 10
+            },
+            "primary_horizon_trading_days": {
+              "const": 504
+            },
+            "primary_benchmark": {
+              "const": "CSI300"
+            },
+            "diagnostic_benchmark": {
+              "const": "CSI1000"
+            },
+            "interim_read_horizons_trading_days": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "items": [
+                {
+                  "const": 21
+                },
+                {
+                  "const": 63
+                },
+                {
+                  "const": 126
+                },
+                {
+                  "const": 252
+                }
+              ]
+            },
+            "interim_horizons_are_diagnostic_only": {
+              "const": true
+            },
+            "entry_rule": {
+              "const": "next_trading_day_close_after_as_of"
+            },
+            "stock_return_basis": {
+              "const": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close"
+            },
+            "benchmark_return_basis": {
+              "const": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close"
+            },
+            "round_trip_cost": {
+              "const": 0.0026
+            },
+            "monthly_overlapping_cohorts": {
+              "const": true
+            },
+            "parameter_search_allowed": {
+              "const": false
+            }
+          }
+        }
+      }
+    },
+    "forward_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "out_of_sample_only",
+        "in_sample_data_cutoff",
+        "forward_window_start_floor",
+        "forward_window_start_rule",
+        "no_as_of_before_start_floor_may_count",
+        "capture_cadence",
+        "capture_pattern",
+        "minimum_monthly_cohorts_for_a_paper_read",
+        "primary_metric_matures_after_trading_days",
+        "interim_metrics_give_earlier_read",
+        "rolling_relative_nav_updates_each_month_regardless_of_hold_completion"
+      ],
+      "properties": {
+        "out_of_sample_only": {
+          "const": true
+        },
+        "in_sample_data_cutoff": {
+          "const": "20251231"
+        },
+        "forward_window_start_floor": {
+          "const": "20260630"
+        },
+        "forward_window_start_rule": {
+          "const": "first_open_A_share_month_end_on_or_after_the_reviewed_freeze_commit_date_and_not_before_the_start_floor"
+        },
+        "no_as_of_before_start_floor_may_count": {
+          "const": true
+        },
+        "capture_cadence": {
+          "const": "monthly"
+        },
+        "capture_pattern": {
+          "const": "monthly_snapshot_at_month_end_as_of_then_backfill_relative_returns_as_each_horizon_matures"
+        },
+        "minimum_monthly_cohorts_for_a_paper_read": {
+          "const": 12
+        },
+        "primary_metric_matures_after_trading_days": {
+          "const": 504
+        },
+        "interim_metrics_give_earlier_read": {
+          "const": true
+        },
+        "rolling_relative_nav_updates_each_month_regardless_of_hold_completion": {
+          "const": true
+        }
+      }
+    },
+    "evidence_and_decision_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_level",
+        "paper_evidence_cannot_satisfy_ship_gate",
+        "ship_gate_requires_live_normalized_reviewed_12_month",
+        "ship_gate_thresholds_for_reference_only",
+        "paper_read_per_construction",
+        "outcome_routing",
+        "anti_p_hacking_controls"
+      ],
+      "properties": {
+        "evidence_level": {
+          "const": "paper"
+        },
+        "paper_evidence_cannot_satisfy_ship_gate": {
+          "const": true
+        },
+        "ship_gate_requires_live_normalized_reviewed_12_month": {
+          "const": true
+        },
+        "ship_gate_thresholds_for_reference_only": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "monthly_alpha_t_stat_min",
+            "sharpe_min",
+            "max_drawdown_max",
+            "forward_live_months_min",
+            "evidence_level_required",
+            "source_ref"
+          ],
+          "properties": {
+            "monthly_alpha_t_stat_min": {
+              "const": 2.0
+            },
+            "sharpe_min": {
+              "const": 1.0
+            },
+            "max_drawdown_max": {
+              "const": 0.15
+            },
+            "forward_live_months_min": {
+              "const": 12
+            },
+            "evidence_level_required": {
+              "const": "live_normalized"
+            },
+            "source_ref": {
+              "const": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md"
+            }
+          }
+        },
+        "paper_read_per_construction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "persistence_check",
+            "tradeability_recheck",
+            "tradeable_drawdown_floor"
+          ],
+          "properties": {
+            "persistence_check": {
+              "const": "out_of_sample_mean_relative_excess_stays_positive_with_consistent_HAC_t_direction_on_matured_and_interim_cohorts"
+            },
+            "tradeability_recheck": {
+              "const": "rolling_overlapping_relative_nav_max_drawdown_vs_csi300_over_the_forward_window"
+            },
+            "tradeable_drawdown_floor": {
+              "const": -0.15
+            }
+          }
+        },
+        "outcome_routing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "promotion_decided_on_single_primary_construction_only",
+            "diagnostics_inform_drivers_but_cannot_promote",
+            "promote_to_real_money_forward_live_design_if",
+            "stay_research_only_or_drop_if",
+            "best_of_three_post_window_selection_forbidden",
+            "single_factor_only_promotion_requires_new_reviewed_preregistration",
+            "promotion_requires_new_reviewed_real_money_forward_live_artifact",
+            "paper_window_does_not_authorize_real_money_by_itself"
+          ],
+          "properties": {
+            "promotion_decided_on_single_primary_construction_only": {
+              "const": "value_yield_composite_cf_sales"
+            },
+            "diagnostics_inform_drivers_but_cannot_promote": {
+              "const": true
+            },
+            "promote_to_real_money_forward_live_design_if": {
+              "const": "the_single_primary_promotion_construction_value_yield_composite_cf_sales_shows_persistent_out_of_sample_alpha_AND_its_rolling_relative_nav_max_drawdown_is_no_worse_than_-0.15_over_the_paper_window"
+            },
+            "stay_research_only_or_drop_if": {
+              "const": "the_primary_promotion_construction_out_of_sample_alpha_decays_or_its_relative_nav_drawdown_stays_worse_than_-0.15"
+            },
+            "best_of_three_post_window_selection_forbidden": {
+              "const": true
+            },
+            "single_factor_only_promotion_requires_new_reviewed_preregistration": {
+              "const": true
+            },
+            "promotion_requires_new_reviewed_real_money_forward_live_artifact": {
+              "const": true
+            },
+            "paper_window_does_not_authorize_real_money_by_itself": {
+              "const": true
+            }
+          }
+        },
+        "anti_p_hacking_controls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "construction_frozen_before_forward_window",
+            "no_parameter_search_during_forward_window",
+            "no_factor_definition_change",
+            "no_horizon_or_benchmark_or_universe_change",
+            "no_threshold_relaxation",
+            "no_drop_then_recombine",
+            "new_reviewed_artifact_required_before_any_change_or_real_money"
+          ],
+          "properties": {
+            "construction_frozen_before_forward_window": {
+              "const": true
+            },
+            "no_parameter_search_during_forward_window": {
+              "const": true
+            },
+            "no_factor_definition_change": {
+              "const": true
+            },
+            "no_horizon_or_benchmark_or_universe_change": {
+              "const": true
+            },
+            "no_threshold_relaxation": {
+              "const": true
+            },
+            "no_drop_then_recombine": {
+              "const": true
+            },
+            "new_reviewed_artifact_required_before_any_change_or_real_money": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "data_path_dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_long_has_no_ongoing_forward_data_path_today",
+        "in_sample_panel_was_bounded_2018_2025_materialization",
+        "forward_capture_needs_ongoing_monthly_pit_pull",
+        "forward_universe_must_be_frozen_pit_at_each_as_of_and_capture_real_delist_halt_merger_outcomes",
+        "this_artifact_authorizes_no_fetch_or_capture_run",
+        "ongoing_pulls_require_separate_reviewed_authorization_and_a_capture_runner_slice",
+        "capture_runner_is_a_separate_future_slice"
+      ],
+      "properties": {
+        "a_long_has_no_ongoing_forward_data_path_today": {
+          "const": true
+        },
+        "in_sample_panel_was_bounded_2018_2025_materialization": {
+          "const": true
+        },
+        "forward_capture_needs_ongoing_monthly_pit_pull": {
+          "const": "monthly top-500 circ_mv (daily_basic) + PIT cashflow.n_cashflow_act + income.revenue (TTM) + main-board daily close/adj_factor + CSI300/CSI1000 total-return close, point-in-time at each forward month-end"
+        },
+        "forward_universe_must_be_frozen_pit_at_each_as_of_and_capture_real_delist_halt_merger_outcomes": {
+          "const": true
+        },
+        "this_artifact_authorizes_no_fetch_or_capture_run": {
+          "const": true
+        },
+        "ongoing_pulls_require_separate_reviewed_authorization_and_a_capture_runner_slice": {
+          "const": true
+        },
+        "capture_runner_is_a_separate_future_slice": {
+          "const": true
+        }
+      }
+    },
+    "family_decision_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "promotion_eligible_construction_count",
+        "single_primary_promotion_construction",
+        "diagnostic_supporting_construction_ids",
+        "diagnostics_can_independently_promote",
+        "best_of_three_post_window_selection_forbidden",
+        "post_window_cherry_pick_across_constructions_forbidden",
+        "multiple_construction_selection_rule",
+        "single_factor_only_pursuit_requires_new_reviewed_preregistration",
+        "rationale"
+      ],
+      "properties": {
+        "promotion_eligible_construction_count": {
+          "const": 1
+        },
+        "single_primary_promotion_construction": {
+          "const": "value_yield_composite_cf_sales"
+        },
+        "diagnostic_supporting_construction_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "const": "cash_flow_to_circ_mv"
+            },
+            {
+              "const": "sales_to_circ_mv"
+            }
+          ]
+        },
+        "diagnostics_can_independently_promote": {
+          "const": false
+        },
+        "best_of_three_post_window_selection_forbidden": {
+          "const": true
+        },
+        "post_window_cherry_pick_across_constructions_forbidden": {
+          "const": true
+        },
+        "multiple_construction_selection_rule": {
+          "const": "single_pre_declared_primary_promotion_construction_no_post_window_selection"
+        },
+        "single_factor_only_pursuit_requires_new_reviewed_preregistration": {
+          "const": true
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "planned_test_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ledger_ref",
+        "family_id",
+        "test_budget_units",
+        "forward_paper_family_is_one_promotion_decision",
+        "promotion_decision_spends_the_singleton",
+        "interim_monthly_captures_do_not_spend_the_singleton",
+        "requires_independent_review_before_capture",
+        "requires_user_authorization_before_each_fetch",
+        "required_preregistration_review_status_for_capture"
+      ],
+      "properties": {
+        "ledger_ref": {
+          "const": "research/ledgers/a_long_large_cap_value_yield_forward_paper_tracking_program_test_budget_ledger_20260609.json"
+        },
+        "family_id": {
+          "const": "a_long_large_cap_value_yield_forward_paper_v1"
+        },
+        "test_budget_units": {
+          "const": 1
+        },
+        "forward_paper_family_is_one_promotion_decision": {
+          "const": true
+        },
+        "promotion_decision_spends_the_singleton": {
+          "const": true
+        },
+        "interim_monthly_captures_do_not_spend_the_singleton": {
+          "const": true
+        },
+        "requires_independent_review_before_capture": {
+          "const": true
+        },
+        "requires_user_authorization_before_each_fetch": {
+          "const": true
+        },
+        "required_preregistration_review_status_for_capture": {
+          "const": "passed_independent_review_ready_for_freeze"
+        }
+      }
+    },
+    "planned_next_slices": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ]
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "paper_is_ship_gate_evidence",
+        "alpha_validated",
+        "tradeable_candidate_confirmed",
+        "in_sample_clue_is_out_of_sample_proof",
+        "real_money_authorized",
+        "data_fetch_authorized",
+        "capture_run_authorized",
+        "production_ready",
+        "full_size_allowed",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "paper_is_ship_gate_evidence": {
+          "const": false
+        },
+        "alpha_validated": {
+          "const": false
+        },
+        "tradeable_candidate_confirmed": {
+          "const": false
+        },
+        "in_sample_clue_is_out_of_sample_proof": {
+          "const": false
+        },
+        "real_money_authorized": {
+          "const": false
+        },
+        "data_fetch_authorized": {
+          "const": false
+        },
+        "capture_run_authorized": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "full_size_allowed": {
+          "const": false
+        },
+        "datahub_authorized": {
+          "const": false
+        },
+        "broker_or_order_automation_authorized": {
+          "const": false
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ]
+    }
+  }
+}
