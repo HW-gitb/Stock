@@ -1,0 +1,3757 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.local/a_long_large_cap_batch_factor_search_signal_search_execution_summary.schema.json",
+  "title": "A-long large-cap BATCH multi-factor signal-search execution summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "artifact_id",
+    "source_refs",
+    "scope",
+    "execution_gates",
+    "large_cap_universe_boundary",
+    "search_design",
+    "execution_diagnostics",
+    "result_cells",
+    "factor_results",
+    "size_coverage_audit",
+    "factor_input_coverage",
+    "fdr_audit",
+    "decision",
+    "ledger_update_required_after_commit",
+    "prohibited_claims",
+    "result_artifacts",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "a_long_large_cap_batch_factor_search_signal_search_execution_summary"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_id": {
+      "const": "a_long_large_cap_batch_factor_search_signal_search_execution_summary_20260609"
+    },
+    "source_refs": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": [
+        {
+          "const": "research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json"
+        },
+        {
+          "const": "research/ledgers/a_long_large_cap_batch_factor_search_program_test_budget_ledger_20260609.json"
+        },
+        {
+          "const": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json"
+        },
+        {
+          "const": "docs/a_long_large_cap_market_cap_materialization_execution_summary_20260607.json"
+        },
+        {
+          "const": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json"
+        },
+        {
+          "const": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json"
+        },
+        {
+          "const": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv"
+        },
+        {
+          "const": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json"
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "purpose",
+        "lane_id",
+        "market",
+        "research_only",
+        "provider_call_executed",
+        "tushare_call_executed",
+        "data_fetch_executed",
+        "local_raw_read_only",
+        "signal_search_executed",
+        "alpha_backtest_executed",
+        "production_use_allowed",
+        "ship_gate_claim_allowed",
+        "full_size_manual_use_allowed",
+        "broker_or_order_automation_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "phase": {
+          "const": "7a_alpha_validation"
+        },
+        "purpose": {
+          "const": "a_long_large_cap_batch_factor_search_signal_search_execution"
+        },
+        "lane_id": {
+          "const": "a_long"
+        },
+        "market": {
+          "const": "A-share"
+        },
+        "research_only": {
+          "const": true
+        },
+        "provider_call_executed": {
+          "const": false
+        },
+        "tushare_call_executed": {
+          "const": false
+        },
+        "data_fetch_executed": {
+          "const": false
+        },
+        "local_raw_read_only": {
+          "const": true
+        },
+        "signal_search_executed": {
+          "const": true
+        },
+        "alpha_backtest_executed": {
+          "const": true
+        },
+        "production_use_allowed": {
+          "const": false
+        },
+        "ship_gate_claim_allowed": {
+          "const": false
+        },
+        "full_size_manual_use_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        }
+      }
+    },
+    "execution_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independent_review_confirmed",
+        "post_review_execute_confirmed",
+        "preregistration_validated",
+        "preregistration_review_passed",
+        "ledger_unspent_before_run",
+        "market_cap_audit_passed",
+        "full_main_board_audit_passed",
+        "benchmark_route_amendment_validated",
+        "restatement_exclusion_list_loaded",
+        "restatement_exclusion_groups_expected",
+        "restatement_exclusion_list_applied",
+        "reviewed_data_quality_exclusion_applied",
+        "reviewed_data_quality_exclusion_backfilled",
+        "no_network_calls_executed",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_endpoint_results",
+        "tracked_summary_contains_secret",
+        "tracked_summary_contains_request_url",
+        "restatement_exclusion_groups_found_in_raw"
+      ],
+      "properties": {
+        "independent_review_confirmed": {
+          "const": true
+        },
+        "post_review_execute_confirmed": {
+          "const": true
+        },
+        "preregistration_validated": {
+          "const": true
+        },
+        "preregistration_review_passed": {
+          "const": true
+        },
+        "ledger_unspent_before_run": {
+          "const": true
+        },
+        "market_cap_audit_passed": {
+          "const": true
+        },
+        "full_main_board_audit_passed": {
+          "const": true
+        },
+        "benchmark_route_amendment_validated": {
+          "const": true
+        },
+        "restatement_exclusion_list_loaded": {
+          "const": true
+        },
+        "restatement_exclusion_groups_expected": {
+          "const": 1504
+        },
+        "restatement_exclusion_list_applied": {
+          "const": true
+        },
+        "reviewed_data_quality_exclusion_applied": {
+          "const": true
+        },
+        "reviewed_data_quality_exclusion_backfilled": {
+          "const": true
+        },
+        "no_network_calls_executed": {
+          "const": true
+        },
+        "tracked_summary_contains_raw_rows": {
+          "const": false
+        },
+        "tracked_summary_contains_endpoint_results": {
+          "const": false
+        },
+        "tracked_summary_contains_secret": {
+          "const": false
+        },
+        "tracked_summary_contains_request_url": {
+          "const": false
+        },
+        "restatement_exclusion_groups_found_in_raw": {
+          "type": "integer"
+        }
+      }
+    },
+    "large_cap_universe_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "board_scope",
+        "selected_market_cap_field",
+        "monthly_as_of_count",
+        "universe_size_n",
+        "size_bucket_count",
+        "minimum_size_bucket_count_for_primary_percentile",
+        "reviewed_data_quality_exclusion_policy",
+        "top500_symbols_written_to_tracked_summary",
+        "large_cap_target_universe_size",
+        "market_cap_monthly_as_of_count",
+        "large_cap_signal_universe_observations",
+        "documented_data_quality_exclusion_observation_count",
+        "backfilled_after_documented_exclusion_observation_count",
+        "outside_prior_audited_universe_after_backfill_observation_count",
+        "incomplete_large_cap_universe_month_count",
+        "minimum_size_bucket_count"
+      ],
+      "properties": {
+        "board_scope": {
+          "const": "main_board_only"
+        },
+        "selected_market_cap_field": {
+          "const": "circ_mv"
+        },
+        "monthly_as_of_count": {
+          "const": 96
+        },
+        "universe_size_n": {
+          "const": 500
+        },
+        "size_bucket_count": {
+          "const": 5
+        },
+        "minimum_size_bucket_count_for_primary_percentile": {
+          "const": 50
+        },
+        "reviewed_data_quality_exclusion_policy": {
+          "const": "drop_documented_exclusions_then_backfill_next_main_board_by_circ_mv"
+        },
+        "top500_symbols_written_to_tracked_summary": {
+          "const": false
+        },
+        "large_cap_target_universe_size": {
+          "const": 500
+        },
+        "market_cap_monthly_as_of_count": {
+          "const": 96
+        },
+        "large_cap_signal_universe_observations": {
+          "type": "integer"
+        },
+        "documented_data_quality_exclusion_observation_count": {
+          "type": "integer"
+        },
+        "backfilled_after_documented_exclusion_observation_count": {
+          "type": "integer"
+        },
+        "outside_prior_audited_universe_after_backfill_observation_count": {
+          "type": "integer"
+        },
+        "incomplete_large_cap_universe_month_count": {
+          "type": "integer"
+        },
+        "minimum_size_bucket_count": {
+          "type": "integer"
+        }
+      }
+    },
+    "search_design": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factor_count",
+        "composite_count",
+        "total_primary_hypotheses",
+        "factor_ids",
+        "composite_id",
+        "primary_view",
+        "primary_horizon_trading_days",
+        "diagnostic_horizons_trading_days",
+        "primary_benchmark",
+        "diagnostic_benchmark",
+        "stock_return_basis",
+        "benchmark_return_basis",
+        "round_trip_cost",
+        "top_fraction",
+        "minimum_top_count_per_month",
+        "minimum_monthly_cohorts",
+        "monthly_t_stat_method",
+        "hac_lag_rule",
+        "decision_type",
+        "fdr_method",
+        "q_research_clue_gate",
+        "q_strict_diagnostic",
+        "minimum_allowed_relative_nav_drawdown",
+        "max_top_symbol_selection_share",
+        "max_single_year_positive_return_share",
+        "sub_period_split_rule",
+        "diagnostics_can_define_alpha",
+        "drop_losing_factors_then_re_fdr_executed",
+        "restatement_exclusion_required",
+        "low_beta_trailing_days",
+        "low_max_trailing_days",
+        "momentum_formation_start_days_ago",
+        "momentum_formation_end_days_ago"
+      ],
+      "properties": {
+        "factor_count": {
+          "const": 9
+        },
+        "composite_count": {
+          "const": 1
+        },
+        "total_primary_hypotheses": {
+          "const": 10
+        },
+        "factor_ids": {
+          "const": [
+            "book_to_circ_mv",
+            "cash_flow_to_circ_mv",
+            "sales_to_circ_mv",
+            "low_accruals",
+            "low_asset_growth",
+            "roa_ttm",
+            "low_beta",
+            "low_max",
+            "momentum_12_1"
+          ]
+        },
+        "composite_id": {
+          "const": "family_balanced_composite"
+        },
+        "primary_view": {
+          "const": "industry_size_neutral"
+        },
+        "primary_horizon_trading_days": {
+          "const": 504
+        },
+        "diagnostic_horizons_trading_days": {
+          "const": [
+            252
+          ]
+        },
+        "primary_benchmark": {
+          "const": "CSI300"
+        },
+        "diagnostic_benchmark": {
+          "const": "CSI1000"
+        },
+        "stock_return_basis": {
+          "const": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close"
+        },
+        "benchmark_return_basis": {
+          "const": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close"
+        },
+        "round_trip_cost": {
+          "const": 0.0026
+        },
+        "top_fraction": {
+          "const": 0.2
+        },
+        "minimum_top_count_per_month": {
+          "const": 10
+        },
+        "minimum_monthly_cohorts": {
+          "const": 48
+        },
+        "monthly_t_stat_method": {
+          "const": "newey_west_hac_on_monthly_overlapping_cohorts"
+        },
+        "hac_lag_rule": {
+          "const": "ceil_horizon_trading_days_div_21_capped_at_monthly_cohort_count_minus_1"
+        },
+        "decision_type": {
+          "const": "batch_bh_fdr_over_primary_cells"
+        },
+        "fdr_method": {
+          "const": "benjamini_hochberg"
+        },
+        "q_research_clue_gate": {
+          "const": 0.1
+        },
+        "q_strict_diagnostic": {
+          "const": 0.05
+        },
+        "minimum_allowed_relative_nav_drawdown": {
+          "const": -0.15
+        },
+        "max_top_symbol_selection_share": {
+          "const": 0.2
+        },
+        "max_single_year_positive_return_share": {
+          "const": 0.35
+        },
+        "sub_period_split_rule": {
+          "const": "median_split_of_valid_504d_entry_cohorts_into_two_equal_halves"
+        },
+        "diagnostics_can_define_alpha": {
+          "const": false
+        },
+        "drop_losing_factors_then_re_fdr_executed": {
+          "const": false
+        },
+        "restatement_exclusion_required": {
+          "const": true
+        },
+        "low_beta_trailing_days": {
+          "const": 252
+        },
+        "low_max_trailing_days": {
+          "const": 21
+        },
+        "momentum_formation_start_days_ago": {
+          "const": 252
+        },
+        "momentum_formation_end_days_ago": {
+          "const": 21
+        }
+      }
+    },
+    "execution_diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "as_of_count",
+        "target_large_cap_universe_size",
+        "large_cap_universe_observations",
+        "scored_pit_universe_excluded_before_list_count",
+        "scored_pit_universe_excluded_after_delist_count",
+        "selection_time_name_vetoed_observation_count",
+        "selection_time_name_vetoed_symbol_count",
+        "industry_neutral_excluded_observation_count",
+        "industry_neutral_excluded_symbol_count",
+        "no_circ_mv_observation_count",
+        "return_exit_scheduled_count",
+        "return_exit_terminal_last_trade_count",
+        "return_exit_next_available_count",
+        "return_exit_missing_non_terminal_count",
+        "missing_signal_rows",
+        "missing_return_rows",
+        "book_to_circ_mv_industry_size_neutral_available_observation_count",
+        "cash_flow_to_circ_mv_industry_size_neutral_available_observation_count",
+        "sales_to_circ_mv_industry_size_neutral_available_observation_count",
+        "low_accruals_industry_size_neutral_available_observation_count",
+        "low_asset_growth_industry_size_neutral_available_observation_count",
+        "roa_ttm_industry_size_neutral_available_observation_count",
+        "low_beta_industry_size_neutral_available_observation_count",
+        "low_max_industry_size_neutral_available_observation_count",
+        "momentum_12_1_industry_size_neutral_available_observation_count",
+        "family_balanced_composite_industry_size_neutral_available_observation_count",
+        "full_main_board_endpoint_results_count",
+        "evaluated_stock_return_rows",
+        "result_cell_count"
+      ],
+      "properties": {
+        "as_of_count": {
+          "type": "integer"
+        },
+        "target_large_cap_universe_size": {
+          "type": "integer"
+        },
+        "large_cap_universe_observations": {
+          "type": "integer"
+        },
+        "scored_pit_universe_excluded_before_list_count": {
+          "type": "integer"
+        },
+        "scored_pit_universe_excluded_after_delist_count": {
+          "type": "integer"
+        },
+        "selection_time_name_vetoed_observation_count": {
+          "type": "integer"
+        },
+        "selection_time_name_vetoed_symbol_count": {
+          "type": "integer"
+        },
+        "industry_neutral_excluded_observation_count": {
+          "type": "integer"
+        },
+        "industry_neutral_excluded_symbol_count": {
+          "type": "integer"
+        },
+        "no_circ_mv_observation_count": {
+          "type": "integer"
+        },
+        "return_exit_scheduled_count": {
+          "type": "integer"
+        },
+        "return_exit_terminal_last_trade_count": {
+          "type": "integer"
+        },
+        "return_exit_next_available_count": {
+          "type": "integer"
+        },
+        "return_exit_missing_non_terminal_count": {
+          "type": "integer"
+        },
+        "missing_signal_rows": {
+          "type": "integer"
+        },
+        "missing_return_rows": {
+          "type": "integer"
+        },
+        "book_to_circ_mv_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "cash_flow_to_circ_mv_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "sales_to_circ_mv_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "low_accruals_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "low_asset_growth_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "roa_ttm_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "low_beta_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "low_max_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "momentum_12_1_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "family_balanced_composite_industry_size_neutral_available_observation_count": {
+          "type": "integer"
+        },
+        "full_main_board_endpoint_results_count": {
+          "type": "integer"
+        },
+        "evaluated_stock_return_rows": {
+          "type": "integer"
+        },
+        "result_cell_count": {
+          "const": 48
+        }
+      }
+    },
+    "result_cells": {
+      "type": "array",
+      "minItems": 48,
+      "maxItems": 48,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cell_id",
+          "signal_id",
+          "view",
+          "weighting",
+          "diagnostic_role",
+          "horizon_trading_days",
+          "benchmark",
+          "monthly_cohort_count",
+          "mean_monthly_cohort_net_excess",
+          "monthly_cohort_std",
+          "monthly_clustered_t_stat",
+          "monthly_t_stat_method",
+          "hac_lag_months",
+          "p_value",
+          "minimum_monthly_top_count",
+          "positive_month_count",
+          "worst_monthly_cohort_excess",
+          "best_monthly_cohort_excess",
+          "diagnostic_max_drawdown_on_monthly_excess",
+          "top_symbol_selection_share",
+          "max_single_year_positive_return_share",
+          "passes_minimum_monthly_cohorts",
+          "passes_minimum_top_count",
+          "passes_name_concentration_guard",
+          "passes_single_year_concentration_guard"
+        ],
+        "properties": {
+          "cell_id": {
+            "type": "string",
+            "enum": [
+              "book_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300",
+              "book_to_circ_mv_industry_size_neutral_equal_weight_252d_CSI300",
+              "book_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI1000",
+              "book_to_circ_mv_non_neutral_equal_weight_504d_CSI300",
+              "book_to_circ_mv_industry_size_neutral_cap_weighted_504d_CSI300",
+              "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300",
+              "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_252d_CSI300",
+              "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI1000",
+              "cash_flow_to_circ_mv_non_neutral_equal_weight_504d_CSI300",
+              "cash_flow_to_circ_mv_industry_size_neutral_cap_weighted_504d_CSI300",
+              "sales_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300",
+              "sales_to_circ_mv_industry_size_neutral_equal_weight_252d_CSI300",
+              "sales_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI1000",
+              "sales_to_circ_mv_non_neutral_equal_weight_504d_CSI300",
+              "sales_to_circ_mv_industry_size_neutral_cap_weighted_504d_CSI300",
+              "low_accruals_industry_size_neutral_equal_weight_504d_CSI300",
+              "low_accruals_industry_size_neutral_equal_weight_252d_CSI300",
+              "low_accruals_industry_size_neutral_equal_weight_504d_CSI1000",
+              "low_accruals_non_neutral_equal_weight_504d_CSI300",
+              "low_accruals_industry_size_neutral_cap_weighted_504d_CSI300",
+              "low_asset_growth_industry_size_neutral_equal_weight_504d_CSI300",
+              "low_asset_growth_industry_size_neutral_equal_weight_252d_CSI300",
+              "low_asset_growth_industry_size_neutral_equal_weight_504d_CSI1000",
+              "low_asset_growth_non_neutral_equal_weight_504d_CSI300",
+              "low_asset_growth_industry_size_neutral_cap_weighted_504d_CSI300",
+              "roa_ttm_industry_size_neutral_equal_weight_504d_CSI300",
+              "roa_ttm_industry_size_neutral_equal_weight_252d_CSI300",
+              "roa_ttm_industry_size_neutral_equal_weight_504d_CSI1000",
+              "roa_ttm_non_neutral_equal_weight_504d_CSI300",
+              "roa_ttm_industry_size_neutral_cap_weighted_504d_CSI300",
+              "low_beta_industry_size_neutral_equal_weight_504d_CSI300",
+              "low_beta_industry_size_neutral_equal_weight_252d_CSI300",
+              "low_beta_industry_size_neutral_equal_weight_504d_CSI1000",
+              "low_beta_non_neutral_equal_weight_504d_CSI300",
+              "low_beta_industry_size_neutral_cap_weighted_504d_CSI300",
+              "low_max_industry_size_neutral_equal_weight_504d_CSI300",
+              "low_max_industry_size_neutral_equal_weight_252d_CSI300",
+              "low_max_industry_size_neutral_equal_weight_504d_CSI1000",
+              "low_max_non_neutral_equal_weight_504d_CSI300",
+              "low_max_industry_size_neutral_cap_weighted_504d_CSI300",
+              "momentum_12_1_industry_size_neutral_equal_weight_504d_CSI300",
+              "momentum_12_1_industry_size_neutral_equal_weight_252d_CSI300",
+              "momentum_12_1_industry_size_neutral_equal_weight_504d_CSI1000",
+              "momentum_12_1_non_neutral_equal_weight_504d_CSI300",
+              "momentum_12_1_industry_size_neutral_cap_weighted_504d_CSI300",
+              "family_balanced_composite_industry_size_neutral_equal_weight_504d_CSI300",
+              "family_balanced_composite_industry_size_neutral_equal_weight_252d_CSI300",
+              "family_balanced_composite_industry_size_neutral_equal_weight_504d_CSI1000"
+            ]
+          },
+          "signal_id": {
+            "type": "string",
+            "enum": [
+              "book_to_circ_mv",
+              "cash_flow_to_circ_mv",
+              "sales_to_circ_mv",
+              "low_accruals",
+              "low_asset_growth",
+              "roa_ttm",
+              "low_beta",
+              "low_max",
+              "momentum_12_1",
+              "family_balanced_composite"
+            ]
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "industry_size_neutral",
+              "non_neutral",
+              "industry_neutral",
+              "size_neutral"
+            ]
+          },
+          "weighting": {
+            "type": "string",
+            "enum": [
+              "equal_weight",
+              "cap_weighted"
+            ]
+          },
+          "diagnostic_role": {
+            "type": "string",
+            "enum": [
+              "primary_decision_cell",
+              "diagnostic_only"
+            ]
+          },
+          "horizon_trading_days": {
+            "type": "integer",
+            "enum": [
+              252,
+              504
+            ]
+          },
+          "benchmark": {
+            "type": "string",
+            "enum": [
+              "CSI300",
+              "CSI1000"
+            ]
+          },
+          "monthly_cohort_count": {
+            "type": "integer"
+          },
+          "mean_monthly_cohort_net_excess": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "monthly_cohort_std": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "monthly_clustered_t_stat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "monthly_t_stat_method": {
+            "const": "newey_west_hac_on_monthly_overlapping_cohorts"
+          },
+          "hac_lag_months": {
+            "type": "integer"
+          },
+          "p_value": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "minimum_monthly_top_count": {
+            "type": "integer"
+          },
+          "positive_month_count": {
+            "type": "integer"
+          },
+          "worst_monthly_cohort_excess": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "best_monthly_cohort_excess": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "diagnostic_max_drawdown_on_monthly_excess": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "top_symbol_selection_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "max_single_year_positive_return_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "passes_minimum_monthly_cohorts": {
+            "type": "boolean"
+          },
+          "passes_minimum_top_count": {
+            "type": "boolean"
+          },
+          "passes_name_concentration_guard": {
+            "type": "boolean"
+          },
+          "passes_single_year_concentration_guard": {
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "book_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "book_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "book_to_circ_mv_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "book_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "book_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "book_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "book_to_circ_mv_non_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "book_to_circ_mv"
+                },
+                "view": {
+                  "const": "non_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "book_to_circ_mv_industry_size_neutral_cap_weighted_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "book_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "cap_weighted"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "cash_flow_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "cash_flow_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "cash_flow_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "cash_flow_to_circ_mv_non_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "cash_flow_to_circ_mv"
+                },
+                "view": {
+                  "const": "non_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "cash_flow_to_circ_mv_industry_size_neutral_cap_weighted_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "cash_flow_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "cap_weighted"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "sales_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "sales_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "sales_to_circ_mv_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "sales_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "sales_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "sales_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "sales_to_circ_mv_non_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "sales_to_circ_mv"
+                },
+                "view": {
+                  "const": "non_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "sales_to_circ_mv_industry_size_neutral_cap_weighted_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "sales_to_circ_mv"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "cap_weighted"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_accruals_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_accruals"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_accruals_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_accruals"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_accruals_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_accruals"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_accruals_non_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_accruals"
+                },
+                "view": {
+                  "const": "non_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_accruals_industry_size_neutral_cap_weighted_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_accruals"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "cap_weighted"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_asset_growth_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_asset_growth"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_asset_growth_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_asset_growth"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_asset_growth_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_asset_growth"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_asset_growth_non_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_asset_growth"
+                },
+                "view": {
+                  "const": "non_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_asset_growth_industry_size_neutral_cap_weighted_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_asset_growth"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "cap_weighted"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "roa_ttm_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "roa_ttm"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "roa_ttm_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "roa_ttm"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "roa_ttm_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "roa_ttm"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "roa_ttm_non_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "roa_ttm"
+                },
+                "view": {
+                  "const": "non_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "roa_ttm_industry_size_neutral_cap_weighted_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "roa_ttm"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "cap_weighted"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_beta_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_beta"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_beta_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_beta"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_beta_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_beta"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_beta_non_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_beta"
+                },
+                "view": {
+                  "const": "non_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_beta_industry_size_neutral_cap_weighted_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_beta"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "cap_weighted"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_max_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_max"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_max_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_max"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_max_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_max"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_max_non_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_max"
+                },
+                "view": {
+                  "const": "non_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "low_max_industry_size_neutral_cap_weighted_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "low_max"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "cap_weighted"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "momentum_12_1_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "momentum_12_1"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "momentum_12_1_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "momentum_12_1"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "momentum_12_1_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "momentum_12_1"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "momentum_12_1_non_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "momentum_12_1"
+                },
+                "view": {
+                  "const": "non_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "momentum_12_1_industry_size_neutral_cap_weighted_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "momentum_12_1"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "cap_weighted"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "family_balanced_composite_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "family_balanced_composite"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "primary_decision_cell"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "family_balanced_composite_industry_size_neutral_equal_weight_252d_CSI300"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "family_balanced_composite"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 252
+                },
+                "benchmark": {
+                  "const": "CSI300"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "cell_id": {
+                  "const": "family_balanced_composite_industry_size_neutral_equal_weight_504d_CSI1000"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "signal_id": {
+                  "const": "family_balanced_composite"
+                },
+                "view": {
+                  "const": "industry_size_neutral"
+                },
+                "weighting": {
+                  "const": "equal_weight"
+                },
+                "horizon_trading_days": {
+                  "const": 504
+                },
+                "benchmark": {
+                  "const": "CSI1000"
+                },
+                "diagnostic_role": {
+                  "const": "diagnostic_only"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "book_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "sales_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "low_accruals_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "low_asset_growth_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "roa_ttm_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "low_beta_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "low_max_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "momentum_12_1_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "cell_id": {
+                "const": "family_balanced_composite_industry_size_neutral_equal_weight_504d_CSI300"
+              },
+              "diagnostic_role": {
+                "const": "primary_decision_cell"
+              }
+            },
+            "required": [
+              "cell_id",
+              "diagnostic_role"
+            ]
+          }
+        }
+      ]
+    },
+    "factor_results": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "factor_id",
+          "family",
+          "primary_cell_id",
+          "monthly_cohort_count",
+          "mean_monthly_cohort_net_excess",
+          "monthly_clustered_t_stat",
+          "p_value",
+          "positive_month_count",
+          "top_symbol_selection_share",
+          "max_single_year_positive_return_share",
+          "passes_minimum_monthly_cohorts",
+          "passes_minimum_top_count",
+          "passes_name_concentration_guard",
+          "passes_single_year_concentration_guard",
+          "sub_period_first_half_mean_net_excess",
+          "sub_period_second_half_mean_net_excess",
+          "sub_period_both_halves_mean_excess_positive",
+          "survives_fdr_q_research_clue",
+          "survives_fdr_q_strict",
+          "passes_per_factor_robustness_gates",
+          "is_statistical_alpha_clue",
+          "relative_nav_max_drawdown",
+          "relative_nav_drawdown_gate_passed",
+          "is_tradeable_candidate"
+        ],
+        "properties": {
+          "factor_id": {
+            "type": "string",
+            "enum": [
+              "book_to_circ_mv",
+              "cash_flow_to_circ_mv",
+              "sales_to_circ_mv",
+              "low_accruals",
+              "low_asset_growth",
+              "roa_ttm",
+              "low_beta",
+              "low_max",
+              "momentum_12_1",
+              "family_balanced_composite"
+            ]
+          },
+          "family": {
+            "type": "string",
+            "enum": [
+              "value",
+              "earnings_quality",
+              "investment",
+              "profitability",
+              "low_risk",
+              "momentum",
+              "composite"
+            ]
+          },
+          "primary_cell_id": {
+            "type": "string",
+            "enum": [
+              "book_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300",
+              "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300",
+              "sales_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300",
+              "low_accruals_industry_size_neutral_equal_weight_504d_CSI300",
+              "low_asset_growth_industry_size_neutral_equal_weight_504d_CSI300",
+              "roa_ttm_industry_size_neutral_equal_weight_504d_CSI300",
+              "low_beta_industry_size_neutral_equal_weight_504d_CSI300",
+              "low_max_industry_size_neutral_equal_weight_504d_CSI300",
+              "momentum_12_1_industry_size_neutral_equal_weight_504d_CSI300",
+              "family_balanced_composite_industry_size_neutral_equal_weight_504d_CSI300"
+            ]
+          },
+          "monthly_cohort_count": {
+            "type": "integer"
+          },
+          "mean_monthly_cohort_net_excess": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "monthly_clustered_t_stat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "p_value": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "positive_month_count": {
+            "type": "integer"
+          },
+          "top_symbol_selection_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "max_single_year_positive_return_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "passes_minimum_monthly_cohorts": {
+            "type": "boolean"
+          },
+          "passes_minimum_top_count": {
+            "type": "boolean"
+          },
+          "passes_name_concentration_guard": {
+            "type": "boolean"
+          },
+          "passes_single_year_concentration_guard": {
+            "type": "boolean"
+          },
+          "sub_period_first_half_mean_net_excess": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "sub_period_second_half_mean_net_excess": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "sub_period_both_halves_mean_excess_positive": {
+            "type": "boolean"
+          },
+          "survives_fdr_q_research_clue": {
+            "type": "boolean"
+          },
+          "survives_fdr_q_strict": {
+            "type": "boolean"
+          },
+          "passes_per_factor_robustness_gates": {
+            "type": "boolean"
+          },
+          "is_statistical_alpha_clue": {
+            "type": "boolean"
+          },
+          "relative_nav_max_drawdown": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "relative_nav_drawdown_gate_passed": {
+            "type": "boolean"
+          },
+          "is_tradeable_candidate": {
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "book_to_circ_mv"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "value"
+                },
+                "primary_cell_id": {
+                  "const": "book_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "cash_flow_to_circ_mv"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "value"
+                },
+                "primary_cell_id": {
+                  "const": "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "sales_to_circ_mv"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "value"
+                },
+                "primary_cell_id": {
+                  "const": "sales_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "low_accruals"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "earnings_quality"
+                },
+                "primary_cell_id": {
+                  "const": "low_accruals_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "low_asset_growth"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "investment"
+                },
+                "primary_cell_id": {
+                  "const": "low_asset_growth_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "roa_ttm"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "profitability"
+                },
+                "primary_cell_id": {
+                  "const": "roa_ttm_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "low_beta"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "low_risk"
+                },
+                "primary_cell_id": {
+                  "const": "low_beta_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "low_max"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "low_risk"
+                },
+                "primary_cell_id": {
+                  "const": "low_max_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "momentum_12_1"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "momentum"
+                },
+                "primary_cell_id": {
+                  "const": "momentum_12_1_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "factor_id": {
+                  "const": "family_balanced_composite"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "family": {
+                  "const": "composite"
+                },
+                "primary_cell_id": {
+                  "const": "family_balanced_composite_industry_size_neutral_equal_weight_504d_CSI300"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "book_to_circ_mv"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "cash_flow_to_circ_mv"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "sales_to_circ_mv"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "low_accruals"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "low_asset_growth"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "roa_ttm"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "low_beta"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "low_max"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "momentum_12_1"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "factor_id": {
+                "const": "family_balanced_composite"
+              }
+            },
+            "required": [
+              "factor_id"
+            ]
+          }
+        }
+      ]
+    },
+    "size_coverage_audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_size_bucket_count_for_primary",
+        "size_coverage_gate_applies_to_cohort_forming_months_only",
+        "gate_excludes_month_from_size_dependent_views",
+        "by_factor"
+      ],
+      "properties": {
+        "minimum_size_bucket_count_for_primary": {
+          "const": 50
+        },
+        "size_coverage_gate_applies_to_cohort_forming_months_only": {
+          "const": true
+        },
+        "gate_excludes_month_from_size_dependent_views": {
+          "const": true
+        },
+        "by_factor": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "factor_id",
+              "observation_month_count",
+              "no_observation_month_count",
+              "no_observation_months",
+              "incomplete_size_coverage_month_count",
+              "incomplete_size_coverage_months",
+              "size_coverage_excluded_month_count",
+              "primary_cohort_month_count"
+            ],
+            "properties": {
+              "factor_id": {
+                "type": "string",
+                "enum": [
+                  "book_to_circ_mv",
+                  "cash_flow_to_circ_mv",
+                  "sales_to_circ_mv",
+                  "low_accruals",
+                  "low_asset_growth",
+                  "roa_ttm",
+                  "low_beta",
+                  "low_max",
+                  "momentum_12_1",
+                  "family_balanced_composite"
+                ]
+              },
+              "observation_month_count": {
+                "type": "integer"
+              },
+              "no_observation_month_count": {
+                "type": "integer"
+              },
+              "no_observation_months": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "incomplete_size_coverage_month_count": {
+                "type": "integer"
+              },
+              "incomplete_size_coverage_months": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "size_coverage_excluded_month_count": {
+                "type": "integer"
+              },
+              "primary_cohort_month_count": {
+                "type": "integer"
+              }
+            }
+          },
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "book_to_circ_mv"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "cash_flow_to_circ_mv"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "sales_to_circ_mv"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_accruals"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_asset_growth"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "roa_ttm"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_beta"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_max"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "momentum_12_1"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "family_balanced_composite"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "factor_input_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "by_factor"
+      ],
+      "properties": {
+        "by_factor": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "factor_id",
+              "available_count",
+              "missing_input_count",
+              "non_positive_count",
+              "insufficient_ttm_count",
+              "insufficient_window_count"
+            ],
+            "properties": {
+              "factor_id": {
+                "type": "string",
+                "enum": [
+                  "book_to_circ_mv",
+                  "cash_flow_to_circ_mv",
+                  "sales_to_circ_mv",
+                  "low_accruals",
+                  "low_asset_growth",
+                  "roa_ttm",
+                  "low_beta",
+                  "low_max",
+                  "momentum_12_1"
+                ]
+              },
+              "available_count": {
+                "type": "integer"
+              },
+              "missing_input_count": {
+                "type": "integer"
+              },
+              "non_positive_count": {
+                "type": "integer"
+              },
+              "insufficient_ttm_count": {
+                "type": "integer"
+              },
+              "insufficient_window_count": {
+                "type": "integer"
+              }
+            }
+          },
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "book_to_circ_mv"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "cash_flow_to_circ_mv"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "sales_to_circ_mv"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_accruals"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_asset_growth"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "roa_ttm"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_beta"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_max"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "momentum_12_1"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "fdr_audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "m_total_hypotheses",
+        "q_research_clue_gate",
+        "q_strict_diagnostic",
+        "bh_threshold_p_at_q_research_clue",
+        "bh_threshold_p_at_q_strict",
+        "sorted_primary_p_values"
+      ],
+      "properties": {
+        "m_total_hypotheses": {
+          "const": 10
+        },
+        "q_research_clue_gate": {
+          "const": 0.1
+        },
+        "q_strict_diagnostic": {
+          "const": 0.05
+        },
+        "bh_threshold_p_at_q_research_clue": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "bh_threshold_p_at_q_strict": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sorted_primary_p_values": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rank",
+              "factor_id",
+              "primary_cell_id",
+              "p_value",
+              "bh_critical_value_at_q_research_clue",
+              "bh_critical_value_at_q_strict",
+              "survives_fdr_q_research_clue",
+              "survives_fdr_q_strict"
+            ],
+            "properties": {
+              "rank": {
+                "type": "integer"
+              },
+              "factor_id": {
+                "type": "string",
+                "enum": [
+                  "book_to_circ_mv",
+                  "cash_flow_to_circ_mv",
+                  "sales_to_circ_mv",
+                  "low_accruals",
+                  "low_asset_growth",
+                  "roa_ttm",
+                  "low_beta",
+                  "low_max",
+                  "momentum_12_1",
+                  "family_balanced_composite"
+                ]
+              },
+              "primary_cell_id": {
+                "type": "string",
+                "enum": [
+                  "book_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300",
+                  "cash_flow_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300",
+                  "sales_to_circ_mv_industry_size_neutral_equal_weight_504d_CSI300",
+                  "low_accruals_industry_size_neutral_equal_weight_504d_CSI300",
+                  "low_asset_growth_industry_size_neutral_equal_weight_504d_CSI300",
+                  "roa_ttm_industry_size_neutral_equal_weight_504d_CSI300",
+                  "low_beta_industry_size_neutral_equal_weight_504d_CSI300",
+                  "low_max_industry_size_neutral_equal_weight_504d_CSI300",
+                  "momentum_12_1_industry_size_neutral_equal_weight_504d_CSI300",
+                  "family_balanced_composite_industry_size_neutral_equal_weight_504d_CSI300"
+                ]
+              },
+              "p_value": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "bh_critical_value_at_q_research_clue": {
+                "type": "number"
+              },
+              "bh_critical_value_at_q_strict": {
+                "type": "number"
+              },
+              "survives_fdr_q_research_clue": {
+                "type": "boolean"
+              },
+              "survives_fdr_q_strict": {
+                "type": "boolean"
+              }
+            }
+          },
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "book_to_circ_mv"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "cash_flow_to_circ_mv"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "sales_to_circ_mv"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_accruals"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_asset_growth"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "roa_ttm"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_beta"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "low_max"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "momentum_12_1"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "factor_id": {
+                    "const": "family_balanced_composite"
+                  }
+                },
+                "required": [
+                  "factor_id"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "m_total_hypotheses",
+        "fdr_method",
+        "q_research_clue_gate",
+        "q_strict_diagnostic",
+        "diagnostics_can_rescue_primary_failure",
+        "drop_losing_factors_then_re_fdr_executed",
+        "multiple_testing_cannot_uncount_prior_spent_singletons",
+        "alpha_found_for_production",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "research_verdict",
+        "is_dry_batch",
+        "bh_threshold_p_at_q_research_clue",
+        "bh_threshold_p_at_q_strict",
+        "statistical_alpha_clue_count",
+        "tradeable_candidate_count",
+        "surviving_clue_factor_ids",
+        "tradeable_candidate_factor_ids",
+        "plain_result",
+        "next_action"
+      ],
+      "properties": {
+        "m_total_hypotheses": {
+          "const": 10
+        },
+        "fdr_method": {
+          "const": "benjamini_hochberg"
+        },
+        "q_research_clue_gate": {
+          "const": 0.1
+        },
+        "q_strict_diagnostic": {
+          "const": 0.05
+        },
+        "diagnostics_can_rescue_primary_failure": {
+          "const": false
+        },
+        "drop_losing_factors_then_re_fdr_executed": {
+          "const": false
+        },
+        "multiple_testing_cannot_uncount_prior_spent_singletons": {
+          "const": true
+        },
+        "alpha_found_for_production": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        },
+        "full_size_allowed": {
+          "const": false
+        },
+        "research_verdict": {
+          "type": "string",
+          "enum": [
+            "batch_dry_no_factor_survives_fdr_under_frozen_rules",
+            "batch_statistical_alpha_clue_research_only"
+          ]
+        },
+        "is_dry_batch": {
+          "type": "boolean"
+        },
+        "bh_threshold_p_at_q_research_clue": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "bh_threshold_p_at_q_strict": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "statistical_alpha_clue_count": {
+          "type": "integer"
+        },
+        "tradeable_candidate_count": {
+          "type": "integer"
+        },
+        "surviving_clue_factor_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "book_to_circ_mv",
+              "cash_flow_to_circ_mv",
+              "sales_to_circ_mv",
+              "low_accruals",
+              "low_asset_growth",
+              "roa_ttm",
+              "low_beta",
+              "low_max",
+              "momentum_12_1",
+              "family_balanced_composite"
+            ]
+          }
+        },
+        "tradeable_candidate_factor_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "book_to_circ_mv",
+              "cash_flow_to_circ_mv",
+              "sales_to_circ_mv",
+              "low_accruals",
+              "low_asset_growth",
+              "roa_ttm",
+              "low_beta",
+              "low_max",
+              "momentum_12_1",
+              "family_balanced_composite"
+            ]
+          }
+        },
+        "plain_result": {
+          "type": "string",
+          "minLength": 1
+        },
+        "next_action": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ledger_update_required_after_commit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ledger_ref",
+        "spends_singleton_test",
+        "test_id",
+        "runner_writes_ledger",
+        "ledger_write_timing",
+        "ledger_status_after_runner"
+      ],
+      "properties": {
+        "ledger_ref": {
+          "const": "research/ledgers/a_long_large_cap_batch_factor_search_program_test_budget_ledger_20260609.json"
+        },
+        "spends_singleton_test": {
+          "const": true
+        },
+        "test_id": {
+          "const": "a_long_large_cap_batch_factor_search_20260609"
+        },
+        "runner_writes_ledger": {
+          "const": true
+        },
+        "ledger_write_timing": {
+          "const": "pending_summary_then_ledger_then_final_summary"
+        },
+        "ledger_status_after_runner": {
+          "const": "active_no_new_test_authorized"
+        }
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "production_ready",
+        "ship_gate_evidence",
+        "full_size_allowed",
+        "batch_factor_proven",
+        "fdr_uncounts_prior_singletons",
+        "in_sample_clue_is_out_of_sample_proof",
+        "datahub_authorized",
+        "broker_or_order_automation_authorized"
+      ],
+      "properties": {
+        "production_ready": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        },
+        "full_size_allowed": {
+          "const": false
+        },
+        "batch_factor_proven": {
+          "const": false
+        },
+        "fdr_uncounts_prior_singletons": {
+          "const": false
+        },
+        "in_sample_clue_is_out_of_sample_proof": {
+          "const": false
+        },
+        "datahub_authorized": {
+          "const": false
+        },
+        "broker_or_order_automation_authorized": {
+          "const": false
+        }
+      }
+    },
+    "result_artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": [
+        {
+          "const": "research/results/a_long_large_cap_batch_factor_search_20260609/execution_summary.json"
+        }
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}
