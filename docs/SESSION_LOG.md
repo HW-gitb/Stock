@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-06-09 — User `执行` + Claude closeout (batch signal-search runner) — **DONE: NOT dry, 2 research-only clues, 0 tradeable**
+
+**Authorization**: user `执行` of the committed review-passed runner (`50d94e3`) with `--confirm-independent-review-pass --confirm-post-review-execute`; exit 0. Spends the batch singleton once.
+
+**Verdict**: **`batch_statistical_alpha_clue_research_only`** — NOT dry. **2 statistical-alpha clues, 0 tradeable.** BH-FDR over the 10 primary cells (m=10, q=0.10 clue gate / q=0.05 strict), BH threshold p ≤ `0.03617` at q0.10, ≤ `0.00105` at q0.05.
+
+**Per-factor primary (504d/CSI300, industry_size_neutral, equal_weight), sorted by p:**
+| factor | cohorts | mean net excess | HAC t | p | half1/half2 | yr-conc | survives q.10/.05 | clue | relND DD | tradeable |
+|---|---|---|---|---|---|---|---|---|---|---|
+| cash_flow_to_circ_mv | 56 | +0.1884 | 5.61 | ~0.0000 | +0.198/+0.179 | 0.289 | Y/Y | **YES** | −0.1805 | no |
+| sales_to_circ_mv | 56 | +0.1454 | 3.99 | 0.0001 | +0.157/+0.133 | 0.326 | Y/Y | **YES** | −0.1710 | no |
+| low_accruals | 56 | +0.0997 | 3.28 | 0.0011 | +0.135/+0.064 | **0.360** | Y/Y | no (yr-conc>0.35) | — | no |
+| low_asset_growth | 56 | +0.0843 | 2.09 | 0.0362 | +0.084/+0.085 | **0.379** | Y/N | no (yr-conc>0.35) | — | no |
+| low_beta | 59 | +0.0893 | 1.22 | 0.223 | +0.023/+0.153 | 0.471 | N | no | — | no |
+| momentum_12_1 | 59 | −0.0303 | −1.21 | 0.225 | — | — | N | no | — | no |
+| book_to_circ_mv | 68 | +0.1040 | 1.19 | 0.233 | +0.010/+0.198 | 0.331 | N | no | — | no |
+| family_balanced_composite | 71 | +0.0780 | 0.91 | 0.362 | −0.044/+0.197 | 0.316 | N | no | — | no |
+| roa_ttm | 56 | −0.0470 | −0.81 | 0.420 | +0.055/−0.149 | 0.648 | N | no | — | no |
+| low_max | 71 | +0.0586 | 0.78 | 0.435 | — | — | N | no | — | no |
+
+**Reading (multi-dim):**
+- **Cross-section**: value *yields* dominate — free-float **cash-flow yield** (t 5.61) and **sales yield** (t 3.99) are the only clues; classic **book_to_circ_mv is weak** (t 1.19), i.e. in A-share large-cap the cash-flow/sales yields carry the value premium, not book/market. **roa_ttm negative** (t −0.81) — consistent with the already-falsified ROE/pure-quality line. **momentum_12_1 negative** (t −1.21) — confirms China large-cap momentum is reversal-prone (as pre-registered). **low_beta / low_max weak** — consistent with the falsified low_volatility line. The composite is diluted by the dead families (t 0.91).
+- **Time-series (sub-period halves)**: the 2 clues are stable across both halves (cash_flow +0.198/+0.179, sales +0.157/+0.133) — not one-regime artifacts. low_accruals decays (+0.135→+0.064); roa/composite are regime-flippy.
+- **Concentration**: name concentration tiny everywhere (~0.01 ≪ 0.2). The decisive line between the 2 clues and the 2 FDR-but-not-clue near-misses is the **single-year concentration guard**: cash_flow 0.289 / sales 0.326 (≤0.35 pass) vs low_accruals 0.360 / low_asset_growth 0.379 (>0.35 fail) — the value yields deliver more evenly across years.
+- **Tradeable gate**: both clues' rolling relative-NAV max drawdown vs CSI300 (−18.0% / −17.1%) is worse than the −15% gate → **NOT tradeable** (same "clue but not tradeable" shape as cash_conversion).
+- **Coverage / data**: per-factor size-coverage gate fired on real data — 15 months excluded per fundamental factor (95 obs months → 56 primary cohorts; all clues ≥48); input coverage e.g. cash_flow 40,392 available / 6,988 insufficient-TTM, sales 17 non-positive excluded. 76,072 return rows, 48 cells.
+
+**State**: singleton ledger now **SPENT** (`tests_spent_count=1`, `active_no_new_test_authorized`, `spent_passed_research_continue_only`). Result `research/results/a_long_large_cap_batch_factor_search_20260609/execution_summary.json`.
+
+**Stopping-rule outcome**: the batch was the agreed LAST structured candidate-generation round. It is **NOT dry**, so the downgrade-to-forward-live-or-pivot does NOT trigger. The 2 clues are research-only (in-sample 2018-2025; BH-FDR controls within-batch error but cannot uncount the 5 prior spent singletons, so a survivor is the program-level 6th+ test) and route to **forward-live validation**, NOT production / ship-gate / full-size. No rerun / factor-definition / q / threshold / window / composite-weight change, no drop-losers-then-re-FDR, no diagnostic rescue without a NEW reviewed prereg + ledger.
+
+**Closeout committed (local master, no push)**: the execution summary + spent ledger + `docs/CURRENT.md` (§0 batch delta + §1/§5 next-step) + `research/README.md` / `docs/README.md` durable pointer rows (deferred from the design/runner slices) + this log.
+
+---
+
 ## 2026-06-09 — Claude `提交` (batch signal-search RUNNER slice, post re-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required, no Optional; boundary = commit-safe not execution-safe — singleton stays UNSPENT, a separate user `执行` still required). Re-read SESSION_LOG top + Codex verdict + git status before committing.
