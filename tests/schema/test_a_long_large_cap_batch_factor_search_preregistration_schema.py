@@ -110,19 +110,21 @@ class ALongLargeCapBatchFactorSearchPreregistrationSchemaTest(unittest.TestCase)
 
     # --- ledger ---
 
-    def test_ledger_validates_and_is_one_unspent_pending_singleton(self) -> None:
+    def test_ledger_validates_and_is_spent_singleton_post_execution(self) -> None:
+        # Post-execution (batch ran 2026-06-09, closeout 68ffc99): the singleton is spent. The schema
+        # still validates; the bespoke assertions track the now-true spent state.
         ledger = self._load_ledger()
         self.assertEqual(self._validate(LEDGER_SCHEMA_PATH, ledger), [])
         self.assertEqual(ledger["family_id"], "a_long_large_cap_batch_factor_search_v1")
-        self.assertEqual(ledger["ledger_status"], "active_planned_test_pending_review")
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
+        self.assertEqual(ledger["ledger_status"], "active_no_new_test_authorized")
+        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 1)
         self.assertEqual(ledger["budget_policy"]["tests_available_without_new_review"], 0)
-        self.assertEqual(ledger["test_spend_log"], [])
-        self.assertEqual(len(ledger["planned_tests"]), 1)
-        planned = ledger["planned_tests"][0]
-        self.assertEqual(planned["test_id"], "a_long_large_cap_batch_factor_search_20260609")
-        self.assertEqual(planned["planned_status"], "planned_not_reviewed")
-        self.assertEqual(planned["expected_tests_spent"], 1)
+        self.assertEqual(ledger["planned_tests"], [])
+        self.assertEqual(len(ledger["test_spend_log"]), 1)
+        spend = ledger["test_spend_log"][0]
+        self.assertEqual(spend["test_id"], "a_long_large_cap_batch_factor_search_20260609")
+        self.assertEqual(spend["status"], "spent_passed_research_continue_only")
+        self.assertEqual(spend["tests_spent"], 1)
         self.assertEqual(
             self._load_artifact()["planned_test_budget"]["ledger_ref"],
             str(LEDGER_ARTIFACT_PATH).replace("\\", "/"),

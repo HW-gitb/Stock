@@ -365,10 +365,16 @@ class PreregLedgerIntegrationTests(unittest.TestCase):
         prereg = r.load_and_validate_preregistration()
         self.assertEqual(prereg["artifact_id"], r.PREREGISTRATION_ARTIFACT_ID)
 
-    def test_real_ledger_validates_unspent(self) -> None:
-        ledger = r.load_and_validate_ledger()
-        self.assertEqual(ledger["budget_policy"]["tests_spent_count"], 0)
-        self.assertEqual(ledger["family_id"], r.LEDGER_FAMILY_ID)
+    def test_real_ledger_now_spent_post_execution(self) -> None:
+        # The batch was executed 2026-06-09 (closeout 68ffc99): the singleton is spent and the
+        # unspent-gate in load_and_validate_ledger correctly blocks any re-run of the real ledger.
+        with self.assertRaises(ValueError):
+            r.load_and_validate_ledger()
+        raw = r.read_json(r.LEDGER_PATH)
+        self.assertEqual(raw["family_id"], r.LEDGER_FAMILY_ID)
+        self.assertEqual(raw["budget_policy"]["tests_spent_count"], 1)
+        self.assertEqual(raw["ledger_status"], "active_no_new_test_authorized")
+        self.assertEqual(raw["test_spend_log"][0]["status"], "spent_passed_research_continue_only")
 
     def test_real_market_cap_audit_report_validates(self) -> None:
         report = r.load_and_validate_market_cap_audit_report()

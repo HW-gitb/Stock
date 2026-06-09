@@ -8,6 +8,16 @@
 
 ---
 
+## 2026-06-09 — Claude post-execution stale-test fix (batch ledger spent-state) — **DONE (local master)**
+
+**Why**: at the batch `执行` closeout (`68ffc99`) I committed the now-SPENT batch ledger but the pre-commit hook only runs the route-doc guard, not the full suite, so two committed tests that asserted the ledger is UNSPENT were left stale and HEAD had 2 failing tests (`test_a_long_large_cap_batch_factor_search_signal_search.PreregLedgerIntegrationTests.test_real_ledger_validates_unspent` ERROR; `test_a_long_large_cap_batch_factor_search_preregistration_schema...test_ledger_validates_and_is_one_unspent_pending_singleton` FAIL). Lesson: after an execution writes a spent ledger, run the FULL suite before committing the closeout, not just the route-doc guard. (Same class as `7cbe7f4`.)
+
+**Fixed (mechanical post-execution reality-flip; no runner/gate/design change)**: flipped both assertions to the now-true spent state — `tests_spent_count=1`, `ledger_status=active_no_new_test_authorized`, `test_spend_log[0].status=spent_passed_research_continue_only`, `planned_tests=[]`. The runner test now asserts `load_and_validate_ledger()` correctly RAISES on the spent real ledger (the unspent-gate blocks re-run). The `load_and_validate_ledger` gate itself is unchanged and correct.
+
+**Verification**: full suite **1211/1211** (was 1193 + 18 new forward-paper-tracking schema tests − 0; the 2 stale failures now pass). Route-doc guard 11/11.
+
+---
+
 ## 2026-06-09 — User `执行` + Claude closeout (batch signal-search runner) — **DONE: NOT dry, 2 research-only clues, 0 tradeable**
 
 **Authorization**: user `执行` of the committed review-passed runner (`50d94e3`) with `--confirm-independent-review-pass --confirm-post-review-execute`; exit 0. Spends the batch singleton once.
