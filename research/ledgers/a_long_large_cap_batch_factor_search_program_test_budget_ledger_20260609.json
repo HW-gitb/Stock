@@ -1,0 +1,60 @@
+{
+  "schema_name": "program_test_budget_ledger",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-09T00:00:00+00:00",
+  "artifact_id": "a_long_large_cap_batch_factor_search_program_test_budget_ledger_20260609",
+  "ledger_status": "active_planned_test_pending_review",
+  "family_id": "a_long_large_cap_batch_factor_search_v1",
+  "lane_id": "a_long_research",
+  "singleton_scope": {
+    "protected_decision": "Whether any of a frozen, diverse set of nine large-cap factors (book/cash_flow/sales to free-float circ_mv, low_accruals, low_asset_growth, roa_ttm proxy, low_beta, low_max, momentum_12_1) or a frozen family-equal-weight composite produces a research-only alpha clue versus CSI300 in the reviewed PIT top-500 large-cap universe, decided in ONE pre-registered batch under Benjamini-Hochberg FDR (q=0.10 research-clue gate, q=0.05 stricter diagnostic).",
+    "applies_to": [
+      "research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json",
+      "The future reviewed A-long large-cap batch signal-search execution package that may be executed only after independent review and explicit user execute."
+    ],
+    "does_not_authorize": [
+      "No signal-search run is authorized by this ledger before independent review and an explicit user execute command.",
+      "No reinterpretation of any prior falsified or research-only-clue result, no old-result reslice, no relabeling a prior diagnostic as a pass, no factor-definition search, no factor-count search, no trailing-window search, no q-threshold search, no composite-weight search, no dropping losing factors then re-running FDR, no production use, no ship-gate evidence, no full-size manual use, no provider expansion, no DataHub work, and no broker / order automation.",
+      "No new daily_basic pull, daily-bar pull, or provider call is authorized; this design reuses the already-reviewed top-500 materialization, audit, and full-main-board PIT fundamentals (income / balancesheet / cashflow / daily) plus the restatement exclusion list."
+    ]
+  },
+  "creation_reason": {
+    "triggering_preflight_ref": "research/results/a_long_large_cap_ep_value_20260608/execution_summary.json",
+    "triggering_preregistration_ref": "research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json",
+    "reason": "Five prior A-long large-cap singletons are spent and closed (full-main-board no_alpha; pure-quality falsified; cash_conversion clue-not-tradeable; low_volatility falsified; ep_value falsified). Sequential singletons control within-factor but not across-factor multiple testing and burn one round each. This new singleton ledger protects ONE pre-registered batch that tests nine diverse large-cap-robust factors + a frozen composite under BH-FDR — the agreed LAST structured candidate-generation round. It reuses the reviewed top-500 universe + full-main-board PIT fundamentals (no new fetch); BH-FDR controls within-batch family-wise error but cannot uncount the five prior spent singletons, so a survivor is the program-level (5+k)-th test and still requires forward-live validation."
+  },
+  "budget_policy": {
+    "ledger_cardinality": "singleton_program_level",
+    "tests_spent_count": 0,
+    "tests_available_without_new_review": 0,
+    "next_test_requires_reviewed_preregistration": true,
+    "next_test_requires_user_approval": true,
+    "spend_rule": "The first reviewed A-long large-cap batch signal-search execution spends one planned test regardless of how many factors survive FDR; the whole batch is one pre-registered test.",
+    "no_silent_rescue_rule": "If the batch is dry or only diagnostics pass, do not rerun with changed factor definitions, factor count, trailing windows, universe N, market-cap field, neutralization, holding period, benchmark, top fraction, cost model, q threshold, sub-period rule, composite weights, or risk-gate threshold, and do not drop losing factors and re-run FDR on the survivors, without a new reviewed preregistration and ledger update."
+  },
+  "test_spend_log": [],
+  "planned_tests": [
+    {
+      "test_id": "a_long_large_cap_batch_factor_search_20260609",
+      "planned_status": "planned_not_reviewed",
+      "created_at": "2026-06-09T00:00:00+00:00",
+      "planned_preregistration_ref": "research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json",
+      "planned_result_ref": "research/results/a_long_large_cap_batch_factor_search_20260609/execution_summary.json",
+      "promotion_relevant": true,
+      "expected_tests_spent": 1,
+      "approval_status": "user_approved_pending_review",
+      "design_summary": "One pre-registered batch of nine primary factors + one frozen family-equal-weight composite, each scored on the frozen primary cell (industry+size-neutral, equal-weight, 504d vs CSI300, top-500 PIT circ_mv universe with the reviewed 000043 exclusion). Across-factor decision = Benjamini-Hochberg FDR over the ten primary p-values at q=0.10 (research-clue gate), q=0.05 reported as a stricter diagnostic. A factor is a research-only clue only if it survives FDR AND passes the per-factor gates (positive mean net excess, both median sub-period halves positive, name/year concentration guards); a survivor is additionally a tradeable candidate only if its rolling-overlapping relative-NAV drawdown vs CSI300 is >= -15%. Diagnostics (252d, CSI1000, non-neutral, cap-weighted) cannot rescue. Reuses the vetted measurement chain + full-main-board PIT fundamentals; fetches nothing. The agreed last structured batch: if no factor survives, downgrade A-share large-cap in-sample alpha rather than rescue with new definitions.",
+      "review_boundary": [
+        "This planned test is not authorized to run until Codex independent review PASS, Claude commit, and a separate explicit user execute.",
+        "No new data fetch, provider call, daily-bar pull, DataHub work, production claim, ship-gate evidence, full-size use, or broker / order automation is authorized.",
+        "If executed and no factor survives FDR with the robustness gates, treat the batch as dry under the frozen rules and follow the stopping rule (downgrade / forward-live / pivot); no rerun, definition / trailing-window / q / threshold / horizon / benchmark / universe change, no dropping losers then re-FDR, and no diagnostic rescue without a new reviewed preregistration and ledger.",
+        "Even a surviving in-sample clue is research-only and routes to forward-live validation, not production or ship-gate evidence; BH-FDR cannot uncount the five prior spent singletons, so a survivor is the program-level (5+k)-th test."
+      ]
+    }
+  ],
+  "next_required_actions": [
+    "Codex independent review of this preregistration, its schema, this ledger, the schema tests, and the route docs before any signal-search work.",
+    "After review PASS and Claude commit, a separate batch signal-search runner slice may be built; its execution requires its own review, commit, and a separate user execute and spends this singleton exactly once.",
+    "Do not run, fetch, or rescue without the reviewed path above."
+  ]
+}

@@ -1,0 +1,507 @@
+{
+  "schema_name": "a_long_large_cap_batch_factor_search_preregistration",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-09T00:00:00+08:00",
+  "artifact_id": "a_long_large_cap_batch_factor_search_20260609",
+  "scope": {
+    "phase": "7a_alpha_validation",
+    "purpose": "a_long_large_cap_batch_factor_search_preregistration",
+    "lane_id": "a_long",
+    "market": "A-share",
+    "registration_status": "registered_not_run",
+    "research_status": "new_frozen_batch_design_registered_not_run",
+    "research_only": true,
+    "externally_motivated_not_prior_rescue": true,
+    "new_hypothesis_not_prior_reslice": true,
+    "is_batch_multiple_testing_design": true,
+    "preregistration_review_status": "passed_independent_review_ready_for_freeze",
+    "reuses_reviewed_materialized_market_cap_universe": true,
+    "reuses_reviewed_full_main_board_fundamentals": true,
+    "new_data_fetch_required": false,
+    "signal_search_executed_by_this_artifact": false,
+    "signal_search_authorized_by_this_artifact": false,
+    "data_fetch_allowed_by_this_artifact": false,
+    "provider_call_allowed_by_this_artifact": false,
+    "datahub_allowed": false,
+    "production_use_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "full_size_manual_use_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "manual_order_only": true
+  },
+  "source_doc_refs": [
+    {
+      "path": "docs/a_long_large_cap_batch_factor_search_design_draft_20260608.md",
+      "role": "the agreed batch design archive this preregistration formalizes (9 primary factors + 1 composite, BH-FDR, q strategy, free-float naming, fields-to-verify checklist, stopping rule); the draft is non-authoritative and this preregistration supersedes it"
+    },
+    {
+      "path": "research/results/a_long_large_cap_ep_value_20260608/execution_summary.json",
+      "role": "immediate-prior result: externally-motivated single-factor ep_value, falsified; the 5th and last A-long large-cap SOLO line. This batch is the agreed move from sequential singletons to one pre-registered multiple-testing batch"
+    },
+    {
+      "path": "research/results/a_long_signal_search_20260604/execution_summary.json",
+      "role": "the prior full-main-board 32-cell + BH-FDR run, the batch template; its families were profitability_quality / cash_conversion / balance_sheet_strength / earnings_stability, i.e. quality/earnings-stability, NOT this batch's value / investment / earnings-quality / low-risk / momentum factors"
+    },
+    {
+      "path": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json",
+      "role": "reviewed PASS market-cap audit; the reused top-500 circ_mv monthly universe with the 000043 exclusion/backfill, also the source of the PIT circ_mv used as every factor's free-float denominator"
+    },
+    {
+      "path": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+      "role": "prior reviewed full-main-board data-integrity PASS; source of the reused PIT income / balancesheet / cashflow / daily fundamentals and the restatement-ambiguity exclusion list from which all batch factors are computed (no new fetch)"
+    },
+    {
+      "path": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+      "role": "reviewed bounded 000043.SZ / 20191129 data-quality exclusion reused unchanged by this design"
+    },
+    {
+      "path": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "role": "grounds the close-to-close total-return CSI300 / CSI1000 benchmark route reused by this design"
+    },
+    {
+      "path": "docs/ALPHA_VALIDATION_ACTION_GUIDE.md",
+      "role": "owns research preregistration, multiple-testing, PIT, factor-exposure, and ship-gate guardrails"
+    },
+    {
+      "path": "research/README.md",
+      "role": "routes research-only preregistration and singleton-ledger artifacts"
+    }
+  ],
+  "hypothesis_provenance": {
+    "externally_literature_motivated": true,
+    "derived_from_in_sample_diagnostic_of_prior_run": false,
+    "tests_diverse_factor_families_in_one_pre_registered_batch": true,
+    "economic_rationale": "After five A-long large-cap single-factor lines were exhausted (full-main-board no_alpha; pure-quality falsified; cash_conversion clue-not-tradeable; low_volatility falsified; ep_value falsified), the statistically correct next step is ONE pre-registered batch that tests a diverse set of remaining large-cap-robust factors under Benjamini-Hochberg FDR, rather than more sequential singletons (which control within-factor but not across-factor multiple testing). The factor set spans value (book / cash-flow / sales to free-float price), earnings quality (low accruals, Sloan), investment (low asset growth, Fama-French CMA direction), profitability (ROA proxy), low risk (low beta BAB, low MAX lottery), and momentum (12-1, expected weak in China). All are documented large-cap-robust or are included to put a specific question to rest; A-share strong anomalies that concentrate in small/shell stocks are deliberately excluded because the user only trades the large-cap main board.",
+    "factor_families_covered": ["value", "earnings_quality", "investment", "profitability", "low_risk", "momentum"],
+    "not_covered_by_prior_full_main_board_signal_families": true,
+    "evidence_status": "external_literature_motivated_in_sample_period_test_not_out_of_sample_proof",
+    "vs_csi300_evidence_is_single_historical_period": true,
+    "in_sample_period_not_forward": true,
+    "requires_forward_live_for_validation": true,
+    "program_level_selection_after_five_prior_spent_singletons_acknowledged": true,
+    "batch_fdr_cannot_uncount_prior_spent_singletons": true,
+    "no_factor_definition_search": true,
+    "no_factor_count_search": true,
+    "no_q_threshold_search": true,
+    "no_composite_weight_search": true,
+    "old_result_reslice_allowed": false,
+    "prior_clue_or_diagnostic_relabel_as_pass_allowed": false
+  },
+  "prior_result_boundary": {
+    "prior_preregistration_ref": "research/preregistrations/a_long_large_cap_ep_value_20260608.json",
+    "prior_result_ref": "research/results/a_long_large_cap_ep_value_20260608/execution_summary.json",
+    "prior_research_verdict": "falsified_large_cap_ep_value_under_frozen_rules",
+    "cumulative_prior_spent_singletons_on_large_cap_program": 5,
+    "prior_spent_singleton_families": [
+      "a_long_signal_search_v1",
+      "a_long_large_cap_pure_quality_v1",
+      "a_long_large_cap_cash_conversion_v1",
+      "a_long_large_cap_low_volatility_v1",
+      "a_long_large_cap_ep_value_v1"
+    ],
+    "new_design_reason": "move_from_sequential_singletons_to_one_preregistered_batch_with_bh_fdr_as_the_last_structured_candidate_generation_round",
+    "is_rescue_of_prior_clue": false,
+    "reuses_falsified_factor_definitions_as_is_allowed": false,
+    "old_result_reslice_allowed": false,
+    "threshold_relaxation_allowed": false,
+    "benchmark_rescue_allowed": false,
+    "horizon_rescue_allowed": false
+  },
+  "data_reuse": {
+    "no_new_provider_call_required": true,
+    "no_new_daily_basic_pull_required": true,
+    "market_cap_audit_report_ref": "research/results/a_long_large_cap_market_cap_audit_20260607/audit_report.json",
+    "market_cap_universe_status": "reviewed_passed_top_500_circ_mv_monthly_2018_2025",
+    "market_cap_raw_root": "data/a_long/raw/tushare/large_cap_market_cap_materialization_20260607/",
+    "full_main_board_audit_report_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/audit_report.json",
+    "full_main_board_raw_root": "data/a_long/raw/tushare/full_main_board_signal_search_20260605/",
+    "denominator_source": "reviewed_materialized_pit_circ_mv_at_as_of",
+    "selected_market_cap_field": "circ_mv",
+    "materialized_fields_verified_present": [
+      "income.revenue",
+      "income.n_income_attr_p",
+      "balancesheet.total_hldr_eqy_exc_min_int",
+      "balancesheet.total_assets",
+      "balancesheet.total_liab",
+      "cashflow.n_cashflow_act",
+      "daily.close",
+      "daily.open",
+      "daily.vol"
+    ],
+    "materialized_fields_verified_absent_so_excluded": [
+      "income.ebit",
+      "income.ebitda",
+      "income.operate_profit",
+      "income.oper_cost",
+      "income.gross_profit",
+      "dividend_per_share_lineage"
+    ],
+    "reuses_data_quality_exclusion_decision_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+    "monthly_as_of_count": 96,
+    "raw_storage_must_stay_gitignored": true,
+    "tracked_summary_must_not_contain_raw_rows": true,
+    "separate_review_required_before_signal_run": true,
+    "separate_user_execute_required_before_signal_run": true
+  },
+  "frozen_design": {
+    "design_id": "a_long_large_cap_batch_factor_search_v1",
+    "hypothesis_text": "In a PIT A-share main-board top-500 large-cap universe (reusing the reviewed circ_mv materialization, the 000043 exclusion, and the reviewed full-main-board PIT fundamentals + restatement-ambiguity exclusion list), a frozen, diverse set of NINE primary factors plus ONE frozen-weight composite is tested in a single pre-registered batch for positive cost-adjusted excess versus CSI300 over a 504-trading-day hold. Each factor's standalone result is one primary cell; the across-factor decision is governed by Benjamini-Hochberg FDR over the ten primary p-values (nine factors + composite), with q=0.10 as the research-clue gate and q=0.05 reported as a stricter diagnostic. A factor is a research-only statistical alpha clue only if it survives FDR AND passes the per-factor robustness gates (positive mean net excess, both median sub-period halves positive, name/year concentration guards); a surviving clue is additionally a research-only tradeable candidate only if its rolling-overlapping-portfolio relative-NAV drawdown versus CSI300 is no worse than -15%. Diagnostics (252d, CSI1000, non-neutral, cap-weighted, single-factor cells) are reporting-only and cannot rescue. This is the agreed LAST structured batch / candidate-generation round: if no factor survives FDR with the robustness gates, A-share large-cap long in-sample alpha is downgraded to forward-live / a different market-or-data path, NOT rescued with new factor definitions. Even a surviving clue is research-only, is the program-level (5+k)-th test (FDR cannot uncount the five prior spent singletons), and requires forward-live validation.",
+    "universe_rule": {
+      "market_scope": "A-share",
+      "board_scope": "main_board_only",
+      "as_of_frequency": "monthly",
+      "as_of_selection_rule": "last_open_A_share_trading_day_of_each_calendar_month",
+      "universe_size_n": 500,
+      "universe_size_n_search_allowed": false,
+      "selection_basis": "top_500_by_pit_market_cap_as_of_each_as_of_date",
+      "market_cap_field_choice_status": "circ_mv_reviewed_probe_passed_frozen_for_materialization",
+      "include_later_delisted_names_at_pre_delisting_asofs": true,
+      "pit_list_delist_required": true,
+      "selection_time_namechange_veto_required": true,
+      "reviewed_no_industry_boundary_ref": "docs/a_long_scaled_delisted_no_industry_boundary_decision_20260605.json",
+      "reviewed_data_quality_exclusion_boundary_ref": "docs/a_long_large_cap_data_quality_exclusion_decision_20260607.json",
+      "reviewed_data_quality_exclusion_policy": {
+        "excluded_symbols": ["000043.SZ"],
+        "affected_as_of_dates": ["20191129"],
+        "max_excluded_symbols": 1,
+        "max_excluded_observations": 1,
+        "drop_excluded_symbols_before_signal_scoring": true,
+        "backfill_next_main_board_by_circ_mv": true,
+        "materialized_top500_rederivation_unchanged": true,
+        "threshold_rescue_allowed": false
+      },
+      "st_star_bse_chinext_excluded": true
+    },
+    "batch_factor_rule": {
+      "factor_count": 9,
+      "composite_count": 1,
+      "total_primary_hypotheses": 10,
+      "factor_count_search_allowed": false,
+      "all_denominators_are_pit_circ_mv_free_float": true,
+      "free_float_naming_required": true,
+      "non_positive_or_insufficient_input_excluded_from_scoring": true,
+      "factors": [
+        {
+          "factor_id": "book_to_circ_mv",
+          "family": "value",
+          "definition": "pit_total_hldr_eqy_exc_min_int_div_pit_circ_mv",
+          "input_fields": ["balancesheet.total_hldr_eqy_exc_min_int", "circ_mv"],
+          "ttm_required": false,
+          "high_value_is_high_score": true,
+          "canonical_label_disclaimer": "free_float_book_yield_not_canonical_book_to_market"
+        },
+        {
+          "factor_id": "cash_flow_to_circ_mv",
+          "family": "value",
+          "definition": "ttm_n_cashflow_act_div_pit_circ_mv",
+          "input_fields": ["cashflow.n_cashflow_act", "circ_mv"],
+          "ttm_required": true,
+          "high_value_is_high_score": true,
+          "canonical_label_disclaimer": "free_float_operating_cash_flow_yield"
+        },
+        {
+          "factor_id": "sales_to_circ_mv",
+          "family": "value",
+          "definition": "ttm_revenue_div_pit_circ_mv",
+          "input_fields": ["income.revenue", "circ_mv"],
+          "ttm_required": true,
+          "high_value_is_high_score": true,
+          "canonical_label_disclaimer": "free_float_sales_yield"
+        },
+        {
+          "factor_id": "low_accruals",
+          "family": "earnings_quality",
+          "definition": "score_equals_negative_of_quantity_(ttm_n_income_attr_p_minus_ttm_n_cashflow_act)_then_divided_by_average_total_assets",
+          "input_fields": ["income.n_income_attr_p", "cashflow.n_cashflow_act", "balancesheet.total_assets"],
+          "ttm_required": true,
+          "high_value_is_high_score": true,
+          "canonical_label_disclaimer": "sloan_accruals_low_is_good_sign_flipped_to_high_score"
+        },
+        {
+          "factor_id": "low_asset_growth",
+          "family": "investment",
+          "definition": "negative_year_over_year_growth_in_pit_total_assets",
+          "input_fields": ["balancesheet.total_assets"],
+          "ttm_required": false,
+          "high_value_is_high_score": true,
+          "canonical_label_disclaimer": "ff5_cma_investment_low_is_good_sign_flipped_to_high_score"
+        },
+        {
+          "factor_id": "roa_ttm",
+          "family": "profitability",
+          "definition": "ttm_net_income_attr_p_div_average_total_assets",
+          "input_fields": ["income.n_income_attr_p", "balancesheet.total_assets"],
+          "ttm_required": true,
+          "high_value_is_high_score": true,
+          "canonical_label_disclaimer": "roa_proxy_not_novy_marx_gross_or_ff5_operating_profitability_those_fields_not_materialized_lowest_novelty_overlaps_prior_roe_quality"
+        },
+        {
+          "factor_id": "low_beta",
+          "family": "low_risk",
+          "definition": "negative_ols_beta_of_daily_total_return_on_csi300_total_return_over_trailing_252_trading_days",
+          "input_fields": ["daily.close", "adj_factor.adj_factor", "csi300_index_close"],
+          "trailing_window_trading_days": 252,
+          "ttm_required": false,
+          "high_value_is_high_score": true,
+          "canonical_label_disclaimer": "bab_direction_low_beta_high_score_distinct_from_falsified_total_vol_low_volatility_but_correlated"
+        },
+        {
+          "factor_id": "low_max",
+          "family": "low_risk",
+          "definition": "negative_max_single_day_total_return_over_trailing_21_trading_days",
+          "input_fields": ["daily.close", "adj_factor.adj_factor"],
+          "trailing_window_trading_days": 21,
+          "ttm_required": false,
+          "high_value_is_high_score": true,
+          "canonical_label_disclaimer": "bali_max_lottery_demand_low_is_good_china_lottery_mostly_small_cap_expect_weak_in_large_cap"
+        },
+        {
+          "factor_id": "momentum_12_1",
+          "family": "momentum",
+          "definition": "cumulative_total_return_from_t_minus_252_to_t_minus_21_trading_days",
+          "input_fields": ["daily.close", "adj_factor.adj_factor"],
+          "formation_start_trading_days_ago": 252,
+          "formation_end_trading_days_ago": 21,
+          "ttm_required": false,
+          "high_value_is_high_score": true,
+          "canonical_label_disclaimer": "china_large_cap_momentum_documented_weak_or_reversal_prone_expect_falsify_included_to_settle_the_question"
+        }
+      ],
+      "composite": {
+        "composite_id": "family_balanced_composite",
+        "construction": "equal_weight_average_across_family_buckets_of_within_family_mean_of_factor_industry_size_neutral_percentile_scores",
+        "family_buckets": ["value", "earnings_quality", "investment", "profitability", "low_risk", "momentum"],
+        "weights_frozen_before_run": true,
+        "weight_search_allowed": false,
+        "rationale": "family-equal-weight so the three value variants do not dominate the composite; counted as the 10th primary hypothesis under FDR",
+        "counted_as_additional_primary_hypothesis": true
+      },
+      "diagnostic_factor_can_rescue_primary_failure": false
+    },
+    "neutralization_rule": {
+      "primary_view": "industry_and_size_neutral",
+      "neutralization_method": "marginal_double_neutralization",
+      "primary_score_construction": "equal_weight_average_of_marginal_industry_neutral_and_marginal_size_neutral_percentile_scores",
+      "industry_neutral_score_rule": "percentile_within_industry_l2_fallback_l1",
+      "size_neutral_score_rule": "percentile_within_market_cap_quintile",
+      "combined_score_rule": "0_5_industry_neutral_percentile_plus_0_5_size_neutral_percentile",
+      "applies_to_every_batch_factor_identically": true,
+      "crossed_industry_size_bucket_allowed": false,
+      "industry_basis": "SW_L2_then_SW_L1_if_sample_lt_20",
+      "industry_l2_min_count": 20,
+      "industry_l1_min_count": 2,
+      "size_bucket_rule": "pit_market_cap_quintile_inside_top_500_per_as_of",
+      "size_bucket_count": 5,
+      "expected_names_per_size_bucket": 100,
+      "minimum_size_bucket_count_for_primary_percentile": 50,
+      "size_coverage_gate_applies_to_cohort_forming_months_only": true,
+      "non_neutral_view_role": "diagnostic_only_not_primary",
+      "cap_weighted_view_role": "diagnostic_only_not_primary"
+    },
+    "measurement_rule": {
+      "primary_horizon_trading_days": 504,
+      "diagnostic_horizons_trading_days": [252],
+      "entry_rule": "next_trading_day_close_after_as_of",
+      "stock_return_basis": "stock_total_return_adj_factor_next_trading_day_close_to_exit_close",
+      "benchmark_return_basis": "benchmark_total_return_index_next_trading_day_close_to_same_exit_close",
+      "same_anchor_required": true,
+      "round_trip_cost": 0.0026,
+      "missing_scheduled_exit_policy": "terminal_delisting_uses_last_trade_otherwise_next_available_or_missing",
+      "total_return_required": true,
+      "price_index_fallback_allowed": false
+    },
+    "benchmark_rule": {
+      "primary_benchmark": "CSI300",
+      "diagnostic_benchmark": "CSI1000",
+      "both_benchmark_pass_required": false,
+      "benchmark_access_probe_ref": "docs/a_long_total_return_benchmark_access_probe_summary_20260606.json",
+      "benchmark_access_status": "total_return_close_available_close_to_close_amendment_selected",
+      "derived_total_return_open_allowed": false
+    },
+    "decision_rule": {
+      "decision_type": "batch_bh_fdr_over_primary_cells",
+      "primary_cell_per_factor": {
+        "view": "industry_and_size_neutral",
+        "weighting": "equal_weight",
+        "horizon_trading_days": 504,
+        "benchmark": "CSI300",
+        "top_fraction": 0.2,
+        "minimum_top_count_per_month": 10
+      },
+      "fdr_unit": "one_primary_cell_per_factor_and_one_for_the_composite",
+      "m_total_hypotheses": 10,
+      "fdr_method": "benjamini_hochberg",
+      "fdr_excludes_diagnostic_cells": true,
+      "q_research_clue_gate": 0.1,
+      "q_strict_diagnostic_reported": 0.05,
+      "q_frozen_before_run": true,
+      "q_search_allowed": false,
+      "per_factor_p_value_method": "two_sided_normal_on_newey_west_hac_t_of_monthly_overlapping_cohorts",
+      "minimum_monthly_cohorts": 48,
+      "per_factor_statistical_alpha_clue_gates": {
+        "must_survive_bh_fdr_at_q_research_clue": true,
+        "mean_net_excess_must_be_positive": true,
+        "minimum_monthly_cohorts": 48,
+        "sub_period_both_halves_mean_excess_positive_required": true,
+        "name_concentration_guard_max_share": 0.2,
+        "single_year_positive_return_guard_max_share": 0.35
+      },
+      "tradeable_candidate_gates": {
+        "applies_to_each_fdr_surviving_clue": true,
+        "risk_gate_metric": "rolling_overlapping_portfolio_relative_nav_max_drawdown_vs_csi300",
+        "minimum_allowed_relative_nav_drawdown": -0.15,
+        "absolute_nav_drawdown_is_diagnostic_only": true,
+        "risk_gate_affects_tradeable_label_only_not_alpha_clue": true
+      },
+      "diagnostics_can_define_alpha": false,
+      "multiple_testing_adjustment_is_within_batch_only": true,
+      "multiple_testing_cannot_uncount_prior_spent_singletons": true
+    },
+    "sub_period_robustness": {
+      "split_rule": "median_split_of_valid_504d_entry_cohorts_into_two_equal_halves",
+      "natural_calendar_year_split_allowed": false,
+      "requires_both_halves_mean_excess_positive": true,
+      "report_each_half_hac_t_stat": true,
+      "applies_per_factor": true
+    },
+    "risk_gate": {
+      "method": "rolling_overlapping_monthly_tranche_portfolio_nav",
+      "benchmark_construction": "option_a_parallel_same_as_of_schedule_horizon_and_ramp_holding_csi300_total_return_instead_of_selected_basket",
+      "cost_applied_to_benchmark_tranches": false,
+      "relative_nav_formula": "strategy_nav_divided_by_benchmark_nav",
+      "primary_risk_metric": "max_drawdown_of_relative_nav",
+      "minimum_allowed_relative_nav_drawdown": -0.15,
+      "threshold_frozen_before_run": true,
+      "summed_overlapping_cohort_excess_drawdown_as_gate_allowed": false,
+      "risk_gate_affects_tradeable_label_only_not_alpha_clue": true,
+      "computed_only_for_fdr_surviving_clues": true
+    },
+    "stopping_rule": {
+      "this_is_the_last_structured_batch_candidate_generation_round": true,
+      "if_no_factor_survives_fdr_with_robustness_gates": "downgrade_a_share_large_cap_long_in_sample_alpha_pivot_to_forward_live_or_different_market_or_data_path",
+      "no_further_factor_definition_rescue_after_dry_batch": true,
+      "further_search_requires_new_reviewed_preregistration_and_ledger": true
+    },
+    "diagnostic_cells": {
+      "report_csi1000": true,
+      "report_252d": true,
+      "report_non_neutral": true,
+      "report_cap_weighted": true,
+      "report_absolute_nav_drawdown": true,
+      "report_each_sub_period_half": true,
+      "report_per_factor_input_coverage_counts": true,
+      "report_q_0_05_stricter_diagnostic": true,
+      "diagnostics_can_define_alpha": false
+    },
+    "anti_p_hacking_controls": {
+      "test_budget_units": 1,
+      "batch_is_one_pre_registered_test": true,
+      "parameter_sweep_allowed": false,
+      "universe_n_search_allowed": false,
+      "factor_definition_search_allowed": false,
+      "factor_count_search_allowed": false,
+      "trailing_window_search_allowed": false,
+      "q_threshold_search_allowed": false,
+      "composite_weight_search_allowed": false,
+      "post_result_rescue_slicing_allowed": false,
+      "drop_losing_factors_then_re_fdr_allowed": false,
+      "risk_gate_threshold_frozen_before_run": true,
+      "new_ledger_required_before_any_followup": true
+    },
+    "pit_and_hygiene_controls": {
+      "restatement_exclusion_list_ref": "research/results/a_long_full_main_board_data_integrity_audit_20260605/restatement_ambiguous_exclusions.csv",
+      "restatement_exclusion_required": true,
+      "expected_restatement_exclusion_group_count": 1504,
+      "pit_fundamentals_use_only_ann_date_leq_as_of": true,
+      "ttm_rollover_rule": "latest_pit_ytd_plus_prior_fiscal_year_annual_minus_prior_year_same_period_ytd_all_pit_and_restatement_excluded",
+      "non_positive_or_insufficient_input_excluded_from_scoring": true,
+      "trailing_window_factors_require_full_window_else_excluded": true,
+      "pit_namechange_required": true,
+      "current_stock_basic_name_veto_allowed": false,
+      "survivorship_handling": "include_later_delisted_names_until_their_pit_delist_cutoff_and_retain_terminal_returns",
+      "tracked_summary_contains_raw_rows_allowed": false,
+      "tracked_summary_contains_endpoint_results_allowed": false,
+      "tracked_summary_contains_secret_allowed": false,
+      "tracked_summary_contains_request_url_allowed": false
+    },
+    "required_output_diagnostics": [
+      "Report all ten primary cells (nine factors + composite) with mean net excess, HAC t, p-value, monthly cohort count, both sub-period halves, and concentration guards.",
+      "Report the BH-FDR decision at q=0.10 (research-clue gate) and, as a stricter diagnostic, at q=0.05: the sorted p-values, the BH thresholds, and which primary cells survive each.",
+      "For every FDR-surviving clue, report the rolling-overlapping relative-NAV (strategy / CSI300) max drawdown and the tradeable-candidate label; absolute NAV drawdown is diagnostic only.",
+      "Report CSI1000, 252d, non-neutral, and cap-weighted cells as diagnostics that cannot define alpha or rescue a primary.",
+      "Report per-factor input-coverage counts (non-positive / insufficient-TTM / insufficient-trailing-window exclusions) and confirm fundamentals are PIT (ann_date <= as_of) and restatement-excluded.",
+      "Report the reviewed 000043.SZ / 20191129 exclusion + circ_mv backfill, top-500 PIT coverage, marginal industry/size coverage, and minimum top-count per month.",
+      "Report the restatement-exclusion application count (1504) and abort if missing or unapplied.",
+      "State the batch verdict against the stopping rule: if no factor survives FDR with the robustness gates, recommend downgrading A-share large-cap in-sample alpha to forward-live / pivot, not definition rescue.",
+      "Report no raw rows, endpoint results, request URL, or secret in any tracked summary."
+    ]
+  },
+  "decision_policy": {
+    "statistical_alpha_clue": [
+      "A future reviewed run may label a batch factor (or the composite) a research-only statistical alpha clue only if its single primary cell survives Benjamini-Hochberg FDR at q=0.10 across the ten primary p-values AND is positive net of costs versus CSI300, has at least 48 monthly cohorts, both median sub-period halves with positive mean excess, and passes the name / year concentration and PIT-hygiene gates.",
+      "q=0.05 is reported as a stricter diagnostic; surviving only at q=0.10 is still a research clue, not alpha proof."
+    ],
+    "tradeable_candidate_research_only": [
+      "An FDR-surviving clue is additionally a research-only tradeable candidate only if its rolling-overlapping-portfolio relative-NAV (strategy / CSI300) max drawdown is no worse than -15%.",
+      "Even a tradeable-candidate label is research-only and cannot authorize production, ship-gate evidence, or full-size manual use."
+    ],
+    "falsified_or_downgrade": [
+      "Any factor that does not survive FDR with the robustness gates is falsified within this batch under the frozen rules.",
+      "If NO factor survives, A-share large-cap long in-sample alpha is downgraded: route to forward-live validation or a different market / data path; do NOT rescue with new factor definitions, thresholds, horizons, benchmarks, universes, trailing windows, or composite weights.",
+      "Do not drop losing factors and re-run FDR on the survivors; the m=10 family is frozen."
+    ],
+    "diagnostics_policy": [
+      "CSI1000, 252d, non-neutral, cap-weighted, and absolute-NAV drawdown are reporting diagnostics only and cannot define alpha or rescue a primary.",
+      "Diagnostics may inform a later new preregistration, but only through a new reviewed ledger update and user approval."
+    ],
+    "provenance_caveat": [
+      "The batch is externally literature-motivated and tests a diverse factor set in one pre-registered round; BH-FDR controls within-batch family-wise error but cannot uncount the five prior spent singletons, so any survivor is the program-level (5+k)-th test.",
+      "It is tested on a single historical period (2018-2025); an in-sample survivor is a research clue only.",
+      "Real validation requires the unchanged forward-live ship gate; at least 12 months of forward-live evidence."
+    ],
+    "minimum_forward_live_months_for_ship_gate": 12,
+    "backtest_can_authorize_full_size": false
+  },
+  "planned_test_budget": {
+    "ledger_ref": "research/ledgers/a_long_large_cap_batch_factor_search_program_test_budget_ledger_20260609.json",
+    "planned_test_id": "a_long_large_cap_batch_factor_search_20260609",
+    "test_budget_units": 1,
+    "batch_is_one_test_regardless_of_factor_count": true,
+    "signal_search_run_authorized_now": false,
+    "new_data_fetch_authorized_now": false,
+    "requires_independent_review_before_any_execution": true,
+    "requires_user_execute_before_any_execution": true,
+    "required_preregistration_review_status_for_execution": "passed_independent_review_ready_for_freeze"
+  },
+  "prohibited_claims": {
+    "validated_alpha": false,
+    "in_sample_clue_is_out_of_sample_proof": false,
+    "prior_falsified_or_clue_result_reinterpreted": false,
+    "batch_factor_proven": false,
+    "fdr_uncounts_prior_singletons": false,
+    "new_data_fetch_authorized": false,
+    "signal_search_authorized": false,
+    "full_size_allowed": false,
+    "ship_gate_evidence": false,
+    "production_ready": false,
+    "datahub_authorized": false,
+    "broker_or_order_automation_authorized": false
+  },
+  "next_steps": [
+    "Independent review (Codex) must validate this preregistration, schema, ledger, tests, and docs before any signal-search work.",
+    "After review PASS and commit, a separate batch signal-search runner slice may be implemented that reuses the vetted measurement chain, the reviewed top-500 universe, and the reviewed full-main-board PIT fundamentals to compute all nine factors + the composite, applies BH-FDR over the ten primary cells, and adds the rolling-overlapping relative-NAV drawdown gate for survivors.",
+    "The signal-search runner execution still requires its own independent review, commit, and a separate user execute; it spends this batch ledger exactly once.",
+    "No signal-search runner execution, new data fetch, provider call, DataHub work, production claim, ship-gate claim, or full-size use is authorized by this artifact."
+  ],
+  "limitations": [
+    "This artifact registers a frozen batch design only; it executes no signal search and fetches no data.",
+    "The batch is the agreed LAST structured candidate-generation round; if it is dry, the project should downgrade A-share large-cap in-sample alpha rather than continue definition-rescue.",
+    "BH-FDR controls within-batch multiple testing but cannot uncount the five prior spent singletons; a survivor is the program-level (5+k)-th test and still requires forward-live evidence.",
+    "All denominators are circulating market cap (circ_mv), a free-float yield; factor ids use the *_to_circ_mv / free-float convention and must not be read as canonical book-to-market / EV / total-market-cap ratios.",
+    "roa_ttm is a profitability proxy, NOT Novy-Marx gross or Fama-French operating profitability (those fields are not materialized); it overlaps the already-falsified ROE-quality line and is the lowest-novelty slot.",
+    "low_beta and low_max are low-risk-family factors correlated with the already-falsified low_volatility line; momentum_12_1 is expected to be weak/reversal-prone in China large-cap and is included to settle the question.",
+    "Statistical power is limited: 504d holds over 2018-2025 give few non-overlapping windows, so each factor's HAC t rests on a short effective sample and FDR at m=10 sets a high bar.",
+    "Non-positive / insufficient-input names are excluded from each factor's scoring; trailing-window factors require a full window; cross-sectional percentiles make the circ_mv unit scale rank-invariant.",
+    "A positive future batch result remains research-only until the unchanged project ship gate, including at least 12 months of forward-live evidence, is satisfied."
+  ]
+}

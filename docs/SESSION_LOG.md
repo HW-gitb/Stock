@@ -8,6 +8,96 @@
 
 ---
 
+## 2026-06-09 — Claude `提交` (batch factor-search design slice, post-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required, no Optional; mutation probes reject every factor/source/field/q/auth mutation; boundary = commit the design slice only with the mechanical post-PASS status flips). Re-read SESSION_LOG top + git status + register before committing.
+
+**Post-PASS mechanical steps (exactly the Codex boundary)**: flipped the batch prereg `scope.preregistration_review_status` pending -> `passed_independent_review_ready_for_freeze`; flipped the matching schema-test assertion (`test_review_status_is_passed_post_review`); marked the register entry `A-long large-cap batch factor-search preregistration freeze gap` -> `resolved` with PASS evidence. No factor / q / threshold / universe / ledger value changed; the schema enum already accepted both review-status values so the prereg still validates.
+
+**Committed (one scope = batch factor-search DESIGN slice, local master, no push)**: `research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json` (review-passed) + `schemas/a_long_large_cap_batch_factor_search_preregistration.schema.json` (all-frozen: per-factor `if/then` const pins + const field lists + source-ref pins) + UNSPENT `research/ledgers/a_long_large_cap_batch_factor_search_program_test_budget_ledger_20260609.json` + `tests/schema/test_a_long_large_cap_batch_factor_search_preregistration_schema.py` (25/25), plus `docs/system_risk_register.md` (resolved) + this log. Durable `docs/README` / `research/README` pointer rows deferred to the batch execution closeout (ep_value pattern).
+
+**State after commit**: the batch design (9 factors + composite, BH-FDR q=0.10/0.05, stopping rule) is frozen and review-passed; its singleton ledger is UNSPENT. Five prior large-cap solo lines remain closed/spent; this batch is the agreed last structured candidate-generation round.
+
+**Next**: build the batch signal-search RUNNER slice (reuses the vetted measurement chain + reviewed top-500 universe + full-main-board PIT fundamentals; computes all nine factors + the composite; applies BH-FDR over the ten primary cells; adds the relative-NAV drawdown gate for survivors), then Codex `审查`, then Claude `提交`, then a separate user `执行` spends the singleton once. No `执行` now (no runner; ledger unspent).
+
+---
+
+## 2026-06-09 — Codex `审查` (R-BATCH-FACTOR-CONSTS + R-BATCH-SOURCE-REF re-review / batch design slice) — **PASS**
+
+**Scope reviewed**: current uncommitted tree for the A-long large-cap batch design slice: `schemas/a_long_large_cap_batch_factor_search_preregistration.schema.json`, `research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json`, `research/ledgers/a_long_large_cap_batch_factor_search_program_test_budget_ledger_20260609.json`, `tests/schema/test_a_long_large_cap_batch_factor_search_preregistration_schema.py`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`. Staged diff empty. No signal search, provider call, data fetch, runner implementation, ledger spend, production claim, ship-gate claim, full-size claim, DataHub work, or broker/order automation was executed.
+
+**Verdict**: PASS. `R-BATCH-FACTOR-CONSTS` and `R-BATCH-SOURCE-REF` are fixed in the reviewed tree. The batch concept remains research-only and unexecuted; this PASS authorizes committing the design slice only.
+
+**Required**: none.
+
+**Optional**: none.
+
+**Independent checks performed**: bundled Python `jsonschema` import OK (`4.26.0`); direct preregistration validation errors `0`; direct ledger validation errors `0`; all `source_doc_refs` exist on disk; restatement exclusion CSV exists with `1504` rows; targeted batch schema + route-doc tests **36/36 OK**; full `unittest discover` failed in sandbox only on the known Tushare `C:\Users\cnhea\tk.csv` permission boundary (`1110` tests run, 6 permission errors), then passed under approved non-sandbox rerun **1131/1131 OK**; `git diff --check` clean except LF/CRLF warnings. Independent mutation probes rejected every tested factor `definition`, `input_fields`, window, direction, disclaimer, extra-field mutation across all nine factors; rejected bad source draft path, reduced present/absent field lists, composite weight optimization, signal/production authorization, q relaxation, and factor-count change; original artifact validates cleanly.
+
+**Register outcome**: `docs/system_risk_register.md` entry `A-long large-cap batch factor-search preregistration freeze gap` updated with this PASS evidence and no longer says pending Codex review. It remains `in_progress` until Claude `提交` performs the mechanical post-PASS commit/status closeout.
+
+**Boundary**: before committing, Claude may perform only the mechanical post-PASS status flips expected by the existing tests/workflow (for example `preregistration_review_status` -> `passed_independent_review_ready_for_freeze`, matching test assertion, and risk-register closeout wording). This PASS does not authorize building/running the batch signal-search runner, fetching data, spending the singleton, changing factors/q/universe/thresholds, or making alpha / production / ship-gate / full-size claims.
+
+**Next**: User command to Claude: **提交**.
+
+---
+
+## 2026-06-09 — Claude `修复` (R-BATCH-FACTOR-CONSTS + R-BATCH-SOURCE-REF on the batch design slice) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` FAIL (entry below): the batch concept is fine and the prereg/ledger validate, but the schema did not actually FREEZE the factor definitions — `batchFactor` had `additionalProperties: true` and the array `contains` pins only checked `factor_id`+`family`, so formulas / inputs / windows could drift post-review and still validate (Codex's probes mutated 5 factors + reduced the field list with 0 errors). Plus a source-path typo. Both real freeze gaps. Re-read SESSION_LOG top + git status before acting.
+
+**Fixed (schema + prereg + tests; NO design value changed, only the freeze tightened):**
+- `R-BATCH-FACTOR-CONSTS`: `batchFactor` now `additionalProperties: false` with per-`factor_id` `if/then` const pins freezing each factor's exact `definition`, `input_fields`, `ttm_required`, `trailing_window_trading_days` / `formation_*` window, score direction, and canonical disclaimer. A mutated formula / input / window / extra field on any factor now fails schema validation. Rewrote the `low_accruals` formula string to be unambiguous (`score_equals_negative_of_quantity_(ttm_n_income_attr_p_minus_ttm_n_cashflow_act)_then_divided_by_average_total_assets`). Added adversarial tests for book_to_circ_mv / cash_flow_to_circ_mv / low_accruals / low_beta / momentum_12_1 mutations.
+- `R-BATCH-SOURCE-REF`: fixed the prereg source path `..._20260609.md` → the committed `..._20260608.md`; const-pinned `materialized_fields_verified_present` (exact 9-field array) + `..._absent_so_excluded`; added `source_doc_refs` `contains` pins for the design draft + EP prior result + market-cap audit + full-main-board audit + data-quality + benchmark-probe refs. Added a disk-existence test on the draft ref + adversarial tests for the bad path and the reduced field list.
+
+**Verification**: batch prereg-schema suite **25/25 OK** (was 18; +7 adversarial); the prereg still validates against the hardened schema with **0 errors** (per-factor `if/then` consts match the prereg exactly); route-doc guard **11/11**; full suite **1131/1131**.
+
+**Boundary**: process/contract-only (schema freeze + source/field pins + tests + the disambiguated formula string). No design knob, factor list, q, threshold, universe, or ledger value changed; the batch is still UNSPENT and unexecuted. Uncommitted, awaiting re-`审查`.
+
+**Next**: Codex re-`审查` of the batch design slice; then Claude `提交`; then a separate batch RUNNER slice (its own review/commit/execute) spends the singleton once.
+
+---
+
+## 2026-06-09 — Codex `审查` (A-long large-cap BATCH multi-factor search design slice) — **FAIL / Required**
+
+**Scope reviewed**: `research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json`, `schemas/a_long_large_cap_batch_factor_search_preregistration.schema.json`, `research/ledgers/a_long_large_cap_batch_factor_search_program_test_budget_ledger_20260609.json`, `tests/schema/test_a_long_large_cap_batch_factor_search_preregistration_schema.py`, plus route docs / current risk register. No signal search, provider call, data fetch, runner change, ledger spend, production claim, ship-gate claim, full-size claim, DataHub work, or broker/order automation was executed.
+
+**Verdict**: FAIL. The batch research idea is directionally coherent, and the current prereg + ledger validate under the proposed schema, but the schema does not yet enforce the actual frozen-factor contract. This would allow post-review drift in formulas / inputs / windows while still passing schema validation, so it blocks commit and any later execution.
+
+**Required**:
+- `R-BATCH-FACTOR-CONSTS` (scope `schemas/a_long_large_cap_batch_factor_search_preregistration.schema.json`, `research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json`, `tests/schema/test_a_long_large_cap_batch_factor_search_preregistration_schema.py`; PIT label `preregistration factor-definition freeze / no market-data PIT`): freeze every factor by `factor_id` to exact `definition`, `input_fields`, TTM / trailing / formation metadata, score direction, and canonical disclaimer; close `batchFactor` extra fields or use equivalent per-factor `if/then` const constraints; add adversarial tests that reject formula/input/window mutations for `book_to_circ_mv`, `cash_flow_to_circ_mv`, `low_accruals`, `low_beta`, and `momentum_12_1`. Also make the `low_accruals` formula string unambiguous while freezing it.
+- `R-BATCH-SOURCE-REF` (scope same prereg/schema/tests; PIT label `source-lineage contract / no market-data PIT`): fix the prereg source path from non-existent `docs/a_long_large_cap_batch_factor_search_design_draft_20260609.md` to the committed `docs/a_long_large_cap_batch_factor_search_design_draft_20260608.md`; const-pin required `source_doc_refs` and the materialized present / absent field lists so source and field-verification drift cannot validate.
+
+**Optional**: none beyond the Required fixes.
+
+**Independent checks performed**: bundled Python `jsonschema` import OK (`4.26.0`); direct prereg validation errors `0`; direct ledger validation errors `0`; targeted batch schema + route-doc tests **29/29 OK**; full `unittest discover` passed under approved non-sandbox rerun **1124/1124 OK** after sandbox run hit the known `C:\Users\cnhea\tk.csv` permission boundary. Source path probe: `docs/a_long_large_cap_batch_factor_search_design_draft_20260609.md = False`, `docs/a_long_large_cap_batch_factor_search_design_draft_20260608.md = True`. Mutation probes under the current schema returned zero errors for bad source path, changed `book_to_circ_mv`, changed `cash_flow_to_circ_mv`, changed `low_accruals`, changed `low_beta`, changed `momentum_12_1`, and reduced `materialized_fields_verified_present` to `["daily.close"]`; only the already-covered composite construction mutation was rejected.
+
+**Register outcome**: opened `A-long large-cap batch factor-search preregistration freeze gap` in `docs/system_risk_register.md` with Required IDs `R-BATCH-FACTOR-CONSTS` and `R-BATCH-SOURCE-REF`.
+
+**Boundary**: this FAIL does not reject the batch concept. It rejects the current frozen-material implementation until the schema/tests actually make the prereg immutable. Do not commit, run signal search, fetch data, spend the singleton ledger, or treat this as reviewed execution material before re-`审查` PASS.
+
+**Next**: User command to Claude: **修复**.
+
+---
+
+## 2026-06-09 — Claude `起草` (A-long large-cap BATCH multi-factor search design slice) — **DONE, pending `审查`**
+
+**Authorization & gate**: user `起草` after agreeing the refined batch design (the committed non-authoritative draft `docs/a_long_large_cap_batch_factor_search_design_draft_20260608.md`). Per that draft's own §6 gate, I FIRST ran the field-verification against the materialized full-main-board panel before drafting — **`income.revenue` is present** (so `sales_to_circ_mv` is computable), and **`ebit`/`operate_profit`/`oper_cost`/`gross_profit` are absent** (confirming EBIT/EV + gross/operating profitability are correctly excluded; `roa_ttm` is the honest proxy). All nine factors' inputs are materialized; no new fetch.
+
+**Built (4 new files; the batch DESIGN slice, modeled on the ep_value design-slice pattern):**
+- `research/preregistrations/a_long_large_cap_batch_factor_search_20260609.json` — one pre-registered batch of **9 primary factors** (`book/cash_flow/sales_to_circ_mv`, `low_accruals`, `low_asset_growth`, `roa_ttm` proxy, `low_beta`, `low_max`, `momentum_12_1`) **+ 1 frozen family-equal-weight composite**; across-factor decision = **Benjamini-Hochberg FDR over the 10 primary cells**, q=0.10 research-clue gate / q=0.05 stricter diagnostic (both frozen); per-factor robustness gates (positive mean net excess, both median sub-period halves positive, name/year concentration) + the same `-15%` relative-NAV tradeable gate; diagnostics (252d/CSI1000/non-neutral/cap-weighted) cannot rescue; **stopping rule** (if the batch is dry, downgrade A-share large-cap in-sample alpha → forward-live/pivot, no definition rescue). Draft `preregistration_review_status: pending_independent_review` (flips to passed at the post-PASS commit).
+- `schemas/a_long_large_cap_batch_factor_search_preregistration.schema.json` (bespoke, all frozen consts: 9-factor `contains` pins, FDR/q/threshold consts, anti-p-hacking search flags const-false), `research/ledgers/a_long_large_cap_batch_factor_search_program_test_budget_ledger_20260609.json` (UNSPENT singleton, `tests_spent_count=0`; the whole batch = one test), `tests/schema/test_a_long_large_cap_batch_factor_search_preregistration_schema.py` (18/18: validates prereg↔schema + ledger, asserts frozen consts, and adversarially rejects wrong factor count / dropped factor / q-relax / enabled search flag / drop-losers-re-FDR / relaxed risk gate / production-authorization / unknown field).
+
+**Key decisions a reviewer should scrutinize:** all denominators are PIT circ_mv (free-float) → factor ids use `*_to_circ_mv`, NOT canonical book-to-market/EV; `roa_ttm` is a profitability proxy (NOT Novy-Marx/FF5; lowest novelty, overlaps the falsified ROE-quality line); `low_beta`/`low_max` are low-risk-family, correlated with the falsified `low_volatility`; `momentum_12_1` expected weak in China; BH-FDR controls within-batch only and **cannot uncount the 5 prior spent singletons** (survivor = program-level (5+k)-th test); honest power note: at m=10, q=0.10 needs the best p ≤ ~0.01 (t≳2.6), so a dry batch is the likely + acceptable outcome that triggers the stopping rule.
+
+**Verification (internal)**: batch prereg-schema suite **18/18 OK**; route-doc guard **11/11**; full suite **1124/1124**; field-verification confirmed inputs present/absent as above. UNSPENT ledger; no fetch / run / spend.
+
+**Boundary**: registers a frozen batch DESIGN only; executes no search, fetches nothing, spends nothing. Durable `docs/README` / `research/README` pointer rows are deferred to the post-PASS commit (matching the ep_value pattern).
+
+**Next**: Codex `审查` of the batch design slice (prereg + schema + ledger + tests). After PASS → Claude `提交`; then a separate batch signal-search RUNNER slice (its own review/commit/execute) spends the singleton once.
+
+---
+
 ## 2026-06-08 — Claude `提交` (ep_value result-closeout + route-doc drift root fix, post-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required, no Optional; the four route-doc drift entries marked `resolved`; boundary = commit the closeout/process-fix tree only). Re-read SESSION_LOG top + git status + register before committing per discipline.
