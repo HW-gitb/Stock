@@ -1,0 +1,1434 @@
+{
+  "schema_name": "a_short_iv_feed",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-10T22:24:22+08:00",
+  "as_of": "20260609",
+  "underlying": "510050.SH",
+  "params": {
+    "risk_free": 0.02,
+    "div_yield": 0.0,
+    "const_maturity_days": 30,
+    "min_t_days": 5,
+    "roll_window": 252,
+    "min_roll_obs": 60
+  },
+  "n_days": 282,
+  "series": [
+    {
+      "trade_date": "20250410",
+      "iv_value": 0.182272,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250411",
+      "iv_value": 0.179408,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250414",
+      "iv_value": 0.158277,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250415",
+      "iv_value": 0.147131,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250416",
+      "iv_value": 0.14892,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250417",
+      "iv_value": 0.144556,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250418",
+      "iv_value": 0.142471,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250421",
+      "iv_value": 0.14174,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250422",
+      "iv_value": 0.139357,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250423",
+      "iv_value": 0.136786,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250424",
+      "iv_value": 0.135833,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250425",
+      "iv_value": 0.136194,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250428",
+      "iv_value": 0.137967,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250429",
+      "iv_value": 0.136533,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250430",
+      "iv_value": 0.145206,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250506",
+      "iv_value": 0.130972,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250507",
+      "iv_value": 0.129319,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250508",
+      "iv_value": 0.125754,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250509",
+      "iv_value": 0.127275,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250512",
+      "iv_value": 0.136529,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250513",
+      "iv_value": 0.126965,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250514",
+      "iv_value": 0.147218,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250515",
+      "iv_value": 0.13992,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250516",
+      "iv_value": 0.128928,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250519",
+      "iv_value": 0.120849,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250520",
+      "iv_value": 0.128227,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250521",
+      "iv_value": 0.128281,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250522",
+      "iv_value": 0.133893,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250523",
+      "iv_value": 0.137798,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250526",
+      "iv_value": 0.13009,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250527",
+      "iv_value": 0.130593,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250528",
+      "iv_value": 0.133366,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250529",
+      "iv_value": 0.130863,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250530",
+      "iv_value": 0.128885,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250603",
+      "iv_value": 0.128961,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250604",
+      "iv_value": 0.128018,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250605",
+      "iv_value": 0.130357,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250606",
+      "iv_value": 0.127765,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250609",
+      "iv_value": 0.132065,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250610",
+      "iv_value": 0.131129,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250611",
+      "iv_value": 0.131371,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250612",
+      "iv_value": 0.131676,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250613",
+      "iv_value": 0.13505,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250616",
+      "iv_value": 0.129055,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250617",
+      "iv_value": 0.129728,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250618",
+      "iv_value": 0.131005,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250619",
+      "iv_value": 0.133488,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250620",
+      "iv_value": 0.123331,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250623",
+      "iv_value": 0.122528,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250624",
+      "iv_value": 0.127244,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250625",
+      "iv_value": 0.156966,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250626",
+      "iv_value": 0.141126,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250627",
+      "iv_value": 0.127572,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250630",
+      "iv_value": 0.127004,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250701",
+      "iv_value": 0.126542,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250702",
+      "iv_value": 0.124324,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250703",
+      "iv_value": 0.124044,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250704",
+      "iv_value": 0.126378,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250707",
+      "iv_value": 0.131091,
+      "iv_percentile_252d": null
+    },
+    {
+      "trade_date": "20250708",
+      "iv_value": 0.134109,
+      "iv_percentile_252d": 63.3333
+    },
+    {
+      "trade_date": "20250709",
+      "iv_value": 0.1368,
+      "iv_percentile_252d": 73.7705
+    },
+    {
+      "trade_date": "20250710",
+      "iv_value": 0.1385,
+      "iv_percentile_252d": 77.4194
+    },
+    {
+      "trade_date": "20250711",
+      "iv_value": 0.145104,
+      "iv_percentile_252d": 87.3016
+    },
+    {
+      "trade_date": "20250714",
+      "iv_value": 0.14704,
+      "iv_percentile_252d": 89.0625
+    },
+    {
+      "trade_date": "20250715",
+      "iv_value": 0.137273,
+      "iv_percentile_252d": 70.7692
+    },
+    {
+      "trade_date": "20250716",
+      "iv_value": 0.136837,
+      "iv_percentile_252d": 69.697
+    },
+    {
+      "trade_date": "20250717",
+      "iv_value": 0.138232,
+      "iv_percentile_252d": 74.6269
+    },
+    {
+      "trade_date": "20250718",
+      "iv_value": 0.13521,
+      "iv_percentile_252d": 58.8235
+    },
+    {
+      "trade_date": "20250721",
+      "iv_value": 0.141907,
+      "iv_percentile_252d": 82.6087
+    },
+    {
+      "trade_date": "20250722",
+      "iv_value": 0.140299,
+      "iv_percentile_252d": 78.5714
+    },
+    {
+      "trade_date": "20250723",
+      "iv_value": 0.158322,
+      "iv_percentile_252d": 97.1831
+    },
+    {
+      "trade_date": "20250724",
+      "iv_value": 0.157673,
+      "iv_percentile_252d": 94.4444
+    },
+    {
+      "trade_date": "20250725",
+      "iv_value": 0.15361,
+      "iv_percentile_252d": 91.7808
+    },
+    {
+      "trade_date": "20250728",
+      "iv_value": 0.162912,
+      "iv_percentile_252d": 97.2973
+    },
+    {
+      "trade_date": "20250729",
+      "iv_value": 0.161659,
+      "iv_percentile_252d": 96.0
+    },
+    {
+      "trade_date": "20250730",
+      "iv_value": 0.153514,
+      "iv_percentile_252d": 88.1579
+    },
+    {
+      "trade_date": "20250731",
+      "iv_value": 0.1508,
+      "iv_percentile_252d": 87.013
+    },
+    {
+      "trade_date": "20250801",
+      "iv_value": 0.142778,
+      "iv_percentile_252d": 76.9231
+    },
+    {
+      "trade_date": "20250804",
+      "iv_value": 0.13901,
+      "iv_percentile_252d": 67.0886
+    },
+    {
+      "trade_date": "20250805",
+      "iv_value": 0.135904,
+      "iv_percentile_252d": 52.5
+    },
+    {
+      "trade_date": "20250806",
+      "iv_value": 0.135114,
+      "iv_percentile_252d": 49.3827
+    },
+    {
+      "trade_date": "20250807",
+      "iv_value": 0.134642,
+      "iv_percentile_252d": 47.561
+    },
+    {
+      "trade_date": "20250808",
+      "iv_value": 0.132501,
+      "iv_percentile_252d": 42.1687
+    },
+    {
+      "trade_date": "20250811",
+      "iv_value": 0.137698,
+      "iv_percentile_252d": 63.0952
+    },
+    {
+      "trade_date": "20250812",
+      "iv_value": 0.14244,
+      "iv_percentile_252d": 76.4706
+    },
+    {
+      "trade_date": "20250813",
+      "iv_value": 0.152967,
+      "iv_percentile_252d": 88.3721
+    },
+    {
+      "trade_date": "20250814",
+      "iv_value": 0.15107,
+      "iv_percentile_252d": 87.3563
+    },
+    {
+      "trade_date": "20250815",
+      "iv_value": 0.169163,
+      "iv_percentile_252d": 97.7273
+    },
+    {
+      "trade_date": "20250818",
+      "iv_value": 0.188614,
+      "iv_percentile_252d": 100.0
+    },
+    {
+      "trade_date": "20250819",
+      "iv_value": 0.179731,
+      "iv_percentile_252d": 97.7778
+    },
+    {
+      "trade_date": "20250820",
+      "iv_value": 0.193295,
+      "iv_percentile_252d": 100.0
+    },
+    {
+      "trade_date": "20250821",
+      "iv_value": 0.188989,
+      "iv_percentile_252d": 98.913
+    },
+    {
+      "trade_date": "20250822",
+      "iv_value": 0.209198,
+      "iv_percentile_252d": 100.0
+    },
+    {
+      "trade_date": "20250825",
+      "iv_value": 0.236949,
+      "iv_percentile_252d": 100.0
+    },
+    {
+      "trade_date": "20250826",
+      "iv_value": 0.232364,
+      "iv_percentile_252d": 98.9474
+    },
+    {
+      "trade_date": "20250827",
+      "iv_value": 0.226076,
+      "iv_percentile_252d": 97.9167
+    },
+    {
+      "trade_date": "20250828",
+      "iv_value": 0.227668,
+      "iv_percentile_252d": 97.9381
+    },
+    {
+      "trade_date": "20250829",
+      "iv_value": 0.220968,
+      "iv_percentile_252d": 95.9184
+    },
+    {
+      "trade_date": "20250901",
+      "iv_value": 0.206228,
+      "iv_percentile_252d": 93.9394
+    },
+    {
+      "trade_date": "20250902",
+      "iv_value": 0.205042,
+      "iv_percentile_252d": 93.0
+    },
+    {
+      "trade_date": "20250903",
+      "iv_value": 0.197966,
+      "iv_percentile_252d": 92.0792
+    },
+    {
+      "trade_date": "20250904",
+      "iv_value": 0.197012,
+      "iv_percentile_252d": 91.1765
+    },
+    {
+      "trade_date": "20250905",
+      "iv_value": 0.185513,
+      "iv_percentile_252d": 87.3786
+    },
+    {
+      "trade_date": "20250908",
+      "iv_value": 0.183693,
+      "iv_percentile_252d": 86.5385
+    },
+    {
+      "trade_date": "20250909",
+      "iv_value": 0.17586,
+      "iv_percentile_252d": 82.8571
+    },
+    {
+      "trade_date": "20250910",
+      "iv_value": 0.165063,
+      "iv_percentile_252d": 81.1321
+    },
+    {
+      "trade_date": "20250911",
+      "iv_value": 0.172337,
+      "iv_percentile_252d": 82.243
+    },
+    {
+      "trade_date": "20250912",
+      "iv_value": 0.168147,
+      "iv_percentile_252d": 80.5556
+    },
+    {
+      "trade_date": "20250915",
+      "iv_value": 0.176347,
+      "iv_percentile_252d": 83.4862
+    },
+    {
+      "trade_date": "20250916",
+      "iv_value": 0.184795,
+      "iv_percentile_252d": 87.2727
+    },
+    {
+      "trade_date": "20250917",
+      "iv_value": 0.193025,
+      "iv_percentile_252d": 90.0901
+    },
+    {
+      "trade_date": "20250918",
+      "iv_value": 0.180154,
+      "iv_percentile_252d": 83.9286
+    },
+    {
+      "trade_date": "20250919",
+      "iv_value": 0.171439,
+      "iv_percentile_252d": 78.7611
+    },
+    {
+      "trade_date": "20250922",
+      "iv_value": 0.17432,
+      "iv_percentile_252d": 79.8246
+    },
+    {
+      "trade_date": "20250923",
+      "iv_value": 0.169202,
+      "iv_percentile_252d": 77.3913
+    },
+    {
+      "trade_date": "20250924",
+      "iv_value": 0.166575,
+      "iv_percentile_252d": 75.0
+    },
+    {
+      "trade_date": "20250925",
+      "iv_value": 0.153639,
+      "iv_percentile_252d": 68.3761
+    },
+    {
+      "trade_date": "20250926",
+      "iv_value": 0.158589,
+      "iv_percentile_252d": 72.0339
+    },
+    {
+      "trade_date": "20250929",
+      "iv_value": 0.165316,
+      "iv_percentile_252d": 74.7899
+    },
+    {
+      "trade_date": "20250930",
+      "iv_value": 0.15994,
+      "iv_percentile_252d": 71.6667
+    },
+    {
+      "trade_date": "20251009",
+      "iv_value": 0.164407,
+      "iv_percentile_252d": 73.5537
+    },
+    {
+      "trade_date": "20251010",
+      "iv_value": 0.172141,
+      "iv_percentile_252d": 79.5082
+    },
+    {
+      "trade_date": "20251013",
+      "iv_value": 0.186971,
+      "iv_percentile_252d": 88.6179
+    },
+    {
+      "trade_date": "20251014",
+      "iv_value": 0.184531,
+      "iv_percentile_252d": 86.2903
+    },
+    {
+      "trade_date": "20251015",
+      "iv_value": 0.17207,
+      "iv_percentile_252d": 77.6
+    },
+    {
+      "trade_date": "20251016",
+      "iv_value": 0.168072,
+      "iv_percentile_252d": 73.8095
+    },
+    {
+      "trade_date": "20251017",
+      "iv_value": 0.175321,
+      "iv_percentile_252d": 80.315
+    },
+    {
+      "trade_date": "20251020",
+      "iv_value": 0.169527,
+      "iv_percentile_252d": 75.7812
+    },
+    {
+      "trade_date": "20251021",
+      "iv_value": 0.156398,
+      "iv_percentile_252d": 62.7907
+    },
+    {
+      "trade_date": "20251022",
+      "iv_value": 0.154601,
+      "iv_percentile_252d": 62.3077
+    },
+    {
+      "trade_date": "20251023",
+      "iv_value": 0.157264,
+      "iv_percentile_252d": 64.1221
+    },
+    {
+      "trade_date": "20251024",
+      "iv_value": 0.153508,
+      "iv_percentile_252d": 59.0909
+    },
+    {
+      "trade_date": "20251027",
+      "iv_value": 0.152924,
+      "iv_percentile_252d": 57.8947
+    },
+    {
+      "trade_date": "20251028",
+      "iv_value": 0.154189,
+      "iv_percentile_252d": 61.9403
+    },
+    {
+      "trade_date": "20251029",
+      "iv_value": 0.157051,
+      "iv_percentile_252d": 64.4444
+    },
+    {
+      "trade_date": "20251030",
+      "iv_value": 0.157221,
+      "iv_percentile_252d": 64.7059
+    },
+    {
+      "trade_date": "20251031",
+      "iv_value": 0.156985,
+      "iv_percentile_252d": 63.5036
+    },
+    {
+      "trade_date": "20251103",
+      "iv_value": 0.157289,
+      "iv_percentile_252d": 65.942
+    },
+    {
+      "trade_date": "20251104",
+      "iv_value": 0.15773,
+      "iv_percentile_252d": 66.9065
+    },
+    {
+      "trade_date": "20251105",
+      "iv_value": 0.154597,
+      "iv_percentile_252d": 60.0
+    },
+    {
+      "trade_date": "20251106",
+      "iv_value": 0.163925,
+      "iv_percentile_252d": 71.6312
+    },
+    {
+      "trade_date": "20251107",
+      "iv_value": 0.164395,
+      "iv_percentile_252d": 71.831
+    },
+    {
+      "trade_date": "20251110",
+      "iv_value": 0.172347,
+      "iv_percentile_252d": 81.1189
+    },
+    {
+      "trade_date": "20251111",
+      "iv_value": 0.185844,
+      "iv_percentile_252d": 89.5833
+    },
+    {
+      "trade_date": "20251112",
+      "iv_value": 0.181885,
+      "iv_percentile_252d": 85.5172
+    },
+    {
+      "trade_date": "20251113",
+      "iv_value": 0.166249,
+      "iv_percentile_252d": 72.6027
+    },
+    {
+      "trade_date": "20251114",
+      "iv_value": 0.184496,
+      "iv_percentile_252d": 87.0748
+    },
+    {
+      "trade_date": "20251117",
+      "iv_value": 0.262378,
+      "iv_percentile_252d": 100.0
+    },
+    {
+      "trade_date": "20251118",
+      "iv_value": 0.162356,
+      "iv_percentile_252d": 67.1141
+    },
+    {
+      "trade_date": "20251119",
+      "iv_value": 0.267423,
+      "iv_percentile_252d": 100.0
+    },
+    {
+      "trade_date": "20251120",
+      "iv_value": 0.268335,
+      "iv_percentile_252d": 100.0
+    },
+    {
+      "trade_date": "20251121",
+      "iv_value": 0.199178,
+      "iv_percentile_252d": 92.7632
+    },
+    {
+      "trade_date": "20251124",
+      "iv_value": 0.194781,
+      "iv_percentile_252d": 90.8497
+    },
+    {
+      "trade_date": "20251125",
+      "iv_value": 0.174499,
+      "iv_percentile_252d": 77.9221
+    },
+    {
+      "trade_date": "20251126",
+      "iv_value": 0.165394,
+      "iv_percentile_252d": 69.0323
+    },
+    {
+      "trade_date": "20251127",
+      "iv_value": 0.163075,
+      "iv_percentile_252d": 65.3846
+    },
+    {
+      "trade_date": "20251128",
+      "iv_value": 0.162296,
+      "iv_percentile_252d": 63.6943
+    },
+    {
+      "trade_date": "20251201",
+      "iv_value": 0.231074,
+      "iv_percentile_252d": 96.8354
+    },
+    {
+      "trade_date": "20251202",
+      "iv_value": 0.150033,
+      "iv_percentile_252d": 47.1698
+    },
+    {
+      "trade_date": "20251203",
+      "iv_value": 0.164292,
+      "iv_percentile_252d": 66.25
+    },
+    {
+      "trade_date": "20251204",
+      "iv_value": 0.155975,
+      "iv_percentile_252d": 54.0373
+    },
+    {
+      "trade_date": "20251205",
+      "iv_value": 0.204881,
+      "iv_percentile_252d": 92.5926
+    },
+    {
+      "trade_date": "20251208",
+      "iv_value": 0.237564,
+      "iv_percentile_252d": 98.1595
+    },
+    {
+      "trade_date": "20251209",
+      "iv_value": 0.198774,
+      "iv_percentile_252d": 90.8537
+    },
+    {
+      "trade_date": "20251210",
+      "iv_value": 0.212181,
+      "iv_percentile_252d": 93.9394
+    },
+    {
+      "trade_date": "20251211",
+      "iv_value": 0.159633,
+      "iv_percentile_252d": 60.241
+    },
+    {
+      "trade_date": "20251212",
+      "iv_value": 0.192318,
+      "iv_percentile_252d": 86.8263
+    },
+    {
+      "trade_date": "20251215",
+      "iv_value": 0.188478,
+      "iv_percentile_252d": 85.119
+    },
+    {
+      "trade_date": "20251216",
+      "iv_value": 0.181644,
+      "iv_percentile_252d": 79.2899
+    },
+    {
+      "trade_date": "20251217",
+      "iv_value": 0.128059,
+      "iv_percentile_252d": 9.4118
+    },
+    {
+      "trade_date": "20251218",
+      "iv_value": 0.132479,
+      "iv_percentile_252d": 21.0526
+    },
+    {
+      "trade_date": "20251219",
+      "iv_value": 0.125483,
+      "iv_percentile_252d": 3.4884
+    },
+    {
+      "trade_date": "20251222",
+      "iv_value": 0.120525,
+      "iv_percentile_252d": 0.578
+    },
+    {
+      "trade_date": "20251223",
+      "iv_value": 0.115168,
+      "iv_percentile_252d": 0.5747
+    },
+    {
+      "trade_date": "20251224",
+      "iv_value": 0.121324,
+      "iv_percentile_252d": 2.2857
+    },
+    {
+      "trade_date": "20251225",
+      "iv_value": 0.1167,
+      "iv_percentile_252d": 1.1364
+    },
+    {
+      "trade_date": "20251226",
+      "iv_value": 0.121532,
+      "iv_percentile_252d": 3.3898
+    },
+    {
+      "trade_date": "20251229",
+      "iv_value": 0.125193,
+      "iv_percentile_252d": 6.1798
+    },
+    {
+      "trade_date": "20251230",
+      "iv_value": 0.129245,
+      "iv_percentile_252d": 16.7598
+    },
+    {
+      "trade_date": "20251231",
+      "iv_value": 0.127328,
+      "iv_percentile_252d": 11.1111
+    },
+    {
+      "trade_date": "20260105",
+      "iv_value": 0.137752,
+      "iv_percentile_252d": 35.9116
+    },
+    {
+      "trade_date": "20260106",
+      "iv_value": 0.161513,
+      "iv_percentile_252d": 62.6374
+    },
+    {
+      "trade_date": "20260107",
+      "iv_value": 0.156497,
+      "iv_percentile_252d": 55.1913
+    },
+    {
+      "trade_date": "20260108",
+      "iv_value": 0.153268,
+      "iv_percentile_252d": 50.0
+    },
+    {
+      "trade_date": "20260109",
+      "iv_value": 0.157521,
+      "iv_percentile_252d": 58.9189
+    },
+    {
+      "trade_date": "20260112",
+      "iv_value": 0.18166,
+      "iv_percentile_252d": 81.1828
+    },
+    {
+      "trade_date": "20260113",
+      "iv_value": 0.172692,
+      "iv_percentile_252d": 75.9358
+    },
+    {
+      "trade_date": "20260114",
+      "iv_value": 0.168758,
+      "iv_percentile_252d": 71.2766
+    },
+    {
+      "trade_date": "20260115",
+      "iv_value": 0.15319,
+      "iv_percentile_252d": 48.6772
+    },
+    {
+      "trade_date": "20260116",
+      "iv_value": 0.155488,
+      "iv_percentile_252d": 53.1579
+    },
+    {
+      "trade_date": "20260119",
+      "iv_value": 0.140469,
+      "iv_percentile_252d": 38.7435
+    },
+    {
+      "trade_date": "20260120",
+      "iv_value": 0.13384,
+      "iv_percentile_252d": 25.5208
+    },
+    {
+      "trade_date": "20260121",
+      "iv_value": 0.137689,
+      "iv_percentile_252d": 33.6788
+    },
+    {
+      "trade_date": "20260122",
+      "iv_value": 0.139991,
+      "iv_percentile_252d": 38.6598
+    },
+    {
+      "trade_date": "20260123",
+      "iv_value": 0.154854,
+      "iv_percentile_252d": 53.8462
+    },
+    {
+      "trade_date": "20260126",
+      "iv_value": 0.166614,
+      "iv_percentile_252d": 70.9184
+    },
+    {
+      "trade_date": "20260127",
+      "iv_value": 0.156974,
+      "iv_percentile_252d": 56.3452
+    },
+    {
+      "trade_date": "20260128",
+      "iv_value": 0.159085,
+      "iv_percentile_252d": 62.1212
+    },
+    {
+      "trade_date": "20260129",
+      "iv_value": 0.164761,
+      "iv_percentile_252d": 68.3417
+    },
+    {
+      "trade_date": "20260130",
+      "iv_value": 0.167688,
+      "iv_percentile_252d": 71.5
+    },
+    {
+      "trade_date": "20260202",
+      "iv_value": 0.215091,
+      "iv_percentile_252d": 95.0249
+    },
+    {
+      "trade_date": "20260203",
+      "iv_value": 0.176132,
+      "iv_percentile_252d": 79.2079
+    },
+    {
+      "trade_date": "20260204",
+      "iv_value": 0.156372,
+      "iv_percentile_252d": 53.202
+    },
+    {
+      "trade_date": "20260205",
+      "iv_value": 0.157401,
+      "iv_percentile_252d": 57.8431
+    },
+    {
+      "trade_date": "20260206",
+      "iv_value": 0.158906,
+      "iv_percentile_252d": 60.9756
+    },
+    {
+      "trade_date": "20260209",
+      "iv_value": 0.157128,
+      "iv_percentile_252d": 55.8252
+    },
+    {
+      "trade_date": "20260210",
+      "iv_value": 0.14907,
+      "iv_percentile_252d": 43.9614
+    },
+    {
+      "trade_date": "20260211",
+      "iv_value": 0.150859,
+      "iv_percentile_252d": 45.1923
+    },
+    {
+      "trade_date": "20260212",
+      "iv_value": 0.149968,
+      "iv_percentile_252d": 44.0191
+    },
+    {
+      "trade_date": "20260213",
+      "iv_value": 0.151542,
+      "iv_percentile_252d": 46.1905
+    },
+    {
+      "trade_date": "20260224",
+      "iv_value": 0.143798,
+      "iv_percentile_252d": 39.8104
+    },
+    {
+      "trade_date": "20260225",
+      "iv_value": 0.135766,
+      "iv_percentile_252d": 26.4151
+    },
+    {
+      "trade_date": "20260226",
+      "iv_value": 0.130368,
+      "iv_percentile_252d": 16.9014
+    },
+    {
+      "trade_date": "20260227",
+      "iv_value": 0.125388,
+      "iv_percentile_252d": 5.6075
+    },
+    {
+      "trade_date": "20260302",
+      "iv_value": 0.135846,
+      "iv_percentile_252d": 27.907
+    },
+    {
+      "trade_date": "20260303",
+      "iv_value": 0.153005,
+      "iv_percentile_252d": 48.6111
+    },
+    {
+      "trade_date": "20260304",
+      "iv_value": 0.165906,
+      "iv_percentile_252d": 70.9677
+    },
+    {
+      "trade_date": "20260305",
+      "iv_value": 0.140648,
+      "iv_percentile_252d": 37.6147
+    },
+    {
+      "trade_date": "20260306",
+      "iv_value": 0.135303,
+      "iv_percentile_252d": 26.484
+    },
+    {
+      "trade_date": "20260309",
+      "iv_value": 0.160339,
+      "iv_percentile_252d": 64.5455
+    },
+    {
+      "trade_date": "20260310",
+      "iv_value": 0.141244,
+      "iv_percentile_252d": 38.4615
+    },
+    {
+      "trade_date": "20260311",
+      "iv_value": 0.140828,
+      "iv_percentile_252d": 37.8378
+    },
+    {
+      "trade_date": "20260312",
+      "iv_value": 0.147173,
+      "iv_percentile_252d": 43.9462
+    },
+    {
+      "trade_date": "20260313",
+      "iv_value": 0.158551,
+      "iv_percentile_252d": 62.5
+    },
+    {
+      "trade_date": "20260316",
+      "iv_value": 0.153926,
+      "iv_percentile_252d": 52.0
+    },
+    {
+      "trade_date": "20260317",
+      "iv_value": 0.154179,
+      "iv_percentile_252d": 52.2124
+    },
+    {
+      "trade_date": "20260318",
+      "iv_value": 0.146293,
+      "iv_percentile_252d": 42.2907
+    },
+    {
+      "trade_date": "20260319",
+      "iv_value": 0.159088,
+      "iv_percentile_252d": 64.4737
+    },
+    {
+      "trade_date": "20260320",
+      "iv_value": 0.174461,
+      "iv_percentile_252d": 79.9127
+    },
+    {
+      "trade_date": "20260323",
+      "iv_value": 0.248261,
+      "iv_percentile_252d": 98.6957
+    },
+    {
+      "trade_date": "20260324",
+      "iv_value": 0.18142,
+      "iv_percentile_252d": 83.1169
+    },
+    {
+      "trade_date": "20260325",
+      "iv_value": 0.153502,
+      "iv_percentile_252d": 49.1379
+    },
+    {
+      "trade_date": "20260326",
+      "iv_value": 0.165898,
+      "iv_percentile_252d": 71.2446
+    },
+    {
+      "trade_date": "20260327",
+      "iv_value": 0.160515,
+      "iv_percentile_252d": 64.9573
+    },
+    {
+      "trade_date": "20260330",
+      "iv_value": 0.169846,
+      "iv_percentile_252d": 76.1702
+    },
+    {
+      "trade_date": "20260331",
+      "iv_value": 0.165247,
+      "iv_percentile_252d": 69.9153
+    },
+    {
+      "trade_date": "20260401",
+      "iv_value": 0.145232,
+      "iv_percentile_252d": 40.5063
+    },
+    {
+      "trade_date": "20260402",
+      "iv_value": 0.154603,
+      "iv_percentile_252d": 52.521
+    },
+    {
+      "trade_date": "20260403",
+      "iv_value": 0.168404,
+      "iv_percentile_252d": 74.477
+    },
+    {
+      "trade_date": "20260407",
+      "iv_value": 0.161983,
+      "iv_percentile_252d": 65.4167
+    },
+    {
+      "trade_date": "20260408",
+      "iv_value": 0.144402,
+      "iv_percentile_252d": 38.5892
+    },
+    {
+      "trade_date": "20260409",
+      "iv_value": 0.140365,
+      "iv_percentile_252d": 33.8843
+    },
+    {
+      "trade_date": "20260410",
+      "iv_value": 0.143509,
+      "iv_percentile_252d": 38.2716
+    },
+    {
+      "trade_date": "20260413",
+      "iv_value": 0.144993,
+      "iv_percentile_252d": 39.7541
+    },
+    {
+      "trade_date": "20260414",
+      "iv_value": 0.144143,
+      "iv_percentile_252d": 38.7755
+    },
+    {
+      "trade_date": "20260415",
+      "iv_value": 0.143503,
+      "iv_percentile_252d": 37.8049
+    },
+    {
+      "trade_date": "20260416",
+      "iv_value": 0.144395,
+      "iv_percentile_252d": 39.2713
+    },
+    {
+      "trade_date": "20260417",
+      "iv_value": 0.139559,
+      "iv_percentile_252d": 31.8548
+    },
+    {
+      "trade_date": "20260420",
+      "iv_value": 0.135632,
+      "iv_percentile_252d": 23.6948
+    },
+    {
+      "trade_date": "20260421",
+      "iv_value": 0.132429,
+      "iv_percentile_252d": 18.8
+    },
+    {
+      "trade_date": "20260422",
+      "iv_value": 0.133358,
+      "iv_percentile_252d": 19.9203
+    },
+    {
+      "trade_date": "20260423",
+      "iv_value": 0.133102,
+      "iv_percentile_252d": 19.8413
+    },
+    {
+      "trade_date": "20260424",
+      "iv_value": 0.133094,
+      "iv_percentile_252d": 19.8413
+    },
+    {
+      "trade_date": "20260427",
+      "iv_value": 0.133141,
+      "iv_percentile_252d": 20.6349
+    },
+    {
+      "trade_date": "20260428",
+      "iv_value": 0.130562,
+      "iv_percentile_252d": 15.0794
+    },
+    {
+      "trade_date": "20260429",
+      "iv_value": 0.125897,
+      "iv_percentile_252d": 5.9524
+    },
+    {
+      "trade_date": "20260430",
+      "iv_value": 0.129743,
+      "iv_percentile_252d": 14.2857
+    },
+    {
+      "trade_date": "20260506",
+      "iv_value": 0.141287,
+      "iv_percentile_252d": 38.8889
+    },
+    {
+      "trade_date": "20260507",
+      "iv_value": 0.149481,
+      "iv_percentile_252d": 46.8254
+    },
+    {
+      "trade_date": "20260508",
+      "iv_value": 0.153833,
+      "iv_percentile_252d": 53.1746
+    },
+    {
+      "trade_date": "20260511",
+      "iv_value": 0.162742,
+      "iv_percentile_252d": 68.6508
+    },
+    {
+      "trade_date": "20260512",
+      "iv_value": 0.162624,
+      "iv_percentile_252d": 68.254
+    },
+    {
+      "trade_date": "20260513",
+      "iv_value": 0.16482,
+      "iv_percentile_252d": 71.4286
+    },
+    {
+      "trade_date": "20260514",
+      "iv_value": 0.158336,
+      "iv_percentile_252d": 61.9048
+    },
+    {
+      "trade_date": "20260515",
+      "iv_value": 0.160758,
+      "iv_percentile_252d": 65.4762
+    },
+    {
+      "trade_date": "20260518",
+      "iv_value": 0.161441,
+      "iv_percentile_252d": 65.4762
+    },
+    {
+      "trade_date": "20260519",
+      "iv_value": 0.152184,
+      "iv_percentile_252d": 46.4286
+    },
+    {
+      "trade_date": "20260520",
+      "iv_value": 0.150086,
+      "iv_percentile_252d": 44.4444
+    },
+    {
+      "trade_date": "20260521",
+      "iv_value": 0.160681,
+      "iv_percentile_252d": 64.6825
+    },
+    {
+      "trade_date": "20260522",
+      "iv_value": 0.153853,
+      "iv_percentile_252d": 50.3968
+    },
+    {
+      "trade_date": "20260525",
+      "iv_value": 0.152922,
+      "iv_percentile_252d": 45.6349
+    },
+    {
+      "trade_date": "20260526",
+      "iv_value": 0.156461,
+      "iv_percentile_252d": 54.7619
+    },
+    {
+      "trade_date": "20260527",
+      "iv_value": 0.172795,
+      "iv_percentile_252d": 80.9524
+    },
+    {
+      "trade_date": "20260528",
+      "iv_value": 0.16209,
+      "iv_percentile_252d": 66.2698
+    },
+    {
+      "trade_date": "20260529",
+      "iv_value": 0.165176,
+      "iv_percentile_252d": 71.4286
+    },
+    {
+      "trade_date": "20260601",
+      "iv_value": 0.168244,
+      "iv_percentile_252d": 75.7937
+    },
+    {
+      "trade_date": "20260602",
+      "iv_value": 0.159122,
+      "iv_percentile_252d": 61.1111
+    },
+    {
+      "trade_date": "20260603",
+      "iv_value": 0.156101,
+      "iv_percentile_252d": 51.5873
+    },
+    {
+      "trade_date": "20260604",
+      "iv_value": 0.157252,
+      "iv_percentile_252d": 55.5556
+    },
+    {
+      "trade_date": "20260605",
+      "iv_value": 0.162268,
+      "iv_percentile_252d": 65.4762
+    },
+    {
+      "trade_date": "20260608",
+      "iv_value": 0.17586,
+      "iv_percentile_252d": 82.9365
+    },
+    {
+      "trade_date": "20260609",
+      "iv_value": 0.163307,
+      "iv_percentile_252d": 67.4603
+    }
+  ],
+  "boundary": {
+    "production": false,
+    "real_money": false,
+    "satisfies_ship_gate": false,
+    "iv_method": "bs_atm_constant_maturity_feasibility_grade"
+  }
+}

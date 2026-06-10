@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-06-10 — Claude `执行` (A-short IV feed BUILD backfill, live Tushare, user-authorized) — **DONE → real 252d IV feed built**
+
+**Authorization**: user `执行下一步` (after committing batch ① `1dc4c0d`). Ran `runners.a_short_iv_feed_build --as-of 20260609 --out research/results/a_short_iv_feed_20260609/iv_feed.json --confirm-fetch-authorized` against **live Tushare** (sandbox disabled for this authorized fetch). HEAD `1dc4c0d`; TUSHARE_TOKEN set.
+
+**Result (`research/results/a_short_iv_feed_20260609/iv_feed.json`)** — build validated end-to-end on REAL data, no provider error:
+- fetch: opt_basic 11,814 / opt_daily 176,250 rows over **282 trade dates** / fund_daily 332.
+- **n_days=282** (every trade date produced a constant-maturity IV); **iv_value 0.1152 / mean 0.1562 / 0.2683** (50ETF IV ~11.5–26.8%, realistic); latest 2026-06-09 IV **0.1633 → 252d percentile 67.46**; 223 days carry a non-null percentile (first ~59 < MIN_ROLL_OBS=60 → null, as designed).
+
+**Decision impact**: the IV feed is real, sane, and consumable → Slice B's IV layer (Rule 3 / M0.5 / M1) can run live on it. BS-inversion + ATM + 30d constant-maturity + 252d percentile all confirmed on live option chains.
+
+**Boundary**: feed artifact only (`boundary` all-false: not production / real money / ship-gate); feasibility-grade r/q. Read-only Tushare fetch. No production scoring change; V14.2 + egs_main untouched.
+
+**Next**: commit this execution result (closeout). Then **batch ② = weekly pipeline** (wire EGS top-N → Slice A overlay → this IV feed → Phase 5 engine → weekly M6.7 report); this also closes the standing P2 consumer-validation item (the pipeline reader must call the validators).
+
+---
+
 ## 2026-06-10 — Claude `提交` (A-short batch ①: IV feed build + Slice B Phase 5 engine, post re-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交并执行下一步` after Codex re-`审查` **PASS** (entry below; no Required). Re-read SESSION_LOG top + Codex verdict + git status + register before committing (HEAD `84044dd`; all 4 batch① register entries already `resolved` by Codex; standing P2 consumer-validation stays open).
