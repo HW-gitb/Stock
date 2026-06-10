@@ -374,10 +374,12 @@ def _safe_pro_call(pro, method: str, **kw):
                                 "error_category": _categorize_error(exc)}
 
 
-def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40):
+def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40, max_trade_dates: int = 25):
     """执行期:拉 SSE 期权合约/行情 + 510050 标的价。返回 (opt_basic, opt_daily, underlier, report)。
     report 含 per-endpoint sanitized status + had_provider_error(任一端点抛异常即 True),
-    供 main 区分 provider 失败(中止、不写 summary) vs 真·覆盖不足(写 not-computable)。"""
+    供 main 区分 provider 失败(中止、不写 summary) vs 真·覆盖不足(写 not-computable)。
+    `max_trade_dates` 截取最近 N 个交易日的 opt_daily:probe 默认 25(smoke);IV-feed build 传大值
+    (≥ ROLL_WINDOW)以便算 252d 分位(R-ASHORT-IVFEED-BUILD-FETCH-WINDOW-NO-PERCENTILE)。"""
     from datetime import datetime, timedelta
     start = (datetime.strptime(as_of, "%Y%m%d") - timedelta(days=lookback_days)).strftime("%Y%m%d")
     statuses = []
@@ -386,7 +388,7 @@ def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40):
     statuses.append(s)
     cal, s = _safe_pro_call(pro, "trade_cal", exchange="SSE", start_date=start, end_date=as_of, is_open="1")
     statuses.append(s)
-    dates = sorted(cal["cal_date"].astype(str).tolist())[-25:] if ("cal_date" in cal.columns and not cal.empty) else []
+    dates = sorted(cal["cal_date"].astype(str).tolist())[-max_trade_dates:] if ("cal_date" in cal.columns and not cal.empty) else []
     frames = []
     for d in dates:
         od, s = _safe_pro_call(pro, "opt_daily", trade_date=d, exchange="SSE",

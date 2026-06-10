@@ -1,0 +1,44 @@
+{
+  "schema_name": "a_short_phase5_engine_governance",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-10T00:00:00+00:00",
+  "scope": {
+    "phase": "a_short_phase5_engine",
+    "purpose": "freeze Phase 5 engine buy/size thresholds (parameterized + governed; parent design §4)",
+    "production": false,
+    "real_money": false,
+    "egs_main_runtime_changed": false
+  },
+  "source_refs": [
+    {"artifact_id": "engine", "path": "runners/a_short_phase5_engine.py",
+     "consumption_role": "Runtime source of the thresholds; parity test mirrors GOVERNANCE literally."},
+    {"artifact_id": "parent_design", "path": "docs/a_short_theme_overlay_phase5_design_spec_20260610.md",
+     "consumption_role": "§4 mandates buy/size thresholds be parameterized + governed."}
+  ],
+  "governance": {
+    "atr_mult": {"进攻期": 1.75, "震荡期": 1.25, "防御期": 1.0, "收缩期": 1.25},
+    "rr_floor": {"进攻期": 1.5, "震荡期": 1.5, "防御期": 2.0, "收缩期": 1.5},
+    "single_cap_pct": {"进攻期": 0.5, "震荡期": 0.4, "防御期": 0.25, "收缩期": 0.0},
+    "iv_halve_pct": 80.0,
+    "iv_nobuild_pct": 90.0,
+    "overheat_5d": 8.0,
+    "overheat_20d": 22.0,
+    "min_avg_amount_5d": 50000000.0,
+    "lowxi_band": 0.015,
+    "support_lookback": 20,
+    "resistance_lookback": 20,
+    "min_shares": 100,
+    "min_amount": 10000.0,
+    "impact_cost_frac": 0.005
+  },
+  "parity_rules": {
+    "runtime_source": "runners/a_short_phase5_engine.py::GOVERNANCE",
+    "exact_value_match_required": true,
+    "threshold_change_requires_reviewed_artifact_update": true
+  },
+  "limitations": [
+    "Phase 5 engine is deterministic decision logic; A-short edge is UNVALIDATED (risk_filter_only) — M6.7 advice is discretionary, not a validated alpha signal.",
+    "Probe shows tentative-position default (cap x0.5); thresholds are feasibility/discipline-grade, to be backtested/forward-validated before any production trust.",
+    "Does not change EGS production scoring; no real money; no broker/order automation; V14.2 reference frozen."
+  ]
+}

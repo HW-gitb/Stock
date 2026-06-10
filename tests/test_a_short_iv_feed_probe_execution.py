@@ -180,6 +180,13 @@ class FetchLineageTests(unittest.TestCase):
         self.assertEqual(report["opt_basic_rows"], 40)
         self.assertEqual(report["underlier_rows"], 20)
 
+    def test_max_trade_dates_param_widens_window(self):
+        b = _good_pro_behaviors()
+        b["trade_cal"] = pd.DataFrame({"cal_date": [f"2026{m:02d}{d:02d}"
+                                                    for m in (1, 2, 3) for d in range(1, 29)]})  # 84 dates
+        _, _, _, rep = fetch_probe_inputs(_FakePro(b), "20260331", lookback_days=200, max_trade_dates=300)
+        self.assertGreater(rep["trade_dates_probed"], 25)   # build path widens beyond probe's default 25
+
     def test_provider_exception_flagged_with_sanitized_status(self):
         b = _good_pro_behaviors()
         b["opt_basic"] = PermissionError("permission denied: tk.csv")

@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_iv_feed",
+  "description": "A-short 50ETF IV feed artifact: per PIT trade_date (<= as_of) a constant-maturity ATM IV (BS-inverted) + its 252d rolling percentile. Feasibility-grade (approx r/q); not production/ship-gate. Consumed by Slice B market_context.volatility.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "as_of", "underlying",
+               "params", "n_days", "series", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_iv_feed"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "underlying": {"const": "510050.SH"},
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["risk_free", "div_yield", "const_maturity_days", "min_t_days", "roll_window", "min_roll_obs"],
+      "properties": {
+        "risk_free": {"const": 0.02},
+        "div_yield": {"const": 0.0},
+        "const_maturity_days": {"const": 30},
+        "min_t_days": {"const": 5},
+        "roll_window": {"const": 252},
+        "min_roll_obs": {"const": 60}
+      }
+    },
+    "n_days": {"type": "integer", "minimum": 0},
+    "series": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["trade_date", "iv_value", "iv_percentile_252d"],
+        "properties": {
+          "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "iv_value": {"type": "number", "exclusiveMinimum": 0},
+          "iv_percentile_252d": {
+            "anyOf": [
+              {"type": "number", "minimum": 0, "maximum": 100},
+              {"type": "null"}
+            ]
+          }
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "real_money", "satisfies_ship_gate", "iv_method"],
+      "properties": {
+        "production": {"const": false},
+        "real_money": {"const": false},
+        "satisfies_ship_gate": {"const": false},
+        "iv_method": {"const": "bs_atm_constant_maturity_feasibility_grade"}
+      }
+    }
+  }
+}

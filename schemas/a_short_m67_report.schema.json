@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_m67_report",
+  "description": "A-short Phase 5 engine output. m67 = the ONLY user-facing section (精简结论区 + 执行清单 table); machine = hidden traceability (indicators / risk_families / layer / consumption). Non-production, edge UNVALIDATED — boundary all false.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "as_of", "ts_code", "name",
+               "m67", "machine", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_m67_report"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "ts_code": {"type": "string"},
+    "name": {"type": "string"},
+    "m67": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["精简结论区", "table"],
+      "properties": {
+        "精简结论区": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["当前环境", "波动率状态", "现价与成本", "否决审查触发",
+                       "板块资金事件", "风控触发", "操作建议"],
+          "properties": {
+            "当前环境": {"type": "string"},
+            "波动率状态": {"type": "string"},
+            "现价与成本": {"type": "string"},
+            "否决审查触发": {"type": "string"},
+            "板块资金事件": {"type": "string"},
+            "风控触发": {"type": "string"},
+            "操作建议": {"type": "string"}
+          }
+        },
+        "table": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["操作", "股数", "入", "盈一", "盈二", "损", "类型", "优先级", "触发条件"],
+          "properties": {
+            "操作": {"enum": ["建仓", "观察", "否决"]},
+            "股数": {"type": ["integer", "null"]},
+            "入": {"type": ["number", "null"]},
+            "盈一": {"type": ["number", "null"]},
+            "盈二": {"type": ["number", "null"]},
+            "损": {"type": ["number", "null"]},
+            "类型": {"type": "string"},
+            "优先级": {"type": "string"},
+            "触发条件": {"type": "string"}
+          }
+        }
+      }
+    },
+    "machine": {
+      "type": "object",
+      "required": ["indicators", "risk_families", "layer", "entry_exit_size_star", "iv_gate", "consumption"],
+      "properties": {
+        "indicators": {"type": "object"},
+        "risk_families": {"type": "object"},
+        "layer": {"type": "object"},
+        "entry_exit_size_star": {"type": "object"},
+        "iv_gate": {"type": "object"},
+        "consumption": {"type": "object"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "real_money", "is_validated_alpha", "satisfies_ship_gate"],
+      "properties": {
+        "production": {"const": false},
+        "real_money": {"const": false},
+        "is_validated_alpha": {"const": false},
+        "satisfies_ship_gate": {"const": false}
+      }
+    }
+  }
+}

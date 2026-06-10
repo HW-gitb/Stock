@@ -8,6 +8,202 @@
 
 ---
 
+## 2026-06-10 — Claude `提交` (A-short batch ①: IV feed build + Slice B Phase 5 engine, post re-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交并执行下一步` after Codex re-`审查` **PASS** (entry below; no Required). Re-read SESSION_LOG top + Codex verdict + git status + register before committing (HEAD `84044dd`; all 4 batch① register entries already `resolved` by Codex; standing P2 consumer-validation stays open).
+
+**Committed (one scope = batch ① = IV-feed build (part 1) + Slice B Phase 5 engine (part 2), local master, no push, ETF excluded)**: `runners/a_short_iv_feed_build.py` (BS-invert ATM → 30d CM → 252d pct → feed; fetch widened; aborts if no usable latest pct) + `runners/a_short_phase5_engine.py` (4-layer + 5 risk families + IV gate + entry/exit/size/star(试探仓) + M6.7-only + §4 invariants + IV-missing explicit + full plan-bind write contract) + `runners/a_short_iv_feed_probe.py` (M: `max_trade_dates` param) + `schemas/a_short_iv_feed.schema.json` + `schemas/a_short_m67_report.schema.json` + `presets/a_short_phase5_engine_governance_20260610.json` + `tests/test_a_short_iv_feed_build.py` + `tests/test_a_short_phase5_engine.py` + `tests/test_a_short_iv_feed_probe_execution.py` (M) + docs (README/design/register/this log). 140/140 batch tests. No production change; V14.2 + egs_main frozen.
+
+**State after commit**: IV-feed build + Phase 5 engine are review-passed + committed (pure cores + validated write paths). Both still need execution-time wiring: IV-feed build needs a user-authorized history-backfill `执行`; the Phase 5 engine needs batch ② (weekly pipeline) to feed it normalized inputs. A-short stays `risk_filter_only`; M6.7 advice is discretionary (not validated alpha).
+
+**Next**: per `执行下一步` — run the **IV-feed build backfill** (user-authorized live Tushare, `--confirm-fetch-authorized`) to produce the real 252d IV feed artifact + validate the build end-to-end on live data. Then batch ② = weekly pipeline.
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short batch ① full re-review: IV feed build + Phase 5 engine + route-doc repair) — **PASS**
+
+**Scope reviewed**: current uncommitted batch ① over tracked files `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_iv_feed_design_20260610.md`, `docs/system_risk_register.md`, `runners/a_short_iv_feed_probe.py`, `tests/test_a_short_iv_feed_probe_execution.py`, plus untracked batch files `runners/a_short_iv_feed_build.py`, `runners/a_short_phase5_engine.py`, `schemas/a_short_iv_feed.schema.json`, `schemas/a_short_m67_report.schema.json`, `presets/a_short_phase5_engine_governance_20260610.json`, `tests/test_a_short_iv_feed_build.py`, `tests/test_a_short_phase5_engine.py`; HEAD `84044dd`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production change / commit.
+
+**Verdict**: PASS. No Required findings. The earlier P0/P1 blockers are fixed in the working tree: IV build can widen beyond the probe's 25-day smoke window, missing/null IV is explicit observe-only plus conservative size reduction, official M6.7/IV write paths reject contradictory artifacts before writing, and the route docs no longer carry the stale "later slice" / `review 中` boundary.
+
+**Closed Required**:
+- `R-ASHORT-IVFEED-BUILD-FETCH-WINDOW-NO-PERCENTILE`: fixed; probe default remains 25, build path widens, 70-date fake build writes non-null latest percentile, 20-date build aborts/no file.
+- `R-ASHORT-PHASE5-IV-MISSING-FAIL-OPEN`: fixed; `iv={}` yields `observe_only_missing_feed`, visible observe marker, IV-unknown caveat, and smaller shares (`34400 -> 17200` in the independent probe).
+- `R-ASHORT-M67-IVFEED-OFFICIAL-WRITE-CONTRACT-GAPS`: fixed; writer-path mutations in `entry`, `t1`/`盈一`, `t2`/`盈二`, `stop`, and `shares` all raise before any file is written.
+- `R-ASHORT-IVFEED-DOCS-STALE-BUILD-BOUNDARY`: fixed; README points to the implemented next-row build, and the design doc separates **已实现** from **仍未来** without review-cycle wording.
+
+**Verification**:
+- Targeted batch suite passed: IV build + Phase 5 engine + IV probe/execution + overlay + route-doc guard = 140/140 OK.
+- `py_compile runners/a_short_iv_feed_build.py runners/a_short_phase5_engine.py runners/a_short_iv_feed_probe.py` OK.
+- JSON parse OK for `schemas/a_short_iv_feed.schema.json`, `schemas/a_short_m67_report.schema.json`, and `presets/a_short_phase5_engine_governance_20260610.json`.
+- `git diff --check` OK (CRLF warnings only).
+- Independent probes passed: M6.7 writer rejects all plan-field drift; IV-missing is conservative/explicit; IV build enough/too-few history cases behave correctly; invalid feed `as_of` rejects/no file; probe default/widened windows behave correctly; IV docs have no stale review/later wording.
+- Full `unittest discover -v` is not green in this environment: 1327 tests ran, 6 errors all from pre-existing `A-EGS/egs_main.py` import-time `ts.set_token(TOKEN)` write to `C:\\Users\\cnhea\\tk.csv`. This is outside the batch diff and remains a whole-repo verification limitation, not a batch ① blocker.
+
+**Register outcome**: `docs/system_risk_register.md` now marks the four batch ① Required IDs above as resolved. The standing P2 future reader-side obligation for `a_short_iv_feed_probe_summary` remains open because this batch does not introduce a consumer that reads that probe summary.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short batch ① — route-doc stale boundary wording) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex re-`审查` **FAIL** (entry below; write-contract P0 closed; 1 residual P1 = route-doc stale wording). Re-read SESSION_LOG top + git status before acting (HEAD `84044dd`). This is the recurring route-doc-state-duplication class ([[route-docs-state-duplication-trap]]) — I wrote review-cycle/stale boundary text into durable docs again.
+
+**Fixed (docs only):**
+- `docs/README.md` probe row: "full IV feed build is a later slice" → "full IV feed build is implemented in the next table row (batch ① part 1)" (was stale — the build is implemented + routed on the next row).
+- `docs/a_short_iv_feed_design_20260610.md` §5: removed the transient "review 中" from the **已实现** line (review-cycle status doesn't belong in a durable boundary section).
+
+**Verification**: route-doc guard 14/14; grep confirms no `review 中` / IV `later slice` left (the remaining "later slice" hit is the unrelated, still-true A-long value-yield capture-runner row). No code change (write-contract P0 already fixed prior round); batch① suite unchanged-green. V14.2 + egs_main frozen.
+
+**Register**: `R-ASHORT-IVFEED-DOCS-STALE-BUILD-BOUNDARY` fixed in tree; all batch① entries to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查` (whole batch ①); then Claude `提交`; then batch ② = weekly pipeline.
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short batch ① residual repair: plan-bind + IV doc boundary) — **FAIL**
+
+**Scope reviewed**: current uncommitted batch ① repair over tracked files `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_iv_feed_design_20260610.md`, `docs/system_risk_register.md`, `runners/a_short_iv_feed_probe.py`, `tests/test_a_short_iv_feed_probe_execution.py`, plus untracked batch files `runners/a_short_iv_feed_build.py`, `runners/a_short_phase5_engine.py`, `schemas/a_short_iv_feed.schema.json`, `schemas/a_short_m67_report.schema.json`, `presets/a_short_phase5_engine_governance_20260610.json`, `tests/test_a_short_iv_feed_build.py`, `tests/test_a_short_phase5_engine.py`; HEAD `84044dd`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production change / commit.
+
+**Verdict**: FAIL. The residual M6.7 write-contract P0 is fixed, but the route/spec documentation still contains stale or transient boundary wording that would be committed into durable docs.
+
+**Closed from prior Required**:
+- `R-ASHORT-M67-IVFEED-OFFICIAL-WRITE-CONTRACT-GAPS`: fixed in the working tree. `validate_m67_consistency()` now compares every trade field (`股数`, `入`, `盈一`, `盈二`, `损`) to `machine.entry_exit_size_star.plan`, and independent writer-path mutation probes confirmed drift in `entry`, `t1`, `t2`, `stop`, and `shares` all reject before writing.
+
+**Required**:
+- `R-ASHORT-IVFEED-DOCS-STALE-BUILD-BOUNDARY` remains open (P1, route-doc stability): `docs/a_short_iv_feed_design_20260610.md` fixed the original stale full-build lines, but `docs/README.md:64` still says "full IV feed build is a later slice" while `docs/README.md:65` routes to the implemented IV build artifact. Also `docs/a_short_iv_feed_design_20260610.md:43` says `已实现(代码+测试已落,review 中)`, which is review-cycle transient wording inside a durable design/boundary section and will be stale immediately after PASS/commit. Required repair: update the README probe row to refer to the now-implemented build row (or explicitly make the phrase historical), and remove/reword `review 中` in the design doc.
+
+**Verification**:
+- Targeted batch suite passed: IV build + Phase 5 engine + IV probe/execution + overlay + route-doc guard = 140/140 OK.
+- `py_compile runners/a_short_iv_feed_build.py runners/a_short_phase5_engine.py runners/a_short_iv_feed_probe.py` OK.
+- `git diff --check` OK (CRLF warnings only).
+- Independent probes confirmed: M6.7 writer rejects all plan-field drift including `盈一` / `盈二`; IV-missing still halves shares `34400 -> 17200` with observe marker; 70-date IV build writes latest pct `100.0`; 20-date IV build aborts/no file; invalid IV-feed `as_of` rejects/no file; probe default remains 25 while widened fetch reaches 84; original stale phrases in `docs/a_short_iv_feed_design_20260610.md` are gone and `已实现` / `仍未来` sections exist.
+- Full `unittest discover -v` remains not green in this environment: 1327 tests ran, 6 errors all from the pre-existing `A-EGS/egs_main.py` import-time `ts.set_token(TOKEN)` write to `C:\\Users\\cnhea\\tk.csv`. This is outside the batch diff but prevents a whole-repo green claim.
+
+**Register outcome**: `docs/system_risk_register.md` now marks the M6.7 write-contract P0 resolved in the working tree and keeps `R-ASHORT-IVFEED-DOCS-STALE-BUILD-BOUNDARY` open with the residual README / `review 中` route-doc issue.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short batch ① residual: 盈一/盈二 plan-bind + stale IV doc boundary) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex re-`审查` **FAIL** (entry below; 2 prior P0 closed, 2 residual). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `84044dd`).
+
+**Fixed:**
+- **R-ASHORT-M67-IVFEED-OFFICIAL-WRITE-CONTRACT-GAPS (residual P0)**: the 建仓 plan-match check now binds **every** trade field (股数/入/**盈一**/**盈二**/损) to `machine.plan` (was missing 盈一↔t1, 盈二↔t2 — a mutated target wrote). Added adversarial tests for 盈一 and 盈二 drift.
+- **R-ASHORT-IVFEED-DOCS-STALE-BUILD-BOUNDARY (P1)**: `docs/a_short_iv_feed_design_20260610.md` §4/§5 now clearly split **已实现**(probe `84044dd` + IV feed BUILD batch① part1: BS inversion / ATM / 30d CM / 252d pct / write_feed) vs **仍未来**(authorized history-backfill 执行; Slice B / 周末 pipeline wiring = 批②; backtest/forward validation). Removed the contradictory "全量构建/BS/252d/接Slice B = 后续切片" line.
+
+**Verification**: py_compile OK; **112/112** batch① (engine + IV build) + probe + execution + route-doc (self-ran); + the two prior closed P0 stay green. No live Tushare / fetch / production change; V14.2 + egs_main frozen.
+
+**Register**: Codex's batch① entries (write-contract residual + doc-stale) fixed in tree; the first two P0 already resolved by Codex; all to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查` (whole batch ①); then Claude `提交`; then batch ② = weekly pipeline.
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short batch ① repair: IV fetch window / IV fail-open / write contracts) — **FAIL**
+
+**Scope reviewed**: current uncommitted batch ① repair over `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_iv_feed_design_20260610.md`, `docs/system_risk_register.md`, `runners/a_short_iv_feed_probe.py`, `tests/test_a_short_iv_feed_probe_execution.py`, and untracked batch files `runners/a_short_iv_feed_build.py`, `runners/a_short_phase5_engine.py`, `schemas/a_short_iv_feed.schema.json`, `schemas/a_short_m67_report.schema.json`, `presets/a_short_phase5_engine_governance_20260610.json`, `tests/test_a_short_iv_feed_build.py`, `tests/test_a_short_phase5_engine.py`; HEAD `84044dd`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production change / commit.
+
+**Verdict**: FAIL. Two prior P0 blockers are fixed in the working tree, but the official M6.7 write contract still accepts target-price drift, and the IV design document now has a stale implementation boundary.
+
+**Closed from prior Required**:
+- `R-ASHORT-IVFEED-BUILD-FETCH-WINDOW-NO-PERCENTILE`: fixed. `fetch_probe_inputs` keeps probe default `max_trade_dates=25`, while IV build widens to `ROLL_WINDOW+30`; fake 70-date build writes non-null latest percentile, and fake 20-date build aborts without writing.
+- `R-ASHORT-PHASE5-IV-MISSING-FAIL-OPEN`: fixed. Missing/null IV now becomes `observe_only_missing_feed`, is visible in `machine.layer.observe_only`, prints an IV-unknown caveat, and conservatively halves size.
+
+**Required**:
+- `R-ASHORT-M67-IVFEED-OFFICIAL-WRITE-CONTRACT-GAPS` remains open (P0): the repair only compares `table.股数`, `table.入`, and `table.损` to `machine.entry_exit_size_star.plan`. It does **not** compare `table.盈一` / `table.盈二` to `plan.t1` / `plan.t2` (`runners/a_short_phase5_engine.py:373-381`). Independent mutation changed `盈一` and `盈二` to different positive values; `write_m67_report()` accepted both and wrote files. Required repair: bind every trade field (`股数`, `入`, `盈一`, `盈二`, `损`) to the machine plan and add writer-path adversarial tests for `盈一` / `盈二` mismatch.
+- `R-ASHORT-IVFEED-DOCS-STALE-BUILD-BOUNDARY` (P1): `docs/a_short_iv_feed_design_20260610.md` now says the IV build implementation has landed (`line 34`), but the same document still says complete feed construction is a later slice (`line 39`) and that IV full build / BS inversion / 252d percentile / Slice B connection remain future (`line 47`). Required repair: update the boundary so it clearly distinguishes what is already implemented in batch ① from what remains future (for example live execution, weekly pipeline wiring, or backtest).
+
+**Verification**:
+- Targeted batch suite passed: IV build + Phase 5 engine + IV probe/execution + overlay + route-doc guard = 139/139 OK.
+- `py_compile runners/a_short_iv_feed_build.py runners/a_short_phase5_engine.py runners/a_short_iv_feed_probe.py` OK.
+- `git diff --check` OK (CRLF warnings only).
+- Independent probes confirmed: default probe window 25 vs widened 84; 70-date IV build writes latest pct `100.0`; 20-date build aborts/no file; IV-missing build halves shares `34400 -> 17200`; negative shares / action mismatch / null plan / invalid as_of / non-build trade fields / invalid feed as_of reject without writing; target-price mismatch for `盈一` and `盈二` still writes.
+- Full `unittest discover -v` is not green in this environment: 1326 tests ran, 6 errors all from the pre-existing `A-EGS/egs_main.py` import-time `ts.set_token(TOKEN)` write to `C:\\Users\\cnhea\\tk.csv`. This remains outside the batch diff but prevents a whole-repo green claim.
+
+**Register outcome**: `docs/system_risk_register.md` now marks the first two prior P0 items resolved in the working tree, keeps the M6.7 write-contract P0 open with the residual `盈一`/`盈二` mutation, and adds the stale IV-boundary doc item as open P1.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short batch ① — 3 P0: IV fetch window / IV fail-open / write contracts) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` **FAIL** (entry below; 3 P0). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `84044dd`; register M with Codex's 3 entries).
+
+**Fixed:**
+- **R-ASHORT-IVFEED-BUILD-FETCH-WINDOW-NO-PERCENTILE**: `fetch_probe_inputs` gained `max_trade_dates` (probe default 25; IV build passes `ROLL_WINDOW+30`, lookback `ROLL_WINDOW*2`) so the feed can reach the 252d window; build `main` now **aborts without writing if the built feed has no usable latest 252d percentile** (n_days < MIN_ROLL_OBS). Fake-provider main regression: 70 dates → non-null latest percentile + file written; 20 dates → SystemExit + no file.
+- **R-ASHORT-PHASE5-IV-MISSING-FAIL-OPEN**: missing/None IV no longer fails open. Engine sets `iv_gate.status=observe_only_missing_feed`, appends `iv_regime_status=observe_only_missing_feed` to observe_only, 波动率状态 reads "IV未知(未执行 IV 风控,保守减半)" (NOT "Rule3减半:否"), conservatively halves size, and the 建仓 advice carries an IV-missing caveat. Tests for iv={} and iv={None}.
+- **R-ASHORT-M67-IVFEED-OFFICIAL-WRITE-CONTRACT-GAPS**: `validate_m67_consistency` now also enforces real-calendar `as_of`, `table.操作 == machine action`, 建仓 ⇒ positive 入/盈一/盈二/损 + positive 股数 + non-null plan + table-values-match-plan, non-建仓 ⇒ all trade fields null, and IV-missing ⇒ observe+波动率状态 consistency. `validate_feed_summary_consistency` now also rejects invalid-calendar `as_of`. Adversarial tests: negative shares, action mismatch, null-plan-with-build, invalid as_of (both m67 + feed).
+
+**Verification**: py_compile OK; **139/139** across batch ① (engine + IV build) + IV probe + execution + overlay + route-doc (self-ran; fixed 3 stale test calls using the renamed `extra_halve` param before handoff). Probe default behavior preserved (max_trade_dates=25). No live Tushare / fetch / production change; V14.2 + egs_main frozen.
+
+**Register**: Codex's 3 batch ① entries fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查` (whole batch ①); then Claude `提交`; then batch ② = weekly pipeline.
+
+---
+
+## 2026-06-10 — Codex `审查` (A-short batch ①: IV feed build + Slice B Phase 5 engine) — **FAIL**
+
+**Scope reviewed**: current uncommitted batch ① files: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_iv_feed_design_20260610.md`, `runners/a_short_iv_feed_build.py`, `schemas/a_short_iv_feed.schema.json`, `tests/test_a_short_iv_feed_build.py`, `runners/a_short_phase5_engine.py`, `schemas/a_short_m67_report.schema.json`, `presets/a_short_phase5_engine_governance_20260610.json`, `tests/test_a_short_phase5_engine.py`; current HEAD `84044dd`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production change / commit.
+
+**Verdict**: FAIL. The pure numerical pieces and basic engine tests are green, but the integrated execution path can still make the new IV layer silently non-functional, and the official M6.7 / IV-feed write contracts accept contradictory or invalid artifacts.
+
+**Required**:
+- `R-ASHORT-IVFEED-BUILD-FETCH-WINDOW-NO-PERCENTILE` (P0, IV feed execution / evidence contamination): `runners/a_short_iv_feed_build.py:264` calls probe `fetch_probe_inputs(..., lookback_days=400)`, but the reused probe fetcher truncates `trade_cal` to `[-25:]` before `opt_daily` calls (`runners/a_short_iv_feed_probe.py:389`). A fake provider with 160 available trading dates still wrote an IV feed with `n_days=25`, `nonnull_pct=0`, and latest percentile `None`. That means the real feed-build execution can never produce the 60-observation minimum, much less a 252d percentile, so Slice B will receive a feed that cannot drive Rule 3 / M0.5 / M1 despite the probe proving option access. Required repair: use a feed-specific fetch path, or parameterize the probe fetch date limit so IV build fetches enough trade dates for at least `MIN_ROLL_OBS` and preferably the full `ROLL_WINDOW`; add a fake-provider `main()` regression proving sufficient dates yield non-null latest `iv_percentile_252d`, and abort / mark not-ready if the built feed has no usable latest percentile.
+- `R-ASHORT-PHASE5-IV-MISSING-FAIL-OPEN` (P0, deterministic engine / IV risk gate): parent design says feed missing must become `iv_regime_status = observe_only_missing_feed` and the report must not pretend IV wind control executed. Current engine instead treats missing or `None` `iv.iv_percentile_252d` as `halve=false`, emits `IV未知 | Rule3减半:否`, leaves `machine.layer.observe_only=[]`, and can still output `建仓`. Independent probe with `iv={}` and `iv={"iv_percentile_252d": None}` produced `machine_action="建仓"`, empty observe layer, and no IV-missing caveat. Required repair: explicitly model IV feed status in machine + M6.7 (`observe_only_missing_feed` / coverage caveat), do not say Rule3减半=否 when IV is unknown, and add tests for missing/null percentile. Decide whether missing IV only caveats / shrinks / observes, but the behavior must be explicit and consistent with §4.
+- `R-ASHORT-M67-IVFEED-OFFICIAL-WRITE-CONTRACT-GAPS` (P0, official artifact consistency / PIT date safety): `write_m67_report()` and `write_feed()` validate too little beyond schema. Independent mutation probes showed `write_m67_report()` accepts `table.股数=-100`; accepts `machine.entry_exit_size_star.action` changed away from the user-facing table action; accepts `machine.entry_exit_size_star.plan=None` while the M6.7 table still has a build plan; and accepts `as_of="20260631"`. `write_feed()` likewise accepts an IV feed summary with invalid calendar `as_of="20260631"`. Required repair: add producer consistency and/or schema invariants for real calendar `as_of`, table action / numeric fields / shares matching machine action and plan, build action requiring positive shares and positive entry/targets/stop, non-build actions requiring null trade fields, and IV feed calendar validity; add adversarial tests for each mutation.
+
+**Verification**:
+- Targeted batch suite passed: IV feed build + Phase 5 engine + IV probe/execution + overlay + route-doc guard = 130/130 OK.
+- `py_compile runners/a_short_iv_feed_build.py runners/a_short_phase5_engine.py` OK.
+- `git diff --check` OK (CRLF warnings only).
+- Manual probes confirmed the three Required failures above.
+- Full `unittest discover -v` is not green in this environment: 1317 tests ran, 6 errors all from pre-existing `A-EGS/egs_main.py` import-time `ts.set_token(TOKEN)` writing `C:\\Users\\cnhea\\tk.csv` when `TUSHARE_TOKEN` is present. This is outside the batch diff but remains a whole-repo verification limitation.
+
+**Register outcome**: the three batch ① Required findings are added to `docs/system_risk_register.md` as open P0 blockers.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `起草` (A-short batch ① PART 2: Slice B Phase 5 engine) — **DONE → BATCH ① COMPLETE, ready for one `审查`**
+
+**Authorization**: user `继续` (draft batch ① part 2). Batch ① (IV-feed build + Slice B) is now fully drafted in two parts → **one Codex `审查` over the whole batch**. Re-read live git status before drafting (HEAD `84044dd`; working tree = batch ① part-1 files + docs, uncommitted).
+
+**Drafted (batch ① part 2 = Slice B v1, uncommitted)**:
+- `runners/a_short_phase5_engine.py` — pure deterministic engine on a normalized input → `m67`(唯一对外:精简结论区 + 执行清单 table)+ `machine`(指标/风险族/分层/consumption,沉底可追溯). Implements parent §3 four-layer (`hard_veto`/`downgrade`/`observe_only`/`llm_enrichment`), §5 five risk families (each ≤1 hard action; overlay crowding folded into `overheat_crowding`), §10 (Tier C llm only writes notes; EGS upstream REGULATOR-VETO recorded as legacy), IV gate (Rule3: iv_pct>90 否决 / >80 减半), M2.7 narrowed (hard-stop only on stop≥close / close≤support / no ATR), Rule7 ATR stop + RR floor, entry type (低吸/突破/观察), position size (single-cap + impact-cost + 100-share + **试探仓 ×0.5**). `build_m67_report` / `validate_m67_consistency` (§4 invariants: consumption-completeness, heat-cannot-rescue-hard-veto, honesty guard = 建仓必带 试探仓/止损/edge未验证, boundary all-false) / `write_m67_report` (schema+consistency before write). Thin `main` (normalized-input wiring = batch ②).
+- `schemas/a_short_m67_report.schema.json` — m67 (精简结论区 7 keys + table 9 cols) + machine sections + boundary all-false const.
+- `presets/a_short_phase5_engine_governance_20260610.json` — frozen thresholds (atr_mult/rr_floor/single_cap/iv/overheat/liquidity/lookbacks/impact), parity-mirrored to engine `GOVERNANCE`.
+- `tests/test_a_short_phase5_engine.py` — 22 tests (indicators / entry-type / exit-size incl. RR-floor + IV-halve-smaller + shrink-regime-block / risk-family routing / M6.7 建仓·否决(reduction,IV>90)·观察 / invariants(hard-veto+build reject, missing-caveat reject, boundary-true reject) / governance parity / schema).
+
+**Verification**: py_compile OK; **130/130** across batch ① (engine + IV build) + IV probe + execution + overlay + route-doc (self-ran). Pure engine; no live data; non-production; not validated alpha (risk_filter_only底色保留); V14.2 + egs_main frozen.
+
+**Boundary**: A-short stays `risk_filter_only`; M6.7 advice is discretionary, NOT validated alpha — honesty guard enforces 试探仓/edge-unvalidated/止损 on every 建仓. No production scoring change / real money / broker / frozen-artifact edit.
+
+**Next**: **one Codex `审查` over the whole batch ①** (IV-feed build part 1 + Slice B part 2) → 修复 → `提交`. Then batch ② = weekly pipeline (wires EGS→overlay→IV feed→engine→weekly M6.7 report).
+
+---
+
+## 2026-06-10 — Claude `起草` (A-short batch ① PART 1: 50ETF IV feed BUILD) — **DONE (part 1/2; NOT yet to 审查)**
+
+**Authorization**: user chose **2 batches** for the remaining A-short build (skip-per-run-confirm REVOKED; review mandatory). Batch ① = IV-feed build + Slice B engine, drafted in two parts then **one `审查` over the whole batch**. This is part 1; part 2 (Slice B) follows; do NOT route to Codex until both parts drafted. Re-read live git status before drafting (HEAD `84044dd`, clean apart from the untracked ETF file).
+
+**Drafted (batch ① part 1, uncommitted)**:
+- `runners/a_short_iv_feed_build.py` — Black-Scholes (European; 50ETF options are 欧式) price + bisection implied-vol solver; per PIT day (trade_date ≤ as_of): ATM IV per near+next future maturity (closest-strike call/put mean), total-variance interp to 30d constant maturity; then 252d rolling percentile; → feed artifact. Pure testable fns (bs_price/implied_vol/atm_iv_for_maturity/constant_maturity_iv/build_daily_iv/rolling_percentile_252) + `write_feed` (schema + `validate_feed_summary_consistency` before atomic write) + `main` (reuses probe `init_tushare_pro`(no set_token, hard-pin)/`fetch_probe_inputs`; aborts on provider error; needs TOKEN + `--confirm-fetch-authorized`). r/q feasibility-grade approx (documented).
+- `schemas/a_short_iv_feed.schema.json` — feed contract (const-pinned params/boundary; series trade_date PIT pattern, iv_value>0, iv_percentile_252d 0–100|null).
+- `tests/test_a_short_iv_feed_build.py` — BS↔IV round-trip recovers sigma; ATM IV; CM variance interp; build_daily_iv recovers constant sigma + PIT (future excluded) + single-maturity-day skipped; 252d percentile (incl. <min-obs→None); consistency + write reject (future date / iv≤0); schema valid + adversarial.
+
+**Verification**: py_compile OK; IV-build + probe + execution + route-doc = **80/80 OK** (self-ran). Fixed one real bug pre-handoff (`DataFrame.join(on=Series)` → `on="_code"`). Probe-only/non-production; no live Tushare in tests; V14.2 + egs_main frozen.
+
+**Next**: draft **batch ① part 2 = Slice B (Phase 5 deterministic engine, consumes §9/§10 + Slice A overlay + this IV feed, outputs M6.7 only)**; then **one Codex `审查` over the whole batch ①** → 修复 → `提交`.
+
+---
+
 ## 2026-06-10 — Claude `执行` (A-short IV feed probe, live Tushare, user-authorized) — **DONE → IV FEASIBLE at 2000 points**
 
 **Authorization**: user `执行 探测`. Pre-checks: HEAD `d5a2c4f` clean; `TUSHARE_TOKEN` set (len 56); Python313 has tushare/jsonschema/pandas. Ran `runners.a_short_iv_feed_probe --as-of 20260609 --out research/results/a_short_iv_feed_probe_20260609/probe_summary.json --confirm-fetch-authorized` against **live Tushare** (sandbox disabled for this user-authorized fetch). `init_tushare_pro` (no set_token, pinned endpoint) worked.

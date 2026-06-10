@@ -30,18 +30,25 @@ V14.2 的 Rule 3(IV>80%分位削半/>90%禁建仓)、M0.5(波动率觉醒)、M1(
 **Summary consistency hard gate**: for `computable=true`, the official summary must also prove `latest_usable_date` is a real YYYYMMDD date and `latest_usable_date <= as_of`, `spot_ref > 0`, `n_strikes_with_valid_quotes >= 1`, and `atm_bracketed=true`. These are contract gates, not just runner implementation details.
 
 ## 4. IV feed 设计(probe PASS 后的后续切片落地)
+
+> **实现(批① part 1,2026-06-10)**:`runners/a_short_iv_feed_build.py` + `schemas/a_short_iv_feed.schema.json` + `tests/test_a_short_iv_feed_build.py`。探测已证 2000 积分可行(`84044dd`),故落地。下方为设计;runner 与之一致。
+
 - 计算:近月 + 次近月 ATM 期权 BS 反解 → 线性插值到恒定到期(如 30d)→ IV 指数 → 252日滚动分位。
 - 产出:独立 IV feed artifact(date、iv_value、iv_percentile_252d、awakening 判定输入),由 **Slice B 的 `market_context.volatility` 消费**。
 - 缺失回退:feed 缺 → Slice B coverage 标 `iv_regime_status = observe_only_missing_feed`(父设计 §4),**不得假装执行了 IV 风控**。
-- 完整 feed 的构建 + 回测是 probe PASS 之后的实现切片(另走 起草→审查→提交→执行)。
+- **状态(2026-06-10)**:probe(`84044dd`)+ 完整 feed 构建(批① part 1:`a_short_iv_feed_build.py` 的 BS 反解 / ATM / 30d 恒定到期 / 252d 分位 / write_feed)均**已实现**(下方 §5 区分已实现 vs 仍未来)。
 
 ## 5. 边界
-- 本切片 = 设计 + probe 评估逻辑 + 结果 schema + **执行 wiring** + 测试。
+
+**已实现(代码+测试已落):** ① probe 设计 + 评估逻辑 + 结果 schema + 执行 wiring(commit `84044dd` + 执行); ② **IV feed 全量构建**(批① part 1:BS 反解 / ATM / 30d 恒定到期 / 252d 分位 / `write_feed` 强校验,`a_short_iv_feed_build.py`)。
+**仍未来:** ① 真实历史回填的**授权 `执行`**(跑 build main 拉 ≥252 交易日生成 feed artifact); ② **接 Slice B / 周末 pipeline**(批②:把 feed 喂进 `market_context.volatility`); ③ feed 的回测 / 前向验证(feasibility-grade r/q 的影响)。
+
+- 本切片(probe)= 设计 + probe 评估逻辑 + 结果 schema + **执行 wiring** + 测试。
 - **执行 wiring(已加)**:`init_tushare_pro`(pin base URL,**不调 set_token**;pin 不上硬 RuntimeError) → `fetch_probe_inputs`(拉 `opt_basic`(SSE)/`opt_daily`(逐交易日)/`fund_daily`(510050);每端点 sanitized status,终端只打 class/category 不打 raw 异常) → `run_probe`(过滤 50ETF + 限定 opt_daily + assess + build) → **`write_probe_summary`(写盘前强制 JSON schema + `validate_probe_summary_consistency`,唯一 sanctioned 写盘路径**,关闭 consumer-validation forward-item)。`main` 需 `TUSHARE_TOKEN` + `--confirm-fetch-authorized`。
 - **provider 错误血缘(关键)**:**任一端点抛异常 → `main` 中止、不写 summary**(无法区分"无访问/签名错/配额"与"无数据",不可伪装成官方 not-computable);**仅"成功返回但覆盖不足"才写 `computable=false` summary**。
 - 真实 `opt_basic`/`opt_daily`/`fund_daily` 调用 = 用户授权 `执行`(per-run fetch 授权)。Tushare 接口签名 / 2000 积分访问以执行期实测为准(异常 → 中止;成功但 0 行 → not-computable + sanitized fetch report)。
 - 不动 production / egs_main / V14.2(冻结);不真钱、不 ship-gate。
-- IV feed 全量构建、BS 反解实现、252d 分位、接 Slice B = 后续切片。
+- IV feed 全量构建 / BS 反解 / 252d 分位 = **已实现(批① part 1)**;**接 Slice B / 周末 pipeline = 批②**;历史回填执行 + 回测 = 后续。
 
 ## 6. 输出契约(probe summary)
 `schemas/a_short_iv_feed_probe_summary.schema.json`:`underlying`(const 510050.SH)、const-pin `thresholds`、`assessment`(**as_of_is_valid_date**/**latest_usable_date**/n_contracts/n_call/n_put/n_strikes/n_maturities/n_valid_date_maturities/n_future_maturities/**n_quotable_future_maturities**/opt_basic_missing_fields/opt_daily_has_required_fields/opt_daily_missing_fields/**opt_pit_coverage_days**/basic_daily_overlap_count/**common_pit_days**/**valid_quote_days**/valid_quote_rows/**underlier_is_510050**/**underlier_valid_days**/spot_ref/n_strikes_with_valid_quotes/atm_bracketed/computable/reasons)、顶层 `computable`(bool,schema `if/then` 强制 == assessment.computable)、`boundary`(全 false)。
