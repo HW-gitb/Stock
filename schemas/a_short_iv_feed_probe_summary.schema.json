@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_iv_feed_probe_summary",
+  "description": "A-short 50ETF IV feed feasibility-probe summary. Probe-only, PIT-safe: computable means 510050.SH option chain + underlier price can support PIT-safe (trade_date<=as_of) BS inversion of ATM/constant-maturity IV — real dates, underlier identity, quotable across >=2 future maturities, enough valid quote DAYS, ATM-bracketed. Does not build the feed or change production.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "as_of", "underlying",
+               "thresholds", "assessment", "computable", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_iv_feed_probe_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "underlying": {"const": "510050.SH"},
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_contracts", "min_strikes", "min_quotable_future_maturities",
+                   "min_opt_pit_coverage_days", "min_basic_daily_overlap", "min_common_dates",
+                   "min_valid_quote_days", "min_underlier_days",
+                   "required_opt_basic_fields", "required_opt_daily_fields"],
+      "properties": {
+        "min_contracts": {"const": 20},
+        "min_strikes": {"const": 5},
+        "min_quotable_future_maturities": {"const": 2},
+        "min_opt_pit_coverage_days": {"const": 15},
+        "min_basic_daily_overlap": {"const": 20},
+        "min_common_dates": {"const": 15},
+        "min_valid_quote_days": {"const": 15},
+        "min_underlier_days": {"const": 15},
+        "required_opt_basic_fields": {
+          "type": "array", "items": {"type": "string"},
+          "const": ["ts_code", "call_put", "exercise_price", "maturity_date"]
+        },
+        "required_opt_daily_fields": {
+          "type": "array", "items": {"type": "string"},
+          "const": ["ts_code", "trade_date", "settle", "close", "vol", "oi"]
+        }
+      }
+    },
+    "assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of_is_valid_date", "latest_usable_date",
+                   "n_contracts", "n_call", "n_put", "n_strikes", "n_maturities",
+                   "n_valid_date_maturities", "n_future_maturities", "n_quotable_future_maturities",
+                   "opt_basic_missing_fields", "opt_daily_has_required_fields", "opt_daily_missing_fields",
+                   "opt_pit_coverage_days", "basic_daily_overlap_count", "common_pit_days",
+                   "valid_quote_days", "valid_quote_rows", "underlier_is_510050", "underlier_valid_days",
+                   "spot_ref", "n_strikes_with_valid_quotes", "atm_bracketed", "computable", "reasons"],
+      "properties": {
+        "as_of_is_valid_date": {"type": "boolean"},
+        "latest_usable_date": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9]{8}$"},
+            {"type": "null"}
+          ]
+        },
+        "n_contracts": {"type": "integer", "minimum": 0},
+        "n_call": {"type": ["integer", "null"]},
+        "n_put": {"type": ["integer", "null"]},
+        "n_strikes": {"type": ["integer", "null"]},
+        "n_maturities": {"type": ["integer", "null"]},
+        "n_valid_date_maturities": {"type": ["integer", "null"]},
+        "n_future_maturities": {"type": ["integer", "null"]},
+        "n_quotable_future_maturities": {"type": "integer", "minimum": 0},
+        "opt_basic_missing_fields": {"type": "array", "items": {"type": "string"}},
+        "opt_daily_has_required_fields": {"type": "boolean"},
+        "opt_daily_missing_fields": {"type": "array", "items": {"type": "string"}},
+        "opt_pit_coverage_days": {"type": "integer", "minimum": 0},
+        "basic_daily_overlap_count": {"type": "integer", "minimum": 0},
+        "common_pit_days": {"type": "integer", "minimum": 0},
+        "valid_quote_days": {"type": "integer", "minimum": 0},
+        "valid_quote_rows": {"type": "integer", "minimum": 0},
+        "underlier_is_510050": {"type": "boolean"},
+        "underlier_valid_days": {"type": "integer", "minimum": 0},
+        "spot_ref": {
+          "anyOf": [
+            {"type": "number", "exclusiveMinimum": 0},
+            {"type": "null"}
+          ]
+        },
+        "n_strikes_with_valid_quotes": {"type": "integer", "minimum": 0},
+        "atm_bracketed": {"type": "boolean"},
+        "computable": {"type": "boolean"},
+        "reasons": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "computable": {"type": "boolean"},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "real_money", "satisfies_ship_gate", "builds_iv_feed"],
+      "properties": {
+        "production": {"const": false},
+        "real_money": {"const": false},
+        "satisfies_ship_gate": {"const": false},
+        "builds_iv_feed": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"computable": {"const": true}}},
+      "then": {"properties": {"assessment": {"properties": {"computable": {"const": true}}}}}
+    },
+    {
+      "if": {"properties": {"computable": {"const": true}}},
+      "then": {
+        "properties": {
+          "assessment": {
+            "properties": {
+              "as_of_is_valid_date": {"const": true},
+              "latest_usable_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+              "spot_ref": {"type": "number", "exclusiveMinimum": 0},
+              "n_strikes_with_valid_quotes": {"type": "integer", "minimum": 1},
+              "atm_bracketed": {"const": true}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"computable": {"const": false}}},
+      "then": {"properties": {"assessment": {"properties": {"computable": {"const": false}}}}}
+    }
+  ]
+}

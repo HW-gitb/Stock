@@ -8,6 +8,242 @@
 
 ---
 
+## 2026-06-10 — Claude `提交` (A-short IV feed probe slice, post-审查 PASS) — **DONE (local master)**
+
+**Authorization**: user `加完提交` after Claude `审查` **PASS** (entry below) on the Codex-fixed probe. Re-read SESSION_LOG top + git status + register before committing (HEAD `05adf5e`).
+
+**Pre-commit register closeout**: the 5 IV-probe register entries (computability false-positive / schema-consistency, residual quote-date-maturity, PIT/date-quality, invalid-as_of/latest-quote, latest-usable summary-consistency) flipped `open`/`in_progress` → `resolved` (Claude 审查 PASS). **Added one OPEN forward-item** `A-short IV feed probe summary consumer-validation obligation` (P2): the cross-field gates (`latest_usable_date` real + `<= as_of`) + `as_of` calendar validity are producer-only (schema can't express them; jsonschema PASSES a `computable=true` summary with `latest_usable_date="29991231"`, validate rejects), so the FUTURE execution-wiring/feed-build/Slice-B consumer MUST call `validate_probe_summary_consistency`; preferred cure = a sanctioned `write_probe_summary()` that validates internally. This pins the deferred Optional in the must-read register so it cannot be forgotten.
+
+**Committed (one scope = IV-feed feasibility-probe slice, local master, no push, ETF excluded)**: `runners/a_short_iv_feed_probe.py` + `schemas/a_short_iv_feed_probe_summary.schema.json` + `tests/test_a_short_iv_feed_probe.py` + `docs/a_short_iv_feed_design_20260610.md` + `docs/README.md` (routing) + `docs/system_risk_register.md` (5 resolved + 1 open forward-item) + this log. Probe-only / non-production; no Tushare call / no fetch / no IV-feed build / no production change; V14.2 + egs_main untouched.
+
+**State after commit**: IV-feed probe contract (PIT-safe `computable`) frozen and review-passed (31 probe tests). **Commit-safe, NOT execution-safe**: the real `opt_basic`/`opt_daily`/510050 probe call is a user-authorized `执行`.
+
+**Next**: user-authorized `执行` of the IV probe (verify real 510050 option + underlier coverage) — its execution wiring must call `validate_probe_summary_consistency` before writing (the new register forward-item). Then per roadmap: IV-feed build slice (if probe computable) / Slice B / pipeline.
+
+---
+
+## 2026-06-10 — Claude `审查` (A-short IV feed probe, post-Codex fix; roles flipped) — **PASS**
+
+**Scope reviewed (full read, not delta)**: `runners/a_short_iv_feed_probe.py`, `schemas/a_short_iv_feed_probe_summary.schema.json`, `tests/test_a_short_iv_feed_probe.py`, `docs/a_short_iv_feed_design_20260610.md` (all read in full); route docs `docs/README.md` / `docs/SESSION_LOG.md` / `docs/system_risk_register.md`. Untracked `A股长线ETF配置框架.md` out of scope. Adversarial standard applied (independent recompute + self-built attacks, not just running Codex's tests).
+
+**Verdict**: PASS. The five-round false-positive class on `computable` is closed and PIT-safe. Independently confirmed:
+- `assess_opt_coverage` produces `computable=true` only when, on PIT data (trade_date ≤ as_of): as_of is a real calendar date; underlier is 510050.SH with ≥15 positive-close PIT days; ≥2 quotable future maturities; opt PIT coverage / overlap / common-PIT-days / valid-quote-DAYS all ≥ thresholds; and ATM is bracketed at the **latest usable valuation date** (its own quotes, not stale whole-window). `latest_usable_date ∈ valid_quote_dates ⊆ common ⊆ PIT`, so it is structurally ≤ as_of and its spot close > 0.
+- `validate_probe_summary_consistency` enforces the §3 line-30 contract gates for hand-built summaries (latest_usable_date real + ≤ as_of, spot_ref>0, n_strikes_with_valid_quotes>0, atm_bracketed, all counters).
+
+**Required**: none.
+
+**Optional (non-blocking, for the future feed-build / execution-wiring slice)**: schema alone is NOT sufficient — I independently built a `computable=true` summary with `latest_usable_date="29991231"` (a real date > as_of): **jsonschema.validate PASSES it, `validate_probe_summary_consistency` REJECTS it**. The cross-field (`<= as_of`) and calendar-validity gates are producer-side only (draft-07 can't express them). So any consumer of this summary (the execution wiring that writes it, and the later IV-feed-build slice that reads it) MUST call `validate_probe_summary_consistency`, not only schema-validate. Recommend the execution `main` call it before writing any summary; document the consumer obligation in §6.
+
+**Independent verification**: read full bodies (untracked files are git-diff-blind). Ran `tests.test_a_short_iv_feed_probe` + route-doc guard = **45/45 OK**. Ran 4 self-authored adversarial probes: happy path passes schema+validate (computable=true); `latest_usable_date="29991231"` → schema PASS / validate reject (the backstop proof above); underlier dates all future → computable=false (common_pit_days=0); hand-built `atm_bracketed=false` with computable=true → schema reject. No data fetch / Tushare call / feed build / production change.
+
+**Next**: Claude `提交` (the slice is review-passed; dispose the Optional in the future execution/feed-build slice). Register's open IV-probe entries → mark resolved at commit.
+
+---
+
+## 2026-06-10 — Codex `修复` (A-short IV feed probe latest-usable summary consistency) — **DONE, pending review / commit**
+
+**Authorization**: user asked Codex to take over the repair after repeated Claude repair/review loops. Scope kept to the IV-feed probe slice and its review records; no data fetch, no Tushare call, no IV feed build, no production scoring change.
+
+**Fixed**:
+- `validate_probe_summary_consistency()` now rejects `computable=true` summaries unless `latest_usable_date` is a real YYYYMMDD calendar date, `latest_usable_date <= as_of`, `spot_ref > 0`, and `n_strikes_with_valid_quotes > 0`, in addition to the existing gate counters and `atm_bracketed`.
+- `schemas/a_short_iv_feed_probe_summary.schema.json` now rejects computable summaries with `latest_usable_date=null`, non-8-digit latest date, `spot_ref=null`, `spot_ref<=0`, `n_strikes_with_valid_quotes=0`, or `atm_bracketed=false`. Calendar validity and cross-field `latest_usable_date <= as_of` remain producer-consistency checks because draft-07 JSON Schema cannot express them cleanly.
+- `tests/test_a_short_iv_feed_probe.py` adds adversarial tests for the exact prior mutations: null / non-date / invalid-calendar / future `latest_usable_date`, null / zero `spot_ref`, and zero quoted strike count. IV probe test count is now 31.
+- `docs/a_short_iv_feed_design_20260610.md` now states the summary consistency hard gate explicitly. `docs/system_risk_register.md` records the repair on the open `R-AIV-PROBE-SUMMARY-LATEST-USABLE-CONSISTENCY` item; closure still belongs to the later review / commit step.
+
+**Verification**: targeted IV probe suite 31/31 OK after the code/schema/test changes; independent mutation probe now shows all listed mutations fail either schema, consistency, or both. Full final checks are recorded in the user-facing result for this turn. No provider/network/data execution occurred.
+
+**Next**: independent `审查` / commit closeout; then user-authorized IV probe `执行` remains a separate step.
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short IV feed probe as_of/latest-quote repair) — **FAIL**
+
+**Scope reviewed**: unstaged `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`; untracked `docs/a_short_iv_feed_design_20260610.md`, `runners/a_short_iv_feed_probe.py`, `schemas/a_short_iv_feed_probe_summary.schema.json`, `tests/test_a_short_iv_feed_probe.py`. Latest committed baseline is `05adf5e`. The untracked `A股长线ETF配置框架.md` file remains out of scope.
+
+**Verdict**: FAIL / runner-side as_of and latest-usable-date logic now fixes the previous Required, but the summary schema / consistency contract still accepts contradictory `computable=true` summaries.
+
+**Required**:
+- `R-AIV-PROBE-SUMMARY-LATEST-USABLE-CONSISTENCY` (P1, schema / official probe-summary contract): independent probes confirm `assess_opt_coverage(..., as_of="20260631")` now returns `computable=false`, the six prior PIT/date-quality cases still return false, and ATM bracketing now uses latest-usable-date quotes rather than stale whole-window contracts. However a hand-built or future-writer summary can still pass both `jsonschema.validate(...)` and `validate_probe_summary_consistency(...)` with `computable=true` while `assessment.latest_usable_date` is `null`, `notadate`, invalid calendar `20260631`, or after top-level `as_of`; while `spot_ref` is `null` or `0`; or while `n_strikes_with_valid_quotes=0`. These fields are now part of the official evidence contract for "PIT-safe latest usable valuation date / ATM bracketing", so accepting such contradictions would let a malformed execution summary claim IV computability without an actual valid valuation date or usable ATM spot/strike basis. Root lines: schema only types `latest_usable_date` as `["string","null"]` and `spot_ref` as `["number","null"]` at `schemas/a_short_iv_feed_probe_summary.schema.json:52-72`, and `validate_probe_summary_consistency` checks broad gate counters but does not require computable summaries to have a real `latest_usable_date <= as_of`, numeric positive `spot_ref`, or positive `n_strikes_with_valid_quotes` at `runners/a_short_iv_feed_probe.py:261-281`. Required repair: for `computable=true`, schema and/or producer consistency must reject null / non-date / invalid-calendar / future `latest_usable_date`, null or non-positive `spot_ref`, and zero quoted strike count; add adversarial tests for those mutations.
+
+**Optional**: once this is fixed, consider exposing a non-blocking staleness/lag field between `as_of` and `latest_usable_date`; the current slice can still be commit-safe without a policy threshold if it clearly reports the actual latest usable date.
+
+**Register outcome**: material residual finding is registered in `docs/system_risk_register.md` as open `A-short IV feed probe latest-usable summary consistency gap`.
+
+**Verification**: bundled Python `py_compile` OK; IV probe suite 28/28 OK; route-doc guard 14/14 OK; `git diff --check` OK after this review-log write. Independent probes: previous `invalid_as_of_20260631` is now false; latest-date stale-window ATM bracketing is false; six older PIT/date-quality probes remain false; but summary mutations for `latest_usable_date`, `spot_ref`, and `n_strikes_with_valid_quotes` still pass schema + consistency while `computable=true`. No data fetch, no Tushare call, no IV feed build, no production-score change, no commit.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short IV feed probe — as_of calendar validity + latest-usable-date ATM) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex re-`审查` **FAIL** (entry below; 1 P0 `R-AIV-PROBE-ASOF-LATEST-QUOTE-GATES`). Re-read SESSION_LOG top + git status before acting (HEAD `05adf5e`).
+
+**Fixed (the two as-of overclaims, plus the "latest usable valuation date" abstraction that closes the class):**
+- **as_of calendar validity**: `as_of="20260631"` (June has 30 days) passed because nothing parsed it. Added `as_of_is_valid_date = _valid_date_mask([as_of])`; gated into `computable`; `validate_probe_summary_consistency` also rejects computable=true with a non-calendar `as_of` (schema regex `^[0-9]{8}$` can't catch calendar validity, so the producer check is authoritative).
+- **ATM at latest usable valuation date (not stale whole-window)**: ATM bracketing previously used whole-window `valid_quote_codes`, so a latest common date with all-zero option quotes still passed via stale historical contracts. Now: `latest_usable_date = max(dates that actually have valid quotes)`; spot = underlier close on that date; ATM bracketing uses ONLY the contracts with valid quotes ON that date (strikes >0). New output `latest_usable_date`. If the latest usable date's quoted strikes don't bracket spot → not computable.
+
+**Verification**: py_compile OK; IV probe suite **28/28** (+4: invalid-as_of, latest-date-all-zero falls back to prior usable day & stays computable, ATM uses-latest-usable-date-not-stale-window reject, computable-with-invalid-as_of consistency reject); route-doc guard 14/14. Self-ran each new adversarial case before hand-off. No Tushare call, no feed build, no production change. Probe-only / non-production / V14.2 frozen unchanged.
+
+**Register**: Codex's open IV-probe as_of/latest-quote entry (+ earlier probe entries) fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then user-authorized `执行` of the probe.
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short IV feed probe PIT/date-quality repair) — **FAIL**
+
+**Scope reviewed**: unstaged `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`; untracked `docs/a_short_iv_feed_design_20260610.md`, `runners/a_short_iv_feed_probe.py`, `schemas/a_short_iv_feed_probe_summary.schema.json`, `tests/test_a_short_iv_feed_probe.py`. Latest committed baseline is `05adf5e`. The untracked `A股长线ETF配置框架.md` file remains out of scope.
+
+**Verdict**: FAIL / the six prior PIT/date-quality probes are fixed, but `computable=true` still overclaims on invalid `as_of` and stale latest-quote availability.
+
+**Required**:
+- `R-AIV-PROBE-ASOF-LATEST-QUOTE-GATES` (P0, IV computability / PIT and latest-date quote availability): `docs/a_short_iv_feed_design_20260610.md` says `as_of / trade_date / maturity_date` must be legal dates, and the probe is supposed to confirm PIT-safe ATM / constant-maturity IV computability as of the probe date. Current code validates `trade_date` and `maturity_date`, but not `as_of`: `assess_opt_coverage(..., as_of="20260631")` returns `computable=true` with empty reasons, and the schema also accepts the resulting summary because `as_of` is only `^[0-9]{8}$`. Current code also allows `computable=true` when the latest common PIT date has zero valid option quotes: with 20 common PIT days, valid quotes on only the first 15 days, and zero quotes on the latest 5 days, `valid_quote_days=15`, `spot_ref` is taken from the latest common date, and ATM bracketing is computed from `valid_quote_codes` collected across the whole window. Root lines: `_pit_filter` compares rows to `str(as_of)` without validating `as_of` at `runners/a_short_iv_feed_probe.py:48-53`; `as_of = str(as_of)` at line 60 never checks calendar validity; maturity comparison still uses string comparison after validating only maturity strings at line 106; `valid_quote_codes` is accumulated across all valid quote days at lines 118-128; `latest_common=max(common_dates)` then brackets with all-window `valid_quote_codes` at lines 140-151; the schema only patterns `as_of` at `schemas/a_short_iv_feed_probe_summary.schema.json:13`. Required repair: validate `as_of` as a real YYYYMMDD calendar date before any PIT comparison and reject / non-computable invalid dates at producer and schema/consistency layers; require the latest usable PIT valuation date to have valid option quotes and the two quotable future maturities needed for that date; compute ATM bracketing from quotes available on that latest usable valuation date, not from stale contracts seen anywhere in the window. Add adversarial tests for invalid calendar `as_of` and latest-common-date zero quotes / stale valid-code bracketing.
+
+**Optional**: none.
+
+**Register outcome**: material residual finding is registered in `docs/system_risk_register.md` as open `A-short IV feed probe invalid-as_of / latest-quote false-positive gates`.
+
+**Verification**: bundled Python `py_compile` OK; IV probe suite 24/24 OK; route-doc guard 14/14 OK; `git diff --check` OK after this review-log write. Independent probes confirm the six prior failures now return `computable=false`, but `invalid_as_of_20260631` and `latest_common_date_zero_option_quote` still return `computable=true`; schema validation also accepts the invalid-`as_of` computable summary. No data fetch, no Tushare call, no IV feed build, no production-score change, no commit.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short IV feed probe — PIT / date-quality false-positive, full rewrite) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex re-`审查` **FAIL** (entry below; 1 P0 `R-AIV-PROBE-PIT-DATE-QUALITY-GATES`). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `05adf5e`). This round applied the [[draft validity gates complete]] discipline properly: derived the FULL PIT + data-validity precondition set up front and rewrote `assess_opt_coverage` once, instead of patching named holes.
+
+**Fixed — `computable` is now PIT-safe BS-inversion-ready, all six Codex probes reject:**
+- **Real dates**: `as_of/trade_date/maturity_date` parsed via `pd.to_datetime(format=%Y%m%d)`; non-date strings (`yyyyyyyy`) no longer count as future maturities (was string compare).
+- **PIT**: `_pit_filter` drops `trade_date > as_of` (and invalid dates) from opt_daily AND underlier before any counting (no future-data leak).
+- **Underlier identity + coverage**: must be `510050.SH` (`underlier_is_510050`; `000300.SH` rejected) AND `close>0` on `>=15` PIT days (`underlier_valid_days`, was "any one positive close").
+- **Valid quote DAYS not rows**: `valid_quote_days >= 15` (distinct common PIT dates with valid quotes) — kills single-day concentration; `valid_quote_rows` kept as info.
+- **Quotable future maturities**: `n_quotable_future_maturities >= 2` = future maturities whose contracts actually have valid quotes (a maturity present only in opt_basic with no quotes no longer counts).
+- **Common PIT days**: `common_pit_days >= 15` = opt PIT dates ∩ underlier valid-close PIT dates.
+- **ATM** now date/maturity-aware: spot = underlier close on the latest common PIT date; valid-quote contracts' strikes must bracket it.
+- Producer `validate_probe_summary_consistency` asserts computable=true ⇒ every gate met; schema rewritten (new const-pinned thresholds + assessment fields, allOf top==assessment). Design §3/§6 aligned.
+
+**Verification**: py_compile OK; IV probe suite **24/24** incl. the six Codex adversarial probes (future-dates, single-day quotes, single-quotable-maturity, one-positive-underlier-day, wrong-underlier-symbol, nondate-maturity) + ATM-not-bracketed + consistency rejects; route-doc guard 14/14. Self-ran each adversarial case before hand-off (the discipline I missed prior rounds). No Tushare call, no feed build, no production change. Probe-only / non-production / V14.2 frozen unchanged.
+
+**Register**: Codex's open IV-probe PIT/date-quality entry (and earlier probe entries) fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then user-authorized `执行` of the probe.
+
+---
+
+## 2026-06-10 - Codex re-`审查` (A-short IV feed probe residual repair) - **FAIL**
+
+**Scope reviewed**: unstaged `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`; untracked `docs/a_short_iv_feed_design_20260610.md`, `runners/a_short_iv_feed_probe.py`, `schemas/a_short_iv_feed_probe_summary.schema.json`, `tests/test_a_short_iv_feed_probe.py`. Latest committed baseline is `05adf5e`. The untracked `A股长线ETF配置框架.md` file remains out of scope.
+
+**Verdict**: FAIL / the prior three residual examples are fixed, but the probe still overclaims `computable=true` under stronger PIT/date-quality adversarial inputs.
+
+**Required**:
+- `R-AIV-PROBE-PIT-DATE-QUALITY-GATES` (P0, IV computability / no market-data PIT): `computable` can still be true with empty reasons when the quoted data cannot actually support PIT-safe ATM / constant-maturity IV. Independent probes returned true for all of these cases: option and underlier `trade_date` rows are after `as_of` (future data counted); all valid option quotes are concentrated on one day while the other common dates are zero-quote rows; valid quotes exist only for one future maturity while the second maturity only exists in `opt_basic`; 20 underlier dates exist but only one date has positive `close`; the underlier `ts_code` is `000300.SH` while the summary still claims `510050.SH`; and non-date maturity strings such as `yyyyyyyy` / `zzzzzzzz` are counted as future maturities because the code uses string comparison. Root lines: `runners/a_short_iv_feed_probe.py` counts `maturity_date > as_of` by string at line 68, builds common dates without `<= as_of` at lines 83-86, counts valid quote rows rather than valid quote days / maturity distribution at lines 90-95, treats any positive underlier close plus date count as coverage at lines 97-100, and derives ATM bracketing from valid codes across all common dates rather than the latest usable quote date at lines 108-123. Required repair: parse and validate `as_of` / `trade_date` / `maturity_date` as real dates, reject or exclude future `trade_date > as_of`, require 510050 underlier identity and enough positive-close underlier days on usable common dates, require enough valid quote days rather than only row count, require valid quoted contracts across at least two future maturities, and make ATM bracketing date/maturity-aware instead of stale-cross-window. Add adversarial tests for the six probes above.
+
+**Optional**: none.
+
+**Register outcome**: material residual finding is registered in `docs/system_risk_register.md` as open `A-short IV feed probe PIT/date-quality false-positive gates`.
+
+**Verification**: bundled Python `py_compile` OK; IV probe suite 24/24 OK; route-doc guard 14/14 OK; `git diff --check` OK after this review-log write. Independent adversarial probes produced `computable=true` for future trade dates, single-day valid quotes, single-maturity valid quotes, one-positive-underlier-close, wrong underlier symbol, and invalid maturity strings. No data fetch, no Tushare call, no IV feed build, no production-score change, no commit.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short IV feed probe — residual quote/date/maturity false-positive) — **DONE, pending re-`审查`**
+
+**Authorization**: user `先修复上轮审查后的问题` after Codex re-`审查` **FAIL** (entry below; 1 residual P0 Required `R-AIV-PROBE-QUOTE-DATE-MATURITY-GATES`). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `05adf5e`).
+
+**Fixed (IV probe slice; still design/probe-only, no fetch):** `computable` no longer overclaims in the three residual cases Codex's probes exposed —
+- **One-valid-quote-only**: replaced `valid_quote_rows > 0` with `>= MIN_VALID_QUOTE_ROWS (20)`, counted only on common option/underlier trade dates.
+- **Stale/non-future maturities** (e.g. `19000101`): `assess_opt_coverage` now takes `as_of` and gates on `n_future_maturities >= 2` (`maturity_date > as_of`), not arbitrary unique maturity strings; keeps `n_maturities` as informational.
+- **Disjoint option/underlier date windows** (`202606` quotes vs `202505` underlier): new `common_quote_underlier_days = |opt_daily dates ∩ underlier dates|` gate `>= MIN_COMMON_DATES (15)` (BS needs same-date option+underlier pairing); valid quotes counted on those common dates only.
+- New thresholds/fields: `min_future_maturities/min_common_dates/min_valid_quote_rows`, output `n_future_maturities/common_quote_underlier_days`. Schema required+const-pinned; **producer `validate_probe_summary_consistency` now also asserts computable=true ⇒ every coverage counter meets its threshold** (closes the Optional: hand-built computable summaries with failed gates rejected). Design §3/§6 aligned.
+- **Proactive self-hardening (user chose option A; per the new [[draft validity gates complete]] discipline — derive the full precondition set up front instead of waiting for the next Codex round)**: added the **ATM-selectability gate** — among overlap contracts with valid quotes on common dates, exercise prices must BRACKET the underlier spot (≤spot AND ≥spot, spot = latest common-date 510050 close), else ATM cannot be located/interpolated. New output `spot_ref / n_strikes_with_valid_quotes / atm_bracketed`; folded into `computable`, the consistency gate-set, schema, design §3/§6; adversarial test (all strikes below spot → not computable).
+
+**Verification**: py_compile OK; IV probe suite **24/24** (was 19; +5: one-valid-quote, expired-maturity, disjoint-date, computable-with-failed-counter reject, ATM-not-bracketed); route-doc guard 14/14. No Tushare call, no feed build, no production change. Probe-only / non-production / V14.2 frozen unchanged.
+
+**Register**: Codex's open `A-short IV feed probe residual quote/date/maturity false-positive gaps` (and the earlier probe entry) fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then user-authorized `执行` of the probe. (Separately queued, not blocking: the Q1 cadence-scope / Q2 qualitative-risk-acquisition design decisions to fold into a parent-design/coverage amendment + Slice B.)
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short IV feed probe Required repair) — **FAIL**
+
+**Scope reviewed**: unstaged `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`; untracked `docs/a_short_iv_feed_design_20260610.md`, `runners/a_short_iv_feed_probe.py`, `schemas/a_short_iv_feed_probe_summary.schema.json`, `tests/test_a_short_iv_feed_probe.py`. Latest committed baseline is `05adf5e`. The untracked `A股长线ETF配置框架.md` file remains out of scope.
+
+**Verdict**: FAIL / residual Required fixes before commit or any IV probe `执行`.
+
+**Required**:
+- `R-AIV-PROBE-QUOTE-DATE-MATURITY-GATES` (P0, IV computability / no market-data PIT): the previous worst false-positive was partly fixed, and schema top-level vs assessment contradiction is now rejected. However `computable` still overclaims BS-inversion readiness. Independent probes produced `computable=true` with empty reasons in all of these cases: only **one** valid non-zero option quote row across the whole 20-day window; `maturity_date` values `19000101` / `19000201` (two unique dates, but not near-month / next-month relative to the probe `as_of`); and option quote dates in `202606xx` while underlier price dates are all `202505xx` (no same-date option/underlier pair for BS inversion). Required repair: gate on common trade dates between option quotes and underlier prices, require enough valid quote coverage on those common dates (not merely `valid_quote_rows > 0`), and classify maturities relative to `as_of` / trade date so they are future near-month and next-month contracts, not arbitrary unique maturity strings. Add adversarial tests for one-valid-quote-only, expired/stale maturities, and disjoint option/underlier date windows.
+
+**Optional**: schema top-level `computable` equality is fixed, but producer consistency should also check the new date/quote/maturity counters once added so a future hand-built summary cannot assert `computable=true` with failed coverage gates.
+
+**Register outcome**: material residual finding is registered in `docs/system_risk_register.md` as open `A-short IV feed probe residual quote/date/maturity false-positive gaps`.
+
+**Verification**: bundled Python `py_compile` OK; IV probe suite 19/19 OK; route-doc guard 14/14 OK; `git diff --check` OK. Independent probes: prior no-maturity/no-underlier/no-overlap/zero-quote case now false; top-level/assessment schema contradiction rejected; residual one-quote / expired-maturity / disjoint-date cases still true. No data fetch, no Tushare call, no IV feed build, no production-score change, no commit.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short IV feed probe — 2 Required computability/consistency gaps) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` **FAIL** (entry below). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `05adf5e`; `docs/system_risk_register.md` now M with Codex's open probe findings, uncommitted).
+
+**Fixed (IV probe slice; still design/probe-only, no fetch):**
+- **R-AIV-PROBE-COMPUTABILITY-FALSE-POSITIVE (P0)**: `computable` now means *BS-inversion-ready*, not table coverage. `assess_opt_coverage` gained `underlier_daily_df` and now also gates on: `opt_basic` required fields incl. `maturity_date`; **≥2 maturities** (near+next month for constant-maturity interp); **basic↔daily contract overlap ≥20**; **valid non-zero quotes >0** (overlap contracts, settle/close>0, rejects all-zero); **510050 underlier price series** (close + ≥15 days). New output fields: `n_maturities`, `opt_basic_missing_fields`, `basic_daily_overlap_count`, `valid_quote_rows`, `underlier_coverage_days`, `has_underlier_price`. Adversarial tests added (no maturity, no underlier, no overlap, zero quotes).
+- **R-AIV-PROBE-SCHEMA-INTERNAL-CONSISTENCY (P1)**: added schema `allOf` if/then forcing top-level `computable` == `assessment.computable` (both directions), and producer-side `validate_probe_summary_consistency()` (top==assessment, `opt_daily_has_required_fields` ⇔ empty missing-fields, computable⇒no blocking reasons / no missing basic fields / has underlier). Adversarial tests added (top/assessment mismatch, computable-with-reasons, has-required mismatch, schema contradiction).
+- Aligned design doc §3/§6 to the real gates + new output fields.
+
+**Verification**: py_compile OK; IV probe suite **19/19** (was 10; +9 gates/consistency/adversarial); route-doc guard 14/14. No Tushare call, no feed build, no production change. Probe-only / non-production / V14.2 frozen unchanged.
+
+**Register**: Codex's open `A-short IV feed probe computability false-positive / summary consistency gaps` entry is fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then user-authorized `执行` of the probe (verify 510050 option + underlier coverage).
+
+---
+
+## 2026-06-10 — Codex `审查` (A-short IV feed 50ETF feasibility-probe slice) — **FAIL**
+
+**Scope reviewed**: unstaged `docs/README.md`, `docs/SESSION_LOG.md`; untracked `docs/a_short_iv_feed_design_20260610.md`, `runners/a_short_iv_feed_probe.py`, `schemas/a_short_iv_feed_probe_summary.schema.json`, `tests/test_a_short_iv_feed_probe.py`. Latest committed baseline is `05adf5e` (A-short Slice A runner). The untracked `A股长线ETF配置框架.md` file remains out of scope.
+
+**Verdict**: FAIL / Required fixes before commit or any IV probe `执行`.
+
+**Required**:
+- `R-AIV-PROBE-COMPUTABILITY-FALSE-POSITIVE` (P0, IV computability / no market-data PIT): the design says the probe confirms whether 510050 option data can support BS inversion of ATM / constant-maturity IV, including near-month completeness and ATM quote availability. The runner only checks contract count, call/put count, strike count, required opt_daily columns, and distinct trade-date count. Independent probe showed `computable=true` with empty reasons even when `opt_basic` has no expiry / maturity fields, no underlier/ETF price input, `opt_daily.ts_code` has zero overlap with `opt_basic.ts_code`, and all quotes / volume / open interest are zero. Required repair: either downgrade the output claim from `computable` to a narrower "option contract/quote table coverage only" status, or add the missing computability gates: expiry / maturity fields and near-month / next-month contract counts, basic↔daily contract overlap, positive valid settle/close and preferably liquidity/oi, and an explicit 510050 underlier price source / coverage requirement needed for ATM selection and BS inversion. Add adversarial tests for no expiry, no underlier price, no overlap, and zero/invalid quotes.
+- `R-AIV-PROBE-SCHEMA-INTERNAL-CONSISTENCY` (P1, schema/summary contract / no market-data PIT): the schema accepts internally contradictory summaries; independent probe showed top-level `computable=true` validates while `assessment.computable=false`. Required repair: add producer-side `validate_probe_summary_consistency()` or schema `if/then`/`const` structure so top-level `computable` must equal `assessment.computable`, missing-field booleans match `opt_daily_missing_fields`, and computable summaries cannot carry blocking `reasons` or failed gate counts. Add adversarial tests for these contradictions.
+
+**Optional**: if the current slice intentionally wants to remain only an option-table smoke probe, rename fields and docs away from "computable / can invert ATM IV" so later actors cannot treat a table-coverage PASS as IV-feed build permission.
+
+**Register outcome**: material Required findings are registered in `docs/system_risk_register.md` as open `A-short IV feed probe computability false-positive / summary consistency gaps`.
+
+**Verification**: bundled Python `py_compile` OK; targeted IV probe tests 10/10 OK; independent adversarial probe exposed the false-positive computability and schema contradiction. No data fetch, no Tushare call, no IV feed build, no production-score change, no commit.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `起草` (A-short IV feed (50ETF) feasibility-probe slice) — **DONE, pending `审查`**
+
+**Authorization**: user `执行下一步` (after the Slice A runner `提交` `05adf5e`). Roadmap step 1 = IV feed (user-locked 补 IV). Re-read live git status before drafting (HEAD `05adf5e`, clean apart from the untracked ETF file).
+
+**Feasibility-driven scope (probe-first)**: Tushare exposes option CONTRACTS (`opt_basic`) + QUOTES (`opt_daily`: settle/close/vol/oi) for 510050.SH options but **NOT implied volatility** — 50ETF IV must be COMPUTED (Black-Scholes inversion of ATM options → constant-maturity IV index → 252d percentile). So this slice does NOT build the feed; it freezes the IV-feed design + a coverage probe to confirm computability before the (later) full feed slice.
+
+**Drafted (one scope = IV-feed probe, design-only / probe-only, uncommitted)**:
+- `docs/a_short_iv_feed_design_20260610.md` — IV-feed design: why IV (Rule 3/M0.5/M1 gate), the Tushare feasibility reality, probe plan, full-feed computation approach (BS ATM IV → 30d constant-maturity → 252d pct), Slice B integration (`market_context.volatility`; missing → `iv_regime_status=observe_only_missing_feed`), boundary.
+- `runners/a_short_iv_feed_probe.py` — pure `assess_opt_coverage(opt_basic_df, opt_daily_df)` (contracts / call-put / strikes / opt_daily coverage-days + required fields → `computable` + `reasons`) + `build_probe_summary`; thin `main` requires `--confirm-fetch-authorized` and defers the real Tushare call to execution-time (user-authorized fetch).
+- `schemas/a_short_iv_feed_probe_summary.schema.json` — probe summary contract; const-pins thresholds + `boundary` all-false (non-production / no real money / not ship-gate / does-not-build-feed).
+- `tests/test_a_short_iv_feed_probe.py` — 10 tests (computable / missing-field / thin-coverage / calls-only / too-few-contracts + schema valid + adversarial). **10/10 OK**, py_compile OK.
+
+**Boundary**: design + probe-logic only. Authorizes no IV-feed build, no real money, no ship-gate, no production change; V14.2 + egs_main untouched. The actual `opt_basic`/`opt_daily` probe call is a user-authorized `执行` (per-run fetch). Uncommitted (4 new files + README + this log), awaiting `审查`.
+
+**Next**: Codex `审查`; then Claude `提交`; then a user-authorized `执行` of the probe (verify 510050 option coverage) → if computable, a later IV-feed BUILD slice; Slice B + pipeline per the roadmap.
+
+---
+
 ## 2026-06-10 — Claude `提交` (A-short Slice A RUNNER, post re-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交并执行下一步` after Codex re-`审查` **PASS** (entry below; no Required; 2 wording-only Optionals). Re-read SESSION_LOG top + Codex verdict + git status before committing (HEAD `4ba5617`).
