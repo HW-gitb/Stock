@@ -331,7 +331,7 @@ Before Codex replies to any `审查`, Codex must complete this closeout gate and
 6. Guard / mutation checks were attempted for frozen fields, ledgers, approvals, and hygiene gates where feasible; otherwise the review states why not.
 7. The verdict layers are not collapsed: computation, schema / ledger, PIT / data, statistical claim, risk / deployability, and production / ship-gate readiness are separated when relevant.
 8. Final response confirms the register outcome and must not issue Pass while any material Required finding is neither fixed nor registered.
-9. Final response must include one standalone, clear line naming the user's next command to Claude, for example `下一步对 Claude 的命令：**修复**`, `下一步对 Claude 的命令：**提交**`, or `下一步对 Claude 的命令：**执行**`. The command token must be bold; if the command is Latin text, uppercase it.
+9. Final response must end with one standalone next-step line for the user, and only the command token itself must be visually emphasized, for example `下一步：Claude Code：**修复**`, `下一步：Claude Code：**提交**`, or `下一步：Claude Code：**执行**`. If the client supports real rich-text color without exposing markup, color the command token only; never output raw HTML tags such as `<span>` / `<strong>` in the final reply.
 
 Codex review output must be concise and decision-first: `verdict`, `Required`, `Optional`, `Options` when useful with at least two options and a recommended option, one-line key risk, and next step. Codex must prepend the review verdict to `docs/SESSION_LOG.md` before replying. If no issue remains, say it is clean; do not invent fixes to appear thorough.
 

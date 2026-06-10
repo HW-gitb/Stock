@@ -8,6 +8,84 @@
 
 ---
 
+## 2026-06-10 — Claude `提交` (A-short theme-overlay + Phase 5 DESIGN slice + Codex review-output rule, post-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交且执行下一步` after Codex `审查` **PASS** on the combined set (entries below; no Required). Re-read SESSION_LOG top + live `git diff` before committing: the working tree had grown to a combined scope — my design slice PLUS a Codex-authored 1-line `AGENTS.md` change (review-reply next-step output-format rule #9). Inspected the `AGENTS.md` diff directly; it is a sensible process tweak and was itself Codex-reviewed. SESSION_LOG entries for both scopes are interleaved, so splitting would require hunk-splitting the shared log; committed as the one combined reviewed set Codex blessed.
+
+**Committed (local master, no push, ETF file excluded)**: `docs/a_short_theme_overlay_phase5_design_spec_20260610.md` (design-only spec) + `docs/README.md` (routing pointer) + `AGENTS.md` (Codex review next-step output-rule #9 wording) + this log. No business code / schema / runner / data artifact changed; `skills/a_short_analysis/reference/v14.2_spec.md` untouched (frozen).
+
+**O1/O2 disposition (non-blocking, deferred to Slice A)**: O1 — PIT coverage must cover BOTH concept membership AND stock→SW L2/L1 mapping; no-PIT periods → forward-only. O2 — freeze numeric `theme_heat/industry_heat/breadth` pass thresholds + the exact "stable win" promotion rule in the governance artifact/tests before any comparison→production promotion. Both to be disposed in Slice A's own `起草`/`审查`.
+
+**State after commit**: A-short theme-overlay + Phase 5 design frozen and review-passed. Design-only: authorizes no code / fetch / run / EGS production-weight change / real money / ship-gate. A-short remains `risk_filter_only`.
+
+**Next**: per user `执行下一步`, Claude `起草` the next implementation slice — **Slice A (EGS 赛道热度 overlay)** first (heart of the 赛道热度 ask, self-contained on data EGS already fetches, 独立 of the IV feed per the roadmap; IV feed follows in parallel). Slice A draft disposes O1/O2.
+
+---
+
+## 2026-06-10 — Codex `审查` (A-short DESIGN slice + review-output next-step rule) — **PASS**
+
+**Scope reviewed**: current working tree after the user-requested output-rule update. Tracked: `AGENTS.md`, `docs/README.md`, `docs/SESSION_LOG.md`. Untracked intentional design file: `docs/a_short_theme_overlay_phase5_design_spec_20260610.md`. Unrelated untracked `A股长线ETF配置框架.md` was ignored. Reviewed current diff, the design spec, `docs/CURRENT.md`, `docs/system_risk_register.md`, and the Codex closeout gate section in `AGENTS.md`. No business code / schema / runner / data artifact was edited during review.
+
+**Verdict**: PASS. The prior A-short design slice remains commit-safe: sector/theme heat is added only as an additive comparison-track overlay, hard vetoes still dominate, V14.2 remains frozen as reference, A-short remains `risk_filter_only`, and the slice authorizes no code / fetch / run / backtest / production-weight change / real money / ship-gate claim. The new `AGENTS.md` process-doc change records the user's requested output rule: future Codex review final replies must end with a standalone next-step line, and the command token itself must be visually emphasized, e.g. `下一步：Claude Code：**提交**`. If a client cannot render color safely, do not emit raw HTML.
+
+**Required**: none.
+
+**Optional**: none before commit. The prior implementation-slice hardening notes still stand as future-slice guidance: PIT coverage for concept/SW mappings and frozen overlay promotion thresholds must be handled when Slice A is implemented.
+
+**Register**: non-material; no new `docs/system_risk_register.md` entry. No unresolved material finding affects data integrity, PIT safety, schema contract, execution correctness, security, ship-gate evidence, or cross-LLM continuity.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_route_doc_ledger_status_consistency -v` → 14/14 OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile tests/test_route_doc_ledger_status_consistency.py` → OK.
+- `git diff --check` → OK, with only existing LF/CRLF warnings from Git settings.
+- Direct scan confirmed the only new `AGENTS.md` rule is in the Codex review closeout gate and does not place transient review gate wording into `docs/CURRENT.md`.
+
+**Next**: Claude may `提交` the combined reviewed documentation/design slice. This PASS authorizes commit only; it does not authorize implementation, data fetch, backtest, production ranking change, ship-gate claim, full-size use, DataHub work, or broker/order automation.
+
+---
+
+## 2026-06-10 — Codex `审查` (A-short 赛道热度 overlay + Phase 5 确定性执行引擎 DESIGN slice) — **PASS**
+
+**Scope reviewed**: tracked `docs/README.md`, `docs/SESSION_LOG.md`; untracked `docs/a_short_theme_overlay_phase5_design_spec_20260610.md`; unrelated untracked `A股长线ETF配置框架.md` ignored. Reviewed the current diff plus `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/AI_REVIEW_PROTOCOL.md`, and the route-doc guard contract. No business code / schema / runner / data artifact was edited.
+
+**Verdict**: PASS. The design cleanly answers the user-requested direction: it increases sector/theme heat weight through an additive comparison-track overlay (`theme_heat⊥` + `industry_heat⊥` = 40%) while keeping individual-stock timing/risk controls as the gate. It also reduces over-strictness in the V14.2 analysis path by separating hard veto / downgrade / observe-only / LLM enrichment, collapsing duplicate risk handling into five risk families, and narrowing M2.7 hard stops to genuinely invalid structures. The boundary language is acceptable: design-only, no code/fetch/run/backtest/production-weight change/real money/ship-gate claim; A-short remains `risk_filter_only`; V14.2 reference stays frozen.
+
+**Required**: none.
+
+**Optional (non-blocking, for implementation slices)**:
+- O1 — When implementing Slice A, make PIT source coverage explicit for both concept membership and stock→SW L2/L1 mapping. The design already requires `--l3-mode pit` + snapshots for overlay backtests; the schema/tests should make it impossible to use a current SW mapping for historical industry heat. If no PIT mapping exists for a period, route that period to forward tracking only.
+- O2 — Before any overlay promotion from comparison-track to production ranking, freeze the numeric pass thresholds behind `theme_heat / industry_heat / breadth` and the exact "stable win" promotion rule in the governance artifact/tests. The current design's metrics list is directionally sound, but implementation should not leave promotion to prose discretion.
+
+**Register**: non-material; no new `docs/system_risk_register.md` entry. The optional items are implementation-hardening requirements, not defects in this design-only slice.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_route_doc_ledger_status_consistency -v` → 14/14 OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile tests/test_route_doc_ledger_status_consistency.py` → OK.
+- `git diff --check` → OK (only expected CRLF warnings from existing Git settings).
+- Note: `python` is not on PATH in this environment, so the bundled Codex Python was used.
+
+**Next**: Claude may `提交` this design slice. Later implementation slices should dispose O1/O2 in their own `起草` / `审查` cycles before code changes promote overlay behavior.
+
+---
+
+## 2026-06-10 — Claude `起草` (A-short 赛道热度 overlay + Phase 5 确定性执行引擎 DESIGN slice) — **DONE, pending `审查`**
+
+**Authorization**: user `起草` after a 4-round multi-LLM (Claude + Codex) design convergence in chat (not in repo until this slice). Positioning + 3 user-locked decisions captured; this slice freezes the design. Re-read SESSION_LOG top + git status before drafting (HEAD `8b8b2b1`, clean).
+
+**Drafted (one scope = A-short Phase 5 / theme-overlay DESIGN slice, design-only, uncommitted)**:
+- `docs/a_short_theme_overlay_phase5_design_spec_20260610.md` — the design spec: positioning contract (赛道层追强 + 个股层低吸/风控不放松); Slice A EGS `industry_theme_heat_overlay`(theme_heat/industry_heat 进加权 + 正交化, breadth=门槛/persistence=乘子/fit=门槛+乘子+unknown, crowding 并入风险族, 冻结单一权重 `esp0.15+l40.45+theme0.25+industry0.15`, v1 只重排现有池+仪表化被丢弃名字, PIT `--l3-mode pit`); Slice B Phase 5 引擎(V14.2 四层 hard_veto/降权降星/observe_only/llm_enrichment, 5 风险族每族一次硬处理, M2.7 只拦极端坏结构, 执行字段子集, **IV feed 已确认补**, 阈值参数化, **唯一对外输出 = M6.7**); 跨切片不变量→测试(消费完整性/可追溯/诚实护栏/热度不覆盖硬风控/每族一次/fit→unknown/theme⊥industry/突破纪律); 验证两道门(≥12 obs→production 排序; 12 月 ship gate→full-size); 实现路线(IV→A→B→pipeline)。
+- `docs/README.md` routing table: added stable pointer row to the design spec (design-only owner role).
+
+**3 user-locked design decisions (2026-06-10)**: IV=补 50ETF feed; breadth/persistence/fit=门槛+乘子(不进加权); overlay v1=只重排现有池+仪表化。最终对外输出仅 M6.7,动作相关的置信/风险必须折进 M6.7 内部。
+
+**Boundary**: design-only. **Authorizes NO code / data fetch / backtest run / EGS production-weight change / real money / ship-gate claim.** `skills/a_short_analysis/reference/v14.2_spec.md` NOT modified (frozen). A-short remains `risk_filter_only`; this slice does not change that. Two implementation slices (A: EGS overlay under EGS governance; B: Phase 5 engine under deterministic_report schema) come after review, each its own `起草`→`审查`→`提交`.
+
+**Verification**: NA (design-only markdown; no schema/runner/test code in this slice). The invariants are enumerated as a required-test checklist for the implementation slices.
+
+**Next**: Codex `审查`; then Claude `提交`; then implementation Slice 1 (IV feed) / Slice A / Slice B / pipeline per the roadmap.
+
+---
+
 ## 2026-06-09 — Claude `提交` (A-long large-cap value-yield FORWARD PAPER-tracking design slice, post re-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required, no Optional before commit). Re-read SESSION_LOG top + Codex verdict + git status before committing.
