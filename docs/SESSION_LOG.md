@@ -8,6 +8,133 @@
 
 ---
 
+## 2026-06-10 — Claude `提交` (A-short IV probe execution wiring, post re-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required). Re-read SESSION_LOG top + Codex verdict + git status before committing (HEAD `0c096d4`). Verified register: the 3 execution-wiring entries already `resolved` (Codex), the P2 consumer-validation obligation correctly stays `open` (future reader-side).
+
+**Committed (one scope = IV probe execution wiring, local master, no push, ETF excluded)**: `runners/a_short_iv_feed_probe.py` (init_tushare_pro pin-or-RuntimeError + no set_token; fetch_probe_inputs sanitized per-endpoint status + had_provider_error; main aborts-without-write on provider exception + sanitized log; run_probe/filter_50etf; write_probe_summary = only validated write path) + `tests/test_a_short_iv_feed_probe_execution.py` (19 tests: filter/run_probe/write-path/main-guards/init-no-settoken+hard-pin/provider-lineage/log-no-leak/provider-abort) + `docs/a_short_iv_feed_design_20260610.md` §5 + `docs/README.md` row + `docs/system_risk_register.md` (3 resolved) + this log. assess/build/validate untouched (review-passed). Probe-only / non-production; no Tushare call / no fetch; V14.2 + egs_main frozen.
+
+**State after commit**: IV probe is now fully wired (init → fetch → run_probe → write) and **execution-ready** behind `TUSHARE_TOKEN` + `--confirm-fetch-authorized`; provider failures abort safely, summaries are validated before write, no secret/url/raw-row leakage. The actual probe run remains a separate user-authorized `执行`.
+
+**Next**: **user-authorized `执行` of the IV probe** (`python -m runners.a_short_iv_feed_probe --as-of <YYYYMMDD> --out <path> --confirm-fetch-authorized` with TUSHARE_TOKEN set) → reveals whether 2000 points reach 50ETF options → informs Slice B's IV layer (live vs permanent observe_only). Then Slice B.
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short IV probe wiring residual repair) — **PASS**
+
+**Scope reviewed**: current unstaged `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_iv_feed_design_20260610.md`, `docs/system_risk_register.md`, `runners/a_short_iv_feed_probe.py`, and untracked `tests/test_a_short_iv_feed_probe_execution.py`; HEAD `0c096d4`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production change / commit.
+
+**Verdict**: PASS. The three residual Required blockers from the prior Codex review are closed for this execution-wiring slice.
+
+**Closed Required findings**:
+- `R-AIV-PROBE-EXEC-TUSHARE-INIT-SIDE-EFFECT`: `main()` no longer calls `ts.set_token`; `init_tushare_pro(token)` pins the Tushare `DataApi` endpoint before `ts.pro_api(token)`. Pin failure is now a hard `RuntimeError` for both missing `pro.client.DataApi` and missing `_DataApi__http_url`, before `pro_api(token)` can run. Independent probe confirmed installed Tushare 1.4.29 pins from `http://api.waditu.com/dataapi` to `https://api.tushare.pro/dataapi`; degraded fake modules hard-fail.
+- `R-AIV-PROBE-EXEC-PROVIDER-ERROR-LINEAGE`: provider exceptions now produce sanitized endpoint status, `had_provider_error=True`, `main()` aborts, and no summary file is written. This preserves the distinction between provider/access/signature/quota failure and successful-but-thin data.
+- `R-AIV-PROBE-EXEC-RAW-ERROR-LOG-LEAK`: `_safe_pro_call()` no longer prints `str(exc)`. Independent stdout/status probe with a planted URL, token-shaped string, and raw-row-shaped content showed no leak in terminal output or structured status.
+- Documentation alignment: `docs/a_short_iv_feed_design_20260610.md` and `docs/README.md` now state the repaired semantics: hard pin, no `set_token`, provider exception aborts without summary, only successful-but-thin responses may write `computable=false`, and error lineage is sanitized.
+
+**Optional / non-blocking**: the current writer side of the consumer-validation forward item is structurally handled by `write_probe_summary()` and tests, but the reader side remains a future Slice B / IV-feed-build obligation. Do not close the standing P2 register item until the future consumer that reads the summary calls `validate_probe_summary_consistency()` before trusting `computable=true`.
+
+**Register outcome**: the three execution-wiring P0 entries are marked resolved with this review evidence. The standing P2 consumer-validation item remains open for the future reader side.
+
+**Verification**: bundled Python `tests.test_a_short_iv_feed_probe_execution` + `tests.test_a_short_iv_feed_probe` + `tests.test_route_doc_ledger_status_consistency` = 62/62 OK; `py_compile runners/a_short_iv_feed_probe.py` OK; `git diff --check` OK (CRLF warnings only). Manual probes: installed Tushare endpoint pin OK; missing pin internals hard-fail; planted provider exception leaks no token/url/raw-row text; provider exception path aborts and writes no output file.
+
+**Next**: Claude `提交`; then a separate user-authorized `执行` may run the real probe.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short IV probe wiring — 3 residual: hard-pin / log-leak / doc) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex re-`审查` **FAIL** (entry below; 3 residuals). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `0c096d4`).
+
+**Fixed:**
+- **R-AIV-PROBE-EXEC-TUSHARE-INIT-SIDE-EFFECT (residual)**: `_pin_tushare_base_url` no longer warns-and-continues; pin failure (missing `pro.client.DataApi` or missing `_DataApi__http_url`) now raises **`RuntimeError`** before `pro_api(token)` — refuses to run on the default endpoint (which 503s to silent empty data). Tests: missing-DataApi and missing-attr both → RuntimeError; the good fake still pins + returns `pro_api(token)` without `set_token`.
+- **R-AIV-PROBE-EXEC-PROVIDER-ERROR-LINEAGE (residual log-leak)**: `_safe_pro_call` terminal print no longer includes `str(exc)` — only `endpoint + error_class + error_category` (same sanitized shape as the status). Adversarial test captures stdout for a leaky exception (`url=...token=SECRET123 raw_rows=[...]`) and asserts none of `SECRET123 / token= / url= / raw_rows / api.example.invalid` appear.
+- **Doc contradiction**: `docs/a_short_iv_feed_design_20260610.md` §5 + `docs/README.md` row now state the repaired semantics: init pins URL without set_token (hard error if pin fails); **provider exception → main aborts WITHOUT writing (not a not-computable artifact); only successful-but-thin → computable=false**; error lineage sanitized.
+
+**Verification**: py_compile OK; execution (+3 new) + IV probe + route-doc guard = **62/62 OK**. No live Tushare / fetch / production change; V14.2 + egs_main frozen.
+
+**Register**: Codex's execution-wiring entries (+ the raw-log-leak P0) fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then user-authorized `执行`.
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short IV probe execution wiring repair) — **FAIL**
+
+**Scope reviewed**: current unstaged `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_iv_feed_design_20260610.md`, `docs/system_risk_register.md`, `runners/a_short_iv_feed_probe.py`, and untracked `tests/test_a_short_iv_feed_probe_execution.py`; HEAD `0c096d4`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production change / commit.
+
+**Verdict**: FAIL. The repair fixed the original `set_token()` home-write failure in the normal path and fixed the false not-computable write on provider exceptions, but it still leaves execution-blocking edge cases before the real probe can be safely run or committed.
+
+**Required**:
+- `R-AIV-PROBE-EXEC-TUSHARE-INIT-SIDE-EFFECT` remains **open**: `_pin_tushare_base_url()` only emits `warnings.warn(...)` and continues if `ts_module.pro.client.DataApi` is unavailable or if `_DataApi__http_url` is absent (`runners/a_short_iv_feed_probe.py:410-423`). The prior Required explicitly asked for endpoint pinning to be applied or to fail clearly. Two adversarial fake modules proved `init_tushare_pro("tok", ts_module=fake)` returns `("PRO","tok")` with only a warning, no exception, and no pin. Current installed Tushare 1.4.29 does have the attr and pins from `http://api.waditu.com/dataapi` to `https://api.tushare.pro/dataapi`, but the degraded path is still silent-enough to proceed and can recreate the known old-endpoint empty-data contamination. Required repair: make pin failure a hard `RuntimeError`/`SystemExit` before `pro_api(token)`, and add tests for missing `pro.client.DataApi` and missing `_DataApi__http_url`.
+- `R-AIV-PROBE-EXEC-PROVIDER-ERROR-LINEAGE` is **partially fixed but still open as a security/evidence boundary**: provider exceptions now set `had_provider_error=True`, `main()` aborts, and no summary file is written. However `_safe_pro_call()` still prints the raw exception text (`runners/a_short_iv_feed_probe.py:369-373`). A fake provider raising `RuntimeError("request failed url=https://api.example.invalid/dataapi?token=SECRET123 raw_rows=[...]")` produced sanitized `status` but printed the URL, token-shaped string, and raw-row-shaped content to stdout. Required repair: terminal/log output must use the same sanitized class/category/endpoint-only shape as the report; do not print `str(exc)` unless first scrubbed. Add an adversarial test capturing stdout/stderr and proving token/url/raw-row substrings are absent.
+- Documentation still contradicts the repaired provider-error semantics: `docs/a_short_iv_feed_design_20260610.md:40-41` says fetch failures return empty and "拉不到 → 探测报 not computable + fetch report", while the correct behavior after repair is "provider exception → abort, no summary; empty successful response → possible not-computable summary." Required repair: align `docs/a_short_iv_feed_design_20260610.md` and `docs/README.md` wording to preserve that distinction.
+
+**What passed**: bundled Python tests `tests.test_a_short_iv_feed_probe_execution`, `tests.test_a_short_iv_feed_probe`, and `tests.test_route_doc_ledger_status_consistency` passed 59/59; `py_compile runners/a_short_iv_feed_probe.py` OK; `git diff --check` OK (CRLF warnings only). Manual positive probe confirmed installed Tushare 1.4.29 currently pins the attr; manual provider-error probe confirmed summary-write abort and no output file.
+
+**Register outcome**: the two existing execution-wiring P0 entries remain open with narrower residuals, and a new explicit raw provider-error log-leak P0 is recorded.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short IV probe execution wiring — 2 P0: tushare-init side-effect + provider-error lineage) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` **FAIL** (entry below). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `0c096d4`; register M with Codex's 2 entries).
+
+**Fixed (`runners/a_short_iv_feed_probe.py` wiring; assess/build/validate untouched):**
+- **R-AIV-PROBE-EXEC-TUSHARE-INIT-SIDE-EFFECT**: `main` no longer calls `ts.set_token` (which writes `~/tk.csv` → PermissionError in sandbox + side-effect). New `init_tushare_pro(token, ts_module=None)` pins the base URL (mirrors EGS `_pin_tushare_base_url` → `TUSHARE_BASE_URL`/`https://api.tushare.pro/dataapi`) then calls `ts.pro_api(token)` (token passed directly, no cache write). Test with a fake ts module asserts set_token is NOT called and the endpoint attr is pinned.
+- **R-AIV-PROBE-EXEC-PROVIDER-ERROR-LINEAGE**: `_safe_pro_call` now returns `(df, status)` with sanitized per-endpoint status (endpoint/ok/rows/error_class/error_category — NO token/url/raw rows); `fetch_probe_inputs` aggregates `endpoint_statuses` + `had_provider_error`. `main` **aborts (SystemExit) without writing any summary** when `had_provider_error` (provider exception ≠ genuine no-data), so an access/signature/quota failure can no longer masquerade as an official `computable=false` artifact. Empty-without-exception (real no-data) still writes a legit not-computable summary. Adversarial tests: provider exception → `had_provider_error=True` + sanitized status; `main(pro_factory=fake-raising)` → SystemExit + **no file written**; good fake provider → file written + computable.
+- Optional addressed: design §5/README now qualify Tushare signatures / 50ETF-name filter as **execution-期实测为准** (not yet confirmed by a real `执行`).
+
+**Verification**: py_compile OK; `tests.test_a_short_iv_feed_probe_execution` (+5 new) + existing IV probe + route-doc guard = **59/59 OK**. `main(pro_factory=...)` lets the provider-error abort + good-path write be tested end-to-end without live Tushare. No live Tushare call / no fetch / no production change; V14.2 + egs_main frozen.
+
+**Register**: Codex's 2 execution-wiring entries fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then user-authorized `执行` of the probe.
+
+---
+
+## 2026-06-10 — Codex `审查` (A-short IV feed probe execution wiring) — **FAIL**
+
+**Scope reviewed**: unstaged `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_iv_feed_design_20260610.md`, `runners/a_short_iv_feed_probe.py`, and untracked `tests/test_a_short_iv_feed_probe_execution.py`; current HEAD `0c096d4`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / data fetch / production change / commit.
+
+**Verdict**: FAIL. The pure probe contract remains strong, but the new execution wiring is not safe to commit or execute yet because it can fail before provider access and can write ambiguous not-computable evidence for provider-call failures.
+
+**Required**:
+- `R-AIV-PROBE-EXEC-TUSHARE-INIT-SIDE-EFFECT` (P0, execution blocker / token handling + endpoint pin): `main()` calls `ts.set_token(token)` before `ts.pro_api()` (`runners/a_short_iv_feed_probe.py:393-398`). In this environment `TUSHARE_TOKEN` is present, and a direct guarded call to `main(["--as-of","20260630","--out","x.json","--confirm-fetch-authorized"])` fails before any provider probe with `PermissionError: [Errno 13] Permission denied: 'C:\\Users\\cnhea\\tk.csv'` because Tushare `set_token()` writes a token cache in the user home. Independent local inspection shows `ts.pro_api(token)` initializes a `DataApi` without that token-cache write. The new runner also does not pin the Tushare base URL, while this repo has known 1.4.29 default-endpoint issues and existing runners pin `DataApi.__http_url` to `TUSHARE_BASE_URL` / `https://api.tushare.pro/dataapi`. Required repair: initialize the client without token-cache writes, e.g. pin the base URL then call `ts.pro_api(token)` (or reuse a reviewed helper), and add tests/mocks proving `main` / client factory does not call `ts.set_token`, honors missing-token behavior, and applies the endpoint pin or fails clearly if the pin cannot be applied. Do not execute the real probe until this is fixed.
+- `R-AIV-PROBE-EXEC-PROVIDER-ERROR-LINEAGE` (P0, execution evidence / false not-computable): `_safe_pro_call()` catches every provider exception, prints it, and returns an empty DataFrame (`runners/a_short_iv_feed_probe.py:349-355`); `fetch_probe_inputs()` returns only row counts (`runners/a_short_iv_feed_probe.py:376-378`); `main()` then writes the normal probe summary (`runners/a_short_iv_feed_probe.py:399-403`). A fake-provider probe with `opt_basic` raising a permission error and `opt_daily` raising a signature error produced `computable=false`, row-count-only fetch report, and a summary containing no provider error text (`summary_mentions_provider_errors=False`). That can turn "wrong endpoint / wrong API signature / quota or permission failure" into an official not-computable artifact, which is exactly the decision this probe is supposed to distinguish. Required repair: either abort without writing a summary on any endpoint exception, or extend the summary schema with a sanitized structured fetch / endpoint report (per endpoint call status, row count, error class/category, request-shape label, no token/no URL/no raw rows) and a decision/status that distinguishes provider-call failure from genuine insufficient option coverage. Add adversarial tests that planted provider exceptions cannot land as ordinary no-data / not-computable evidence.
+
+**Optional**: after fixing the above, remove or qualify "execution-verified" wording for Tushare option signatures / 50ETF-name filtering until a real user-authorized `执行` has actually succeeded; current tests use synthetic fixtures only.
+
+**Register outcome**: both Required findings are added to `docs/system_risk_register.md` hot queue as open blockers for this execution-wiring slice.
+
+**Verification**: targeted execution + existing probe + route-doc guard passed 54/54; `py_compile` OK; `git diff --check` OK (CRLF warnings only). Additional probes: `tushare_import=ok 1.4.29`, `jsonschema_import=ok 4.26.0`; `ts.pro_api(token)` can initialize without `set_token`; direct `main()` fails on `C:\\Users\\cnhea\\tk.csv`; fake-provider exception path confirms summary lacks provider-error lineage. No live provider/network call was made.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `起草` (A-short IV feed probe EXECUTION wiring, bundled design+code+tests) — **DONE, pending `审查`**
+
+**Authorization**: user `起草` (chose IV-probe execution wiring before Slice B, to cheaply answer "does 2000-point Tushare reach option data → is the IV feed buildable" before the big engine). Re-read live git status before drafting (HEAD `0c096d4`, clean apart from the untracked ETF file).
+
+**Drafted (one scope = IV probe execution wiring, bundled, uncommitted)** — added to `runners/a_short_iv_feed_probe.py` (assess/build/validate unchanged, review-passed):
+- `filter_50etf_options(opt_basic)` — identify 510050 options by `name` contains "50ETF" (Tushare opt_basic has no clean underlier column; execution-verified).
+- `run_probe(opt_basic, opt_daily, underlier, as_of, generated_at)` — pure orchestration (no I/O): filter 50ETF → restrict opt_daily to those ts_codes → assess → build_probe_summary.
+- **`write_probe_summary(summary, out_path)` — the ONLY sanctioned write path: JSON-schema validate + `validate_probe_summary_consistency` BEFORE atomic write. Closes the register consumer-validation forward-item structurally (no unvalidated write path).**
+- `fetch_probe_inputs(pro, as_of)` — defensive Tushare fetch (`opt_basic` SSE / `opt_daily` per trade-date / `fund_daily` 510050); failures → empty DataFrame + printed fetch report. `_safe_pro_call` wraps each call.
+- real `main` — requires `TUSHARE_TOKEN` + `--confirm-fetch-authorized`; validates `as_of` calendar; fetch → run_probe → write_probe_summary; prints fetch report + computable verdict.
+- `tests/test_a_short_iv_feed_probe_execution.py` — filter / run_probe(good, non-50ETF-daily-noise-filtered, no-50ETF→not-computable) / write path (writes valid; **refuses cross-field-inconsistent summary `latest_usable_date="29991231"` → no file**, the forward-item cure) / main guards (no-confirm → SystemExit; invalid as_of → SystemExit before any fetch).
+
+**Verification**: py_compile OK; `tests.test_a_short_iv_feed_probe_execution` + existing `tests.test_a_short_iv_feed_probe` + route-doc guard = **54/54 OK**. assess/build/validate (Codex-fixed, Claude-审查-PASS) untouched. No Tushare call / no fetch / no production change in tests; V14.2 + egs_main frozen. Design §5 + README routing updated.
+
+**Boundary**: the REAL probe run (`opt_basic`/`opt_daily`/`fund_daily` fetch) is a user-authorized `执行` (needs TUSHARE_TOKEN + `--confirm-fetch-authorized`); Tushare signatures / 2000-point access are execution-verified (unreachable → probe reports not-computable + fetch report). Probe-only / non-production.
+
+**Next**: Codex `审查`; then Claude `提交`; then **user-authorized `执行` of the probe** → reveals whether 2000 points reach 50ETF options → informs Slice B's IV layer (live vs permanent observe_only).
+
+---
+
 ## 2026-06-10 — Claude `提交` (A-short parent-design §9/§10 revision, post re-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required/Optional). Re-read SESSION_LOG top + Codex verdict + git status before committing (HEAD `b44525f`). Verified the 3 parent-design register entries are already `resolved` (Codex marked them with the re-review evidence) — no double-edit needed.

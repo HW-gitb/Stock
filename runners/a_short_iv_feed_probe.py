@@ -21,12 +21,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 
+import jsonschema
 import pandas as pd
 
 SCHEMA_NAME = "a_short_iv_feed_probe_summary"
 SCHEMA_VERSION = "1.0.0"
 UNDERLYING = "510050.SH"
+SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "schemas", "a_short_iv_feed_probe_summary.schema.json")
 
 MIN_CONTRACTS = 20
 MIN_STRIKES = 5
@@ -304,19 +308,164 @@ def validate_probe_summary_consistency(summary: dict) -> None:
             raise ValueError("computable=true 但有 PIT/质量门未达标")
 
 
-def main(argv=None):
+def filter_50etf_options(opt_basic_df: pd.DataFrame) -> pd.DataFrame:
+    """从 opt_basic 过滤出 50ETF(510050)期权。Tushare opt_basic 无干净标的列,
+    用 name 含 '50ETF' 识别(执行期实测;识别不到 → 空 → 探测自然报 not computable)。"""
+    if opt_basic_df is None or opt_basic_df.empty:
+        return pd.DataFrame()
+    if "name" not in opt_basic_df.columns:
+        return opt_basic_df.iloc[0:0].copy()
+    return opt_basic_df[opt_basic_df["name"].astype(str).str.contains("50ETF", na=False)].copy()
+
+
+def run_probe(opt_basic_df: pd.DataFrame, opt_daily_df: pd.DataFrame,
+              underlier_df: pd.DataFrame, as_of: str, generated_at: str) -> dict:
+    """纯编排(无 I/O,可测):过滤 50ETF → 限定 opt_daily 到这些合约 → assess → build summary。"""
+    basic = filter_50etf_options(opt_basic_df)
+    codes = set(basic["ts_code"].astype(str)) if ("ts_code" in basic.columns and not basic.empty) else set()
+    daily = opt_daily_df if opt_daily_df is not None else pd.DataFrame()
+    if codes and not daily.empty and "ts_code" in daily.columns:
+        daily = daily[daily["ts_code"].astype(str).isin(codes)].copy()
+    else:
+        daily = daily.iloc[0:0].copy() if not daily.empty else pd.DataFrame()
+    assessment = assess_opt_coverage(basic, daily, underlier_df, as_of)
+    return build_probe_summary(assessment, as_of, generated_at)
+
+
+def write_probe_summary(summary: dict, out_path: str) -> None:
+    """唯一 sanctioned 写盘路径:先 JSON schema + producer consistency 校验,再原子写。
+    关闭 register forward-item(R-AIV consumer-validation):没有"不校验就写"的路径。"""
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    jsonschema.validate(summary, schema)               # 含 computable⇒字段 if/then 硬门
+    validate_probe_summary_consistency(summary)         # 跨字段(latest≤as_of / spot>0 / 计数)硬门
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    tmp = str(out_path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, out_path)
+
+
+def _categorize_error(exc) -> str:
+    """粗分类(sanitized:只给类别,不外泄 token/url/raw 行)。"""
+    msg = str(exc).lower()
+    if any(k in msg for k in ("permission", "denied", "权限", "积分", "quota", "没有", "无权")):
+        return "permission_or_quota"
+    if any(k in msg for k in ("argument", "param", "field", "signature", "参数", "字段")):
+        return "signature_or_args"
+    if any(k in msg for k in ("timeout", "connection", "network", "ssl", "max retries", "超时")):
+        return "network"
+    return "other"
+
+
+def _safe_pro_call(pro, method: str, **kw):
+    """返回 (df, status)。status sanitized:endpoint / ok / rows / error_class / error_category,
+    不含 token / url / 原始行。异常 → ok=False(供上层区分 provider 失败 vs 真无数据)。"""
+    try:
+        df = getattr(pro, method)(**kw)
+        df = df if df is not None else pd.DataFrame()
+        return df, {"endpoint": method, "ok": True, "rows": int(len(df)),
+                    "error_class": None, "error_category": None}
+    except Exception as exc:
+        # sanitized:只打 endpoint/class/category,绝不 print str(exc)(可能含 url/token/raw 行)
+        print(f"[probe] Tushare {method} 失败: {type(exc).__name__} ({_categorize_error(exc)})")
+        return pd.DataFrame(), {"endpoint": method, "ok": False, "rows": 0,
+                                "error_class": type(exc).__name__,
+                                "error_category": _categorize_error(exc)}
+
+
+def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40):
+    """执行期:拉 SSE 期权合约/行情 + 510050 标的价。返回 (opt_basic, opt_daily, underlier, report)。
+    report 含 per-endpoint sanitized status + had_provider_error(任一端点抛异常即 True),
+    供 main 区分 provider 失败(中止、不写 summary) vs 真·覆盖不足(写 not-computable)。"""
+    from datetime import datetime, timedelta
+    start = (datetime.strptime(as_of, "%Y%m%d") - timedelta(days=lookback_days)).strftime("%Y%m%d")
+    statuses = []
+    opt_basic, s = _safe_pro_call(pro, "opt_basic", exchange="SSE",
+                                  fields="ts_code,name,call_put,exercise_price,maturity_date,list_date,delist_date")
+    statuses.append(s)
+    cal, s = _safe_pro_call(pro, "trade_cal", exchange="SSE", start_date=start, end_date=as_of, is_open="1")
+    statuses.append(s)
+    dates = sorted(cal["cal_date"].astype(str).tolist())[-25:] if ("cal_date" in cal.columns and not cal.empty) else []
+    frames = []
+    for d in dates:
+        od, s = _safe_pro_call(pro, "opt_daily", trade_date=d, exchange="SSE",
+                               fields="ts_code,trade_date,settle,close,vol,oi")
+        if not s["ok"]:
+            statuses.append({**s, "trade_date": d})
+        if not od.empty:
+            frames.append(od)
+    opt_daily = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    underlier, s = _safe_pro_call(pro, "fund_daily", ts_code=UNDERLYING, start_date=start, end_date=as_of,
+                                  fields="ts_code,trade_date,close")
+    statuses.append(s)
+    had_provider_error = any(not st["ok"] for st in statuses)
+    report = {
+        "opt_basic_rows": int(len(opt_basic)), "opt_daily_rows": int(len(opt_daily)),
+        "underlier_rows": int(len(underlier)), "trade_dates_probed": len(dates),
+        "endpoint_statuses": statuses, "had_provider_error": had_provider_error,
+    }
+    return opt_basic, opt_daily, underlier, report
+
+
+def _pin_tushare_base_url(ts_module) -> None:
+    """仿 EGS:pin DataApi 默认 endpoint(1.4.29 默认 url 会 503 静默返回空)。
+    **pin 不上 → 硬 RuntimeError**(拒绝以默认 url 跑,否则会静默空数据污染探测)。"""
+    base_url = os.environ.get("TUSHARE_BASE_URL", "https://api.tushare.pro/dataapi")
+    attr = "_DataApi__http_url"
+    try:
+        DataApi = ts_module.pro.client.DataApi
+    except AttributeError as exc:
+        raise RuntimeError("tushare.pro.client.DataApi 不可达;拒绝以默认 endpoint 运行 probe") from exc
+    if not hasattr(DataApi, attr):
+        raise RuntimeError(f"DataApi 无 {attr};拒绝以默认 endpoint 运行 probe")
+    setattr(DataApi, attr, base_url)
+
+
+def init_tushare_pro(token: str, ts_module=None):
+    """初始化 pro_api,**不调用 `set_token`**(其会写 ~/tk.csv,有副作用 + 沙箱 PermissionError);
+    pin base url 后用 `pro_api(token)` 直接传 token。ts_module 可注入便于测试。"""
+    if ts_module is None:
+        import tushare as ts_module  # noqa
+    _pin_tushare_base_url(ts_module)
+    return ts_module.pro_api(token)
+
+
+def main(argv=None, pro_factory=None):
+    from datetime import datetime
     p = argparse.ArgumentParser(description="A-short 50ETF IV feed feasibility probe (probe-first, PIT-safe)")
     p.add_argument("--as-of", required=True, help="YYYYMMDD")
     p.add_argument("--out", required=True)
     p.add_argument("--confirm-fetch-authorized", action="store_true",
-                   help="确认用户已授权本次 Tushare opt_basic/opt_daily/标的价格 探测调用")
+                   help="确认用户已授权本次 Tushare opt_basic/opt_daily/fund_daily 探测调用")
     args = p.parse_args(argv)
     if not args.confirm_fetch_authorized:
         raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:本 probe 会调用 Tushare,须用户授权")
-    # NOTE: 真实 opt_basic/opt_daily/510050 daily 调用 + 过滤在执行期接线;
-    # 纯评估 assess_opt_coverage / build_probe_summary / validate_probe_summary_consistency 已单测。
-    raise SystemExit("[INFO] Tushare opt_basic/opt_daily/underlier fetch wiring is execution-time (authorized) work; "
-                     "pure assessment contract is unit-tested. See design doc + tests.")
+    if not _is_valid_yyyymmdd(args.as_of):
+        raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
+    if pro_factory is not None:
+        pro = pro_factory()
+    else:
+        token = os.environ.get("TUSHARE_TOKEN")
+        if not token:
+            raise SystemExit("[FATAL] 需设置环境变量 TUSHARE_TOKEN")
+        pro = init_tushare_pro(token)               # 不写 tk.csv;pin endpoint
+    opt_basic, opt_daily, underlier, report = fetch_probe_inputs(pro, args.as_of)
+    print(f"[probe] fetch report: rows(basic/daily/underlier)="
+          f"{report['opt_basic_rows']}/{report['opt_daily_rows']}/{report['underlier_rows']}; "
+          f"had_provider_error={report['had_provider_error']}; "
+          f"statuses={[{k: st[k] for k in ('endpoint', 'ok', 'rows', 'error_class', 'error_category')} for st in report['endpoint_statuses']]}")
+    # R-AIV-PROBE-EXEC-PROVIDER-ERROR-LINEAGE: provider 调用异常 → 中止、不写 summary,
+    # 否则会把"无访问/签名错/配额"伪装成官方 not-computable 证据。
+    if report["had_provider_error"]:
+        raise SystemExit("[FATAL] provider-call failure(见上 fetch report);不写 not-computable 证据"
+                         "(无法区分'无访问'与'无数据')。修端点/访问后重跑。")
+    summary = run_probe(opt_basic, opt_daily, underlier, args.as_of,
+                        datetime.now().astimezone().isoformat(timespec="seconds"))
+    write_probe_summary(summary, args.out)             # 写盘前强制校验
+    a = summary["assessment"]
+    print(f"[probe] computable={summary['computable']}; reasons={a['reasons']}")
+    print(f"[probe] summary -> {args.out}")
 
 
 if __name__ == "__main__":
