@@ -138,6 +138,8 @@ def classify_risk_families(inp: dict, ind: dict) -> dict:
         ner.append("ST/退市")
     if d.get("crash_veto"):
         ner.append("闪崩")
+    if d.get("hard_veto"):
+        ner.append("EGS hard_veto(上游聚合,无条件否决)")  # 即使分解原因未单独命中也硬杀
     if ev.get("regulatory_legacy_vetoed"):
         ner.append("EGS 上游监管 veto(legacy)")  # §10:上游 legacy 已剔,这里只记录
     if ner:

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_weekly_report",
+  "description": "A-short weekly pipeline output: top-N per-stock M6.7 reports for one weekend run. reports[] each ALSO validated against a_short_m67_report.schema.json by write_weekly_report (this schema only gates the envelope + per-item minimal shape). Non-production, edge UNVALIDATED — boundary all false.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "as_of",
+               "iv_feed_ref", "n_stocks", "reports", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_weekly_report"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "iv_feed_ref": {"type": "string"},
+    "n_stocks": {"type": "integer", "minimum": 0},
+    "reports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["schema_name", "as_of", "ts_code", "m67", "machine", "boundary"],
+        "properties": {
+          "schema_name": {"const": "a_short_m67_report"},
+          "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "ts_code": {"type": "string"}
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "real_money", "is_validated_alpha", "satisfies_ship_gate"],
+      "properties": {
+        "production": {"const": false},
+        "real_money": {"const": false},
+        "is_validated_alpha": {"const": false},
+        "satisfies_ship_gate": {"const": false}
+      }
+    }
+  }
+}

@@ -122,6 +122,14 @@ class RiskFamilyTests(unittest.TestCase):
         fam = classify_risk_families(_good_input(derived=d), self.ind)
         self.assertEqual(fam["overheat_crowding"]["action"], "downgrade")
 
+    def test_egs_hard_veto_flag_hard_vetoes(self):
+        # EGS aggregate hard_veto must hard-veto independently (defensive vs decomposed reasons).
+        d = _good_input()["derived"]; d["hard_veto"] = True
+        fam = classify_risk_families(_good_input(derived=d), self.ind)
+        self.assertEqual(fam["negative_event"]["action"], "hard_veto")
+        r = build_m67_report(_good_input(derived=d), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")
+
 
 class BuildReportTests(unittest.TestCase):
     def test_buildable_m67(self):

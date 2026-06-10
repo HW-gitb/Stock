@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""A-short 周末 pipeline(批②).
+
+把已审过的各块串成一次周末跑:EGS top-N 候选(analysis_input.json) → Slice A overlay(eligible/
+crowding) → IV feed(252d 分位,市场级) → Phase 5 引擎(逐票 M6.7) → 一份周报(per-stock M6.7)。
+
+**消费方必须校验(关闭 register P2 consumer-validation):** 读 IV feed 后调
+`validate_feed_summary_consistency`;每张 M6.7 调 `validate_m67_consistency` + schema。
+纯函数(normalize_candidate / build_weekly_report / validate_weekly_report)合成 fixture 可测;
+真实价格抓取(前复权日线)+ 读 artifacts 在薄 main(执行期授权)。
+
+边界:非 production、不真钱、不接券商、不自动下单;A-short 仍 risk_filter_only,M6.7 为辅助建议
+非验证 alpha。不动 egs_main / V14.2。
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+
+import jsonschema
+
+SCHEMA_NAME = "a_short_weekly_report"
+SCHEMA_VERSION = "1.0.0"
+SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "schemas", "a_short_weekly_report.schema.json")
+M67_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "schemas", "a_short_m67_report.schema.json")
+OVERLAY_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                   "schemas", "a_short_theme_overlay_comparison.schema.json")
+
+
+def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pct,
+                        account: dict, regime: str, industry_trend: str = "neutral",
+                        llm_enrichment=None, observe_only=None) -> dict:
+    """把一个 EGS analysis_input 候选 + 价格序列 + overlay 行 + 市场级 IV 分位 + 账户/环境
+    归一化成 Phase 5 引擎输入。字段缺失 → 引擎按保守/observe 处理。"""
+    d = cand.get("derived_flags", {}) or {}
+    ev = cand.get("event_risk", {}) or {}
+    hr = ev.get("holder_reduction", {}) or {}
+    delist = ev.get("delisting", {}) or {}
+    susp = ev.get("suspension", {}) or {}
+    liq = cand.get("liquidity", {}) or {}
+    sc = cand.get("scores", {}) or {}
+    return {
+        "ts_code": cand.get("ts_code"), "name": cand.get("name"),
+        "close": (cand.get("quote") or {}).get("close"),
+        "price_series": list(price_series or []),
+        "esp_score": sc.get("esp_score"), "l4_score": sc.get("l4_score"),
+        "overlay": {"eligible": bool((overlay_row or {}).get("eligible")),
+                    "crowding_hit": bool((overlay_row or {}).get("crowding_hit"))},
+        "industry_trend": industry_trend,
+        # 真实 EGS analysis_input 契约:derived_flags.{is_lock,is_breakout,has_crash_veto,
+        # overheat_flag,chasing_high,hard_veto};suspension 在 event_risk.suspension.is_suspended。
+        # 注:契约无 vol_confirm 字段 → 突破入场(需放量确认)在 v1 暂休眠(保守,只走低吸/观察)。
+        "derived": {"overheat": bool(d.get("overheat_flag")), "chasing_high": bool(d.get("chasing_high")),
+                    "breakout": bool(d.get("is_breakout")), "vol_confirm": bool(d.get("vol_confirm")),
+                    "crash_veto": bool(d.get("has_crash_veto")), "limit_locked": bool(d.get("is_lock")),
+                    "suspended": bool(susp.get("is_suspended")), "hard_veto": bool(d.get("hard_veto"))},
+        # regulatory_legacy_vetoed 恒 False:EGS Stage3 CNINFO REGULATOR-VETO 在上游已剔除被否票
+        # (§10),analysis_input 里的票均已过 cninfo;契约无顶层 veto 字段,pipeline 不再二次硬杀。
+        "event": {"holder_reduction_active": bool(hr.get("active_plan")),
+                  "st_or_delisting": bool(delist.get("st_flag") or delist.get("delisting_warning")),
+                  "regulatory_legacy_vetoed": False},
+        "liquidity": {"avg_amount_5d": liq.get("avg_amount_5d"), "avg_amount_20d": liq.get("avg_amount_20d")},
+        "iv": {"iv_percentile_252d": iv_pct},
+        "market_regime": regime,
+        "account": account or {},
+        "portfolio": {},
+        "observe_only": list(observe_only or []),
+        "llm_enrichment": list(llm_enrichment or []),
+    }
+
+
+def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
+                        iv_feed_ref: str = "") -> dict:
+    from runners.a_short_phase5_engine import build_m67_report
+    reports = [build_m67_report(n, as_of, generated_at) for n in normalized_list]
+    return {
+        "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
+        "generated_at": generated_at, "as_of": as_of,
+        "iv_feed_ref": iv_feed_ref, "n_stocks": len(reports), "reports": reports,
+        "boundary": {"production": False, "real_money": False,
+                     "is_validated_alpha": False, "satisfies_ship_gate": False},
+    }
+
+
+def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
+    """关闭 P2:消费方校验它读入的 IV feed + 每张 M6.7。"""
+    from datetime import datetime
+    from runners.a_short_iv_feed_build import validate_feed_summary_consistency
+    from runners.a_short_phase5_engine import validate_m67_consistency
+    # weekly as_of 必须是合法日历日(空报告时也要校验;schema 的 ^\d{8}$ 不查历法,20260631 会漏过)
+    try:
+        datetime.strptime(str(weekly["as_of"]), "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"weekly as_of {weekly['as_of']} 非合法日历日期")
+    validate_feed_summary_consistency(iv_feed_summary)        # 读取方校验 feed(P2)
+    # 跨-as_of PIT:feed 不得来自周报 as_of 之后(否则用了未来波动率)
+    if str(iv_feed_summary.get("as_of")) > weekly["as_of"]:
+        raise ValueError(f"IV feed as_of {iv_feed_summary.get('as_of')} 晚于周报 as_of {weekly['as_of']}(未来 feed)")
+    fs = iv_feed_summary.get("series") or []
+    if fs and str(fs[-1]["trade_date"]) > weekly["as_of"]:
+        raise ValueError(f"IV feed 最新 trade_date {fs[-1]['trade_date']} 晚于周报 as_of {weekly['as_of']}(PIT 违规)")
+    if weekly["n_stocks"] != len(weekly["reports"]):
+        raise ValueError("n_stocks 与 reports 长度不一致")
+    if any(b for b in weekly["boundary"].values()):
+        raise ValueError("weekly boundary 必须全 false")
+    seen = set()
+    for rep in weekly["reports"]:
+        if rep["as_of"] != weekly["as_of"]:
+            raise ValueError("report.as_of 与周报 as_of 不一致")
+        if rep["ts_code"] in seen:
+            raise ValueError(f"周报含重复 ts_code {rep['ts_code']}")
+        seen.add(rep["ts_code"])
+        validate_m67_consistency(rep)                        # 逐票 §4 不变量
+
+
+def _reject_production_output_path(out_path: str) -> None:
+    """周报是 non-production artifact。输出路径由调用方指定(约定写 research/results/),
+    但**绝不写 production 输出根 result/a_short/<date>**(CLAUDE.md 硬约束)。"""
+    norm = os.path.normpath(os.path.abspath(out_path)).replace("\\", "/").lower()
+    if "/result/a_short/" in norm:
+        raise ValueError(f"禁止写入 production 路径 {out_path}(result/a_short/<date>);"
+                         "周报输出由调用方指定(约定 research/results/),但绝不落 production 根")
+
+
+def write_weekly_report(weekly: dict, iv_feed_summary: dict, out_path: str) -> None:
+    _reject_production_output_path(out_path)
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        wschema = json.load(f)
+    with open(M67_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        m67schema = json.load(f)
+    jsonschema.validate(weekly, wschema)
+    for rep in weekly["reports"]:
+        jsonschema.validate(rep, m67schema)                  # 每张 M6.7 过 m67 schema
+    validate_weekly_report(weekly, iv_feed_summary)
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    tmp = str(out_path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(weekly, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, out_path)
+
+
+def _load_validated_overlay(overlay_path: str, weekly_as_of: str) -> dict:
+    """#5 消费方校验:overlay 必须过 schema + `validate_overlay_summary_consistency`,
+    且 as_of 必须 == 周报 as_of(同一周末批;拒未来/陈旧)。返回 {ts_code: row}。"""
+    from runners.a_short_theme_overlay_comparison import validate_overlay_summary_consistency
+    with open(overlay_path, encoding="utf-8") as f:
+        ov = json.load(f)
+    with open(OVERLAY_SCHEMA_PATH, encoding="utf-8") as f:
+        jsonschema.validate(ov, json.load(f))
+    validate_overlay_summary_consistency(ov)
+    if str(ov.get("as_of")) != str(weekly_as_of):
+        raise SystemExit(f"[FATAL] overlay as_of {ov.get('as_of')} != 周报 as_of {weekly_as_of}"
+                         "(未来/陈旧 overlay,须同一周末批)")
+    return {c["ts_code"]: c for c in ov.get("candidates", [])}
+
+
+def latest_iv_percentile(iv_feed_summary: dict):
+    """取 feed 最新一天的 252d 分位(市场级 IV 闸门输入);无则 None。"""
+    series = iv_feed_summary.get("series") or []
+    return series[-1]["iv_percentile_252d"] if series else None
+
+
+MIN_PRICE_OBS = 20               # 指标(支撑/压力 20d、ATR 14d)所需最少 PIT 交易日
+
+
+def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str) -> list:
+    """前复权日线 → [{high,low,close}](oldest→newest)。A 股主板个股用 asset='E'。`end` == 周报 as_of。
+    **provider 异常 → 中止(不 fail-open)**:provider 失败 ≠ 无交易,不能默默退化成观察。
+    **PIT + 新鲜度门(R-ASHORT-WEEKLY-PRICE-SERIES-PIT-FRESHNESS-GAP)**:每个 `trade_date` 必须是
+    合法日历日;拒任何 `trade_date > end`(未来 bar);**最新 bar 必须 == `end`(==as_of)**,否则数据
+    陈旧 → 中止不写。返回空(provider 成功但无行)由 main 覆盖门统一拦截。"""
+    from datetime import datetime
+    try:
+        df = ts_module.pro_bar(ts_code=ts_code, adj="qfq", asset="E",
+                               start_date=start, end_date=end, api=pro)
+    except Exception as exc:
+        raise SystemExit(f"[FATAL] pro_bar {ts_code} provider 失败: {type(exc).__name__};"
+                         "不写周报(provider 失败 ≠ 无交易,不可 fail-open 成观察)")
+    if df is None or df.empty:
+        return []
+    df = df.sort_values("trade_date")
+    rows = []
+    for _, r in df.iterrows():
+        td = str(r["trade_date"])
+        try:
+            datetime.strptime(td, "%Y%m%d")
+        except ValueError:
+            raise SystemExit(f"[FATAL] pro_bar {ts_code} 返回非法日历日期 {td};不写周报")
+        if td > str(end):
+            raise SystemExit(f"[FATAL] pro_bar {ts_code} 返回未来 bar {td} > as_of {end}(PIT 违规);不写周报")
+        rows.append({"trade_date": td, "high": float(r["high"]), "low": float(r["low"]), "close": float(r["close"])})
+    if rows and rows[-1]["trade_date"] != str(end):
+        raise SystemExit(f"[FATAL] pro_bar {ts_code} 最新 bar {rows[-1]['trade_date']} != as_of {end}"
+                         "(数据陈旧,未含 as_of 当日);不写周报")
+    return [{"high": r["high"], "low": r["low"], "close": r["close"]} for r in rows]
+
+
+def main(argv=None, pro_factory=None, price_provider=None):
+    from datetime import datetime, timedelta
+    from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
+    from engine.data.analysis_input_contract import validate_analysis_input_file
+    p = argparse.ArgumentParser(description="A-short weekly pipeline (EGS→overlay→IV→engine→weekly M6.7)")
+    p.add_argument("--as-of", required=True, help="YYYYMMDD")
+    p.add_argument("--analysis-input", required=True, help="EGS analysis_input.json (top-N 候选)")
+    p.add_argument("--iv-feed", required=True, help="a_short_iv_feed.json")
+    p.add_argument("--overlay", help="overlay artifact(可选)")
+    p.add_argument("--account", help="账户/环境 JSON(available_cash / market_regime)")
+    p.add_argument("--out", required=True)
+    p.add_argument("--confirm-fetch-authorized", action="store_true")
+    args = p.parse_args(argv)
+    if not _is_valid_yyyymmdd(args.as_of):
+        raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
+
+    def _load(path):
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+
+    # analysis_input 消费方校验(#R-ASHORT-WEEKLY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP):
+    # 用仓库契约校验 schema + PIT,并强制 trade_date == --as-of(拒错配/未来/陈旧批次)。
+    ai = validate_analysis_input_file(args.analysis_input, label="weekly analysis_input")
+    if str(ai.get("trade_date")) != args.as_of:
+        raise SystemExit(f"[FATAL] analysis_input.trade_date {ai.get('trade_date')} != --as-of {args.as_of}"
+                         "(批次错配/未来/陈旧,拒跑周报)")
+    feed = _load(args.iv_feed)
+    iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位(None → 引擎按 missing 处理)
+    overlay = _load_validated_overlay(args.overlay, args.as_of) if args.overlay else {}
+    acct = _load(args.account) if args.account else {}
+    regime = acct.get("market_regime", "震荡期")
+    account = {"available_cash": acct.get("available_cash")}
+    # 价格序列:注入(测试)或执行期抓取(需授权)
+    if price_provider is None:
+        if not args.confirm_fetch_authorized:
+            raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:周末 run 会抓前复权价")
+        import tushare as ts
+        pro = pro_factory() if pro_factory else init_tushare_pro(os.environ["TUSHARE_TOKEN"])
+        start = (datetime.strptime(args.as_of, "%Y%m%d") - timedelta(days=120)).strftime("%Y%m%d")
+        price_provider = lambda code: _fetch_price_series(ts, pro, code, start, args.as_of)
+    normalized = [normalize_candidate(c, price_provider(c["ts_code"]), overlay.get(c["ts_code"]),
+                                      iv_pct, account, regime)
+                  for c in ai.get("candidates", [])]
+    # 价格覆盖门(#2):任一被纳入候选缺足够价格 → 中止不写(不可 fail-open 成观察)
+    short = [(n["ts_code"], len(n["price_series"])) for n in normalized
+             if len(n["price_series"]) < MIN_PRICE_OBS]
+    if short:
+        raise SystemExit(f"[FATAL] 以下候选价格序列不足(<{MIN_PRICE_OBS} 交易日):{short};"
+                         "不写周报(价格抓取失败/停牌须排查,不可静默退化成观察)")
+    gen = datetime.now().astimezone().isoformat(timespec="seconds")
+    weekly = build_weekly_report(normalized, args.as_of, gen, iv_feed_ref=os.path.basename(args.iv_feed))
+    write_weekly_report(weekly, feed, args.out)
+    actions = {}
+    for r in weekly["reports"]:
+        actions[r["m67"]["table"]["操作"]] = actions.get(r["m67"]["table"]["操作"], 0) + 1
+    print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out}")
+
+
+if __name__ == "__main__":
+    main()

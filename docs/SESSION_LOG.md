@@ -8,6 +8,194 @@
 
 ---
 
+## 2026-06-10 — Claude `提交` (A-short batch ② weekly pipeline, post Codex PASS) — **DONE (local master)**
+
+**Gate**: Codex final re-`审查` PASS (no Required; 5+3+1 = 9 `R-ASHORT-WEEKLY-*` repairs all verified). Committed to LOCAL master only (no push). Scope: weekly pipeline runner + weekly-report schema + tests + design doc + engine hard_veto add-on + README/register/SESSION_LOG. Untracked `A股长线ETF配置框架.md` excluded.
+
+**Batch ② complete** → A-short Phase 5 engineering is end-to-end wired: EGS top-N → Slice A overlay → IV feed → Phase 5 engine → weekly M6.7 report, with consumer-validation on every input. Remaining is a user-authorized `执行` of a real weekend run, then the two validation doors (comparison-track ≥12 obs / 12-month ship gate) over time.
+
+---
+
+## 2026-06-10 - Codex `审查` (A-short batch ② weekly pipeline final re-review) - **PASS**
+
+**Scope reviewed**: uncommitted working tree after Claude's price-series PIT/freshness repair over tracked `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `runners/a_short_phase5_engine.py`, `tests/test_a_short_phase5_engine.py`; untracked `docs/a_short_weekly_pipeline_design_20260610.md`, `runners/a_short_weekly_pipeline.py`, `schemas/a_short_weekly_report.schema.json`, `tests/test_a_short_weekly_pipeline.py`; HEAD `2aa8e2a`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production write / commit.
+
+**Verdict**: PASS. No remaining Required finding in the reviewed A-short batch ② weekly pipeline slice. The prior 5 Required, the later 3 Required, and the final price-series PIT/freshness Required are all verified repaired in the working tree.
+
+**Closure checks**:
+- `_fetch_price_series()` now validates provider `trade_date` values as real calendar `YYYYMMDD`, rejects future rows (`trade_date > --as-of/end`), requires latest fetched bar to equal the weekly `--as-of`, and aborts without writing on violation.
+- `main()` now validates `analysis_input` through the repo contract and requires `analysis_input.trade_date == --as-of`.
+- The writer rejects invalid weekly `as_of`, future IV feed data, invalid overlay artifacts, production-shaped `result/a_short/...` output paths, missing/short price coverage, and real EGS hard-risk fields cannot become `建仓`.
+
+**Verification**:
+- Targeted A-short batch suite passed: weekly pipeline + IV build + Phase 5 engine + IV probe/execution + overlay + route-doc guard = 182/182 OK.
+- `py_compile runners/a_short_weekly_pipeline.py runners/a_short_phase5_engine.py` OK.
+- `git diff --check` OK before this review-log edit (CRLF warnings only).
+- Independent adversarial probes confirmed future/stale/non-calendar price rows are rejected, fake `tushare` through `main(... --confirm-fetch-authorized)` rejects future rows without writing, and latest==as_of writes.
+- Full `unittest discover -v` still has the known six import-time errors from `A-EGS/egs_main.py` calling `ts.set_token(TOKEN)` and trying to write `C:\Users\cnhea\tk.csv`; 1370 tests ran, 6 errors, all outside this slice.
+
+**Register outcome**: no new material finding. Added a top-level closeout record in `docs/system_risk_register.md` for the batch ② Required repair set.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short batch ② weekly pipeline; price-series PIT/freshness P0) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: new P0 `R-ASHORT-WEEKLY-PRICE-SERIES-PIT-FRESHNESS-GAP` repaired + adversarially tested, **uncommitted**, awaiting Codex re-`审查`. HEAD `2aa8e2a`. (Prior 8 Required all confirmed holding by Codex.)
+
+**Fix**: `_fetch_price_series` now validates every provider `trade_date` as a real calendar date, rejects any future bar (`trade_date > end`/as_of), and requires the latest bar to equal `end` (== `--as-of`; exact-match, not a tolerance) — any violation `SystemExit` aborts without writing. Tests: future bar / stale latest / non-calendar date / fake-`tushare`-through-`main` (no file) / latest==end happy path.
+
+**Files**: `runners/a_short_weekly_pipeline.py`, `tests/test_a_short_weekly_pipeline.py` (+5), `docs/{a_short_weekly_pipeline_design_20260610,system_risk_register}.md`.
+
+**Verification**: A-short batch suite **170/170 OK** (weekly 41 tests; route-doc guard 14/14 incl.); `py_compile` OK.
+
+**Next**: Codex re-`审查`. PASS → `提交`; else another `修复`.
+
+---
+
+## 2026-06-10 - Codex `审查` (A-short batch ② weekly pipeline; 3-Required repair re-review) - **FAIL**
+
+**Scope reviewed**: uncommitted working tree after Claude's 3-Required repair over tracked `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `runners/a_short_phase5_engine.py`, `tests/test_a_short_phase5_engine.py`; untracked `docs/a_short_weekly_pipeline_design_20260610.md`, `runners/a_short_weekly_pipeline.py`, `schemas/a_short_weekly_report.schema.json`, `tests/test_a_short_weekly_pipeline.py`; HEAD `2aa8e2a`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production write / commit.
+
+**Verdict**: FAIL. The three prior re-review Required fixes are substantively repaired, but a new same-class P0 remains in the real price-fetch path: the weekly pipeline can write an official-looking M6.7 weekly report from future or stale price bars.
+
+**Prior Required status**:
+- `R-ASHORT-WEEKLY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP`: verified repaired in working tree. `main()` now calls `validate_analysis_input_file()` and rejects schema-invalid / stale / future `analysis_input.trade_date != --as-of` before writing.
+- `R-ASHORT-WEEKLY-OFFICIAL-OUTPUT-ROOT-MISMATCH`: accepted as repaired by contract narrowing. README/design/error text now state caller-controlled output path with `research/results/` convention, while hard-refusing `result/a_short/...`; arbitrary non-research temp output is no longer a contradiction.
+- `R-ASHORT-WEEKLY-WRITE-ASOF-CALENDAR-GAP`: verified repaired in working tree. Empty weekly envelope with `as_of=20260631` now raises before writing.
+
+**Required**:
+- `R-ASHORT-WEEKLY-PRICE-SERIES-PIT-FRESHNESS-GAP` (P0): `_fetch_price_series()` sorts provider rows and returns only `{high, low, close}`; it never validates provider `trade_date` as a real calendar date, never rejects rows after `end` / weekly `as_of`, and never requires the latest returned bar to match the run `as_of`. Independent probes showed `_fetch_price_series(..., end=20260609)` accepts a future `trade_date=20260630` row and includes its `high=99.0 / low=1.0 / close=50.0`; it also accepts a 30-row series whose latest dates are all in `202601xx`. A fake `tushare` module through `main(... --confirm-fetch-authorized)` wrote `weekly.json` in both the future-row and stale-row cases. Required repair: validate every fetched `trade_date` as real `YYYYMMDD`, reject provider rows with `trade_date > end`, require latest fetched bar to equal `analysis_input.trade_date / --as-of` for included candidates (or document and test an explicit reviewed tolerance), abort without writing on violation, and add adversarial tests for future rows and stale latest bars.
+
+**Verification**:
+- Targeted A-short suite passed: weekly pipeline + IV build + Phase 5 engine + IV probe/execution + overlay + route-doc guard = 178/178 OK.
+- `py_compile runners/a_short_weekly_pipeline.py runners/a_short_phase5_engine.py` OK.
+- `git diff --check` OK before review-log edits (CRLF warnings only).
+- Full `unittest discover -v` still fails in this environment with the known six import-time errors from `A-EGS/egs_main.py` calling `ts.set_token(TOKEN)` and trying to write `C:\Users\cnhea\tk.csv`; 1365 tests ran, 6 errors, all pre-existing/outside this slice.
+- Independent probes confirmed the three previous Required fixes and reproduced the new price-series PIT/freshness leak.
+
+**Register outcome**: new P0 Required ID `R-ASHORT-WEEKLY-PRICE-SERIES-PIT-FRESHNESS-GAP` added to `docs/system_risk_register.md`. Do not commit or execute the real weekly run until repaired and re-reviewed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short batch ② weekly pipeline; 3 re-review Required) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: 3 new Required repaired + adversarially tested, **uncommitted**, awaiting Codex re-`审查`. HEAD `2aa8e2a`. (Prior 5 Required confirmed holding by Codex re-review.)
+
+**Fixes** (register entries `open`→`in_progress` with repair detail):
+- `R-ASHORT-WEEKLY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP` (P0): `main` now validates `--analysis-input` via repo contract `validate_analysis_input_file()` (schema + PIT) and requires `analysis_input.trade_date == --as-of` (rejects mismatch/future/stale). Tests for stale/future/malformed; test envelope switched to `schemas/examples/analysis_input.example.json`.
+- `R-ASHORT-WEEKLY-OFFICIAL-OUTPUT-ROOT-MISMATCH` (P1): chose honest narrower contract — README/design/error text now "caller-controlled path (convention research/results/), hard-refuses production `result/a_short/<date>`" (no longer "only research/results"). Guard unchanged.
+- `R-ASHORT-WEEKLY-WRITE-ASOF-CALENDAR-GAP` (P1): `validate_weekly_report` validates `weekly.as_of` as a real calendar date FIRST (covers empty-report envelopes). Test for `as_of=20260631` empty → reject, no file.
+- Bonus (same class as prior #3): removed invented non-contract `cand.cninfo_vetoed` read; `regulatory_legacy_vetoed` hard-False (EGS Stage3 removes regulator-vetoed names upstream, §10).
+
+**Files**: `runners/a_short_weekly_pipeline.py`, `tests/test_a_short_weekly_pipeline.py` (+adversarial), `docs/{README,a_short_weekly_pipeline_design_20260610,system_risk_register}.md`.
+
+**Verification**: A-short batch suite **166/166 OK** (weekly 37 tests; route-doc guard 14/14 incl.); `py_compile` OK.
+
+**Next**: Codex re-`审查`. PASS → `提交`; else another `修复`.
+
+---
+
+## 2026-06-10 - Codex `审查` (A-short batch ② weekly pipeline repair re-review) - **FAIL**
+
+**Scope reviewed**: uncommitted working tree after Claude repair over tracked `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `runners/a_short_phase5_engine.py`, `tests/test_a_short_phase5_engine.py`; untracked `docs/a_short_weekly_pipeline_design_20260610.md`, `runners/a_short_weekly_pipeline.py`, `schemas/a_short_weekly_report.schema.json`, `tests/test_a_short_weekly_pipeline.py`; HEAD `2aa8e2a`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production write / commit.
+
+**Verdict**: FAIL. The prior five Required fixes were mostly closed under direct mutation probes, but re-review found new commit-blocking consumer-validation and write-contract gaps in the weekly pipeline entrypoint / sanctioned writer.
+
+**Prior Required status**:
+- `R-ASHORT-WEEKLY-IV-FEED-PIT-CROSS-ASOF`: verified repaired in working tree. Future `feed.as_of` and future latest feed `trade_date` now raise before write.
+- `R-ASHORT-WEEKLY-PRICE-FETCH-FAIL-OPEN`: verified repaired in working tree. `_fetch_price_series()` uses `asset="E"`, provider exception raises `SystemExit`, and empty/short price coverage aborts without writing.
+- `R-ASHORT-WEEKLY-EGS-HARD-RISK-MAPPING-GAP`: verified repaired in working tree. Real `is_lock`, `suspension.is_suspended`, and `hard_veto` each produce non-build hard-veto behavior.
+- `R-ASHORT-WEEKLY-OVERLAY-CONSUMER-VALIDATION-GAP`: verified repaired in working tree. Future/stale/malformed/count-drift overlay is rejected before write.
+- `R-ASHORT-WEEKLY-OFFICIAL-OUTPUT-PATH-BOUNDARY`: only partially repaired. `result/a_short/...` is rejected, but the durable claim "writes only to research/results" is still false.
+
+**Required**:
+- `R-ASHORT-WEEKLY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP` (P0): `main()` reads `--analysis-input` with a local JSON loader and then iterates `ai.get("candidates", [])`; it never calls the existing `engine.data.analysis_input_contract.validate_analysis_input_file()` and never requires `analysis_input.trade_date == --as-of`. Independent probe used a malformed object with only `trade_date=20260630` and one candidate while running `--as-of 20260609`; the pipeline wrote `weekly.json` with `n_stocks=1` and weekly `as_of=20260609`. Required repair: validate the `analysis_input` artifact with the repo contract, reject schema-invalid payloads, reject `trade_date` mismatch/future/stale relative to `--as-of`, and add adversarial tests for malformed, future, and stale analysis_input.
+- `R-ASHORT-WEEKLY-OFFICIAL-OUTPUT-ROOT-MISMATCH` (P1): `docs/README.md` and the design doc still say weekly output writes only to `research/results`, but `_reject_production_output_path()` only rejects paths containing `/result/a_short/`. Independent probe wrote an official-shaped weekly report to `not_research_results/weekly.json`. Required repair: either enforce an allowed output root under `research/results` (and test arbitrary non-research path rejection), or change README/design/error text to the honest narrower contract: caller-controlled path, but never `result/a_short/...`.
+- `R-ASHORT-WEEKLY-WRITE-ASOF-CALENDAR-GAP` (P1): `write_weekly_report()` is the sanctioned write path, but it does not validate the weekly envelope `as_of` as a real calendar date unless at least one per-stock M6.7 report exists. Independent probe built an empty weekly report with `as_of=20260631`; schema pattern accepted it and `write_weekly_report()` wrote the file. Required repair: validate `weekly.as_of` as a real `YYYYMMDD` calendar date in the weekly envelope consistency layer, including empty-report cases; add an adversarial writer-path test.
+
+**Verification**:
+- Targeted A-short suite passed: weekly pipeline + IV build + Phase 5 engine + IV probe/execution + overlay + route-doc guard = 175/175 OK.
+- `py_compile runners/a_short_weekly_pipeline.py runners/a_short_phase5_engine.py` OK.
+- `git diff --check` OK before review-log edits (CRLF warnings only).
+- Full `unittest discover -v` still fails in this environment with the known six import-time errors from `A-EGS/egs_main.py` calling `ts.set_token(TOKEN)` and trying to write `C:\Users\cnhea\tk.csv`; 1362 tests ran, 6 errors, all pre-existing/outside this slice.
+- Independent probes confirmed the old IV/price/EGS/overlay fixes and the three residual/new gaps above.
+
+**Register outcome**: three new Required IDs added to `docs/system_risk_register.md`; the output-root item explicitly extends the prior path-boundary finding. Do not commit or execute the real weekly run until repaired and re-reviewed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short batch ② weekly pipeline; 5 Codex Required) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: 5 Required all repaired + adversarially tested in the working tree, **uncommitted**, awaiting Codex re-`审查` (commit only after PASS). HEAD `2aa8e2a`.
+
+**Fixes** (register entries flipped `open`→`in_progress` with per-ID repair detail + verification):
+- `R-ASHORT-WEEKLY-IV-FEED-PIT-CROSS-ASOF` (P0): `validate_weekly_report` now rejects `feed.as_of > weekly.as_of` + latest feed `trade_date > weekly.as_of`.
+- `R-ASHORT-WEEKLY-PRICE-FETCH-FAIL-OPEN` (P0): `_fetch_price_series` uses `asset="E"` + re-raises provider errors as `SystemExit` (no `[]` swallow); `main` price-coverage gate (`MIN_PRICE_OBS=20`) aborts WITHOUT writing on any thin/missing series.
+- `R-ASHORT-WEEKLY-EGS-HARD-RISK-MAPPING-GAP` (P0): `normalize_candidate` maps REAL contract `derived_flags.is_lock` / `event_risk.suspension.is_suspended` / `derived_flags.hard_veto`; engine `classify_risk_families` gains an independent `derived.hard_veto` hard-veto. (No `vol_confirm` in contract → 突破 entry dormant in v1, documented.)
+- `R-ASHORT-WEEKLY-OFFICIAL-OUTPUT-PATH-BOUNDARY` (P1): `write_weekly_report` → `_reject_production_output_path` rejects `result/a_short/` paths.
+- `R-ASHORT-WEEKLY-OVERLAY-CONSUMER-VALIDATION-GAP` (P1): `--overlay` → `_load_validated_overlay` = schema + `validate_overlay_summary_consistency` + `as_of == weekly.as_of`.
+
+**Files touched**: `runners/a_short_weekly_pipeline.py`, `runners/a_short_phase5_engine.py` (additive hard_veto), `tests/test_a_short_weekly_pipeline.py` (+13 adversarial), `tests/test_a_short_phase5_engine.py` (+1), `docs/a_short_weekly_pipeline_design_20260610.md`, `docs/system_risk_register.md`.
+
+**Verification**: A-short batch suite **163/163 OK** (weekly file 34 tests; route-doc guard 14/14 incl.). Engine change additive (`derived.hard_veto` default-absent → no batch ① regression).
+
+**Next**: Codex re-`审查` (adversarial). PASS → `提交`; else another `修复`.
+
+---
+
+## 2026-06-10 — Codex `审查` (A-short batch ② weekly pipeline wiring) — **FAIL**
+
+**Scope reviewed**: uncommitted batch ② weekly pipeline over tracked `docs/README.md`, `docs/SESSION_LOG.md`, plus untracked `docs/a_short_weekly_pipeline_design_20260610.md`, `runners/a_short_weekly_pipeline.py`, `schemas/a_short_weekly_report.schema.json`, `tests/test_a_short_weekly_pipeline.py`; HEAD `2aa8e2a`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare call / network fetch / production write / commit.
+
+**Verdict**: FAIL. The pure fixture tests pass, but the executable weekly pipeline is not commit-safe: it can write an official-looking weekly report from future IV data, from missing/failing price data, and from real EGS hard-risk fields that are not mapped into the Phase 5 engine.
+
+**Required**:
+- `R-ASHORT-WEEKLY-IV-FEED-PIT-CROSS-ASOF` (P0): `validate_weekly_report()` validates the IV feed internally but never checks `iv_feed.as_of <= weekly.as_of` or the consumed latest IV trade date `<= weekly.as_of`. Independent mutation used weekly `as_of=20260609` with feed `as_of=20260630` and latest feed trade date `20260624`; validation passed. Required repair: reject future feed `as_of` / future latest usable IV date relative to the weekly run, and add adversarial tests for future-feed-as-of and future-latest-series-date.
+- `R-ASHORT-WEEKLY-PRICE-FETCH-FAIL-OPEN` (P0): `_fetch_price_series()` calls Tushare `pro_bar(... asset="FD")` for stock codes, while installed Tushare `pro_bar` documents/defaults `asset="E"` for stocks/exchange funds and `FD` for funds. It also catches provider errors / empty provider responses and returns `[]`; `main()` then writes a weekly report where the candidate becomes `观察` instead of aborting. Independent probe with `price_provider=lambda code: []` wrote `weekly.json` with `n_stocks=1`, action `观察`, and no error. Required repair: use the correct stock asset, distinguish provider failure/empty required price coverage from a valid no-trade decision, abort without writing on missing required price series for any included candidate, and add tests for wrong asset prevention plus empty/exception price provider no-file behavior.
+- `R-ASHORT-WEEKLY-EGS-HARD-RISK-MAPPING-GAP` (P0): `normalize_candidate()` reads non-contract keys `derived_flags.limit_locked` / `derived_flags.suspended`, but real `analysis_input` uses `derived_flags.is_lock` and `event_risk.suspension.is_suspended`; it also ignores `derived_flags.hard_veto`. Independent probe with actual-style `is_lock=True`, `suspension.is_suspended=True`, `hard_veto=True` normalized both `limit_locked` and `suspended` to false and produced `建仓` with no hard veto. Required repair: map the real EGS contract fields into Phase 5 hard-risk inputs, and add actual-analysis-input-shape tests proving lock/suspension/hard_veto cannot become `建仓`.
+- `R-ASHORT-WEEKLY-OFFICIAL-OUTPUT-PATH-BOUNDARY` (P1): docs/README claim the weekly pipeline writes only to `research/results` and never `result/a_short/<date>`, but `--out` is unrestricted. Independent probe wrote a weekly file under a `result/a_short/20260609/weekly.json` shaped path. Required repair: either enforce an allowed output root / reject `result/a_short` production-shaped paths, or remove the claim from durable docs and explicitly mark path responsibility; tests must match the chosen contract.
+- `R-ASHORT-WEEKLY-OVERLAY-CONSUMER-VALIDATION-GAP` (P1): `main()` consumes the Slice A overlay artifact as arbitrary JSON and never runs `a_short_theme_overlay_comparison` schema + `validate_overlay_summary_consistency()`, nor checks overlay `as_of` against weekly `as_of`. A stale/future/malformed overlay can alter `eligible` / `crowding_hit` without being caught. Required repair: schema + consistency validate the overlay when supplied, reject future/stale `as_of` relative to the weekly run, and add adversarial tests for malformed/candidate-count-drift/future overlay.
+
+**Verification**:
+- Targeted A-short batch suite passed despite the above gaps: weekly pipeline + IV build + Phase 5 engine + IV probe/execution + overlay + route-doc guard = 161/161 OK. This proves the current tests miss the adversarial execution cases.
+- `py_compile runners/a_short_weekly_pipeline.py` OK.
+- `schemas/a_short_weekly_report.schema.json` JSON parse OK.
+- `git diff --check` OK (CRLF warnings only).
+- Independent probes confirmed: future IV feed relative to weekly `as_of` passes validation; empty price series writes a weekly report; price fetch uses `asset="FD"`; real EGS `is_lock` / `suspension.is_suspended` / `hard_veto` can still produce `建仓`; `--out` can write to a `result/a_short/...` shaped path.
+- Full `unittest discover -v` is still not green in this environment: 1348 tests ran, 6 errors all from pre-existing `A-EGS/egs_main.py` import-time `ts.set_token(TOKEN)` write to `C:\\Users\\cnhea\\tk.csv`; this remains outside the batch ② diff.
+
+**Register outcome**: the five Required IDs above are added to `docs/system_risk_register.md` as open blockers for batch ②. Do not commit or execute the real weekly run until repaired and re-reviewed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-10 — Claude `起草` (A-short batch ② = weekly pipeline; design+code+tests) — **ROUTED TO CODEX `审查`**
+
+**Live gate**: batch ② drafted, **uncommitted**, awaiting Codex independent `审查` (review mandatory; commit only after PASS). HEAD `2aa8e2a`.
+
+**What**: strings the reviewed parts (Slice A overlay / IV feed build / Phase 5 engine, all committed) into one weekend run. New files:
+- `runners/a_short_weekly_pipeline.py` — `normalize_candidate`(EGS analysis_input candidate + price series + overlay row + market-wide IV pct + account/regime → Phase 5 engine input, field-aligned), `build_weekly_report`(per-stock `build_m67_report` → weekly envelope), `validate_weekly_report`, `write_weekly_report`, `latest_iv_percentile`, thin `main`(reads artifacts + `pro_bar adj=qfq` price fetch behind `--confirm-fetch-authorized`, `price_provider` injectable for tests).
+- `schemas/a_short_weekly_report.schema.json` — weekly envelope; reports[] also re-validated per-item against the m67 schema by `write_weekly_report`.
+- `tests/test_a_short_weekly_pipeline.py` — 21 tests (normalize mapping, envelope, 建仓/否决 paths, consumer-validation, write contract, IV-missing propagation, main wiring with injected provider, schema).
+- docs: `docs/a_short_weekly_pipeline_design_20260610.md` (design slice), README routing row.
+
+**Key decisions**: (1) IV is **market-wide** — all candidates in a week share the feed's latest `iv_percentile_252d`; missing → engine `observe_only_missing_feed` (no fail-open). (2) **Consumer-validation**: `validate_weekly_report` calls `validate_feed_summary_consistency` on the consumed IV feed + `validate_m67_consistency` per report; `write_weekly_report` also re-runs the m67 schema per report. (3) Price fetch is **execution-time** (`main` only); pure core is fully fixture-tested.
+
+**Honest scope note on register P2**: the open P2 "IV feed probe summary consumer-validation obligation" is about a reader of the **probe summary**. This pipeline does NOT read the probe summary — it reads the **IV feed** — so it applies the *same-shape* consumer-validation to the feed but does **not** close that P2 (no consumer reads the probe summary today). Left `open`, not falsely resolved.
+
+**Self-test**: 149/149 OK across the A-short suite + route-doc guard (21 new weekly-pipeline tests included). Fixed a file-handle leak in `main` (context-managed reads).
+
+**Next**: Codex `审查` (apply the adversarial write-contract standard). After PASS → `修复` if Required, else `提交`; then the only remaining step is a user-authorized `执行` of a real weekend run.
+
+---
+
 ## 2026-06-10 — Claude `执行` (A-short IV feed BUILD backfill, live Tushare, user-authorized) — **DONE → real 252d IV feed built**
 
 **Authorization**: user `执行下一步` (after committing batch ① `1dc4c0d`). Ran `runners.a_short_iv_feed_build --as-of 20260609 --out research/results/a_short_iv_feed_20260609/iv_feed.json --confirm-fetch-authorized` against **live Tushare** (sandbox disabled for this authorized fetch). HEAD `1dc4c0d`; TUSHARE_TOKEN set.
