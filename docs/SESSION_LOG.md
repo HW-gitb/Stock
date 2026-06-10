@@ -8,6 +8,97 @@
 
 ---
 
+## 2026-06-10 — Claude `提交` (A-short Slice A overlay design repair, post re-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required/Optional). Re-read SESSION_LOG top + Codex verdict + git status before committing (HEAD `f918594`).
+
+**Committed (one scope = Slice A overlay DESIGN, local master, no push, ETF file excluded)**: `docs/a_short_theme_overlay_slice_a_design_20260610.md` (design with the 2 Required fixes) + `docs/README.md` (routing pointer) + `docs/system_risk_register.md` (the `A-short Slice A theme-overlay computation contract gaps` entry flipped `open`→`resolved` with PASS evidence) + this log. No runner / schema / business code / data artifact changed; `skills/a_short_analysis/reference/v14.2_spec.md` untouched (frozen).
+
+**State after commit**: Slice A overlay design frozen and review-passed. Design-only — authorizes no runner code / fetch / run / EGS production-weight change / real money / ship-gate; overlay is comparison-track, non-production; does not change `final_score`/`tier`/admission. A-short remains `risk_filter_only`.
+
+**Process decision (user 2026-06-10)**: from here the build uses a COARSER granularity — each remaining slice bundles **design + schema + runner code + tests** into ONE `起草` → ONE `审查` (instead of separate design-slice then runner-slice). Remaining ≈ 3 bundled slices: (1) IV feed (probe + 50ETF IV + 252d percentile + market_context); (2) **Slice A runner** (implements this frozen design + tests + EGS governance/parity update); (3) Slice B engine + 周末 pipeline (may be one review). NOT batched: "do everything then one mega-review" — review quality / commit-scope / per-run data-fetch authorization / dependency chain keep implementation review per-bounded-slice. IV feed's live Tushare pull still needs explicit user `执行` authorization at run time.
+
+**Next**: per the coarser granularity, the next slice is the **Slice A runner** (bundled design+code+tests, one review) — or the IV feed slice — at the user's direction. Each remaining slice: one `起草` → one `审查` → `修复` if needed → `提交` → `执行` (data pulls authorized per run).
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short Slice A Required computation-contract repair) — **PASS**
+
+**Scope reviewed**: current repaired Slice A design-only diff: `docs/a_short_theme_overlay_slice_a_design_20260610.md` (untracked intended design), `docs/README.md`, `docs/SESSION_LOG.md`, and `docs/system_risk_register.md`; unrelated untracked `A股长线ETF配置框架.md` ignored. No runner/schema/business code/data artifact was edited or executed.
+
+**Verdict**: PASS. The two prior Required findings are fixed in the working tree. `R-ASLICEA-INDUSTRY-ORTHO-SCALE`: the design now explicitly residualizes `industry_heat` against `theme_heat`, then percentile-normalizes the residual back to 0-100 as `industry_heat_norm⊥`, and the weight formula uses that normalized field rather than the raw residual. `R-ASLICEA-FIT-GATE-CONSISTENCY`: the design now defines one `fit_pass=(fit≠unknown)∧(fit≥fit_floor)` condition and reuses it in the formula, eligibility gate, output flags, and invariant checklist.
+
+**Required**: none.
+
+**Optional**: none before commit. Numeric thresholds / promotion margins may remain delegated to the future runner sub-slice, but that sub-slice must update governance + parity tests before any code/run.
+
+**Register**: already covered by `A-short Slice A theme-overlay computation contract gaps` in `docs/system_risk_register.md`; both findings are fixed in the reviewed working tree. Keep the register entry open until Claude `提交` records the reviewed commit, then mark it resolved with this PASS evidence.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_route_doc_ledger_status_consistency -v` → 14/14 OK.
+- `git diff --check` → OK, with only expected LF/CRLF warnings.
+- Direct scan found no final-output raw HTML issue beyond the process rule/examples that explicitly forbid emitting raw tags.
+
+**Next**: Claude may `提交` the Slice A design repair + route/register/log closeout. This PASS authorizes commit only; it does not authorize runner implementation, data fetch, run/backtest, production ranking change, ship-gate/full-size claim, DataHub work, or broker/order automation.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short Slice A — 2 Required computation-contract gaps) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` **FAIL / Required** (entry below). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `f918594`; `docs/system_risk_register.md` now M with Codex's two registered findings, uncommitted).
+
+**Fixed (design doc only: `docs/a_short_theme_overlay_slice_a_design_20260610.md`; no runner/schema/code/data):**
+- **R-ASLICEA-INDUSTRY-ORTHO-SCALE**: the orthogonalized industry term is a zero-centred regression residual with arbitrary scale; weighting it directly against 0–100 terms is incommensurate. Fixed: residualize cross-sectionally THEN **percentile-normalize back to 0–100** → `industry_heat_norm⊥ = pct_rank(residual)×100`; the weight formula now uses `industry_heat_norm⊥` (not the raw residual); added the matching output field + the §7 "theme⊥industry + 同尺度 / 禁止零中心残差加权" invariant.
+- **R-ASLICEA-FIT-GATE-CONSISTENCY**: three inconsistent fit conditions (formula `fit≥floor`, eligibility `fit≠unknown`, output only `fit_unknown`). Fixed: single `fit_pass = (fit≠unknown) ∧ (fit≥fit_floor)` defined once and reused in the weight formula (`fit_mult`), the eligibility 门槛, the output flags (added `fit_pass`), and the §7 invariant. theme AND industry bonus both gate on `fit_pass`.
+
+**Boundary**: design-doc wording only; still design-only — authorizes no runner code / fetch / run / EGS production change / real money / ship-gate; overlay stays comparison-track, non-production; V14.2 frozen. No frozen weight / threshold value changed (the fixes are scale-normalization + condition-unification, not new numbers). Uncommitted (design doc + register + this log), awaiting re-`审查`.
+
+**Register**: Codex's two entries in `docs/system_risk_register.md` (`R-ASLICEA-INDUSTRY-ORTHO-SCALE`, `R-ASLICEA-FIT-GATE-CONSISTENCY`) are fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then the Slice A runner sub-slice.
+
+---
+
+## 2026-06-10 — Codex `审查` (A-short Slice A — EGS 赛道热度 overlay detailed design) — **FAIL / Required**
+
+**Scope reviewed**: tracked `docs/README.md`, `docs/SESSION_LOG.md`; untracked intended design `docs/a_short_theme_overlay_slice_a_design_20260610.md`; unrelated untracked `A股长线ETF配置框架.md` ignored. Reviewed current diff, parent commit `f918594`, `docs/CURRENT.md`, `docs/system_risk_register.md`, and the Slice A design against the parent Codex O1/O2 notes. No runner/schema/business code/data artifact was edited.
+
+**Verdict**: FAIL / not commit-safe yet. The design is directionally correct and preserves the key boundaries: comparison-track only, no production `final_score` / `tier` / admission change, no fetch/run/backtest/real-money/ship-gate claim, dual-PIT concept+SW mapping requirement, and governance/parity routing for frozen thresholds. However two core scoring-contract ambiguities must be fixed before commit because the runner sub-slice would otherwise implement a mathematically unstable or internally inconsistent overlay gate.
+
+**Required**:
+- `R-ASLICEA-INDUSTRY-ORTHO-SCALE` (materiality: schema/scoring-contract correctness; PIT label: no market-data PIT). In `docs/a_short_theme_overlay_slice_a_design_20260610.md`, `industry_heat_score` is 0-100, but `industry_heat⊥` is defined as a regression residual and then weighted directly in `overlay_raw`. The spec never says whether that residual is re-ranked / clipped / shifted back to 0-100. Required repair: define the exact post-orthogonalization scale before weighting, preferably residualize cross-sectionally and then percentile-rank / normalize `industry_heat⊥` to 0-100, or explicitly choose a bounded exposure-cap method; add the matching invariant/output wording for the runner sub-slice.
+- `R-ASLICEA-FIT-GATE-CONSISTENCY` (materiality: schema/scoring-contract correctness; PIT label: no market-data PIT). The formula says theme/industry bonus is zero unless `fit != unknown` and `fit >= fit_floor`, but the "赛道红利资格门槛" only requires `fit != unknown`, and the output flags include `fit_unknown` but not `fit_pass`. Required repair: use one definition everywhere, e.g. `fit_pass = fit != unknown AND fit >= fit_floor`; use `fit_pass` for both theme and industry bonus eligibility; include `fit_pass` in the overlay artifact/test checklist.
+
+**Optional**: none beyond the Required fixes. The O2 numeric thresholds may still be frozen in the runner sub-slice as long as that sub-slice is reviewed before code/run and updates governance + parity tests.
+
+**Register**: material findings recorded in `docs/system_risk_register.md` under `A-short Slice A theme-overlay computation contract gaps` with Required IDs `R-ASLICEA-INDUSTRY-ORTHO-SCALE` and `R-ASLICEA-FIT-GATE-CONSISTENCY`.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_route_doc_ledger_status_consistency -v` → 14/14 OK.
+- `git diff --check` → OK, with only expected LF/CRLF warnings.
+- No schema/runner tests or recomputation exist for this design-only slice.
+
+**Next**: Claude `修复` the two Required contract gaps; do not `提交` this Slice A design until re-review PASS.
+
+---
+
+## 2026-06-10 — Claude `起草` (A-short Slice A — EGS 赛道热度 overlay 详细设计) — **DONE, pending `审查`**
+
+**Authorization**: user `提交且执行下一步` — after committing the parent design slice (`f918594`), the "next step" is to `起草` the first implementation slice. Led with **Slice A** (heart of the 赛道热度 ask, self-contained on EGS-fetched data, 独立 of IV feed per roadmap). Re-read live git status before drafting (HEAD `f918594`, clean apart from the untracked ETF file).
+
+**Drafted (one scope = Slice A DESIGN, design-only, uncommitted)**:
+- `docs/a_short_theme_overlay_slice_a_design_20260610.md` — pins the overlay computation contract: `theme_heat`(5d+20d concept percentile, lead) + `industry_heat⊥`(SW L2/L1 vs CSI300/CSI1000/market 20d/60d, residualized on theme) as weighted; `breadth`=gate, `persistence`=0~1 multiplier, `fit`=gate+multiplier (proxies: amount-weight / corr-to-concept-index / multi-concept; else `unknown`→no bonus); `crowding_risk_family`(overheat/chasing/CHASE/高位缩量, one hard action, not extra subtraction). Frozen v1 weight `esp0.15+l40.45+theme_eff0.25+industry⊥0.15`; eligibility = theme/industry/breadth ≥2 pass ∧ fit≠unknown. v1 = re-rank existing pool only (no admission/final_score/tier change) + dropped-at-L0–L5 instrumentation. Output contract + comparison-track (CSI1000∧CSI300, clustered-t/dd/win/bad-ticket/false-neg) + 7 invariants→test checklist.
+- **Disposes父审查 O1/O2**: O1 — dual-PIT (concept membership AND SW L1/L2 mapping must both be as-of snapshots; no-snapshot period → forward-only; test makes current-mapping-for-history impossible). O2 — freeze breadth/theme/industry pass thresholds + persistence window + fit_floor + the "stable win" ≥12-obs promotion rule in `presets/a_short_screening_threshold_governance_20260602.json` + parity tests (done in the runner sub-slice).
+- `docs/README.md` routing row (stable pointer, design-only role).
+
+**Boundary**: design-only. **Authorizes NO runner code / data fetch / run / EGS production behavior or weight change / real money / ship-gate.** Overlay is comparison-track, non-production; does not change `final_score`/`tier`/admission. The runner sub-slice (own `起草`→`审查`→`提交`→`执行`) implements the schema + computation + tests and updates EGS governance/parity.
+
+**Verification**: NA (design-only markdown; invariants enumerated as the runner sub-slice's required-test checklist).
+
+**Next**: Codex `审查` of the Slice A design; then Claude `提交`; then the Slice A runner sub-slice. IV feed slice + Slice B + pipeline follow per the parent roadmap.
+
+---
+
 ## 2026-06-10 — Claude `提交` (A-short theme-overlay + Phase 5 DESIGN slice + Codex review-output rule, post-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交且执行下一步` after Codex `审查` **PASS** on the combined set (entries below; no Required). Re-read SESSION_LOG top + live `git diff` before committing: the working tree had grown to a combined scope — my design slice PLUS a Codex-authored 1-line `AGENTS.md` change (review-reply next-step output-format rule #9). Inspected the `AGENTS.md` diff directly; it is a sensible process tweak and was itself Codex-reviewed. SESSION_LOG entries for both scopes are interleaved, so splitting would require hunk-splitting the shared log; committed as the one combined reviewed set Codex blessed.
