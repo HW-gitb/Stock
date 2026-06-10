@@ -8,6 +8,96 @@
 
 ---
 
+## 2026-06-10 — Claude `提交` (A-short parent-design §9/§10 revision, post re-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required/Optional). Re-read SESSION_LOG top + Codex verdict + git status before committing (HEAD `b44525f`). Verified the 3 parent-design register entries are already `resolved` (Codex marked them with the re-review evidence) — no double-edit needed.
+
+**Committed (one scope = A-short parent-design §9/§10 revision, local master, no push, ETF excluded)**: `docs/a_short_theme_overlay_phase5_design_spec_20260610.md` (§9 周频/EOD cadence-scope + §10 三级 qualitative-evidence-tiers grounded in the user's 2000 Tushare points + EGS legacy `REGULATOR-VETO` bridge + tightened §3/§4) + `docs/system_risk_register.md` (3 entries resolved) + this log. Design-only; no code / fetch / run / EGS production change; `v14.2_spec.md` + `egs_main.py` untouched (EGS legacy veto described, not modified).
+
+**State after commit**: parent design now carries the Q1 (weekly-cadence boundary; intraday = human playbook, not system capability) and Q2 (Tier A structured-can-hard-veto / Tier B official-webpage strong-flag / Tier C web-LLM soft-flag; per-interface 2000-point probe before Tier A; EGS upstream REGULATOR-VETO stays legacy) conventions as written requirements for Slice B + the future qualitative-enrichment / execution wiring.
+
+**Next**: Slice B (Phase 5 deterministic engine) — bundled design+code+tests, consuming §9/§10 + the committed Slice A overlay (`05adf5e`) + IV probe (`b44525f`). The standing IV-feed summary consumer-validation register forward-item + user-authorized IV probe `执行` remain separate open threads.
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short parent-design §9/§10 repair) — **PASS**
+
+**Scope reviewed**: unstaged `docs/a_short_theme_overlay_phase5_design_spec_20260610.md`, `docs/SESSION_LOG.md`, and `docs/system_risk_register.md`; context checked against current `A-EGS/egs_main.py` Stage3 CNINFO behavior. Untracked `A股长线ETF配置框架.md` remains out of scope. Design-only review: no code / fetch / run / production behavior change reviewed or authorized.
+
+**Verdict**: PASS. The three Required doc-contract conflicts from the prior Codex review are closed.
+
+**Required**: none.
+
+**Closed findings**:
+- `R-ASHORT-CADENCE-OBSERVE-DRIFT`: §3 no longer classifies Level-2 / minute-book items as ordinary `observe_only`; the execution-field bullet now leaves only true data-probe items under observe/requires_external and routes cadence-scoped intraday rules to §9 `out_of_scope_by_weekly_cadence`.
+- `R-ASHORT-REGULATORY-WEB-VETO-LEGACY-CONFLICT`: §10 now states the current EGS CNINFO `REGULATOR-VETO` remains a legacy upstream production pre-screen until a separate reviewed EGS-governance change demotes it; the Tier B non-veto rule governs only new Phase 5 / Slice B qualitative handling.
+- `R-ASHORT-QUAL-TIER-COUNT-CONTRACT`: authoritative §10 now says "三级证据(Tier A/B/C)"; the latest repair log explicitly supersedes the earlier draft-log "four tiers" wording.
+
+**Optional**: none.
+
+**Register outcome**: the three A-short parent-design Required entries in `docs/system_risk_register.md` are marked resolved with this Codex re-review evidence. The standing IV-feed summary consumer-validation forward item remains open and unrelated to this parent-design commit.
+
+**Verification**: route-doc guard with bundled Python passed 14/14; `git diff --check` passed (CRLF warnings only). String scan confirmed the authoritative spec uses `三级证据`, retains the EGS legacy-veto bridge, and no longer leaves cadence-scoped intraday rules as plain observe-only execution fields. No Tushare call, no web fetch, no EGS run, no production scoring change, no commit.
+
+**Next**: Claude `提交`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short parent-design §9/§10 — 3 Required doc-consistency gaps) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` **FAIL** (entry below). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `b44525f`; register M with Codex's 3 entries). Read `A-EGS/egs_main.py:2952-3013` to describe the legacy veto accurately. Design-only.
+
+**Fixed (`docs/a_short_theme_overlay_phase5_design_spec_20260610.md` only):**
+- **R-ASHORT-CADENCE-OBSERVE-DRIFT**: the §3 execution-field bullet still listed Level-2 热插拔 / 盘口织布机·分钟挂单 under `observe_only` — contradicting §9. Fixed: removed the cadence-scoped intraday items from that bullet (kept only true data-probe items: analyst targets / unstable block-trade / northbound) and pointed the intraday ones to §9 `out_of_scope_by_weekly_cadence`.
+- **R-ASHORT-REGULATORY-WEB-VETO-LEGACY-CONFLICT**: §10 said Tier B regulatory webpage "never auto-veto", but EGS Stage3 already auto-removes candidates on CNINFO keyword hits (`A-EGS/egs_main.py:2952-3013` `REGULATOR-VETO`: 问询函/立案调查/监管关注/警示函). Fixed by writing one stable rule: the existing EGS `REGULATOR-VETO` stays as a **legacy upstream pre-screen** (runs before Slice B; this design changes no production); §10's "Tier B non-veto" governs only the NEW Phase 5/Slice B analysis layer and does not retroactively undo the EGS upstream filter; demoting the EGS veto to a strong-flag is a separate reviewed EGS-governance change. Two layers, different口径, non-conflicting.
+- **R-ASHORT-QUAL-TIER-COUNT-CONTRACT**: "四级证据" → "三级证据(Tier A/B/C)" in §10 (the table only ever had A/B/C; the earlier 起草 log's "four tiers" wording is superseded by this — the authoritative spec now reads 三级).
+
+**Verification**: route-doc guard 14/14. No code / fetch / run / production change; v14.2_spec + egs_main untouched (the EGS legacy veto is described, not modified). Uncommitted (spec + register + this log), awaiting re-`审查`.
+
+**Register**: Codex's 3 entries (cadence-observe-drift / regulatory-web-veto-legacy-conflict / qual-tier-count) fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then Slice B.
+
+---
+
+## 2026-06-10 — Codex `审查` (A-short parent-design §9/§10 revision) — **FAIL**
+
+**Scope reviewed**: unstaged `docs/a_short_theme_overlay_phase5_design_spec_20260610.md` and `docs/SESSION_LOG.md`; context read from `docs/README.md`, `docs/CURRENT.md`, `docs/system_risk_register.md`, `docs/AI_REVIEW_PROTOCOL.md`, and current `A-EGS/egs_main.py` regulatory Stage3 behavior. Untracked `A股长线ETF配置框架.md` remains out of scope. No code / fetch / run / production change reviewed or authorized.
+
+**Verdict**: FAIL. The new §9/§10 direction is mostly correct, but the parent design is not commit-safe because it still contains implementation-conflicting contract text.
+
+**Required**:
+- `R-ASHORT-CADENCE-OBSERVE-DRIFT` (P1, design contract / Slice B execution boundary): §9 correctly marks Rule 6.1 Level-2, Rule 7A 织布机/盘口分钟, M3.7 竞价校准, and legacy 盘中入场窗口 as `out_of_scope_by_weekly_cadence`, and §3 layer 3 also says cadence-scoped intraday items are not `observe_only`. But the same §3 still says the execution field subset will "**暂不实现 / 标 `observe_only` / `requires_external`**: Level-2 热插拔; ... 盘口织布机/分钟挂单厚度" at `docs/a_short_theme_overlay_phase5_design_spec_20260610.md:90-92`. That leaves the exact ambiguity Q1 was supposed to remove: future implementers can still treat minute/Level-2 rules as data-missing observe-only features instead of cadence-excluded rules. Required repair: remove cadence-scoped intraday items from that observe-only bullet, or rewrite it to point to §9 `out_of_scope_by_weekly_cadence`; keep only analyst target / block trade / northbound or other true data-probe items there.
+- `R-ASHORT-REGULATORY-WEB-VETO-LEGACY-CONFLICT` (P1, design contract / current pipeline compatibility): §10 says Tier B official webpage regulatory evidence "只强风险提示 + 人工确认,绝不自动杀票" and "监管问询无干净结构化源 → 归此层", but current production screening code still auto-removes candidates on CNINFO webpage keyword hits (`A-EGS/egs_main.py:2952-3013`, `REGULATOR-VETO`). Because the design declares no production change, this conflict will persist after commit unless the spec states the transition explicitly. Required repair: choose and write one stable rule: either current EGS CNINFO hard-veto remains a legacy upstream filter until a separate reviewed EGS change demotes it, or Slice B / future pipeline must not claim Tier B is non-veto while upstream EGS still removes those names. Do not leave "Tier B never auto-veto" and an existing upstream auto-veto path both unqualified.
+- `R-ASHORT-QUAL-TIER-COUNT-CONTRACT` (P2, design clarity): §10 says "四级证据" and SESSION_LOG says "four evidence tiers", but the table defines only Tier A / B / C. Required repair: either change the wording to "三级证据" everywhere, or add the missing fourth tier with explicit source and permission. This is low-risk, but it is a design contract and should not be committed ambiguous.
+
+**Optional**: none.
+
+**Register outcome**: the three Required findings were added to `docs/system_risk_register.md` hot queue as current design-slice blockers; they can be resolved by a small docs-only repair and re-review.
+
+**Verification**: `git diff --check` passed before this review-log write (CRLF warnings only); route-doc guard passed with bundled Python: `tests.test_route_doc_ledger_status_consistency` 14/14 OK. Ordinary `python` is not on PATH in this shell, so bundled Python was used. No data fetch, no Tushare call, no code execution beyond the route-doc guard, no production change, no commit.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `起草` (A-short parent-design revision: §9 cadence-scope + §10 qualitative-evidence-tiers) — **DONE, pending `审查`**
+
+**Authorization**: user `起草` to fix the Q1/Q2 design-口径 into the parent spec before Slice B (Codex's optimization + my additions agreed in chat). Re-read live git status before drafting (HEAD `b44525f`, clean apart from the untracked ETF file). Design-only; no code / no fetch / no production change; v14.2_spec frozen.
+
+**Drafted (one scope = parent-design revision, uncommitted)** — amended `docs/a_short_theme_overlay_phase5_design_spec_20260610.md`:
+- **§9 周频/EOD 系统边界 (Q1)**: intraday/minute rules (Rule 6.1 Level-2 热插拔, Rule 7A 织布机/盘口分钟, M3.7 竞价校准, legacy 盘中入场窗口) marked **`out_of_scope_by_weekly_cadence`** (distinct from observe_only — the weekly system shouldn't depend on them even if data later exists). System gives weekend preset levels only; **intraday reaction = human playbook, NOT a system capability** (fixes my prior over-claim); M6.7 must carry a "not monitoring intraday" caveat; held-position human emergency override; cross-reference scrub of M6.7/Rule12/OrderAudit to those intraday fields (impl-slice test).
+- **§10 定性风险获取分层 (Q2)**: four evidence tiers — **Tier A official-structured** (only EGS-confirmed + your 2000-point-accessible interfaces: 减持 stk_holdertrade / 解禁 share_float) may be hard-veto candidates under exact-match ∧ date-in-window ∧ reviewed-mapping; **Tier B official webpage** (巨潮/交易所 问询函·监管措施) = strong flag + user-confirm, never auto-veto (监管问询 has no clean structured source → here); **Tier C web+LLM** (媒体/景气/政策/隐蔽风险) = `llm_notes` only via `schemas/deterministic_report_enrichment.schema.json`, surfaced in M6.7 but can't change the decision. Grounded in the user's **2000 Tushare points**: confirmed (EGS-used) / to-probe (opt_basic/opt_daily=IV, block_trade, pledge) / doubtful (anns, news, 问询 structured); **probe each interface before assigning Tier A, don't assume**; web/LLM never auto-hard-veto; PIT for backtest; record source+time else unknown.
+- Tightened §4 layer-3 (`observe_only` no longer lists the cadence-scoped intraday items → they go to §9) and layer-4 (`llm_enrichment` now names the real enrichment schema); §8 open-items + header revision note aligned.
+
+**Boundary**: design-only; authorizes no code/fetch/run/EGS production change/real money/ship-gate; v14.2_spec frozen. These two sections are written requirements that Slice B (and the future qualitative-enrichment + execution wiring) must implement. Uncommitted (parent spec + this log), awaiting `审查`.
+
+**Verification**: NA (design markdown). The §9/§10 obligations become impl-slice test checklist items.
+
+**Next**: Codex `审查`; then Claude `提交`; then Slice B (consuming §9/§10 + the committed Slice A overlay + IV probe).
+
+---
+
 ## 2026-06-10 — Claude `提交` (A-short IV feed probe slice, post-审查 PASS) — **DONE (local master)**
 
 **Authorization**: user `加完提交` after Claude `审查` **PASS** (entry below) on the Codex-fixed probe. Re-read SESSION_LOG top + git status + register before committing (HEAD `05adf5e`).

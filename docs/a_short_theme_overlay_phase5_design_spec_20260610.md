@@ -3,7 +3,8 @@
 **日期**: 2026-06-10
 **类型**: design-only 设计规格(DESIGN SLICE)。**本文件不授权任何代码改动 / 数据抓取 / 回测运行 / EGS production 权重变更 / 真钱 / ship-gate 主张。** 它只固化设计,审查通过后再分两个实现切片落地。
 **冻结边界**: 不修改 `skills/a_short_analysis/reference/v14.2_spec.md`(冻结参考)。V14.2 的所有优化体现在 Phase 5 引擎 + `schemas/deterministic_report_coverage.md`,不动 spec 原文。
-**定位前提(已确认)**: A-short steady 当前是 `risk_filter_only`(见 `docs/CURRENT.md` §3),正向 alpha 未验证。本设计不改变这一底色;它让系统更连贯、可读、可测,但"能不能赚钱"仍交给前向证据(§7)。
+**定位前提(已确认)**: A-short steady 当前是 `risk_filter_only`(见 `docs/CURRENT.md` §3),正向 alpha 未验证。本设计不改变这一底色;它让系统更连贯、可读、可测,但"能不能赚钱"仍交给前向证据(§5)。
+**修订(2026-06-10)**: 增 §9(周频/EOD 系统边界,Q1)+ §10(定性风险获取分层,Q2,挂用户实际 2000 积分访问);收紧 §4 层级措辞。两节是 Slice B 的写定要求。
 
 ---
 
@@ -72,8 +73,8 @@ overlay_score = esp_score×0.15 + l4_score×0.45 + theme_heat⊥×0.25 + industr
 **V14.2 四层归位(只有第 1 层能终止):**
 1. `hard_veto` — Rule 6 核心否决、ST/退市、监管、减持、闪崩、流动性底线、熔断、T+1/涨跌停不可执行、ship-gate/manual-only 边界。**保留严苛。**
 2. `downgrade_or_weight_adjustment` — 过热/追高/效率替代、行业逆风、盈亏比偏弱(非明显坏结构)、组合暴露过高。
-3. `observe_only` — 数据缺失、Level-2/分析师目标价/盘口分钟不可用、IV 未接入时的占位。
-4. `llm_enrichment` — 行业景气、政策、48h 监管、隐蔽风险、fit 的不可结构化残差。**只写 `llm_notes`,不改 deterministic decision。**
+3. `observe_only` — 数据缺失、分析师目标价不可用、IV 未接入时的占位(可来数据就看)。**盘中/分钟类(Level-2 热插拔、盘口分钟、竞价校准、盘中入场窗口)不归这里,归 §9 `out_of_scope_by_weekly_cadence`**——周频系统本就不该依赖它们。
+4. `llm_enrichment` — 行业景气、政策、媒体负面、隐蔽风险残差(分层见 §10 Tier C)。**只经 `schemas/deterministic_report_enrichment.schema.json` 写 `llm_notes`,不改 deterministic decision。**
 
 **风险族归并(核心去过严,全局跨 EGS 与 V14.2,每族最多一次 hard action):**
 ```
@@ -88,7 +89,7 @@ portfolio_concentration_family: SW L2 暴露 / 因子共振 / 单赛道拥挤
 
 **执行字段(只实现 Tushare 喂得动的连贯子集):**
 - 优先实现: 前复权价/MA/RSI/MACD/ATR/支撑压力/盈亏比;流动性(5d/20d 成交额、冲击成本、100 股手数);P0a capital context、bucket ceiling、单票上限、总仓位约束;已有 Rule 6 hard-veto 子集;T+1/涨跌停/停复牌/解禁/减持结构化输入;`entry_plan / exit_plan / position_size / star` + 赛道热度字段。
-- **暂不实现 / 标 `observe_only` / `requires_external`**: Level-2 热插拔;分析师一致预期/目标价;盘口织布机/分钟挂单厚度;未稳定接入的大宗折价、北向逐股。
+- **暂不实现 / 标 `observe_only` / `requires_external`(真·数据缺失项,可来数据就看)**: 分析师一致预期/目标价;未稳定接入的大宗折价、北向逐股。**盘中/分钟类(Level-2 热插拔、盘口织布机/分钟挂单厚度)不在此列 → 归 §9 `out_of_scope_by_weekly_cadence`**(周频系统不依赖,非"缺数据";R-ASHORT-CADENCE-OBSERVE-DRIFT)。
 - **IV(已确认补)**: 接入 50ETF 期权 IV feed,算 252 日分位,接进 `market_context`,使 Rule 3 / M0.5 / M1 真正生效。若某次运行 feed 缺失 → coverage 标 `iv_regime_status = observe_only_missing_feed`,**不得让报告假装执行了 IV 风控**。
 
 **阈值参数化**: 凡驱动"买/仓位"的阈值(ATR 系数、盈亏比门槛、跳空、过热线)做成可回测 config 参数,比照选股侧阈值治理。
@@ -148,5 +149,44 @@ portfolio_concentration_family: SW L2 暴露 / 因子共振 / 单赛道拥挤
 ## 8. 显式延后 / 开放项
 
 - v2 才考虑 overlay 改 L0–L5 准入(v1 仅重排 + 仪表化)。
-- Level-2 / 分析师一致预期 / 盘口分钟 / 大宗 / 北向逐股 暂 out-of-scope。
+- Level-2 / 盘口分钟 / 竞价校准 / 盘中入场窗口 = `out_of_scope_by_weekly_cadence`(§9);分析师一致预期 / 未稳定接入的大宗 / 北向逐股 = observe_only 或待 probe(§10)。
 - 真钱 forward-live 是未来另行审查的决策,前提是两道门通过。
+
+---
+
+## 9. 周频 / EOD 系统边界(cadence scope)— Q1 固化
+
+**系统节奏 = 周末 + EOD,不是盘中。** 以下规则对周频系统标 **`out_of_scope_by_weekly_cadence`**(区别于 `observe_only`:不是"以后有数据就看",而是周频系统**本就不该依赖**):Rule 6.1 盘中热插拔(Level-2 特大单)、Rule 7A 织布机(盘口分钟挂单厚度)、M3.7 竞价校准、legacy 第四阶段盘中入场窗口 / 分时确认。
+
+- **系统不监控盘中风险。** 系统只在周末给:预设 entry 区间、止损价、止盈价、仓位上限、周一人工执行类型(低吸/突破)、禁入条件。
+- **盘中反应(闪崩/急跌/紧急减仓)= 人工执行 playbook,不是系统能力**;绝不写成系统在承担实时风控。
+- **M6.7 必带 caveat**:本报告不监控盘中 Level-2 / 分钟盘口;盘中异常由你按预设止损无条件执行。
+- **持仓人工紧急 override**:遇重大监管 / 跌停 / 黑天鹅,不等周末系统,按止损 / 减仓纪律即时处理。
+- **真洞补丁(对已持仓)**:EOD 闪崩否决 + 下周重筛只能事后发现;真正的盘中保护靠上面的预设止损价 + 人工 override,系统给级别、人执行。
+- v14.2_spec 冻结;这些规则在 Phase 5 引擎 / coverage 标 `out_of_scope_by_weekly_cadence`,并**清理 M6.7 / Rule 12 / OrderAudit 对这些盘中字段的交叉引用**(无悬挂引用,实现切片测试守)。
+
+---
+
+## 10. 定性风险获取分层(official_structured vs web_llm_soft_flag)— Q2 固化
+
+**三级证据(Tier A/B/C),权限不同;"互联网能看" ≠ "可稳定/合规/批量抓" ≠ "可硬否决"。**
+
+| 级 | 源 | 权限 |
+|---|---|---|
+| **Tier A 官方结构化** | EGS 现用且你 2000 积分确认能拿的接口:**减持** `stk_holdertrade`、**解禁** `share_float`(已在跑) | **可进 deterministic hard-veto 候选**,但须:代码精确匹配 ∧ 事件日期在 as-of 窗口内 ∧ 事件类型在已审核映射表 |
+| **Tier B 官方网页** | 巨潮 / 上交所 / 深交所 问询函·监管措施页 | **只强风险提示 + 人工确认,绝不自动杀票**;仅 top-N bounded fetch;留 URL/标题/公告日/抓取时间/查询词/命中词;失败标 `unknown`/`source_unavailable`,不标 clear。**监管问询无干净结构化源 → 归此层** |
+| **Tier C web+LLM** | 媒体负面 / 行业景气 / 政策 / 隐蔽风险残差 | 走 `llm_enrichment`(`schemas/deterministic_report_enrichment.schema.json`),**只写 `llm_notes`,不改判决**;M6.7 须暴露高风险摘要,但不自动改 deterministic decision |
+
+**挂实际 2000 积分(不假设,逐接口 probe,像 IV 探测那样):**
+- **已确认能用**(EGS 在跑):daily / daily_basic / fina_indicator / index_daily / moneyflow / moneyflow_hsgt / margin_detail / share_float / stk_holdertrade / concept / index_classify·member。
+- **待 probe**(大概率能但要验):`opt_basic/opt_daily`(IV,由 IV 探测 `执行` 实测)、`block_trade`(大宗)、`pledge_stat/detail`(质押)。
+- **存疑 / 多半不在 2000**:公告全文 `anns`、新闻 `news`;监管问询函**无结构化数据集** → 只能 Tier B。
+- **接入前先 probe 实际访问再定级**;拿不到的事件**降级到 Tier B/C(软标记),不放 Tier A**。
+
+**铁律:**
+- web/LLM 命中(Tier B/C)**绝不自动 hard-veto**(不可复现 / 会过时);只有 Tier A 满足全部条件才自动否决。
+- **PIT**:历史 as-of 回测不得用今日网页 / 今日概念标签补历史判断;无 PIT 源 → forward-only。
+- **实盘周末 pipeline**:可用当前网页,但记录检索时间 + 来源;没检索就 `unknown` 不 clear。
+- 这些定性结论按 §4 消费完整性**必须折进 M6.7**(降级 / observe / 一句话风险),不只躺 `llm_notes`。
+
+**与现有 EGS 上游的衔接(legacy;R-ASHORT-REGULATORY-WEB-VETO-LEGACY-CONFLICT):** 现有 EGS Stage3 已有 CNINFO 关键词 `REGULATOR-VETO`(`A-EGS/egs_main.py` ~2952–3013:问询函/立案调查/监管关注/警示函 命中即从候选池剔除),是**已上线 production 行为**。本设计**不改 production**,故该 EGS 上游 veto **作为 legacy 前置过滤保留原样**——它在候选池进入 Slice B **之前**就已执行。**§10 的"Tier B 强提示·不自动杀票"约束的是 Phase 5 / Slice B 分析层新增的定性风险处理,不回溯撤销 EGS 上游 legacy 筛选。** 若要把 EGS `REGULATOR-VETO` 降级为强提示以与本节口径一致(它本质也是网页关键词自动否决,正是本节认为太噪的那类),那是**另走 reviewed EGS-governance 变更**,不在本切片。在那之前,两层口径不同但不冲突:上游 legacy 硬筛 + 下游 Slice B 软标记。
