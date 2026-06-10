@@ -35,12 +35,17 @@
 **冻结单一权重(v1 comparison-track,不做权重搜索)**:
 ```
 fit_pass    = (fit ≠ unknown) ∧ (fit ≥ fit_floor)        # 单一定义, 全文/输出/测试复用
-theme_eff   = theme_heat_score × persistence_mult × fit_mult
-              （fit_mult 仅当 fit_pass=true 时生效; fit_pass=false → theme 与 industry 红利均 = 0）
-overlay_raw = esp_score×0.15 + l4_score×0.45 + theme_eff×0.25 + industry_heat_norm⊥×0.15
+eligible    = (theme/industry/breadth ≥2 项过 pass) ∧ fit_pass
+bonus_gate  = eligible ∧ (¬crowding_hit)                  # 赛道红利唯一门
+theme_eff   = theme_heat_score × persistence_mult × fit_mult     （fit_mult = 1 当 fit_pass 否则 0）
+overlay_base  = esp_score×0.15 + l4_score×0.45
+overlay_score = overlay_base
+              + 0.25 × (theme_eff            当 bonus_gate 否则 0)
+              + 0.15 × (industry_heat_norm⊥  当 bonus_gate 否则 0)
               （industry_heat_norm⊥ = 残差百分位归一化回 0–100, 见 §2 正交化; 与其余 0–100 项同尺度）
-overlay_score = crowding 处理后的 overlay_raw（族内命中 → 降级档 / 转 burst 标记）
 overlay_rank  = overlay_score 降序
+注:**crowding 命中 = 一次硬处理 → 剥夺赛道红利**(overlay 退回 esp+l4 base),热度不得救回;
+   不再用乘 0.5 的"降级系数"(会被高热度压过,不满足"不得救回")。
 ```
 
 **赛道红利资格门槛**: `theme_heat / industry_heat / breadth` **≥2 项过 pass 阈值** ∧ `fit_pass`(定义见上,= `fit≠unknown ∧ fit≥fit_floor`,与权重公式 `fit_mult` 用同一条件)。不满足 → 该股 overlay 只吃 `esp+l4` 部分,不获赛道红利。

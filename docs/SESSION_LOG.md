@@ -8,6 +8,98 @@
 
 ---
 
+## 2026-06-10 — Claude `提交` (A-short Slice A RUNNER, post re-PASS) — **DONE (local master)**
+
+**Authorization**: user `提交并执行下一步` after Codex re-`审查` **PASS** (entry below; no Required; 2 wording-only Optionals). Re-read SESSION_LOG top + Codex verdict + git status before committing (HEAD `4ba5617`).
+
+**Pre-commit cleanups (the 2 non-blocking Optionals)**: governance `source_refs` now says the parity test mirrors `EMITTED_THRESHOLDS` (was stale `GOVERNANCE_THRESHOLDS`); test module docstring now says "crowding strips bonus" (was "crowding demote"). No executable-contract change.
+
+**Committed (one scope = Slice A runner, comparison-track non-production, local master, no push, ETF excluded)**: `runners/a_short_theme_overlay_comparison.py` + `schemas/a_short_theme_overlay_comparison.schema.json` + `presets/a_short_theme_overlay_governance_20260610.json` + `tests/test_a_short_theme_overlay_comparison.py` + `tests/schema/test_a_short_theme_overlay_comparison_schema.py` + `docs/a_short_theme_overlay_slice_a_design_20260610.md` (§2 formula aligned: bonus_gate = eligible ∧ ¬crowding) + `docs/README.md` (routing) + `docs/system_risk_register.md` (runner findings entry `open`→`resolved` with re-PASS evidence) + this log. `egs_main.py` / production `final_score`/`tier`/admission / V14.2 reference all untouched.
+
+**State after commit**: Slice A overlay runner committed = the comparison-track scoring contract (theme/industry⊥/breadth/persistence/fit/crowding → overlay_score+rank; single bonus_gate; industry residual 0–100; O2 frozen thresholds + ≥12-obs promotion rule, production promotion NOT authorized). 28/28 overlay tests, 14/14 route-doc guard. **Commit-safe but NOT execution-safe**: data-loading wiring + any forward run are a user-authorized `执行` step (no fetch happened).
+
+**Next (per user `执行下一步`)**: roadmap step 1 = IV feed (50ETF). **Feasibility note**: Tushare exposes option CONTRACTS/QUOTES (`opt_basic`/`opt_daily`: settle/close/oi/vol) but NOT implied volatility directly — 50ETF IV must be COMPUTED (Black-Scholes inversion → ATM/VIX-style index) then turned into a 252d percentile. So IV feed is non-trivial and should start with a feasibility probe of `opt_basic`/`opt_daily` coverage for 510050 options. Drafting the IV-feed PROBE slice next (design + probe runner + schema + tests; the real Tushare probe call is a later user-authorized `执行`).
+
+---
+
+## 2026-06-10 — Codex re-`审查` (A-short Slice A RUNNER Required repair) — **PASS**
+
+**Scope reviewed**: unstaged `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_theme_overlay_slice_a_design_20260610.md`, `docs/system_risk_register.md`; untracked `runners/a_short_theme_overlay_comparison.py`, `schemas/a_short_theme_overlay_comparison.schema.json`, `presets/a_short_theme_overlay_governance_20260610.json`, `tests/test_a_short_theme_overlay_comparison.py`, `tests/schema/test_a_short_theme_overlay_comparison_schema.py`. The untracked `A股长线ETF配置框架.md` file remains out of scope.
+
+**Verdict**: PASS. The three prior Required findings are fixed in the working tree.
+
+**Required**: none.
+
+**Resolved findings**:
+- `R-ASLICEA-RUNNER-ELIGIBILITY-BONUS-GATE`: `assemble_overlay()` now computes one `bonus_gate = eligible AND NOT crowding_hit`, where `eligible = fit_pass AND >=2 of theme/industry/breadth`. Theme and industry terms are zeroed unless this gate passes. Independent probe confirmed the prior failing shape (`fit_pass=true`, only one gate passing, `eligible=false`) now scores exactly `esp+l4` base.
+- `R-ASLICEA-RUNNER-CROWDING-HARD-GATE`: crowding now strips the theme/industry bonus instead of multiplying an already-bonused score by `0.5`. Independent probe confirmed an eligible high-heat crowded row scores exactly base-only, so heat cannot rescue it inside the comparison score.
+- `R-ASLICEA-SCHEMA-OUTPUT-INVARIANTS`: emitted `thresholds` are closed and const-pinned including `theme_window_blend`; producer-side `validate_overlay_summary_consistency()` rejects `candidate_count != len(candidates)` and non-contiguous / duplicate overlay ranks. Independent probes confirmed schema rejects extra threshold keys and theme blend drift, and producer validation rejects count/rank mutations.
+
+**Optional**: two wording-only cleanups remain non-blocking: `presets/a_short_theme_overlay_governance_20260610.json` still says the parity test mirrors old symbol name `GOVERNANCE_THRESHOLDS`, while the runner now uses `EMITTED_THRESHOLDS`; `tests/test_a_short_theme_overlay_comparison.py` docstring still says "crowding demote" although behavior is now "crowding strips bonus". These do not change the executable contract or test coverage.
+
+**Register outcome**: the open risk-register entry remains correctly open until a reviewed commit closes it; the repair evidence is now sufficient for Claude `提交`, where the entry should be marked resolved with this PASS evidence.
+
+**Verification**: bundled Python `py_compile` OK; overlay unit+schema suite 28/28 OK; route-doc guard 14/14 OK; `git diff --check` OK; independent mutation probes all passed. No data fetch, no overlay run, no EGS production-score change, no commit.
+
+**Next**: Claude `提交`.
+
+---
+
+## 2026-06-10 — Claude `修复` (A-short Slice A RUNNER — 3 Required scoring/risk/schema gaps) — **DONE, pending re-`审查`**
+
+**Authorization**: user `修复` after Codex `审查` **FAIL** (entry below). Re-read SESSION_LOG top + Codex Required + git status before acting (HEAD `4ba5617`; `docs/system_risk_register.md` now M with Codex's open runner findings, uncommitted).
+
+**Fixed (runner + schema + governance + design doc + tests; still comparison-track, non-production, no fetch):**
+- **R-ASLICEA-RUNNER-ELIGIBILITY-BONUS-GATE (P0)**: the bonus was gated only on `fit_pass`, so a `fit_pass=true` row passing <2 of theme/industry/breadth still got the heat bonus. Fixed: introduced one `bonus_gate = eligible ∧ ¬crowding_hit` (`eligible = ≥2 pass ∧ fit_pass`); `theme_term`/`industry_term` are zeroed unless `bonus_gate`; overlay falls back to `esp+l4 overlay_base`. Regression test added (fit_pass=true, only 1/3 gates → no bonus).
+- **R-ASLICEA-RUNNER-CROWDING-HARD-GATE (P0)**: replaced the ambiguous `overlay*0.5` demote (a high bonus could still dominate) with **crowding strips the heat bonus entirely** (folded into `bonus_gate`) → a crowded candidate scores exactly its `esp+l4` base; heat cannot rescue it. Removed `CROWDING_DEMOTE_FACTOR`. Test added: crowded high-heat name == base AND a clean eligible name outranks it.
+- **R-ASLICEA-SCHEMA-OUTPUT-INVARIANTS (P1)**: schema `thresholds` now `additionalProperties:false` with every key const-pinned (incl. `theme_window_blend`), so unpinned drift (e.g. `theme_window_blend`, stray keys) is rejected; `validate_overlay_summary_consistency` now also enforces `candidate_count == len(candidates)` and `overlay_rank` unique-contiguous 1..N. Adversarial tests added (extra threshold key, theme_window_blend drift, count mismatch, rank gap).
+- Aligned the committed design doc §2 formula (bonus gated on `bonus_gate`, crowding strips bonus) + governance artifact (`thresholds` == runner `EMITTED_THRESHOLDS`: added `theme_window_blend`, dropped `crowding_demote_factor`; added `crowding_handling` note) so design↔schema↔runner↔governance are consistent.
+
+**Verification**: py_compile OK; overlay unit+schema suite **28/28** (was 23; +5: eligibility-gate, crowding-strip, count-mismatch, rank-gap, extra-threshold/theme-blend rejects); route-doc guard 14/14. No production-ranking change, no fetch, no run. Comparison-track / non-production / V14.2 frozen unchanged.
+
+**Register**: Codex's open `A-short Slice A theme-overlay runner eligibility / crowding / schema contract gaps` entry is fixed in the working tree; to be marked resolved by Claude at `提交` after re-`审查` PASS.
+
+**Next**: Codex re-`审查`; then Claude `提交`; then data-loading wiring + user-authorized `执行` (forward run).
+
+---
+
+## 2026-06-10 — Codex `审查` (A-short Slice A RUNNER — overlay comparison-track) — **FAIL**
+
+**Scope reviewed**: unstaged `docs/README.md`, `docs/SESSION_LOG.md`; untracked `runners/a_short_theme_overlay_comparison.py`, `schemas/a_short_theme_overlay_comparison.schema.json`, `presets/a_short_theme_overlay_governance_20260610.json`, `tests/test_a_short_theme_overlay_comparison.py`, `tests/schema/test_a_short_theme_overlay_comparison_schema.py`; committed Slice A design `docs/a_short_theme_overlay_slice_a_design_20260610.md`. The untracked `A股长线ETF配置框架.md` file was present but out of scope for this A-short runner review.
+
+**Verdict**: FAIL / Required fixes before commit, data-loading wiring, or any `执行`.
+
+**Required**:
+- `R-ASLICEA-RUNNER-ELIGIBILITY-BONUS-GATE` (P0, scoring contract / no market-data PIT): committed Slice A design says a candidate must pass at least 2 of `theme_heat / industry_heat / breadth` plus `fit_pass`; otherwise overlay only gets `esp+l4` and no theme/industry bonus. The runner computes `eligible`, but lines 260-263 still gate `theme_eff` and `industry_term` only on `fit_pass`. Independent probe reproduced a row with `theme_pass=true`, `industry_pass=false`, `breadth_pass=false`, `fit_pass=true`, `eligible=false`, yet `overlay_raw=45.5` vs base-only `10.5` (extra bonus `35.0`). Required repair: introduce one bonus gate equivalent to `eligible` (or stricter if risk flags apply), zero both theme and industry terms when it is false, and add regression tests where `fit_pass=true` but only 0/1 of the three heat/breadth gates pass.
+- `R-ASLICEA-RUNNER-CROWDING-HARD-GATE` (P0, risk-family contract / no market-data PIT): Slice A invariant says hard-veto/crowding means heat bonus cannot rescue the candidate. Current implementation applies `overlay_score = overlay_raw * 0.5` for crowding, and the test only proves multiplication, not "heat cannot rescue"; a very high theme/industry bonus can still dominate after the demote. Required repair: make the crowding/hard-veto risk-family handling unambiguous and test it against a high-heat rescue case; at minimum, crowding must not leave theme/industry bonus able to lift the candidate above its allowed base/risk route.
+- `R-ASLICEA-SCHEMA-OUTPUT-INVARIANTS` (P1, schema/output contract / no market-data PIT): the schema claims const-pinned thresholds/output integrity, but `thresholds.additionalProperties=true` accepts unpinned threshold-like drift such as `theme_window_blend`, and neither schema nor producer validation catches `candidate_count != len(candidates)`. Independent schema probe accepted `candidate_count=999` with empty candidates and mutated `thresholds.theme_window_blend`. Required repair: close or explicitly const-pin every emitted threshold/governance key, add producer-side consistency checks for `candidate_count` and rank uniqueness/contiguity, and add adversarial tests for these mutations.
+
+**Optional**: the CLI `main()` still exits before writing an artifact. That is acceptable only for this pure-function contract slice; the future data-loading wiring must call schema validation and `validate_overlay_summary_consistency()` before any output write.
+
+**Register outcome**: material Required findings are registered in `docs/system_risk_register.md` as open `A-short Slice A theme-overlay runner eligibility / crowding / schema contract gaps`.
+
+**Verification**: bundled Python `py_compile` OK; targeted unit/schema suite reproduced as 23/23 OK; independent probes exposed the eligibility bonus leak and schema drift acceptance. No data fetch, no EGS production-score change, no runner execution, no commit.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-10 — Claude `起草` (A-short Slice A RUNNER — overlay comparison-track, bundled design+code+tests) — **DONE, pending `审查`**
+
+**Authorization**: user `起草` under the agreed coarser granularity (bundle design+schema+runner code+tests in ONE 起草→审查). Led with the Slice A runner (implements the frozen Slice A design `4ba5617`; self-contained on EGS-fetched data; 独立 of IV feed). Re-read live git status before drafting (HEAD `4ba5617`, clean apart from the untracked ETF file). Investigated EGS data flow first: concept membership ← `state/l3_snapshots/` (PIT), member daily ← `egs_cache/daily_all_*`, SW map ← `get_sw_industry_map` (no historical snapshot → SW dim forward-only per design), indices ← `index_daily`.
+
+**Drafted (one scope = Slice A runner, bundled, design-only-runtime / comparison-track, uncommitted)**:
+- `runners/a_short_theme_overlay_comparison.py` — non-production comparison-track runner. **Read-only consumer** of EGS artifacts/caches/snapshots; **does NOT modify `egs_main.py`, does NOT change production `final_score`/`tier`/admission, does NOT fetch** (missing inputs → forward-only / recorded, never fabricated). Pure testable functions: `concept_intensity`, `compute_theme_heat` (5d+20d blended percentile), `compute_industry_heat` + `orthogonalize_industry_on_theme` (residualize on theme THEN percentile-normalize back to 0–100 = `industry_heat_norm_ortho`, R-ASLICEA fix), `compute_breadth` (gate), `compute_persistence` (0–1 mult), `compute_fit` (proxies; None=unknown), `crowding_hit`, `assemble_overlay` (single `fit_pass=(fit≠unknown)∧(fit≥fit_floor)` gates both theme+industry bonus; crowding demotes ×0.5, not extra subtraction; eligibility ≥2 of theme/industry/breadth ∧ fit_pass), `build_summary`, `validate_overlay_summary_consistency`. Thin `main` (I/O wiring is execution-time authorized work).
+- `schemas/a_short_theme_overlay_comparison.schema.json` — output contract; const-pins weights/thresholds/track/boundary; `industry_heat_norm_ortho` bounded 0–100; `pit_source` enum {pit,forward,unavailable}; `boundary` all-false (non-production / not buy advice / not ship-gate).
+- `presets/a_short_theme_overlay_governance_20260610.json` — **O2**: frozen weights + thresholds (parity-mirror of runner constants) + promotion rule (≥12 forward obs, CSI1000∧CSI300, clustered-t/dd/win/bad-ticket/false-neg, stable-win margin to be frozen before first promotion review; production promotion NOT authorized by this artifact).
+- `tests/test_a_short_theme_overlay_comparison.py` + `tests/schema/test_a_short_theme_overlay_comparison_schema.py` — 23 tests (component math, R-ASLICEA scale, fit_pass single-gate, crowding demote, eligibility, consistency validation + adversarial, governance parity, schema valid + adversarial). **23/23 OK**; py_compile OK (Claude Python 3.13).
+
+**Boundary**: comparison-track, non-production. Authorizes no production-ranking change / real money / ship-gate / buy advice. Live Tushare reads / any data fetch are deferred to a user-`执行`-authorized run; the runner's data-loading wiring is intentionally execution-time (the pure-function contract is what this slice freezes + tests). V14.2 reference + `egs_main.py` untouched. Uncommitted (5 new/changed files + README + this log), awaiting `审查`.
+
+**Next**: Codex `审查`; then Claude `提交`; then the data-loading wiring + a user-authorized `执行` (forward run) — then IV feed slice + Slice B + pipeline per the roadmap.
+
+---
+
 ## 2026-06-10 — Claude `提交` (A-short Slice A overlay design repair, post re-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required/Optional). Re-read SESSION_LOG top + Codex verdict + git status before committing (HEAD `f918594`).

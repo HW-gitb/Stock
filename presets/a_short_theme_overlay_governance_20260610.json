@@ -1,0 +1,56 @@
+{
+  "schema_name": "a_short_theme_overlay_governance",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-10T00:00:00+00:00",
+  "scope": {
+    "phase": "a_short_theme_overlay_slice_a",
+    "purpose": "freeze overlay weights/thresholds + promotion rule (O2); parity-mirror the runner constants",
+    "contract_status": "comparison_track_non_production",
+    "production_ranking_changed_by_this_artifact": false,
+    "egs_main_runtime_changed": false,
+    "data_fetch_allowed": false,
+    "ship_gate_claim_allowed": false,
+    "broker_or_order_automation_allowed": false
+  },
+  "source_refs": [
+    {"artifact_id": "overlay_runner", "path": "runners/a_short_theme_overlay_comparison.py",
+     "consumption_role": "Runtime source of overlay constants; parity test mirrors EMITTED_THRESHOLDS + OVERLAY_WEIGHTS literally."},
+    {"artifact_id": "slice_a_design", "path": "docs/a_short_theme_overlay_slice_a_design_20260610.md",
+     "consumption_role": "Frozen design this artifact pins (commit 4ba5617)."},
+    {"artifact_id": "overlay_schema", "path": "schemas/a_short_theme_overlay_comparison.schema.json",
+     "consumption_role": "Output artifact contract; const-pins the same weights/thresholds."}
+  ],
+  "overlay_weights": {"esp": 0.15, "l4": 0.45, "theme": 0.25, "industry": 0.15},
+  "crowding_handling": "one hard action: crowding_hit strips the theme/industry bonus (overlay falls back to esp+l4 base); heat cannot rescue a crowded candidate",
+  "thresholds": {
+    "theme_window_blend": {"d5": 0.5, "d20": 0.5},
+    "pass_percentile": 70.0,
+    "breadth_up_frac_min": 0.5,
+    "breadth_vol_frac_min": 0.4,
+    "persistence_top_quantile": 0.3,
+    "persistence_window_days": 5,
+    "fit_floor": 0.4,
+    "eligibility_min_pass": 2
+  },
+  "promotion_rule": {
+    "min_forward_observations": 12,
+    "compare_same_candidate_pool": true,
+    "benchmarks_required": ["CSI1000", "CSI300"],
+    "metrics_required": ["monthly_clustered_t", "max_drawdown", "win_rate", "bad_ticket_rate", "false_negative_rate"],
+    "decision": "overlay promoted to production ranking ONLY if it beats baseline on the required metrics by a frozen margin over >= min_forward_observations; otherwise stays research/comparison-track",
+    "stable_win_margin_pending": "the exact numeric margin is frozen here before the first promotion review; until then no promotion",
+    "production_promotion_authorized_by_this_artifact": false,
+    "full_size_or_real_money": "separate 12-month live-normalized ship gate, not governed here"
+  },
+  "parity_rules": {
+    "runtime_source": "runners/a_short_theme_overlay_comparison.py",
+    "exact_value_match_required": true,
+    "threshold_change_requires_reviewed_artifact_update": true
+  },
+  "limitations": [
+    "Comparison-track only; does not change EGS production final_score / tier / admission.",
+    "Overlay artifact authorizes no buy advice, real money, or ship-gate claim.",
+    "The numeric stable-win margin must be frozen here before the first promotion review; this v1 sets none, so no promotion is authorized yet.",
+    "PIT: concept membership uses L3 snapshots; SW industry mapping has no historical snapshot yet, so the SW dimension is forward-only until snapshots accumulate."
+  ]
+}

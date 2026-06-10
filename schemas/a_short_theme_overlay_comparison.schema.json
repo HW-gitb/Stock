@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_theme_overlay_comparison",
+  "description": "A-short 赛道热度 overlay comparison-track artifact (Slice A). Non-production, comparison-track. Frozen design values (weights/thresholds/boundary/track) are const-pinned so post-review drift cannot validate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "generated_at", "as_of", "preset", "track",
+    "weights", "thresholds", "pit_source", "candidate_count", "candidates",
+    "dropped_at_l0_l5", "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_theme_overlay_comparison"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "preset": {"const": "a_short"},
+    "track": {"const": "comparison_non_production"},
+    "weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["esp", "l4", "theme", "industry"],
+      "properties": {
+        "esp": {"const": 0.15},
+        "l4": {"const": 0.45},
+        "theme": {"const": 0.25},
+        "industry": {"const": 0.15}
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "theme_window_blend", "pass_percentile", "breadth_up_frac_min", "breadth_vol_frac_min",
+        "persistence_top_quantile", "persistence_window_days", "fit_floor",
+        "eligibility_min_pass"
+      ],
+      "properties": {
+        "theme_window_blend": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["d5", "d20"],
+          "properties": {"d5": {"const": 0.5}, "d20": {"const": 0.5}}
+        },
+        "pass_percentile": {"const": 70.0},
+        "breadth_up_frac_min": {"const": 0.5},
+        "breadth_vol_frac_min": {"const": 0.4},
+        "persistence_top_quantile": {"const": 0.3},
+        "persistence_window_days": {"const": 5},
+        "fit_floor": {"const": 0.4},
+        "eligibility_min_pass": {"const": 2}
+      }
+    },
+    "pit_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept_membership", "sw_mapping"],
+      "properties": {
+        "concept_membership": {"enum": ["pit", "forward", "unavailable"]},
+        "sw_mapping": {"enum": ["pit", "forward", "unavailable"]}
+      }
+    },
+    "candidate_count": {"type": "integer", "minimum": 0},
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ts_code", "baseline_rank", "overlay_rank", "overlay_score",
+          "esp_score", "l4_score", "theme_heat_score", "industry_heat_score",
+          "industry_heat_norm_ortho", "breadth_pass", "persistence_mult",
+          "fit_score", "fit_unknown", "fit_pass", "theme_pass", "industry_pass",
+          "theme_eff", "eligible", "crowding_hit"
+        ],
+        "properties": {
+          "ts_code": {"type": "string"},
+          "baseline_rank": {"type": ["integer", "null"]},
+          "overlay_rank": {"type": ["integer", "null"]},
+          "overlay_score": {"type": ["number", "null"]},
+          "esp_score": {"type": ["number", "null"]},
+          "l4_score": {"type": ["number", "null"]},
+          "theme_heat_score": {"type": ["number", "null"]},
+          "industry_heat_score": {"type": ["number", "null"]},
+          "industry_heat_norm_ortho": {"type": ["number", "null"], "minimum": 0.0, "maximum": 100.0},
+          "breadth_pass": {"type": "boolean"},
+          "persistence_mult": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
+          "fit_score": {"type": ["number", "null"]},
+          "fit_unknown": {"type": "boolean"},
+          "fit_pass": {"type": "boolean"},
+          "theme_pass": {"type": "boolean"},
+          "industry_pass": {"type": "boolean"},
+          "theme_eff": {"type": ["number", "null"]},
+          "eligible": {"type": "boolean"},
+          "crowding_hit": {"type": "boolean"}
+        }
+      }
+    },
+    "dropped_at_l0_l5": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "theme_heat_score", "drop_stage"],
+        "properties": {
+          "ts_code": {"type": "string"},
+          "theme_heat_score": {"type": ["number", "null"]},
+          "drop_stage": {"type": "string"}
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "changes_final_score_or_tier", "is_buy_advice", "satisfies_ship_gate"],
+      "properties": {
+        "production": {"const": false},
+        "changes_final_score_or_tier": {"const": false},
+        "is_buy_advice": {"const": false},
+        "satisfies_ship_gate": {"const": false}
+      }
+    }
+  }
+}
