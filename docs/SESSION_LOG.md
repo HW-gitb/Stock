@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-06-10 — Claude `执行` (A-short IV feed probe, live Tushare, user-authorized) — **DONE → IV FEASIBLE at 2000 points**
+
+**Authorization**: user `执行 探测`. Pre-checks: HEAD `d5a2c4f` clean; `TUSHARE_TOKEN` set (len 56); Python313 has tushare/jsonschema/pandas. Ran `runners.a_short_iv_feed_probe --as-of 20260609 --out research/results/a_short_iv_feed_probe_20260609/probe_summary.json --confirm-fetch-authorized` against **live Tushare** (sandbox disabled for this user-authorized fetch). `init_tushare_pro` (no set_token, pinned endpoint) worked.
+
+**Result (`research/results/a_short_iv_feed_probe_20260609/probe_summary.json`)** — **`computable=true`, reasons=[]**, `had_provider_error=false`:
+- All endpoints OK at the user's **2000 Tushare points**: `opt_basic`(11,814 SSE rows → 7,394 are 50ETF: 3,697 call / 3,697 put), `opt_daily`, `fund_daily`(510050).
+- 50ETF coverage: n_strikes 246; n_future_maturities 4 / **n_quotable_future_maturities 4**; opt_pit_coverage_days / common_pit_days / valid_quote_days all 25; basic↔daily overlap 532; underlier_valid_days 26; latest_usable_date 20260609; **spot_ref 2.917**; n_strikes_with_valid_quotes 47; **atm_bracketed true**.
+
+**Decision impact**: 50ETF option data is sufficient at 2000 points to BS-invert ATM/constant-maturity IV → **the IV feed is buildable → Slice B's IV layer (Rule 3 / M0.5 / M1) can be LIVE, not permanent observe_only.** The IV-feed BUILD slice (BS inversion → 30d constant-maturity → 252d percentile → feed artifact) is now a real next piece.
+
+**Boundary**: probe-only / non-production; the summary's `boundary` is all-false (does not build the feed, no real money, no ship-gate). No production scoring change; V14.2 + egs_main untouched. Read-only Tushare fetch.
+
+**Next**: commit this execution result (closeout). Then either the **IV-feed BUILD slice** or **Slice B** (now able to design IV as live). The standing P2 consumer-validation register item (reader side) still applies to whoever consumes IV-probe/feed summaries.
+
+---
+
 ## 2026-06-10 — Claude `提交` (A-short IV probe execution wiring, post re-PASS) — **DONE (local master)**
 
 **Authorization**: user `提交` after Codex re-`审查` **PASS** (entry below; no Required). Re-read SESSION_LOG top + Codex verdict + git status before committing (HEAD `0c096d4`). Verified register: the 3 execution-wiring entries already `resolved` (Codex), the P2 consumer-validation obligation correctly stays `open` (future reader-side).

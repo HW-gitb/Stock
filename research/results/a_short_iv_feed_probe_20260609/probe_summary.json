@@ -1,0 +1,65 @@
+{
+  "schema_name": "a_short_iv_feed_probe_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-10T20:55:19+08:00",
+  "as_of": "20260609",
+  "underlying": "510050.SH",
+  "thresholds": {
+    "min_contracts": 20,
+    "min_strikes": 5,
+    "min_quotable_future_maturities": 2,
+    "min_opt_pit_coverage_days": 15,
+    "min_basic_daily_overlap": 20,
+    "min_common_dates": 15,
+    "min_valid_quote_days": 15,
+    "min_underlier_days": 15,
+    "required_opt_basic_fields": [
+      "ts_code",
+      "call_put",
+      "exercise_price",
+      "maturity_date"
+    ],
+    "required_opt_daily_fields": [
+      "ts_code",
+      "trade_date",
+      "settle",
+      "close",
+      "vol",
+      "oi"
+    ]
+  },
+  "assessment": {
+    "as_of_is_valid_date": true,
+    "latest_usable_date": "20260609",
+    "n_contracts": 7394,
+    "n_call": 3697,
+    "n_put": 3697,
+    "n_strikes": 246,
+    "n_maturities": 139,
+    "n_valid_date_maturities": 139,
+    "n_future_maturities": 4,
+    "n_quotable_future_maturities": 4,
+    "opt_basic_missing_fields": [],
+    "opt_daily_has_required_fields": true,
+    "opt_daily_missing_fields": [],
+    "opt_pit_coverage_days": 25,
+    "basic_daily_overlap_count": 532,
+    "common_pit_days": 25,
+    "valid_quote_days": 25,
+    "valid_quote_rows": 10378,
+    "underlier_is_510050": true,
+    "underlier_valid_days": 26,
+    "spot_ref": 2.917,
+    "n_strikes_with_valid_quotes": 47,
+    "atm_bracketed": true,
+    "computable": true,
+    "reasons": []
+  },
+  "computable": true,
+  "boundary": {
+    "production": false,
+    "real_money": false,
+    "satisfies_ship_gate": false,
+    "builds_iv_feed": false
+  }
+}
