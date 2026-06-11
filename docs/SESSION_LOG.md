@@ -8,6 +8,12 @@
 
 ---
 
+## 2026-06-11 — Claude (docs-only) register forward-item: production EGS 行业/赛道 weight promotion — **DONE (local master)**
+
+User-directed (approver, 2026-06-11) + Codex-refined design decision recorded as a register forward-item (no code changed): raise 行业/赛道 in the PRODUCTION EGS selection scoring (sector beta). Locked v1 default `egs_base = esp 0.20 + cat 0.25 + l4 0.40 + industry_heat 0.15` (esp kept as fundamentals anchor; new industry term from cat-0.05/l4-0.10). Industry heat ranking-only (never rescues vetoes); keep overheat/chasing→Tier2; reuse overlay SW L2 industry_heat def; avoid double-counting l4 industry kickers; drafted slice must emit new-vs-current selection diff. **概念+行业双提 variant = condition-triggered, NOT scheduled** — promoted only if over rolling ≥12wk its Tier1 forward return beats default by a noise-passing margin AND overheat/drawdown not worse, via reviewed governance change; anti-forget = comparison-track logs all 3 variants weekly + auto-flags promotion candidates (not memory-dependent). Drafting deferred until user says `起草`; touches frozen production `egs_main` → `起草`(Claude)→`审查`(Codex) mandatory. Full spec in register Hot Queue forward-item.
+
+---
+
 ## 2026-06-10 — Claude `提交` (A-short batch ② weekly pipeline, post Codex PASS) — **DONE (local master)**
 
 **Gate**: Codex final re-`审查` PASS (no Required; 5+3+1 = 9 `R-ASHORT-WEEKLY-*` repairs all verified). Committed to LOCAL master only (no push). Scope: weekly pipeline runner + weekly-report schema + tests + design doc + engine hard_veto add-on + README/register/SESSION_LOG. Untracked `A股长线ETF配置框架.md` excluded.
