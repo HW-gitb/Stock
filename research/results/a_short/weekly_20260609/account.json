@@ -1,0 +1,5 @@
+{
+  "available_cash": 1000000,
+  "market_regime": "震荡期",
+  "_note": "first-run placeholder: available_cash=100万 illustrative for position sizing; market_regime defaulted to 震荡期 (analysis_input market_context.market_regime.status was 'unknown'). Adjust before any real use."
+}

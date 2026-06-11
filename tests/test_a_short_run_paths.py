@@ -19,8 +19,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_run_paths import (  # noqa: E402
-    ANALYSIS_OUTPUT_ROOT, run_bundle_dir, analysis_input_path, weight_comparison_path,
-    weekly_m67_path, account_path,
+    ANALYSIS_OUTPUT_ROOT, LANES, lane_output_root, run_bundle_dir, analysis_input_path,
+    weight_comparison_path, weekly_m67_path, account_path,
 )
 from runners.a_short_weekly_pipeline import _reject_production_output_path  # noqa: E402
 from runners.forward_tracker import LIVE_RESULT_ROOT  # noqa: E402
@@ -30,6 +30,21 @@ AS_OF = "20260609"
 
 def _n(p):
     return str(p).replace("\\", "/")
+
+
+class LaneOutputRootTests(unittest.TestCase):
+    def test_lane_roots(self):
+        self.assertEqual(set(LANES), {"a_short", "a_long", "us_short", "us_long"})
+        for lane in LANES:
+            p = _n(lane_output_root(lane))
+            self.assertTrue(p.endswith(f"research/results/{lane}"), p)
+            self.assertNotIn("/result/a_short/", p + "/")          # never the production root
+        # a_short lane root == the analysis output root used by the bundle convention
+        self.assertTrue(_n(lane_output_root("a_short")).endswith(_n(ANALYSIS_OUTPUT_ROOT)))
+
+    def test_unknown_lane_rejected(self):
+        with self.assertRaises(ValueError):
+            lane_output_root("a_share")
 
 
 class RunPathTests(unittest.TestCase):

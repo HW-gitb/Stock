@@ -19,12 +19,19 @@
 设 `AS_OF=<交易日>`,`OUT=research/results/a_short/$AS_OF`:
 1. `python A-EGS/egs_main.py --as-of $AS_OF --backtest-mode --l3-mode pit --output-root research/results/a_short`
    → `$OUT/{analysis_input.json, candidates.csv, snapshot.json, egs_weight_comparison.json}`(comparison 自动同桶)。
-2. `python -m runners.a_short_weekly_pipeline --as-of $AS_OF --analysis-input $OUT/analysis_input.json --iv-feed research/results/a_short_iv_feed_<feed_date>/iv_feed.json --account $OUT/account.json --out $OUT/weekly_m67.json --confirm-fetch-authorized`
+2. `python -m runners.a_short_weekly_pipeline --as-of $AS_OF --analysis-input $OUT/analysis_input.json --iv-feed research/results/a_short/iv_feed_<feed_date>/iv_feed.json --account $OUT/account.json --out $OUT/weekly_m67.json --confirm-fetch-authorized`
    → `$OUT/weekly_m67.json`。
 路径函数 `run_bundle_dir / analysis_input_path / weight_comparison_path / weekly_m67_path / account_path(AS_OF, output_root="research/results/a_short")` 给出上述位置。
 
 ## 4. 边界
-- IV feed 市场级跨 run 复用 → **不进 run 桶**,仍 `research/results/a_short_iv_feed_<date>/`,用 `--iv-feed` 引用。
+- IV feed 市场级跨 run 复用 → **不进 run 桶**(不是某次 `<as_of>/` 桶),归入 a_short lane 的 `research/results/a_short/iv_feed_<date>/`(2026-06-11 从 research/results 顶层归档至此),用 `--iv-feed` 引用。
 - 本约定只规整产物落盘位置 + 让 comparison 与选股同桶,不改任何选股/打分/分析逻辑。
 - 唯一代码改动:egs_main comparison-diff 路径改用 `weight_comparison_path(TODAY, output_root=output_root)`(动生产 egs_main,仅路径,无打分变更)。
 - 生产流(weekly_screening.ps1 / forward_tracker / CURRENT.md 命令)**不改**——显式 legacy 边界。历史散落产物不迁移,新 run 起按约定。
+
+## 5. lane 归档约定(2026-06-11)— 未来运行结果按 lane 落
+**约定:每条 lane 的研究/运行结果落 `research/results/<lane>/`**(`lane ∈ {a_short, a_long, us_short, us_long}`;`engine/a_short_run_paths.lane_output_root(lane)`)。
+- **a_short**:已用(本约定 §1-§4;run bundle = `research/results/a_short/<as_of>/`,IV feed = `research/results/a_short/iv_feed_<date>/`)。2026-06-11 把 pre-convention 的 `a_short_iv_feed_*`/`a_short_iv_feed_probe_*`/`a_short_weekly_20260609`/`egs_weight_comparison_20260609.json` 从 research/results 顶层归入 `research/results/a_short/`。
+- **us_short / us_long**:绿地(无历史、无耦合)。建美股 runner 时从第一天直接写本 lane。
+- **a_long**:**增量迁移**。现存 a_long 产物**留在 research/results 顶层不动**(整条 a_long 链 + ~20 测试 + prereg 按硬编码路径互读/读 fixture/作 provenance,物理搬迁会断,需单独审查迁移);**新的 a_long 切片**建时把输出 + 读上游路径一起指到 `research/results/a_long/`(配套改 + 测试)。各 lane 文件夹 README 记录此边界。
+- **不动 `result/`**:它是代码引用的生产/回测数据根(forward_tracker / backtest / reaudit / egs_main 生产 output-root),与本 lane 归档无关。

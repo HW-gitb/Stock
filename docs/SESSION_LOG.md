@@ -8,6 +8,54 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (research/results lane archival + lane convention, post Codex PASS) — **DONE (local master)**
+
+**Gate**: Codex `审查` PASS (no Required). Committed to LOCAL master. Per housekeeping: explicit staging (no `git add -A`); ETF md excluded; **decided to TRACK the relocated a_short one-offs as archive evidence** (`a_short/weekly_20260609/` = first real M6.7 + `a_short/egs_weight_comparison_20260609.json` = first industry-weighting diff — small, meaningful, consistent with the already-tracked iv_feed/probe).
+
+**Shipped**: 4 lane folders `research/results/{a_short,a_long,us_short,us_long}/` (each README'd); the 4 code-unreferenced a_short one-offs relocated under `research/results/a_short/` (iv_feed/probe `git mv` renames + weekly/diff now tracked in lane); `lane_output_root(lane)` helper + convention §5 ("future results land by lane": a_short auto, us greenfield, a_long incremental per-slice; `result/` untouched). Coupled `a_long_*`/`a_share_*`/reaudit left at top level (documented; needs a separate reviewed migration).
+
+**A-short**: the ONLY remaining completeness item is the EGS market-regime classifier (blocked on user: V14.2 M1 verbatim vs V14.3 optimization + 涨停指数 data-source). Then A-long capture.
+
+---
+
+## 2026-06-11 — Codex `审查` (research/results lane archival: a_short safe one-offs + lane convention) — **PASS**
+
+**Scope reviewed**: current uncommitted lane-archival slice after HEAD `26c1e5c`. Reviewed tracked changes in `docs/a_short_run_bundle_convention_20260611.md`, `engine/a_short_run_paths.py`, `tests/test_a_short_run_paths.py`, staged `git mv` renames for `research/results/a_short_iv_feed_20260609/` and `research/results/a_short_iv_feed_probe_20260609/`, plus intended untracked lane README files under `research/results/{a_short,a_long,us_short,us_long}/`. Also inspected relocated untracked a_short one-offs under `research/results/a_short/weekly_20260609/` and `research/results/a_short/egs_weight_comparison_20260609.json`. Unrelated untracked `A股长线ETF配置框架.md` remains out of scope. No provider call, live run, data fetch, production `result/` migration, or commit was performed by Codex.
+
+**Verdict**: PASS. The lane archival design is internally consistent: `a_short` safe one-offs are relocated under `research/results/a_short/`; old moved top-level a_short paths no longer have active code/doc references outside a historical convention note; coupled `a_long_*` / `a_share_*` / reaudit artifacts correctly remain at `research/results/` top level pending a separate migration slice; `result/` remains untouched; and `lane_output_root(lane)` rejects unknown lanes while keeping `a_short` aligned with `ANALYSIS_OUTPUT_ROOT`.
+
+**Findings**: no Required findings. Submit-time housekeeping: do not use blind `git add -A`; intentionally stage the lane README files and code/docs/test changes, keep the unrelated ETF markdown excluded, and decide explicitly whether the relocated untracked one-off artifacts (`weekly_20260609/`, `egs_weight_comparison_20260609.json`) should remain local-untracked as drafted or be tracked as archive artifacts.
+
+**Register**: no new risk entry required.
+
+**Verification**:
+- `rg` old moved a_short paths: no active references; only `docs/a_short_run_bundle_convention_20260611.md` historical note remains.
+- `python -m unittest tests.test_a_short_run_paths tests.test_a_short_weekly_pipeline tests.test_route_doc_ledger_status_consistency`: 64/64 OK.
+- `git diff --check`: OK except expected CRLF normalization warnings.
+- AST parse for touched Python files: OK.
+- UTF-8 replacement-character probe for lane READMEs: 0 hits.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `起草` (research/results lane archival: a_short safe one-offs + lane convention) — **ROUTED TO CODEX `审查`**
+
+**Live gate**: drafted, **uncommitted**, awaiting Codex `审查`. HEAD `26c1e5c`. User chose option 2 (move the safe a_short one-offs; do NOT touch `result/`; do NOT bulk-move coupled a_long) + asked to make future results land by lane.
+
+**What**:
+- Created 4 lane folders `research/results/{a_short, a_long, us_short, us_long}/` (each with a README explaining the lane + the boundary).
+- **Moved the 4 code-unreferenced a_short one-offs** into `research/results/a_short/` (confirmed no source hardcodes them): `git mv` the tracked `a_short_iv_feed_20260609`→`a_short/iv_feed_20260609` + `a_short_iv_feed_probe_20260609`→`a_short/iv_feed_probe_20260609`; plain `mv` the untracked `a_short_weekly_20260609`→`a_short/weekly_20260609` + `egs_weight_comparison_20260609.json`→`a_short/`.
+- **NOT moved (coupled, left at research/results top level)**: all `a_long_*` + `a_share_minimal_data_burst_*` + `a_short_steady_alpha_reaudit_20260603` — the a_long chain reads upstream by hardcoded paths, ~20 tests read them as fixtures, preregs reference them as provenance; a blind move breaks the build. Documented in the a_long lane README (needs a separate reviewed migration).
+- **Forward convention**: `engine/a_short_run_paths.lane_output_root(lane)` (= `research/results/<lane>/`) + convention doc §5: new a_short auto-lands (bundle convention); us = greenfield (born in lane); a_long = incremental per-slice migration. `result/` untouched (code-referenced production root).
+- Updated convention doc IV-feed path refs to the new `research/results/a_short/iv_feed_<date>/`.
+
+**Verification**: run-paths (incl. lane_output_root + guard-safe + unknown-lane-reject) + weekly + route-doc 64/64 OK; `py_compile` OK. (Untracked moved one-offs stay untracked, just relocated.)
+
+**Next**: Codex `审查`. PASS → `提交`.
+
+---
+
 ## 2026-06-11 — Claude `提交` (M6.7 panel renderer + Slice A overlay in-EGS wiring, post Codex PASS) — **DONE (local master)**
 
 **Gate**: Codex re-`审查` PASS (no Required) on the two stacked slices. Committed to LOCAL master only. Per housekeeping: flipped the overlay-drift register entry to `resolved`. Untracked one-off run artifacts (`research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`) + ETF md EXCLUDED.

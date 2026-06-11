@@ -24,8 +24,20 @@ from __future__ import annotations
 import os
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 未来运行结果按 lane 归档的根:research/results/<lane>/(约定见 docs/a_short_run_bundle_convention)。
+# 新 runner 默认往自己 lane 的目录写;us 绿地直接用;a_long 新切片配套改路径用;a_short 已用。
+RESEARCH_RESULTS_REL = os.path.join("research", "results")
+LANES = ("a_short", "a_long", "us_short", "us_long")
 # 分析流传给 EGS `--output-root` 的相对根(我们的 run 用这个,落到 research/results/a_short/<as_of>)
 ANALYSIS_OUTPUT_ROOT = os.path.join("research", "results", "a_short")
+
+
+def lane_output_root(lane: str, project_root: str | None = None) -> str:
+    """某 lane 的结果归档根:<root>/research/results/<lane>/。新 runner 默认往这里写,实现按 lane 归档。"""
+    if lane not in LANES:
+        raise ValueError(f"unknown lane {lane!r}; expected one of {LANES}")
+    root = project_root if project_root is not None else PROJECT_ROOT
+    return os.path.join(root, RESEARCH_RESULTS_REL, lane)
 # 生产流缺省根(egs_main 默认;forward_tracker 从这里读)
 PRODUCTION_OUTPUT_ROOT = os.path.join("result", "a_short")
 

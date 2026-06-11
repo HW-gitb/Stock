@@ -1,0 +1,1546 @@
+{
+  "schema_name": "a_short_weekly_report",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-11T13:50:37+08:00",
+  "as_of": "20260609",
+  "iv_feed_ref": "iv_feed.json",
+  "n_stocks": 15,
+  "reports": [
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "002768.SZ",
+      "name": "国恩股份",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "63.16 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:现价跌破 MA5/10/20,等收复。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "现价跌破 MA5/10/20,等收复"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 63.354,
+          "ma10": 64.09,
+          "ma20": 63.483000000000004,
+          "rsi14": 45.82500998801437,
+          "atr14": 3.8228571428571425,
+          "support": 59.5,
+          "resistance": 70.31
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "现价跌破 MA5/10/20,等收复"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "603337.SH",
+      "name": "杰克科技",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "40.59 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 40.186,
+          "ma10": 40.399,
+          "ma20": 41.137,
+          "rsi14": 51.60703456640389,
+          "atr14": 2.4642857142857144,
+          "support": 38.08,
+          "resistance": 46.2
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "600999.SH",
+      "name": "招商证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "16.98 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 17.041999999999998,
+          "ma10": 17.134,
+          "ma20": 16.9685,
+          "rsi14": 48.708487084870846,
+          "atr14": 0.5928571428571426,
+          "support": 15.68,
+          "resistance": 18.35
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "601058.SH",
+      "name": "赛轮轮胎",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "12.59 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 12.39,
+          "ma10": 12.465,
+          "ma20": 12.558,
+          "rsi14": 56.321839080459775,
+          "atr14": 0.39285714285714285,
+          "support": 12.12,
+          "resistance": 13.15
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "600160.SH",
+      "name": "巨化股份",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "37.72 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 38.434000000000005,
+          "ma10": 36.951,
+          "ma20": 35.71,
+          "rsi14": 64.19452887537994,
+          "atr14": 2.1649999999999996,
+          "support": 31.62,
+          "resistance": 40.94
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "002388.SZ",
+      "name": "新亚制程",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "5.45 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 5.442,
+          "ma10": 5.603,
+          "ma20": 5.554,
+          "rsi14": 51.2396694214876,
+          "atr14": 0.43357142857142866,
+          "support": 5.09,
+          "resistance": 6.99
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "605319.SH",
+      "name": "无锡振华",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "28.0 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 27.572000000000003,
+          "ma10": 26.076,
+          "ma20": 26.0045,
+          "rsi14": 61.65311653116531,
+          "atr14": 1.2092857142857143,
+          "support": 23.76,
+          "resistance": 28.89
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "600592.SH",
+      "name": "龙溪股份",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "20.26 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 20.418,
+          "ma10": 20.465,
+          "ma20": 20.2125,
+          "rsi14": 58.12101910828028,
+          "atr14": 0.9485714285714284,
+          "support": 18.98,
+          "resistance": 22.0
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "002516.SZ",
+      "name": "旷达科技",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "5.9 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:现价跌破 MA5/10/20,等收复。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "现价跌破 MA5/10/20,等收复"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 5.936,
+          "ma10": 6.057,
+          "ma20": 6.121499999999999,
+          "rsi14": 42.24598930481283,
+          "atr14": 0.29071428571428576,
+          "support": 5.68,
+          "resistance": 6.83
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "现价跌破 MA5/10/20,等收复"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "601375.SH",
+      "name": "中原证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "3.87 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:现价跌破 MA5/10/20,等收复。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "现价跌破 MA5/10/20,等收复"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 3.9619999999999997,
+          "ma10": 3.9850000000000003,
+          "ma20": 3.9799999999999995,
+          "rsi14": 41.53846153846152,
+          "atr14": 0.11357142857142866,
+          "support": 3.83,
+          "resistance": 4.13
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "现价跌破 MA5/10/20,等收复"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "601688.SH",
+      "name": "华泰证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "18.78 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 18.919999999999998,
+          "ma10": 18.645,
+          "ma20": 18.6565,
+          "rsi14": 53.21100917431193,
+          "atr14": 0.6250000000000002,
+          "support": 17.92,
+          "resistance": 19.76
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "601995.SH",
+      "name": "中金公司",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "32.3 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:现价跌破 MA5/10/20,等收复。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "现价跌破 MA5/10/20,等收复"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 32.858,
+          "ma10": 33.373000000000005,
+          "ma20": 33.748000000000005,
+          "rsi14": 33.059210526315766,
+          "atr14": 0.8450000000000001,
+          "support": 31.66,
+          "resistance": 34.95
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "现价跌破 MA5/10/20,等收复"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "603683.SH",
+      "name": "晶华新材",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "31.73 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 32.11,
+          "ma10": 30.317,
+          "ma20": 29.081,
+          "rsi14": 66.31393298059965,
+          "atr14": 1.5821428571428569,
+          "support": 26.79,
+          "resistance": 34.58
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "600886.SH",
+      "name": "国投电力",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "13.63 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:现价跌破 MA5/10/20,等收复。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "现价跌破 MA5/10/20,等收复"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 13.846,
+          "ma10": 14.009,
+          "ma20": 13.7345,
+          "rsi14": 55.68627450980394,
+          "atr14": 0.39785714285714285,
+          "support": 13.08,
+          "resistance": 14.75
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "现价跌破 MA5/10/20,等收复"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-11T13:50:37+08:00",
+      "as_of": "20260609",
+      "ts_code": "600500.SH",
+      "name": "中化国际",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期",
+          "波动率状态": "IV分位≈67.4603% | Rule3减半:否",
+          "现价与成本": "5.95 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "无",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×3",
+          "触发条件": "未到低吸/突破触发"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 5.746,
+          "ma10": 5.696,
+          "ma20": 5.822,
+          "rsi14": 47.572815533980574,
+          "atr14": 0.5157142857142859,
+          "support": 5.14,
+          "resistance": 6.49
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [],
+          "observe_only": [],
+          "llm_enrichment": []
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 3,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 67.4603,
+          "halve": false,
+          "status": "ok"
+        },
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    }
+  ],
+  "boundary": {
+    "production": false,
+    "real_money": false,
+    "is_validated_alpha": false,
+    "satisfies_ship_gate": false
+  }
+}

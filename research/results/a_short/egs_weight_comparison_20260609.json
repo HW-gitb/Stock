@@ -1,0 +1,504 @@
+{
+  "schema_name": "egs_weight_comparison",
+  "schema_version": "1.0.0",
+  "as_of": "20260609",
+  "active_profile": "balanced",
+  "universe_n": 910,
+  "legacy_vs": {
+    "balanced": {
+      "base_tier1_n": 40,
+      "cand_tier1_n": 43,
+      "added": [
+        "000536.SZ",
+        "000980.SZ",
+        "001389.SZ",
+        "002134.SZ"
+      ],
+      "removed": [
+        "600743.SH"
+      ],
+      "kept_n": 39,
+      "base_overheat_share": 0.0,
+      "cand_overheat_share": 0.0
+    },
+    "aggressive": {
+      "base_tier1_n": 40,
+      "cand_tier1_n": 44,
+      "added": [
+        "000536.SZ",
+        "000980.SZ",
+        "001389.SZ",
+        "002119.SZ",
+        "002134.SZ",
+        "002876.SZ"
+      ],
+      "removed": [
+        "600030.SH",
+        "600743.SH"
+      ],
+      "kept_n": 38,
+      "base_overheat_share": 0.0,
+      "cand_overheat_share": 0.0
+    },
+    "theme_double": {
+      "base_tier1_n": 40,
+      "cand_tier1_n": 42,
+      "added": [
+        "000536.SZ",
+        "000980.SZ",
+        "001389.SZ",
+        "002134.SZ",
+        "002876.SZ"
+      ],
+      "removed": [
+        "600030.SH",
+        "600743.SH",
+        "603997.SH"
+      ],
+      "kept_n": 37,
+      "base_overheat_share": 0.0,
+      "cand_overheat_share": 0.0
+    }
+  },
+  "variant_top_n": {
+    "_label": "comparison-only / non-production / NOT tradeable — informational side-by-side of what each weight profile would pick; the production picks are the ACTIVE profile only; do NOT trade a non-active variant's list",
+    "top_n": 15,
+    "profiles": {
+      "legacy": [
+        {
+          "ts_code": "601225.SH",
+          "final_score": 96.74,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        },
+        {
+          "ts_code": "003025.SZ",
+          "final_score": 95.53,
+          "tier": "Tier2",
+          "industry_heat_score": 36.84210526315789,
+          "l2_name": "通用机械"
+        },
+        {
+          "ts_code": "603337.SH",
+          "final_score": 92.96,
+          "tier": "Tier1",
+          "industry_heat_score": 18.421052631578945,
+          "l2_name": "专用设备"
+        },
+        {
+          "ts_code": "000725.SZ",
+          "final_score": 91.71,
+          "tier": "Tier2",
+          "industry_heat_score": 78.94736842105263,
+          "l2_name": "光学光电子"
+        },
+        {
+          "ts_code": "002552.SZ",
+          "final_score": 90.58,
+          "tier": "Tier2",
+          "industry_heat_score": 36.84210526315789,
+          "l2_name": "通用机械"
+        },
+        {
+          "ts_code": "600999.SH",
+          "final_score": 90.03,
+          "tier": "Tier1",
+          "industry_heat_score": 15.789473684210524,
+          "l2_name": "证券"
+        },
+        {
+          "ts_code": "002645.SZ",
+          "final_score": 89.31,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        },
+        {
+          "ts_code": "605358.SH",
+          "final_score": 89.18,
+          "tier": "Tier2",
+          "industry_heat_score": 68.42105263157895,
+          "l2_name": "半导体"
+        },
+        {
+          "ts_code": "601916.SH",
+          "final_score": 88.69,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        },
+        {
+          "ts_code": "600293.SH",
+          "final_score": 88.69,
+          "tier": "Tier2",
+          "industry_heat_score": 94.73684210526315,
+          "l2_name": "玻璃制造"
+        },
+        {
+          "ts_code": "002472.SZ",
+          "final_score": 88.59,
+          "tier": "Tier2",
+          "industry_heat_score": 31.578947368421048,
+          "l2_name": "汽车零部件"
+        },
+        {
+          "ts_code": "600323.SH",
+          "final_score": 88.5,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        },
+        {
+          "ts_code": "601009.SH",
+          "final_score": 88.41,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        },
+        {
+          "ts_code": "600919.SH",
+          "final_score": 88.41,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        },
+        {
+          "ts_code": "600036.SH",
+          "final_score": 88.33,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        }
+      ],
+      "balanced": [
+        {
+          "ts_code": "000725.SZ",
+          "final_score": 90.18,
+          "tier": "Tier2",
+          "industry_heat_score": 78.94736842105263,
+          "l2_name": "光学光电子"
+        },
+        {
+          "ts_code": "600293.SH",
+          "final_score": 88.12,
+          "tier": "Tier2",
+          "industry_heat_score": 94.73684210526315,
+          "l2_name": "玻璃制造"
+        },
+        {
+          "ts_code": "002138.SZ",
+          "final_score": 87.57,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "603186.SH",
+          "final_score": 86.94,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "600183.SH",
+          "final_score": 86.94,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "003025.SZ",
+          "final_score": 86.8,
+          "tier": "Tier2",
+          "industry_heat_score": 36.84210526315789,
+          "l2_name": "通用机械"
+        },
+        {
+          "ts_code": "605358.SH",
+          "final_score": 84.58,
+          "tier": "Tier2",
+          "industry_heat_score": 68.42105263157895,
+          "l2_name": "半导体"
+        },
+        {
+          "ts_code": "002768.SZ",
+          "final_score": 83.09,
+          "tier": "Tier1",
+          "industry_heat_score": 81.57894736842104,
+          "l2_name": "塑料"
+        },
+        {
+          "ts_code": "600011.SH",
+          "final_score": 82.05,
+          "tier": "Tier2",
+          "industry_heat_score": 60.52631578947368,
+          "l2_name": "电力"
+        },
+        {
+          "ts_code": "601225.SH",
+          "final_score": 81.99,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        },
+        {
+          "ts_code": "002552.SZ",
+          "final_score": 81.61,
+          "tier": "Tier2",
+          "industry_heat_score": 36.84210526315789,
+          "l2_name": "通用机械"
+        },
+        {
+          "ts_code": "603337.SH",
+          "final_score": 81.3,
+          "tier": "Tier1",
+          "industry_heat_score": 18.421052631578945,
+          "l2_name": "专用设备"
+        },
+        {
+          "ts_code": "603773.SH",
+          "final_score": 80.29,
+          "tier": "Tier2",
+          "industry_heat_score": 78.94736842105263,
+          "l2_name": "光学光电子"
+        },
+        {
+          "ts_code": "002472.SZ",
+          "final_score": 79.88,
+          "tier": "Tier2",
+          "industry_heat_score": 31.578947368421048,
+          "l2_name": "汽车零部件"
+        },
+        {
+          "ts_code": "600999.SH",
+          "final_score": 79.06,
+          "tier": "Tier1",
+          "industry_heat_score": 15.789473684210524,
+          "l2_name": "证券"
+        }
+      ],
+      "aggressive": [
+        {
+          "ts_code": "000725.SZ",
+          "final_score": 91.63,
+          "tier": "Tier2",
+          "industry_heat_score": 78.94736842105263,
+          "l2_name": "光学光电子"
+        },
+        {
+          "ts_code": "002138.SZ",
+          "final_score": 90.84,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "600293.SH",
+          "final_score": 90.36,
+          "tier": "Tier2",
+          "industry_heat_score": 94.73684210526315,
+          "l2_name": "玻璃制造"
+        },
+        {
+          "ts_code": "603186.SH",
+          "final_score": 89.31,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "600183.SH",
+          "final_score": 89.31,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "003025.SZ",
+          "final_score": 86.15,
+          "tier": "Tier2",
+          "industry_heat_score": 36.84210526315789,
+          "l2_name": "通用机械"
+        },
+        {
+          "ts_code": "605358.SH",
+          "final_score": 85.5,
+          "tier": "Tier2",
+          "industry_heat_score": 68.42105263157895,
+          "l2_name": "半导体"
+        },
+        {
+          "ts_code": "002768.SZ",
+          "final_score": 83.76,
+          "tier": "Tier1",
+          "industry_heat_score": 81.57894736842104,
+          "l2_name": "塑料"
+        },
+        {
+          "ts_code": "600011.SH",
+          "final_score": 83.47,
+          "tier": "Tier2",
+          "industry_heat_score": 60.52631578947368,
+          "l2_name": "电力"
+        },
+        {
+          "ts_code": "603773.SH",
+          "final_score": 82.64,
+          "tier": "Tier2",
+          "industry_heat_score": 78.94736842105263,
+          "l2_name": "光学光电子"
+        },
+        {
+          "ts_code": "002484.SZ",
+          "final_score": 80.82,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "603337.SH",
+          "final_score": 80.62,
+          "tier": "Tier1",
+          "industry_heat_score": 18.421052631578945,
+          "l2_name": "专用设备"
+        },
+        {
+          "ts_code": "000670.SZ",
+          "final_score": 80.56,
+          "tier": "Tier2",
+          "industry_heat_score": 76.3157894736842,
+          "l2_name": "其他电子"
+        },
+        {
+          "ts_code": "002552.SZ",
+          "final_score": 80.05,
+          "tier": "Tier2",
+          "industry_heat_score": 36.84210526315789,
+          "l2_name": "通用机械"
+        },
+        {
+          "ts_code": "601225.SH",
+          "final_score": 79.93,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        }
+      ],
+      "theme_double": [
+        {
+          "ts_code": "000725.SZ",
+          "final_score": 93.17,
+          "tier": "Tier2",
+          "industry_heat_score": 78.94736842105263,
+          "l2_name": "光学光电子"
+        },
+        {
+          "ts_code": "600293.SH",
+          "final_score": 90.19,
+          "tier": "Tier2",
+          "industry_heat_score": 94.73684210526315,
+          "l2_name": "玻璃制造"
+        },
+        {
+          "ts_code": "600183.SH",
+          "final_score": 88.38,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "603186.SH",
+          "final_score": 88.38,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "003025.SZ",
+          "final_score": 87.81,
+          "tier": "Tier2",
+          "industry_heat_score": 36.84210526315789,
+          "l2_name": "通用机械"
+        },
+        {
+          "ts_code": "002138.SZ",
+          "final_score": 87.6,
+          "tier": "Tier2",
+          "industry_heat_score": 97.36842105263158,
+          "l2_name": "元件"
+        },
+        {
+          "ts_code": "605358.SH",
+          "final_score": 86.8,
+          "tier": "Tier2",
+          "industry_heat_score": 68.42105263157895,
+          "l2_name": "半导体"
+        },
+        {
+          "ts_code": "002768.SZ",
+          "final_score": 84.93,
+          "tier": "Tier1",
+          "industry_heat_score": 81.57894736842104,
+          "l2_name": "塑料"
+        },
+        {
+          "ts_code": "601225.SH",
+          "final_score": 84.44,
+          "tier": "Tier2",
+          "industry_heat_score": null,
+          "l2_name": "未知"
+        },
+        {
+          "ts_code": "002472.SZ",
+          "final_score": 83.93,
+          "tier": "Tier2",
+          "industry_heat_score": 31.578947368421048,
+          "l2_name": "汽车零部件"
+        },
+        {
+          "ts_code": "603337.SH",
+          "final_score": 83.55,
+          "tier": "Tier1",
+          "industry_heat_score": 18.421052631578945,
+          "l2_name": "专用设备"
+        },
+        {
+          "ts_code": "603773.SH",
+          "final_score": 82.51,
+          "tier": "Tier2",
+          "industry_heat_score": 78.94736842105263,
+          "l2_name": "光学光电子"
+        },
+        {
+          "ts_code": "002552.SZ",
+          "final_score": 82.2,
+          "tier": "Tier2",
+          "industry_heat_score": 36.84210526315789,
+          "l2_name": "通用机械"
+        },
+        {
+          "ts_code": "600011.SH",
+          "final_score": 82.07,
+          "tier": "Tier2",
+          "industry_heat_score": 60.52631578947368,
+          "l2_name": "电力"
+        },
+        {
+          "ts_code": "000670.SZ",
+          "final_score": 80.54,
+          "tier": "Tier2",
+          "industry_heat_score": 76.3157894736842,
+          "l2_name": "其他电子"
+        }
+      ]
+    }
+  },
+  "note": "non-production cross-sectional Tier1 diff + per-profile top-N lists (no forward returns); forward-return scoreboard + promotion auto-flag = register forward-item follow-up",
+  "boundary": {
+    "production": false,
+    "changes_selection": false,
+    "is_promotion_decision": false,
+    "variant_lists_are_tradeable": false
+  }
+}
