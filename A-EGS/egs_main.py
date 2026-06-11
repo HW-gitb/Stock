@@ -3302,6 +3302,30 @@ def run_egs(backtest_mode=False, output_root=None):
     except Exception as _wc_exc:  # noqa: BLE001 (non-production side output must never break the run)
         log.warning(f"egs 权重 variant 对比 diff 跳过：{type(_wc_exc).__name__}")
 
+    # 赛道热度 overlay(Slice A,comparison-track 非生产):A 方案——在 EGS run 内用内存里的全量日线
+    # + 同一份 PIT 概念快照(score_l3 pit 用的那份)+ sw_map 装配,落到同一 run 桶。失败绝不影响生产 run。
+    # **仅 --l3-mode pit 产出**(overlay 标签 pit_source=pit 只有 pit 模式诚实;today 可能写当日快照、
+    # neutralize 无概念 → 跳过,不产出标 pit 却用 today 概念的 artifact)。
+    try:
+        from runners.a_short_theme_overlay_comparison import (
+            build_overlay_summary_from_panels, write_overlay_summary, overlay_emit_allowed)
+        from engine.a_short_run_paths import overlay_path
+        _l3 = _load_l3_snapshot(TODAY) if overlay_emit_allowed(CONF.get("l3_mode")) else None
+        if _l3 is not None:
+            _ov_pool = top50[["ts_code", "esp_score", "l4_score", "overheat_flag", "chasing_high"]].copy()
+            _ov_pool["baseline_rank"] = range(1, len(_ov_pool) + 1)
+            _ov_gen = datetime.now().astimezone().isoformat(timespec="seconds")
+            _ov = build_overlay_summary_from_panels(
+                _ov_pool, all_daily, _l3[1], _l3[2], sw_map, TODAY, _ov_gen,
+                pit_source={"concept_membership": "pit", "sw_mapping": "forward"})
+            _ov_path = overlay_path(TODAY, output_root=output_root)
+            write_overlay_summary(_ov, _ov_path)
+            log.info(f"赛道热度 overlay 已写(非生产,comparison-track）：{_ov_path}")
+        else:
+            log.info("赛道热度 overlay 跳过:无 L3 快照(l3_mode≠pit 或无快照),不编造概念")
+    except Exception as _ov_exc:  # noqa: BLE001 (non-production side output must never break the run)
+        log.warning(f"赛道热度 overlay 跳过：{type(_ov_exc).__name__}")
+
     tier1_final, cninfo_checked = stage3_ai_clearing(top50, red_dict, unlock_set, backtest_mode=backtest_mode)
     env_report  = market_environment(trade_dates, stats_df)
 

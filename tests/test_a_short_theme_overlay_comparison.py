@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from runners.a_short_theme_overlay_comparison import (  # noqa: E402
     OVERLAY_WEIGHTS, EMITTED_THRESHOLDS, FIT_FLOOR,
     concept_intensity, orthogonalize_industry_on_theme, assemble_overlay,
     build_summary, validate_overlay_summary_consistency,
+    build_overlay_summary_from_panels, write_overlay_summary,
 )
 
 GOV_PATH = ROOT / "presets" / "a_short_theme_overlay_governance_20260610.json"
@@ -189,6 +191,62 @@ class GovernanceParityTests(unittest.TestCase):
         self.assertEqual(gov["promotion_rule"]["min_forward_observations"], 12)
         self.assertFalse(gov["promotion_rule"]["production_promotion_authorized_by_this_artifact"])
         self.assertFalse(gov["scope"]["production_ranking_changed_by_this_artifact"])
+
+    def test_governance_egs_main_boundary_honest(self):
+        # A 方案 wiring: egs_main runtime DID gain a non-production side-output, but production
+        # scoring (final_score/tier/admission) is UNCHANGED. Both must be machine-asserted honestly.
+        gov = json.loads(GOV_PATH.read_text(encoding="utf-8"))
+        self.assertTrue(gov["scope"]["egs_main_runtime_changed"])              # side-output added
+        self.assertFalse(gov["scope"]["egs_main_production_behavior_changed"])  # scoring untouched
+        self.assertFalse(gov["scope"]["production_ranking_changed_by_this_artifact"])
+
+    def test_overlay_emit_gated_to_pit_mode(self):
+        # R-ASHORT-OVERLAY-L3-MODE-BOUNDARY-DRIFT: only pit-mode emits overlay (honest pit_source).
+        from runners.a_short_theme_overlay_comparison import overlay_emit_allowed
+        self.assertTrue(overlay_emit_allowed("pit"))
+        for m in ("today", "neutralize", None, ""):
+            self.assertFalse(overlay_emit_allowed(m), m)
+
+
+def _panels():
+    """Synthetic in-memory EGS data (A 方案 inputs): all_daily ≥60 dates + concepts + sw_map + pool."""
+    import itertools
+    stocks = ["A.SZ", "B.SH", "C.SH"]
+    dates = [f"202601{d:02d}" for d in range(1, 29)] + [f"202602{d:02d}" for d in range(1, 33)]  # ~60
+    rows = []
+    for i, (code, d) in enumerate(itertools.product(stocks, dates)):
+        rows.append({"ts_code": code, "trade_date": d,
+                     "pct_chg": (2.0 if code == "B.SH" else (1.0 if code == "C.SH" else -0.5)),
+                     "amount": 1e8 + (i % 7) * 1e7})
+    all_daily = pd.DataFrame(rows)
+    stock_concepts = {"A.SZ": ["c1"], "B.SH": ["c1"], "C.SH": ["c2"]}
+    concept_members = {"c1": ["A.SZ", "B.SH"], "c2": ["C.SH"]}
+    sw_map = {"A.SZ": {"l2_name": "银行"}, "B.SH": {"l2_name": "半导体"}, "C.SH": {"l2_name": "半导体"}}
+    return all_daily, stock_concepts, concept_members, sw_map
+
+
+class BuildFromPanelsTests(unittest.TestCase):
+    def test_assembles_valid_summary(self):
+        all_daily, sc, cm, sw = _panels()
+        summary = build_overlay_summary_from_panels(
+            _pool(), all_daily, sc, cm, sw, as_of="20260612",
+            generated_at="2026-06-12T00:00:00+08:00")
+        validate_overlay_summary_consistency(summary)            # no raise
+        self.assertEqual(summary["candidate_count"], 3)
+        self.assertEqual(summary["track"], "comparison_non_production")
+        self.assertFalse(any(summary["boundary"].values()))
+
+    def test_write_roundtrip(self):
+        import json
+        all_daily, sc, cm, sw = _panels()
+        summary = build_overlay_summary_from_panels(
+            _pool(), all_daily, sc, cm, sw, as_of="20260612",
+            generated_at="2026-06-12T00:00:00+08:00")
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "overlay.json"
+            write_overlay_summary(summary, str(p))
+            loaded = json.loads(p.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["candidate_count"], 3)
 
 
 if __name__ == "__main__":

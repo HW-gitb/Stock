@@ -355,6 +355,21 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(loaded["iv_feed_ref"], "feed.json")
         self.assertEqual(loaded["reports"][0]["m67"]["table"]["操作"], "建仓")
 
+    def test_main_writes_markdown_sibling_with_banner(self):
+        # pipeline main emits a readable weekly_m67.md sibling next to the json (honesty banner present).
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly_m67.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            md = Path(td) / "weekly_m67.md"
+            self.assertTrue(md.exists())
+            text = md.read_text(encoding="utf-8")
+        self.assertIn("# A-short 周报 M6.7", text)
+        self.assertIn("edge 未验证", text)        # honesty banner
+        self.assertIn("## 一览", text)
+
     def test_main_invalid_as_of_aborts(self):
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)

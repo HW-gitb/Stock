@@ -52,6 +52,10 @@ def weight_comparison_path(as_of, output_root=None, project_root=None):
     return os.path.join(run_bundle_dir(as_of, output_root, project_root), "egs_weight_comparison.json")
 
 
+def overlay_path(as_of, output_root=None, project_root=None):
+    return os.path.join(run_bundle_dir(as_of, output_root, project_root), "overlay.json")
+
+
 def weekly_m67_path(as_of, output_root=None, project_root=None):
     return os.path.join(run_bundle_dir(as_of, output_root, project_root), "weekly_m67.json")
 

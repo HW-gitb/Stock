@@ -7,7 +7,9 @@
     "purpose": "freeze overlay weights/thresholds + promotion rule (O2); parity-mirror the runner constants",
     "contract_status": "comparison_track_non_production",
     "production_ranking_changed_by_this_artifact": false,
-    "egs_main_runtime_changed": false,
+    "egs_main_runtime_changed": true,
+    "egs_main_runtime_change_note": "non-production overlay SIDE-OUTPUT added to the EGS run (2026-06-11, A 方案: writes overlay.json into the run bundle, --l3-mode pit only); the production scoring path (final_score / tier / admission) is untouched",
+    "egs_main_production_behavior_changed": false,
     "data_fetch_allowed": false,
     "ship_gate_claim_allowed": false,
     "broker_or_order_automation_allowed": false

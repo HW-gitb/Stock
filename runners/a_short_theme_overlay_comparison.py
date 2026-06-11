@@ -4,9 +4,11 @@
 
 实现冻结设计 `docs/a_short_theme_overlay_slice_a_design_20260610.md`(commit `4ba5617`)。
 
-定位:**非 production、comparison-track**。本 runner **只读消费** EGS 已产出的 artifacts +
-缓存 + L3 快照,对**现有候选池重排序**,产出一份与 baseline 并行的 overlay artifact。
-它 **不修改 `egs_main.py`、不改 production `final_score`/`tier`/准入、不新抓数据**;
+定位:**非 production、comparison-track**。对**现有候选池重排序**,产出一份与 baseline 并行的 overlay
+artifact。**数据装载已接进 EGS run(A 方案,2026-06-11)**:`build_overlay_summary_from_panels` 用
+egs_main 内存里的全量日线 + 同一份 PIT 概念快照 + sw_map 装配(不新抓数据)。
+边界:本切片**确实给 `A-EGS/egs_main.py` 加了一个非生产 side-output**(仅 --l3-mode pit 写 overlay.json
+进 run 桶),但**不改 production `final_score`/`tier`/准入**(生产打分路径一行不动);
 缺数据的输入按设计 forward-only(记 `pit_source` / unavailable,绝不编造)。
 
 纯计算函数对 plain dict/DataFrame 操作(可用合成 fixture 单测);I/O 在 `main` 薄层。
@@ -359,6 +361,75 @@ def validate_overlay_summary_consistency(summary: dict) -> None:
             raise ValueError(f"{c['ts_code']}: industry_heat_norm_ortho={v} 不在 0-100(未归一化)")
 
 
+# ── 从 EGS run 内存数据装配 overlay(A 方案:EGS 内计算,复用已加载日线/概念/sw,产物进 run 桶)──
+def _amount_by_code(daily_window: pd.DataFrame) -> dict:
+    if daily_window is None or daily_window.empty:
+        return {}
+    return daily_window.groupby("ts_code")["amount"].sum().to_dict()
+
+
+def build_overlay_summary_from_panels(pool_df: pd.DataFrame, all_daily: pd.DataFrame,
+                                      stock_concepts: dict, concept_members: dict, sw_map: dict,
+                                      as_of: str, generated_at: str, bench20=None, bench60=None,
+                                      pit_source: dict | None = None,
+                                      dropped_at_l0_l5: list | None = None) -> dict:
+    """用 egs_main run 内存数据(全量日线 + L3 概念 + SW 映射)装配 overlay summary(comparison-track,
+    非生产)。只切片 + 调已测计算链,不抓数据。`all_daily` 需含 ts_code/trade_date/pct_chg/amount 且
+    覆盖 ≥60 交易日。bench20/bench60 缺省 None —— 对全行业同一常数减法不改跨行业百分位,故无害。"""
+    ad = all_daily.copy()
+    ad["trade_date"] = ad["trade_date"].astype(str)
+    dates = sorted(ad["trade_date"].unique())
+
+    def _win(n):
+        return ad[ad["trade_date"].isin(dates[-n:])]
+
+    daily_5d, daily_20d, daily_60d = _win(5), _win(20), _win(60)
+    amount_5d, amount_20d = _amount_by_code(daily_5d), _amount_by_code(daily_20d)
+    latest = dates[-1] if dates else None
+    amount_latest = (ad[ad["trade_date"] == latest].groupby("ts_code")["amount"].sum().to_dict()
+                     if latest else {})
+
+    theme_heat = compute_theme_heat(stock_concepts, concept_members, daily_5d, daily_20d)
+    best_concept = theme_heat["best_concept"]
+    industry_heat_by_l2 = compute_industry_heat(sw_map, daily_20d, daily_60d, bench20, bench60)
+    breadth = compute_breadth(best_concept, concept_members, daily_5d, amount_5d, amount_20d)
+    concept_daily_intensity = {}
+    for d in dates[-PERSISTENCE_WINDOW_DAYS:]:
+        day = ad[ad["trade_date"] == d]
+        concept_daily_intensity[d] = {cid: concept_intensity(day, m)
+                                      for cid, m in concept_members.items()}
+    persistence = compute_persistence(best_concept, concept_daily_intensity)
+    fit = compute_fit(best_concept, concept_members, amount_latest, stock_concepts)
+    sw_l2_by_code = {c: (info or {}).get("l2_name") for c, info in sw_map.items()}
+
+    assembled = assemble_overlay(pool_df, theme_heat, industry_heat_by_l2, breadth,
+                                 persistence, fit, sw_l2_by_code)
+    return build_summary(assembled, as_of,
+                         pit_source or {"concept_membership": "pit", "sw_mapping": "forward"},
+                         dropped_at_l0_l5 or [], generated_at)
+
+
+def overlay_emit_allowed(l3_mode) -> bool:
+    """overlay 仅在 `--l3-mode pit` 下产出:其 `pit_source.concept_membership='pit'` 标签只有 pit 模式
+    才诚实。today(可能写当日快照)/ neutralize / 缺省 → 不产出(否则会标 pit 却用 today 概念)。"""
+    return l3_mode == "pit"
+
+
+def write_overlay_summary(summary: dict, out_path: str) -> None:
+    """唯一 sanctioned 写盘:schema + consistency 校验后原子写。"""
+    import jsonschema
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "schemas", "a_short_theme_overlay_comparison.schema.json")
+    with open(schema_path, "r", encoding="utf-8") as f:
+        jsonschema.validate(summary, json.load(f))
+    validate_overlay_summary_consistency(summary)
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    tmp = str(out_path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, out_path)
+
+
 # ── main(薄 I/O,只读消费 EGS 产出/缓存/快照;不新抓、不改 production)────────────
 def main(argv=None):
     p = argparse.ArgumentParser(description="A-short 赛道热度 overlay comparison-track runner (Slice A)")
@@ -370,11 +441,14 @@ def main(argv=None):
     args = p.parse_args(argv)
     if not args.confirm_non_production:
         raise SystemExit("[FATAL] 需 --confirm-non-production:本 runner 仅产出 comparison-track artifact")
-    # NOTE: 数据装载(L3 snapshot / daily_all cache / SW map / index series)在此薄层接 EGS;
-    # 真实数据装载 + 任何缺失 fetch 需用户 `执行` 授权,故装载实现留给执行期接线。
-    # 本提交聚焦可测纯计算契约;装载层在 `执行` 时按 EGS 缓存路径补全并校验。
-    raise SystemExit("[INFO] data-loading wiring is execution-time (authorized) work; "
-                     "pure-function contract is unit-tested. See design doc + tests.")
+    # 数据装载已接线(A 方案):`build_overlay_summary_from_panels` 在 **EGS run 内**用内存里的全量日线
+    # + 同一份 PIT 概念快照 + sw_map 装配 overlay,落到 run 桶(见 A-EGS/egs_main.py score_l5 之后)。
+    # 独立冷 runner **不支持**——overlay 需全市场 5/20/60 日日线面板,只有 EGS run 内才有(冷启动得重抓,
+    # 与"不 fetch + PIT 一致"冲突)。故本 main 不做冷装载;请通过 EGS analysis 流产出 overlay。
+    raise SystemExit("[INFO] overlay data-loading is wired INSIDE the EGS run (A 方案: "
+                     "build_overlay_summary_from_panels, see A-EGS/egs_main.py). This standalone cold "
+                     "runner is intentionally not wired (needs the full-universe daily panel only "
+                     "available in-EGS). Run the EGS analysis flow to produce overlay.json.")
 
 
 if __name__ == "__main__":

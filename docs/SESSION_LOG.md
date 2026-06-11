@@ -8,6 +8,149 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (M6.7 panel renderer + Slice A overlay in-EGS wiring, post Codex PASS) — **DONE (local master)**
+
+**Gate**: Codex re-`审查` PASS (no Required) on the two stacked slices. Committed to LOCAL master only. Per housekeeping: flipped the overlay-drift register entry to `resolved`. Untracked one-off run artifacts (`research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`) + ETF md EXCLUDED.
+
+**Shipped (two slices, one reviewed commit):**
+1. **M6.7 readable Markdown panel** — `runners/a_short_m67_render.py` (pure `render_weekly_markdown`: honesty banner + summary line + 一览 table + per-stock cards) + CLI; weekly pipeline emits `weekly_m67.md` alongside `weekly_m67.json`.
+2. **Slice A overlay data-loading WIRED (A 方案)** — `build_overlay_summary_from_panels` computes overlay INSIDE the EGS run from in-memory `all_daily` + the same PIT L3 snapshot + sw_map (no fetch, PIT-consistent); gated to `--l3-mode pit` (`overlay_emit_allowed`); writes `overlay.json` into the run bundle; weekly pipeline reads it via `--overlay` → M6.7 赛道红利 star. Governance honest (`egs_main_runtime_changed=true` / `egs_main_production_behavior_changed=false`); production scoring untouched.
+
+**A-short completeness**: with overlay wired, the ONLY remaining A-short item is the **EGS market-regime classifier** (blocked on user: V14.2 M1 verbatim vs V14.3 optimization + the 涨停指数 data-source decision). After that → A-long capture (per user sequencing).
+
+---
+
+## 2026-06-11 — Codex re-`审查` (overlay docstring residual repair + stacked M6.7 renderer) — **PASS**
+
+**Scope reviewed**: current uncommitted repair after HEAD `b0256c7`. Reviewed tracked changes in `A-EGS/egs_main.py`, `engine/a_short_run_paths.py`, `runners/a_short_theme_overlay_comparison.py`, `runners/a_short_weekly_pipeline.py`, `presets/a_short_theme_overlay_governance_20260610.json`, `docs/README.md`, `docs/system_risk_register.md`, `tests/test_a_short_theme_overlay_comparison.py`, `tests/test_a_short_weekly_pipeline.py`, plus untracked intended renderer files `runners/a_short_m67_render.py` and `tests/test_a_short_m67_render.py`. Untracked one-off artifacts `research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`, and `A股长线ETF配置框架.md` remain out of commit scope unless separately approved. No live EGS run, provider call, data fetch, production scoring change, or commit was performed by Codex.
+
+**Verdict**: PASS. The residual `R-ASHORT-OVERLAY-GOVERNANCE-RUNTIME-DRIFT` is repaired. `runners/a_short_theme_overlay_comparison.py` now states the honest runtime boundary: the slice DOES add a non-production `A-EGS/egs_main.py` side-output (`overlay.json`, pit-only), while production `final_score` / `tier` / admission remain unchanged and no new fetch is introduced. The earlier repairs also hold: `overlay_emit_allowed(l3_mode)` gates overlay emission to `--l3-mode pit`; governance records `egs_main_runtime_changed=true` and `egs_main_production_behavior_changed=false`; README uses the same boundary; weekly pipeline writes the Markdown sibling and tests assert the honesty banner.
+
+**Findings**: no Required findings. Submit-time housekeeping: keep the unrelated untracked one-off artifacts out of the commit unless the user explicitly approves them; after `提交`, close the registered `A-short Slice A overlay in-EGS wiring governance / mode-boundary drift` entry as resolved with this PASS + the commit hash.
+
+**Register**: no new risk. Existing register item remains `in_progress` until the reviewed commit is made, per the register's closure rule.
+
+**Verification**:
+- Targeted tests: `tests.test_a_short_m67_render`, `tests.test_a_short_theme_overlay_comparison`, `tests.schema.test_a_short_theme_overlay_comparison_schema`, `tests.test_a_short_weekly_pipeline`, `tests.test_a_short_run_paths`, `tests.phase6.test_weekly_screening_guardrails`, `tests.test_route_doc_ledger_status_consistency`: 102/102 OK.
+- Stale wording grep outside review/register history found no current source claim that the overlay slice "does not modify egs_main"; remaining `不改 production` / pipeline `不动 egs_main` wording is scoped and accurate.
+- `git diff --check`: OK except expected CRLF normalization warnings.
+- AST parse without `.pyc` writes for touched/new Python files: OK (8 files).
+- UTF-8 replacement-character probe over touched/current related code/docs/governance: 0 hits.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (overlay: stale module-docstring egs_main claim) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex re-FAIL (1 residual P1 sub-item) repaired, **uncommitted**, awaiting Codex re-`审查`. HEAD `b0256c7`.
+
+**Fix**: Codex confirmed the pit-gate + governance + README are fixed, but the **overlay runner module docstring** still said "只读消费 … 不修改 `egs_main.py`/不改 production…/不新抓数据". Rewrote it to the honest boundary used elsewhere: the slice DOES add a non-production `egs_main` side-output (`build_overlay_summary_from_panels`, pit-only), but does NOT change production `final_score`/`tier`/admission, no new fetch. Re-grep `不修改.*egs_main` → zero source hits (weekly-pipeline's "不动 egs_main" is accurate for the pipeline itself; only `.pyc` caches + the finding description remain).
+
+**Files**: `runners/a_short_theme_overlay_comparison.py` (docstring), `docs/system_risk_register.md`.
+
+**Verification**: overlay + route-doc 34/34 OK; `py_compile` OK; module `replacement_chars=0`.
+
+**Next**: Codex re-`审查` (overlay wiring + stacked renderer). PASS → `提交`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (overlay wiring pit gate + governance repair) — **FAIL**
+
+**Scope reviewed**: current uncommitted repair after HEAD `b0256c7`. Reviewed tracked changes in `A-EGS/egs_main.py`, `runners/a_short_theme_overlay_comparison.py`, `presets/a_short_theme_overlay_governance_20260610.json`, `docs/README.md`, `runners/a_short_weekly_pipeline.py`, `tests/test_a_short_theme_overlay_comparison.py`, `tests/test_a_short_weekly_pipeline.py`, `engine/a_short_run_paths.py`, `docs/system_risk_register.md`, plus untracked intended renderer files `runners/a_short_m67_render.py` and `tests/test_a_short_m67_render.py`. Untracked one-off artifacts `research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`, and `A股长线ETF配置框架.md` remain out of commit scope. No live EGS run, provider call, data fetch, production scoring change, commit, or business-code fix was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. `R-ASHORT-OVERLAY-L3-MODE-BOUNDARY-DRIFT` is repaired: the code now gates overlay emission through `overlay_emit_allowed(CONF.get("l3_mode"))`, and the pure helper/test pin pit-only behavior. The optional Markdown sibling test is also repaired. However `R-ASHORT-OVERLAY-GOVERNANCE-RUNTIME-DRIFT` is only partially repaired.
+
+**Required finding**:
+- `R-ASHORT-OVERLAY-GOVERNANCE-RUNTIME-DRIFT` remains open (materiality: governance / cross-LLM route state; PIT label: comparison artifact runtime boundary). `presets/a_short_theme_overlay_governance_20260610.json` and `docs/README.md` are now honest, but `runners/a_short_theme_overlay_comparison.py` module docstring still says the runner is a read-only consumer and "它 **不修改 `egs_main.py`、不改 production `final_score`/`tier`/准入、不新抓数据**" even though this slice intentionally modifies `A-EGS/egs_main.py` to add a non-production overlay side-output. Required repair: rewrite that module contract to the same honest boundary used elsewhere: the slice DOES add an `egs_main` non-production side-output, but does NOT change production scoring (`final_score` / `tier` / admission) and does not add fetches. Then rerun the stale-wording grep for `不修改 .*egs_main` / `does NOT modify egs_main`.
+
+**Optional**: none beyond the already-fixed Markdown sibling assertion.
+
+**Register**: no new risk entry needed; this is the same already-registered `A-short Slice A overlay in-EGS wiring governance / mode-boundary drift` item in `docs/system_risk_register.md`, currently `in_progress`.
+
+**Verification**:
+- Targeted tests: `tests.test_a_short_m67_render`, `tests.test_a_short_theme_overlay_comparison`, `tests.schema.test_a_short_theme_overlay_comparison_schema`, `tests.test_a_short_weekly_pipeline`, `tests.test_a_short_run_paths`, `tests.phase6.test_weekly_screening_guardrails`, `tests.test_route_doc_ledger_status_consistency`: 102/102 OK.
+- `git diff --check`: OK except expected CRLF normalization warnings.
+- AST parse without `.pyc` writes for touched/new Python files: OK (8 files).
+- UTF-8 replacement-character probe over touched/current related code/docs/governance: 0 hits.
+
+**Next**: Claude `修复` the stale module contract line, then Codex re-`审查`. Do not `提交` yet.
+
+---
+
+## 2026-06-11 — Claude `修复` (overlay wiring: pit-only gate + governance/runtime boundary honesty) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex FAIL (2 P1) repaired + the Optional, **uncommitted**, awaiting Codex re-`审查`. HEAD `b0256c7`. (Still 2 slices stacked: renderer + overlay; functional paths Codex-confirmed fine — only governance/mode boundary drifted.)
+
+**Fixes**:
+- **`R-ASHORT-OVERLAY-L3-MODE-BOUNDARY-DRIFT`** (chose pit-only): added pure `overlay_emit_allowed(l3_mode)` (=`l3_mode=='pit'`); egs_main gates `_load_l3_snapshot(TODAY)` on it → today/neutralize/None skip (no overlay labeled pit while using today concepts). `test_overlay_emit_gated_to_pit_mode` pins it.
+- **`R-ASHORT-OVERLAY-GOVERNANCE-RUNTIME-DRIFT`**: governance scope `egs_main_runtime_changed=true` + `egs_main_runtime_change_note` + new `egs_main_production_behavior_changed=false`; README route row no longer says "does NOT modify egs_main" (now "does NOT change egs_main PRODUCTION scoring, but DOES add a non-production side-output"). `test_governance_egs_main_boundary_honest` machine-asserts runtime_changed=true ∧ production_behavior_changed=false ∧ production_ranking_changed=false.
+- **Optional**: `test_main_writes_markdown_sibling_with_banner` — pipeline main writes `weekly_m67.md` sibling with the honesty banner.
+
+**Files**: `runners/a_short_theme_overlay_comparison.py` (overlay_emit_allowed), `A-EGS/egs_main.py` (pit gate), `presets/a_short_theme_overlay_governance_20260610.json`, `docs/README.md`, `tests/test_a_short_theme_overlay_comparison.py` (+2), `tests/test_a_short_weekly_pipeline.py` (+1), `docs/system_risk_register.md`.
+
+**Verification**: overlay + weekly + render + run-paths + phase6 loadability + route-doc 88/88 OK; `py_compile` OK; `replacement_chars=0`.
+
+**Next**: Codex re-`审查` (overlay wiring + stacked renderer). PASS → `提交`.
+
+---
+
+## 2026-06-11 — Codex `审查` (A-short M6.7 panel + Slice A overlay in-EGS wiring) — **FAIL**
+
+**Scope reviewed**: current uncommitted tree after HEAD `b0256c7`. Tracked diff reviewed: `A-EGS/egs_main.py`, `engine/a_short_run_paths.py`, `runners/a_short_theme_overlay_comparison.py`, `runners/a_short_weekly_pipeline.py`, `tests/test_a_short_theme_overlay_comparison.py`, `docs/README.md`, plus the review-log/register edits made by this review in `docs/SESSION_LOG.md` and `docs/system_risk_register.md`. Untracked intended panel files reviewed: `runners/a_short_m67_render.py`, `tests/test_a_short_m67_render.py`; untracked one-off artifacts `research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`, and `A股长线ETF配置框架.md` remain out of commit scope unless separately approved. No live EGS run, provider call, data fetch, production scoring change, commit, or business-code fix was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. The M6.7 Markdown panel itself is structurally fine, and the overlay functional path is directionally correct: it reuses in-memory EGS `all_daily`, the L3 snapshot payload, and `sw_map`, writes `overlay.json` into the run bundle, and weekly pipeline consumes overlay through the existing validated path. However the slice's governance and mode boundary are inconsistent with the implementation.
+
+**Required findings**:
+- `R-ASHORT-OVERLAY-GOVERNANCE-RUNTIME-DRIFT` (materiality: governance / cross-LLM route state; PIT label: comparison artifact runtime boundary). `presets/a_short_theme_overlay_governance_20260610.json` still says `scope.egs_main_runtime_changed=false`, `runners/a_short_theme_overlay_comparison.py` still describes the runner as a read-only consumer that does not modify `egs_main.py`, and `docs/README.md` current route row says both "does NOT modify egs_main.py" and "Data-loading WIRED inside the EGS run". The actual slice modifies `A-EGS/egs_main.py` to add a side-output overlay block. Required: update governance/route/module contract wording to distinguish "EGS side-output wiring changed" from the still-important boundary "production final_score / tier / admission unchanged"; add/adjust tests if governance scope fields are meant to be enforced.
+- `R-ASHORT-OVERLAY-L3-MODE-BOUNDARY-DRIFT` (materiality: PIT/source provenance / execution boundary; PIT label: L3 source mode). The current comments/docs claim only `--l3-mode pit` emits overlay, but `A-EGS/egs_main.py` does not check `CONF["l3_mode"]` before `_load_l3_snapshot(TODAY)`. Because the default `today` branch can write a same-day L3 snapshot, a default today-mode EGS run can also emit `overlay.json` while the artifact is labeled `pit_source={"concept_membership":"pit"}`. Required: choose one boundary and make it machine-tested: either gate overlay to `CONF["l3_mode"] == "pit"` and prove today/neutralize skip, or explicitly allow today-mode overlay and update emitted provenance/schema/docs/governance so the source mode/snapshot date is honest.
+
+**Optional**: add a weekly-pipeline integration assertion that `main(..., --out weekly_m67.json)` creates the sibling Markdown file and includes the honesty banner. Current tests exercise the renderer and implicitly import it through `main`, but they do not assert the written `.md` content.
+
+**Register**: material findings registered in `docs/system_risk_register.md` under `A-short Slice A overlay in-EGS wiring governance / mode-boundary drift` with the two Required IDs above.
+
+**Verification**:
+- Targeted tests: `tests.test_a_short_m67_render`, `tests.test_a_short_theme_overlay_comparison`, `tests.schema.test_a_short_theme_overlay_comparison_schema`, `tests.test_a_short_weekly_pipeline`, `tests.test_a_short_run_paths`, `tests.phase6.test_weekly_screening_guardrails`, `tests.test_route_doc_ledger_status_consistency`: 99/99 OK.
+- `git diff --check`: OK except expected CRLF normalization warnings.
+- AST parse without `.pyc` writes for touched/new Python files: OK (7 files). Direct `py_compile` hit a local `A-EGS/__pycache__` permission boundary, so AST parse was used as the no-write syntax check.
+- UTF-8 replacement-character probe over changed/current related code/docs/governance: 0 hits.
+
+**Next**: Claude `修复`; then Codex re-`审查`. Do not `提交` this overlay wiring until the governance/runtime and L3-mode boundary drift is repaired.
+
+---
+
+## 2026-06-11 — Claude `起草` (Slice A overlay data-loading WIRED inside EGS run, A 方案) — **ROUTED TO CODEX `审查`**
+
+**Live gate**: drafted, **uncommitted**, awaiting Codex `审查`. HEAD `b0256c7`. ⚠️ **Two slices now stacked uncommitted in the tree**: (1) the M6.7 markdown renderer (prior 起草, awaiting review), (2) this overlay wiring. Mostly file-disjoint; recommend Codex reviews both, then commit by scope (or batch). User approved Option A.
+
+**What (overlay wiring, A 方案)**: the Slice A overlay runner main was a stub (couldn't cold-load full-universe daily panels). Now wired to compute INSIDE the EGS run, reusing in-memory data — no fetch, PIT-consistent:
+- `runners/a_short_theme_overlay_comparison.py`: new `build_overlay_summary_from_panels(pool_df, all_daily, stock_concepts, concept_members, sw_map, as_of, generated_at, …)` (slices daily 5/20/60d + amount panels + per-day concept-intensity panel for persistence → calls the existing tested compute chain → assemble → build_summary) + `write_overlay_summary` (schema + consistency validate + atomic write). bench20/60 omitted (None) — a constant benchmark subtraction is a no-op for the cross-industry percentile, so harmless. Standalone cold `main` left as an explicit not-wired stub (note updated, no stale "TODO execution-time").
+- `A-EGS/egs_main.py`: after score_l5, guarded block computes overlay from `all_daily` + the **same PIT L3 snapshot score_l3 used** (`_load_l3_snapshot(TODAY)`) + `sw_map`, pool=top50, writes `overlay.json` into the run bundle (`engine.a_short_run_paths.overlay_path`). Only pit-mode runs (which have an L3 snapshot) emit it; today/neutralize → skipped (no fabricated concepts). Failure never breaks the production run.
+- `engine/a_short_run_paths.py`: `overlay_path(as_of, output_root)`. Tests: `BuildFromPanelsTests` (synthetic panels → valid summary + write round-trip). The weekly pipeline already consumes `--overlay` → M6.7 赛道红利 star/crowding.
+
+**Verification**: overlay + run-paths + weekly + render + phase6 loadability + route-doc 85/85 OK; `py_compile` OK.
+
+**After this lands, A-short "complete" = nearly there**: remaining = EGS market-regime classifier (V14.2 M1; needs 涨停指数 data-source decision / or the V14.3 optimization you're weighing). Then A-long capture (per your sequencing).
+
+**Next**: Codex `审查` (this overlay wiring; and the stacked renderer). PASS → `提交`.
+
+---
+
+## 2026-06-11 — Claude `起草` (A-short M6.7 readable Markdown panel renderer) — **ROUTED TO CODEX `审查`**
+
+**Live gate**: drafted, **uncommitted**, awaiting Codex `审查`. HEAD `b0256c7`. User asked for a readable M6.7 output (JSON hard to read → a "面板").
+
+**What**: `runners/a_short_m67_render.py` — pure `render_weekly_markdown(weekly)` → Markdown panel (honesty banner + 环境/汇总一句话 + 一览表[每票 操作/优先级/类型/入/损/盈一/盈二/股数] + 逐票卡片[精简结论区 7 项 + 执行清单]) + `write_weekly_markdown` + CLI `main`. Weekly pipeline now emits `weekly_m67.md` alongside `weekly_m67.json` (renders only; no analysis change). `tests/test_a_short_m67_render.py`. Rendered the first-run `weekly.json` → `research/results/a_short_weekly_20260609/weekly_m67.md` for review.
+- Bug fixed mid-draft: ASCII `"` around 「建仓」 inside a `"`-delimited string broke parsing → switched to full-width 「」 (was a quoting bug, not encoding).
+
+**Verification**: render + weekly + run-paths + route-doc 63/63 OK; `py_compile` OK.
+
+**Overlay finding (NOT drafted yet — needs user nod on architecture)**: the Slice A overlay can NOT be a cold standalone runner — `compute_theme_heat`/`compute_industry_heat` need full-universe 5/20/60d daily panels that EGS does NOT persist (egs_cache has only concept members / concepts_ts / csi300). Right architecture = **compute the overlay INSIDE egs_main's run** (reuse in-memory `all_daily` + concept caches + l2_name + csi300), emit into the run bundle (same pattern as comparison-diff), pipeline reads via `--overlay`. This is a real egs_main integration (bigger than filling the stub) + needs breadth/persistence/fit data-source mapping. Deferred pending user confirm.
+
+**Next**: Codex `审查` the renderer. PASS → `提交`. Overlay = await user nod on the compute-inside-egs architecture.
+
+---
+
 ## 2026-06-11 — Claude `提交` (A-short per-run bundle path convention, post Codex PASS) — **DONE (local master)**
 
 **Gate**: Codex re-`审查` PASS (no Required). Committed to LOCAL master only. Per Codex housekeeping: flipped both run-bundle register entries (`R-ASHORT-RUNBUNDLE-NOT-WIRED-TO-WEEKLY-FLOW`, `R-ASHORT-RUNBUNDLE-STALE-COMPARISON-PATH-DOCS`) to `resolved`. Untracked one-off run artifacts (`research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`) + ETF md EXCLUDED.

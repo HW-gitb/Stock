@@ -257,10 +257,14 @@ def main(argv=None, pro_factory=None, price_provider=None):
     gen = datetime.now().astimezone().isoformat(timespec="seconds")
     weekly = build_weekly_report(normalized, args.as_of, gen, iv_feed_ref=os.path.basename(args.iv_feed))
     write_weekly_report(weekly, feed, args.out)
+    # 同时产出易读的 Markdown 面板(只渲染,不改结论)
+    from runners.a_short_m67_render import write_weekly_markdown
+    md_path = os.path.splitext(args.out)[0] + ".md"
+    write_weekly_markdown(weekly, md_path)
     actions = {}
     for r in weekly["reports"]:
         actions[r["m67"]["table"]["操作"]] = actions.get(r["m67"]["table"]["操作"], 0) + 1
-    print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out}")
+    print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out} (+ {md_path})")
 
 
 if __name__ == "__main__":
