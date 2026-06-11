@@ -8,6 +8,132 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (A-short per-run bundle path convention, post Codex PASS) — **DONE (local master)**
+
+**Gate**: Codex re-`审查` PASS (no Required). Committed to LOCAL master only. Per Codex housekeeping: flipped both run-bundle register entries (`R-ASHORT-RUNBUNDLE-NOT-WIRED-TO-WEEKLY-FLOW`, `R-ASHORT-RUNBUNDLE-STALE-COMPARISON-PATH-DOCS`) to `resolved`. Untracked one-off run artifacts (`research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`) + ETF md EXCLUDED.
+
+**Shipped**: per-run bundle convention — a run's artifacts co-locate in `<EGS output_root>/<as_of>/`. New `engine/a_short_run_paths.py` (single-source path helpers, mirrors export_analysis_input's base_root resolution) + tests; egs_main comparison-diff derives from the run's output_root so it always co-locates with analysis_input (no more split). Two explicit flows: production (default → `result/a_short/<as_of>/`; forward_tracker/weekly_screening.ps1/CURRENT unchanged) vs analysis (`--output-root research/results/a_short` → bundle + weekly M6.7, guard-safe). IV feed stays market-level (referenced). Convention doc + README. egs_main touched (comparison-diff path only, no scoring change).
+
+**A-short remaining to "complete"** (per user sequencing, before A-long capture): (a) Slice A overlay data-loading wiring (M6.7 赛道红利 star — runner main still a stub); (b) EGS market-regime classifier (V14.2 M1; needs 涨停指数 data-source decision from user; user is weighing a possible V14.3 regime-rules optimization — proposal given, spec still frozen, NOT to implement without unfreeze+revalidation).
+
+---
+
+## 2026-06-11 - Codex re-`审查` (A-short per-run bundle stale-path repair) - **PASS**
+
+**Scope reviewed**: current uncommitted repair after HEAD `efe96c2`. Reviewed the run-bundle path implementation and docs/register repair in `A-EGS/egs_main.py`, `engine/a_short_run_paths.py`, `tests/test_a_short_run_paths.py`, `docs/a_short_run_bundle_convention_20260611.md`, `docs/a_short_egs_industry_heat_promotion_design_20260611.md`, `docs/README.md`, `docs/system_risk_register.md`, plus unchanged downstream boundaries in `runners/weekly_screening.ps1`, `runners/forward_tracker.py`, and `docs/CURRENT.md`. Untracked one-off artifacts `research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`, and `A股长线ETF配置框架.md` remain out of scope and must not be swept into this commit. No live EGS run, provider call, weekly pipeline execution, or commit.
+
+**Verdict**: PASS. The last Required finding `R-ASHORT-RUNBUNDLE-STALE-COMPARISON-PATH-DOCS` is repaired. Current guidance now says the comparison artifact is `<EGS output_root>/<as_of>/egs_weight_comparison.json`, co-located with `analysis_input.json`, and points to the run-bundle convention. The earlier implementation-level repair also still holds: `run_egs(output_root=...)` sets `CONF["output_root"]`, `export_analysis_input()` consumes that same root, and `egs_main` writes comparison diff via `weight_comparison_path(TODAY, output_root=output_root)`. The two-flow boundary is honest: production/default remains `result/a_short/<as_of>/`; analysis flow can use `--output-root research/results/a_short` and write M6.7 in that same research bundle.
+
+**Findings**: no Required findings. Submit-time housekeeping: when `提交` is invoked, close both run-bundle risk-register entries (`R-ASHORT-RUNBUNDLE-NOT-WIRED-TO-WEEKLY-FLOW`, `R-ASHORT-RUNBUNDLE-STALE-COMPARISON-PATH-DOCS`) as resolved with this PASS + the commit hash, and do not include the out-of-scope one-off artifacts.
+
+**Verification**:
+- `tests.test_a_short_run_paths` + `tests.test_a_short_weekly_pipeline` + `tests.test_egs_industry_heat` + `tests.phase6.test_weekly_screening_guardrails` + `tests.test_route_doc_ledger_status_consistency`: 88/88 OK.
+- `tests.schema.test_analysis_input_contract` + `tests.schema.test_a_short_screening_threshold_governance_schema`: 13/13 OK.
+- Source syntax parse OK for `A-EGS/egs_main.py`, `engine/a_short_run_paths.py`, `runners/a_short_weekly_pipeline.py`, and `runners/forward_tracker.py`.
+- `git diff --check` OK (CRLF warnings only).
+- UTF-8 replacement-char probe over changed/current related docs/code: 0; targeted mojibake probe for common review/repair/arrow corruption patterns also 0 outside historical log text.
+- Stale-path grep over current docs/registers found no current-guidance use of the old flat `research/results/egs_weight_comparison_<date>.json`; remaining hits are the repaired finding's own description and historical one-off SESSION_LOG entries.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (per-run bundle: stale comparison-path in durable docs) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex FAIL (1 P1, `R-ASHORT-RUNBUNDLE-STALE-COMPARISON-PATH-DOCS`) repaired, **uncommitted**, awaiting Codex re-`审查`. HEAD `efe96c2`. (Codex confirmed the code-level co-location fix holds; only durable docs lagged.)
+
+**Fix**: code now writes comparison-diff to `<EGS output_root>/<as_of>/egs_weight_comparison.json` (co-located), but current docs still advertised the old flat `research/results/egs_weight_comparison_<date>.json`. Updated all current-guidance occurrences:
+- `docs/a_short_egs_industry_heat_promotion_design_20260611.md` lines 11 + 36 → the run-bundle path + pointer to the convention doc.
+- `docs/system_risk_register.md` industry_heat implementation-slice summary → bundle path (removed the explicit old-path quote).
+- Left untouched (correct/factual): the first-run gap-fix entry naming the actual existing one-off file `research/results/egs_weight_comparison_20260609.json` (that file really is there, produced before the path change); historical SESSION_LOG entries.
+
+**Verification**: stale-path grep `egs_weight_comparison_<date>` across current docs → only the finding's own description remains; run-paths 18/18 + route-doc guard OK; register/design `replacement_chars=0`.
+
+**Next**: Codex re-`审查`. PASS → `提交` (exclude untracked one-off run artifacts).
+
+---
+
+## 2026-06-11 - Codex re-`审查` (A-short per-run bundle repair) - **FAIL**
+
+**Scope reviewed**: current uncommitted repair after HEAD `efe96c2`. Reviewed `A-EGS/egs_main.py`, `engine/a_short_run_paths.py`, `tests/test_a_short_run_paths.py`, `docs/a_short_run_bundle_convention_20260611.md`, `docs/README.md`, `docs/system_risk_register.md`, and the existing execution/read boundaries in `runners/weekly_screening.ps1`, `runners/forward_tracker.py`, and `docs/CURRENT.md`. Untracked one-off artifacts `research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`, and `A股长线ETF配置框架.md` remain out of scope and must not be swept into this commit. No live EGS run, provider call, weekly pipeline execution, or commit.
+
+**Verdict**: FAIL. The prior implementation-level split is repaired: `run_egs(output_root=...)` sets `CONF["output_root"]`, `export_analysis_input()` reads that same root, and `egs_main` now writes `egs_weight_comparison.json` through `weight_comparison_path(TODAY, output_root=output_root)`, so comparison and analysis_input co-locate for the active EGS output root. The two-flow boundary is also honest: production/default stays under `result/a_short/<as_of>/`; analysis flow can use `--output-root research/results/a_short` and write M6.7 in that same research bundle. However, the slice is not commit-safe because durable current-state docs still describe the old comparison artifact path.
+
+**Required**:
+- `R-ASHORT-RUNBUNDLE-STALE-COMPARISON-PATH-DOCS` (P1, scope `docs/a_short_egs_industry_heat_promotion_design_20260611.md`, `docs/system_risk_register.md`, plus any current route/doc line advertising the comparison artifact; PIT label `run artifact layout / durable route state`): the repaired code changed the comparison artifact from `research/results/egs_weight_comparison_<date>.json` to `<EGS output_root>/<as_of>/egs_weight_comparison.json`, but current durable docs still say the old path. Specifically, `docs/a_short_egs_industry_heat_promotion_design_20260611.md` lines 11 and 36 still advertise `research/results/egs_weight_comparison_<date>.json`, and the already-resolved industry_heat implementation-slice summary in `docs/system_risk_register.md` still records the same old flat path. This will send future operators/LLMs to the wrong file and contradicts the new "same run bundle" convention. Required repair: update those current guidance lines to the new output-root-derived bundle path, and rerun a stale-path grep for `research/results/egs_weight_comparison_<date>` / `research/results/egs_weight_comparison_` across current docs/registers. Historical SESSION_LOG entries may remain if clearly historical.
+
+**Verification**:
+- `tests.test_a_short_run_paths` + `tests.test_a_short_weekly_pipeline` + `tests.test_egs_industry_heat` + `tests.phase6.test_weekly_screening_guardrails` + `tests.test_route_doc_ledger_status_consistency`: 88/88 OK.
+- `tests.schema.test_analysis_input_contract` + `tests.schema.test_a_short_screening_threshold_governance_schema`: 13/13 OK.
+- Source syntax parse OK for `A-EGS/egs_main.py`, `engine/a_short_run_paths.py`, `runners/a_short_weekly_pipeline.py`, and `runners/forward_tracker.py`.
+- `git diff --check` OK (CRLF warnings only).
+- UTF-8 replacement-char probe over changed/current related docs/code: 0.
+- `python -m py_compile ...` could not be used because writing `A-EGS/__pycache__` hit `WinError 5`; I used in-memory `compile()` instead, so no pycache write was required.
+
+**Register outcome**: added the open P1 route-state finding to `docs/system_risk_register.md`. Do not commit this slice until the stale comparison-path guidance is repaired and re-reviewed. This review does not authorize live screening execution, provider fetches, production `result/a_short` writes, real-money use, or ship-gate claims.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (per-run bundle: co-locate comparison via output_root + explicit two-flow boundary) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex FAIL (1 P1, `R-ASHORT-RUNBUNDLE-NOT-WIRED-TO-WEEKLY-FLOW`) repaired, **uncommitted**, awaiting Codex re-`审查`. HEAD `efe96c2`.
+
+**Root cause**: I'd hardcoded comparison-diff to `research/results/a_short` regardless of the run's output-root → in a production/default run, selection went to `result/a_short/<as_of>` while comparison went to `research/results/a_short/<as_of>` (split); docs overclaimed "every run in research/results".
+
+**Fix**: reframed the convention to **"a run's bundle = `<its EGS output_root>/<as_of>/`"**:
+- `engine/a_short_run_paths.py` now mirrors `export_analysis_input`'s base_root resolution (output_root abs/project-rel, default `result/a_short`) and parameterizes every path by `output_root`.
+- `A-EGS/egs_main.py` comparison-diff now `weight_comparison_path(TODAY, output_root=output_root)` → **always co-locates with analysis_input**, for any output-root.
+- **Two explicit flows** (chosen "preserve legacy boundary" option): production (default → `result/a_short/<as_of>/`; forward_tracker / weekly_screening.ps1 / CURRENT command UNCHANGED) vs analysis (`--output-root research/results/a_short` → bundle + weekly M6.7, guard-safe). No "every run in research/results" claim.
+- Tests: `test_comparison_colocates_with_analysis_input_any_output_root` (no split for any output_root), `test_analysis_flow_bundle_is_guard_safe`, `test_production_bundle_matches_forward_tracker_read_root` (== `forward_tracker.LIVE_RESULT_ROOT/as_of`).
+
+**Files**: `engine/a_short_run_paths.py`, `A-EGS/egs_main.py`, `tests/test_a_short_run_paths.py`, `docs/a_short_run_bundle_convention_20260611.md`, `docs/README.md`, `docs/system_risk_register.md`.
+
+**Verification**: run-paths + weekly + egs + phase6 loadability 72/72 OK; `py_compile` OK; register `replacement_chars=0`; route-doc guard 14/14.
+
+**Next**: Codex re-`审查`. PASS → `提交`.
+
+---
+
+## 2026-06-11 - Codex `审查` (A-short per-run bundle path convention) - **FAIL**
+
+**Scope reviewed**: current uncommitted per-run bundle path convention after HEAD `efe96c2`. Reviewed tracked changes in `A-EGS/egs_main.py`, `docs/README.md`, `docs/SESSION_LOG.md`; reviewed new untracked files `docs/a_short_run_bundle_convention_20260611.md`, `engine/a_short_run_paths.py`, and `tests/test_a_short_run_paths.py`. Also checked existing execution/read paths in `runners/weekly_screening.ps1`, `runners/forward_tracker.py`, `docs/CURRENT.md`, and current `docs/system_risk_register.md`. Untracked one-off artifacts `research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`, and `A股长线ETF配置框架.md` remain out of scope and must not be swept into this commit. No live EGS run, provider call, weekly pipeline run, or commit.
+
+**Verdict**: FAIL. The folder convention itself is directionally right, and the helper path `research/results/a_short/<as_of>/` is guard-safe. But the implementation is not wired into the actual weekly/common execution path, so it does not yet satisfy the user's goal that every run's selection + analysis artifacts are easy to find in one folder.
+
+**Required**:
+- `R-ASHORT-RUNBUNDLE-NOT-WIRED-TO-WEEKLY-FLOW` (P1, scope `runners/weekly_screening.ps1`, `runners/forward_tracker.py`, `A-EGS/egs_main.py`, `docs/CURRENT.md`, `docs/a_short_run_bundle_convention_20260611.md`, tests; PIT label `run artifact layout / weekly execution entrypoint`): the new convention says a run folder is `research/results/a_short/<as_of>/`, but `runners/weekly_screening.ps1` still invokes EGS without `--output-root research/results/a_short`, `docs/CURRENT.md` still advertises `python A-EGS\egs_main.py --as-of <YYYYMMDD>`, and `forward_tracker.py` still reads `result/a_short/<as_of>/analysis_input.json`. At the same time `A-EGS/egs_main.py` writes only the side comparison artifact via `weight_comparison_path(TODAY)` and ignores the active `run_egs(output_root=...)`. Therefore the common run still splits artifacts: selection export can remain under old `result/a_short/<as_of>/`, comparison goes to the new bundle, and tracker cannot consume the new bundle if the documented manual command is used. Required repair: wire the bundle path into the sanctioned weekly/common entrypoint or add a reviewed wrapper; update downstream readers such as forward_tracker or explicitly preserve a legacy boundary without claiming "each run"; make the EGS side-output path derive from the same run output root when applicable; and add regression tests proving the common/weekly path produces and reads one `research/results/a_short/<as_of>/` bundle.
+
+**Verification**:
+- `tests.test_a_short_run_paths` + `tests.test_a_short_weekly_pipeline` + `tests.test_egs_industry_heat` + `tests.phase6.test_weekly_screening_guardrails` + `tests.test_route_doc_ledger_status_consistency`: 87/87 OK.
+- `tests.schema.test_analysis_input_contract` + `tests.schema.test_a_short_screening_threshold_governance_schema`: 13/13 OK.
+- Source syntax parse OK for `A-EGS/egs_main.py`, `engine/a_short_run_paths.py`, `runners/a_short_weekly_pipeline.py`, and `runners/forward_tracker.py`.
+- `git diff --check` OK (CRLF warnings only).
+- UTF-8 replacement-char probe over changed docs/code: 0.
+
+**Register outcome**: added the current open P1 entry to `docs/system_risk_register.md`. Do not commit this convention as complete until repaired and re-reviewed. This review does not authorize live screening execution, provider fetches, production `result/a_short` writes, real-money use, or ship-gate claims.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `起草` (A-short per-run bundle path convention — consolidate run artifacts) — **ROUTED TO CODEX `审查`**
+
+**Live gate**: drafted, **uncommitted**, awaiting Codex `审查` (touches production egs_main — comparison-diff path only). HEAD `efe96c2`. User-requested + user-confirmed location.
+
+**What**: per user — consolidate each run's selection + analysis artifacts into ONE folder `research/results/a_short/<as_of>/` (was scattered across `result/a_short/backtest/generated/<date>/` + `research/results/`). User confirmed the location (`research/results/a_short/`, NOT `result/a_short/` — that's the production root, AI-forbidden + the pipeline guard rejects it; `research/results/a_short/` has `results` w/ s so it's guard-safe).
+- New pure single-source path module `engine/a_short_run_paths.py` (`run_bundle_dir`/`analysis_input_path`/`weight_comparison_path`/`weekly_m67_path`/`account_path`/`output_root`).
+- `A-EGS/egs_main.py`: comparison-diff now writes via `weight_comparison_path(TODAY)` → into the bundle (only code change; no scoring change).
+- `tests/test_a_short_run_paths.py`: pins the layout + **guard-safety** (bundle paths don't trip `_reject_production_output_path`).
+- `docs/a_short_run_bundle_convention_20260611.md`: the convention + exact runner invocations (EGS `--output-root research/results/a_short`; pipeline `--out $bundle/weekly_m67.json`). IV feed stays market-level (referenced, not copied per run). Historical scattered artifacts not migrated; new runs follow the convention.
+
+**Verification**: run-paths + weekly-pipeline + egs + phase6 loadability 71/71 OK; `py_compile` OK.
+
+**Next**: Codex `审查`. PASS → `提交`. Then resume A-short completion: Slice A overlay wiring + EGS regime classifier (then A-long capture).
+
+---
+
 ## 2026-06-11 — Claude `提交` (first-run gap-fix bundle, post Codex PASS) — **DONE (local master)**
 
 **Gate**: Codex re-`审查` PASS (no Required). Committed to LOCAL master only. Per Codex housekeeping: flipped both first-run gap-fix register entries (`R-ASHORT-FIRSTGAP-STALE-VOLCONFIRM-DURABLE-DOCS`, `...-bundle review blockers` covering `-STALE-VOLCONFIRM-COMMENT` / `-BREAKOUT-E2E-TEST-GAP` / `R-ROUTE-RISK-REGISTER-INDHEAT-STALE-INPROGRESS`) to `resolved`. Untracked one-off run artifacts (`research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`) + ETF md EXCLUDED.

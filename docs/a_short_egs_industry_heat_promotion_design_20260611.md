@@ -8,7 +8,7 @@
 **生产 `active_profile=balanced`(esp .20 / cat .25 / l4 .40 / industry_heat .15)= 直接生效。** 用户目的就是靠提高行业/赛道权重改变选股,故 v1 默认即 balanced;**提交本切片 + 下次 EGS 运行 → 选股按新权重改变**(赛道/行业总权重 0.30→0.40)。
 **安全网(不是"默认不生效"):**
 - `legacy` profile(esp .20 / cat .30 / l4 .50 / industry_heat 0 = 改前原式)**保留**,仅作 **① 一键回滚锚**(若新选股不对,把 `active_profile` 翻回 `legacy` 即可,不改代码)+ **② 回归测试基准**(证明本次重构除了"有意的权重改动"外没改别的——`test_legacy_byte_identical*` / `test_legacy_final_score_formula`)。
-- **每次运行自动产出"新 vs legacy 选股 diff"**(`research/results/egs_weight_comparison_<date>.json`):即使权重已生效,你每周仍能看到改了哪些票、过热占比变化——透明,非盲改。
+- **每次运行自动产出"新 vs legacy 选股 diff"**(落到该 run 的桶 `<EGS output_root>/<as_of>/egs_weight_comparison.json`,与 analysis_input 同桶;见 `docs/a_short_run_bundle_convention_20260611.md`):即使权重已生效,你每周仍能看到改了哪些票、过热占比变化——透明,非盲改。
 - industry_heat 只加分排序,**绝不救回** hard_veto/停牌/涨停锁/ST/减持/闪崩;`chasing_high·overheat·未知行业 → Tier2` 降级原样保留。
 
 ## 1. 锁定的权重 profile(presets/egs_industry_heat_governance_20260611.json)
@@ -33,7 +33,7 @@
 - 非真钱、不接券商、不自动下单。
 
 ## 4. 上线不盲改 + 防遗忘(每周自动产出 diff)
-`run_egs` 在 score_l5 后(全量打分 df 在手)调 `write_weight_comparison(df_full, research/results/egs_weight_comparison_<date>.json)`(guarded,失败绝不影响生产 run)。每周自动落盘:
+`run_egs` 在 score_l5 后(全量打分 df 在手)调 `write_weight_comparison(df_full, weight_comparison_path(TODAY, output_root=output_root))`(guarded,失败绝不影响生产 run)——落到**本次 run 的桶** `<EGS output_root>/<as_of>/egs_weight_comparison.json`,与 analysis_input 同桶(分析流=`research/results/a_short/<as_of>/`;生产流=`result/a_short/<as_of>/`;见 `docs/a_short_run_bundle_convention_20260611.md`)。每周自动落盘:
 - `legacy_vs`:每个非 legacy profile vs legacy 的 **Tier1 名单变动 + 过热票占比**(看权重改动的影响)。
 - `variant_top_n`:**每个 profile(legacy/balanced/aggressive/theme_double)各自的 top-N 选股清单**(默认 15),供并排比较。**明确标 `comparison-only / non-production / NOT tradeable`**:这些只是"各公式会选啥"的参考,**生产实际只用 active(balanced)那份,非 active 的清单绝不可照着交易**(`boundary.variant_lists_are_tradeable=false`)。在前向收益记分牌建好前,它是参考信息、非"换着用"的依据。
 - `theme_double` 也每周在列,**不依赖任何人记忆**。

@@ -111,6 +111,7 @@ from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
     write_weight_comparison,
 )
+from engine.a_short_run_paths import weight_comparison_path
 
 TOKEN = os.environ.get("TUSHARE_TOKEN")
 if not TOKEN and not any(arg in ("-h", "--help") for arg in sys.argv[1:]):
@@ -3290,11 +3291,12 @@ def run_egs(backtest_mode=False, output_root=None):
     df = score_l4(df, mf_df)
     df_full, top50 = score_l5(df, sw_map)
 
-    # 非生产侧产物:行业热度权重各 variant vs legacy 的选股 diff(每周自动记录 → 防遗忘;
-    # 不改生产选股)。失败绝不影响生产 run。前向收益记分牌 = register forward-item 后续件。
+    # 行业热度权重各 variant vs legacy 的选股 diff(每周自动记录 → 防遗忘;不改生产选股)。
+    # 从**本次 run 的 output_root 派生**,落到与 analysis_input 同一个 run 桶
+    # <output_root>/<as_of>/(见 engine/a_short_run_paths;与 export_analysis_input 落点一致)。
+    # 失败绝不影响生产 run。前向收益记分牌 = register forward-item 后续件。
     try:
-        _wc_path = os.path.join(PROJECT_ROOT, "research", "results",
-                                f"egs_weight_comparison_{TODAY}.json")
+        _wc_path = weight_comparison_path(TODAY, output_root=output_root)
         write_weight_comparison(df_full, _wc_path, as_of=TODAY)
         log.info(f"egs 权重 variant 对比 diff 已写(非生产）：{_wc_path}")
     except Exception as _wc_exc:  # noqa: BLE001 (non-production side output must never break the run)
