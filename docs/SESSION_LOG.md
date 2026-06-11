@@ -8,6 +8,217 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (V14.3 slice 2b-impl ① → local master)
+
+Codex PASS (entry below). Committed slice 2b-impl ① to local master only (no push): new `engine/a_short_regime_features.py` (pure `compute_regime_daily_features` — fail-closed as_of price+limit usability, finite-numeric inputs, source-panel uniqueness + canonical dates, producer self-validate) + `tests/test_a_short_regime_features.py`; classifier `engine/a_short_regime_classifier.py` gained `history_masked` (masks history-dependent rules on `stk_limit_history_incomplete`); `engine/a_short_regime_ledger.py` made `is_canonical_date` public; + README/design/register. ~9 Codex rounds — all findings were data-integrity (non-finite, missing/partial/unusable limit, bad price, duplicates, source dates, history consumption, doc drift). All 13 slice-2b-impl ① risk entries flipped `resolved`. Comparison-only, pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen. `A股长线ETF配置框架.md` left untracked.
+
+**Next**: `起草` V14.3 slice 2b-impl ② (in-EGS fetch [stk_limit + index] + compute → ledger append via the gates + panel comparison-only block + forward backfill). The bootstrap 252-day backfill RUN is the first real-Tushare `执行` in the whole V14.3 track → needs explicit user authorization + TUSHARE_TOKEN; drafting the code is unblocked. After A-short build wrap, the analysis-layer semantic-automation evaluation then the A-long leftover remain (CURRENT.md §5).
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ①: finite inputs + classifier history-mask)
+
+**Trigger**: Codex re-`审查` FAIL, 2 P1 + 1 P3. Evaluated — both P1 legitimate (and both are categories on my pre-flight sweep I under-applied): non-finite (Inf slips `>0`) and the history-incomplete-consumed gap.
+
+**P1 NONFINITE-NUMERIC-INPUTS**: `_usable_*` used `notna & >0` → `+Inf>0` True → Inf counted usable → fabricated counts / `csi_ret=inf` (which the ledger validator rejects, so the producer broke its own contract). Switched to `np.isfinite & >0` for daily close/high, stk_limit up/down, index close. ±Inf index → filtered → unavailable+flag (not inf output). Added a producer self-check: the returned row runs through `daily_row_semantic_errors` and raises if non-empty — a semantic-invalid row can no longer escape.
+
+**P1 HISTORY-INCOMPLETE-OPERANDS-CONSUMED**: prior-window gaps were flagged but the classifier ignored the flag and still consumed history-dependent operands (probe fired slow_bleed despite the flag). `max_limit_streak` is non-null (can't be nulled), so chose the classifier-refusal option: `classify_raw_regime` now masks ALL history-dependent rules (contraction streak_collapse/earning_effect_gone/slow_bleed → []; attack blocked) when the as_of row carries `stk_limit_history_incomplete`; only today-only defense + shock remain reachable. Added `history_masked` to the output. This touches the committed slice-2a classifier (Codex explicitly authorized the classifier-side fix); existing classifier behavior is unchanged for clean rows (flag absent).
+
+**P3**: `_limit_sets` docstring still referenced the old `stk_limit_missing` flag contract → corrected to the fail-closed + history-incomplete contract.
+
+**Tests +7** (Inf as_of price/limit→raise, Inf index→unavailable; classifier slow_bleed/streak_collapse/attack masked→shock, defense not masked). Pre-flight sweep re-run.
+
+**Boundary unchanged**: pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen; ledger business logic untouched (only `is_canonical_date`/`daily_row_semantic_errors` reused).
+
+**Verification**: `python -m unittest tests.test_a_short_regime_features tests.test_a_short_regime_classifier tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 161/161 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-impl ① finite/history-mask repair) — **PASS**
+
+**Scope reviewed**: current working tree after Claude `修复`. Tracked modified files: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`, `engine/a_short_regime_classifier.py`, `engine/a_short_regime_ledger.py`, `tests/test_a_short_regime_classifier.py`. Untracked intended files: `engine/a_short_regime_features.py`, `tests/test_a_short_regime_features.py`. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: PASS / commit-safe for this slice. The previous Requireds are materially repaired in the current working tree: source panels are canonical + unique before PIT sorting; as_of price/limit inputs fail closed on missing/unusable/non-finite data; non-finite index closes degrade to unavailable/null rather than leaking non-finite returns; producer rows self-check `daily_row_semantic_errors` before return; and classifier history-dependent rules are masked when the as_of row carries `stk_limit_history_incomplete`. No business-code edits were made by Codex.
+
+**Verified repaired**:
+- `R-V143-SLICE2B-FEATURES-ASOF-DAILY-PRICE-QUALITY`: tested NaN / zero / high<close as_of daily price now raises via `_usable_price_codes`.
+- `R-V143-SLICE2B-FEATURES-SOURCE-PANEL-DUPLICATE-ROWS`: duplicate daily `(trade_date, ts_code)`, duplicate `stk_limit` `(trade_date, ts_code)`, and duplicate index `trade_date` now raise before metric computation.
+- `R-V143-SLICE2B-FEATURES-SOURCE-TRADE-DATE-CANONICAL-GAP`: non-canonical panel `trade_date` now raises before lexicographic PIT filters/sorts.
+- `R-V143-SLICE2B-FEATURES-DOC-CONTRACT-DRIFT-AFTER-FAIL-CLOSED`: README route row and cadence design §5 now describe the layered fail-closed contract; producer/test module top comments mostly match.
+- `R-V143-SLICE2B-FEATURES-NONFINITE-NUMERIC-INPUTS`: `_usable_price_codes` / `_usable_limit_codes` now use `np.isfinite`; index panels drop non-finite closes and return unavailable if the current as_of index close is invalid; producer self-checks semantic errors before return. Independent probes confirmed daily `Inf` raises, limit `Inf` raises, and index `Inf` becomes `csi300_unavailable` with no semantic errors.
+- `R-V143-SLICE2B-FEATURES-HISTORY-INCOMPLETE-OPERANDS-CONSUMED`: classifier now sets `history_masked` and suppresses contraction history rules + attack when the as_of row carries `stk_limit_history_incomplete`; today-only defense remains active. Independent probe with 5 low-breadth rows + history flag now returns `shock/residual`, `history_masked=True`.
+
+**Required findings**: none remaining in this reviewed slice.
+
+**Register outcome**: the material findings are already in `docs/system_risk_register.md` with repair evidence; final closure still requires the reviewed commit, per register convention.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 161/161 OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile engine\a_short_regime_features.py engine\a_short_regime_ledger.py engine\a_short_regime_classifier.py tests\test_a_short_regime_features.py`: OK.
+- Independent adversarial probes: daily `Inf` raises; limit `Inf` raises; index `Inf` degrades to unavailable/null and semantic errors `[]`; history-incomplete slow-bleed probe is masked to `shock/residual`.
+- `python -m unittest tests.test_route_doc_ledger_status_consistency`: 14/14 OK.
+- `git diff --check`: no whitespace errors; LF -> CRLF warnings only.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ①: source-panel integrity + price fail-closed + doc sync)
+
+**Trigger**: Codex two-round re-`审查` FAIL, 4 findings (2 P1 + 2 P2). All evaluated legitimate — and all four are categories on my own pre-flight sweep that I failed to apply symmetrically (price = limit symmetry; duplicate/footgun inputs; source-date canonical; doc↔behavior). Fixed together.
+
+**P1 ASOF-DAILY-PRICE-QUALITY**: fail-closed covered stk_limit but not daily prices (NaN close→silent 0; close=0→fabricated limit-down). Added `_usable_price_codes` (finite positive close&high, high>=close); the as_of gate now requires usable price AND limit per stock (`_usable_codes` = price ∩ limit); prior-window price gaps fold into `_incomplete` → history flag + promotion null.
+
+**P1 SOURCE-PANEL-DUPLICATE-ROWS**: dup (date,stock) daily/limit or dup (date) index fabricated counts / a −50% index return. Added `_assert_unique` (rejects any duplicate key at/<= as_of) on daily/stk_limit/csi300/csi1000.
+
+**P2 SOURCE-TRADE-DATE-CANONICAL-GAP**: source trade_dates compared lexicographically unvalidated (malformed prior `2026-01-01` accepted). Added `_assert_canonical_panel_dates` (reuses single-source `is_canonical_date`) on all four panels before any sort/filter.
+
+**P2 DOC-CONTRACT-DRIFT**: durable text still said "missing→flag / never fabricates" after the fail-closed switch. Rewrote producer main + inputs docstrings, test header, README route row, cadence design §5 ① to the layered contract.
+
+**Order**: canonical → unique → PIT dates → as_of fail-closed → metrics. **Tests +5** (bad-price, dup daily/limit/index, non-canonical date). Pre-flight sweep re-run (this time symmetrically across price/limit + inputs hygiene).
+
+**Boundary unchanged**: pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen; classifier/ledger business logic untouched.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 154/154 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex two-round re-`审查` (V14.3 slice 2b-impl ① fail-closed repair) — **FAIL**
+
+**Scope reviewed**: current working tree after Claude `修复`. Tracked modified files: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`, `engine/a_short_regime_ledger.py`. Untracked intended files: `engine/a_short_regime_features.py`, `tests/test_a_short_regime_features.py`. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: FAIL / not commit-safe. I ran the review twice. Round 1 verified the previous Required limit-data fixes are materially repaired: missing, partial, and unusable as_of `stk_limit` now fail closed; prior-day incompleteness no longer creates `promotion_rate=0.0`; stale index and invalid IV/as_of guards still hold. Round 2 then re-read the producer as a fresh source-data boundary and found four remaining holes. The core pattern: malformed source panels can still produce a row that passes schema and `daily_row_semantic_errors`, while the metrics are not real market observations.
+
+**Verified repaired from previous FAIL**:
+- `R-V143-SLICE2B-FEATURES-ASOF-LIMIT-MISSING-METRIC-FABRICATION`: missing/partial as_of `stk_limit` now raises instead of emitting fabricated zero limit metrics.
+- `R-V143-SLICE2B-FEATURES-UNUSABLE-LIMIT-VALUES-SILENT`: NaN, zero, or negative as_of `up_limit/down_limit` now raise via usable-limit coverage, instead of counting as covered.
+- Prior repaired guards still hold in the test suite and probes: stale index rows return null/unavailable, bad `as_of` raises, IV outside `[0,100]` becomes null + `iv_unavailable`.
+
+**Required findings**:
+- `R-V143-SLICE2B-FEATURES-ASOF-DAILY-PRICE-QUALITY` (P1): `compute_regime_daily_features` fail-closes on bad `stk_limit`, but not on bad current-day `daily` prices. Probe with as_of `close/high = NaN` emitted a schema-valid row with `limit_up_count=0`, `limit_down_count=0`, no price-quality flag. Probe with as_of `close/high = 0` emitted `limit_down_count=1`, `net_limit=-1`, again schema-valid and semantically accepted. These are not real "zero limit-up" or "limit-down" observations; they are broken price rows. Required repair: before any limit breadth calculation, require each as_of traded stock to have usable finite positive `close` and `high` (and reject impossible `high < close`, at minimum). Bad as_of price data should fail closed; prior-window daily-price gaps used by MA/streak/promotion need explicit null/flag behavior, not silent coercion. Add adversarial tests for NaN/nonnumeric/zero/negative `close/high` and `high < close`.
+- `R-V143-SLICE2B-FEATURES-SOURCE-PANEL-DUPLICATE-ROWS` (P1): source panels have no uniqueness guard. Duplicate conflicting `daily` rows for the same `(trade_date, ts_code)` can fabricate `limit_up_count=1` or `failed_limit_rate=1.0`; duplicate conflicting `stk_limit` rows can fabricate `limit_up_count=1` by matching a bogus lower `up_limit`; duplicate current-day `csi300` rows produced `csi300_ret_1d=-50.0` from two same-date rows and would be consumed as a broad-index crash. All probes passed the ledger semantic validator. Required repair: enforce one row per `(trade_date, ts_code)` in `daily` and `stk_limit`, and one row per `trade_date` in each index panel for all rows used at or before `as_of`; reject duplicates (or only allow exact identical duplicates after a documented deterministic de-dup, but rejecting is safer for this evidence clock). Add tests for conflicting duplicate daily, limit, and index rows.
+- `R-V143-SLICE2B-FEATURES-SOURCE-TRADE-DATE-CANONICAL-GAP` (P2): the producer validates `as_of`, but source-panel `trade_date` values are cast to string and compared/sorted lexicographically without canonical-date validation. A malformed prior `daily.trade_date="2026-01-01"` was accepted and ignored by downstream semantic validation because the output row's `as_of` was valid. This reopens the exact date-order/PIT class the ledger slice already fixed: lexicographic PIT filters are only sound after every used source date is real canonical `YYYYMMDD`. Required repair: validate `trade_date` values in `daily`, `stk_limit`, `csi300`, and `csi1000` for rows in the producer's used universe before sorting/filtering; reject noncanonical or impossible dates. Add tests for malformed daily/limit/index dates.
+- `R-V143-SLICE2B-FEATURES-DOC-CONTRACT-DRIFT-AFTER-FAIL-CLOSED` (P2): the code contract changed to fail-closed for as_of limit coverage, but durable text still says missing-day `stk_limit` degrades with a flag / "honest degradation flags, never fabricates" in places such as `engine/a_short_regime_features.py` inputs docstring, `tests/test_a_short_regime_features.py` header, `docs/README.md` route row 70, and `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md` §5. Future slice ② wiring could follow the stale docs and reintroduce the old fail-open behavior. Required repair: update these docs/tests descriptions to the actual layered contract: as_of non-nullable count inputs fail closed; nullable or prior-window metrics degrade only where explicitly tested.
+
+**Register outcome**: added all four Required findings to `docs/system_risk_register.md`. The two previous limit-data findings are verified repaired in working tree but remain not finally closed until a clean PASS + commit.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 149/149 OK, but independent adversarial probes above still violate the intended data-integrity contract.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile engine\a_short_regime_features.py engine\a_short_regime_ledger.py engine\a_short_regime_classifier.py tests\test_a_short_regime_features.py`: OK.
+- `git diff --check`: no whitespace errors; LF -> CRLF warnings only in touched docs / ledger module.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ①: limit-data fail-closed)
+
+**Trigger**: Codex re-`审查` FAIL, 2 new P1 (same limit-data integrity family). Evaluated — both legitimate and important: (1) as_of stk_limit fully missing still emitted limit_up_count=0/streak=0/promotion=0.0 with only stk_limit_missing, and `classify_raw_regime` ignores that flag → a missing-data row fired contraction/streak_collapse (false regime); (2) `_uncovered` checked row presence not value usability, so NaN/zero/negative limits counted as covered → silent zero counts.
+
+**Root cause + fix (fail-closed)**: the limit count fields are non-null integers — a fabricated 0 cannot be distinguished from a real "0 limit-ups", so flagging isn't enough; the only honest option for non-nullable fields is to not produce the row. Added `_usable_limit_codes` (finite positive up&down); `compute_regime_daily_features` now RAISES if any as_of traded stock lacks a usable limit (covers both findings — missing AND unusable values). No fabricated-zero row is produced, so nothing reaches the classifier → no classifier change needed. Prior-day window incompleteness degrades instead: promotion_rate=None + `stk_limit_history_incomplete` (never 0.0 from missing data). A real A-share trading day always has complete usable stk_limit; an incomplete one is a fetch failure the ② runner must resolve.
+
+**Intentional contract change**: the earlier partial→`stk_limit_partial`-flag-and-keep-counts (which Codex had verified) is escalated to fail-closed, because keeping subset counts still feeds the classifier (exactly finding 1). The principled rule: nullable fields (index/iv/ma20/promotion) degrade via flags; non-nullable count fields that can't be computed → fail closed.
+
+**Tests**: replaced the missing/partial-flag tests with fail-closed assertions; added unusable-values (NaN/0/negative) fail-closed + prior-day history-incomplete-nulls-promotion. Fixed fixtures that used down_limit=0.0 (now unusable) → positive. Pre-flight sweep re-run.
+
+**Boundary unchanged**: pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen; classifier untouched.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 149/149 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-impl ① repair) — **FAIL**
+
+**Scope reviewed**: current working tree after Claude `修复`. Tracked modified files: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`, `engine/a_short_regime_ledger.py`. Untracked intended files: `engine/a_short_regime_features.py`, `tests/test_a_short_regime_features.py`. No data fetch, EGS wiring, result-file write, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe. The three prior findings are materially repaired: partial `stk_limit` coverage is now flagged and ratio fields are nulled; stale CSI index rows no longer emit stale returns; malformed `as_of` and out-of-range IV no longer produce schema-invalid rows. However, a stricter re-probe found two remaining P1 holes in the same limit-data integrity family. Missing or unusable current-day `stk_limit` can still produce limit-derived numeric observations that the raw classifier consumes as real regime evidence.
+
+**Verified repaired from previous FAIL**:
+- `R-V143-SLICE2B-FEATURES-PARTIAL-STK-LIMIT-SILENT`: previous partial-as-of probe now emits `stk_limit_partial`, `failed_limit_rate=None`, schema OK, ledger semantics OK.
+- `R-V143-SLICE2B-FEATURES-STALE-INDEX-ASOF`: previous stale-index probe now emits `csi300_ret_1d=None`, `csi1000_ret_1d=None`, `csi1000_below_ma20=None`, and unavailable flags.
+- `R-V143-SLICE2B-FEATURES-SCHEMA-INVALID-OUTPUT-GUARDS`: IV `150` now becomes `None + iv_unavailable`; malformed/impossible `as_of` values are rejected before output.
+
+**Required findings**:
+- `R-V143-SLICE2B-FEATURES-ASOF-LIMIT-MISSING-METRIC-FABRICATION` (P1): when current-day `stk_limit` is fully missing but prior-day denominator is valid, `compute_regime_daily_features` still emits `limit_up_count=0`, `max_limit_streak=0`, and `promotion_rate=0.0` with only `stk_limit_missing`. Because `classify_raw_regime` ignores `stk_limit_missing`, a row with `max_limit_streak=0` can fire `contraction/streak_collapse`; independent classifier probe reproduced `raw_regime='contraction'`, `fired_rule='streak_collapse'` from such a missing-limit row. Required repair: missing/partial/unusable as-of limit data must not feed limit-dependent raw rules as real observations. Either fail close producer output for as-of limit-data absence, or make the producer/classifier contract mask all limit-derived operands when `stk_limit_missing` / `stk_limit_partial` / unusable-limit flags are present. Add tests proving missing as-of limit data cannot produce `promotion_rate=0.0` and cannot fire streak-collapse, exhaustion, limit-down defense, or attack rules.
+- `R-V143-SLICE2B-FEATURES-UNUSABLE-LIMIT-VALUES-SILENT` (P1): `_uncovered(day)` checks only row presence, and `_limit_sets` returns `have_limit=True` as soon as merge output is non-empty. If `stk_limit` rows exist but `up_limit/down_limit` are NaN, nonnumeric, or non-positive, the function emits `limit_up_count=0`, `limit_down_count=0`, no limit-data flag, schema OK, and no ledger semantic error. Probe with two current daily stocks and two unusable limit rows reproduced this. Required repair: define coverage as usable finite positive up/down limit values per stock/date, not row presence; unusable values must be treated as missing/partial or fail closed. Add tests for NaN, nonnumeric, zero, and negative limit values.
+
+**Register outcome**: added both new Required findings to `docs/system_risk_register.md`. The three prior findings remain with repair notes but are not final-closed until a PASS + commit.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 148/148 OK, but independent probes above still fail the intended contract.
+- `python -m py_compile engine\a_short_regime_features.py engine\a_short_regime_ledger.py tests\test_a_short_regime_features.py`: OK.
+- `git diff --check`: OK apart from LF -> CRLF warnings in touched docs / ledger module.
+- Independent probes verified previous repairs and reproduced the two new P1s.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ①: partial-stk_limit / stale-index / output-contract)
+
+**Trigger**: Codex `审查` FAIL, 3 findings (2 P1 + 1 P2). Evaluated all — legitimate, none over-engineering; the partial-stk_limit one I'd self-flagged as an open question at handoff, Codex confirmed it real.
+
+**P1 PARTIAL-STK-LIMIT-SILENT**: `_limit_sets` returned have_limit=True on any match, so partial stk_limit coverage silently computed full-universe breadth from a subset. Added `_uncovered(day)`; flag `stk_limit_partial` when any window day (as_of / prior / streak) is incomplete (as_of fully-missing stays `stk_limit_missing`); null the coverage-sensitive ratios (failed_limit_rate on partial as_of; promotion_rate on partial as_of or prior day). Integer counts kept (schema non-null) but flagged as lower bounds.
+
+**P1 STALE-INDEX-ASOF**: `_index_ret_and_below` used the last row ≤ as_of without requiring it == as_of, so a stale index emitted finite ret/below_ma20 unflagged. Now returns (None,None) unless the latest index row == as_of → caller flags csi300/csi1000_unavailable.
+
+**P2 SCHEMA-INVALID-OUTPUT-GUARDS**: producer could emit schema-invalid rows. Now raises on non-canonical `as_of` (reuses the now-public single-source `is_canonical_date` from the ledger module — `_is_canonical_date` kept as internal alias; avoids a duplicate canonical-date impl that could drift); IV outside [0,100] (also NaN/Inf/None) → null + iv_unavailable.
+
+**Tests +4** (partial-as_of, partial-prior-day, stale-index, malformed-as_of; IV test extended to 150/−5). Pre-flight sweep re-run.
+
+**Boundary unchanged**: pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen. (The ledger file is touched only to make `is_canonical_date` public — single-source.)
+
+**Verification**: `python -m unittest tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 148/148 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex `审查` (V14.3 slice 2b-impl ①: pure regime daily-feature computation) — **FAIL**
+
+**Scope reviewed**: current working tree after Claude `起草`. Tracked modified files: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`. Untracked intended files: `engine/a_short_regime_features.py`, `tests/test_a_short_regime_features.py`. No data fetch, EGS wiring, file write to results, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe. The slice is correctly scoped as pure comparison-only producer logic, and the checked-in tests pass, but adversarial probes found three material contract gaps. Two are P1 because they can silently create wrong market-regime features while still passing the daily schema / ledger semantic checks.
+
+**Required findings**:
+- `R-V143-SLICE2B-FEATURES-PARTIAL-STK-LIMIT-SILENT` (P1, limit-breadth integrity): `_limit_sets` inner-joins daily rows to `stk_limit` and returns `have_limit=True` as soon as any matched row exists; `compute_regime_daily_features` only flags `stk_limit_missing` when the whole day has no usable limit rows. Probe with two daily stocks but only one `stk_limit` row emitted `limit_up_count=1`, no limit coverage flag, schema OK, and no ledger semantic error. This silently computes full-universe limit-up/down, failed-limit, streak, and promotion metrics from a subset. Required repair: detect partial `stk_limit` coverage at least for `as_of` and prior-day promotion inputs, preferably all streak dates; fail closed or null/degrade affected metrics with an explicit partial-coverage flag. Add partial as_of and partial prior-day tests.
+- `R-V143-SLICE2B-FEATURES-STALE-INDEX-ASOF` (P1, index date alignment): `_index_ret_and_below` filters index rows to `<= as_of` and uses the last available row, without requiring that the last index `trade_date` equals `as_of`. Probe with `as_of=20240105` and CSI rows only through `20240104` returned finite CSI returns and did not flag `csi300_unavailable`; CSI1000 could likewise emit stale `below_ma20`. This can fabricate or suppress broad-index-crash / slow-bleed operands. Required repair: require current-day index rows for emitted index metrics; stale/missing current index data must return null and flag unavailable/stale. Add stale CSI300 and stale CSI1000 tests.
+- `R-V143-SLICE2B-FEATURES-SCHEMA-INVALID-OUTPUT-GUARDS` (P2, producer output contract): the function documentation and README say output passes the daily schema + ledger semantic validator, but malformed `as_of` and out-of-range finite IV can produce schema-invalid rows. Probes showed `as_of="2024011"` returns a row rejected by schema/ledger semantics, and `iv_percentile_252d=150.0` returns `150.0` with no `iv_unavailable` flag although schema max is 100. Downstream ledger validation would catch writes, but this pure producer currently violates its own advertised contract and is a footgun for the next wiring slice. Required repair: reject non-canonical real `YYYYMMDD` `as_of` before lexicographic filtering, and treat IV outside `[0,100]` as invalid (null+flag or fail closed). Add malformed-date / impossible-date / IV<0 / IV>100 tests.
+
+**Register outcome**: added all three Required findings to `docs/system_risk_register.md` with IDs above. No separate Optional finding; unused `sl_dates` is minor cleanup and not material.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 144/144 OK, but the independent probes above still fail the intended contract.
+- `python -m py_compile engine\a_short_regime_features.py tests\test_a_short_regime_features.py`: OK.
+- `git diff --check`: OK apart from LF -> CRLF warnings in touched docs.
+- Independent probes reproduced: partial `stk_limit` coverage silently accepted; stale index row reused; IV=150 emitted schema-invalid row; malformed `as_of` emitted schema-invalid row.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `起草` (V14.3 slice 2b-impl ①: pure regime daily-feature computation)
+
+**What**: next build step after the cadence commit (`549a71c`). New `engine/a_short_regime_features.py::compute_regime_daily_features` — the PURE producer of one `a_short_market_regime_daily` row from in-memory panels (daily + stk_limit + csi300/csi1000 + iv passthrough), faithful to slice-1 governance calibers. + `tests/test_a_short_regime_features.py` (19 tests). Verified data shapes first (all_daily cols = ts_code/trade_date/OHLC/pre_close/pct_chg/vol/amount — NO up/down limit, so stk_limit is required and per-stock caliber auto-covers ±10/20/ST±5; indices via index_daily; iv from the batch-① feed, not recomputed).
+
+**Scope discipline (reduce-fix-cycles feedback)**: deliberately did NOT cram producer+fetch+EGS-wiring+bootstrap+panel+backfill into one slice — split slice 2b-impl into ① pure compute (this, unblocked, fully testable) and ② wiring+bootstrap-runner (needs user 执行 + TUSHARE_TOKEN). Ran the pre-flight self-sweep ([[feedback_draft_validity_gates_complete]]) before this handoff: non-finite (all float outputs round-or-null, iv isfinite-guarded, index div-by-zero guarded), date (as_of gated downstream by ledger), cross-field (net_limit==up−down by construction + tested), footguns (trade_date astype(str) throughout, DataFrame not generator, all-or-nothing stk_limit→flag), design self-check (only raises when as_of absent; else degrades via flags), doc↔behavior (flag list matches code).
+
+**Rigor highlights**: ST ±5% vs normal ±10% both at +5% close → only ST counts (tested via per-stock up_limit); failed_limit_rate zero-denom→null; promotion thin-denom→null+insufficient_sample (never hard-judge attack); pct_above_ma20 short-window→null; missing index/iv→null+flag; PIT ignores rows>as_of. Integration tests: produced row passes the daily schema AND the ledger `daily_row_semantic_errors`.
+
+**Boundary**: pure logic — no data fetch / EGS wiring / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → expected all-pass (run before handoff). FFFD=0.
+
+**Next**: `审查`.
+
+---
+
 ## 2026-06-11 — Claude `提交` (V14.3 slice 2b-cadence → local master)
 
 Codex final re-`审查` PASS (entry below). Committed the slice-2b cadence design to local master only (no push): `engine/a_short_regime_ledger.py` (pure cadence logic — `plan_append` / `merge_rows` / `build_ledger` + `validate_ledger_envelope` / `validate_ledger_for_append` / `validate_ledger` three-gate split + `LEDGER_POLICY` + `daily_row_semantic_errors` + strict `_is_canonical_date`), `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py` (55 tests), `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, + README/register. Comparison-only, pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen. All 12 slice-2b-cadence risk entries flipped to `resolved`. `A股长线ETF配置框架.md` left untracked (out of scope).

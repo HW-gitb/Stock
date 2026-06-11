@@ -247,6 +247,46 @@ class ComparisonRecordTests(unittest.TestCase):
             jsonschema.validate(rec, self._schema())
 
 
+class HistoryMaskTests(unittest.TestCase):
+    """R-V143-SLICE2B-FEATURES-HISTORY-INCOMPLETE-OPERANDS-CONSUMED: a row flagged
+    stk_limit_history_incomplete must not fire history-dependent rules (the classifier honours the
+    producer's data-quality flag); only today-only defense + shock remain reachable."""
+
+    FLAG = "stk_limit_history_incomplete"
+
+    def test_slow_bleed_masked_when_history_incomplete(self):
+        rows = _history(252)
+        for r in rows[-5:]:
+            r["pct_above_ma20"] = 25.0
+        rows[-1]["csi1000_below_ma20"] = True
+        rows[-1]["data_quality_flags"] = [self.FLAG]
+        out = classify_raw_regime(rows)
+        self.assertTrue(out["history_masked"])
+        self.assertEqual(out["raw_regime"], "shock")                 # slow_bleed suppressed
+        self.assertEqual(out["candidate_hits"]["contraction"], [])
+
+    def test_streak_collapse_masked_when_history_incomplete(self):
+        rows = _history(252)
+        rows[-2]["max_limit_streak"] = 6
+        rows[-1]["max_limit_streak"] = 2
+        rows[-1]["data_quality_flags"] = [self.FLAG]
+        out = classify_raw_regime(rows)
+        self.assertEqual(out["raw_regime"], "shock")
+
+    def test_attack_masked_when_history_incomplete(self):
+        rows = _with_today(252, max_limit_streak=8, promotion_rate=0.60, net_limit=30,
+                           limit_down_count=3, failed_limit_rate=0.10, iv_percentile_252d=50.0)
+        rows[-1]["data_quality_flags"] = [self.FLAG]
+        out = classify_raw_regime(rows)
+        self.assertEqual(out["raw_regime"], "shock")                 # attack suppressed
+
+    def test_defense_not_masked_when_history_incomplete(self):
+        rows = _with_today(252, csi1000_ret_1d=-4.0)                 # broad-index crash (today-only)
+        rows[-1]["data_quality_flags"] = [self.FLAG]
+        out = classify_raw_regime(rows)
+        self.assertEqual(out["raw_regime"], "defense")              # safety-first rule stays active
+
+
 class ComparisonInvariantTests(unittest.TestCase):
     """R-V143-SLICE2A-COMPARISON-INVARIANTS: cross-field contradictions must be rejected by
     validate_comparison_record (and enum/basis ones also by the schema)."""

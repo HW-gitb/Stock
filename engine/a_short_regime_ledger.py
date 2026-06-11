@@ -45,13 +45,14 @@ _DAILY_FLOAT_FIELDS = ("promotion_rate", "failed_limit_rate", "iv_percentile_252
                        "csi300_ret_1d", "csi1000_ret_1d", "pct_above_ma20")
 
 
-def _is_canonical_date(s) -> bool:
+def is_canonical_date(s) -> bool:
     """True iff ``s`` is a real calendar date in canonical YYYYMMDD form.
 
     Strict: must be a str of exactly 8 ASCII digits AND round-trip
     ``strptime(s).strftime("%Y%m%d") == s``. ``strptime`` alone is too lenient — it parses
     ``"2024011"`` and ``"202401 1"`` as 2024-01-01 — which would make lexicographic PIT/freshness
-    ordering unsound; the length + ASCII-digit + round-trip guards reject those.
+    ordering unsound; the length + ASCII-digit + round-trip guards reject those. Public so sibling
+    V14.3 producers (e.g. the feature computation) share one canonical-date definition.
     """
     if not isinstance(s, str) or len(s) != 8 or not all(c in "0123456789" for c in s):
         return False
@@ -59,6 +60,9 @@ def _is_canonical_date(s) -> bool:
         return datetime.strptime(s, "%Y%m%d").strftime("%Y%m%d") == s
     except ValueError:
         return False
+
+
+_is_canonical_date = is_canonical_date   # internal back-compat alias (single source)
 
 
 def daily_row_semantic_errors(row: dict) -> list[str]:

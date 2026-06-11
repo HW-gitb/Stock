@@ -246,9 +246,16 @@ def classify_raw_regime(history: Iterable[dict], as_of: str | None = None,
         # surfaced for visibility; the slow_bleed operand simply cannot fire (treated as not-below)
         flags.append("csi1000_unavailable")
 
+    # When the producer flagged the as_of row's lookback as incomplete, the HISTORY-dependent rules
+    # (contraction's streak_collapse/earning_effect_gone/slow_bleed, and attack via streak+promotion)
+    # cannot be trusted as real observations — an incomplete window can fabricate OR suppress a hit.
+    # Mask them; defense uses only today-only operands (iv / limit_down / index ret / exhaustion whose
+    # promotion is already nulled upstream) so it stays active (safety-first, never masked).
+    history_masked = "stk_limit_history_incomplete" in (today.get("data_quality_flags") or [])
+
     defense = _defense_hits(today, pc)
-    contraction = _contraction_hits(rows, today, pc)
-    attack = _attack_all_satisfied(today, pc)
+    contraction = [] if history_masked else _contraction_hits(rows, today, pc)
+    attack = (not history_masked) and _attack_all_satisfied(today, pc)
 
     if defense:
         regime, fired = "defense", defense[0]
@@ -263,6 +270,7 @@ def classify_raw_regime(history: Iterable[dict], as_of: str | None = None,
         "as_of": eff_as_of,
         "raw_regime": regime,
         "fired_rule": fired,
+        "history_masked": history_masked,
         "candidate_hits": {
             "defense": defense,
             "contraction": contraction,

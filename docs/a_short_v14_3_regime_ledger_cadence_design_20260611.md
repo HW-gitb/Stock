@@ -41,7 +41,9 @@ comparison-only / 非生产 / V14.2 仍冻结;不驱动 Phase 5 / veto / 仓位;
 
 ## 5. 分阶段(本切片之后)
 - **本切片(2b-cadence)**:ledger 契约 + 纯 cadence 逻辑(plan_append / merge_rows / validate_ledger / build_ledger)+ 测试 + 本文。
-- **切片2b-impl(待本切片审过)**:EGS run 内的 daily-feature **生产**(从内存 `all_daily` + `stk_limit` + `index_daily` 算一行特征,落 ledger via merge/validate)+ bootstrap 回填 runner(一次性授权 `执行`)+ 面板 comparison-only 段(读 ledger → `classify_raw_regime` → `build_comparison_record`)+ 前向收益回填。
+- **切片2b-impl,拆两步降风险**:
+  - **①(已起草 2026-06-11)纯特征计算**:`engine/a_short_regime_features.py::compute_regime_daily_features(as_of, daily, stk_limit, csi300, csi1000, iv_percentile_252d)` → 一行符合 `a_short_market_regime_daily` 的特征。忠实 governance 口径(未复权 daily + 每股 stk_limit 自动含 ±10/20/ST±5;炸板=touched-up 但收在下;promotion=昨封今再封,denom<5→null+insufficient_sample;pct_above_ma20 需 20 日窗;指数 ret/below_ma20;iv 透传)。**分层完整性**:源面板须规范 YYYYMMDD + 唯一 (date,股)/(date) 行(否则 raise);as_of **fail-closed**(任一交易股缺可用 daily 价[有限正 close&high、high≥close] 或可用 stk_limit[有限正 up&down] 即 raise——非空计数字段无法表达"未知",不产伪造零行);可空/历史窗缺口走 flag 降级(stk_limit_history_incomplete/insufficient_sample/ma20_insufficient_window/csi*_unavailable/iv_unavailable)。纯函数、吃内存 DataFrame、**无 fetch / 无 EGS / 无文件**;产出行过 daily schema + ledger `daily_row_semantic_errors`。
+  - **②(待 ① 审过)接线 + 回填 runner**:EGS run 内 fetch `stk_limit`+指数+读 IV feed → `compute_regime_daily_features` → `validate_ledger_for_append`→`plan_append`→`merge_rows`→`validate_ledger`→写 ledger;bootstrap 回填 runner(一次性重 Tushare `执行`,**需用户授权 + TUSHARE_TOKEN**)+ 面板 comparison-only 段(读 ledger → `classify_raw_regime` → `build_comparison_record`)+ 前向收益回填。
 - **切片3(更远)**:跨周状态机 + 评分 + switch-candidate 提醒。
 
 ## 6. 本切片交付物
