@@ -8,6 +8,250 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (production EGS industry_heat promotion v1, post Codex PASS) — **DONE (local master)**
+
+**Gate**: Codex re-`审查` PASS (no Required; balanced live, profiles + industry_heat_def schema-pinned, comparison outputs non-production/not-tradeable, UTF-8 clean). Committed to LOCAL master only (no push). Pre-commit: cleared Codex's one non-blocking note (egs_main "对比 runner" comment → "对比 diff (write_weight_comparison)"). Untracked `A股长线ETF配置框架.md` excluded.
+
+**Shipped + LIVE**: production EGS selection now raises 行业/赛道 — `active_profile=balanced` (esp.20/cat.25/l4.40/industry_heat.15). **Next real EGS weekly run selects by the new weights.** Rollback = flip `active_profile`→legacy (one line). Each run emits a non-production `egs_weight_comparison_<date>.json` (legacy_vs diff + per-profile top-N, comparison-only/not-tradeable).
+
+**Still open (register forward-item, NOT this slice)**: forward-return scoreboard + promotion auto-flag (needs ≥12wk forward data) + the `theme_double` condition-triggered promotion. New-weight edge is reasoned (sector beta), NOT yet forward-validated.
+
+---
+
+## 2026-06-11 - Codex re-`审查` (production EGS industry_heat residual wording repair) - **PASS**
+
+**Scope reviewed**: current uncommitted production EGS industry/track heat promotion slice after Claude's last residual wording repair. Reviewed tracked changes in `A-EGS/egs_main.py`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `schemas/analysis_input.schema.json`; reviewed untracked slice files `docs/a_short_egs_industry_heat_promotion_design_20260611.md`, `engine/egs_industry_heat.py`, `presets/egs_industry_heat_governance_20260611.json`, `schemas/egs_industry_heat_governance.schema.json`, `tests/test_egs_industry_heat.py`. Untracked `A股长线ETF配置框架.md` remains out of scope. HEAD `dfb4987`. No live Tushare run / provider call / production screening execution / commit.
+
+**Verdict**: PASS. The last Required finding `R-EGS-INDHEAT-RESIDUAL-OVERLAY-REUSE-WORDING` is repaired: `engine/egs_industry_heat.py` now states the production-pinned per-SW-L2 median-momentum cross-industry-percentile definition, says it only borrows the overlay percentile concept, and explicitly does not claim literal Slice-A overlay reuse or L1 / CSI-relative fallback. The earlier blockers also remain repaired: `active_profile=balanced` is live, profile weights and `industry_heat_def` are schema-pinned, comparison outputs are labelled non-production / not tradeable, and UTF-8 replacement corruption is not present.
+
+**Findings**: no Required findings. One non-blocking wording note: `A-EGS/egs_main.py` has a generic comment saying the pure module is shared with a "non-production comparison runner"; because the module doc and README explicitly state the comparison artifact is written by `egs_main` / `write_weight_comparison` and there is no referenced nonexistent runner path, this is not material for commit safety.
+
+**Verification**:
+- `tests.test_egs_industry_heat` 21/21 OK.
+- Related targeted suite (`tests.test_egs_industry_heat`, `tests.schema.test_analysis_input_contract`, `tests.schema.test_a_short_screening_threshold_governance_schema`, `tests.test_a_short_weekly_pipeline`) 75/75 OK.
+- `tests.test_route_doc_ledger_status_consistency` 14/14 OK.
+- `git diff --check` OK (CRLF warnings only).
+- Source compile probe OK for `engine/egs_industry_heat.py` and `A-EGS/egs_main.py`.
+- Encoding probe: `replacement_chars=0` for the register, session log, design doc, module, tests, governance preset, and governance schema.
+- Mutation probe: `balanced.esp=1`, deleted `industry_heat_def`, and fake future-return `industry_heat_def` are rejected; `active_profile=legacy` remains accepted as the intended rollback.
+- Behavior probe: active profile is `balanced`; `overheat_flag=True` demotes a hot stock to `Tier2`; `variant_top_n` lists all profiles and `variant_lists_are_tradeable=false`.
+- Exact stale-overclaim grep for `复用 Slice A overlay 口径`, `复用 overlay 口径`, `industry_heat 定义复用`, `default legacy`, `production default legacy`, `active=legacy`, and `a_short_egs_weight_comparison` is clean across the current slice files.
+
+**Register outcome**: no new material finding. Existing industry_heat risk-register entries may close only after this PASS is committed with the reviewed slice; the forward-return scoreboard / promotion auto-flag remains a P2 forward item and does not block this commit.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (production EGS industry_heat: last residual overlay-reuse wording in module) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex re-审查 FAIL (1 P1, `R-EGS-INDHEAT-RESIDUAL-OVERLAY-REUSE-WORDING`) repaired, **uncommitted**, awaiting Codex re-`审查`. HEAD `dfb4987`.
+
+**Fix**: `engine/egs_industry_heat.py` lines 15 + 33 still said `industry_heat 定义复用 Slice A overlay 口径` / `复用 overlay 口径` (I missed these two in the prior wording sweep — my grep pattern hadn't matched them). Both rewritten to the honest production-pinned wording (生产钉死定义:每 SW L2 成员动量中位数 → 跨行业百分位; 借鉴 overlay 百分位概念、非字面复用; v1 无 L1/CSI-relative fallback). Re-ran a full stale-wording grep across module/tests/design/register/egs_main: zero remaining `复用 overlay` / `reuse…overlay` / `default legacy` / `a_short_egs_weight_comparison` / `active=legacy` (only the finding's own quoted text + the historical Slice-A overlay entry remain, both expected). Also corrected the forward-item scope phrase "definition reuse" → "concept adaptation".
+
+**Files**: `engine/egs_industry_heat.py`, `docs/system_risk_register.md`.
+
+**Verification**: `tests.test_egs_industry_heat` 21/21; route-doc guard 14/14; module + register `replacement_chars=0`.
+
+**Next**: Codex re-`审查`. PASS → `提交`; else another `修复`.
+
+---
+
+## 2026-06-11 - Codex re-`审查` (production EGS industry_heat residual wording) - **FAIL**
+
+**Scope reviewed**: current uncommitted repair state after Claude's UTF-8 + stale wording repair. Reviewed tracked changes in `A-EGS/egs_main.py`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `schemas/analysis_input.schema.json`; reviewed untracked slice files `docs/a_short_egs_industry_heat_promotion_design_20260611.md`, `engine/egs_industry_heat.py`, `presets/egs_industry_heat_governance_20260611.json`, `schemas/egs_industry_heat_governance.schema.json`, `tests/test_egs_industry_heat.py`. Untracked `A股长线ETF配置框架.md` remains out of scope. HEAD `dfb4987`. No live Tushare run / provider call / production screening execution / commit.
+
+**Verdict**: FAIL. The prior encoding corruption is repaired (`replacement_chars=0` across the register and slice files), `active_profile=balanced` is live, profile weights and `industry_heat_def` are schema-pinned, and targeted tests pass. One prior Required is still not fully repaired: the module contract still overclaims overlay reuse.
+
+**Required**:
+- `R-EGS-INDHEAT-RESIDUAL-OVERLAY-REUSE-WORDING` (P1): `engine/egs_industry_heat.py` line 15 still says `industry_heat 定义复用 Slice A overlay 口径`, and line 33 still labels the implementation as `复用 overlay 口径`. This contradicts the repaired design/governance, which says the production definition is a production-pinned per-SW-L2 median-momentum cross-industry percentile that only adapts the overlay percentile concept, is not a literal reuse, and has no L1 / CSI-relative fallback in v1. Required repair: change those module doc/comment lines to the honest production-pinned wording and re-run the stale-wording grep.
+
+**Verification**:
+- `tests.test_egs_industry_heat` 21/21 OK.
+- Related targeted suite (`test_egs_industry_heat`, `test_analysis_input_contract`, `test_a_short_screening_threshold_governance_schema`, `test_a_short_weekly_pipeline`) 75/75 OK.
+- `tests.test_route_doc_ledger_status_consistency` 14/14 OK.
+- Source `compile(...)` probe OK for `engine/egs_industry_heat.py` and `A-EGS/egs_main.py`.
+- `git diff --check` OK (CRLF warnings only).
+- Mutation probe: `balanced.esp=1` rejected; deleted/fake `industry_heat_def` rejected; `active_profile=legacy` accepted as rollback.
+- Encoding probe: `replacement_chars=0` for `docs/system_risk_register.md`, `docs/a_short_egs_industry_heat_promotion_design_20260611.md`, `engine/egs_industry_heat.py`, `tests/test_egs_industry_heat.py`, and `docs/SESSION_LOG.md`; additional mojibake-pattern scan found zero `鈥/锟/琛/璧/鎵/瀹/淇/鍋/闂/閫` in `docs/system_risk_register.md`.
+
+**Register outcome**: added current open P1 entry in `docs/system_risk_register.md`. Do not commit this slice until repaired and re-reviewed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (production EGS industry_heat: risk-register UTF-8 corruption + stale legacy/overlay wording) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex double-审查 FAIL (2 P1) repaired, **uncommitted**, awaiting Codex re-`审查`. HEAD `dfb4987`.
+
+**Fixes**:
+- **`R-EGS-INDHEAT-RISK-REGISTER-ENCODING-CORRUPTION` (P1)**: `docs/system_risk_register.md` had 102 `U+FFFD` replacement chars (a non-UTF-8 write this session corrupted all non-ASCII incl. historical entries; HEAD baseline was clean, 0 fffd). Fix per Codex: `git checkout HEAD -- docs/system_risk_register.md` (clean baseline) then re-applied ONLY the intended current-slice edits via the Edit tool (which preserves UTF-8 — SESSION_LOG with heavy CJK stayed clean all session). Verified `replacement_total==0` across the register + all slice files.
+- **`R-EGS-INDHEAT-STALE-LEGACY-AND-OVERLAY-WORDING` (P1)**: removed all residual stale wording — `engine/egs_industry_heat.py` (docstring no longer says "default legacy"; the `industry_heat_def` comment now says v1=balanced live; removed the reference to a **nonexistent** `runners/a_short_egs_weight_comparison.py` → "egs_main runtime calls the module's `write_weight_comparison`, no separate runner"); `tests/test_egs_industry_heat.py` docstring now says active=balanced (legacy=anchor); design doc §5 wiring line now active=balanced; register forward-item "reuse overlay def" → "adapts the overlay percentile concept (not literal; no L1 fallback v1)" + "to be implemented when 起草" → "implemented + live". Added a clean register implementation-slice entry capturing all Required IDs + balanced-live + const-pins + the still-open forward-evaluation parts.
+
+**Files**: `engine/egs_industry_heat.py`, `tests/test_egs_industry_heat.py`, `docs/a_short_egs_industry_heat_promotion_design_20260611.md`, `docs/system_risk_register.md` (restored + clean re-apply).
+
+**Verification**: `tests.test_egs_industry_heat` 21/21; route-doc guard 14/14; `replacement_total==0` across register + slice files; `py_compile` OK earlier this round.
+
+**Next**: Codex re-`审查`. PASS → `提交`; else another `修复`.
+
+---
+
+## 2026-06-11 - Codex double `审查` (production EGS industry_heat current repair) - **FAIL**
+
+**Scope reviewed**: two consecutive adversarial passes over the current uncommitted repair state for production EGS industry/track heat promotion. Reviewed tracked changes in `A-EGS/egs_main.py`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `schemas/analysis_input.schema.json`; reviewed untracked slice files `docs/a_short_egs_industry_heat_promotion_design_20260611.md`, `engine/egs_industry_heat.py`, `presets/egs_industry_heat_governance_20260611.json`, `schemas/egs_industry_heat_governance.schema.json`, `tests/test_egs_industry_heat.py`. Untracked `A股长线ETF配置框架.md` remains out of scope. HEAD `dfb4987`. No live Tushare run / provider call / production screening execution / commit.
+
+**Pass 1 result**: FAIL. The core code repair is mostly effective: `active_profile=balanced` is live, production scoring differs from legacy, profile weights are const-pinned, `industry_heat_def` is required/const-pinned, and the runtime `egs_main` log no longer says production default is legacy. However, durable documentation and module/test comments still contain stale legacy-default / literal-overlay wording, and `docs/system_risk_register.md` has real Unicode replacement corruption.
+
+**Pass 2 result**: FAIL again. Independent mutation probes rejected profile-weight drift and fake/deleted `industry_heat_def`; route-doc guard and targeted suites passed. The same two blockers remained: risk-register encoding corruption and stale/misleading active-legacy / overlay-reuse wording.
+
+**Required**:
+- `R-EGS-INDHEAT-RISK-REGISTER-ENCODING-CORRUPTION` (P1): `docs/system_risk_register.md` now contains 102 Unicode replacement characters (`U+FFFD`) across old durable entries. Examples include line 42 after `weight promotion`, line 44 after `batch`, and lines 167/169 where prior `退市*` text is corrupted. This corrupts historical risk-register content outside the current slice and is not commit-safe. Required repair: restore the file from the UTF-8 committed baseline, re-apply only the current intended risk-register edits, and verify `replacement_total == 0` plus a clean diff limited to intended lines.
+- `R-EGS-INDHEAT-STALE-LEGACY-AND-OVERLAY-WORDING` (P1): stale wording remains after the repair. `docs/a_short_egs_industry_heat_promotion_design_20260611.md` still says `A-EGS/egs_main.py` wiring is `active=legacy` zero-change; `tests/test_egs_industry_heat.py` top docstring still says `active=legacy`; `engine/egs_industry_heat.py` still says default legacy, says the industry definition reuses Slice A overlay口径, and names a non-existent `runners/a_short_egs_weight_comparison.py`. This contradicts the reviewed current state (`balanced` is live; production definition only adapts the overlay percentile concept). Required repair: update all stale comments/docs/test docstrings to say `balanced` is live, `legacy` is rollback/regression-only, the definition is production-pinned and only adapts the overlay concept, and comparison output is produced by `egs_main`/module rather than a nonexistent runner.
+
+**Verification**:
+- `tests.test_egs_industry_heat` 21/21 OK.
+- Related targeted suite (`test_egs_industry_heat`, `test_analysis_input_contract`, `test_a_short_screening_threshold_governance_schema`, `test_a_short_weekly_pipeline`) 75/75 OK.
+- `tests.test_route_doc_ledger_status_consistency` 14/14 OK.
+- Source `compile(...)` probe OK for `engine/egs_industry_heat.py` and `A-EGS/egs_main.py`; `py_compile` hit the known local `A-EGS/__pycache__` permission boundary.
+- `git diff --check` OK (CRLF warnings only).
+- Mutation probe: `balanced.esp=1` rejected; deleted/fake `industry_heat_def` rejected; `active_profile=legacy` accepted as rollback.
+- Phase6 `egs_main` import suite still fails only at the known Tushare `set_token` write to `C:\Users\cnhea\tk.csv` permission boundary.
+
+**Register outcome**: added current open P1 entry in `docs/system_risk_register.md`. Do not commit this slice until repaired and re-reviewed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (production EGS industry_heat: stale-doc + def-schema-pin + as_of + per-variant top-N) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex re-审查 FAIL (2 new P1 + 1 P2) all repaired, **plus** the user-requested per-variant top-N output added, **uncommitted**, awaiting Codex re-`审查`. HEAD `dfb4987`.
+
+**Fixes**:
+- **`R-EGS-INDHEAT-STALE-LEGACY-DOC-LOG` (P1)**: module docstring + egs_main scoring comment + runtime log were still saying "production default legacy / flip later" while active=balanced. Now they truthfully state `active_profile=balanced` is LIVE (selection changed); legacy = rollback/regression-only.
+- **`R-EGS-INDHEAT-DEF-SCHEMA-UNPINNED` (P1)**: `industry_heat_def` is now schema-**required** + const-pinned (level/windows/agg/equal_weight/unknown=null/l1_fallback=false + non-empty notes); `test_schema_rejects_deleted_or_fake_industry_heat_def` rejects deletion AND a fake `{level:fake,windows:[future_return],l1_fallback:true}`.
+- **`R-EGS-WEIGHT-COMPARISON-ASOF-GAP` (P2, addressed)**: comparison artifact now carries `as_of` (egs_main passes `TODAY` = run's `date_str` in backtest); `test_write_roundtrip_with_as_of`.
+- **User-requested — per-variant top-N pick lists**: `build_weight_comparison` now emits `variant_top_n` = each profile's (legacy/balanced/aggressive/theme_double) top-N (default 15) list, explicitly `comparison-only / non-production / NOT tradeable` (`boundary.variant_lists_are_tradeable=false`); only the active (balanced) picks are production. `test_variant_top_n_lists_all_profiles_comparison_only`.
+
+**Files**: `engine/egs_industry_heat.py`, `A-EGS/egs_main.py`, `schemas/egs_industry_heat_governance.schema.json`, `tests/test_egs_industry_heat.py` (→ 21), `docs/{a_short_egs_industry_heat_promotion_design_20260611,README,system_risk_register}.md`.
+
+**Verification**: `tests.test_egs_industry_heat` 21/21; broad regression 80/80 (incl. weekly pipeline + phase6 egs_main importlib loadability); route-doc guard 14/14; `py_compile` OK.
+
+**Next**: Codex re-`审查`. PASS → `提交`; else another `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (production EGS industry_heat: balanced-active + profile const-pin + honest def) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex FAIL (3 Required, then superseding review dropped #1) + user directive ("the change must actually take effect") both repaired, **uncommitted**, awaiting Codex re-`审查`. HEAD `dfb4987`.
+
+**Fixes**:
+- **#1 / user directive — `active_profile=balanced` LIVE** (was legacy). My earlier legacy-default was an over-conservative safe-rollout default; user clarified the goal is to actually change selection, so balanced (esp.20/cat.25/l4.40/ind.15) is the active production formula → next EGS run selects differently. `legacy` retained only as one-flag rollback + regression anchor (`test_legacy_byte_identical*` prove the refactor changed nothing else). `test_active_profile_is_balanced` + `test_active_weights_actually_differ_from_legacy` pin it.
+- **#2 `R-EGS-INDHEAT-GOVERNANCE-PROFILE-DRIFT`**: schema now const-pins every profile's 4 weights (`test_schema_rejects_profile_weight_drift` rejects `balanced={esp:1,...}`); boundary reframed to always-true invariants (dropped the profile-dependent consts that allowed contradictory active/boundary states; legacy-rollback stays schema-valid).
+- **#3 `R-EGS-INDHEAT-DEFINITION-DRIFT`**: chose the honest-revise option — governance `industry_heat_def` + design §2 + README now say the production-pinned def (per-L2 median momentum → cross-industry percentile; unknown L2→null; **no L1 fallback / no CSI-relative in v1**) **ADAPTS** the overlay percentile concept, NOT a literal reuse (overclaim removed; the committed forward-item wording also corrected). `test_definition_pinned_values` pins exact values; l4-overlap = accepted additive overlap, `test_does_not_mutate_l4` proves industry_heat never touches l4_score (v2 may demote l4 kickers).
+
+**Files**: `presets/egs_industry_heat_governance_20260611.json`, `schemas/egs_industry_heat_governance.schema.json`, `tests/test_egs_industry_heat.py` (+4 → 19), `docs/{a_short_egs_industry_heat_promotion_design_20260611,README,system_risk_register}.md`. (egs_main unchanged this round — already calls the module.)
+
+**Verification**: `tests.test_egs_industry_heat` 19/19; broad regression 119/119; route-doc guard 14/14; `py_compile` OK.
+
+**Next**: Codex re-`审查`. PASS → `提交`; else another `修复`.
+
+---
+
+## 2026-06-11 - Codex `审查` (production EGS industry_heat promotion current repair) - **FAIL**
+
+**Scope reviewed**: current uncommitted repair state for production EGS industry/track heat promotion. Current tree now has `active_profile=balanced`, profile weights are schema-const-pinned, and active scoring differs from legacy. The prior active-profile and profile-weight-drift findings are superseded. HEAD `dfb4987`; untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare run / provider call / production screening execution / commit.
+
+**Verdict**: FAIL. Production scoring is now actually promoted to balanced weights, but the repair is not commit-safe because the operator-facing code comments/logs and module contract still say the production default is `legacy`, while the live governance is `balanced`; and the claimed production-pinned industry heat definition is not enforced by the governance schema.
+
+**Required**:
+- `R-EGS-INDHEAT-STALE-LEGACY-DOC-LOG` (P1): `engine/egs_industry_heat.py` module docstring and `A-EGS/egs_main.py` scoring comments/log still state production default is `legacy` / activation requires a later flip, while `presets/egs_industry_heat_governance_20260611.json` has `active_profile=balanced`. This would make the production run log tell the operator the old formula is still default even though selection has changed. Required repair: update the module docstring, egs_main comments, and runtime log to truthfully say balanced is live and legacy is rollback/regression-only; keep tests proving active != legacy.
+- `R-EGS-INDHEAT-DEF-SCHEMA-UNPINNED` (P1): the governance artifact says the industry heat definition is production-pinned, but `schemas/egs_industry_heat_governance.schema.json` leaves `industry_heat_def` optional and unconstrained (`{"type":"object"}`). Mutation probes accepted deleting `industry_heat_def` and replacing it with `{"level":"fake","windows":["future_return"],"l1_fallback":true}`. Required repair: make `industry_heat_def` required and schema-pin the chosen production definition fields (`level`, windows, aggregation, unknown handling, no L1 fallback, and L4-overlap treatment), with adversarial tests for deletion and fake/future-return definitions.
+
+**Optional / follow-up**:
+- `R-EGS-WEIGHT-COMPARISON-ASOF-GAP` (P2): the non-production comparison artifact has no `as_of` field and `egs_main.py` writes it to `research/results/egs_weight_comparison_<TODAY>.json`; historical `--as-of` runs on the same day can overwrite or mislabel diffs. Fix before using these files as the future forward-return scoreboard source.
+
+**Verification**:
+- Current related suite: `tests.test_egs_industry_heat`, `tests.schema.test_analysis_input_contract`, `tests.schema.test_a_short_screening_threshold_governance_schema`, `tests.test_a_short_weekly_pipeline` = 73/73 OK using bundled Codex Python.
+- `tests.test_route_doc_ledger_status_consistency` 14/14 OK.
+- `git diff --check` OK (CRLF warnings only).
+- Mutation probe: profile weight drift rejected; `active_profile=legacy` remains schema-valid as rollback; fake/deleted `industry_heat_def` still accepted.
+- Phase6 `egs_main` import tests were not rerun in this final pass; earlier review hit the known Tushare `set_token` write to `C:\Users\cnhea\tk.csv` permission boundary.
+
+**Register outcome**: added a current open P1 entry for the two remaining Required IDs in `docs/system_risk_register.md`. Do not commit this slice until repaired and re-reviewed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 - Codex `审查` (production EGS industry_heat weight promotion v1, updated tree) - **FAIL**
+
+**Scope reviewed**: same uncommitted production EGS industry_heat promotion slice as the immediately following entry, after the working tree changed during review. Current tree has `active_profile=balanced`; independent probe confirms active scores now differ from legacy. The earlier activation-mismatch finding is therefore superseded and is not a current blocker. HEAD `dfb4987`; untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare run / provider call / production screening execution / commit.
+
+**Verdict**: FAIL. The slice now does raise production scoring weight for industry/track heat, but it is still not commit-safe: governance can drift silently, and the implemented industry heat definition does not match the promised Slice-A/PIT-safe contract.
+
+**Required**:
+- `R-EGS-INDHEAT-GOVERNANCE-PROFILE-DRIFT` (P1): the governance schema only constrains profile keys/ranges; it does not const-pin the frozen `balanced` / `aggressive` / `theme_double` profile values, nor enforce coherent `active_profile` / boundary states. Mutation probes still schema-accepted `balanced={esp:1, cat:0, l4:0, industry_heat:0}`, `active_profile=legacy` with active-production boundary semantics, and a fake `industry_heat_def`. Required repair: schema/tests must reject drift from every frozen profile value, reject incoherent active-profile/boundary combinations, and pin the industry heat definition fields that the production scorer relies on.
+- `R-EGS-INDHEAT-DEFINITION-DRIFT` (P1): the register and Slice-A design require reusing the PIT-safe SW L2 industry heat definition: benchmark-relative 20d/60d industry strength versus CSI1000/CSI300/market, L1 fallback where needed, PIT SW mapping, and explicit treatment of overlap with existing L4 industry kickers. Current `compute_industry_heat_score()` uses only L2 median `pct_20d_n` / `pct_60d(_n)` cross-industry percentile. Required repair: align the computation and tests to the promised definition, or revise the design/register honestly before activation and add tests that pin the chosen production definition plus the L4-overlap treatment.
+
+**Verification**:
+- `tests.test_egs_industry_heat` 19/19 OK after `active_profile=balanced` latest rerun.
+- Related targeted suite from the same review round 69/69 OK.
+- Route-doc guard 14/14 OK.
+- Source `compile(...)` probe OK for `A-EGS/egs_main.py` and `engine/egs_industry_heat.py`; `py_compile` itself hit the known local `__pycache__` permission boundary.
+- `git diff --check` OK (CRLF warnings only).
+- Phase6 `egs_main` import tests still hit the known Tushare `set_token` write to `C:\Users\cnhea\tk.csv` permission error; not treated as new slice evidence.
+
+**Register outcome**: added a superseding open P1 entry for the two remaining Required IDs in `docs/system_risk_register.md`. Do not commit this slice until repaired and re-reviewed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 - Codex `审查` (production EGS industry_heat weight promotion v1) - **FAIL**
+
+**Scope reviewed**: uncommitted working tree after Claude `起草`; touched tracked `A-EGS/egs_main.py`, `docs/README.md`, `docs/SESSION_LOG.md`, `schemas/analysis_input.schema.json`; added `docs/a_short_egs_industry_heat_promotion_design_20260611.md`, `engine/egs_industry_heat.py`, `presets/egs_industry_heat_governance_20260611.json`, `schemas/egs_industry_heat_governance.schema.json`, `tests/test_egs_industry_heat.py`. HEAD `dfb4987`. Untracked `A股长线ETF配置框架.md` remains out of scope. No live Tushare run / provider call / production screening execution / commit.
+
+**Verdict**: FAIL. The pure-module extraction is useful, and the legacy path is currently non-disruptive, but the slice is not commit-safe as the requested "production EGS 行业/赛道 weight promotion": it does not actually raise production scoring yet, the future activation weights are not frozen against drift, and the implemented `industry_heat_score` is not the promised Slice-A/PIT-safe definition.
+
+**Required**:
+- `R-EGS-INDHEAT-ACTIVE-PROFILE-NOT-PRODUCTION-PROMOTION` (P1): governance `active_profile` remains `legacy`, and the design explicitly says commit produces zero selection change; independent probe confirmed active scores equal legacy while `balanced` would differ. This does not satisfy the user-directed requirement to raise 行业/赛道 weight in the production selection system. Required repair: either make `balanced` the reviewed active production profile in this slice and update boundary/tests accordingly, or explicitly re-scope the slice as plumbing-only and do not present it as the production promotion.
+- `R-EGS-INDHEAT-GOVERNANCE-PROFILE-DRIFT` (P1): the governance schema only constrains profile keys/ranges; it does not const-pin `balanced` / `aggressive` / `theme_double`, nor enforce `active_profile` vs boundary coherence. Independent mutation changed `balanced` to `{esp:1, cat:0, l4:0, industry_heat:0}` and schema still accepted it; setting `active_profile=balanced` while `production_default_is_legacy=true` also schema-validated. Required repair: add schema/tests that reject drift from every frozen profile value and reject contradictory active-profile/boundary states.
+- `R-EGS-INDHEAT-DEFINITION-DRIFT` (P1): the register and Slice-A design require reusing the PIT-safe SW L2 industry heat definition (relative to CSI1000/CSI300/market, L1 fallback where needed, and explicit handling of overlap with existing L4 industry kickers). The implementation instead computes median `pct_20d_n` / `pct_60d(_n)` by L2 and cross-industry percentile only. Required repair: either align the computation and tests to the promised definition, or revise the design/register honestly before activation and add tests that pin the chosen production definition plus the l4-overlap treatment.
+
+**Verification**:
+- `tests.test_egs_industry_heat` 15/15 OK.
+- Related targeted suite (`test_egs_industry_heat`, `test_analysis_input_contract`, `test_a_short_screening_threshold_governance_schema`, `test_a_short_weekly_pipeline`) 69/69 OK.
+- Route-doc guard 14/14 OK.
+- Source `compile(...)` probe OK for `A-EGS/egs_main.py` and `engine/egs_industry_heat.py`; `py_compile` itself hit the known local `__pycache__` permission boundary.
+- `git diff --check` OK (CRLF warnings only).
+- Phase6 `egs_main` import tests still hit the known Tushare `set_token` write to `C:\Users\cnhea\tk.csv` permission error; not treated as new slice evidence.
+
+**Register outcome**: added combined open P1 entry for the three Required IDs in `docs/system_risk_register.md`. Do not commit this slice until repaired and re-reviewed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `起草` (production EGS 行业/赛道 industry_heat weight promotion v1) — **ROUTED TO CODEX `审查`**
+
+**Live gate**: drafted, **uncommitted**, awaiting Codex `审查` (touches frozen production `egs_main` → review mandatory; commit only after PASS). HEAD `dfb4987`.
+
+**What**: implements the locked register forward-item (production EGS sector-beta). Scoring tail extracted to single-source pure module `engine/egs_industry_heat.py` (industry_heat + governed weight profiles + `final_score_and_tier` faithful replica of egs_main 2743-2784 + `selection_diff` + `write_weight_comparison`). New files: that module + `presets/egs_industry_heat_governance_20260611.json` + `schemas/egs_industry_heat_governance.schema.json` + `tests/test_egs_industry_heat.py` (15) + design `docs/a_short_egs_industry_heat_promotion_design_20260611.md`. egs_main: import + scoring-tail now calls the module (preserving ch_mask/oh_mask/fin_coverage/esp_neg_mask for downstream downgrade_reasons) + emits `scores.industry_heat_score` + CSV column + auto-writes a per-run non-production variant diff. `schemas/analysis_input.schema.json`: optional `scores.industry_heat_score`.
+
+**Key safety**: production default `active_profile=legacy` (esp.20/cat.30/l4.50/ind 0) → egs_base/final_score/tier **byte-identical to pre-change** (test `test_legacy_byte_identical*` + `test_legacy_final_score_formula`). Activation = a later, separately-reviewed flip of `active_profile`→`balanced` after viewing the diff. industry_heat is ranking-only (test: hot-industry + overheat still not Tier1); overheat/chasing/unknown-industry demotions preserved. l4's small industry kickers left intact (keeps legacy identical) → mild double-count under balanced, documented for v2.
+
+**Locked weights**: legacy(.20/.30/.50/0) / balanced(.20/.25/.40/.15, v1 target) / aggressive(.15/.25/.40/.20, comparison-only) / theme_double(.15/.35/.35/.15, condition-triggered). esp kept 0.20 (fundamentals anchor, Codex fix).
+
+**Scope honesty**: this slice = production-safe plumbing (legacy default) + cross-sectional new-vs-current diff. **Still open (register forward-item)**: forward-return scoreboard + promotion auto-flag (needs ≥12wk forward data) + the activation flip. No standalone comparison runner — the diff is emitted in-run from the full df (the exported CSV lacks columns needed to re-score faithfully).
+
+**Verification**: `test_egs_industry_heat` 15/15; broad regression 119/119 (incl. weekly pipeline on the example analysis_input + phase6 egs_main importlib loadability); `py_compile A-EGS/egs_main.py engine/egs_industry_heat.py` OK. egs_main runtime not re-run (needs live Tushare; the change is unit-covered via the pure module + import-loadability).
+
+**Next**: Codex `审查` (production frozen-file change → adversarial: legacy byte-identical / industry_heat never rescues vetoes / single-source parity / no downstream breakage).
+
+---
+
 ## 2026-06-11 — Claude (docs-only) register forward-item: production EGS 行业/赛道 weight promotion — **DONE (local master)**
 
 User-directed (approver, 2026-06-11) + Codex-refined design decision recorded as a register forward-item (no code changed): raise 行业/赛道 in the PRODUCTION EGS selection scoring (sector beta). Locked v1 default `egs_base = esp 0.20 + cat 0.25 + l4 0.40 + industry_heat 0.15` (esp kept as fundamentals anchor; new industry term from cat-0.05/l4-0.10). Industry heat ranking-only (never rescues vetoes); keep overheat/chasing→Tier2; reuse overlay SW L2 industry_heat def; avoid double-counting l4 industry kickers; drafted slice must emit new-vs-current selection diff. **概念+行业双提 variant = condition-triggered, NOT scheduled** — promoted only if over rolling ≥12wk its Tier1 forward return beats default by a noise-passing margin AND overheat/drawdown not worse, via reviewed governance change; anti-forget = comparison-track logs all 3 variants weekly + auto-flags promotion candidates (not memory-dependent). Drafting deferred until user says `起草`; touches frozen production `egs_main` → `起草`(Claude)→`审查`(Codex) mandatory. Full spec in register Hot Queue forward-item.

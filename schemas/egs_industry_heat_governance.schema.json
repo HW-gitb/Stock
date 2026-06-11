@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "egs_industry_heat_governance",
+  "description": "Governed weight profiles for A-EGS production egs_base, adding SW L2 industry_heat. active_profile is 'balanced' (LIVE: industry/theme weight raised → production selection changes). 'legacy' (esp.20/cat.30/l4.50/ind 0 = pre-change formula) is retained as a one-flag rollback + regression anchor. Each profile's weights must sum to 1.0 (enforced by parity test, not schema).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "active_profile", "profiles", "industry_heat_def", "boundary"],
+  "properties": {
+    "schema_name": {"const": "egs_industry_heat_governance"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "active_profile": {"enum": ["legacy", "balanced", "aggressive", "theme_double"]},
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legacy", "balanced", "aggressive", "theme_double"],
+      "properties": {
+        "legacy": {"type": "object", "additionalProperties": false,
+          "required": ["esp", "cat", "l4", "industry_heat"],
+          "properties": {"esp": {"const": 0.20}, "cat": {"const": 0.30}, "l4": {"const": 0.50}, "industry_heat": {"const": 0.00}}},
+        "balanced": {"type": "object", "additionalProperties": false,
+          "required": ["esp", "cat", "l4", "industry_heat"],
+          "properties": {"esp": {"const": 0.20}, "cat": {"const": 0.25}, "l4": {"const": 0.40}, "industry_heat": {"const": 0.15}}},
+        "aggressive": {"type": "object", "additionalProperties": false,
+          "required": ["esp", "cat", "l4", "industry_heat"],
+          "properties": {"esp": {"const": 0.15}, "cat": {"const": 0.25}, "l4": {"const": 0.40}, "industry_heat": {"const": 0.20}}},
+        "theme_double": {"type": "object", "additionalProperties": false,
+          "required": ["esp", "cat", "l4", "industry_heat"],
+          "properties": {"esp": {"const": 0.15}, "cat": {"const": 0.35}, "l4": {"const": 0.35}, "industry_heat": {"const": 0.15}}}
+      }
+    },
+    "industry_heat_def": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "windows", "agg", "equal_weight_windows", "unknown_industry_score",
+                   "l1_fallback", "definition_note", "l4_overlap_treatment"],
+      "properties": {
+        "level": {"const": "sw_l2"},
+        "windows": {"const": ["pct_20d_n", "pct_60d_n"]},
+        "agg": {"const": "per_l2_median_then_cross_industry_percentile_0_100"},
+        "equal_weight_windows": {"const": true},
+        "unknown_industry_score": {"const": null},
+        "l1_fallback": {"const": false},
+        "definition_note": {"type": "string", "minLength": 1},
+        "l4_overlap_treatment": {"type": "string", "minLength": 1}
+      }
+    },
+    "promotion": {"type": "object"},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legacy_profile_retained_as_rollback",
+                   "industry_heat_is_ranking_only_never_rescues_veto",
+                   "keeps_overheat_chasing_unknown_industry_demotions"],
+      "properties": {
+        "legacy_profile_retained_as_rollback": {"const": true},
+        "industry_heat_is_ranking_only_never_rescues_veto": {"const": true},
+        "keeps_overheat_chasing_unknown_industry_demotions": {"const": true}
+      }
+    }
+  }
+}

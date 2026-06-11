@@ -1,0 +1,36 @@
+{
+  "schema_name": "egs_industry_heat_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260611",
+  "active_profile": "balanced",
+  "profiles": {
+    "legacy":       {"esp": 0.20, "cat": 0.30, "l4": 0.50, "industry_heat": 0.00},
+    "balanced":     {"esp": 0.20, "cat": 0.25, "l4": 0.40, "industry_heat": 0.15},
+    "aggressive":   {"esp": 0.15, "cat": 0.25, "l4": 0.40, "industry_heat": 0.20},
+    "theme_double": {"esp": 0.15, "cat": 0.35, "l4": 0.35, "industry_heat": 0.15}
+  },
+  "industry_heat_def": {
+    "level": "sw_l2",
+    "windows": ["pct_20d_n", "pct_60d_n"],
+    "agg": "per_l2_median_then_cross_industry_percentile_0_100",
+    "equal_weight_windows": true,
+    "unknown_industry_score": null,
+    "l1_fallback": false,
+    "definition_note": "production-pinned definition: per SW L2, median member momentum (pct_20d_n, plus pct_60d(_n) equal-weight if present) ranked cross-industry to 0-100. Unknown L2 -> null (term contributes 0; unknown-L2 also demoted to Tier2). This ADAPTS the cross-industry-percentile industry-heat CONCEPT of runners/a_short_theme_overlay_comparison.compute_industry_heat; it is NOT a literal call to it (the overlay uses separate benchmark window-strength series unavailable in the egs_main scoring df). v1 has no SW L1 fallback.",
+    "l4_overlap_treatment": "l4_score already carries small industry kickers (ind_mom_cnt>=3 +5; alpha+industry-not-falling +10). v1 keeps them intact (so the legacy profile stays byte-identical) and adds industry_heat as a separate additive term -> mild positive overlap accepted and documented; v2 may demote the l4 kickers. compute_industry_heat_score does NOT modify l4_score."
+  },
+  "promotion": {
+    "production_active": "balanced",
+    "balanced_is_v1_live": true,
+    "legacy": "retained_as_one_flag_rollback_and_regression_anchor",
+    "aggressive": "comparison_variant_only_not_active",
+    "theme_double": "condition_triggered_deferred_variant",
+    "theme_double_trigger": "over rolling >=12 weeks: theme_double Tier1 forward 1-3wk return beats balanced by a noise-passing margin AND overheat/chasing share + realized drawdown not materially worse; then a reviewed governance change. Else never auto-promoted.",
+    "rollback_rule": "if the per-run new-vs-legacy diff shows a bad delta, flip active_profile back to legacy (one-line governance change, no code)"
+  },
+  "boundary": {
+    "legacy_profile_retained_as_rollback": true,
+    "industry_heat_is_ranking_only_never_rescues_veto": true,
+    "keeps_overheat_chasing_unknown_industry_demotions": true
+  }
+}

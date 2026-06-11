@@ -722,6 +722,10 @@
               "$ref": "#/$defs/scoreNullable",
               "description": "Unit: points, 0-100."
             },
+            "industry_heat_score": {
+              "$ref": "#/$defs/scoreNullable",
+              "description": "Unit: points, 0-100. SW L2 industry heat (cross-industry percentile). Optional; emitted by EGS once the industry_heat promotion ships; null/absent for older artifacts."
+            },
             "l1_score": {
               "$ref": "#/$defs/numberNullable",
               "description": "Unit: EGS internal points."

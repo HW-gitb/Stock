@@ -107,6 +107,10 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from engine.data.analysis_input_contract import validate_analysis_input_contract, validate_json_schema
+from engine.egs_industry_heat import (
+    compute_industry_heat_score, get_active_weights, final_score_and_tier,
+    write_weight_comparison,
+)
 
 TOKEN = os.environ.get("TUSHARE_TOKEN")
 if not TOKEN and not any(arg in ("-h", "--help") for arg in sys.argv[1:]):
@@ -560,6 +564,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "esp_score": _json_score(_row_get(row, "esp_score")),
             "cat_score": _json_score(_row_get(row, "cat_score")),
             "l4_score": _json_score(_row_get(row, "l4_score")),
+            "industry_heat_score": _json_score(_row_get(row, "industry_heat_score")),
             "l1_score": _json_float(_row_get(row, "l1_score")),
             "l2_flags": _json_value(_row_get(row, "l2_flags")),
             "l4_flag": _json_value(_row_get(row, "l4_flag")),
@@ -2740,48 +2745,24 @@ def score_l5(df, sw_map):
     df.loc[non_indep, "esp_score"] = df.loc[non_indep, "esp_z"].apply(z2s)
     df.loc[cov_mask & non_indep, "esp_score"] = df.loc[cov_mask & non_indep, "esp_score"].clip(upper=50)
 
-    df["egs_base"] = df["esp_score"] * 0.20 + df["cat_score"] * 0.30 + df["l4_score"] * 0.50
-
-    df["mult"] = 1.0
-    df.loc[df["l2_flags"].str.contains("ESP-Q", na=False), "mult"] *= 0.7
-    df.loc[df["cat_flag"].str.contains("CAT-0", na=False), "mult"] *= 0.5
-
-    df["deduct"] = 0.0
-    df.loc[df["l1_flag"] == "ITF-2", "deduct"] += 15
-    df.loc[df["itf_adj"] == True,     "deduct"] += 10
-    df["deduct"]   += df.get("reduce_penalty", pd.Series(0, index=df.index)).fillna(0)
-    df["deduct"]   += df.get("val_penalty",    pd.Series(0, index=df.index)).fillna(0)
-    df["val_bonus"] = df.get("val_bonus",      pd.Series(0, index=df.index)).fillna(0)
-
-    df["final_score"] = (
-        (df["egs_base"] * df["mult"]).clip(lower=df["egs_base"] * 0.3)
-        + df["val_bonus"] - df["deduct"]
-    ).clip(lower=0).round(2)
-
-    p75 = df["final_score"].quantile(0.75)
-    p55 = df["final_score"].quantile(0.55)
-    df["tier"] = "Other"
-    df.loc[df["final_score"] >= p55, "tier"] = "Tier2"
-    df.loc[df["final_score"] >= p75, "tier"] = "Tier1"
-    df.loc[df["final_score"] <  50,  "tier"] = "Other"
-
-    # v7.3 Tier1 准入硬条件：预期差比值 > 0（esp_raw > 0）
-    # 仅在财务数据覆盖率 ≥ 70% 时激活，避免披露率低的时间窗口过度收窄候选池
-    fin_coverage = df["q0_dt_yoy"].notna().sum() / max(len(df), 1)
+    # 行业热度(SW L2)+ 可治理权重 profile —— 打分尾段(egs_base→mult→deduct→final_score→tier→准入降级)
+    # 抽到 engine/egs_industry_heat.py(单一真相源:egs_main 与每周非生产对比 diff(同模块 write_weight_comparison)共用,杜绝漂移)。
+    # 生产 active_profile=balanced(esp.20/cat.25/l4.40/ind.15)= 已生效:行业/赛道权重已提高、选股已改变。
+    # legacy(esp.20/cat.30/l4.50/ind 0 = 改前原式)仅作一键回滚锚 + 回归基准(翻回 legacy 即还原)。
+    # 行业热度只加分排序,绝不救回 hard_veto/停牌/涨停锁/ST/减持/闪崩;chasing_high·overheat·未知行业 降级原样保留。
+    df["industry_heat_score"] = compute_industry_heat_score(df)
+    _ih_profile, _ih_weights = get_active_weights()
+    df, _score_info = final_score_and_tier(df, _ih_weights)
+    fin_coverage = _score_info["fin_coverage"]
+    esp_neg_mask = df["esp_raw"].fillna(0) <= 0          # 供下游 downgrade_reasons 标注复用
     if fin_coverage >= 0.70:
-        esp_neg_mask = df["esp_raw"].fillna(0) <= 0
-        df.loc[(df["tier"] == "Tier1") & esp_neg_mask, "tier"] = "Tier2"
-        log.info(f"Tier1 准入硬条件激活（财务覆盖率{fin_coverage:.0%}≥70%）：{esp_neg_mask.sum()} 只降级")
+        log.info(f"Tier1 准入硬条件激活（财务覆盖率{fin_coverage:.0%}≥70%）：{_score_info['esp_neg_demoted']} 只降级")
     else:
         log.info(f"Tier1 准入硬条件暂停（财务覆盖率{fin_coverage:.0%}<70%，等待财报完整披露）")
+    log.info(f"egs_base 权重 profile={_ih_profile}（active 生效；行业热度权重={_ih_weights['industry_heat']}；legacy 仅回滚锚）")
 
     ch_mask = df.get("chasing_high", pd.Series(False, index=df.index)).fillna(False)
-    df.loc[ch_mask & (df["tier"] == "Tier1"), "tier"] = "Tier2"
     oh_mask = df.get("overheat_flag", pd.Series(False, index=df.index)).fillna(False)
-    df.loc[oh_mask & (df["tier"] == "Tier1"), "tier"] = "Tier2"
-    df.loc[df["l4_flag"].str.contains("TIER2_FORCED", na=False), "tier"] = "Tier2"
-    # 行业未知的股票 ESP 评分无参照系，降至 Tier2
-    df.loc[(df["tier"] == "Tier1") & (df["l2_name"] == "未知"), "tier"] = "Tier2"
 
     def _join_reasons(reasons):
         reasons = [r for r in reasons if r]
@@ -3308,6 +3289,16 @@ def run_egs(backtest_mode=False, output_root=None):
     df = score_l4(df, mf_df)
     df_full, top50 = score_l5(df, sw_map)
 
+    # 非生产侧产物:行业热度权重各 variant vs legacy 的选股 diff(每周自动记录 → 防遗忘;
+    # 不改生产选股)。失败绝不影响生产 run。前向收益记分牌 = register forward-item 后续件。
+    try:
+        _wc_path = os.path.join(PROJECT_ROOT, "research", "results",
+                                f"egs_weight_comparison_{TODAY}.json")
+        write_weight_comparison(df_full, _wc_path, as_of=TODAY)
+        log.info(f"egs 权重 variant 对比 diff 已写(非生产）：{_wc_path}")
+    except Exception as _wc_exc:  # noqa: BLE001 (non-production side output must never break the run)
+        log.warning(f"egs 权重 variant 对比 diff 跳过：{type(_wc_exc).__name__}")
+
     tier1_final, cninfo_checked = stage3_ai_clearing(top50, red_dict, unlock_set, backtest_mode=backtest_mode)
     env_report  = market_environment(trade_dates, stats_df)
 
@@ -3382,7 +3373,7 @@ def run_egs(backtest_mode=False, output_root=None):
     tier1_final["entry_flag"] = tier1_final.apply(_entry_flag, axis=1)
 
     out_cols = ["ts_code","name","l2_name","final_score","tier",
-                "esp_score","cat_score","l4_score",
+                "esp_score","cat_score","l4_score","industry_heat_score",
                 "pct_20d_n","pct_5d_n","pct_60d","drawdown_20d",
                 "big_ratio","ind_mom_cnt",
                 "l2_flags","l4_flag","cninfo_flag","entry_flag",
