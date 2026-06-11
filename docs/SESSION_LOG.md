@@ -8,6 +8,130 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (V14.3 regime classifier design slice 1 → local master)
+
+Codex PASS (entry below). Committed the V14.3 slice-1 design package to local master only (no push). Both register entries (`A-short V14.3 residual missing-index flag schema gap`, parent `A-short V14.3 regime classifier design/schema blockers`) flipped to `resolved`. Slice 1 is design + schema + governance + tests only — comparison-only, V14.2 stays the frozen production baseline, no runner / no production / no Phase 5 wiring. `A股长线ETF配置框架.md` left untracked (out of scope, user's own file). Next build step is slice 2 (in-EGS raw classifier + weekly v14_2-vs-v14_3 diff + comparison-only panel block), but that waits its turn behind remaining A-short work.
+
+**Next**: (A-short build queue) — slice 2 deferred; no immediate Codex action.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 missing-index flag schema enforcement) — **PASS**
+
+**Scope reviewed**: current uncommitted repair after HEAD `9b610f1`. Reviewed tracked changes in `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, plus untracked intended files `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `schemas/a_short_market_regime_daily.schema.json`, `schemas/a_short_v14_3_regime_governance.schema.json`, `presets/a_short_v14_3_regime_governance_20260611.json`, and `tests/test_a_short_v14_3_regime_governance.py`. Unrelated untracked `A股长线ETF配置框架.md` remains out of scope. No runner, production code, provider call, data fetch, Phase 5 wiring, or commit was performed by Codex.
+
+**Verdict**: PASS. The residual `R-V143-REGIME-MISSING-INDEX-FLAG-NOT-ENFORCED` is repaired. `schemas/a_short_market_regime_daily.schema.json` now has a draft-07 `if/then`: when `csi1000_below_ma20` is `null`, `data_quality_flags` must contain `csi1000_unavailable`. The earlier V14.3 repairs also hold: the slow-bleed operand is explicit, governance threshold/switch/boundary values are const-pinned, V14.3 remains comparison-only, V14.2 remains the frozen production baseline, and no Phase 5 / production wiring is introduced.
+
+**Findings**: no Required findings. Optional from the prior round remains accepted: action-matrix payload values are not fully const-pinned, but `_status` is const-pinned to documented-only/not-wired and the future production-switch slice must re-review action wiring.
+
+**Register**: no new risk. Existing V14.3 risk entries are repaired but should remain non-resolved until the reviewed commit is made; submit-time housekeeping should flip `A-short V14.3 residual missing-index flag schema gap` and the parent `A-short V14.3 regime classifier design/schema blockers` entry to `resolved` with this PASS + the commit hash.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 28/28 OK.
+- Independent daily-schema probes: `csi1000_below_ma20=null` + empty flags is rejected; null + `csi1000_unavailable` is valid; boolean + empty flags is valid.
+- Governance mutation probes: broken `promotion_rate_ge`, removed `backtest_years_min`, flipped `auto_switch_allowed`, and flipped `production_switch_authorized` all rejected.
+- `git diff --check`: OK except expected CRLF normalization warnings.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice1: missing-index flag now schema-enforced)
+
+**Trigger**: Codex re-`审查` FAIL (entry below), 1 residual P1 `R-V143-REGIME-MISSING-INDEX-FLAG-NOT-ENFORCED` — the missing-CSI1000 honesty contract (`csi1000_below_ma20=null` ⇒ `data_quality_flags` must contain `csi1000_unavailable`) was prose-only; a null row with empty flags still validated.
+
+**Fix**: added a top-level `if/then` to `schemas/a_short_market_regime_daily.schema.json`: when `csi1000_below_ma20` is `null`, `data_quality_flags` is required and must `contain` `csi1000_unavailable`. So the slow-bleed operand's absence is now machine-auditable, not silently coercible. Added 3 tests — `test_null_csi1000_requires_unavailable_flag` (negative: null+empty → rejected), `test_null_csi1000_with_flag_validates` (positive), `test_nonnull_csi1000_does_not_require_flag` (conditional does not over-fire on a present boolean). Design §2 now notes the schema-enforced constraint. Register residual entry annotated with the repair.
+
+**Why this and not the Optional**: Codex's Optional (action-matrix payload values not const-pinned, e.g. `attack` → plain string still validates) is deliberately left flexible — the matrix is documented-only / not-wired and its `防御=禁建仓 vs 极小仓` decision is explicitly unresolved (pinned only as `_status`). Freezing illustrative values now would over-claim finality before the switch slice re-reviews wiring. The `_status` const already prevents the matrix being mistaken for production.
+
+**Boundary unchanged**: comparison-only / non-production / V14.2 stays frozen baseline. No runner, no production wiring, no Phase 5 touch.
+
+**Verification**: `python -m unittest tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 28/28 OK (was 25; +3 missing-index tests). Governance still validates against the tightened schema; all 4 prior mutation probes still rejected. UTF-8 replacement-char probe over touched files: 0. `git diff --check`: clean (CRLF warnings only).
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice1 repair: slow-bleed field + governance const-pin) — **FAIL**
+
+**Scope reviewed**: current uncommitted repair after HEAD `9b610f1`. Reviewed tracked changes in `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, plus untracked intended files `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `schemas/a_short_market_regime_daily.schema.json`, `schemas/a_short_v14_3_regime_governance.schema.json`, `presets/a_short_v14_3_regime_governance_20260611.json`, and `tests/test_a_short_v14_3_regime_governance.py`. Unrelated untracked `A股长线ETF配置框架.md` remains out of scope. No runner, production code, provider call, data fetch, Phase 5 wiring, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. The main repairs are mostly correct: `csi1000_below_ma20` now exists as the slow-bleed operand in design/schema/governance/tests, and the prior governance mutation probes (broken `promotion_rate_ge`, removed `backtest_years_min`, flipped `auto_switch_allowed`, flipped `production_switch_authorized`) are rejected. One residual schema contract gap remains.
+
+**Required finding**:
+- `R-V143-REGIME-MISSING-INDEX-FLAG-NOT-ENFORCED` (P1, schema/PIT): the repair documents that missing CSI1000 index data must be represented as `csi1000_below_ma20=null` plus `data_quality_flags` containing `csi1000_unavailable`, but the daily schema does not enforce that. Probe result: a row with `csi1000_below_ma20=null` and empty `data_quality_flags` still validates. This keeps the missing-index state ambiguous and lets Slice 2 pass schema while silently omitting the required data-quality flag. Required repair: add a schema-level conditional (or equivalent tested contract) so null requires `csi1000_unavailable`, with negative and positive tests.
+
+**Optional note**: changing an action matrix regime payload such as `attack` to a plain string still validates. I am not treating this as Required because the repaired governance schema now explicitly pins only the documented-only/not-wired status, and a future production-switch slice must re-review action wiring. If the intent is to freeze the documented action values too, pin those in the same repair.
+
+**Register**: residual Required registered in `docs/system_risk_register.md` as `A-short V14.3 residual missing-index flag schema gap`.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 25/25 OK, but the residual null-without-flag case is untested.
+- Governance mutation probes: broken `promotion_rate_ge`, removed `backtest_years_min`, flipped `auto_switch_allowed`, and flipped `production_switch_authorized` all rejected.
+- Daily schema probe: `csi1000_below_ma20=null` without `csi1000_unavailable` flag still validates.
+- `git diff --check`: OK except expected CRLF normalization warnings.
+- UTF-8 replacement-character probe over touched/current V14.3 docs/schemas/tests/register/log: 0 hits.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice1: slow-bleed field gap + governance const-pin gap) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex FAIL (2 P1) repaired, **uncommitted**, awaiting Codex re-`审查`. HEAD `9b610f1`.
+
+**Fixes**:
+- **`R-V143-REGIME-SLOW-BLEED-FIELD-GAP`**: the slow-bleed rule needed `csi1000<csi1000_ma20` but the daily contract lacked it. Added required `csi1000_below_ma20` (boolean|null) to `a_short_market_regime_daily.schema.json`; design §2/§3 + governance slow_bleed now reference that field; null + `csi1000_unavailable` flag pinned for missing index data. Test `test_daily_requires_csi1000_below_ma20`.
+- **`R-V143-REGIME-GOVERNANCE-CONST-PIN-GAP`**: governance schema was mostly unconstrained objects. Rewrote it to **const-pin** every frozen value (all threshold formulas/anchors incl. the ceiling `min(50,max(P25_252,10))`, state-machine days, action-matrix `_status` documented-only, switch gate `12/2/8 + auto_switch_allowed=false + review booleans`, comparison-only boundary) with `additionalProperties:false`. Adversarial tests: broken `promotion_rate_ge`, removed `backtest_years_min`, flipped `auto_switch_allowed`, flipped `production_switch_authorized` — all rejected.
+
+**Files**: `schemas/a_short_market_regime_daily.schema.json`, `schemas/a_short_v14_3_regime_governance.schema.json`, `presets/a_short_v14_3_regime_governance_20260611.json`, `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `tests/test_a_short_v14_3_regime_governance.py` (+4), `docs/system_risk_register.md`.
+
+**Verification**: `tests.test_a_short_v14_3_regime_governance` 25/25 (incl. mutation-rejection) + route-doc OK; governance validates against the tightened schema; all JSON valid.
+
+**Next**: Codex re-`审查`. PASS → `提交`.
+
+---
+
+## 2026-06-11 — Codex `审查` (V14.3 regime classifier schema-first design proposal, slice 1) — **FAIL**
+
+**Scope reviewed**: current uncommitted V14.3 design/schema-first slice after HEAD `9b610f1`. Reviewed tracked changes in `docs/README.md` and `docs/SESSION_LOG.md`, plus untracked intended files `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `schemas/a_short_market_regime_daily.schema.json`, `schemas/a_short_v14_3_regime_governance.schema.json`, `presets/a_short_v14_3_regime_governance_20260611.json`, and `tests/test_a_short_v14_3_regime_governance.py`. Unrelated untracked `A股长线ETF配置框架.md` remains out of scope. No runner, production code, provider call, data fetch, Phase 5 wiring, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. The strategic direction is acceptable: V14.3 as comparison-only, V14.2 frozen, no Phase 5 downstream action, no auto-switch, and a separate Regime comparison panel block is the right boundary. Two schema/design contract gaps block commit.
+
+**Required findings**:
+- `R-V143-REGIME-SLOW-BLEED-FIELD-GAP` (P1, schema/PIT): `docs/a_short_v14_3_regime_classifier_design_20260611.md` defines the slow-bleed contraction rule as `pct_above_ma20<30%` for 5 days plus `csi1000<csi1000_ma20`, but `schemas/a_short_market_regime_daily.schema.json` only requires `csi1000_ret_1d` and `pct_above_ma20`; no `csi1000_close`, `csi1000_ma20`, or `csi1000_below_ma20` field exists. Slice 2 cannot implement the documented rule from the schema without adding hidden data or dropping half the condition. Add the CSI1000 MA20 state to the daily schema/design/governance/test fixture, or rewrite the rule so every operand is represented; also pin null/quality-flag behavior for missing index data.
+- `R-V143-REGIME-GOVERNANCE-CONST-PIN-GAP` (P1, schema/governance): `schemas/a_short_v14_3_regime_governance.schema.json` says it pins metric definitions, thresholds, action matrix, and switch gate, but those areas are mostly unconstrained objects. A mutation changing `attack_all_of_confirm_3d.promotion_rate_ge` to a broken string and removing `switch_candidate_gate.backtest_years_min` still validates. Strengthen schema and/or tests to pin the frozen threshold formulas, documented-only action matrix status, `backtest_years_min=2`, `divergence_samples_min=8`, no-auto-switch, and the review/no-fluke/no-missed-opportunity booleans.
+
+**Register**: material findings registered in `docs/system_risk_register.md` under `A-short V14.3 regime classifier design/schema blockers`.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 21/21 OK, but tests do not cover the blockers above.
+- Schema mutation probe: broken `promotion_rate_ge` plus removed `backtest_years_min` still validates against the governance schema.
+- `git diff --check`: OK except expected CRLF normalization warnings.
+- UTF-8 replacement-character probe for touched route/log files: 0 hits.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `起草` (V14.3 regime classifier — schema-first design proposal, slice 1) — **ROUTED TO CODEX `审查`**
+
+**Live gate**: drafted, **uncommitted**, awaiting Codex `审查`. HEAD `9b610f1`. From the user's desktop `regime优化建议.md` + Claude's simplification. **Design-only: V14.2 stays frozen, no production touch, no Phase 5 wiring, no runner.**
+
+**What**: V14.3 = a comparison-only regime classifier proposal (the path that also dissolves the V14.2 涨停指数 data-source blocker — V14.3 uses PIT-computable 晋级率/炸板率 instead). Deliverables:
+- `docs/a_short_v14_3_regime_classifier_design_20260611.md` — 4-regime raw rules (PIT metrics; 震荡=residual default; 收缩 broadened; **attack low-risk gate fixed to a CEILING `min(50,max(P25,10))`, not the original buggy floor `max(P25,50)`**), state-machine spec, documented-only action matrix, switch gate, the **phased/simplified** plan (slice1 design / slice2 in-EGS raw classifier + weekly diff + panel comparison-only block / slice3 deferred state-machine+scoring+alert), in-EGS data-layer (reuse all_daily + stk_limit, A 方案).
+- `schemas/a_short_market_regime_daily.schema.json` (daily feature contract, PIT, boundary comparison-only).
+- `presets/a_short_v14_3_regime_governance_20260611.json` + `schemas/a_short_v14_3_regime_governance.schema.json` (const-pin: thresholds, state-machine days, action matrix documented-only, switch gate ≥12wk + no-auto-switch, boundary comparison-only / V14.2-frozen / no-Phase5 / no-mix-with-overlay-star).
+- `tests/test_a_short_v14_3_regime_governance.py` (schema validity + governance-vs-schema + comparison-only boundary + ceiling-not-floor + action-matrix-documented-only + daily-row shape).
+
+**My judgment on the proposal (recorded for the user)**: feasible + sound; adopt as V14.3; but **don't build it all at once** — phase it, piggyback the EGS run for data, defer the scoring engine + full state machine + action wiring until evidence accumulates; action matrix documented-only in v1; panel regime-comparison must be a separate comparison-only block (not mixed with overlay star / M6.7 action).
+
+**Verification**: V14.3 governance + route-doc 21/21 OK; all JSON valid.
+
+**Next**: Codex `审查` (design/schema-first slice). PASS → `提交`. Then slice2 (in-EGS raw classifier + comparison) when you want — that starts the evidence clock.
+
+---
+
 ## 2026-06-11 — Claude `提交` (research/results lane archival + lane convention, post Codex PASS) — **DONE (local master)**
 
 **Gate**: Codex `审查` PASS (no Required). Committed to LOCAL master. Per housekeeping: explicit staging (no `git add -A`); ETF md excluded; **decided to TRACK the relocated a_short one-offs as archive evidence** (`a_short/weekly_20260609/` = first real M6.7 + `a_short/egs_weight_comparison_20260609.json` = first industry-weighting diff — small, meaningful, consistent with the already-tracked iv_feed/probe).

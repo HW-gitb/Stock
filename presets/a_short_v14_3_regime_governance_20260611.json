@@ -1,0 +1,73 @@
+{
+  "schema_name": "a_short_v14_3_regime_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260611",
+  "status": "design_proposal_comparison_only_not_production",
+  "metric_definitions": {
+    "limit_detection": "unadjusted daily + stk_limit same-caliber prices; respect ±10% / ±20% / ST ±5% regimes",
+    "failed_limit_rate": "fraction with high >= up_limit*0.999 AND close < up_limit*0.999 (NOT high == up_limit)",
+    "promotion_rate": "yesterday-limit-up names that limit up again today / denom; mark insufficient_sample when denom too small (never hard-judge attack)",
+    "universe": "point-in-time tradable A-share universe each as_of (no survivorship lookback)",
+    "percentile_window": "rolling 252 trading days, <= as_of only (no future data)",
+    "csi1000_below_ma20": "boolean: CSI1000 close < its 20d MA at as_of; null + data_quality_flag csi1000_unavailable when the index series is missing (the slow-bleed contraction operand)"
+  },
+  "thresholds": {
+    "defense_any_of": {
+      "iv_percentile_252d_gt": 90.0,
+      "limit_down_count_ge": "max(P95_252, 100)",
+      "csi1000_ret_1d_le": -3.5,
+      "csi300_ret_1d_le": -3.0,
+      "exhaustion": "promotion_rate <= 0.10 AND net_limit < 0 AND failed_limit_rate > P75_252"
+    },
+    "contraction_any_of_confirm_2d": {
+      "streak_collapse": "max_limit_streak <= 3 AND recent_3d_peak_streak >= 5 AND streak_drop >= 2",
+      "earning_effect_gone": "promotion_rate < 0.25 for 2 consecutive days AND failed_limit_rate > P75_252",
+      "slow_bleed": "pct_above_ma20 < 30 for 5 consecutive days AND csi1000_below_ma20"
+    },
+    "attack_all_of_confirm_3d": {
+      "max_limit_streak_ge": "max(P75_252, 5)",
+      "promotion_rate_ge": "max(P60_252, 0.50)",
+      "net_limit_gt": 0,
+      "limit_down_count_le": "min(50, max(P25_252, 10))",
+      "failed_limit_rate_le": "P50_252",
+      "iv_percentile_252d_le": 80.0,
+      "_note": "limit_down_count is a CEILING (min(50, ...)), NOT a floor max(P25,50) — low-risk gates cap, not widen"
+    },
+    "shock": "residual default: not defense/contraction/attack"
+  },
+  "state_machine": {
+    "first_default": "shock",
+    "attack_confirm_days": 3,
+    "contraction_confirm_days": 2,
+    "clear_exit_days": 2,
+    "allow_cross_level_jump_to_defense_on_extreme": true,
+    "extreme_triggers": ["iv_percentile_252d>90", "limit_down_panic", "broad_index_crash"],
+    "normal_defense_from_attack_buffers_via_shock_first": true,
+    "forbid_contraction_to_attack_direct": true
+  },
+  "downstream_action_matrix": {
+    "_status": "DOCUMENTED ONLY — NOT wired in comparison-only phase; wired only by a future reviewed production-switch slice",
+    "_unresolved_decision": "normal defense = no-build vs allow-tiny-position-with-tighter-gates (decide at switch time)",
+    "attack":        {"new_build": "allow", "single_cap_pct": 50, "total_cap_pct": 80, "rr_min": 1.5, "atr": "attack"},
+    "shock":         {"new_build": "allow", "single_cap_pct": 40, "total_cap_pct": 60, "rr_min": 1.5, "atr": "shock"},
+    "normal_defense":{"new_build": "restricted_or_defensive_only", "single_cap_pct": 25, "total_cap_pct": 50, "rr_min": 2.0, "atr": "defense"},
+    "extreme_defense":{"new_build": "forbidden", "single_cap_pct": 0, "total_cap_pct": "de_risk", "rr_min": null, "atr": null},
+    "contraction":   {"new_build": "forbidden", "single_cap_pct": 0, "total_cap_pct": "de_risk", "rr_min": null, "atr": "shock_or_contraction"}
+  },
+  "switch_candidate_gate": {
+    "forward_live_weeks_min": 12,
+    "backtest_years_min": 2,
+    "divergence_samples_min": 8,
+    "requires_net_improvement_on_divergence": true,
+    "requires_no_material_missed_opportunity": true,
+    "requires_review_not_single_fluke": true,
+    "auto_switch_allowed": false
+  },
+  "boundary": {
+    "comparison_only": true,
+    "production_switch_authorized": false,
+    "changes_phase5_downstream": false,
+    "v14_2_remains_frozen_baseline": true,
+    "mixes_with_overlay_star_or_m67_action": false
+  }
+}

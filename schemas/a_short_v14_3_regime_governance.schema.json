@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_v14_3_regime_governance",
+  "description": "Governance for the V14.3 comparison-only regime classifier proposal (design slice 1). CONST-PINS metric definitions, thresholds (frozen formulas/anchors), state-machine params, the documented-only downstream action matrix status, the switch-candidate gate, and the comparison-only boundary, so drift (e.g. a broken attack threshold or a removed gate field) is rejected. V14.2 stays the frozen production baseline; V14.3 must NOT drive Phase 5 risk posture.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "status", "metric_definitions", "thresholds",
+               "state_machine", "downstream_action_matrix", "switch_candidate_gate", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_v14_3_regime_governance"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"const": "design_proposal_comparison_only_not_production"},
+    "metric_definitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limit_detection", "failed_limit_rate", "promotion_rate", "universe",
+                   "percentile_window", "csi1000_below_ma20"],
+      "properties": {
+        "limit_detection": {"const": "unadjusted daily + stk_limit same-caliber prices; respect ±10% / ±20% / ST ±5% regimes"},
+        "failed_limit_rate": {"const": "fraction with high >= up_limit*0.999 AND close < up_limit*0.999 (NOT high == up_limit)"},
+        "promotion_rate": {"const": "yesterday-limit-up names that limit up again today / denom; mark insufficient_sample when denom too small (never hard-judge attack)"},
+        "universe": {"const": "point-in-time tradable A-share universe each as_of (no survivorship lookback)"},
+        "percentile_window": {"const": "rolling 252 trading days, <= as_of only (no future data)"},
+        "csi1000_below_ma20": {"const": "boolean: CSI1000 close < its 20d MA at as_of; null + data_quality_flag csi1000_unavailable when the index series is missing (the slow-bleed contraction operand)"}
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defense_any_of", "contraction_any_of_confirm_2d", "attack_all_of_confirm_3d", "shock"],
+      "properties": {
+        "defense_any_of": {
+          "type": "object", "additionalProperties": false,
+          "required": ["iv_percentile_252d_gt", "limit_down_count_ge", "csi1000_ret_1d_le", "csi300_ret_1d_le", "exhaustion"],
+          "properties": {
+            "iv_percentile_252d_gt": {"const": 90.0},
+            "limit_down_count_ge": {"const": "max(P95_252, 100)"},
+            "csi1000_ret_1d_le": {"const": -3.5},
+            "csi300_ret_1d_le": {"const": -3.0},
+            "exhaustion": {"const": "promotion_rate <= 0.10 AND net_limit < 0 AND failed_limit_rate > P75_252"}
+          }
+        },
+        "contraction_any_of_confirm_2d": {
+          "type": "object", "additionalProperties": false,
+          "required": ["streak_collapse", "earning_effect_gone", "slow_bleed"],
+          "properties": {
+            "streak_collapse": {"const": "max_limit_streak <= 3 AND recent_3d_peak_streak >= 5 AND streak_drop >= 2"},
+            "earning_effect_gone": {"const": "promotion_rate < 0.25 for 2 consecutive days AND failed_limit_rate > P75_252"},
+            "slow_bleed": {"const": "pct_above_ma20 < 30 for 5 consecutive days AND csi1000_below_ma20"}
+          }
+        },
+        "attack_all_of_confirm_3d": {
+          "type": "object", "additionalProperties": false,
+          "required": ["max_limit_streak_ge", "promotion_rate_ge", "net_limit_gt", "limit_down_count_le",
+                       "failed_limit_rate_le", "iv_percentile_252d_le", "_note"],
+          "properties": {
+            "max_limit_streak_ge": {"const": "max(P75_252, 5)"},
+            "promotion_rate_ge": {"const": "max(P60_252, 0.50)"},
+            "net_limit_gt": {"const": 0},
+            "limit_down_count_le": {"const": "min(50, max(P25_252, 10))"},
+            "failed_limit_rate_le": {"const": "P50_252"},
+            "iv_percentile_252d_le": {"const": 80.0},
+            "_note": {"const": "limit_down_count is a CEILING (min(50, ...)), NOT a floor max(P25,50) — low-risk gates cap, not widen"}
+          }
+        },
+        "shock": {"const": "residual default: not defense/contraction/attack"}
+      }
+    },
+    "state_machine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first_default", "attack_confirm_days", "contraction_confirm_days", "clear_exit_days",
+                   "allow_cross_level_jump_to_defense_on_extreme", "extreme_triggers",
+                   "normal_defense_from_attack_buffers_via_shock_first", "forbid_contraction_to_attack_direct"],
+      "properties": {
+        "first_default": {"const": "shock"},
+        "attack_confirm_days": {"const": 3},
+        "contraction_confirm_days": {"const": 2},
+        "clear_exit_days": {"const": 2},
+        "allow_cross_level_jump_to_defense_on_extreme": {"const": true},
+        "extreme_triggers": {"const": ["iv_percentile_252d>90", "limit_down_panic", "broad_index_crash"]},
+        "normal_defense_from_attack_buffers_via_shock_first": {"const": true},
+        "forbid_contraction_to_attack_direct": {"const": true}
+      }
+    },
+    "downstream_action_matrix": {
+      "type": "object",
+      "required": ["_status", "attack", "shock", "normal_defense", "extreme_defense", "contraction"],
+      "properties": {
+        "_status": {"const": "DOCUMENTED ONLY — NOT wired in comparison-only phase; wired only by a future reviewed production-switch slice"}
+      }
+    },
+    "switch_candidate_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forward_live_weeks_min", "backtest_years_min", "divergence_samples_min",
+                   "requires_net_improvement_on_divergence", "requires_no_material_missed_opportunity",
+                   "requires_review_not_single_fluke", "auto_switch_allowed"],
+      "properties": {
+        "forward_live_weeks_min": {"const": 12},
+        "backtest_years_min": {"const": 2},
+        "divergence_samples_min": {"const": 8},
+        "requires_net_improvement_on_divergence": {"const": true},
+        "requires_no_material_missed_opportunity": {"const": true},
+        "requires_review_not_single_fluke": {"const": true},
+        "auto_switch_allowed": {"const": false}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparison_only", "production_switch_authorized", "changes_phase5_downstream",
+                   "v14_2_remains_frozen_baseline", "mixes_with_overlay_star_or_m67_action"],
+      "properties": {
+        "comparison_only": {"const": true},
+        "production_switch_authorized": {"const": false},
+        "changes_phase5_downstream": {"const": false},
+        "v14_2_remains_frozen_baseline": {"const": true},
+        "mixes_with_overlay_star_or_m67_action": {"const": false}
+      }
+    }
+  }
+}

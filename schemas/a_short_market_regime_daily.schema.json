@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_market_regime_daily",
+  "description": "Per-trade-day A-share market-regime feature row for the V14.3 comparison-only regime classifier (design slice 1; producer = slice 2, computed inside the EGS run from in-memory all_daily + stk_limit, PIT). NON-production / comparison-only — does NOT drive Phase 5 risk posture. All percentiles use <= as_of windows only; limit detection uses unadjusted daily + stk_limit same-caliber prices.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "limit_up_count", "limit_down_count",
+               "net_limit", "max_limit_streak", "promotion_rate", "failed_limit_rate",
+               "iv_percentile_252d", "csi300_ret_1d", "csi1000_ret_1d", "pct_above_ma20",
+               "csi1000_below_ma20", "data_quality_flags", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_market_regime_daily"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "limit_up_count": {"type": "integer", "minimum": 0},
+    "limit_down_count": {"type": "integer", "minimum": 0},
+    "net_limit": {"type": "integer"},
+    "max_limit_streak": {"type": "integer", "minimum": 0},
+    "promotion_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1,
+      "description": "yesterday-limit-up names that limit up again today / denom; null when denom too small (also flagged insufficient_sample)"},
+    "failed_limit_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1,
+      "description": "high>=up_limit*0.999 AND close<up_limit*0.999 fraction (炸板率)"},
+    "iv_percentile_252d": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+    "csi300_ret_1d": {"type": ["number", "null"], "description": "Unit: percent."},
+    "csi1000_ret_1d": {"type": ["number", "null"], "description": "Unit: percent."},
+    "pct_above_ma20": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+    "csi1000_below_ma20": {"type": ["boolean", "null"],
+      "description": "CSI1000 close < its 20d MA (the slow-bleed contraction operand); null when index data unavailable (also flag csi1000_unavailable)"},
+    "data_quality_flags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "e.g. insufficient_sample, stk_limit_missing, csi1000_unavailable — never silently coerce"
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "comparison_only", "drives_phase5_risk_posture"],
+      "properties": {
+        "production": {"const": false},
+        "comparison_only": {"const": true},
+        "drives_phase5_risk_posture": {"const": false}
+      }
+    }
+  },
+  "if": {"properties": {"csi1000_below_ma20": {"const": null}}},
+  "then": {
+    "description": "missing CSI1000 index data (csi1000_below_ma20=null) must be made explicit, never silently coerced: data_quality_flags MUST contain csi1000_unavailable so the slow-bleed operand absence is auditable.",
+    "properties": {
+      "data_quality_flags": {"contains": {"const": "csi1000_unavailable"}}
+    },
+    "required": ["data_quality_flags"]
+  }
+}
