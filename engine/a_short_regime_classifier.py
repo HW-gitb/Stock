@@ -24,6 +24,8 @@ from typing import Iterable
 
 import numpy as np
 
+from engine.a_short_regime_ledger import is_canonical_date   # single-source canonical YYYYMMDD
+
 ROOT = Path(__file__).resolve().parents[1]
 GOVERNANCE_PATH = ROOT / "presets" / "a_short_v14_3_regime_governance_20260611.json"
 
@@ -353,6 +355,8 @@ def validate_comparison_record(record: dict) -> bool:
         jsonschema.validate(record, schema)
     except jsonschema.ValidationError as exc:
         errs.append(f"schema: {exc.message}")
+    if not is_canonical_date(record.get("as_of")):
+        errs.append(f"as_of {record.get('as_of')!r} is not a real YYYYMMDD date")
     v2 = record.get("v14_2_regime")
     raw = record.get("v14_3_raw_regime")
     if v2 not in V14_2_REGIMES:

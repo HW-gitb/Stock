@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 import json
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 import jsonschema
@@ -42,7 +43,9 @@ def _benign(as_of: str) -> dict:
 
 
 def _history(n: int) -> list[dict]:
-    return [_benign(f"{20240101 + i:08d}") for i in range(n)]
+    # real consecutive calendar dates (canonical YYYYMMDD) — build_comparison_record validates as_of.
+    start = date(2023, 1, 2)
+    return [_benign((start + timedelta(days=i)).strftime("%Y%m%d")) for i in range(n)]
 
 
 def _with_today(n: int, **overrides) -> list[dict]:
@@ -245,6 +248,13 @@ class ComparisonRecordTests(unittest.TestCase):
         rec["boundary"]["drives_phase5_risk_posture"] = True   # const False
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(rec, self._schema())
+
+    def test_validator_rejects_noncanonical_as_of(self):
+        # R-V143-SLICE2B-COMPARISON-ASOF-CANONICAL-GAP: impossible 8-digit date must be rejected.
+        rec = build_comparison_record(_history(252), v14_2_regime="shock")
+        rec["as_of"] = "20240231"
+        with self.assertRaises(ValueError):
+            validate_comparison_record(rec)
 
 
 class HistoryMaskTests(unittest.TestCase):

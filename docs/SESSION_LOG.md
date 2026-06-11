@@ -8,6 +8,357 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (V14.3 slice 2b-impl ②a → local master)
+
+Codex PASS (entry below). Committed slice 2b-impl ②a to local master only (no push): new `engine/a_short_regime_comparison.py` (`backfill_forward_returns` + audited evidence path `summarize_comparison_records` / `render_regime_comparison_block` + `_audited_history`) + `tests/test_a_short_regime_comparison.py` (25 tests); classifier `validate_comparison_record` gained the canonical-as_of check + classifier-test `_history` → real dates; + README/design/register. ~8 Codex rounds — all evidence-clock integrity (fabricated/non-positive/non-canonical/duplicate/future/look-ahead values, audit-bypass, current/history consistency, doc drift). All 11 slice-2b-impl ②a risk entries flipped `resolved`. Comparison-only, pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen. `A股长线ETF配置框架.md` left untracked.
+
+**Next**: `起草` V14.3 slice 2b-impl ②b — the LAST 2b slice: in-EGS fetch (stk_limit + indices) + `compute_regime_daily_features` → ledger append via the gates; wire the panel block into the weekly report; bootstrap 252-day backfill runner; forward-backfill scheduling. The bootstrap RUN is the first real-Tushare `执行` in the whole V14.3 track → needs explicit user authorization + TUSHARE_TOKEN; drafting the code is unblocked. After that A-short is build-complete → the analysis-layer semantic-automation evaluation, then the A-long leftover (CURRENT.md §5).
+
+---
+
+## 2026-06-11 — Codex `审查` (V14.3 slice 2b-impl ②a future/current-history repair) — **PASS**
+
+**Scope reviewed**: working tree after Claude `修复` for `R-V143-SLICE2B-COMPARISON-FUTURE-ASOF-COUNTS` and `R-V143-SLICE2B-COMPARISON-RENDER-HISTORY-CURRENT-MISMATCH`. Reviewed modified tracked docs/code (`docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`, `engine/a_short_regime_classifier.py`, `tests/test_a_short_regime_classifier.py`) plus untracked new files (`engine/a_short_regime_comparison.py`, `tests/test_a_short_regime_comparison.py`). Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: PASS / commit-safe for this slice. The prior P1/P2 are repaired. `summarize_comparison_records` now routes through `_audited_history`, which backfill-audits records, rejects `as_of > as_of_now`, and rejects duplicate `as_of`. `render_regime_comparison_block` rejects future current records and, when `records` is supplied, requires the displayed current week to appear exactly once in the audited history and match the audited current record before deriving evidence counts from that same history.
+
+**Required findings**: none remaining.
+
+**Verified repaired**:
+- `R-V143-SLICE2B-COMPARISON-FUTURE-ASOF-COUNTS`: independent probes now raise for future history rows in `summarize_comparison_records` and future current records in `render_regime_comparison_block`.
+- `R-V143-SLICE2B-COMPARISON-RENDER-HISTORY-CURRENT-MISMATCH`: independent probes now raise when the displayed current record is missing from `records` or when same-`as_of` history payload differs; a raw current/history pair for the same week still renders after audit/backfill.
+- Earlier audited-path guards remain intact: omitted/None/non-canonical `as_of_now` raises, fabricated existing forward returns raise, duplicate history raises, impossible `as_of` raises, and non-positive CSI1000 closes remain unavailable/null.
+
+**Register outcome**: the two repaired findings already carry Claude repair notes in `docs/system_risk_register.md`; final closure remains gated on reviewed commit per register convention. No new material findings were identified.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> 187/187 OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile engine\a_short_regime_comparison.py tests\test_a_short_regime_comparison.py engine\a_short_regime_classifier.py tests\test_a_short_regime_classifier.py` -> OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_route_doc_ledger_status_consistency` -> 14/14 OK.
+- `git diff --check` -> no whitespace errors; LF -> CRLF warnings only.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ②a: future-record reject + render current/history consistency)
+
+**Trigger**: Codex deeper `审查` FAIL, 1 P1 + 1 P2. Both legitimate.
+
+**P1 FUTURE-ASOF-COUNTS**: audited path validated as_of_now but not each record's `as_of <= as_of_now` → a future-dated record (20991231 vs cap 20240112) counted in total/divergence + rendered. Fix: new `_audited_history` (backfill-audit + reject `as_of > as_of_now` + reject dup), used by summarize; render rejects a future current record.
+
+**P2 RENDER-HISTORY-CURRENT-MISMATCH**: render displayed current `record` but counted arbitrary `records` without requiring current present+consistent → shown divergent week excluded from counts. Fix: render now requires the audited history contain exactly one row matching the current's `as_of` and equal to the audited current (else raise), and derives the displayed counts from that same audited history.
+
+**Tests +4** (future history reject, future current reject, current-missing-in-history reject, same-as_of payload-mismatch reject). Pre-flight sweep re-run. **Boundary unchanged**: pure logic, comparison-only, no fetch / EGS / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 187/187 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex `审查` (V14.3 slice 2b-impl ②a deeper evidence-clock pass) — **FAIL**
+
+**Scope reviewed**: working tree after Claude `修复` for mandatory `as_of_now` cap + API doc sync. Reviewed `engine/a_short_regime_comparison.py`, `tests/test_a_short_regime_comparison.py`, V14.3 route docs, active risk-register summary, and the current git diff. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The prior `as_of_now` optional look-ahead path is functionally repaired: `summarize_comparison_records` and `render_regime_comparison_block` now require a canonical `as_of_now`, internally run backfill/audit, and the target suite is green. A deeper evidence-clock probe still found two untested holes that can make the comparison panel overstate or misstate forward-live progress.
+
+**Required findings**:
+- `R-V143-SLICE2B-COMPARISON-FUTURE-ASOF-COUNTS` (P1): the audited path validates the PIT cap date but never checks that each comparison record's `as_of <= as_of_now`. A record dated after the cap is treated like an anchor-missing record: all forward returns stay pending, but `summarize_comparison_records` still returns `total_weeks=1` and `divergence_weeks=1`; `render_regime_comparison_block` also renders a future current record. Probe: with `as_of_now=20240112`, record `as_of=20991231`, `summarize_comparison_records([record], idx, as_of_now)` returned `{'total_weeks': 1, 'divergence_weeks': 1, 'backfill_complete_weeks': 0}` and render succeeded. Required repair: sanctioned summarize/render must reject any current/history comparison record whose `as_of` is after `as_of_now` before it can advance evidence counts or be shown as the current panel. Add tests for future history rejection and future current-record render rejection.
+- `R-V143-SLICE2B-COMPARISON-RENDER-HISTORY-CURRENT-MISMATCH` (P2): `render_regime_comparison_block(record, ..., records=...)` displays the audited current `record`, but evidence progress is calculated from arbitrary `records` without requiring the displayed current week to be present and identical in that history. Probe: current `record.as_of=20240107` with V14.3 `attack` divergence rendered as current divergence `yes`, while `records=[20240102 shock/non-divergent]` produced evidence progress `1/12` and divergence `0`; the displayed week is excluded from the counts. Required repair: either render should build evidence history from `records + [current]` with duplicate/current consistency checks, or it should require `records` to contain exactly one matching row for `record.as_of` and raise on missing/mismatched current. Add regression tests for missing current in history and same-`as_of` mismatched payload.
+
+**Verified repaired / still OK**:
+- Omitted / None / non-canonical `as_of_now` now raises on the sanctioned evidence path.
+- Fabricated existing forward values still raise through summarize/render.
+- Duplicate history `as_of`, invalid records, impossible dates, and non-positive CSI1000 closes remain guarded.
+- Durable README / cadence design now describe the mandatory audited API correctly; active Hot Queue summary shows 21/21 and 183/183.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_comparison` -> 21/21 OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> 183/183 OK, but missing the two probes above.
+
+**Register outcome**: new findings recorded in `docs/system_risk_register.md`; prior repaired findings remain open until reviewed PASS + commit per register convention.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ②a: mandatory as_of_now cap + API doc sync)
+
+**Trigger**: Codex `审查` FAIL, 1 P1 + 1 P3. Both legitimate.
+
+**P1 AUDITED-PATH-ASOF-NOW-OPTIONAL**: I documented as_of_now as REQUIRED but left `=None` default on summarize/render → with as_of_now=None a future-containing CSI1000 frame fills look-ahead horizons counted as evidence. Fix: removed the default — `summarize_comparison_records(records, csi1000, as_of_now)` and `render_regime_comparison_block(record, csi1000, as_of_now, records=None)` now raise ValueError on None/non-canonical (omitting → TypeError); `backfill_forward_returns` stays the lower-level helper (optional as_of_now), documented as such. Tests: omitted/None/non-canonical raise; as-of cap at anchor leaves all horizons pending (backfill_complete_weeks=0) even with a future CSI1000 frame.
+
+**P3 ROUTE-DOC-API-DRIFT**: README still showed `render(record, records)` + "summarize = pure counts"; design didn't state the require-csi1000+as_of_now+audit contract. Updated both to the audited mandatory-cap API; register active summary test count → 21.
+
+**Boundary unchanged**: pure logic, comparison-only, no fetch / EGS / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 183/183 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex `审查` (V14.3 slice 2b-impl ②a audited evidence path repair) — **FAIL**
+
+**Scope reviewed**: current working tree after Claude `修复` for the render/summary backfill-audit bypass. Reviewed modified tracked files (`docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`, `engine/a_short_regime_classifier.py`, `tests/test_a_short_regime_classifier.py`) plus untracked new files (`engine/a_short_regime_comparison.py`, `tests/test_a_short_regime_comparison.py`). Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The prior fabricated-value bypass is mostly repaired: `summarize_comparison_records` and `render_regime_comparison_block` now route through `backfill_forward_returns`, and fabricated `h1=999.0` raises. But the audited evidence path still allows `as_of_now=None`, which means a full CSI1000 series can be consumed uncapped and future horizons can be counted as complete evidence.
+
+**Required findings**:
+- `R-V143-SLICE2B-COMPARISON-AUDITED-PATH-ASOF-NOW-OPTIONAL` (P1): `summarize_comparison_records(records, csi1000, as_of_now=None)` and `render_regime_comparison_block(record, csi1000, as_of_now=None, ...)` document `as_of_now` as REQUIRED, but the signature defaults it to `None` and tests exercise the default. Independent probe with an 11-day CSI1000 series and a 20240102 record: `summarize_comparison_records([record], idx)` returned `backfill_complete_weeks=1`, and `render_regime_comparison_block(record, idx)` rendered fully filled forward returns, even though no as-of cap was supplied. This is a look-ahead path for the evidence clock whenever the caller passes an index frame containing future rows. Required repair: for the sanctioned evidence/render path, make `as_of_now` truly mandatory and canonical. `summarize_comparison_records` and `render_regime_comparison_block` should raise when `as_of_now is None`; add tests proving omitted `as_of_now` raises, and proving an as-of cap at the anchor leaves all forward horizons pending even if the supplied CSI1000 frame contains future rows. `backfill_forward_returns` may remain a lower-level pure helper with optional `as_of_now` only if docs/tests clearly distinguish it from the sanctioned evidence path.
+- `R-V143-SLICE2B-COMPARISON-ROUTE-DOC-API-DRIFT` (P3): durable docs still describe the pre-repair API/contract. `docs/README.md` still says `render_regime_comparison_block(record, records)` and "`summarize_comparison_records` = pure counts"; `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md` still says `summarize`/`render` validate records but does not state they require `csi1000 + as_of_now` and internally audit via backfill. This can mislead slice ②b wiring back to the old call shape. Required repair: update README and cadence design to the actual audited API after the `as_of_now` fix, including the mandatory cap and no-look-ahead evidence path.
+
+**Verified repaired / still OK**:
+- Fabricated existing `h1=999.0` raises through `backfill_forward_returns`, `summarize_comparison_records`, and `render_regime_comparison_block`.
+- Duplicate/invalid comparison records still raise.
+- Existing-value mismatch/not-elapsed checks and non-positive CSI1000 target handling remain repaired.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> 181/181 OK, but missing the omitted-`as_of_now` look-ahead probes above.
+- `python -m py_compile engine\a_short_regime_comparison.py tests\test_a_short_regime_comparison.py engine\a_short_regime_classifier.py tests\test_a_short_regime_classifier.py` -> OK.
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` -> 14/14 OK.
+- `git diff --check` -> no whitespace errors; LF/CRLF warnings only.
+
+**Register outcome**: new findings recorded in `docs/system_risk_register.md`; previous repair findings remain open until reviewed PASS + commit.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ②a: unbypassable audited evidence path + doc sync)
+
+**Trigger**: Codex `审查` FAIL, 1 P2 + 1 P3. Evaluated both legitimate.
+
+**P2 RENDER-SUMMARY-BACKFILL-AUDIT-BYPASS**: backfill audits existing forward values, but `summarize`/`render` could be called WITHOUT backfill (they only checked shape) → a fabricated `h1=999` complete record counted as evidence. Chose Codex option (a): `summarize_comparison_records(records, csi1000, as_of_now)` and `render_regime_comparison_block(record, csi1000, as_of_now, records=None)` now REQUIRE csi1000+as_of_now and run `backfill_forward_returns` internally before counting/rendering — there is no unaudited evidence path. Tests: fabricated record raises through both summarize and render.
+
+**P3 AUDIT-REPAIR-DOCSTRING-REGISTER-DRIFT**: stale "left untouched / never overwrites" wording + wrong test count. Updated module + backfill docstrings (existing values are audited, not untouched), test header, and the active register summary (test count → 19, verification line).
+
+**Boundary unchanged**: pure logic, comparison-only, no fetch / EGS / file write / production, V14.2 frozen. (②b will pass csi1000+as_of_now to the panel/evidence path — it fetches indices anyway.)
+
+**Verification**: `python -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 181/181 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex `审查` (V14.3 slice 2b-impl ②a after existing-value audit repair) — **FAIL**
+
+**Scope reviewed**: working tree after Claude repair for existing forward-return audit. Reviewed modified tracked docs/code (`docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`, `engine/a_short_regime_classifier.py`, `tests/test_a_short_regime_classifier.py`) plus untracked new helper/test files (`engine/a_short_regime_comparison.py`, `tests/test_a_short_regime_comparison.py`). No data fetch, no EGS wiring, no result write, no production scoring change, no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The previous P1 is functionally repaired inside `backfill_forward_returns`: existing non-null horizons now raise on deterministic mismatch or if the target horizon has not elapsed under `as_of_now`. But the evidence-render path still has an audit-boundary ambiguity, and the live docs/comments still carry stale contract text from the pre-repair behavior.
+
+**Required findings**:
+- `R-V143-SLICE2B-COMPARISON-RENDER-SUMMARY-BACKFILL-AUDIT-BYPASS` (P2): `summarize_comparison_records` / `render_regime_comparison_block` validate comparison-record shape and reject duplicate `as_of`, but they do not and cannot verify forward-return numerical truth against CSI1000. Independent probe: a shape-valid record with `h1=999.0`, `h3=3.0`, `h5=5.0`, `h10=10.0`, `forward_returns_pending=[]`, `backfill_complete=True` was accepted by `summarize_comparison_records` and counted as `backfill_complete_weeks=1` when passed directly, without calling `backfill_forward_returns`. The repaired backfill gate is therefore safe only if ②b always runs full-history backfill immediately before evidence count/render. Required repair: make the sanctioned panel/evidence path impossible or clearly invalid without the backfill audit step. Acceptable shapes include: (a) render/summarize wrapper takes `csi1000` + `as_of_now` and internally calls `backfill_forward_returns` before counting; or (b) add an explicit audited provenance/metadata contract and require it for complete forward-return evidence; or (c) rename/partition raw summary from evidence summary and document/test that the ②b sanctioned path is `backfill_forward_returns(full_history, csi1000, as_of_now)` -> evidence count/render. Add a test proving a fabricated prefilled complete record cannot advance the sanctioned evidence-render path.
+- `R-V143-SLICE2B-COMPARISON-AUDIT-REPAIR-DOCSTRING-REGISTER-DRIFT` (P3): stale live text remains after the audit repair. `engine/a_short_regime_comparison.py` docstrings still say existing non-null values are "left untouched" / "never overwritten" without the new "must be auditable or raise" qualifier, and `tests/test_a_short_regime_comparison.py` top docstring still pins "never overwrites existing values" / "missing/non-finite" instead of audited-existing + finite-positive. `docs/system_risk_register.md` active in-progress summary says "18 tests" but the actual module run is 17/17, and the same line still says `tests.test_a_short_regime_comparison` 11/11. Required repair: update the live code/test docstrings and active register summary to the actual post-repair contract and actual test count; historical FAIL evidence paragraphs may remain unchanged.
+
+**Verified repaired from prior round**:
+- Existing mismatched `h1=999.0` raises in `backfill_forward_returns`.
+- Existing not-yet-elapsed prefilled `h1` raises under `as_of_now=anchor`.
+- Matching existing `h1=1.0` is preserved.
+- Existing `h10` with the target outside the finite-positive series raises.
+- Invalid/duplicate comparison records and impossible `as_of` remain rejected; non-positive CSI1000 target close remains null.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> 179/179 OK, but the suite lacks the sanctioned-render-path bypass test above.
+- `python -m unittest tests.test_a_short_regime_comparison` -> 17/17 OK.
+- `python -m py_compile engine\a_short_regime_comparison.py tests\test_a_short_regime_comparison.py` -> OK.
+- `git diff --check` -> no whitespace errors; LF/CRLF warnings only.
+
+**Register outcome**: new findings recorded in `docs/system_risk_register.md`; existing prior findings remain repaired but not closed until a reviewed commit.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ②a: audit existing forward-return values)
+
+**Trigger**: Codex deeper re-`审查` FAIL, 1 P1 `R-V143-SLICE2B-COMPARISON-EXISTING-FWD-RETURN-PIT-CONFLICT-BYPASS` — backfill blindly preserved existing non-null horizons, so a corrupt prefilled value (h1=999 vs real +1%) or a not-yet-elapsed prefilled value (look-ahead) survived and counted as evidence. Evaluated: legitimate + important (forward returns are deterministic given the CSI1000 series + basis, so existing values must be auditable, not trusted).
+
+**Fix**: backfill now audits every existing non-null horizon — if the target isn't available under as_of_now (not elapsed / out of the finite-positive series) → RAISE; if available → recompute the const CSI1000 return and RAISE on `|existing − recomputed| > 1e-6`; only an audited matching value is preserved. Tests: mismatch raises, not-elapsed raises, matching preserved.
+
+**Proactive doc-consistency** (the recurring drift category): updated README ②a row, cadence design §5 ②a, and the active register summary from "fills only nulls/never overwrites" to the audited-existing-value contract — so ②b doesn't re-introduce blind preservation.
+
+**Boundary unchanged**: pure logic, comparison-only, no fetch / EGS / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 179/179 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-impl ②a deeper adversarial pass) — **FAIL**
+
+**Scope reviewed**: current working tree after previous PASS, with a fresh adversarial focus on already-filled forward returns, PIT/no-look-ahead enforcement, and evidence-clock contamination. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: FAIL / not commit-safe. The prior Requireds remain repaired, but a deeper probe found a remaining evidence-clock hole: existing non-null forward-return values are trusted without checking whether the horizon has actually elapsed or whether the stored value matches the deterministic CSI1000 return now calculable from the same `csi1000` series.
+
+**Required finding**:
+- `R-V143-SLICE2B-COMPARISON-EXISTING-FWD-RETURN-PIT-CONFLICT-BYPASS`: `backfill_forward_returns` preserves every existing non-null horizon (`continue`) and only validates shape/finite-ness through `validate_comparison_record`. Probe 1: a record with existing `h1=999.0` and CSI1000 closes 100→101 was returned as `h1=999.0`, validated successfully, counted as `backfill_complete_weeks=1`, and rendered into the panel. Probe 2: with `as_of_now='20240102'` (anchor day; no horizon elapsed), a record prefilled with `h1/h3/h5/h10` stayed fully complete and counted as evidence. This bypasses the intended no-look-ahead / const-pinned return-basis contract for prefilled values and can preserve a bad value from an earlier buggy run. Required repair: keep the no-overwrite principle only for matching audited values. For every non-null existing horizon, if the target trading day is not available under `as_of_now`, raise instead of counting it; if the target is available, recompute the const-pinned CSI1000 return and raise on mismatch beyond a tight deterministic tolerance. Add tests for (a) existing mismatched h1 raises, (b) existing not-yet-elapsed horizon raises under `as_of_now`, and (c) matching existing h1 is preserved without overwrite.
+
+**Verified still clean**:
+- Invalid/duplicate comparison records raise and cannot advance evidence counts.
+- Impossible `as_of` raises.
+- Non-positive CSI1000 target closes leave horizons null.
+- README / cadence design / active Hot Queue summary are aligned to finite-positive close semantics.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 177/177 OK, but the suite lacks the existing-value PIT/conflict probes above.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile engine\a_short_regime_comparison.py engine\a_short_regime_classifier.py tests\test_a_short_regime_comparison.py tests\test_a_short_regime_classifier.py`: OK.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-impl ②a register-summary repair) — **PASS**
+
+**Scope reviewed**: current working tree after Claude register-only `修复` for `R-V143-SLICE2B-COMPARISON-RISK-REGISTER-CURRENT-DESC-DRIFT`. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: PASS / commit-safe for this slice. The active Hot Queue in-progress summary now matches the implemented contract: `backfill_forward_returns` uses finite AND positive CSI1000 closes only; zero/negative/NaN/Inf are unavailable and leave horizons null; `summarize_comparison_records` validates every record and rejects duplicate `as_of`. Historical FAIL evidence paragraphs intentionally still contain the old wording as audit history, which is acceptable.
+
+**Verified repaired**:
+- `R-V143-SLICE2B-COMPARISON-RISK-REGISTER-CURRENT-DESC-DRIFT`: current active slice summary in `docs/system_risk_register.md` no longer says only "skips non-finite closes"; it now states finite AND positive close, unavailable/null handling for zero/negative/NaN/Inf, and record-validation/duplicate-`as_of` evidence guard.
+- `R-V143-SLICE2B-COMPARISON-DOC-POSITIVE-CLOSE-DRIFT`: README route row and cadence design §5 ②a remain aligned to finite-positive close semantics.
+- Prior functional Requireds remain repaired: invalid/duplicate evidence records raise, impossible `as_of` raises, and non-positive CSI1000 target closes remain null.
+
+**Required findings**: none remaining.
+
+**Register outcome**: repair evidence is recorded in `docs/system_risk_register.md`; final closure still requires the reviewed commit, per register convention.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 177/177 OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile engine\a_short_regime_comparison.py engine\a_short_regime_classifier.py tests\test_a_short_regime_comparison.py tests\test_a_short_regime_classifier.py`: OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_route_doc_ledger_status_consistency`: 14/14 OK.
+- `git diff --check`: no whitespace errors; LF -> CRLF warnings only.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ②a: register in-progress summary drift)
+
+**Trigger**: Codex re-`审查` FAIL, 1 P3 `R-V143-SLICE2B-COMPARISON-RISK-REGISTER-CURRENT-DESC-DRIFT` — I fixed README + design but the register's OWN active in-progress ②a slice summary still said "skips non-finite closes". Evaluated: legitimate (it's the live slice summary the next 提交/②b agent reads, not historical evidence), trivial.
+
+**Fix**: updated only the active in-progress ②a Hot Queue summary — finite AND positive close (zero/negative/NaN/Inf → unavailable → null); summarize/render validate + reject duplicate as_of; test count 11→16. Historical FAIL-evidence/finding paragraphs left untouched per Codex.
+
+**Boundary unchanged**: register-only, no code/behavior change (full suite 177/177 from the prior round; route-doc guard 14/14).
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-impl ②a positive-close doc repair) — **FAIL**
+
+**Scope reviewed**: current working tree after Claude docs-only `修复` for `R-V143-SLICE2B-COMPARISON-DOC-POSITIVE-CLOSE-DRIFT`. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The actual code and the two previously named durable route/design docs are now aligned: `backfill_forward_returns` treats CSI1000 closes as usable only when finite AND positive, README states zero/negative/NaN/Inf become unavailable/null, and the cadence design says `isfinite 且 >0`. The remaining issue is a smaller cross-LLM continuity drift inside the active Hot Queue itself.
+
+**Required finding**:
+- `R-V143-SLICE2B-COMPARISON-RISK-REGISTER-CURRENT-DESC-DRIFT`: `docs/system_risk_register.md` still has the current `A-short V14.3 slice 2b-impl ②a comparison backfill + panel render` in-progress entry describing `backfill_forward_returns` as "skips non-finite closes". That line is not just historical evidence; it is the active slice summary in the Hot Queue and can mislead the next `提交` / ②b wiring agent. Required repair: update that current in-progress slice summary to match the repaired contract: finite AND positive CSI1000 close only; zero/negative/NaN/Inf are unavailable and leave the horizon null; summarize/render validate records and reject duplicate `as_of`. Do not rewrite historical FAIL evidence paragraphs.
+
+**Verified clean**:
+- Prior functional Requireds remain fixed: invalid/duplicate evidence records raise, impossible `as_of` raises, and non-positive CSI1000 target closes remain null.
+- README ②a and cadence design §5 ②a now state the finite-positive close contract.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 177/177 OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile engine\a_short_regime_comparison.py engine\a_short_regime_classifier.py tests\test_a_short_regime_comparison.py tests\test_a_short_regime_classifier.py`: OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_route_doc_ledger_status_consistency`: 14/14 OK.
+- `git diff --check`: no whitespace errors; LF -> CRLF warnings only.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ②a: positive-close doc drift)
+
+**Trigger**: Codex re-`审查` FAIL, 1 P2 doc drift `R-V143-SLICE2B-COMPARISON-DOC-POSITIVE-CLOSE-DRIFT` — the positive-close fix landed in code but README said "skips non-finite closes" and design §5 said "isfinite" (stale). Evaluated: legitimate (doc↔behavior consistency, the recurring category), cheap.
+
+**Fix**: README ②a route row → "usable CSI1000 close = finite AND positive; zero/negative/NaN/Inf → unavailable → horizon null, not filled" + summarize/render validate-every-record/reject-dup note. Cadence design §5 ②a → "收盘须 isfinite 且 >0 (0/负→unavailable→留 null,不填)". Docs-only; behavior/tests unchanged.
+
+**Boundary unchanged**: comparison-only, pure logic, no fetch / EGS / file write / production.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_comparison tests.test_route_doc_ledger_status_consistency` → OK (behavior untouched; full suite 177/177 from the prior round).
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-impl ②a repair) — **FAIL**
+
+**Scope reviewed**: current working tree after Claude `修复`. Modified tracked files include `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`, `engine/a_short_regime_classifier.py`, `tests/test_a_short_regime_classifier.py`; new files under review remain `engine/a_short_regime_comparison.py`, `tests/test_a_short_regime_comparison.py`. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The prior three functional Requireds are materially repaired: invalid/duplicate comparison records no longer advance evidence counts, impossible `as_of` is rejected by `validate_comparison_record`, and zero/negative CSI1000 target closes now leave the horizon null. However, the durable route/design docs still describe the backfill close-quality contract as finite/non-finite only, not finite-positive. That is the exact boundary that caused `R-V143-SLICE2B-COMPARISON-NONPOSITIVE-INDEX-CLOSE`, so leaving it stale can mislead slice ②b wiring/backfill scheduling.
+
+**Required finding**:
+- `R-V143-SLICE2B-COMPARISON-DOC-POSITIVE-CLOSE-DRIFT`: `engine/a_short_regime_comparison.py` now correctly treats a valid CSI1000 close as finite AND positive, but `docs/README.md` still says the helper "skips non-finite closes", and `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md` still says index close `isfinite`. Required repair: update both durable route/design descriptions for slice ②a to say CSI1000 close must be finite positive and zero/negative closes are unavailable/null, not filled. Keep the comparison-only / no fetch / no EGS / no file-write boundary unchanged.
+
+**Verified repaired from prior FAIL**:
+- `R-V143-SLICE2B-COMPARISON-UNVALIDATED-EVIDENCE-COUNT`: independent probes confirmed invalid history records, duplicate `as_of`, invalid current record, and invalid render history all raise.
+- `R-V143-SLICE2B-COMPARISON-ASOF-CANONICAL-GAP`: independent probe confirmed `20240231` raises in `validate_comparison_record`.
+- `R-V143-SLICE2B-COMPARISON-NONPOSITIVE-INDEX-CLOSE`: independent probes confirmed target close `0.0` and `-1.0` leave `h1=None` while other elapsed horizons still fill.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 177/177 OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile engine\a_short_regime_comparison.py engine\a_short_regime_classifier.py tests\test_a_short_regime_comparison.py tests\test_a_short_regime_classifier.py`: OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_route_doc_ledger_status_consistency`: 14/14 OK.
+- `git diff --check`: no whitespace errors; LF -> CRLF warnings only.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-impl ②a: evidence-count validation + canonical as_of + positive index close)
+
+**Trigger**: Codex `审查` FAIL, 3 Required. All legitimate — and all three are (again) the same recurring categories I under-applied symmetrically (validate-before-count, canonical date, non-finite→here non-positive). Fixed together.
+
+**UNVALIDATED-EVIDENCE-COUNT**: `summarize_comparison_records` counted without validating + allowed duplicate `as_of` → render showed bad/duplicate weeks as `n/12` evidence. Now summarize runs `validate_comparison_record` per record + rejects duplicate `as_of` (raises); render validates the current record first.
+
+**ASOF-CANONICAL-GAP**: `validate_comparison_record` only required 8 digits → `20240231` passed. Added `is_canonical_date(as_of)` (single-source, imported into the classifier). Side effect: the classifier test `_history` helper used synthetic `20240101+i` dates (which become impossible like 20240352) → switched it to real calendar dates so `build_comparison_record` (which self-validates) still works.
+
+**NONPOSITIVE-INDEX-CLOSE**: `_index_close_map` kept zero/negative closes → target `0.0` filled `h1=-100%`. Now a usable CSI1000 close is finite AND `>0`; non-positive → unavailable → horizon stays null.
+
+**Tests +5**. Pre-flight sweep re-run. **Boundary unchanged**: pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen (classifier touched only to add the canonical-as_of check — single-source).
+
+**Verification**: `python -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 177/177 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex `审查` (V14.3 slice 2b-impl ②a comparison backfill + panel render) — **FAIL**
+
+**Scope reviewed**: current working tree after Claude `起草`. Tracked modified docs: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`. New code under review: `engine/a_short_regime_comparison.py`, `tests/test_a_short_regime_comparison.py`. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: FAIL / not commit-safe. The pure helpers are directionally correct and the target suite passes, but the comparison evidence layer still accepts invalid observations into the switch-candidate evidence clock. This is material because governance pins `forward_live_weeks_min=12` and `divergence_samples_min=8`; counting bad or duplicate weeks would make a later V14.3 switch prompt look more mature than it is.
+
+**Required findings**:
+- `R-V143-SLICE2B-COMPARISON-UNVALIDATED-EVIDENCE-COUNT`: `summarize_comparison_records` counts records without calling the sanctioned `validate_comparison_record`, does not reject duplicate `as_of`, and `render_regime_comparison_block` displays that count as evidence progress. Probe: a deliberately invalid record with contradictory `forward_returns_pending` / `backfill_complete` was counted as `backfill_complete_weeks=1`; two records with the same `as_of` plus one pending record displayed `3/12` evidence weeks. Required repair: validate the current record and every history record before rendering/counting; reject duplicate `as_of`; tests must prove invalid and duplicate records cannot advance evidence progress.
+- `R-V143-SLICE2B-COMPARISON-ASOF-CANONICAL-GAP`: `validate_comparison_record` / schema only require eight digits for `as_of`, so impossible dates such as `20240231` pass the sanctioned comparison-record gate and can survive into panel/evidence history as pending weeks. Required repair: enforce real canonical `YYYYMMDD` for comparison-record `as_of` (prefer in `validate_comparison_record`, and mirror in tests).
+- `R-V143-SLICE2B-COMPARISON-NONPOSITIVE-INDEX-CLOSE`: `backfill_forward_returns` documents target closes as finite positive, but `_index_close_map` keeps zero/negative closes and the fill loop only checks `t_close is not None`. Probe: target close `0.0` filled `h1=-100.0`; target close `-1.0` filled `h1=-101.0`. Required repair: treat non-positive CSI1000 closes as unavailable (or raise consistently if that is the chosen data-quality policy); add zero/negative target-close tests and keep anchor-positive behavior tested.
+
+**Verification run**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_features tests.test_a_short_regime_classifier tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 172/172 OK, but insufficient for the adversarial cases above.
+- Independent probes reproduced all three required findings. First attempt with bare `python` failed because `python` is not on PATH in this shell; bundled Python was used for the valid verification run.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `起草` (V14.3 slice 2b-impl ②a: comparison backfill + panel render)
+
+**What**: next build step after ① (`7ae1d91`). New `engine/a_short_regime_comparison.py` — two PURE comparison-layer helpers + a counter: `backfill_forward_returns` (fill elapsed h1/h3/h5/h10 on the const-pinned CSI1000 raw forward close-to-close basis) and `render_regime_comparison_block` (comparison-only panel markdown) + `summarize_comparison_records`. + `tests/test_a_short_regime_comparison.py` (11 tests).
+
+**Pre-flight sweep run before handoff** (per reduce-fix-cycles): backfill skips non-finite index closes (np.isfinite), rejects non-canonical + duplicate index dates (the same source-integrity class as ①), is PIT (fills a horizon only if its target trading-day close exists ≤ as_of_now — no look-ahead), never overwrites an already-filled horizon, leaves all-null when the anchor as_of is absent from the index, and re-validates every updated record via `validate_comparison_record`. Render is a pure string, explicitly labelled non-production / never-mixed-with-overlay-or-M6.7, reads the evidence gate (forward_live_weeks_min) from governance (single source), shows pending markers for un-elapsed horizons.
+
+**Boundary**: pure logic — no data fetch / EGS wiring / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_comparison tests.test_a_short_regime_features tests.test_a_short_regime_classifier tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 172/172 OK. FFFD=0.
+
+**Next**: `审查`. (Then ②b: in-EGS fetch+append wiring + panel into weekly report + bootstrap runner [needs user 执行 + TUSHARE_TOKEN] + forward-backfill scheduling — the last 2b slice.)
+
+---
+
 ## 2026-06-11 — Claude `提交` (V14.3 slice 2b-impl ① → local master)
 
 Codex PASS (entry below). Committed slice 2b-impl ① to local master only (no push): new `engine/a_short_regime_features.py` (pure `compute_regime_daily_features` — fail-closed as_of price+limit usability, finite-numeric inputs, source-panel uniqueness + canonical dates, producer self-validate) + `tests/test_a_short_regime_features.py`; classifier `engine/a_short_regime_classifier.py` gained `history_masked` (masks history-dependent rules on `stk_limit_history_incomplete`); `engine/a_short_regime_ledger.py` made `is_canonical_date` public; + README/design/register. ~9 Codex rounds — all findings were data-integrity (non-finite, missing/partial/unusable limit, bad price, duplicates, source dates, history consumption, doc drift). All 13 slice-2b-impl ① risk entries flipped `resolved`. Comparison-only, pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen. `A股长线ETF配置框架.md` left untracked.
