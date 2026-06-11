@@ -184,6 +184,16 @@ class NormalizeTests(unittest.TestCase):
         self.assertFalse(n["overlay"]["eligible"])
         self.assertFalse(n["overlay"]["crowding_hit"])
 
+    def test_maps_vol_confirm(self):
+        # vol_confirm now flows from EGS derived_flags → engine breakout entry (no longer dormant).
+        n = normalize_candidate(
+            _egs_candidate(derived_flags={"chasing_high": False, "overheat_flag": False,
+                                          "has_crash_veto": False, "is_lock": False,
+                                          "is_breakout": True, "vol_confirm": True, "hard_veto": False}),
+            _series(), _overlay_row(), 55.0, {}, "震荡期")
+        self.assertTrue(n["derived"]["vol_confirm"])
+        self.assertTrue(n["derived"]["breakout"])
+
 
 class BuildWeeklyTests(unittest.TestCase):
     def test_envelope(self):
@@ -405,6 +415,19 @@ class MainWiringTests(unittest.TestCase):
                       "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
                       "--out", str(out)], price_provider=lambda code: _series())
             self.assertFalse(out.exists())
+
+    def test_main_regime_from_analysis_input_takes_precedence(self):
+        # market_regime sourced from analysis_input.market_context (EGS), overriding the account file.
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
+            ai["market_context"]["market_regime"]["status"] = "attack"   # → 进攻期
+            self._write_inputs(td, ai=ai)                                # account.json says 震荡期
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["reports"][0]["m67"]["精简结论区"]["当前环境"], "进攻期")
 
     def test_main_with_valid_overlay_accepted(self):
         with tempfile.TemporaryDirectory() as td:

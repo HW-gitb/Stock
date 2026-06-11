@@ -1568,6 +1568,13 @@
                 "null"
               ]
             },
+            "vol_confirm": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "Volume-confirmation flag (EGS-computed: up-amount > down-amount over last 5d). Optional; emitted once the breakout-entry wiring ships; null/absent for older artifacts. Consumed by Phase 5 breakout entry."
+            },
             "m4_review_required": {
               "type": [
                 "boolean",

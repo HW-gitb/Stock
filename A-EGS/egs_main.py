@@ -730,6 +730,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "has_crash_veto": has_crash_veto,
             "is_lock": is_lock,
             "is_breakout": is_breakout,
+            "vol_confirm": _json_bool(_row_get(row, "vol_confirm")),
             "m4_review_required": None,
             "hard_veto": bool(reduce_deduct or has_crash_veto),
         },

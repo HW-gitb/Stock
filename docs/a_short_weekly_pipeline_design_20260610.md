@@ -22,7 +22,7 @@ EGS top-N(analysis_input.json)
 
 ## 2. 关键设计决定
 - **IV 是市场级,不是个股级。** 50ETF IV 252d 分位是 V14.2 Rule3/M0.5/M1 的**市场波动率闸门**,对当周所有候选取**同一个值**(feed 最新一天的 `iv_percentile_252d`)。feed 缺/最新分位为 None → 引擎按 `observe_only_missing_feed` 保守处理(不 fail-open)。`latest_iv_percentile()` 取 `series[-1]`。
-- **normalize 是唯一映射点,且必须用 EGS *真实* 契约键。** `normalize_candidate(...)` 把 EGS analysis_input 候选翻成引擎归一化输入。**硬风险字段按真实契约**(对齐 `A-EGS/egs_main.py` 产出):`derived_flags.is_lock`→引擎 `limit_locked`、`event_risk.suspension.is_suspended`→`suspended`、`derived_flags.hard_veto`→引擎独立硬否决输入(即使分解原因未单独命中也硬杀)、`derived_flags.{overheat_flag,chasing_high,is_breakout,has_crash_veto}` / `event_risk.{holder_reduction.active_plan, delisting.st_flag/delisting_warning}` 照映。字段缺失 → 引擎保守/observe,不抛。**契约无 `vol_confirm` 字段** → 突破入场(需放量确认)在 v1 暂休眠(只走低吸/观察,保守),待后续补量能字段再启用。
+- **normalize 是唯一映射点,且必须用 EGS *真实* 契约键。** `normalize_candidate(...)` 把 EGS analysis_input 候选翻成引擎归一化输入。**硬风险字段按真实契约**(对齐 `A-EGS/egs_main.py` 产出):`derived_flags.is_lock`→引擎 `limit_locked`、`event_risk.suspension.is_suspended`→`suspended`、`derived_flags.hard_veto`→引擎独立硬否决输入(即使分解原因未单独命中也硬杀)、`derived_flags.{overheat_flag,chasing_high,is_breakout,has_crash_veto}` / `event_risk.{holder_reduction.active_plan, delisting.st_flag/delisting_warning}` 照映。字段缺失 → 引擎保守/observe,不抛。**`derived_flags.vol_confirm` 可选**(EGS 已导出,见 §5):缺失/false → 保守非突破路径(低吸/观察);true → 启用 Phase 5 突破入场(is_breakout∧站稳 MA10∧vol_confirm)。
 - **四道消费方/边界护栏(写入校验,不只声明):**
   - *IV feed PIT 跨-as_of*:`validate_weekly_report` 先 `validate_feed_summary_consistency(iv_feed)`(历法/PIT/升序/iv>0),**再拒 `feed.as_of > weekly.as_of` 与最新 `trade_date > weekly.as_of`**(防用未来波动率)。
   - *价格覆盖 + PIT/新鲜度不 fail-open*:`_fetch_price_series` 用 A 股 `asset="E"`,**provider 异常 → `SystemExit` 中止**(不吞成 `[]`);**每个 `trade_date` 校历法、拒任何 `> as_of` 的未来 bar、最新 bar 必须 == `as_of`(否则数据陈旧)→ 违反即中止不写**;`main` 价格覆盖门(`MIN_PRICE_OBS=20`)对任一纳入候选缺序列即**中止不写**(不静默退化成"观察")。
@@ -42,3 +42,11 @@ EGS top-N(analysis_input.json)
 - 真实前复权价抓取(`pro_bar adj=qfq`)= 用户授权 `执行`;输出路径调用方指定(约定 `research/results/`),**绝不写 production 根 `result/a_short/<date>`**(写入路径硬校验)。
 - 本切片 = 设计 + pipeline 纯核(normalize / build_weekly_report / validate_weekly_report / write_weekly_report)+ 周报 schema + `main` 执行接线 + 测试。
 - **仍未来:** 真实周末跑的授权 `执行`(产一份真实周报);comparison-track ≥12 周与 12 个月 ship-gate 的前向验证(纯执行,等数据)。
+
+## 5. 首跑缺口修复(2026-06-11 follow-up,首次端到端 `执行` 后)
+首跑(as-of 20260609)暴露并修复:
+- **vol_confirm 解休眠**:EGS 一直在算 `vol_confirm`(up/down 量能,egs_main 2052-2093)但没导出 → 加 `derived_flags.vol_confirm` 到 analysis_input + schema(可选,旧 artifact 仍合法);normalize 早已映射 → **突破入场不再永久休眠**(is_breakout∧站稳 MA10∧vol_confirm)。**这一项动了生产 egs_main(仅多导出一个已算字段,加性低风险)。**
+- **market_regime 取自 analysis_input**:pipeline 不再用账户配置里的硬编码 regime;改为读 `market_context.market_regime.status`(EGS 英文枚举 attack/shock/defense/contraction → `REGIME_MAP` 映射到 进攻/震荡/防御/收缩),缺失或 unknown → 降级到账户配置 → 默认震荡期。**注:EGS 当前仍可能输出 `unknown`(真正的 regime 分类器是上游未建件,另立切片);本改只是消除"pipeline 侧硬编码占位"。**
+- **available_cash = 用户必填输入**(账户现金,系统无法推导):非 bug;缺失则引擎不出建仓股数。文档化。
+- **控制台中文乱码**:非代码缺陷,是 Windows 控制台 GBK 显示;产物已是干净 UTF-8。运行 egs_main 时设 `PYTHONIOENCODING=utf-8`(或 chcp 65001)即可避免日志乱码。
+- **仍未来(不在本修复)**:Slice A overlay 数据装载接线(M6.7 赛道红利星级)、EGS regime 分类器。

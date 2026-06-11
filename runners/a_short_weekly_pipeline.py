@@ -52,8 +52,8 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
                     "crowding_hit": bool((overlay_row or {}).get("crowding_hit"))},
         "industry_trend": industry_trend,
         # 真实 EGS analysis_input 契约:derived_flags.{is_lock,is_breakout,has_crash_veto,
-        # overheat_flag,chasing_high,hard_veto};suspension 在 event_risk.suspension.is_suspended。
-        # 注:契约无 vol_confirm 字段 → 突破入场(需放量确认)在 v1 暂休眠(保守,只走低吸/观察)。
+        # overheat_flag,chasing_high,vol_confirm,hard_veto};suspension 在 event_risk.suspension.is_suspended。
+        # vol_confirm 可选:缺失/false → 走保守非突破路径(低吸/观察);true → 启用 Phase 5 突破分支。
         "derived": {"overheat": bool(d.get("overheat_flag")), "chasing_high": bool(d.get("chasing_high")),
                     "breakout": bool(d.get("is_breakout")), "vol_confirm": bool(d.get("vol_confirm")),
                     "crash_veto": bool(d.get("has_crash_veto")), "limit_locked": bool(d.get("is_lock")),
@@ -165,6 +165,8 @@ def latest_iv_percentile(iv_feed_summary: dict):
 
 
 MIN_PRICE_OBS = 20               # 指标(支撑/压力 20d、ATR 14d)所需最少 PIT 交易日
+# analysis_input.market_context.market_regime.status(EGS 英文枚举)→ 引擎中文 regime
+REGIME_MAP = {"attack": "进攻期", "shock": "震荡期", "defense": "防御期", "contraction": "收缩期"}
 
 
 def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str) -> list:
@@ -229,7 +231,11 @@ def main(argv=None, pro_factory=None, price_provider=None):
     iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位(None → 引擎按 missing 处理)
     overlay = _load_validated_overlay(args.overlay, args.as_of) if args.overlay else {}
     acct = _load(args.account) if args.account else {}
-    regime = acct.get("market_regime", "震荡期")
+    # 市场 regime 优先取自 analysis_input(EGS 分类),其次账户配置,最后默认震荡期。
+    # (EGS 当前可能仍输出 status='unknown' —— 真正的 regime 分类器是上游待建件;在此优雅降级。)
+    _mr_status = ((ai.get("market_context") or {}).get("market_regime") or {}).get("status")
+    regime = REGIME_MAP.get(_mr_status) or acct.get("market_regime") or "震荡期"
+    # available_cash 是用户必填输入(账户现金,系统无法推导);缺失则为 None → 引擎不出建仓股数。
     account = {"available_cash": acct.get("available_cash")}
     # 价格序列:注入(测试)或执行期抓取(需授权)
     if price_provider is None:

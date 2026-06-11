@@ -8,6 +8,134 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (first-run gap-fix bundle, post Codex PASS) — **DONE (local master)**
+
+**Gate**: Codex re-`审查` PASS (no Required). Committed to LOCAL master only. Per Codex housekeeping: flipped both first-run gap-fix register entries (`R-ASHORT-FIRSTGAP-STALE-VOLCONFIRM-DURABLE-DOCS`, `...-bundle review blockers` covering `-STALE-VOLCONFIRM-COMMENT` / `-BREAKOUT-E2E-TEST-GAP` / `R-ROUTE-RISK-REGISTER-INDHEAT-STALE-INPROGRESS`) to `resolved`. Untracked one-off run artifacts (`research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`) + ETF md EXCLUDED.
+
+**Shipped**: first-run gap fixes — (1) **突破 entry un-dormant**: EGS exports optional `derived_flags.vol_confirm` (already computed) → analysis_input schema + normalize → Phase 5 breakout branch active (test-pinned); (2) **market_regime sourced from analysis_input** (EGS enum→中文 REGIME_MAP, fallback default), available_cash documented as required user input; (3) **#4 mojibake = cosmetic** (UTF-8 run-flag documented, no code). Also cleaned register stale-state (industry_heat resolved/`3494abd`; batch ② superseded/`89a1318`; zero in_progress for committed slices). Touches production egs_main (one additive field export, no scoring change).
+
+**A-short remaining to "complete" (per user sequencing: finish A-short before A-long capture)**: (a) **Slice A overlay data-loading wiring** (M6.7 赛道红利 star — runner main still a stub); (b) **EGS market-regime classifier** (turn status='unknown' into real 进攻/震荡/防御/收缩 — needs a rule decision). After both → remind user to `起草` A-long capture (monthly, first cohort = next available month-end; 6/30 deliberately not raced).
+
+---
+
+## 2026-06-11 - Codex re-`审查` (first-run gap bundle durable-doc repair) - **PASS**
+
+**Scope reviewed**: current uncommitted first-run gap-fix bundle after HEAD `f5d7bf5`. Reviewed tracked changes in `A-EGS/egs_main.py`, `schemas/analysis_input.schema.json`, `runners/a_short_weekly_pipeline.py`, `tests/test_a_short_phase5_engine.py`, `tests/test_a_short_weekly_pipeline.py`, `docs/a_short_weekly_pipeline_design_20260610.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`. Untracked `research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`, and `A股长线ETF配置框架.md` remain out of scope and must not be swept into this commit.
+
+**Verdict**: PASS. The last Required finding `R-ASHORT-FIRSTGAP-STALE-VOLCONFIRM-DURABLE-DOCS` is repaired. `docs/a_short_weekly_pipeline_design_20260610.md` §2 now states the current contract: optional `derived_flags.vol_confirm`; absent/false stays conservative non-breakout; true enables the Phase 5 breakout path. The older batch ② register wording now carries an explicit `SUPERSEDED 2026-06-11` historical note instead of acting as current guidance. Prior repaired items still hold: runner comment no longer says breakout is dormant, M6.7 breakout behavior is test-pinned, and already-committed `industry_heat` / batch ② stale route states are no longer current blockers.
+
+**Findings**: no Required findings. One submit-time housekeeping note: when Claude performs `提交`, close the current first-run gap-fix risk-register entries as resolved with this Codex PASS + the commit hash; do not commit them forever as `in_progress`.
+
+**Verification**:
+- `tests.test_a_short_phase5_engine` + `tests.test_a_short_weekly_pipeline` + `tests.test_egs_industry_heat` + `tests.test_route_doc_ledger_status_consistency`: 109/109 OK.
+- `tests.schema.test_analysis_input_contract` + `tests.schema.test_a_short_screening_threshold_governance_schema`: 13/13 OK.
+- Source syntax parse OK for `A-EGS/egs_main.py`, `runners/a_short_weekly_pipeline.py`, and `runners/a_short_phase5_engine.py`.
+- `git diff --check` OK (CRLF warnings only).
+- UTF-8 replacement-char probe over changed docs/code: 0.
+- Stale `vol_confirm` grep reviewed: remaining stale phrases are limited to historical finding/log descriptions or the explicit `SUPERSEDED 2026-06-11` note; current design guidance is clean.
+
+**Register outcome**: no new material finding. Existing first-run gap-fix entries are review-passed and may be closed during `提交`; no provider call, live screening run, production output write, real-money use, or ship-gate claim is authorized by this review.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (first-run gap bundle: durable-doc vol_confirm wording drift) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex FAIL (1 P1, `R-ASHORT-FIRSTGAP-STALE-VOLCONFIRM-DURABLE-DOCS`) repaired, **uncommitted**, awaiting Codex re-`审查`. HEAD `f5d7bf5`.
+
+**Fix**: two durable docs still carried the old "no vol_confirm / breakout dormant" contract (the code comment + tests were already fixed last round). Now:
+- `docs/a_short_weekly_pipeline_design_20260610.md` §2 rewritten → "`derived_flags.vol_confirm` 可选(EGS 已导出,见 §5):缺失/false → 保守非突破;true → 启用 Phase 5 突破入场" (removed "契约无 vol_confirm / v1 暂休眠"; §2 now consistent with §5 + code/schema).
+- `docs/system_risk_register.md` batch ② closeout line's "Contract has no vol_confirm → 突破 entry stays dormant in v1" → explicit `SUPERSEDED 2026-06-11` historical note pointing to the un-dormant fix.
+
+**Verification**: re-ran Codex's grep (`契约无.*vol_confirm` / `vol_confirm.*暂休眠` / `entry stays dormant` / `永久休眠`) → zero current-guidance hits (only finding/log descriptions + the SUPERSEDED-marked line remain); register/design `replacement_chars=0`; route-doc guard 14/14.
+
+**Next**: Codex re-`审查`. PASS → `提交` (exclude untracked one-off run artifacts).
+
+---
+
+## 2026-06-11 - Codex re-`审查` (first-run gap bundle repair) - **FAIL**
+
+**Scope reviewed**: current uncommitted repair after HEAD `f5d7bf5`, including `A-EGS/egs_main.py`, `schemas/analysis_input.schema.json`, `runners/a_short_weekly_pipeline.py`, `tests/test_a_short_phase5_engine.py`, `tests/test_a_short_weekly_pipeline.py`, `docs/a_short_weekly_pipeline_design_20260610.md`, and `docs/system_risk_register.md`. Untracked `research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`, and `A股长线ETF配置框架.md` remain out of scope and must not be swept into this commit.
+
+**Verdict**: FAIL. The three previously reported implementation-level repairs are substantively fixed: the runner comment now treats `derived_flags.vol_confirm` as optional/current, M6.7 breakout behavior is test-pinned, and the already-committed `industry_heat` entries are no longer left as active blockers. But the bundle is still not commit-safe because durable route/design state still contains the old `vol_confirm` contract in two places.
+
+**Required**:
+- `R-ASHORT-FIRSTGAP-STALE-VOLCONFIRM-DURABLE-DOCS` (P1, scope `docs/a_short_weekly_pipeline_design_20260610.md`, `docs/system_risk_register.md`, PIT label `weekly pipeline consumer contract / durable route-doc state`): `docs/a_short_weekly_pipeline_design_20260610.md` §2 still says the contract has no `vol_confirm` and breakout entry is v1 dormant, while §5 and the current code/schema say optional `derived_flags.vol_confirm` is exported/consumed and enables Phase 5 breakout. `docs/system_risk_register.md` also still has an older batch closeout line saying "Contract has no `vol_confirm` → 突破 entry stays dormant in v1". Required repair: update all durable design/register wording to the current contract (`vol_confirm` optional; absent/false stays conservative non-breakout; true enables breakout), or explicitly mark historical wording as superseded so it cannot be read as current guidance. Re-run stale-wording grep for `契约无.*vol_confirm`, `vol_confirm.*暂休眠`, `entry stays dormant`, and `永久休眠` across changed docs/code before re-review.
+
+**Verification**:
+- `tests.test_a_short_phase5_engine` + `tests.test_a_short_weekly_pipeline` + `tests.test_egs_industry_heat` + `tests.test_route_doc_ledger_status_consistency`: 109/109 OK.
+- `tests.schema.test_analysis_input_contract` + `tests.schema.test_a_short_screening_threshold_governance_schema`: 13/13 OK.
+- Source syntax parse OK for `A-EGS/egs_main.py`, `runners/a_short_weekly_pipeline.py`, and `runners/a_short_phase5_engine.py`. Direct `py_compile` hit local Windows `A-EGS/__pycache__` permission denial, so a no-`.pyc` AST/compile probe was used instead.
+- `git diff --check` OK (CRLF warnings only).
+
+**Register outcome**: added `R-ASHORT-FIRSTGAP-STALE-VOLCONFIRM-DURABLE-DOCS` to `docs/system_risk_register.md`. Do not commit this bundle until repaired and re-reviewed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (first-run gap bundle: stale vol_confirm comment + breakout e2e test + register stale-state) — **REPAIRED (working tree) → ROUTED TO CODEX re-`审查`**
+
+**Live gate**: Codex FAIL (3 P1) repaired, **uncommitted**, awaiting Codex re-`审查`. HEAD `f5d7bf5`.
+
+**Fixes**:
+- **`R-ASHORT-FIRSTGAP-STALE-VOLCONFIRM-COMMENT`**: `normalize_candidate()` comment rewritten — "derived_flags.vol_confirm 可选:缺失/false → 保守非突破;true → 启用 Phase 5 突破分支" (removed the contradictory "契约无 vol_confirm / 暂休眠").
+- **`R-ASHORT-FIRSTGAP-BREAKOUT-E2E-TEST-GAP`**: added engine tests `test_breakout_entry_gated_by_vol_confirm` (is_breakout+vol_confirm=False → NOT 突破; +True → 突破) + `test_breakout_m67_path_active_with_vol_confirm` (`machine.entry_exit_size_star.type == 突破`) — proves the M6.7 breakout branch is un-dormant.
+- **`R-ROUTE-RISK-REGISTER-INDHEAT-STALE-INPROGRESS`**: industry_heat register entries → `resolved` (committed `3494abd`, Codex PASS); removed do-not-commit wording; only forward-return scoreboard / promotion auto-flag stays open (P2). **Also proactively flipped the 9 stale batch ② `in_progress` entries → `superseded` by their committed closeout (`89a1318`)** — same stale-state class (route-docs lesson: fix the class, not just the named instance); register now has **zero `in_progress` entries for already-committed slices**.
+
+**Files**: `runners/a_short_weekly_pipeline.py` (comment), `tests/test_a_short_phase5_engine.py` (+2), `docs/system_risk_register.md` (status cleanup).
+
+**Verification**: engine 31/31; full relevant suite (phase5 + weekly + egs + route-doc + phase6 loadability) 113/113 OK; register/SESSION_LOG/pipeline `replacement_chars=0`.
+
+**Next**: Codex re-`审查` this bundle. PASS → `提交` (exclude the untracked one-off run artifacts).
+
+---
+
+## 2026-06-11 - Codex `审查` (first-run gap fixes bundle: vol_confirm + regime source) - **FAIL**
+
+**Scope reviewed**: current uncommitted first-run gap-fix bundle after HEAD `f5d7bf5`. Reviewed tracked changes in `A-EGS/egs_main.py`, `schemas/analysis_input.schema.json`, `runners/a_short_weekly_pipeline.py`, `tests/test_a_short_weekly_pipeline.py`, `docs/a_short_weekly_pipeline_design_20260610.md`, and `docs/SESSION_LOG.md`. Also checked current `docs/system_risk_register.md` because it is mandatory startup/review state. Untracked `research/results/a_short_weekly_20260609/`, `research/results/egs_weight_comparison_20260609.json`, and `A股长线ETF配置框架.md` remain out of scope for this commit and must not be swept in accidentally. No live provider call / screening execution / commit.
+
+**Verdict**: FAIL. The code path is close and targeted tests pass, but the slice is not commit-safe yet. It leaves a stale code comment that says the exact opposite of the new `vol_confirm` contract, lacks an end-to-end regression test proving breakout entry is actually un-dormant in M6.7 behavior, and the current risk register still carries stale `industry_heat` in-progress / do-not-commit wording even though commit `3494abd` already shipped that reviewed slice.
+
+**Required**:
+- `R-ASHORT-FIRSTGAP-STALE-VOLCONFIRM-COMMENT` (P1, scope `runners/a_short_weekly_pipeline.py`, PIT label `analysis_input consumer contract / breakout entry`): `normalize_candidate()` now consumes `derived_flags.vol_confirm`, and the schema/export add that optional field, but the adjacent comment still says the contract has no `vol_confirm` and breakout entry remains temporarily dormant. That directly contradicts this slice's purpose and will mislead the next repair/review. Required repair: update the comment to the current contract: `derived_flags.vol_confirm` is optional; absent/false keeps the conservative non-breakout path; true enables the Phase 5 breakout branch.
+- `R-ASHORT-FIRSTGAP-BREAKOUT-E2E-TEST-GAP` (P1, scope `tests/test_a_short_weekly_pipeline.py` or `tests/test_a_short_phase5_engine.py`, PIT label `weekly pipeline -> Phase 5 M6.7 behavior`): the new test only proves normalized `derived.vol_confirm=True`; it does not prove weekly/M6.7 behavior changes from "未到低吸/突破触发" to the breakout branch. Independent probe shows `vol_confirm=False` yields `type=观察 / 未到低吸/突破触发`, while `vol_confirm=True` reaches `type=突破` before risk/reward rejection, but this is not locked by repo tests. Required repair: add an adversarial test where `is_breakout=True` with absent/false `vol_confirm` remains non-breakout, and `vol_confirm=True` makes `machine.entry_exit_size_star.type == "突破"` or otherwise proves the M6.7 path is no longer dormant.
+- `R-ROUTE-RISK-REGISTER-INDHEAT-STALE-INPROGRESS` (P1, scope `docs/system_risk_register.md`, PIT label `cross-LLM route state / stale blocker wording`): `docs/system_risk_register.md` still says the production `industry_heat` slice is `in_progress`, closure requires Codex re-review PASS + commit, and "Do not commit before Codex re-review PASS", but the reviewed slice was committed as `3494abd` and `docs/SESSION_LOG.md` records it as DONE. Required repair: update the industry_heat register entries to resolved/closed evidence for commit `3494abd`, while keeping only the forward-return scoreboard / promotion auto-flag as the open P2 forward item. Do not carry stale do-not-commit wording into the next commit.
+
+**Verification**:
+- `tests.test_a_short_weekly_pipeline` + `tests.test_egs_industry_heat` + `tests.test_route_doc_ledger_status_consistency`: 78/78 OK.
+- `tests.schema.test_analysis_input_contract` + `tests.schema.test_a_short_screening_threshold_governance_schema`: 13/13 OK.
+- Source compile probe OK for `A-EGS/egs_main.py`, `runners/a_short_weekly_pipeline.py`, and `runners/a_short_phase5_engine.py`.
+- `git diff --check` OK (CRLF warnings only).
+- Schema probe: existing example `analysis_input` remains valid without `vol_confirm`; adding `derived_flags.vol_confirm=true` also validates.
+- Behavior probe: `contraction` maps to `收缩期` and hard-vetoes new entries; `unknown` / missing regime falls back conservatively. Independent breakout probe confirms the intended behavior exists but is not test-pinned.
+
+**Register outcome**: added current open P1 entry in `docs/system_risk_register.md`. Do not commit this bundle until the Required items are repaired and re-reviewed. Exclude the one-off untracked run artifacts unless a later reviewed docs/result slice explicitly includes them.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `起草` (first-run gap fixes bundle: vol_confirm export + regime-from-analysis_input + run-encoding) — **ROUTED TO CODEX `审查`**
+
+**Live gate**: drafted, **uncommitted**, awaiting Codex `审查` (touches frozen production egs_main — additive field export). HEAD `f5d7bf5`. Fills 3 of the 4 first-run gaps (the 2 big ones — overlay wiring + EGS regime classifier — deferred, see Next).
+
+**Fixes**:
+- **#2 vol_confirm (突破 entry un-dormant)**: EGS already computes `vol_confirm` (up/down amount over 5d, egs_main 2052-2093) but never exported it → analysis_input `derived_flags.vol_confirm` now emitted + added to schema (**optional** → old/example artifacts still valid). normalize_candidate already mapped it → engine 突破 entry (is_breakout∧站稳MA10∧vol_confirm) is no longer permanently dormant. **Touches production egs_main (one added field export, additive/low-risk).**
+- **#3 market_regime source (pipeline side)**: pipeline no longer uses a hardcoded account-file regime; reads `analysis_input.market_context.market_regime.status` (EGS enum attack/shock/defense/contraction via new `REGIME_MAP` → 进攻/震荡/防御/收缩), falls back to account → default 震荡期 on unknown/missing. `available_cash` documented as required user input (not auto-derivable; missing → no 建仓 shares). **Note: EGS still emits status='unknown' (the real regime classifier is an unbuilt upstream item, separate slice) — this only removes the pipeline-side hardcode.**
+- **#4 console mojibake**: not a code bug — Windows console GBK display; artifacts are clean UTF-8. Documented the `PYTHONIOENCODING=utf-8` run fix.
+
+**Files**: `A-EGS/egs_main.py`, `schemas/analysis_input.schema.json`, `runners/a_short_weekly_pipeline.py`, `tests/test_a_short_weekly_pipeline.py` (+2), `docs/a_short_weekly_pipeline_design_20260610.md` (§5 gap-fix note).
+
+**Verification**: weekly-pipeline + egs_industry_heat + phase6 egs_main loadability + route-doc guard 82/82 OK; example analysis_input still valid (vol_confirm optional); `py_compile` OK.
+
+**Deferred (the 2 BIG gaps, NOT in this bundle)**: (1) **Slice A overlay data-loading wiring** (M6.7 赛道红利 star — big slice); (2) **EGS market-regime classifier** (turn 'unknown' into a real 进攻/震荡/防御/收缩 classification — needs a rule decision). Recommended to slot **A-long capture (6/30 deadline) BEFORE** these two.
+
+**Next**: Codex `审查` this bundle. PASS → `提交`. Then user decides: A-long capture (6/30) vs the 2 deferred big gaps.
+
+---
+
 ## 2026-06-11 — Claude `执行` (A-short FIRST end-to-end run, as-of 20260609, industry-weighted) — **DONE → first real M6.7 + industry-weighting diff**
 
 **Authorization**: user `先执行跑首跑(20260609)`. First time the full A-short chain ran on real data (system was engineering-complete but never run). Test/non-production (backtest-mode, as-of past day, placeholder account). Artifacts (NOT committed — one-off validation, not a forward cohort): `result/a_short/backtest/generated/20260609/analysis_input.json` (15 watch candidates), `research/results/egs_weight_comparison_20260609.json`, `research/results/a_short_weekly_20260609/weekly.json`.

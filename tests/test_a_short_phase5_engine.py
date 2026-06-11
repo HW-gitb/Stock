@@ -83,6 +83,15 @@ class EntryExitTests(unittest.TestCase):
         etype, _ = entry_type(_good_input(close=2.80), self.ind)
         self.assertEqual(etype, "观察")
 
+    def test_breakout_entry_gated_by_vol_confirm(self):
+        # R-ASHORT-FIRSTGAP-BREAKOUT-E2E: is_breakout alone stays non-breakout; vol_confirm un-dormants it.
+        d = _good_input()["derived"]; d["breakout"] = True; d["vol_confirm"] = False
+        et, _ = entry_type(_good_input(derived=d), self.ind)
+        self.assertNotEqual(et, "突破")
+        d2 = _good_input()["derived"]; d2["breakout"] = True; d2["vol_confirm"] = True
+        et2, _ = entry_type(_good_input(derived=d2), self.ind)
+        self.assertEqual(et2, "突破")
+
     def test_exit_size_buildable(self):
         plan, rej = exit_and_size(_good_input(), self.ind, "震荡期", extra_halve=False)
         self.assertIsNone(rej)
@@ -135,6 +144,12 @@ class BuildReportTests(unittest.TestCase):
     def test_buildable_m67(self):
         r = build_m67_report(_good_input(), AS_OF, "t")
         self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+
+    def test_breakout_m67_path_active_with_vol_confirm(self):
+        # M6.7 breakout branch is no longer dormant: is_breakout+vol_confirm reaches type=突破.
+        d = _good_input()["derived"]; d["breakout"] = True; d["vol_confirm"] = True
+        r = build_m67_report(_good_input(derived=d), AS_OF, "t")
+        self.assertEqual(r["machine"]["entry_exit_size_star"]["type"], "突破")
         adv = r["m67"]["精简结论区"]["操作建议"]
         for token in ("试探仓", "止损", "未验证"):
             self.assertIn(token, adv)
