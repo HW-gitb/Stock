@@ -8,6 +8,332 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (V14.3 slice 2b-cadence → local master)
+
+Codex final re-`审查` PASS (entry below). Committed the slice-2b cadence design to local master only (no push): `engine/a_short_regime_ledger.py` (pure cadence logic — `plan_append` / `merge_rows` / `build_ledger` + `validate_ledger_envelope` / `validate_ledger_for_append` / `validate_ledger` three-gate split + `LEDGER_POLICY` + `daily_row_semantic_errors` + strict `_is_canonical_date`), `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py` (55 tests), `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, + README/register. Comparison-only, pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen. All 12 slice-2b-cadence risk entries flipped to `resolved`. `A股长线ETF配置框架.md` left untracked (out of scope).
+
+**Process note (user feedback 2026-06-11)**: this cadence slice took ~6 Codex FAIL rounds (non-finite, canonical dates, gate-split design contradiction, generator double-consume, docstring drift, …). User flagged code quality / too many fix cycles and asked for more upfront rigor to reduce rounds. Recorded to memory ([[feedback_draft_validity_gates_complete]]). Applies especially to slice 2b-impl next: enumerate adversarial inputs + cross-field invariants + API-misuse footguns + doc↔behavior consistency BEFORE handing to Codex.
+
+**Next**: `起草` V14.3 slice 2b-impl (in-EGS daily-feature producer + bootstrap runner + panel comparison-only block + forward backfill). The bootstrap backfill RUN is the first real-Tushare `执行` in the whole V14.3 track and needs explicit user authorization + TUSHARE_TOKEN; drafting the code is unblocked.
+
+---
+
+## 2026-06-11 — Codex final re-`审查` (V14.3 slice 2b-cadence docstring repair) — **PASS**
+
+**Scope reviewed**: current uncommitted V14.3 slice 2b-cadence artifacts after Claude's docstring repair: `engine/a_short_regime_ledger.py`, `tests/test_a_short_regime_ledger.py`, `schemas/a_short_regime_daily_ledger.schema.json`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, plus route/register updates in `docs/README.md` and `docs/system_risk_register.md`.
+
+**Verdict**: PASS / commit-safe. The prior blocking issue `R-V143-SLICE2B-PLANAPPEND-DOCSTRING-STALE-PREGATE` is repaired: `plan_append` now documents the correct pre-append gate (`validate_ledger_for_append`) and explicitly warns not to use final/read `validate_ledger` as the pre-append gate. No new material design, API-contract, schema, route-doc, or test-coverage finding was found in this re-review.
+
+**Adversarial checks performed**:
+- Re-read the repaired `plan_append` / `validate_ledger_for_append` / `validate_ledger` contract.
+- Probed strict canonical date rejection for malformed `as_of`, malformed calendar values, duplicate existing dates, stale prior-run ledgers, gappy ledgers, generator calendars, and invalid `backfill_min`.
+- Confirmed the intended split remains intact: pre-append gate allows stale-but-contiguous prior-run ledgers; final/read gate requires freshness through `as_of`; `plan_append` only plans forward from the existing maximum date and relies on the pre-append gate to reject internal historical gaps.
+
+**Verification**:
+- Independent probe: PASS for malformed date rejection, stale prior-run append acceptance, final freshness rejection, gap rejection, generator materialization, duplicate detection, and merged final validation.
+- `python -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 125/125 OK.
+- `python -m py_compile engine\a_short_regime_ledger.py tests\test_a_short_regime_ledger.py`: OK.
+- `git diff --check`: OK apart from existing LF -> CRLF warnings.
+
+**Register outcome**: existing risk-register rows already contain repair notes for this slice. Closure can happen in the reviewed commit/update cycle; this review adds no new open issue.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-cadence: plan_append pre-gate docstring drift)
+
+**Trigger**: Codex final re-`审查` FAIL, 1 P2 (commit-blocking doc drift) `R-V143-SLICE2B-PLANAPPEND-DOCSTRING-STALE-PREGATE` — when I split the gates I updated design + README but left `plan_append`'s Note pointing at `validate_ledger` as the pre-append gate; that's exactly where a slice-2b-impl author looks, and it would recreate the append pre-gate contradiction (`validate_ledger` has freshness → rejects the normal prior-run ledger). Evaluated: legitimate, cheap, agree.
+
+**Fix**: rewrote the `plan_append` Note to require `validate_ledger_for_append` as the pre-append gate and explicitly warn against using `validate_ledger` there. Docstring-only — behavior and tests unchanged. (No docstring-assertion convention in this repo, so text fix per Codex's allowance.)
+
+**Boundary unchanged**: pure logic, no data fetch / EGS / file write / production, V14.2 frozen. All prior P1/P2 behavior verified still-good by Codex.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 125/125 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex final re-`审查` (V14.3 slice 2b-cadence final judgment) — **FAIL**
+
+**Scope reviewed**: final re-check after the prior PASS. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`. Untracked intended files: `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `engine/a_short_regime_ledger.py`, `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py`. No data fetch, EGS wiring, file write, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / do not commit yet. The code behavior for the prior P1/P2 probes remains correct, but a final documentation-contract drift remains in the code-facing API documentation and can mislead the next slice-2b implementation into recreating the append pre-gate contradiction.
+
+**Required finding**:
+- `R-V143-SLICE2B-PLANAPPEND-DOCSTRING-STALE-PREGATE` (P2 but commit-blocking doc/API contract drift): `engine/a_short_regime_ledger.py::plan_append` still says: "That is safe because the sanctioned `validate_ledger` rejects a gappy ledger before any read/write, so callers must validate before planning." After the gate split, the correct pre-planning gate is `validate_ledger_for_append`, because `validate_ledger` intentionally enforces freshness and rejects the normal prior-run ledger before append. The design doc and README now say the correct workflow (`validate_ledger_for_append -> plan_append -> merge_rows -> validate_ledger`), but this stale function docstring is exactly where the future implementation author will look while wiring `plan_append`. Required repair: change the `plan_append` docstring to point to `validate_ledger_for_append` as the required pre-append gate and reserve `validate_ledger` for the merged final/read gate. Add or adjust a small test/comment assertion only if the repo pattern supports docstring checks; otherwise the text fix is sufficient.
+
+**Verified still-good behavior**:
+- Strict canonical dates now reject `2024011`, `202401 1`, leading-space, trailing-space, and malformed calendar entries through both `validate_ledger()` and `plan_append()`.
+- `validate_ledger_for_append()` accepts stale-but-contiguous prior-run ledgers and rejects gappy/future ledgers; final `validate_ledger()` still rejects stale ledgers and accepts the merged current ledger.
+- Generator calendars, non-positive `backfill_min`, duplicate `existing_dates`, and final semantic validation behave as intended.
+
+**Register**: added the stale `plan_append` docstring issue to `docs/system_risk_register.md`. No other new material finding found in this final pass.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> previously 125/125 OK in this final review flow.
+- Targeted A-short V14.3 tests excluding route-doc were 111/111 OK; route-doc guard 14/14 OK.
+- Independent probe covered the prior P1/P2 behavior and confirmed only the docstring drift remains.
+- `py_compile` -> OK; `git diff --check` -> OK except expected LF-to-CRLF warnings.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-cadence gate-split/canonical repair) — **PASS**
+
+**Scope reviewed**: current working-tree repair after the two-round comprehensive FAIL. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`. Untracked intended files: `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `engine/a_short_regime_ledger.py`, `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py`. No data fetch, EGS wiring, file write, production scoring change, or commit was performed by Codex.
+
+**Verdict**: PASS / commit-safe for this slice. The two P1s from the previous review are repaired: canonical date validation is now strict enough for lexicographic PIT/freshness comparisons, and the ledger validation semantics are split into a usable pre-append historical gate plus a current/read-write final gate. The P2 API/schema/doc hardening items are also adequately addressed for this pure cadence slice.
+
+**Verified repairs**:
+- `R-V143-SLICE2B-CANONICAL-DATE-LENIENCY-GAP`: repaired. Independent probes now reject `2024011`, `202401 1`, leading-space, and trailing-space dates through both `validate_ledger()` and `plan_append()`, including malformed calendar entries. `_is_canonical_date` requires str + exactly 8 ASCII digits + parse round-trip.
+- `R-V143-SLICE2B-APPEND-PREGATE-CONTRADICTION`: repaired. Independent workflow probe: `validate_ledger_for_append()` accepts the normal stale-but-contiguous prior-run ledger; `validate_ledger()` still rejects the same stale ledger for read/current use; gappy stale ledgers are rejected by the pre-append gate; `for_append -> plan_append -> merge_rows -> validate_ledger` succeeds after appending the missing trade dates.
+- `R-V143-SLICE2B-API-HARDENING-DOC-DRIFT`: repaired enough for this slice. Generator `trade_calendar` works in validation and planning; `backfill_min <= 0` is rejected; duplicate `existing_dates` are rejected; schema/design wording now distinguishes merge-only behavior from sanctioned gates. `merge_rows()` remains merge-only, but this is now explicit and final validation catches semantic-invalid rows before write/read.
+
+**Residual / follow-up**: the ledger JSON Schema is still envelope-level and does not `$ref` the full daily-row schema; this is acceptable only because the documented and tested write/read workflow requires the Python gates. Slice 2b-impl must preserve that by never writing or reading the ledger after only generic schema validation. No current blocker.
+
+**Register outcome**: the relevant risk-register entries contain repair notes; leave final closure to the reviewed commit/update cycle. No new material finding was added by this review.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> 125/125 OK.
+- Independent adversarial probe covered the repaired P1/P2 cases above and the final semantic-invalid-row catch.
+- `py_compile` for `engine/a_short_regime_ledger.py` and `tests/test_a_short_regime_ledger.py` -> OK.
+- `git diff --check` -> OK except expected LF-to-CRLF normalization warnings.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-cadence: gate-split + canonical-strict + API hardening)
+
+**Trigger**: Codex two-round comprehensive re-`审查` FAIL — 2 P1 (CANONICAL-DATE-LENIENCY, APPEND-PREGATE-CONTRADICTION) + 1 P2 (API-HARDENING-DOC-DRIFT, 6 footguns incl. one real bug). Evaluated all per the standing rule — all legitimate, none over-engineering; the generator-double-consume footgun is a genuine bug. Fixed together as Codex requested.
+
+**P1 CANONICAL-DATE-LENIENCY**: `strptime` alone parses `2024011` / `202401 1` as 2024-01-01. `_is_canonical_date` now requires str + exactly 8 ASCII digits + `strftime` round-trip. Tested through both `validate_ledger` and `plan_append`.
+
+**P1 APPEND-PREGATE-CONTRADICTION** (a real design flaw I introduced): the only sanctioned gate enforced freshness, which rejects the NORMAL pre-append ledger (ends at the previous run date) — so the future weekly append couldn't validate its input. Split `_validate_ledger_core(..., require_fresh)` into `validate_ledger_for_append` (no freshness — historical integrity) and `validate_ledger` (adds freshness — final/read). Design §3 documents the fail-closed workflow for_append→plan_append→merge_rows→validate_ledger→write.
+
+**P2 API-HARDENING (6)**: (1) `validate_ledger` materializes `trade_calendar` once → generator no longer falsely rejected [real bug]; (2) `plan_append` rejects `backfill_min<=0`; (3) `plan_append` rejects duplicate existing dates; (4) `merge_rows` docstring = merge-only + gates mandatory; (5) design doc `==as_of→[]` vs `>as_of→raise` corrected; (6) schema description corrected (merge_rows enforces only append-only immutability).
+
+**Tests +16** (CanonicalDateStrictness + AppendPregate + ApiHardening). **Boundary unchanged**: pure logic, no data fetch / EGS / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 125/125 OK (ledger 39→55). FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex two-round comprehensive re-`审查` (V14.3 slice 2b-cadence) — **FAIL**
+
+**Scope reviewed**: current working tree after the previous Codex FAIL. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`. Untracked intended files: `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `engine/a_short_regime_ledger.py`, `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py`. No data fetch, EGS wiring, file write, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe. I ran two passes. Round 1 re-probed the previous two P1 findings; both still reproduce because no repair has landed after the prior FAIL. Round 2 did a fresh API/design/schema pass and found additional P2 hardening/documentation gaps that should be cleaned while repairing the P1s, but they do not supersede the two P1 blockers.
+
+**Round 1 Required findings, still open**:
+- `R-V143-SLICE2B-CANONICAL-DATE-LENIENCY-GAP` (P1, PIT date semantics): still open. `_is_canonical_date()` still accepts non-canonical strings because it only calls `datetime.strptime(s, "%Y%m%d")`. Independent probes again confirmed `validate_ledger(build_ledger([]), as_of="2024011", trade_calendar=valid_calendar)` and `as_of="202401 1"` are accepted; `plan_append([], "2024011", valid_calendar)` is accepted; malformed calendar entries `2024011` / `202401 1` are accepted by `validate_ledger`; and `plan_append` can return `202401 1` as an append date. Required repair remains: exactly 8 ASCII digits + successful parse + round-trip `strftime("%Y%m%d") == s`, with tests for 7-digit and whitespace-containing values through `validate_ledger` and `plan_append`.
+- `R-V143-SLICE2B-APPEND-PREGATE-CONTRADICTION` (P1, cadence API design): still open. Independent workflow probe again confirmed a normal stale-but-contiguous pre-append ledger through `20240105` fails `validate_ledger(... as_of=20240110 ...)` as stale, even though `plan_append()` correctly plans `20240106..20240110` and the merged final ledger validates. The slice still lacks a usable pre-append historical-integrity gate. Required repair remains: split append-pre-gate/historical validation from current/read/final freshness validation, with tests for stale-contiguous pre-append acceptance, gappy stale rejection, plan+merge+current pass, and stale read/current rejection.
+
+**Round 2 additional findings**:
+- `R-V143-SLICE2B-API-HARDENING-DOC-DRIFT` (P2, API robustness / implementation-proofing): several lower-severity issues remain. `validate_ledger()` consumes `trade_calendar` twice, so a valid generator calendar is falsely rejected as "dates not on calendar"; `plan_append(..., backfill_min=0)` returns the full eligible calendar and `backfill_min=-1` returns a sliced subset instead of rejecting invalid policy input; `plan_append(["20240101","20240101"], ...)` silently deduplicates corrupt existing dates; `merge_rows()` accepts a semantic-invalid new row such as `net_limit=999` unless a final validator is called; `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md` still says "ledger 已到/超 as_of -> 返回 []", while repaired code raises on `max(existing)>as_of`; and `schemas/a_short_regime_daily_ledger.schema.json` describes daily-row validity as enforced by `validate_ledger / merge_rows`, but `merge_rows` is not a row validator and generic schema-only validation accepts a row containing only `{"as_of": "20240101"}`. These are not the main P1 blockers if future implementation always uses the sanctioned gate, but they are real footguns for slice 2b-impl and should be repaired or explicitly narrowed before commit.
+
+**Register**: the two P1s were already registered in `docs/system_risk_register.md`; added one consolidated P2 entry for the Round 2 API/schema/doc hardening issues.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> 113/113 OK, but the Round 1 P1 probes still fail the intended contract.
+- `py_compile` for `engine/a_short_regime_ledger.py` and `tests/test_a_short_regime_ledger.py` -> OK.
+- `tests.test_route_doc_ledger_status_consistency` -> 14/14 OK after this review context.
+- `git diff --check` -> OK except expected LF-to-CRLF normalization warnings.
+- UTF-8 file read remains clean; one PowerShell display/read command hit console encoding on special symbols, but Python UTF-8 reads showed the file text is not corrupted.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-cadence 5-gap repair) — **FAIL**
+
+**Scope reviewed**: current working-tree repair after the comprehensive 5-gap FAIL. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`. Untracked intended files: `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `engine/a_short_regime_ledger.py`, `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py`. No data fetch, EGS wiring, file write, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe. The prior 5 Required findings are mostly repaired in the direct cases (NaN/Inf, impossible 8-digit dates, `net_limit`, no `validate_rows` bypass, duplicate existing rows), and the existing test pack passes. However two material gaps remain in the cadence contract and would either reopen date-PIT corruption or make the future weekly append implementation unsafe/impossible if it follows the documented call order.
+
+**Required findings**:
+- `R-V143-SLICE2B-CANONICAL-DATE-LENIENCY-GAP` (P1, PIT date semantics / string-order precondition): `_is_canonical_date()` relies only on `datetime.strptime(s, "%Y%m%d")`. Python accepts non-canonical strings such as `2024011` and `202401 1` as 2024-01-01. Independent sanctioned-gate probes showed `validate_ledger(build_ledger([]), as_of="2024011", trade_calendar=valid_calendar)` and `as_of="202401 1"` are accepted; `plan_append([], "2024011", valid_calendar)` is accepted; `validate_ledger(..., trade_calendar=valid_calendar + ["2024011"])` is accepted; and `plan_append(..., calendar + ["202401 1"])` can return the malformed calendar entry. This means the repaired "real YYYYMMDD" gate is still not canonical, and lexicographic PIT/freshness comparisons remain unsound for malformed but parseable inputs. Required repair: `_is_canonical_date` must require `isinstance(str)`, exactly 8 ASCII digits, successful parse, and round-trip `strftime("%Y%m%d") == s`; add adversarial tests for 7-digit and whitespace-containing `as_of` and calendar entries through both `validate_ledger` and `plan_append`.
+- `R-V143-SLICE2B-APPEND-PREGATE-CONTRADICTION` (P1, cadence design / safe weekly append path): the design says callers must validate a ledger before planning/writing because `plan_append()` does not repair internal gaps before `max(existing)`. But the only sanctioned `validate_ledger()` now enforces freshness (`last_row == latest trading day <= as_of`) and therefore rejects the normal weekly pre-append state: a contiguous existing ledger ending at the previous run date. Independent workflow probe: an existing ledger through `20240105` with current `as_of=20240110` fails `validate_ledger(...)` as stale; `plan_append()` then correctly plans `20240106..20240110`, and the merged final ledger validates. So the final gate is correct, but there is no sanctioned pre-append historical-integrity gate that is both safe and usable. If implementation skips validation before planning, the earlier internal-gap hazard returns; if it follows the doc and validates first, normal append cannot run. Required repair: split the gate semantics, e.g. `validate_ledger_for_append` / `validate_ledger_historical` (schema + row semantics + canonical dates + sorted/coverage/policy/boundary + no duplicates + calendar subset + contiguity within existing coverage + no row > as_of, but no freshness) and `validate_ledger_current` / read-write-final gate (adds freshness and, for read use, likely non-empty). Add tests for stale-but-contiguous existing ledger accepted by the append pre-gate, gappy stale ledger rejected by the append pre-gate, plan+merge+current-gate pass, and read/current gate still rejecting stale ledgers.
+
+**Optional / follow-up**:
+- The ledger JSON Schema alone accepts rows containing only `{"as_of": "YYYYMMDD"}` because full daily-row validation is enforced by the Python gate, not a `$ref` in `schemas/a_short_regime_daily_ledger.schema.json`. I am not making this a separate blocker if the future writer always calls the sanctioned Python gate before writing, but the implementation slice must not rely on generic `jsonschema.validate()` alone.
+
+**Register**: added the two new P1 Required findings to `docs/system_risk_register.md`. The older date-semantics risk remains not closable until the canonical-date leniency repair passes review.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 113/113 OK, but the two Required probes above are not covered and currently fail the intended contract.
+- `py_compile` for `engine/a_short_regime_ledger.py` and `tests/test_a_short_regime_ledger.py` → OK.
+- `git diff --check` → OK except expected LF→CRLF normalization warnings.
+- UTF-8 probe: new design/code/test/schema files have 0 replacement characters and no mojibake markers when read as UTF-8; PowerShell display mojibake is console encoding, not file corruption.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-cadence: 5 ledger contract gaps, evaluated then fixed together)
+
+**Trigger**: Codex comprehensive re-`审查` FAIL, 5 P1 (fix together). Per the standing rule I first evaluated each finding's reasonableness — all 5 are legitimate sanctioned-gate integrity gaps, none over-engineering: (1) jsonschema accepts NaN/Inf for the float daily fields → poisons percentiles; (2) `^[0-9]{8}$` + free-string `as_of` admit impossible dates (20240231) under lexicographic compare; (3) `net_limit` (derived, feeds defense/attack) had no `==up−down` constraint → can flip regime; (4) sanctioned `validate_ledger(validate_rows=False)` exposed a row-contract bypass; (5) `merge_rows` dict-build silently collapsed duplicate existing dates.
+
+**Fixes (all in `engine/a_short_regime_ledger.py`)**: added `_is_canonical_date` (strptime) + `daily_row_semantic_errors` (finite floats, `net_limit==up−down`, real as_of). Wired the row-semantics into the envelope per-row loop. `validate_ledger`: dropped `validate_rows` (rows always validated — no bypass), added canonical-date checks for `as_of` + calendar. `plan_append`: canonical checks for `as_of`/calendar/existing. `merge_rows`: reject duplicate `existing_rows` dates before dict build + canonical date checks. Fixed the test `_cal` helper to emit real consecutive calendar dates (the old `20240101+i` synthesized impossible dates that the new date gate correctly rejects).
+
+**Tests +8** (RowContractIntegrityTests): non-finite × 6 fields × 3, malformed as_of, non-canonical calendar entry, impossible row date, net_limit mismatch, no-validate_rows-bypass, duplicate-existing conflicting + identical.
+
+**Boundary unchanged**: pure logic, no data fetch / EGS / file write / production, V14.2 frozen. README route row updated (freshness + new guards) — closes the Optional doc-hygiene note.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 113/113 OK (ledger 31→39). FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex comprehensive re-`审查` (V14.3 slice 2b-cadence ledger) — **FAIL**
+
+**Scope reviewed**: current working-tree V14.3 slice 2b-cadence repair after prior FAIL rounds. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`. Untracked intended files: `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `engine/a_short_regime_ledger.py`, `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py`. No data fetch, EGS wiring, file write, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe. The earlier future-row, missing-context, gap-contiguity, and stale-coverage findings are repaired in the current code. A broader adversarial pass found multiple remaining material contract gaps that should be fixed together in the next repair round, not one-by-one.
+
+**Required findings**:
+- `R-V143-SLICE2B-LEDGER-NONFINITE-DAILY-FEATURES` (P1, numeric validity / percentile integrity): `validate_ledger()` still accepts non-finite daily-feature values because row validation relies on Python `jsonschema`. Confirmed accepted: `NaN` in `promotion_rate`, `failed_limit_rate`, `iv_percentile_252d`, `pct_above_ma20`, and `NaN/+Inf/-Inf` in `csi300_ret_1d` / `csi1000_ret_1d`. These can poison `resolve_percentiles()` / `np.percentile()` and raw-regime decisions. Required: explicit finite-number checks for all numeric daily-feature fields, preserving allowed `null`.
+- `R-V143-SLICE2B-LEDGER-DATE-SEMANTICS-GAP` (P1, PIT date semantics): date handling is still string/pattern-based. Confirmed accepted: row/calendar/as_of values such as `20240231`, `20240199`, and malformed 9-digit `as_of="202401105"` in compatible contexts. Lexicographic comparison only works after real `YYYYMMDD` date validation; otherwise PIT/freshness checks can validate impossible dates. Required: validate `as_of`, row dates, and trade-calendar entries as real calendar dates in canonical `YYYYMMDD` form; reject malformed/impossible dates before lexicographic ordering.
+- `R-V143-SLICE2B-LEDGER-NET-LIMIT-INVARIANT-GAP` (P1, daily-feature cross-field integrity): `net_limit` is accepted even when inconsistent with `limit_up_count - limit_down_count`. Confirmed accepted: `limit_up_count=20`, `limit_down_count=5`, `net_limit=999`. V14.3 uses `net_limit` directly in defense/attack logic, so this can flip regime labels without changing the underlying counts. Required: enforce `net_limit == limit_up_count - limit_down_count` in the sanctioned row/ledger validator and add adversarial tests.
+- `R-V143-SLICE2B-LEDGER-ROW-VALIDATION-BYPASS` (P1, sanctioned gate bypass): the public `validate_ledger(..., validate_rows=False)` path still accepts schema-invalid rows. Confirmed accepted: `limit_up_count="bad"` with `validate_rows=False`. A sanctioned write/read gate for evidence-clock inputs should not expose a flag that disables row-contract enforcement. Required: remove/privatize this bypass from the sanctioned `validate_ledger` path, or make bypassed validation impossible for write/read use; add a test proving invalid rows are rejected through the full gate.
+- `R-V143-SLICE2B-MERGE-EXISTING-DUPLICATE-COLLAPSE` (P1, append-only immutability): `merge_rows()` builds a dict from `existing_rows`, so duplicate existing dates are silently collapsed before conflict detection. Confirmed accepted: two existing `20240101` rows with different payloads return a single row instead of raising. This violates append-only immutable ledger semantics and can hide existing corruption. Required: detect duplicate existing dates before dict conversion and reject both identical and conflicting duplicates, with tests.
+
+**Optional / doc hygiene**:
+- `docs/README.md` route row for slice 2b mentions PIT + contiguity but still omits the repaired freshness gate. Update it when repairing the Required findings.
+- `plan_append()` not repairing internal gaps before `max(existing)` is acceptable only if future implementation always runs the full `validate_ledger` gate before planning/writing; keep that fail-closed ordering explicit in the implementation slice.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 105/105 OK, but the Required probes above are untested and currently accepted.
+- Independent probes confirm previous repairs hold: stale ledger, future rows, gappy ledger, missing full-gate context, existing-future `merge_rows`, and future-contaminated `plan_append` are rejected.
+- File encoding probe: 0 replacement characters and no mojibake markers in the new design/code/test/schema files when read as UTF-8.
+- `py_compile` for `engine/a_short_regime_ledger.py` and `tests/test_a_short_regime_ledger.py` → OK.
+- `git diff --check` → OK except expected LF→CRLF normalization warnings.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-cadence freshness repair) — **FAIL**
+
+**Scope reviewed**: current working-tree repair after the stale-coverage Codex FAIL. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`. Untracked intended files: `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `engine/a_short_regime_ledger.py`, `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py`. No data fetch, EGS wiring, file write, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. The stale-coverage gap is repaired: `validate_ledger` now rejects a non-empty ledger whose last row is earlier than the latest trading day `<= as_of`, while allowing an explicitly empty pre-bootstrap ledger. However the daily-feature row numeric validity gate still has the same non-finite-number class previously caught in the comparison record.
+
+**Required finding**:
+- `R-V143-SLICE2B-LEDGER-NONFINITE-DAILY-FEATURES` (P1, daily-feature ledger numeric validity / percentile-window integrity): `validate_ledger_envelope()` validates each row against `schemas/a_short_market_regime_daily.schema.json`, but Python `jsonschema` accepts `float("nan")` as a JSON Schema `number`; fields without min/max (`csi300_ret_1d`, `csi1000_ret_1d`) also accept `+Inf` and `-Inf`. Independent probe: `validate_ledger()` accepted rows with `promotion_rate=NaN`, `failed_limit_rate=NaN`, `iv_percentile_252d=NaN`, `pct_above_ma20=NaN`, and accepted `csi300_ret_1d` / `csi1000_ret_1d` as `NaN`, `+Inf`, and `-Inf`. These values are not valid daily observations and can poison `resolve_percentiles()` / `np.percentile()` or trigger nonsensical raw-regime comparisons. Required repair: explicitly reject non-finite values for every numeric daily-feature field in the ledger validator (integers and nullable floats), with adversarial tests for NaN/+Inf/-Inf across at least bounded rate/percentile fields and unbounded index-return fields. Keep null semantics unchanged where the schema allows null.
+
+**Optional note**: `docs/README.md` route row for this slice says the sanctioned validator adds PIT + contiguity but omits the newly repaired freshness gate. That is not the primary blocker, but after the numeric repair the route row should mention freshness to avoid stale current guidance.
+
+**Register**: added `A-short V14.3 slice 2b-cadence non-finite daily-feature gap` to `docs/system_risk_register.md`.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 105/105 OK, but non-finite daily features are untested and currently accepted.
+- Independent probes: stale ledger is now rejected; current-through-`as_of`, non-trading-day `as_of` using the latest prior trade date, and empty pre-bootstrap ledger pass; future rows, gappy ledgers, missing full-gate context, existing-future `merge_rows`, and future-contaminated `plan_append` are rejected.
+- Non-finite daily-feature probe shows the numeric gap described above.
+- `py_compile` for `engine/a_short_regime_ledger.py` and `tests/test_a_short_regime_ledger.py` → OK.
+- `git diff --check` → OK except expected LF→CRLF normalization warnings.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-cadence: ledger freshness gate)
+
+**Trigger**: Codex re-`审查` FAIL, 1 P1 `R-V143-SLICE2B-LEDGER-STALE-COVERAGE-GAP` — `validate_ledger` accepted a contiguous-but-stale ledger (last row earlier than the latest trading day <= as_of), so a later as_of could read old features (feature-date/run-date mismatch poisoning the evidence clock).
+
+**Fix**: added a freshness check to the sanctioned `validate_ledger` — when rows present, the last row date must equal the latest trading day `<= as_of` (from the calendar), else `ValueError`. Empty (pre-bootstrap) ledger passes; readers must separately require non-empty (documented). `validate_ledger_envelope` stays context-free / non-sanctioned. Added 3 tests (stale-but-contiguous rejected, current-through-as_of passes, empty pre-bootstrap passes).
+
+**Optional addressed**: Codex's note that `plan_append` doesn't repair internal gaps before `max(existing)` — documented as fail-closed: `validate_ledger` rejects gappy ledgers before any read/write, so callers validate before planning.
+
+**Boundary unchanged**: pure logic, no data fetch / EGS / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 105/105 OK (ledger 28→31). FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2b-cadence PIT/as_of repair) — **FAIL**
+
+**Scope reviewed**: current working-tree repair after the prior Codex FAIL. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`. Untracked intended files: `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `engine/a_short_regime_ledger.py`, `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py`. No data fetch, EGS wiring, file write, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. The previous future-row / missing-context gap is repaired: `validate_ledger(ledger, *, as_of, trade_calendar)` now requires run context, rejects rows after `as_of`, rejects calendar gaps, and `plan_append` / `merge_rows` reject future-contaminated existing state. A stale-ledger freshness gap remains.
+
+**Required finding**:
+- `R-V143-SLICE2B-LEDGER-STALE-COVERAGE-GAP` (P1, PIT freshness / evidence-clock date alignment): the sanctioned `validate_ledger` accepts a contiguous but stale ledger whose `coverage.end` is earlier than the latest trading day `<= as_of`. Independent probe: with trade calendar `20240101..20240112`, a ledger containing rows only through `20240105` passes `validate_ledger(ledger, as_of="20240110", trade_calendar=calendar)`. This is not just a bookkeeping issue: the next comparison step can then call the classifier with `as_of=20240110` over stale history and classify the last available row (`20240105`), creating a run-date / feature-date mismatch and poisoning the comparison evidence clock. Required repair: the full sanctioned gate must enforce freshness for write/read use: `coverage.end` (or the last row date) must equal the latest trading calendar date `<= as_of` when rows are present, with explicit behavior for empty ledgers/bootstrap before first write. Add adversarial tests proving stale-but-contiguous ledgers are rejected, current-through-as_of ledgers pass, and comparison/read paths cannot silently use stale rows for a later `as_of`. Keep `validate_ledger_envelope` context-free but clearly non-sanctioned.
+
+**Optional note**: `plan_append` still does not repair internal gaps before `max(existing)` (e.g. existing `{20240101, 20240103}` plans only dates after `20240103`). I am not treating this as Required because the sanctioned full gate rejects gappy ledgers before read/write use; it is acceptable fail-closed behavior if implementation always validates before planning/writing.
+
+**Register**: added `A-short V14.3 slice 2b-cadence stale coverage freshness gap` to `docs/system_risk_register.md`.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 102/102 OK, but the stale-ledger freshness case is untested and currently accepted.
+- Independent probes: existing-future merge, future-contaminated `plan_append`, future-row validate, gappy full gate, and missing-context full gate are rejected; stale-but-contiguous ledger is accepted.
+- `py_compile` for `engine/a_short_regime_ledger.py` and `tests/test_a_short_regime_ledger.py` → OK.
+- `git diff --check` → OK except expected LF→CRLF normalization warnings.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2b-cadence: PIT/as_of gate actually closed)
+
+**Trigger**: Codex `审查` FAIL, 1 P1 `R-V143-SLICE2B-LEDGER-PIT-ASOF-GAP` — the advertised PIT gate wasn't real: `merge_rows` only checked NEW rows for >as_of (not existing); `plan_append` returned `[]` for a future-contaminated ledger (treating it as current); `validate_ledger` had no `as_of` so future rows passed; and contiguity was skipped when `trade_calendar` was omitted.
+
+**Fix**: split context-free `validate_ledger_envelope` (schema/sorted/coverage/policy/boundary/per-row — explicitly NOT a substitute gate) from the sanctioned `validate_ledger(ledger, *, as_of, trade_calendar)` whose `as_of` + `trade_calendar` are now **mandatory** (omitting → TypeError), rejecting any row `> as_of` (PIT) and any calendar gap/non-subset (contiguity). `plan_append` now raises on `max(existing) > as_of` instead of silently returning `[]`. `merge_rows` rejects existing rows `> as_of` as well as new ones. Added 5 adversarial tests covering each probe (incl. envelope-accepts-but-full-gate-rejects to prove the envelope is not a bypass).
+
+**Boundary unchanged**: pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 102/102 OK (ledger 23→28). FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex `审查` (V14.3 slice 2b-cadence daily-feature ledger) — **FAIL**
+
+**Scope reviewed**: current working tree after slice 2a commit `b0d31f5`. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`. Untracked intended files: `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `engine/a_short_regime_ledger.py`, `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py`. No data fetch, EGS wiring, file write, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. The incremental-ledger direction is correct and solves the weekly-cadence cost problem in principle, but the PIT/as_of validation gate is not actually closed.
+
+**Required finding**:
+- `R-V143-SLICE2B-LEDGER-PIT-ASOF-GAP` (P1, PIT / evidence-clock ledger integrity): the public contract says `validate_ledger` enforces sorted/contiguous/**PIT** rows and that `merge_rows` / `plan_append` are PIT-capped at `as_of`, but the implementation cannot reject several realistic look-ahead states. Independent probes: `merge_rows([row("20240108")], [], "20240105")` accepted the already-existing future row; `plan_append(["20240108"], "20240105", calendar)` returned `[]`, treating the future-contaminated ledger as already current; `validate_ledger(build_ledger(rows_through_20240108), trade_calendar=calendar)` passed because `validate_ledger` has no `as_of`; and a gappy ledger passed `validate_ledger(ledger)` when the caller omitted `trade_calendar`. This means a future row or a non-contiguous ledger can survive the sanctioned gate and later poison the 252d percentile window / comparison evidence clock. Required repair: make the full ledger validation API require the run `as_of` and trading calendar (or split schema-only validation from a mandatory full gate), reject any existing or new row dated `> as_of`, reject future-contaminated existing ledgers in `merge_rows` / `plan_append` or require a validated ledger before planning, and add adversarial tests for existing-future rows, `plan_append` with future existing dates, validate-with-as_of future rows, and gappy-ledger-without-calendar acceptance.
+
+**Non-finding**: the apparent mojibake in PowerShell output for the new design/code files is a terminal display issue; reading the files as UTF-8 with Python shows the content is normal Chinese/UTF-8. I did not treat this as a file corruption issue.
+
+**Register**: added `A-short V14.3 slice 2b-cadence ledger PIT validation gap` to `docs/system_risk_register.md`.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_ledger tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 97/97 OK, but the PIT/as_of adversarial cases above are untested and currently accepted.
+- `py_compile` for `engine/a_short_regime_ledger.py` and `tests/test_a_short_regime_ledger.py` → OK.
+- `git diff --check` → OK except expected LF→CRLF normalization warnings.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `起草` (V14.3 slice 2b-cadence: incremental daily-feature ledger)
+
+**What**: drafted the slice-2b cadence decision the user approved (the recommended incremental-ledger approach), as a PURE schema-first slice. New: `engine/a_short_regime_ledger.py` (`plan_append` / `merge_rows` / `build_ledger` / `validate_ledger` + const `LEDGER_POLICY`), `schemas/a_short_regime_daily_ledger.schema.json`, `tests/test_a_short_regime_ledger.py` (23 tests), `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`.
+
+**The decision settled**: how the 252d percentile window is maintained without recomputing 252×(daily+stk_limit) every weekly run → a persisted append-only ledger of per-trade-day regime feature rows under the guard-safe research lane (`research/results/a_short/regime_daily_ledger.json`, never `result/a_short`); one-time 252-day backfill, then `plan_append` appends only the trading days since the last ledger date (~5/week, self-healing across missed runs, PIT-capped at as_of, idempotent rerun). `merge_rows` is append-only with immutable existing dates (a data revision must be explicit, never silent overwrite). Features only — regime is derived on read by `classify_raw_regime`, so no derived-state drift.
+
+**Rigor**: `validate_ledger` enforces what JSON Schema can't — sorted/contiguous trading days (gap rejected against the calendar), coverage matches rows, const-policy parity, comparison-only boundary, guard-safe lane (rejects `result/a_short` lane_root), per-row daily-schema validity. Adversarial tests cover bootstrap/steady-state/gap-self-heal/idempotent/no-future, append-only immutability, and every validate failure mode.
+
+**Boundary**: PURE logic — no data fetch, no EGS wiring, no file write, no production, V14.2 frozen. Slice 2b-impl (in-EGS feature producer + bootstrap runner + panel block + forward backfill) is drafted only after this passes review.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_ledger tests.test_route_doc_ledger_status_consistency` → 37/37 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
 ## 2026-06-11 — Claude `提交` (V14.3 slice 2a → local master)
 
 Codex re-`审查` PASS (entry below). Committed slice 2a to local master only (no push): `engine/a_short_regime_classifier.py` (pure raw classifier + comparison-record producer with full-schema + cross-field + non-finite validation), `schemas/a_short_regime_comparison_weekly.schema.json`, `tests/test_a_short_regime_classifier.py` (46 tests), + design §6 / README routing / register / log. Comparison-only, V14.2 frozen, no data fetch / EGS / Phase 5 wiring. The three slice-2a risk entries flipped to `resolved`; the slice-2b cadence/ledger decision stays `open` by design (must be specified + reviewed before wiring the in-EGS daily-feature producer + panel block). `A股长线ETF配置框架.md` left untracked (out of scope).

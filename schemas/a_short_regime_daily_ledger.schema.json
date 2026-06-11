@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_regime_daily_ledger",
+  "description": "Persisted append-only ledger of per-trade-day A-share regime feature rows for the V14.3 comparison-only classifier (design slice 2b-cadence). Each row matches a_short_market_regime_daily; the ledger lets the 252d rolling-percentile window be read without recomputing 252 days of daily+stk_limit per weekly run. This schema pins the envelope + const cadence policy + comparison-only boundary; integrity invariants JSON Schema cannot express are enforced by the Python gates in engine.a_short_regime_ledger: validate_ledger_for_append / validate_ledger enforce rows sorted/contiguous/PIT, coverage matches rows, canonical dates, and each row valid against the daily schema (finite floats, net_limit); merge_rows enforces ONLY append-only immutability (it is merge-only and does NOT validate daily-row semantics — the caller must run the gates before write/read). NON-production: V14.2 stays frozen; this drives nothing and is written only under the guard-safe research lane, never result/a_short.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "coverage", "policy", "rows", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_regime_daily_ledger"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": ["string", "null"]},
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "n"],
+      "properties": {
+        "start": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "end": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "n": {"type": "integer", "minimum": 0}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["percentile_window", "backfill_min_trading_days", "row_contract", "append_rule", "cadence"],
+      "description": "const-pinned so the cadence contract cannot drift",
+      "properties": {
+        "percentile_window": {"const": 252},
+        "backfill_min_trading_days": {"const": 252},
+        "row_contract": {"const": "a_short_market_regime_daily"},
+        "append_rule": {"const": "contiguous trading days in (last_ledger_date, as_of]; bootstrap = the last backfill_min trading days <= as_of; existing dates immutable; never > as_of"},
+        "cadence": {"const": "weekly_egs_append_plus_one_time_backfill"}
+      }
+    },
+    "rows": {
+      "type": "array",
+      "description": "ascending-by-as_of daily-feature rows; full row contract + contiguity/PIT enforced by validate_ledger against a_short_market_regime_daily.schema.json",
+      "items": {
+        "type": "object",
+        "required": ["as_of"],
+        "properties": {"as_of": {"type": "string", "pattern": "^[0-9]{8}$"}}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "comparison_only", "drives_phase5_risk_posture", "lane_root"],
+      "properties": {
+        "production": {"const": false},
+        "comparison_only": {"const": true},
+        "drives_phase5_risk_posture": {"const": false},
+        "lane_root": {"const": "research/results/a_short"}
+      }
+    }
+  }
+}
