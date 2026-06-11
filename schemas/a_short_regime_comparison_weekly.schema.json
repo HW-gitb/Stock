@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_regime_comparison_weekly",
+  "description": "One weekly comparison-only record for the V14.3 regime classifier (design slice 2): the V14.2 production regime label vs the V14.3 raw regime label for an as_of, with the divergence flag and the forward 1/3/5/10-trading-day returns measured on the const-pinned forward_return_basis (null until the horizon has elapsed, then backfilled by a later run — NEVER fabricated). NON-production / comparison-only: V14.2 stays the frozen production baseline; this record does NOT drive Phase 5 risk posture, overlay stars, or M6.7 actions. It accumulates the switch-decision evidence clock. Field-local constraints are pinned here; cross-field invariants (divergence == (v14_2 != v14_3_raw), pending == exactly the null horizons, backfill_complete == empty pending, fired_rule consistent with regime) are enforced by engine.a_short_regime_classifier.validate_comparison_record, which JSON Schema cannot express.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "v14_2_regime", "v14_3_raw_regime",
+               "divergence", "v14_3_fired_rule", "v14_3_window_n", "v14_3_insufficient_window",
+               "data_quality_flags", "forward_returns", "forward_returns_pending",
+               "backfill_complete", "forward_return_basis", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_regime_comparison_weekly"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "generated_at": {"type": ["string", "null"]},
+    "v14_2_regime": {"enum": ["attack", "shock", "defense", "contraction", "unknown"],
+      "description": "the production V14.2 M1 regime label as surfaced this run (mirrors analysis_input market_regime.status enum; often 'unknown' — V14.2 M1 is not always computed)"},
+    "v14_3_raw_regime": {"enum": ["defense", "contraction", "attack", "shock"]},
+    "divergence": {"type": "boolean"},
+    "v14_3_fired_rule": {"enum": ["iv_percentile_252d_gt_90", "limit_down_count_ge_max_p95_100",
+      "broad_index_crash", "exhaustion", "streak_collapse", "earning_effect_gone", "slow_bleed",
+      "attack_all_of", "residual"],
+      "description": "the winning rule key; must be a rule of v14_3_raw_regime (cross-checked by validate_comparison_record)"},
+    "v14_3_window_n": {"type": "integer", "minimum": 0},
+    "v14_3_insufficient_window": {"type": "boolean"},
+    "data_quality_flags": {"type": "array", "items": {"type": "string"}},
+    "forward_returns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["h1", "h3", "h5", "h10"],
+      "properties": {
+        "h1": {"type": ["number", "null"]},
+        "h3": {"type": ["number", "null"]},
+        "h5": {"type": ["number", "null"]},
+        "h10": {"type": ["number", "null"]}
+      },
+      "description": "forward return per horizon on forward_return_basis; null = horizon not yet elapsed (backfilled later, never look-ahead)"
+    },
+    "forward_returns_pending": {
+      "type": "array",
+      "items": {"enum": ["h1", "h3", "h5", "h10"]},
+      "uniqueItems": true,
+      "description": "horizons still null/awaiting backfill; must equal exactly the null horizons (validate_comparison_record)"
+    },
+    "backfill_complete": {"type": "boolean"},
+    "forward_return_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["benchmark", "benchmark_name", "measure", "horizons_trading_days", "unit",
+                   "price_basis", "cost_basis", "scope"],
+      "description": "const-pinned so every record declares one unambiguous return basis; no mixing raw/excess, decimal/percent, or gross/cost across records.",
+      "properties": {
+        "benchmark": {"const": "000852.SH"},
+        "benchmark_name": {"const": "CSI1000"},
+        "measure": {"const": "forward_close_to_close_simple_return"},
+        "horizons_trading_days": {
+          "type": "object", "additionalProperties": false,
+          "required": ["h1", "h3", "h5", "h10"],
+          "properties": {"h1": {"const": 1}, "h3": {"const": 3}, "h5": {"const": 5}, "h10": {"const": 10}}
+        },
+        "unit": {"const": "percent"},
+        "price_basis": {"const": "index_close_unadjusted"},
+        "cost_basis": {"const": "gross"},
+        "scope": {"const": "market_level_regime_indicator"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "comparison_only", "drives_phase5_risk_posture",
+                   "mixes_with_overlay_star_or_m67_action"],
+      "properties": {
+        "production": {"const": false},
+        "comparison_only": {"const": true},
+        "drives_phase5_risk_posture": {"const": false},
+        "mixes_with_overlay_star_or_m67_action": {"const": false}
+      }
+    }
+  }
+}

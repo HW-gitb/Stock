@@ -8,6 +8,144 @@
 
 ---
 
+## 2026-06-11 — Claude `提交` (V14.3 slice 2a → local master)
+
+Codex re-`审查` PASS (entry below). Committed slice 2a to local master only (no push): `engine/a_short_regime_classifier.py` (pure raw classifier + comparison-record producer with full-schema + cross-field + non-finite validation), `schemas/a_short_regime_comparison_weekly.schema.json`, `tests/test_a_short_regime_classifier.py` (46 tests), + design §6 / README routing / register / log. Comparison-only, V14.2 frozen, no data fetch / EGS / Phase 5 wiring. The three slice-2a risk entries flipped to `resolved`; the slice-2b cadence/ledger decision stays `open` by design (must be specified + reviewed before wiring the in-EGS daily-feature producer + panel block). `A股长线ETF配置框架.md` left untracked (out of scope).
+
+**Next**: (A-short build queue) — slice 2b needs the daily-feature ledger/cadence decision before `起草`; then the analysis-layer semantic-automation evaluation (CURRENT.md §5), both still ahead of the A-long leftover.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2a non-finite forward-return repair) — **PASS**
+
+**Scope reviewed**: current working-tree repair after the prior Codex FAIL. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `docs/system_risk_register.md`. Untracked intended files: `engine/a_short_regime_classifier.py`, `schemas/a_short_regime_comparison_weekly.schema.json`, `tests/test_a_short_regime_classifier.py`. No provider call, data fetch, EGS wiring, Phase 5 wiring, production scoring change, or commit was performed by Codex.
+
+**Verdict**: PASS / commit-safe. The prior Required findings are repaired for this slice: comparison-record invariants are enforced, forward-return basis is const-pinned to CSI1000 raw forward close-to-close return, producer output now runs full schema validation, and non-finite forward-return values are explicitly rejected before any record can be returned or counted.
+
+**Findings**: no Required findings. The remaining slice-2b item is not a defect in this slice: the daily-feature ledger/cadence decision still must be specified before wiring the in-EGS producer + panel block.
+
+**Register**: no new risk added. Existing V14.3 slice 2a risk-register entries already contain the working-tree repair notes and can be marked resolved by Claude at submit time with the commit hash; the slice-2b cadence/design decision remains open by design.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 74/74 OK.
+- `py_compile` for `engine/a_short_regime_classifier.py` and `tests/test_a_short_regime_classifier.py` → OK.
+- Independent probes: builder rejects NaN/+Inf/-Inf/string forward returns; validator rejects mutated NaN/+Inf/-Inf; finite `h1=1.25` is accepted.
+- `git diff --check` → OK except expected LF→CRLF normalization warnings.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2a: reject non-finite forward returns)
+
+**Trigger**: Codex re-`审查` FAIL, 1 P1 `R-V143-SLICE2A-NONFINITE-FORWARD-RETURNS` — Python `jsonschema` accepts NaN/+Inf/-Inf as `number`, so the producer still returned records with non-finite forward returns (would emit non-standard JSON `NaN`/`Infinity` and poison the evidence clock).
+
+**Fix**: added a non-finite guard in `validate_comparison_record()` — each non-null `forward_returns.h*` must pass `math.isfinite(float(v))`, else `ValueError` (runs with the full-schema + cross-field checks). `build_comparison_record` self-validates, so NaN/+Inf/-Inf are rejected at the producer before return. Added 6 adversarial cases (builder + validator × NaN/+Inf/-Inf).
+
+**Boundary unchanged**: const-pinned CSI1000 raw forward-return basis + comparison-only, V14.2 frozen, no data fetch / EGS / Phase 5. Slice 2b cadence (incremental daily-feature ledger) still open.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 74/74 OK (classifier 44→46). FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2a producer schema-validation repair) — **FAIL**
+
+**Scope reviewed**: current working-tree repair after the prior Codex FAIL. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `docs/system_risk_register.md`. Untracked intended files: `engine/a_short_regime_classifier.py`, `schemas/a_short_regime_comparison_weekly.schema.json`, `tests/test_a_short_regime_classifier.py`. No provider call, data fetch, EGS wiring, Phase 5 wiring, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. The prior producer schema-invalid string case is repaired: `validate_comparison_record()` now runs full JSON Schema validation plus cross-field invariants, `build_comparison_record(..., forward_returns={"h1": "not-a-number"})` is rejected, and the stale `forward excess` docstring was corrected to CSI1000 raw forward return. One numeric-validity gap remains.
+
+**Required finding**:
+- `R-V143-SLICE2A-NONFINITE-FORWARD-RETURNS` (P1, comparison-record numeric validity / evidence-clock artifact integrity): Python `jsonschema` accepts non-finite floats as `number`, so the current producer still returns records for `forward_returns={"h1": float("nan")}`, `{"h1": float("inf")}`, and `{"h1": float("-inf")}`. Those are not valid finite return observations and can serialize to non-standard JSON (`NaN` / `Infinity`) or contaminate later evidence-clock comparisons. Required repair: explicitly reject non-finite forward-return values in `validate_comparison_record()` / producer path (e.g. `math.isfinite` for non-null horizons), with adversarial tests proving builder/validator reject NaN, +Inf, and -Inf. Keep the const-pinned CSI1000 raw-return basis and comparison-only boundary unchanged.
+
+**Optional note**: `build_comparison_record(..., forward_returns={"h2": 0.2})` silently drops the unsupported input key and returns a valid all-null record. I am not treating this as Required because it does not corrupt the persisted record, but rejecting unknown input horizons would make caller mistakes noisier.
+
+**Register**: new Required added to `docs/system_risk_register.md` as `A-short V14.3 slice 2a non-finite forward-return gap`.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 72/72 OK, but the non-finite cases are untested and currently accepted.
+- `py_compile` for classifier/test: OK.
+- Independent probes: string forward return is rejected; mutated missing/extra horizon keys are rejected by schema+validator; bad divergence is rejected by validator; NaN/+Inf/-Inf are accepted by the builder.
+- `git diff --check`: OK except expected LF→CRLF normalization warnings.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2a: producer now full-schema-validates)
+
+**Trigger**: Codex re-`审查` FAIL, 1 P1 `R-V143-SLICE2A-BUILDER-SCHEMA-INVALID-OUTPUT` — `build_comparison_record` only ran the bespoke cross-field validator, so `forward_returns={"h1":"not-a-number"}` returned a record the schema itself rejects (string forward value). Producer-self-validation claim was false for field-local types.
+
+**Fix**: `validate_comparison_record()` is now the single sanctioned validity gate — it runs **full JSON-Schema validation** (types/enums/consts/required/exact-horizon-keys/number|null values) AND the cross-field invariants, surfacing any schema error as `ValueError` (single-exception contract, so existing `assertRaises(ValueError)` probes keep working). `build_comparison_record` calls it before returning, so non-number / missing / extra-horizon payloads are rejected at the producer layer, not persisted. Stale `forward excess` docstring corrected to CSI1000 raw forward return. Added 4 adversarial tests (builder non-number; validator non-number / missing-key / extra-key).
+
+**Boundary unchanged**: comparison-only, V14.2 frozen, no data fetch / EGS / Phase 5 / overlay / M6.7. Slice 2b cadence (incremental daily-feature ledger) still open. `jsonschema` import is local to the validator (keeps `classify_raw_regime` dependency-free).
+
+**Verification**: `python -m unittest tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 72/72 OK (classifier 40→44). FFFD=0 over touched files.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex re-`审查` (V14.3 slice 2a comparison-record repair) — **FAIL**
+
+**Scope reviewed**: current working-tree repair after the prior Codex FAIL. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `docs/system_risk_register.md`. Untracked intended files: `engine/a_short_regime_classifier.py`, `schemas/a_short_regime_comparison_weekly.schema.json`, `tests/test_a_short_regime_classifier.py`. No provider call, data fetch, EGS wiring, Phase 5 wiring, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. The prior two Required findings are mostly repaired: `v14_2_regime` is enum-pinned, `v14_3_fired_rule` is enum-pinned, cross-field invariants are enforced by `validate_comparison_record()`, `forward_return_basis` is const-pinned to CSI1000 raw forward close-to-close return, and the old contradiction probes are now rejected by schema and/or validator. One producer-validity gap remains.
+
+**Required finding**:
+- `R-V143-SLICE2A-BUILDER-SCHEMA-INVALID-OUTPUT` (P1, comparison-record producer / evidence-clock artifact validity): `build_comparison_record()` now calls `validate_comparison_record()` before returning, but that validator only checks bespoke cross-field invariants and basis equality. It does not enforce field-local schema constraints or forward-return value types. Independent probe: `build_comparison_record(..., forward_returns={"h1": "not-a-number"})` returned a record with string `forward_returns.h1`; `schemas/a_short_regime_comparison_weekly.schema.json` then rejects that exact returned record (`'not-a-number' is not of type 'number', 'null'`). This contradicts the repair claim that the producer self-validates before returning, and can let future writer/backfill code persist schema-invalid evidence if it trusts the builder. Required repair: make the sanctioned producer reject schema-invalid forward return payloads before returning, either by schema-validating in the builder/writer path or adding equivalent exact horizon-key + number/null type checks to `validate_comparison_record`; add adversarial tests for non-number values and missing/extra horizon keys. Also clean the stale `forward excess` docstring in `build_comparison_record`; the pinned basis is CSI1000 raw forward return, not excess.
+
+**Register**: new Required added to `docs/system_risk_register.md` as `A-short V14.3 slice 2a producer schema-validation gap`.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 68/68 OK, but this new non-number producer case is untested.
+- `py_compile` for classifier/test: OK.
+- Prior contradiction probes now reject as expected: divergence/pending/backfill/fired-rule via validator; bad `v14_2_regime` and bad/missing basis via schema+validator as applicable.
+- `git diff --check`: OK except expected LF→CRLF normalization warnings.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `修复` (V14.3 slice 2a: comparison-record evidence contract hardened)
+
+**Trigger**: Codex `审查` FAIL (entry below), 2 P1 on the weekly comparison record (the evidence-clock contract), classifier logic itself accepted.
+
+**Fix R-V143-SLICE2A-COMPARISON-INVARIANTS**: the schema accepted self-contradictory records (equal regimes with `divergence=true`, non-null horizon still in pending, all-null with `backfill_complete=true`, all-null with empty pending, nonsense `v14_2_regime`). Added `validate_comparison_record()` enforcing the cross-field invariants JSON Schema can't: `divergence==(v14_2≠v14_3_raw)`; `forward_returns_pending` == exactly the null horizons; `backfill_complete==(no nulls)`; `v14_3_fired_rule` ∈ `FIRED_RULES_BY_REGIME[regime]` (single source shared by classifier/validator/schema-test). `build_comparison_record` self-validates before returning and rejects an out-of-enum `v14_2_regime`. Schema also tightened: `v14_2_regime` enum (mirrors production `market_regime.status` = attack/shock/defense/contraction/unknown), `v14_3_fired_rule` enum, `forward_returns_pending` uniqueItems.
+
+**Fix R-V143-SLICE2A-FORWARD-RETURN-BASIS-UNPINNED**: forward returns had no pinned basis (could mix raw/excess, CSI300/CSI1000, decimal/percent, gross/cost). Added const-pinned `forward_return_basis` (required, every subfield `const` in schema + `FORWARD_RETURN_BASIS` in code): **CSI1000 `000852.SH`, forward close-to-close simple return, horizons 1/3/5/10 trading days, unit=percent, index_close_unadjusted, gross, market-level regime indicator**. Chose CSI1000 because the regime's breadth/limit signals track the speculative small/mid space and the evidence question is "after V14.3 says defense, did the market fall?" → market-level RAW forward return is the aligned outcome; pinned (not silently defaulted), revisit only at the switch-candidate slice with review. Validator + schema both reject missing/mismatched basis.
+
+**Boundary unchanged**: comparison-only, V14.2 frozen, no data fetch / EGS / Phase 5 / overlay / M6.7. Slice 2b cadence decision (incremental daily-feature ledger) still open, unchanged.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 68/68 OK (classifier 29→40, +11 invariant/basis adversarial tests). FFFD=0 over touched files.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-11 — Codex `审查` (V14.3 slice 2a raw-classifier + weekly comparison record) — **FAIL**
+
+**Scope reviewed**: current working tree after slice-1 commit. Tracked changes: `docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `docs/system_risk_register.md`. Untracked intended files: `engine/a_short_regime_classifier.py`, `schemas/a_short_regime_comparison_weekly.schema.json`, `tests/test_a_short_regime_classifier.py`. No provider call, data fetch, EGS wiring, Phase 5 wiring, production scoring change, or commit was performed by Codex.
+
+**Verdict**: FAIL / not commit-safe yet. The pure raw-classifier logic is directionally sound for slice 2a's stated boundary: comparison-only, top-down defense→contraction→attack→shock, nulls block consecutive/attack operands, insufficient-window and missing-CSI1000 flags are surfaced, and no state machine / production action is wired. The blocker is the weekly comparison record contract that will feed the future evidence clock.
+
+**Required findings**:
+- `R-V143-SLICE2A-COMPARISON-INVARIANTS` (P1, comparison evidence clock / schema): `schemas/a_short_regime_comparison_weekly.schema.json` accepts contradictory records that would corrupt later backfill or switch review. Independent probes validated equal regimes with `divergence=true`, non-null `h1` still listed in `forward_returns_pending`, all-null returns with `backfill_complete=true`, all-null returns with empty pending list, and arbitrary `v14_2_regime='nonsense_status'`. Required repair: constrain what schema can constrain (at least production regime enum) and add producer/backfill-side consistency validation + adversarial tests for divergence, pending/null symmetry, backfill_complete, and fired-rule/regime consistency where JSON Schema cannot compare fields.
+- `R-V143-SLICE2A-FORWARD-RETURN-BASIS-UNPINNED` (P1, evidence basis): the comparison schema says `h1/h3/h5/h10` are "forward excess return" but does not pin benchmark, unit, price/cost basis, or portfolio/universe scope. Future records could mix raw index return, candidate return, CSI300/CSI1000 excess, decimals vs percentage points, or cost-adjusted vs gross and still validate. Required repair: add an explicit `forward_return_basis` contract or const-pinned governance reference, and reject missing/mismatched basis before any record is counted toward switch-candidate evidence.
+
+**Register**: both Required findings were added to `docs/system_risk_register.md` under `A-short V14.3 slice 2a comparison-record evidence-contract gaps`.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_classifier tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency`: 57/57 OK.
+- `py_compile` for `engine/a_short_regime_classifier.py` and `tests/test_a_short_regime_classifier.py`: OK.
+- `git diff --check`: OK except expected LF→CRLF normalization warnings.
+- Initial `python` / `py` commands were unavailable in this shell; bundled Codex Python was used for the actual verification above.
+
+**Next**: `修复`.
+
+---
+
 ## 2026-06-11 — Claude `提交` (V14.3 regime classifier design slice 1 → local master)
 
 Codex PASS (entry below). Committed the V14.3 slice-1 design package to local master only (no push). Both register entries (`A-short V14.3 residual missing-index flag schema gap`, parent `A-short V14.3 regime classifier design/schema blockers`) flipped to `resolved`. Slice 1 is design + schema + governance + tests only — comparison-only, V14.2 stays the frozen production baseline, no runner / no production / no Phase 5 wiring. `A股长线ETF配置框架.md` left untracked (out of scope, user's own file). Next build step is slice 2 (in-EGS raw classifier + weekly v14_2-vs-v14_3 diff + comparison-only panel block), but that waits its turn behind remaining A-short work.
@@ -33,6 +171,22 @@ Codex PASS (entry below). Committed the V14.3 slice-1 design package to local ma
 - `git diff --check`: OK except expected CRLF normalization warnings.
 
 **Next**: `提交`.
+
+---
+
+## 2026-06-11 — Claude `起草` (V14.3 slice 2a: pure raw-classifier + comparison record; slice 2b cadence finding)
+
+**What**: drafted slice 2a of V14.3 = the **pure** per-day raw regime classifier, deliberately split off from the data/integration work. New: `engine/a_short_regime_classifier.py` (`classify_raw_regime` → defense→contraction→attack→shock by top-down priority, faithful to the slice-1 governance const thresholds; `build_comparison_record` → weekly v14_2-vs-v14_3_raw + divergence + forward 1/3/5/10d returns), `schemas/a_short_regime_comparison_weekly.schema.json`, `tests/test_a_short_regime_classifier.py` (29 tests). comparison-only, no data fetch, no EGS wiring, no production, no state machine (slice 3).
+
+**Why split (the adversarial feasibility finding, surfaced before drafting per draft-validity-gates discipline)**: slice-1 §2 said "compute in the EGS run + one stk_limit call" (same-day breadth only), but §3 thresholds need **252-trading-day rolling percentiles**. The EGS run is **weekly** and emits one row/run — so breadth percentiles can't be derived in-run. Index parts (CSI300/1000 ret_1d, CSI1000 MA20, IV-already-in-market_context) are cheap via `index_daily`; the breadth-percentile history is the cost. Resolution proposed for slice 2b: a persisted **incremental daily-feature ledger** in the a_short lane (one-time 252d backfill → ~5 new days/week), not 252×(daily+stk_limit) recompute every run. That ledger is a new managed state file = real design addition → must be specified + reviewed before 2b. Hence 2a (pure logic, producer-agnostic, fully unit-testable with synthetic history) ships first; 2b waits the cadence decision.
+
+**Also found**: production `market_context.market_regime.status` is `unknown` today (EGS never computes V14.2 M1; breadth fields are None) — this is one of the same "semantic items not automated" the user asked about. The comparison record's `v14_2_regime` therefore allows `unknown`; divergence stats stay meaningful (V14.3 flags defense/contraction while production says unknown/shock).
+
+**Design rigor**: top-down priority pinned (defense > contraction > attack); attack = ALL 6 operands, any null blocks it (never hard-judge attack); consecutive-day operands break on a null; percentile resolvers mirror the governance const strings and are parity-tested (code↔governance can't drift); insufficient-252d-window + missing-CSI1000 flagged honestly; forward returns null-until-elapsed (no look-ahead). Boundary: comparison-only, V14.2 frozen, no Phase 5 / veto / overlay / M6.7 touch.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_classifier` → 29/29 OK. (Full suite + route-doc guard re-run before commit.)
+
+**Next**: `审查`.
 
 ---
 
