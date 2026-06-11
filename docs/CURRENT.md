@@ -90,7 +90,12 @@
 
 ## 5. 下一步
 
-### P0 / P1 - Post redesigned outcome boundary
+### P0 - A-short 收尾(执行顺序优先于下面的 A-long 遗留)
+按用户 2026-06-11 定的顺序,A-short 建造收尾排在 A-long 遗留之前,依次:
+1. **V14.3 切片2** — EGS run 内算 raw regime + 每周记一行 `v14_2 / v14_3_raw / 是否分歧 / 后续 1/3/5/10 日表现` + 面板加 comparison-only 的 regime 对比段。comparison-only,V14.2 仍冻结。设计见 `docs/a_short_v14_3_regime_classifier_design_20260611.md` §6 切片2(切片1 已 commit `c7ca3c4`)。
+2. **A-short 分析层语义项自动化评估** — 监管48h / 行业景气 / 媒体负面 / 隐蔽风险 当前是 `deterministic_report_coverage.md` 里**有意标 `requires_llm` / `pending_llm` 的可选 LLM-enrich 项,不是硬规则,也不是 production blocker**(enrich 层翻不动 `veto`/`decision`,确定性内核不依赖它们;短线"赛道热度"维度已被 EGS `industry_heat` 部分覆盖)。是否升级成自动硬规则属**独立可选增强**,真正前置 = 可靠的 PIT 新闻/公告/监管数据源(与 `SR-PROVIDER-001` 同类数据源难题),须先单独评估数据源可行性再决定;无可靠 PIT 源前维持 LLM-enrich 边界,**不得**硬编"负面媒体→硬否决"(误否决 + look-ahead 风险)。此项 `执行` 顺序在 A-long 遗留之前。
+
+### P0 / P1 - Post redesigned outcome boundary（A-long 遗留:排在上面 A-short 收尾之后）
 - Read `docs/system_risk_register.md` before choosing the next `执行`.
 - All five A-long large-cap single-factor lines — full-main-board, large-cap pure-quality (`cfb4058`), `cash_conversion` (`527ac58`), `low_volatility` (`20bd22e`), and `ep_value` (`d6bedfd`) — plus the pre-registered batch + BH-FDR multi-factor round (runner `50d94e3`, executed) are executed and closed; do not route work back to any of them. Verdicts, metrics, and spent-ledger state live in §0 + `docs/SESSION_LOG.md` top + each `research/results/.../execution_summary.json`. The batch is NOT dry — `cash_flow_to_circ_mv` and `sales_to_circ_mv` are research-only statistical-alpha clues (NOT tradeable). The next A-long step is **forward-live validation of those two clues**; any in-sample follow-up (incl. a fresh batch) needs a NEW reviewed prereg + ledger and must not rerun / change definitions / change q / drop losers and re-run FDR / rescue with diagnostics.
 - Do not run `research/preregistrations/a_share_minimal_data_burst_20260531.json`; it remains `BLOCKED_DO_NOT_RUN`.
