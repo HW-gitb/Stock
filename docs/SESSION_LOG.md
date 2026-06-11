@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-06-11 — Claude `执行` (A-short FIRST end-to-end run, as-of 20260609, industry-weighted) — **DONE → first real M6.7 + industry-weighting diff**
+
+**Authorization**: user `先执行跑首跑(20260609)`. First time the full A-short chain ran on real data (system was engineering-complete but never run). Test/non-production (backtest-mode, as-of past day, placeholder account). Artifacts (NOT committed — one-off validation, not a forward cohort): `result/a_short/backtest/generated/20260609/analysis_input.json` (15 watch candidates), `research/results/egs_weight_comparison_20260609.json`, `research/results/a_short_weekly_20260609/weekly.json`.
+
+**Ran**: EGS (`--as-of 20260609 --backtest-mode --l3-mode pit` [snapshot 20260530] `--output-root result/a_short/backtest/generated`, sandbox off for tk.csv+net) → analysis_input + per-run weight-comparison diff. Then weekly pipeline (`--confirm-fetch-authorized`, reused IV feed 20260609, no overlay) → 15 M6.7.
+
+**Result 1 — industry weighting IS live + measured** (`egs_weight_comparison_20260609.json`, universe 910, active=balanced): balanced Tier1 40→43 (kept 39, +4 `000536/000980/001389/002134`, −1 `600743`); **overheat share legacy 0% → balanced 0%** (no top-chasing pulled in — anti-overheat gates held); top ranks shifted toward high-industry-heat names. aggressive +6/−2, theme_double +5/−3 also in the diff.
+
+**Result 2 — first M6.7** (`a_short_weekly_20260609/weekly.json`): 15 reports, **0 建仓 / 15 观察 / 0 否决** — 5 "现价跌破 MA5/10/20 等收复", 10 "未到低吸/突破触发"; none at a 低吸 entry point on 6/9 (conservative engine working: 低吸/风控不放松). boundary all-false.
+
+**Gaps surfaced (honest)**: (1) **Slice A overlay runner is a stub** — its data-loading (L3/daily/SW→theme/industry heat) is unwired, so M6.7 has NO 赛道红利 star bonus yet (overlay execution-wiring = a separate future slice). (2) `vol_confirm` not in EGS contract → 突破 entry dormant (documented). (3) account (available_cash 100万 / regime 震荡期) was a placeholder; market_context.market_regime was 'unknown'. (4) console shows GBK mojibake on egs_main Chinese logs — cosmetic, artifacts are clean UTF-8.
+
+**Next**: per user — remind to `起草` the A-long capture runner (monthly, first cohort 2026-06-30; must be built+reviewed before then). A-short ongoing: overlay execution-wiring slice would complete the M6.7 star layer; real weekend runs use each Friday's date + IV refresh.
+
+---
+
 ## 2026-06-11 — Claude `提交` (production EGS industry_heat promotion v1, post Codex PASS) — **DONE (local master)**
 
 **Gate**: Codex re-`审查` PASS (no Required; balanced live, profiles + industry_heat_def schema-pinned, comparison outputs non-production/not-tradeable, UTF-8 clean). Committed to LOCAL master only (no push). Pre-commit: cleared Codex's one non-blocking note (egs_main "对比 runner" comment → "对比 diff (write_weight_comparison)"). Untracked `A股长线ETF配置框架.md` excluded.
