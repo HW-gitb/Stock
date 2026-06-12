@@ -8,6 +8,104 @@
 
 ---
 
+## 2026-06-12 — Codex `审查` (V14.3 slice 2b-impl ②b-2 repair) — **PASS**
+
+**Scope reviewed**: working tree after Claude `修复` for V14.3 slice 2b-impl ②b-2. Reviewed modified docs (`docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`) plus the new runner/tests (`runners/a_short_regime_comparison_runner.py`, `tests/test_a_short_regime_comparison_runner.py`) and the called V14.3 contracts (`engine/a_short_regime_pipeline.py`, `engine/a_short_regime_ledger.py`, `engine/a_short_regime_classifier.py`, `engine/a_short_regime_comparison.py`, `runners/a_short_iv_feed_build.py`). Codex performed no provider call, no EGS run, no production scoring/report change, and no commit.
+
+**Verdict**: PASS / commit-safe for this slice. The four prior Required findings are repaired. The standalone-runner deviation from the earlier "EGS side-output" wording is acceptable for this comparison-only slice because it isolates production `egs_main`, writes only lane artifacts by default, refuses `result/a_short` production paths, and still maintains the V14.3 comparison ledger/panel loop. After commit, the first real bootstrap remains a separate user-authorized `执行` requiring `TUSHARE_TOKEN`.
+
+**Required findings**: none remaining.
+
+**Verified repaired**:
+- `R-V143-SLICE2B-RUNNER-SHORT-CALENDAR-BLOCKS-WEEKLY-APPEND`: weekly calendar now spans the persisted ledger coverage; independent probe with a 252-row ledger + one new day appended to 253 rows.
+- `R-V143-SLICE2B-RUNNER-THIN-BOOTSTRAP-COUNTS-EVIDENCE`: absent ledger without bootstrap now raises; `<252` bootstrap now raises before writing/starting the evidence clock.
+- `R-V143-SLICE2B-RUNNER-IV-FEED-UNVALIDATED`: wrong-schema / duplicate-date / future-date IV feeds now raise before mapping; the consumed percentile cannot silently overwrite a date.
+- `R-V143-SLICE2B-RUNNER-CLI-ASOF-LENIENT-FETCH`: non-canonical `--as-of` now raises before `_init_pro()` / provider fetch; probe confirmed `_init_pro` was not called for `2024011`.
+- Prior Optional items are handled: `save_comparison_records` validates each record and rejects duplicate `as_of`; route docs now say CLI defaults to the lane and all writers refuse production `result/a_short` paths.
+
+**Optional follow-ups (non-blocking)**:
+- Missed-run recovery beyond the current recent-data window: `main()` fetches the calendar from ledger start but `daily`/`stk_limit` from `as_of-60d`; a long gap (>~60 calendar days) fails closed when the first missing planned day is computed. That does not contaminate evidence, but a future repair can compute `daily_start` from `min(plan_append(...))` minus the needed lookback, or document `--bootstrap` as the heavy recovery path for long gaps.
+- IV-feed finite-value hardening: the consumed `iv_percentile_252d` rejects NaN/Inf/out-of-range, but upstream `validate_feed_summary_consistency` still accepts non-finite `iv_value` because it only checks `>0`. This does not flip V14.3 labels because the runner maps only percentiles, but the IV feed writer/validator should eventually add an explicit `math.isfinite(iv_value)` guard.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_regime_comparison_runner tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_a_short_iv_feed_build tests.test_route_doc_ledger_status_consistency` -> 233/233 OK.
+- `python -m py_compile runners\a_short_regime_comparison_runner.py tests\test_a_short_regime_comparison_runner.py` -> OK.
+- `git diff --check` -> no whitespace errors; LF->CRLF warnings only.
+- Independent probes: 252-row append -> 253 rows; no-ledger/no-bootstrap -> `ValueError`; 6-day bootstrap -> `ValueError`; malformed IV feed -> `ValidationError`; malformed `--as-of 2024011` -> exits before provider init; long missed-run gap -> fail-closed (Optional).
+
+**Register outcome**: no new material Required finding. The four existing ②b-2 risk-register entries contain repair notes and are verified by this review; final status flip to resolved remains tied to the commit per register convention.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-12 — Claude `提交` (V14.3 slice 2b-impl ②b-2 → local master) — A-short build-complete
+
+Codex PASS (entry below). Committed the standalone V14.3 regime comparison runner to local master only (no push): `runners/a_short_regime_comparison_runner.py` + `tests/test_a_short_regime_comparison_runner.py` (12 tests). All 5 ②b-2 risk entries flipped `resolved`. Comparison-only, V14.2 frozen; egs_main + frozen weekly report untouched.
+
+**A-short build is now complete.** The V14.3 regime comparison track runs end-to-end standalone (cadence ledger + raw classifier + audited comparison/evidence/panel + runner). The ONE remaining action to actually start the evidence clock is the **bootstrap 252-day backfill `执行`** — the first real-Tushare run in the whole V14.3 track — which needs explicit user authorization + TUSHARE_TOKEN (`python runners/a_short_regime_comparison_runner.py --as-of <YYYYMMDD> --bootstrap --confirm-fetch-authorized [--iv-feed ...]`). Slice 3 (state machine + scoring + switch-candidate alert) stays deferred until ≥12 weeks of comparison evidence accumulate.
+
+**Next (per CURRENT.md §5 ordering)**: (1) A-short analysis-layer semantic-automation evaluation (监管48h / 行业景气 / 媒体负面 / 隐蔽风险 — currently requires_llm/pending_llm; real prerequisite is a PIT news/announcement data source); then (2) the A-long leftover (forward-live of the 2 batch clues + the A-long capture runner). The standing reminder to draft the A-long capture runner now applies (A-short build complete).
+
+---
+
+## 2026-06-12 — Claude `修复` (V14.3 slice 2b-impl ②b-2: weekly-append calendar + bootstrap policy + IV validation + canonical as_of)
+
+**Trigger**: Codex `审查` FAIL, 4 Required + 2 Optional. All evaluated legitimate (runner I/O correctness — the weekly path would actually fail).
+
+**P1 SHORT-CALENDAR-BLOCKS-WEEKLY-APPEND**: weekly fetched a 45-day calendar but the ledger gate requires the calendar to span the 252-row ledger → normal append failed. Fix: `main()` builds the calendar to SPAN the ledger (`coverage.start`→`as_of`), fetching daily/stk_limit only for the recent computed window.
+
+**P1 THIN-BOOTSTRAP-COUNTS-EVIDENCE**: absent ledger bootstrapped from any calendar + started the evidence clock. Fix: `run_regime_step(bootstrap=...)` — absent+no-bootstrap raises, `<BACKFILL_MIN_TRADING_DAYS` (252) bootstrap raises; `main()` refuses first run without `--bootstrap`.
+
+**P1 IV-FEED-UNVALIDATED**: `iv_series_to_map` blindly mapped (dup dates overwrote, future accepted). Fix: `validate_iv_feed` = schema + reused `validate_feed_summary_consistency` before mapping.
+
+**P2 CLI-ASOF-LENIENT**: `strptime` accepted `2024011`. Fix: `is_canonical_date(as_of)` guard before any fetch.
+
+**Optional**: `save_comparison_records` validates each + rejects dup as_of; route-doc wording narrowed ("CLI default writes under the lane; all writers refuse production paths").
+
+**Test perf note**: the 252-scale orchestration/policy tests originally drove 252 real computes → the suite took 362s (compute's per-day pandas-astype loop is O(N²); fine for the one-time production bootstrap 执行 but not tests). Added a `feature_provider` DI override to `run_regime_step` (mirrors ②b-1) so the policy tests inject a fast fake provider; real compute stays covered by `test_a_short_regime_features` + a 1-call provider-integration test. Suite back to ~9s.
+
+**Tests +6** (12 total). Pre-flight sweep re-run. **Boundary unchanged**: comparison-only, non-production, egs_main + frozen weekly report untouched; only privileged action is the authorized bootstrap 执行.
+
+**Verification**: `python -m unittest` over the full V14.3 + route suite → 212/212 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-12 — Codex `审查` (V14.3 slice 2b-impl ②b-2 standalone regime runner) — **FAIL**
+
+**Scope reviewed**: working tree after Claude `起草` for V14.3 slice 2b-impl ②b-2. Reviewed modified tracked docs (`docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`) plus untracked new runner/tests (`runners/a_short_regime_comparison_runner.py`, `tests/test_a_short_regime_comparison_runner.py`). Also re-checked the already-committed ②b-1 pipeline/ledger/comparison contracts that this runner calls. Codex performed no data fetch, no EGS wiring, no result write outside temporary probe directories, no production scoring change, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The standalone-runner direction is understandable for production isolation, but the current I/O layer is not safe enough for the first authorized bootstrap / weekly update path. The test suite passes, but it misses normal post-bootstrap weekly operation, insufficient-window bootstrap, IV-feed validation, and CLI date-validation probes.
+
+**Required findings**:
+- `R-V143-SLICE2B-RUNNER-SHORT-CALENDAR-BLOCKS-WEEKLY-APPEND` (P1): `main()` fetches only a short recent trade calendar in weekly mode (`lookback_days = 45`) and passes that truncated calendar into `run_regime_step`; `run_regime_step` then passes it to `weekly_regime_step` / `validate_ledger_for_append`. The ledger gate requires the calendar to cover the existing ledger's full coverage span, so a normal persisted 252-row ledger fails before it can append the latest week. Probe: existing ledger with 252 rows + a 45-day recent calendar raised `ValueError: invalid ledger: ledger contains dates not on the trade calendar`. Required repair: for an existing ledger, build the validation/planning calendar from the persisted ledger coverage plus newly fetched trade dates, or fetch the calendar from `coverage.start` / last ledger date through `as_of`; add a test for a post-bootstrap 252-row ledger plus a short recent fetch window.
+- `R-V143-SLICE2B-RUNNER-THIN-BOOTSTRAP-COUNTS-EVIDENCE` (P1): absent-ledger `run_regime_step` bootstraps with whatever calendar it receives and immediately writes a comparison record / evidence count, without requiring explicit bootstrap mode or `BACKFILL_MIN_TRADING_DAYS` coverage. Probe: a 30-trading-day calendar produced a persisted 30-row ledger and `evidence.total_weeks = 1` with `v14_3_insufficient_window = True`. This can happen in real CLI weekly mode because `--bootstrap` is not enforced when the ledger is absent, and even `--bootstrap` has no post-fetch assertion that at least 252 eligible trading days were fetched. Required repair: initial ledger creation must be explicit bootstrap-only and must fail if coverage is below the 252-day policy minimum; do not advance the comparison evidence clock from an insufficient bootstrap. Add tests for no-ledger + non-bootstrap rejection and no-ledger + <252 eligible days rejection.
+- `R-V143-SLICE2B-RUNNER-IV-FEED-UNVALIDATED` (P1): `main()` reads `--iv-feed` with `json.loads`, and `iv_series_to_map` blindly maps `{trade_date: iv_percentile_252d}` without running the existing `a_short_iv_feed` schema + `validate_feed_summary_consistency` checks. Probe: a payload with wrong schema/name, duplicate `20240102` rows, and a future `29991231` row was accepted; duplicate dates silently overwrote the percentile (`20240102: 95.0`), which can flip the V14.3 IV-defense rule. Required repair: validate the IV feed artifact before consumption (schema + consistency; at minimum reject duplicate/non-canonical/future rows and boundary mismatch). Add tests for duplicate-date and wrong-schema IV feed rejection.
+- `R-V143-SLICE2B-RUNNER-CLI-ASOF-LENIENT-FETCH` (P2): `main()` does not validate `--as-of` as strict canonical `YYYYMMDD` before initializing/fetching. It uses `datetime.strptime`, which accepts non-canonical strings such as `2024011` as `20240101`; a monkeypatched probe showed `_fetch_trade_calendar` called with `end='2024011'`. Required repair: use the repo's strict `is_canonical_date` guard before `_init_pro()` / any provider call, and add a CLI-level test proving malformed dates fail before fetch.
+
+**Optional findings**:
+- `save_comparison_records` writes arbitrary record lists without even shape/cross-field validation; `run_regime_step` currently writes audited `weekly_regime_step` output, so this is not the main failure path, but the persistence helper is advertised as part of the pure core. Consider validating each record and rejecting duplicate `as_of` before direct writes.
+- The route docs now say the runner writes only under `research/results/a_short/...`, while the public save helpers actually allow any non-`result/a_short` path (tests use temp dirs). Either narrow the wording to "CLI default writes under the lane and all writers refuse production paths" or add a real lane-root guard with a test escape hatch.
+
+**Verified clean / still OK**:
+- The runner does not touch `egs_main`, Phase 5, overlay, M6.7, or production scoring.
+- Real provider fetch remains gated behind `--confirm-fetch-authorized` and `TUSHARE_TOKEN`; no provider/network call was made in this review.
+- The already-committed ②b-1 pipeline remains intact.
+
+**Verification**:
+- Existing suite: `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_comparison_runner tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> 206/206 OK, but missing the Required probes above.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile runners\a_short_regime_comparison_runner.py tests\test_a_short_regime_comparison_runner.py` -> OK.
+- `git diff --check` -> no whitespace errors; LF->CRLF warnings only.
+- Independent probes reproduced: existing 252-row ledger + short recent calendar fails; 30-day absent-ledger run writes evidence; malformed IV feed maps duplicate/future rows; malformed `--as-of 2024011` reaches the fetch layer.
+
+**Register outcome**: new material findings recorded in `docs/system_risk_register.md`.
+
+**Next**: `修复`.
+
+---
+
 ## 2026-06-12 — Codex `审查` (V14.3 slice 2b-impl ②b-1 repair) — **PASS**
 
 **Scope reviewed**: working tree after Claude `修复` for V14.3 slice 2b-impl ②b-1. Reviewed modified tracked docs (`docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`) and untracked new code/tests (`engine/a_short_regime_pipeline.py`, `tests/test_a_short_regime_pipeline.py`). Also re-read the called helper contracts (`engine/a_short_regime_ledger.py`, `engine/a_short_regime_classifier.py`, `engine/a_short_regime_comparison.py`) and the route/current/review protocol docs. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
@@ -35,6 +133,22 @@
 **Register outcome**: no new material findings. The three existing risk-register entries already contain Claude repair notes; final closure remains gated on commit per register convention.
 
 **Next**: `提交`.
+
+---
+
+## 2026-06-12 — Claude `起草` (V14.3 slice 2b-impl ②b-2: standalone regime comparison runner — last 2b slice)
+
+**What**: the I/O + execution layer after ②b-1 (`b503663`). New `runners/a_short_regime_comparison_runner.py` — pure/tested core (`iv_series_to_map`, `make_feature_provider`, production-path guard, ledger/records/panel persistence, `run_regime_step` orchestration with frames injected) + thin real-Tushare fetch + `main()` CLI gated behind `--confirm-fetch-authorized` (`--bootstrap` = the one-time 252-day backfill 执行). + `tests/test_a_short_regime_comparison_runner.py` (6 core cases).
+
+**Design judgment (deviation from §5, surfaced + documented)**: built as a STANDALONE runner, NOT an egs_main side-output. egs_main is production-frozen-adjacent (CLAUDE.md: view-before-edit, side-output must never break the production run) and the persisted ledger already amortizes the 252-day cost (bootstrap once → ~5 new days/week), so a standalone runner feeds the comparison track with full production isolation. Verified the real contracts first (IV-feed `series` shape, lane root, the `/result/a_short/` production-path guard pattern, stk_limit/index_daily fields) to avoid guessing.
+
+**Pre-flight sweep**: writes only under the guard-safe lane (refuses `result/a_short`); `save_ledger` re-validates through the sanctioned gate before writing; `run_regime_step` is idempotent across reruns (loads persisted state); real fetch gated behind `--confirm-fetch-authorized`; frames injected so the orchestration is testable without Tushare.
+
+**Boundary**: comparison-only, non-production; the only privileged action is the authorized bootstrap `执行` (user + TUSHARE_TOKEN). Drafting/tests need no authorization. V14.2 frozen; egs_main + frozen weekly report untouched.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_comparison_runner tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 206/206 OK. FFFD=0.
+
+**Next**: `审查`. (After PASS+commit, A-short is build-complete: V14.3 comparison track runs standalone; the bootstrap `执行` awaits user authorization + TUSHARE_TOKEN. Then CURRENT.md §5: analysis-layer semantic-automation evaluation, then A-long leftover.)
 
 ---
 
