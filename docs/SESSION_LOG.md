@@ -8,6 +8,131 @@
 
 ---
 
+## 2026-06-12 — Codex `审查` (V14.3 slice 2b-impl ②b-1 repair) — **PASS**
+
+**Scope reviewed**: working tree after Claude `修复` for V14.3 slice 2b-impl ②b-1. Reviewed modified tracked docs (`docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`) and untracked new code/tests (`engine/a_short_regime_pipeline.py`, `tests/test_a_short_regime_pipeline.py`). Also re-read the called helper contracts (`engine/a_short_regime_ledger.py`, `engine/a_short_regime_classifier.py`, `engine/a_short_regime_comparison.py`) and the route/current/review protocol docs. Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: PASS / commit-safe for this slice. The three prior Required findings are repaired and the Optional stable-order point is handled. The slice remains pure / comparison-only / no-I/O; ②b-2 is still the first real provider + persistence + EGS wiring step and still needs separate `执行` authorization for any Tushare bootstrap run.
+
+**Required findings**: none remaining.
+
+**Verified repaired**:
+- `R-V143-SLICE2B-PIPELINE-CALENDAR-ITERATOR-CONSUMED`: `extend_ledger` and `weekly_regime_step` now materialize `trade_calendar` once and reuse the list; independent generator-calendar probe bootstrapped all rows and called the provider for each date.
+- `R-V143-SLICE2B-PIPELINE-EMPTY-BOOTSTRAP-CALENDAR-ACCEPTED`: empty calendar and all-future calendar bootstrap probes now raise `ValueError` instead of returning a 0-row ledger.
+- `R-V143-SLICE2B-PIPELINE-WEEKLY-RERUN-DUPLICATE-CURRENT`: identical same-week rerun now dedupes to one evidence week; divergent same-week history now raises immutable-history conflict.
+- Prior Optional stable output order is fixed: `comparison_records` is sorted by `as_of` before return.
+
+**Verified clean / still OK**:
+- Boundary: no Tushare fetch, no EGS wiring, no file write, no production path, no Phase 5/M6.7/overlay influence.
+- Existing helper invariants remain delegated to reviewed gates: ledger row validity/PIT/contiguity/freshness, comparison-record schema/cross-field invariants, and audited PIT-capped forward-return evidence.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> 200/200 OK.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile engine\a_short_regime_pipeline.py tests\test_a_short_regime_pipeline.py` -> OK.
+- Independent probes: generator bootstrap -> full rows; empty/all-future bootstrap -> raise; identical same-week rerun -> `total_weeks=1`; divergent same-week -> raise; unsorted prior history -> sorted output.
+- `git diff --check` -> no whitespace errors; LF->CRLF warnings only.
+
+**Register outcome**: no new material findings. The three existing risk-register entries already contain Claude repair notes; final closure remains gated on commit per register convention.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-12 — Claude `提交` (V14.3 slice 2b-impl ②b-1 → local master)
+
+Codex PASS (entry below). Committed slice 2b-impl ②b-1 to local master only (no push): new `engine/a_short_regime_pipeline.py` (`extend_ledger` fail-closed cadence workflow + `weekly_regime_step` composition, data side injected) + `tests/test_a_short_regime_pipeline.py` (13 tests). All 4 ②b-1 risk entries flipped `resolved`. Pure logic, comparison-only, no Tushare fetch / EGS wiring / file write / production; V14.2 frozen. `A股长线ETF配置框架.md` left untracked.
+
+**Next**: `起草` V14.3 slice 2b-impl ②b-2 — the LAST 2b slice (real Tushare provider + ledger/record file persistence + in-EGS side-output calling `weekly_regime_step` + panel-into-weekly-report + bootstrap-runner CLI). The bootstrap 252-day backfill RUN is the first real-Tushare `执行` in the whole V14.3 track → needs explicit user authorization + TUSHARE_TOKEN. After ②b-2, A-short is build-complete → the analysis-layer semantic-automation evaluation, then the A-long leftover (CURRENT.md §5).
+
+---
+
+## 2026-06-12 — Claude `修复` (V14.3 slice 2b-impl ②b-1: calendar materialize + empty-bootstrap reject + rerun semantics)
+
+**Trigger**: Codex deeper `审查` FAIL, 3 Required (2 from the prior sweep + 1 new) + 1 Optional. All evaluated legitimate (again the calendar-generator / empty-coverage / rerun-idempotency categories).
+
+**P1 CALENDAR-ITERATOR-CONSUMED**: `extend_ledger` passed `trade_calendar` to 3 helpers → a generator emptied after the first. Fix: `list(trade_calendar)` once at the top of `extend_ledger` + `weekly_regime_step`, reuse.
+
+**P1 EMPTY-BOOTSTRAP-CALENDAR-ACCEPTED**: bootstrap from empty + no eligible day returned a valid 0-row ledger (②b-2 would persist a bad calendar as a successful empty bootstrap). Fix: `extend_ledger` raises when bootstrapping from empty produces no rows.
+
+**P2 WEEKLY-RERUN-DUPLICATE-CURRENT**: blindly appending current → same-week rerun raised on duplicate as_of. Fix: same-week rerun semantics — identical immutable classification (`_same_classification`, forward_returns excluded) → dedupe-replace; divergent → immutable-history conflict raise.
+
+**Optional**: output `comparison_records` now sorted by `as_of` for stable ②b-2 persistence.
+
+**Tests +6** (generator calendar, empty-cal raise, all-future raise, identical-rerun dedupe, divergent-rerun raise, sorted output). Pre-flight sweep re-run. **Boundary unchanged**: pure logic, no Tushare / EGS / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 200/200 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-12 — Codex `审查` (V14.3 slice 2b-impl ②b-1 deeper adversarial sweep) — **FAIL**
+
+**Scope reviewed**: same working tree after Claude `起草` for V14.3 slice 2b-impl ②b-1, plus the prior Codex FAIL entry already recorded in this file. Re-reviewed `engine/a_short_regime_pipeline.py`, `tests/test_a_short_regime_pipeline.py`, the called helper contracts in `engine/a_short_regime_ledger.py` / `engine/a_short_regime_classifier.py` / `engine/a_short_regime_comparison.py`, route docs (`docs/README.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`), and the live risk register. Codex performed no business-code edit, no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: FAIL / still not commit-safe. The two earlier Required findings remain valid. A deeper sweep found one additional material orchestration gap in bootstrap coverage handling. I did not find a production-boundary breach: the slice still stays pure / no-I/O / comparison-only.
+
+**Required findings**:
+- Existing open `R-V143-SLICE2B-PIPELINE-CALENDAR-ITERATOR-CONSUMED` (P1) still applies: `extend_ledger` / `weekly_regime_step` must materialize `trade_calendar` once and reuse that list so generator calendars cannot be consumed into an empty bootstrap.
+- Existing open `R-V143-SLICE2B-PIPELINE-WEEKLY-RERUN-DUPLICATE-CURRENT` (P2) still applies: `weekly_regime_step` must define same-date comparison-record rerun semantics, deduping identical current records and raising immutable-history conflict on divergence.
+- `R-V143-SLICE2B-PIPELINE-EMPTY-BOOTSTRAP-CALENDAR-ACCEPTED` (P1): `extend_ledger` treats an empty/no-eligible calendar as a successful empty bootstrap. Probe: `extend_ledger(build_ledger([]), "20240105", [], provider)` and `extend_ledger(build_ledger([]), "20240105", ["20240110","20240111"], provider)` both returned a valid 0-row ledger with `coverage.n=0` and made zero provider calls. That behavior is acceptable only for the low-level `validate_ledger` pre-bootstrap envelope; it is not safe for this orchestration function, because ②b-2's bootstrap runner is expected to call `extend_ledger(empty, ...)` and then persist the result. A bad calendar fetch/range could therefore be recorded as a successful empty ledger. Required repair: in the orchestration layer, reject empty final ledgers when the caller is bootstrapping/extending from an empty existing ledger and there are no eligible trading days `<= as_of`; add tests for empty calendar and all-calendar-dates-after-as_of.
+
+**Optional finding**:
+- `weekly_regime_step` preserves the order of `prior_comparison_records` and appends current, so an unsorted loaded history stays unsorted in `comparison_records` even though counts remain correct. Probe returned `['20240103', '20240102', '20240109']`. This is not evidence-corrupting today, but before ②b-2 persists the history it would be cleaner to sort the audited output by `as_of` or explicitly document that writer input order is authoritative.
+
+**Verified clean / still OK**:
+- Boundary remains correct: no Tushare fetch, no EGS wiring, no file write, no production path, no Phase 5/M6.7/overlay influence.
+- Prior audited helper guards remain in place at the called-function layer: comparison records validate schema/cross-field invariants, the evidence path is PIT-capped by mandatory `as_of_now`, duplicate/future records are rejected by audited summarize/render, fabricated forward returns are rejected, ledger gates enforce row validity/PIT/contiguity/freshness when supplied a reusable calendar.
+
+**Verification**:
+- Re-read code/tests/docs and ran independent probes for generator calendars, duplicate same-date comparison rerun, empty/no-eligible bootstrap calendars, and unsorted prior comparison history.
+- Existing target suite had already passed in the prior review (`tests.test_a_short_regime_pipeline` + regime helper suites + route-doc guard, 194/194 OK), but it does not cover the three Required probes above.
+
+**Register outcome**: the new material finding `R-V143-SLICE2B-PIPELINE-EMPTY-BOOTSTRAP-CALENDAR-ACCEPTED` is recorded in `docs/system_risk_register.md`; the earlier two Required findings were already registered and remain open.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Codex `审查` (V14.3 slice 2b-impl ②b-1 pure weekly orchestration) — **FAIL**
+
+**Scope reviewed**: working tree after Claude `起草` for V14.3 slice 2b-impl ②b-1. Reviewed modified tracked docs (`docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`) plus untracked new code/tests (`engine/a_short_regime_pipeline.py`, `tests/test_a_short_regime_pipeline.py`). Codex performed no data fetch, no EGS wiring, no result write, no production scoring change, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The orchestration direction is right and it stays pure/no-I/O, but two workflow-integrity gaps remain. Both are material for the next ②b-2 persistence/EGS wiring slice: bootstrap must not silently produce an empty ledger from a valid calendar generator, and a repeated weekly run must not fail merely because the comparison history already contains the current week.
+
+**Required findings**:
+- `R-V143-SLICE2B-PIPELINE-CALENDAR-ITERATOR-CONSUMED` (P1): `extend_ledger` accepts `trade_calendar: Iterable[str]` but passes the same iterable to `validate_ledger_for_append`, `plan_append`, and final `validate_ledger` without materializing it once. The ledger helpers correctly materialize their own input, so a generator is consumed by the first validation call. Probe: `extend_ledger(build_ledger([]), cal[-1], (d for d in cal), provider)` returned an empty valid ledger and made zero provider calls instead of bootstrapping the five calendar rows; `weekly_regime_step` with the same generator later failed only because the classifier saw empty history. This reintroduces the earlier generator-calendar bug class at the orchestration layer and can let ②b-2 write an empty bootstrap ledger if it uses a one-shot iterator. Required repair: materialize `trade_calendar` once at the start of `extend_ledger` / `weekly_regime_step` and reuse the list for all downstream calls; add tests proving generator calendars bootstrap and weekly-step correctly.
+- `R-V143-SLICE2B-PIPELINE-WEEKLY-RERUN-DUPLICATE-CURRENT` (P2): `weekly_regime_step` blindly computes `all_records = prior_comparison_records + [record]`. If the comparison history already contains the current `as_of` from a successful or partial same-date rerun, the audited evidence path rejects duplicate `as_of` and the whole step fails. Probe: an existing fresh ledger through `as_of` plus `prior_comparison_records=[build_comparison_record(... as_of=same day)]` raised `ValueError: duplicate as_of`. ②b-2 needs repeatable weekly execution/recovery semantics; the current function is only ledger-idempotent, not full-step idempotent. Required repair: define and implement same-date comparison-record handling before appending: if prior current record matches the newly built/audited record, reuse/dedupe it; if it differs, raise an immutable-history conflict. Add tests for same-date identical rerun success and same-date divergent conflict.
+
+**Verified clean / still OK**:
+- Existing tests pass: bootstrap from list calendar, steady increment, ledger idempotent rerun, wrong provider date, gappy existing, weekly from empty, and prior-record accumulation.
+- ②a audited backfill/evidence/render guards remain in the target suite.
+- Scope boundary is respected: no Tushare fetch, no EGS wiring, no file write, no production path.
+
+**Verification**:
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` -> 194/194 OK, but missing the two probes above.
+- `C:\Users\cnhea\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m py_compile engine\a_short_regime_pipeline.py tests\test_a_short_regime_pipeline.py` -> OK.
+
+**Register outcome**: new material findings recorded in `docs/system_risk_register.md`.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-11 — Claude `起草` (V14.3 slice 2b-impl ②b-1: pure regime weekly orchestration)
+
+**What**: next build step after ②a (`e417a66`). New `engine/a_short_regime_pipeline.py` — `extend_ledger` (the fail-closed cadence workflow with the data side INJECTED via `feature_provider`; same fn does bootstrap + weekly increment) + `weekly_regime_step` (composes extend + comparison record + the audited evidence/panel path). + `tests/test_a_short_regime_pipeline.py` (7 tests).
+
+**Scope discipline (reduce-fix-cycles)**: deliberately split ②b into ②b-1 (this — PURE orchestration, providers injected, fully testable, no fetch/EGS/file) and ②b-2 (the real Tushare provider + file persistence + in-EGS side-output + bootstrap-runner CLI + panel-into-weekly-report; the bootstrap RUN needs user 执行 + TUSHARE_TOKEN). So the production-adjacent egs_main + real-fetch glue stays isolated in the last slice. ②b-1 is almost entirely composition of already-reviewed pure functions (ledger gates, classifier, ②a audit) + the one new `extend_ledger` orchestration. Pre-flight sweep run: provider-wrong-date raises, gappy existing rejected (for_append), idempotent rerun, final validate_ledger enforces freshness/contiguity, weekly step PIT-capped at the run date (this week's horizons pending).
+
+**Boundary**: pure logic — no Tushare fetch / EGS wiring / file write / production, V14.2 frozen.
+
+**Verification**: `python -m unittest tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_route_doc_ledger_status_consistency` → 194/194 OK. FFFD=0.
+
+**Next**: `审查`. (Then ②b-2: the real fetch/EGS/bootstrap glue — the LAST 2b slice — after which A-short is build-complete.)
+
+---
+
 ## 2026-06-11 — Claude `提交` (V14.3 slice 2b-impl ②a → local master)
 
 Codex PASS (entry below). Committed slice 2b-impl ②a to local master only (no push): new `engine/a_short_regime_comparison.py` (`backfill_forward_returns` + audited evidence path `summarize_comparison_records` / `render_regime_comparison_block` + `_audited_history`) + `tests/test_a_short_regime_comparison.py` (25 tests); classifier `validate_comparison_record` gained the canonical-as_of check + classifier-test `_history` → real dates; + README/design/register. ~8 Codex rounds — all evidence-clock integrity (fabricated/non-positive/non-canonical/duplicate/future/look-ahead values, audit-bypass, current/history consistency, doc drift). All 11 slice-2b-impl ②a risk entries flipped `resolved`. Comparison-only, pure logic, no data fetch / EGS wiring / file write / production, V14.2 frozen. `A股长线ETF配置框架.md` left untracked.
