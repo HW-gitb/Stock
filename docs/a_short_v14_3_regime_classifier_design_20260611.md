@@ -19,7 +19,7 @@ V14.2 M1 用含糊的"涨停指数"(3/4 档都依赖它),且收缩窄、震荡�
 **PIT 口径(硬要求,schema/governance 钉死):**
 - 涨跌停判定用**未复权 `daily` + `stk_limit` 同口径价**;炸板 = `high >= up_limit*0.999 且 close < up_limit*0.999`(不是 `high==up_limit`);照顾 ±10%/±20%/ST±5% 不同涨跌幅制度。
 - 晋级率 = 昨日封板股今日再封板占比;分母过小标 `insufficient_sample`,**不得硬判进攻**。
-- universe = 当日可交易 A 股(PIT,不用现存活股回看);所有 252d 分位只用 `<= as_of` 窗口。
+- universe = 当日可交易**主板** A 股(PIT,不用现存活股回看;沪市 600/601/603/605 + 深市 000/001/002/003,**排除创业板/科创板/北交所**——用户口径"A股只操作主板",复用 `engine/data/a_share_board_scope.py`);所有 252d 分位只用 `<= as_of` 窗口。
 
 ## 3. V14.3 四档 raw 判定(优先级 top-down;最终输出还需状态机防抖)
 **① 防御期(任一即触发,向下快):** `iv_percentile_252d>90` / `limit_down_count>=max(P95_252,100)` / `csi1000_ret_1d<=-3.5% 或 csi300_ret_1d<=-3.0%` / `promotion_rate<=10% ∧ net_limit<0 ∧ failed_limit_rate>P75_252`。

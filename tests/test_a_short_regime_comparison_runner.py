@@ -24,8 +24,9 @@ if str(ROOT) not in sys.path:
 
 from runners.a_short_regime_comparison_runner import (  # noqa: E402
     iv_series_to_map, make_feature_provider, run_regime_step, save_panel, save_ledger,
-    save_comparison_records, load_ledger, load_comparison_records, main,
+    save_comparison_records, load_ledger, load_comparison_records, main, main_board_only,
 )
+from engine.a_short_regime_features import compute_regime_daily_features  # noqa: E402
 from engine.a_short_regime_ledger import build_ledger, BACKFILL_MIN_TRADING_DAYS  # noqa: E402
 
 
@@ -103,6 +104,39 @@ class PureHelperTests(unittest.TestCase):
     def test_production_path_guard(self):
         with self.assertRaises(ValueError):
             save_panel("x", str(ROOT / "result" / "a_short" / "20240101" / "panel.md"))
+
+    def test_main_board_only_filters_non_main(self):
+        # R-V143-PREBOOTSTRAP-MAINBOARD-FILTER-BSHARE-LEAK: B-shares (200/900) must also be dropped.
+        df = pd.DataFrame([("600000.SH",), ("000001.SZ",), ("002001.SZ",), ("003001.SZ",),
+                           ("300750.SZ",), ("688981.SH",), ("920083.BJ",),
+                           ("200001.SZ",), ("900901.SH",), ("garbage",)], columns=["ts_code"])
+        kept = set(main_board_only(df)["ts_code"])
+        self.assertEqual(kept, {"600000.SH", "000001.SZ", "002001.SZ", "003001.SZ"})
+
+    def test_init_pro_delegates_to_sanctioned_init(self):
+        # Optional: prove _init_pro uses the no-set_token sanctioned initializer, not ts.set_token.
+        import os as _os, runners.a_short_regime_comparison_runner as r
+        import runners.a_short_iv_feed_probe as probe
+        from unittest import mock
+        sentinel = object()
+        with mock.patch.dict(_os.environ, {"TUSHARE_TOKEN": "tok"}), \
+                mock.patch.object(probe, "init_tushare_pro", return_value=sentinel) as m:
+            self.assertIs(r._init_pro(), sentinel)
+            m.assert_called_once_with("tok")
+
+    def test_main_board_filter_enables_compute(self):
+        # mirrors the probe finding: a .BJ stock without stk_limit trips the fail-closed gate; filtering
+        # to main board resolves it. d="20240105" canonical.
+        d = "20240105"
+        daily = pd.DataFrame([(d, "600000.SH", 11.0, 10.0), (d, "920083.BJ", 11.0, 10.0)],
+                             columns=["trade_date", "ts_code", "high", "close"])
+        stk_limit = pd.DataFrame([(d, "600000.SH", 11.0, 9.0)],   # no usable .BJ limit row
+                                 columns=["trade_date", "ts_code", "up_limit", "down_limit"])
+        with self.assertRaises(ValueError):                       # unfiltered → fail-closed on .BJ
+            compute_regime_daily_features(d, daily, stk_limit, _idx([d]), _idx([d]))
+        row = compute_regime_daily_features(d, main_board_only(daily), main_board_only(stk_limit),
+                                            _idx([d]), _idx([d]))   # filtered → succeeds
+        self.assertEqual(row["as_of"], d)
 
     def test_save_records_rejects_duplicate(self):
         from engine.a_short_regime_classifier import build_comparison_record

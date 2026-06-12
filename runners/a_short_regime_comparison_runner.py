@@ -40,6 +40,7 @@ from engine.a_short_regime_ledger import (
     LEDGER_LANE_ROOT, LEDGER_FILENAME,
 )
 from engine.a_short_regime_classifier import validate_comparison_record
+from engine.data.a_share_board_scope import is_a_share_main_board
 
 RECORDS_FILENAME = "regime_comparison_records.json"
 PANEL_FILENAME = "regime_comparison_panel.md"
@@ -67,6 +68,19 @@ def iv_series_to_map(iv_feed: dict | None) -> dict:
     validate_iv_feed(iv_feed)   # schema + consistency before mapping (no silent dup-overwrite)
     return {str(row.get("trade_date")): row.get("iv_percentile_252d")
             for row in iv_feed.get("series", []) or []}
+
+
+def main_board_only(df: pd.DataFrame) -> pd.DataFrame:
+    """Restrict a stock panel (daily / stk_limit) to A-share MAIN-BOARD ts_codes only.
+
+    The user operates A-shares main-board only; the breadth universe is exactly the governance
+    main-board prefixes (SSE 600/601/603/605 + SZSE 000/001/002/003) via the shared INCLUSION-based
+    `is_a_share_main_board` — which (unlike the exclusion-based `is_main_board_ts_code`) also rejects
+    B-shares (900*.SH / 200*.SZ) and unknown/malformed codes, not just ChiNext/STAR/BSE. Index panels
+    (no ts_code) pass through unchanged."""
+    if df is None or df.empty or "ts_code" not in df.columns:
+        return df
+    return df[df["ts_code"].map(is_a_share_main_board)].reset_index(drop=True)
 
 
 def make_feature_provider(daily: pd.DataFrame, stk_limit: pd.DataFrame,
@@ -165,6 +179,9 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
         raise ValueError("run_regime_step: no existing ledger — initial creation requires explicit "
                          "bootstrap=True (a weekly run must not silently bootstrap)")
     records = load_comparison_records(records_path)
+    # scope the breadth universe to A-share MAIN BOARD only (user directive; excludes ChiNext/STAR/BSE)
+    daily = main_board_only(daily)
+    stk_limit = main_board_only(stk_limit)
     # default provider = real fetch→compute over the injected frames; an explicit feature_provider may
     # be supplied (DI for tests / alternative sources), mirroring engine.a_short_regime_pipeline.
     provider = feature_provider or make_feature_provider(
@@ -184,12 +201,14 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
 # ---- thin real-fetch + CLI (NOT unit-tested; first real-Tushare 执行 = bootstrap) ---------------
 
 def _init_pro():
-    import tushare as ts
+    # Use the repo's sanctioned init (pins the base URL, no set_token) — plain ts.set_token+pro_api
+    # hits Tushare's silent-empty-DataFrame failure mode (trade_cal/daily return 0 rows), which would
+    # let a bootstrap silently fetch nothing. (Found by the pre-bootstrap fetch probe, 2026-06-12.)
+    from runners.a_short_iv_feed_probe import init_tushare_pro
     token = os.environ.get("TUSHARE_TOKEN")
     if not token:
         raise SystemExit("TUSHARE_TOKEN not set; the V14.3 regime fetch needs it")
-    ts.set_token(token)
-    return ts.pro_api()
+    return init_tushare_pro(token)
 
 
 def _fetch_trade_calendar(pro, start: str, end: str) -> list:

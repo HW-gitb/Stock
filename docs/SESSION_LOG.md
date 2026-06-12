@@ -8,6 +8,149 @@
 
 ---
 
+## 2026-06-12 — Codex `审查` (V14.3 canonical main-board helper repair) — **PASS**
+
+**Scope reviewed**: working tree after Claude `修复` for the two residual V14.3 strict-main-board findings. Reviewed modified files: `engine/data/a_share_board_scope.py`, `runners/a_short_regime_comparison_runner.py`, `tests/test_a_share_board_scope.py`, `tests/test_a_short_regime_comparison_runner.py`, `docs/README.md`, `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `presets/a_short_v14_3_regime_governance_20260611.json`, `schemas/a_short_v14_3_regime_governance.schema.json`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`. Codex performed no provider call, no bootstrap, no result write, no EGS run, and no commit.
+
+**Verdict**: PASS / commit-safe for this repair slice. The original B-share leak and the follow-up malformed-code leak are both repaired in the V14.3 runner path, and the durable V14.3 route row now points to the strict helper instead of the old exclusion-based helper.
+
+**Required findings**: none remaining.
+
+**Verified repaired**:
+- `R-V143-PREBOOTSTRAP-MAINBOARD-MALFORMED-LEAK`: `is_a_share_main_board` now requires a canonical 6-character ASCII-digit symbol before applying the prefix whitelist, so accepted-prefix malformed values such as `600ABC.SH`, `60000.SH`, `6000000.SH`, `00000A.SZ`, and `002.SZ` are rejected.
+- `R-V143-PREBOOTSTRAP-MAINBOARD-ROUTE-DOC-DRIFT`: the current V14.3 runner row in `docs/README.md` now names `engine.data.a_share_board_scope.is_a_share_main_board` and states the exact accepted universe: canonical six-digit `.SH` `600/601/603/605` plus `.SZ` `000/001/002/003`, rejecting B-shares, ChiNext/STAR/BSE, malformed, and unknown codes.
+- The previous `R-V143-PREBOOTSTRAP-MAINBOARD-FILTER-BSHARE-LEAK` remains closed in the current runner path: `main_board_only` keeps only normal main-board A-share codes and drops `200001.SZ`, `900901.SH`, `300750.SZ`, `688981.SH`, `920083.BJ`, and malformed accepted-prefix examples.
+- `_init_pro` still delegates to the sanctioned `runners.a_short_iv_feed_probe.init_tushare_pro(token)`; V14.2 production, `egs_main`, Phase 5, M6.7, overlay, scoring, and production result paths remain untouched.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_regime_comparison_runner tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_a_share_board_scope tests.test_route_doc_ledger_status_consistency` -> 218/218 OK.
+- `python -m py_compile runners\a_short_regime_comparison_runner.py tests\test_a_short_regime_comparison_runner.py engine\data\a_share_board_scope.py tests\test_a_share_board_scope.py` -> OK.
+- `git diff --check` -> no whitespace errors; LF-to-CRLF warnings only.
+- Independent probes confirmed `is_a_share_main_board` returns `True` for canonical accepted prefixes and `False` for B-shares / other boards / malformed accepted-prefix symbols; `main_board_only` retained only `600000.SH`, `000001.SZ`, and `003816.SZ` from a mixed adversarial frame.
+
+**Optional follow-up (non-blocking)**: the older shared `is_main_board_ts_code` / `assert_main_board_only` helpers remain intentionally unchanged for A-long compatibility in this slice and are still exclusion-based. If the project later wants one global strict "A-share main board" meaning across A-short and A-long, make that a separate reviewed migration with A-long evidence-impact checks rather than folding it into this V14.3 comparison-runner repair.
+
+**Register outcome**: no new material finding. Existing V14.3 strict-main-board risk entries contain working-tree repair notes; final status flip to `resolved` remains tied to Claude `提交` per register convention.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-12 — Claude `提交` (V14.3 runner pre-bootstrap probe fixes → local master)
+
+Codex PASS (entry below). Committed the probe-driven fixes to local master only (no push): Tushare init → sanctioned `init_tushare_pro` (avoids silent-empty), V14.3 breadth universe → strict main-board via the new inclusion-based `is_a_share_main_board` (canonical 6-digit, rejects B-shares/ChiNext/STAR/BSE/malformed), governance `universe` const + design + README aligned. Files: `engine/data/a_share_board_scope.py` (added `is_a_share_main_board`; existing `is_main_board_ts_code` untouched → A-long unaffected), `runners/a_short_regime_comparison_runner.py`, `tests/test_a_share_board_scope.py`, `tests/test_a_short_regime_comparison_runner.py`, `presets/...governance...json`, `schemas/...governance.schema.json`, `docs/{README,design,register,SESSION_LOG}`. All 4 probe/main-board risk entries flipped `resolved`. 218/218. The throwaway probe verified the fixes on real 20260611 data, then was deleted (wrote nothing). `A股长线ETF配置框架.md` left untracked.
+
+**A-short build remains complete + now real-data-de-risked.** The V14.3 comparison track is runnable; the only remaining action to start the evidence clock is the user-authorized bootstrap `执行`.
+
+**Next**: user decides — (1) authorize the V14.3 bootstrap `执行` (`python runners/a_short_regime_comparison_runner.py --as-of <real-trading-day, e.g. 20260611> --bootstrap --confirm-fetch-authorized --iv-feed <path>`; TUSHARE_TOKEN present; ~minutes over real ~3190 main-board stocks × 252 days); or (2) `起草` the A-short analysis-layer semantic-automation evaluation; or (3) `起草` the A-long capture runner (A-short build complete → the standing reminder applies). CURRENT.md §5 ordering: A-short semantic-automation, then A-long leftover.
+
+---
+
+## 2026-06-12 — Claude `修复` (V14.3 main-board helper: canonical 6-digit guard + README helper-name)
+
+**Trigger**: Codex `审查` FAIL, 2 P1. Both legitimate.
+
+**P1 MALFORMED-LEAK**: `is_a_share_main_board` used only `startswith`, so malformed accepted-prefix codes (`600ABC.SH`, `60000.SH`, `6000000.SH`, `00000A.SZ`, `002.SZ`) returned True — contradicting its own "reject malformed" claim. Fix: require `len(symbol)==6` + all-ASCII-digit before the prefix whitelist. Tests +6 malformed negatives.
+
+**P1 ROUTE-DOC-DRIFT**: README still named the old exclusion-based `is_main_board_ts_code` for the V14.3 runner (I'd added that line before the B-share fix). Fix: both V14.3 README rows now name `is_a_share_main_board` + the exact canonical-6-digit/prefix/B-share-malformed-rejection contract; grep confirms no `is_main_board_ts_code` left in V14.3 docs.
+
+**Boundary**: comparison-only, V14.2 frozen, egs_main untouched; shared `is_main_board_ts_code` still unchanged (A-long unaffected).
+
+**Verification**: full V14.3 + board-scope + route-doc → 218/218 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-12 — Codex `审查` (V14.3 strict main-board repair re-review) — **FAIL**
+
+**Scope reviewed**: working tree after Claude `修复` for `R-V143-PREBOOTSTRAP-MAINBOARD-FILTER-BSHARE-LEAK`. Reviewed modified files: `engine/data/a_share_board_scope.py`, `runners/a_short_regime_comparison_runner.py`, `tests/test_a_share_board_scope.py`, `tests/test_a_short_regime_comparison_runner.py`, `docs/README.md`, `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `presets/a_short_v14_3_regime_governance_20260611.json`, `schemas/a_short_v14_3_regime_governance.schema.json`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`. Codex performed no provider call, no bootstrap, no result write, no EGS run, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The original B-share prefix leak is substantively repaired for normal codes: `run_regime_step.main_board_only` now calls the new inclusion-based `is_a_share_main_board`, and `200001.SZ` / `900901.SH` are rejected. However the repair is not fully aligned with its own "reject unknown/malformed" contract, and the route table still points future agents to the old helper.
+
+**Required findings**:
+- `R-V143-PREBOOTSTRAP-MAINBOARD-MALFORMED-LEAK` (P1): `engine/data/a_share_board_scope.py::is_a_share_main_board` only checks `symbol.startswith(...)`. It therefore returns `True` for malformed symbols that start with accepted prefixes but are not canonical 6-digit Tushare A-share codes, e.g. `600ABC.SH`, `60000.SH`, `6000000.SH`, `00000A.SZ`, and `002.SZ`. This contradicts the new helper comment and runner docstring, both of which say unknown/malformed codes are rejected, and it misses part of the prior Required repair. Required repair: require canonical `^\d{6}\.(SH|SZ)$` shape before prefix acceptance, keep the exact prefix whitelist, and add adversarial tests for non-six-digit / non-numeric symbols under accepted prefixes.
+- `R-V143-PREBOOTSTRAP-MAINBOARD-ROUTE-DOC-DRIFT` (P1): `docs/README.md` still documents the V14.3 runner as filtering via `engine.data.a_share_board_scope.is_main_board_ts_code` and says it excludes only ChiNext/STAR/BSE. The implementation now uses `is_a_share_main_board`, and the intended universe also excludes B-shares and malformed/unknown symbols. This is a durable route-doc mismatch, not just wording: future agents may follow the routing table back to the old exclusion-based helper. Required repair: update the README row to name `is_a_share_main_board` and the exact accepted prefix/format contract, consistent with governance/schema/design and tests.
+
+**Verified repaired / still OK**:
+- The B-share prefix leak that triggered the previous FAIL is closed in the current runner path for normal codes: `200001.SZ`, `900901.SH`, ChiNext/STAR/BSE are rejected by `main_board_only`.
+- `_init_pro` now delegates to the sanctioned `runners.a_short_iv_feed_probe.init_tushare_pro(token)`; the added mock test covers that optional.
+- V14.2 production, `egs_main`, Phase 5, M6.7, overlay, scoring, and production result paths remain untouched.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_regime_comparison_runner tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_a_share_board_scope tests.test_route_doc_ledger_status_consistency` -> 218/218 OK, but missing malformed accepted-prefix cases.
+- `python -m py_compile runners\a_short_regime_comparison_runner.py tests\test_a_short_regime_comparison_runner.py engine\data\a_share_board_scope.py tests\test_a_share_board_scope.py` -> OK.
+- `git diff --check` -> no whitespace errors; LF-to-CRLF warnings only.
+- Independent probe: `is_a_share_main_board({"600ABC.SH","60000.SH","6000000.SH","00000A.SZ","002.SZ"})` currently returns `True` for all five malformed values.
+
+**Register outcome**: two residual material findings recorded in `docs/system_risk_register.md`.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `修复` (V14.3 main-board filter: strict inclusion-based, no B-share leak)
+
+**Trigger**: Codex `审查` FAIL, 1 P1 `R-V143-PREBOOTSTRAP-MAINBOARD-FILTER-BSHARE-LEAK` + 2 Optional. Legitimate — and the exact gap I'd noticed but lazily papered over by reusing the exclusion-based helper: `is_main_board_ts_code` treats any non-rejected code as "main", so B-shares (200001.SZ / 900901.SH) leaked into the governance-declared main-board universe.
+
+**Fix**: added a NEW INCLUSION-based `is_a_share_main_board` to the shared `engine/data/a_share_board_scope.py` (accepts ONLY `.SH` 600/601/603/605 + `.SZ` 000/001/002/003; rejects B-shares/ChiNext/STAR/BSE/unknown/malformed). Added as a new function so the many existing exclusion-based `is_main_board_ts_code` callers (A-long materialization/audit) are untouched — no ripple. `run_regime_step.main_board_only` now uses the strict one. Tests: shared-helper inclusion/rejection (200/900/garbage/None) + runner B-share drop. Optionals also done: `_init_pro` delegation test (mock proves no-set_token sanctioned init); register external-memory-reference wording dropped.
+
+**Boundary**: comparison-only, V14.2 frozen, egs_main untouched; A-long board-scope behavior unchanged (only added a function).
+
+**Verification**: full V14.3 + board-scope + route-doc → 218/218 OK. FFFD=0.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-12 — Codex `审查` (V14.3 runner pre-bootstrap probe fixes) — **FAIL**
+
+**Scope reviewed**: working tree after Claude `修复` for the V14.3 runner pre-bootstrap probe fixes. Reviewed modified files: `runners/a_short_regime_comparison_runner.py`, `tests/test_a_short_regime_comparison_runner.py`, `presets/a_short_v14_3_regime_governance_20260611.json`, `schemas/a_short_v14_3_regime_governance.schema.json`, `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `docs/README.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`; also checked the shared board helper `engine/data/a_share_board_scope.py` and the sanctioned Tushare init helper in `runners/a_short_iv_feed_probe.py`. Codex performed no provider call, no bootstrap, no result write, no EGS run, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The Tushare init switch to `init_tushare_pro(token)` is directionally correct, and filtering the regime runner to a main-board universe is also the right design. But the implemented filter does not match the newly frozen governance universe.
+
+**Required finding**:
+- `R-V143-PREBOOTSTRAP-MAINBOARD-FILTER-BSHARE-LEAK` (P1): the governance and design now define the V14.3 universe as **MAIN-BOARD A-share** with an exact prefix set: SSE `600/601/603/605` and SZSE `000/001/002/003`, excluding ChiNext/STAR/BSE. But `run_regime_step` filters through `engine.data.a_share_board_scope.is_main_board_ts_code`, whose implementation is exclusion-based: it rejects `300/301/688/689/.BJ/920/8*/4*`, but treats any other code as `"main"`. Probe: `main_board_only(["600000.SH","000001.SZ","002001.SZ","003001.SZ","200001.SZ","900901.SH","300750.SZ","688981.SH","920083.BJ"])` kept `200001.SZ` and `900901.SH`. Those are B-share style prefixes, not the governance-declared A-share main-board universe. This is not just wording drift: if a provider frame ever includes such codes, the bootstrap can again either fail closed on missing `stk_limit` or contaminate the regime breadth ledger with non-target symbols.
+
+**Required repair**: make the runner's filter enforce the exact governance universe, or tighten the shared helper if that is the intended project-wide meaning: keep only `600/601/603/605` on `.SH` and `000/001/002/003` on `.SZ`; reject B-share prefixes such as `200*` and `900*`, unknown/malformed codes, and the already-excluded ChiNext/STAR/BSE symbols. Add adversarial tests at the shared helper and/or runner layer for `200001.SZ`, `900901.SH`, malformed/unknown symbols, and the existing positive main-board prefixes. Keep docs/governance/schema aligned to that single source.
+
+**Optional findings**:
+- Add a small unit test around `_init_pro` (mocking `TUSHARE_TOKEN` and the imported helper) to prove it delegates to the sanctioned no-`set_token` initializer before bootstrap. Current code path is plausible and reused from `a_short_iv_feed_probe`, so this is not blocking.
+- Remove or reword the risk-register phrase "see memory `a-share-main-board-only`" in a later cleanup; durable repo artifacts should not rely on external memory names. The current docs/governance do state the main-board rule directly, so this is not blocking.
+
+**Verified clean / still OK**:
+- No production `egs_main`, Phase 5, M6.7, overlay, scoring, or V14.2 production behavior is touched.
+- `_init_pro` now delegates to `runners.a_short_iv_feed_probe.init_tushare_pro(token)`, which pins the Tushare base URL and avoids `set_token` / `tk.csv` writes.
+- The governance schema/preset still validate and remain comparison-only; the universe wording is const-pinned, but the runner filter must be brought up to that exact const.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_regime_comparison_runner tests.test_a_short_regime_pipeline tests.test_a_short_regime_comparison tests.test_a_short_regime_classifier tests.test_a_short_regime_features tests.test_a_short_regime_ledger tests.test_a_short_v14_3_regime_governance tests.test_a_share_board_scope tests.test_route_doc_ledger_status_consistency` -> 216/216 OK, but missing the B-share / exact-whitelist adversarial cases above.
+- `python -m py_compile runners\a_short_regime_comparison_runner.py tests\test_a_short_regime_comparison_runner.py engine\data\a_share_board_scope.py` -> OK.
+- `git diff --check` -> no whitespace errors; LF->CRLF warnings only.
+- Independent probe confirmed `main_board_only` currently keeps `200001.SZ` and `900901.SH`.
+
+**Register outcome**: new material finding recorded in `docs/system_risk_register.md`.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `修复` (V14.3 runner pre-bootstrap probe: Tushare init + main-board universe)
+
+**Context**: before authorizing the heavy 252-day bootstrap, the user asked for a lightweight real-Tushare fetch probe to de-risk. I wrote a throwaway probe (uncommitted, wrote nothing) over the REAL latest data date (20260611 — the real world is ~now; the simulated 2026-06-12 is one day ahead of real data). It found 2 issues that would have broken the first bootstrap of the committed ②b-2 runner, so this is a real `修复` (not "pure run", as flagged):
+
+**(1) Tushare init silent-empty (P1)**: `_init_pro` used `ts.set_token`+`ts.pro_api` → Tushare's known silent-empty-DataFrame mode (trade_cal/daily returned 0 rows) → a bootstrap would silently fetch nothing. Fixed to the repo's sanctioned `init_tushare_pro(token)` (pins base URL).
+
+**(2) Universe not scoped (P1)**: full-market fetch included BSE `920083.BJ` (no usable stk_limit) → the as_of fail-closed gate raised. Per the user's NEW standing directive **"A股只操作主板,设计上别再涉及其他板块"** (saved to memory `a-share-main-board-only`), `run_regime_step` now filters daily/stk_limit to main board via `engine.data.a_share_board_scope.is_main_board_ts_code`, and the frozen governance `universe` const + design §2 are made explicit ("MAIN-BOARD A-share … excludes ChiNext/STAR/BSE") so spec=impl.
+
+**Re-probe (real data, all PASS)**: field shapes correct; main-board as_of=3190 stocks, 0 uncovered; `compute_regime_daily_features(20260611)` succeeds + row passes daily schema + ledger semantics. Probe then deleted. Tests +2 (main_board_only filter; .BJ-without-limit fails-closed unfiltered, computes after filter). 214/214. FFFD=0.
+
+**Boundary**: comparison-only, V14.2 frozen, egs_main untouched; bootstrap RUN still a separate authorized `执行` + TUSHARE_TOKEN.
+
+**Next**: `审查`. (After PASS+commit, the bootstrap `执行` is genuinely runnable.)
+
+---
+
 ## 2026-06-12 — Codex `审查` (V14.3 slice 2b-impl ②b-2 repair) — **PASS**
 
 **Scope reviewed**: working tree after Claude `修复` for V14.3 slice 2b-impl ②b-2. Reviewed modified docs (`docs/README.md`, `docs/SESSION_LOG.md`, `docs/a_short_v14_3_regime_ledger_cadence_design_20260611.md`, `docs/system_risk_register.md`) plus the new runner/tests (`runners/a_short_regime_comparison_runner.py`, `tests/test_a_short_regime_comparison_runner.py`) and the called V14.3 contracts (`engine/a_short_regime_pipeline.py`, `engine/a_short_regime_ledger.py`, `engine/a_short_regime_classifier.py`, `engine/a_short_regime_comparison.py`, `runners/a_short_iv_feed_build.py`). Codex performed no provider call, no EGS run, no production scoring/report change, and no commit.

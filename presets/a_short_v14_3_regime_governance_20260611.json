@@ -7,7 +7,7 @@
     "limit_detection": "unadjusted daily + stk_limit same-caliber prices; respect ±10% / ±20% / ST ±5% regimes",
     "failed_limit_rate": "fraction with high >= up_limit*0.999 AND close < up_limit*0.999 (NOT high == up_limit)",
     "promotion_rate": "yesterday-limit-up names that limit up again today / denom; mark insufficient_sample when denom too small (never hard-judge attack)",
-    "universe": "point-in-time tradable A-share universe each as_of (no survivorship lookback)",
+    "universe": "point-in-time tradable MAIN-BOARD A-share universe each as_of (SSE 600/601/603/605 + SZSE 000/001/002/003; excludes ChiNext/STAR/BSE; no survivorship lookback)",
     "percentile_window": "rolling 252 trading days, <= as_of only (no future data)",
     "csi1000_below_ma20": "boolean: CSI1000 close < its 20d MA at as_of; null + data_quality_flag csi1000_unavailable when the index series is missing (the slow-bleed contraction operand)"
   },
