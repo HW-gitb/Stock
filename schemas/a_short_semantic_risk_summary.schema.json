@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_semantic_risk_summary",
+  "description": "A-short semantic-risk advisory summary over the main-board Top15 watch pool (Slice 2). TWO clearly-separated confidence tiers: (1) official_structured = cninfo disclosure-date-PIT evidence (headless, deterministic-ish); (2) web_llm = Sina/web LLM advisory (skill-in-loop, LIVE-only, soft-flag). ADVISORY ONLY: never a hard veto, never enters production scoring / decision / veto, never disguises unknown as clear, never feeds historical backtests, never writes a production path. The headless Slice-2a builder fills official_structured + scan_tier + sources scaffold and leaves web_llm at status=unknown for the Slice-2b skill to fill.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "as_of",
+               "universe", "coverage", "candidates", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_semantic_risk_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested", "main_board_top15", "dropped_non_main"],
+      "properties": {
+        "requested": {"type": "array", "items": {"type": "string"}},
+        "main_board_top15": {"type": "array", "items": {"type": "string"}, "maxItems": 15},
+        "dropped_non_main": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checked", "unknown", "failed"],
+      "properties": {
+        "checked": {"type": "integer", "minimum": 0},
+        "unknown": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "candidates": {"type": "array", "items": {"$ref": "#/definitions/candidate"}},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "real_money", "hard_veto", "changes_egs_scoring",
+                   "changes_phase5_decision", "historical_backtest_evidence", "writes_production_path"],
+      "properties": {
+        "production": {"const": false},
+        "real_money": {"const": false},
+        "hard_veto": {"const": false},
+        "changes_egs_scoring": {"const": false},
+        "changes_phase5_decision": {"const": false},
+        "historical_backtest_evidence": {"const": false},
+        "writes_production_path": {"const": false}
+      }
+    }
+  },
+  "definitions": {
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts_code", "rank", "scan_tier", "official_structured", "web_llm",
+                   "sources", "confidence", "summary", "boundary"],
+      "properties": {
+        "ts_code": {"type": "string"},
+        "rank": {"type": "integer", "minimum": 1, "maximum": 15},
+        "scan_tier": {"enum": ["deep", "light", "upgraded"]},
+        "official_structured": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "had_pit_announcements", "events"],
+          "properties": {
+            "status": {"enum": ["clear", "risk", "unknown"]},
+            "had_pit_announcements": {"type": "boolean"},
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source", "title", "category", "disclosure_date", "url_or_pdf", "risk_type"],
+                "properties": {
+                  "source": {"type": "string"},
+                  "title": {"type": "string"},
+                  "category": {"type": "string"},
+                  "disclosure_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+                  "url_or_pdf": {"type": "string"},
+                  "risk_type": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "web_llm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "risk_level", "action"],
+          "properties": {
+            "status": {"enum": ["clear_light", "risk_candidate", "risk", "tailwind", "headwind", "unknown"]},
+            "risk_level": {"enum": ["none", "low", "medium", "high", "unknown"]},
+            "action": {"enum": ["no_action", "observe", "downgrade", "manual_review_required"]}
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title", "url", "published_at", "fetched_at", "source_type"],
+            "properties": {
+              "title": {"type": "string"},
+              "url": {"type": "string"},
+              "published_at": {"type": ["string", "null"]},
+              "fetched_at": {"type": ["string", "null"]},
+              "source_type": {"enum": ["cninfo", "sina", "web", "user"]}
+            }
+          }
+        },
+        "confidence": {
+          "anyOf": [
+            {"type": "number", "minimum": 0, "maximum": 1},
+            {"type": "null"}
+          ]
+        },
+        "summary": {"type": "string"},
+        "boundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["advisory_only", "not_deterministic_veto"],
+          "properties": {
+            "advisory_only": {"const": true},
+            "not_deterministic_veto": {"const": true}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "comment": "official risk => at least one event",
+          "if": {"properties": {"official_structured": {"properties": {"status": {"const": "risk"}}}}},
+          "then": {"properties": {"official_structured": {"properties": {"events": {"minItems": 1}}}}}
+        },
+        {
+          "comment": "scan_tier upgraded only for rank>5",
+          "if": {"properties": {"scan_tier": {"const": "upgraded"}}},
+          "then": {"properties": {"rank": {"minimum": 6}}}
+        }
+      ]
+    }
+  }
+}

@@ -8,6 +8,130 @@
 
 ---
 
+## 2026-06-12 — Claude `提交` (语义风险 Slice 2a headless 骨架 → local master)
+
+Codex PASS(entry below)。提交 Slice 2a 到本地 master(无 push):`runners/a_short_semantic_risk_summary.py` + `schemas/a_short_semantic_risk_summary.schema.json` + `tests/test_a_short_semantic_risk_summary.py` + `tests/test_semantic_risk_slice3_guard.py`(CI 防忘守护)+ `runners/a_short_semantic_risk_probe.py`(Sina 稳健化)+ README/register/design 更新 + `research/results/a_short/semantic_risk_probe_20260612.json`(orgId 重跑正向证据,Codex 已审 valid)。register Slice-2a 项 flip `resolved`(连同上轮 batch-gate/CI-guard 两 finding 修复)。
+
+**经 2 轮审查**:① batch 200+空壳误报全员 clear(P1,加 batch sanity gate + had_pit_announcements)② CI guard 口径与设计/register 矛盾(P2,三处统一为 tracker-present)。
+
+**边界**:advisory-only,headless 结构化骨架;web/LLM 判断留 2b skill;不硬否决/不进 production·decision·veto/不写 production 路径/不做历史回测;V14.2 frozen;egs_main stage3 未碰;真取数需授权;无 push。
+
+**Next**: Slice 2b(skill enrichment 契约填 web_llm + M6.7/周报面板渲染 + coverage 文档);或先 `执行` 跑一次 2a 看真实 Top15 官方结构化输出。Sina 端点仍 `执行`-pending(headless 未再赌端点,真 web 判断走 2b skill)。
+
+---
+
+## 2026-06-12 — Codex 审查 (A-short semantic-risk Slice 2a repair: batch sanity + Slice-3 guard alignment) — PASS
+
+**Verdict**: PASS。上轮两个 findings 均已修复,未发现新的阻断问题。
+
+**Finding 1 closeout — batch 200+空壳不再误报全员 clear**:
+- `build_official_structured` 增加 `had_pit_announcements`。
+- `build_summary_from_fetches` 增加 batch-level cninfo sanity gate:Top15 有 PIT 公告代码数低于 `MIN_BATCH_ANNOUNCED` 时,空窗口 `clear` 自动降级为 `unknown`。
+- `validate_summary_consistency` 增加反伪造门:batch unhealthy 时空窗口不得报 `clear`。
+- 独立复现:15 个主板代码全 `ok=True, announcements=[]` 现在输出 `coverage={"checked":0,"unknown":15,"failed":0}`;把它手工伪造成 15 个 `clear` 会被 validator 拒绝。
+
+**Finding 2 closeout — Slice-3 CI guard 口径已三处对齐**:
+- 设计 §8、`docs/system_risk_register.md` deferred-open tracker、`tests/test_semantic_risk_slice3_guard.py` docstring/实现现在都明确为 tracker-present anti-forget guard,不是 fail-until-Slice3-closed。
+- grep 未发现活动契约仍要求 "reconciliation open 即 FAIL" 的残留说法。
+
+**Reviewed scope**:
+- 新增 `runners/a_short_semantic_risk_summary.py`, `schemas/a_short_semantic_risk_summary.schema.json`, `tests/test_a_short_semantic_risk_summary.py`, `tests/test_semantic_risk_slice3_guard.py`。
+- `runners/a_short_semantic_risk_probe.py` 的 Sina source feeder hardening。
+- `research/results/a_short/semantic_risk_probe_20260612.json` orgId 重跑证据: schema+consistency valid,cninfo feasible=true,无 URL/raw body/token 泄露。
+- Route/register/design updates: `docs/README.md`, `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md`, `docs/system_risk_register.md`。
+
+**Validation run**:
+- Reproduced prior all-empty bug case: now downgraded to `unknown=15`; forged all-clear rejected。
+- `python -m unittest tests.test_a_short_semantic_risk_summary tests.test_semantic_risk_slice3_guard tests.test_a_short_semantic_risk_probe` → 82 tests OK。
+- schema Draft7 meta check for probe + summary → OK。
+- `research/results/a_short/semantic_risk_probe_20260612.json` schema + consistency → OK。
+- `py_compile` for touched runners/tests → OK。
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` → 14 tests OK。
+- `git diff --check` → OK(CRLF warnings only)。
+
+**Boundary confirmed**: advisory-only,非生产;不改 egs_main / Phase5 / V14.2;不新增 hard veto / production scoring / historical-backtest evidence / production-path write。Slice 3 reconciliation 仍是 deferred-open tracker,不会阻塞本 Slice 2a 提交。
+
+**Next**: Claude Code `提交`;之后进入 Slice 2b(skill enrichment contract + M6.7/weekly panel + coverage doc)。
+
+---
+
+## 2026-06-12 — Claude `修复` (Slice 2a — batch 空壳 sanity gate + CI guard 三处对齐)
+
+**两条都成立。**
+
+**Finding 1 (P1) — batch 空壳误报全员 clear** ✅:**又是同一类**——per-candidate 逻辑建了,却没把 Slice-1 探针确立的 batch-level feasibility sanity 带进 summary 层。cninfo 200+空 → 15 个全 clear、checked=15。
+- Fix:`build_official_structured` 记 `had_pit_announcements`(PIT 公告数>0);`_batch_unhealthy`(有公告代码数 < `MIN_BATCH_ANNOUNCED`,复用探针门槛)时,builder 把"空窗口 clear"(clear 且无 PIT 公告)降级 `unknown`,validator 同样拒之(fail-closed,双保险)。**单只真无公告在健康批量里仍 clear**;批量空壳绝不报全员无风险。schema 加 `had_pit_announcements`。
+- 对抗测试:全 15 空→全 unknown/checked=0;健康批量单只空→仍 clear;伪造全空 clear→validator raise。
+
+**Finding 2 (P2) — CI guard 解释与设计/register 矛盾** ✅:我偏离了设计字面"fail-until-Slice3-closed"为 tracker-present,但没同步设计/register 文案,register 里新旧两说并存。
+- Fix:统一三处为 **tracker-present anti-forget** 读法——改 设计 §8 + register `deferred-open` 的 CI-guard 文案 + 测试 docstring(本就如此)。明确不做字面 fail-until-done(会 build-block 同一设计要求的分阶段交付);守护只保证"别忘 Slice 3",Slice 3 落地时 flip tracker + 退场。
+
+**Pre-flight 复跑**:96 tests OK(summary 32 + guard 1 + probe 49 + route-doc 14);schema meta OK;py_compile OK。
+
+**Boundary**: advisory-only;不硬否决/不进 production/不写 production 路径/不做历史回测;V14.2 frozen;egs_main stage3 未碰。
+
+**Next**: `审查`(复审 batch gate + CI-guard 对齐)。
+
+---
+
+## 2026-06-12 — Codex 审查 (A-short semantic-risk Slice 2a headless advisory summary) — FAIL
+
+**Verdict**: FAIL。测试绿,但存在 2 个需要修复的设计/实现漏洞。
+
+**Finding 1 — P1: Slice 2a 会把 cninfo 批量 200+空公告空壳误报为全员 `clear`。**
+`build_official_structured` 对 `ok=True` 且 `announcements=[]` 直接给 `official_structured.status="clear"`;`build_summary_from_fetches` / `validate_summary_consistency` 没有复用 Slice-1 的 provider feasibility sanity gate。合成复现:15 个主板代码全部 `ok=True, announcements=[]` 时 summary 输出 `coverage={"checked":15,"unknown":0,"failed":0}` 且 15 个 candidate 全是 `clear`, consistency 仍通过。这重开了 Slice-1 刚用 orgId probe 修掉的同类洞:provider 请求形态/软反爬可以返回 HTTP 200+空,系统不能把这种批量空壳解释成"全票无风险"。Required fix:在 summary 层增加 batch-level cninfo sanity gate(例如 Top15 总 PIT 公告代码数低于探针门槛/全空时把 official layer 标 `unknown` 或拒写 summary),并加 adversarial test 覆盖全空/大面积空响应不得 `checked=15 clear`。修复后仍允许单只真实无公告为 clear,但批量异常必须 fail-closed。
+
+**Finding 2 — P2: Slice-3 CI guard 实现与设计/风险登记原文矛盾。**
+设计文档 §8 写的是 advisory layer 存在且 `A-short semantic-risk layer ↔ production reconciliation` 仍 `deferred-open` 就 FAIL,也就是 build-blocking 强制处理 Slice 3；当前 `tests/test_semantic_risk_slice3_guard.py` 改成只要求 tracker 存在且含 `DEFERRED, DO NOT CLOSE`,因此在 reconciliation 仍 open 时测试通过。这个解释可能更适合分阶段交付,但它没有同步修订设计文档,且同一份 `system_risk_register.md` 里同时存在新解释和旧的 "if advisory-layer code is present AND this deferred-open item is still open, test FAIL" 说法。Required fix:二选一并统一三处文字/测试:要么按原设计做 fail-until-Slice3-closed;要么正式修订设计与 deferred-open register 文案,明确 guard 是 tracker-present anti-forget,并说明 Slice 3 不阻塞 Slice 2a/2b 提交。
+
+**Validation run**:
+- `python -m unittest tests.test_a_short_semantic_risk_summary tests.test_semantic_risk_slice3_guard tests.test_a_short_semantic_risk_probe` → 79 tests OK。
+- schema Draft7 meta check for probe + summary → OK。
+- `py_compile` for touched runners/tests → OK。
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` → 14 tests OK。
+- `git diff --check` → OK(CRLF warnings only)。
+
+**Next**: Claude Code `修复` above findings, then rerun review.
+
+---
+
+## 2026-06-12 — Claude `起草` (语义风险 Slice 2a — headless 结构化骨架 + Sina 稳健化 + CI 守护)
+
+**切片决策**: Slice 2 拆成 **2a(headless 结构化骨架)+ 2b(skill 契约 + 面板渲染)**——鉴于 Slice 1 走了 4 轮 PIT saga,大切片不变式多易反复;web/LLM 判断本就 skill-在环、headless 测不了,2a/2b 是天然缝。
+
+**交付物(2a)**:
+- `schemas/a_short_semantic_risk_summary.schema.json` — 正式 artifact schema(§5 全字段一次到位,2b 只填不改);boundary 全 false + per-candidate advisory_only/not_deterministic_veto const + scan_tier/events allOf 硬门。
+- `runners/a_short_semantic_risk_summary.py` — headless builder。**official_structured**:复用已验证 cninfo orgId fetch,`build_official_structured` PIT 过滤(canonical ≤ as_of;secCode 错配/非字典/不可解析/未来=质量缺陷),标题→risk_type 映射,status risk/clear/unknown(**unknown 不伪装 clear**;真 PIT 风险即便有缺陷行也优先报 risk)。**web_llm**:headless 留 unknown/unknown/no_action 待 2b skill;仅 best-effort 把 Sina 原始条目喂 sources。scan_tier deep(≤5)/light(6-15)/upgraded(6-15 命中官方风险)。`validate_summary_consistency` 落整张不变式矩阵。
+- `runners/a_short_semantic_risk_probe.py` — Sina 稳健化(`fetch_sina` market 前缀 symbol + 防御式 item 归一 title/url/published_at)。
+- `tests/test_a_short_semantic_risk_summary.py`(官方层 unknown-not-clear/PIT/risk优先 × scan-tier × 主板 × web风险态需sources × coverage × schema × write-guard)+ `tests/test_semantic_risk_slice3_guard.py`(CI 防忘守护)。
+
+**Sina 诚实标注**: headless Sina 端点我**没有再赌一个未验证端点**(避免又一次 cninfo 式空跑)——只做稳健化 + 可配 + 标 `执行`-pending;真 web 判断交 2b skill 在环。用户"Sina 端点修正并入"以此方式落地(fetch 层稳健化纳入本切片)。
+
+**CI 守护的解释偏离(主动声明)**: 设计原话"advisory 存在且 reconciliation 未关闭就 FAIL"字面会**阻断同一设计要求的分阶段交付**(Slice 3 在 advisory 建成+验证之后)。故实现为 **tracker-present 守护**(advisory 代码存在 ⇒ register 的 Slice-3 reconciliation tracker 不得被静默删除/降级),同 route-doc guard 精神;测试 docstring 已写明此推理。
+
+**Pre-flight**: 79 tests PASS(30 summary/guard + 49 probe);schema Draft7 meta OK;py_compile OK;不变式矩阵(unknown-not-clear × 官方层/web层/candidate × PIT × 主板 × scan-tier × advisory 边界 × coverage)第一稿对抗自测。
+
+**Boundary**: advisory-only;不硬否决/不进 production scoring·decision·veto/不做历史回测/不写 production 路径;V14.2 frozen;egs_main stage3 未碰;真取数需授权。
+
+**Next**: `审查`(审 Slice 2a)→ 提交 → Slice 2b(skill enrichment 契约 + M6.7/周报面板 + coverage 文档)。
+
+---
+
+## 2026-06-12 — Claude `执行` (Slice 1 探针重跑 — orgId 修复实测,cninfo 可行)
+
+**命令**: `a_short_semantic_risk_probe --as-of 20260612 --watch-pool <同样本 15 主板>`(cninfo only,无 --include-sina;用户授权)。产物覆盖 `research/results/a_short/semantic_risk_probe_20260612.json`。
+
+**结果:cninfo `feasible=True`(orgId 假设证实)。**
+- `n_ok=15/15`、`n_announced=15/15`(全部代码取回真公告;600000.SH 单只 29 条)、`n_required_fields_ok=15`、`n_dates_pit_ok=15`、`n_code_mapping_ok=15`、future/unparseable/bad_shape 全 0、`reasons=[]`。
+- 对比首跑(orgId 前):announced 0→15。**确认根因 = `stock` 参数缺 orgId**(非反爬、非真无公告);egs_main stage3 裸形态长期回空的潜在 production 观察项由此得到佐证(仍不在本切片改)。
+- `n_risk_candidate=3`:600000.SH/601166.SH/000001.SZ(均银行)命中监管关键词——银行例行**诉讼/仲裁**公告触发宽口径关键词。**这是 advisory 标记、非否决**;也暴露一个 Slice-2 校准点:关键词口径偏宽(诉讼/仲裁 抓到例行业务),需靠 web+LLM advisory 层做实质性判断 + 关键词分级。
+
+**结论**: **cninfo 官方结构化层(gating)可行性确认**,Slice 2 正式 advisory 层可在此之上建。Sina(2B advisory)端点修正后置;它是 skill-在环、非 gating,不阻塞 Slice 2 起步。
+
+**Next**: 待用户定——起草 Slice 2 正式 advisory 层(cninfo 结构化 PIT 层 headless + web/LLM advisory skill 契约 + a_short_semantic_risk_summary 正式 schema + 面板渲染);Sina 端点修正可并入或单独小切片。
+
+---
+
 ## 2026-06-12 — Claude `提交` (Slice 1 探针 cninfo orgId fetch 修正 → local master)
 
 Codex PASS(entry below)。提交 cninfo orgId fetch 薄层修正到本地 master(无 push):`runners/a_short_semantic_risk_probe.py`(`fetch_cninfo_orgid_map` + `stock`="代码,orgId" + 分层失败 + 限速)+ `tests`(49)+ README/register。register fetch-fix 项 flip `resolved`。probe 结果 JSON(orgId 前的负向证据)未纳入提交——会被本次重 `执行` 覆盖。**fetch 层 only,纯逻辑/schema 不动;probe-only 非生产;V14.2 frozen;egs_main 未碰。**

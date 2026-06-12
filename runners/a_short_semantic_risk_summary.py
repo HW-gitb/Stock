@@ -1,0 +1,369 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""A-short 语义风险 advisory summary — Slice 2a(headless 结构化骨架,非生产).
+
+在主板 Top15 观察池上产出 `a_short_semantic_risk_summary`(独立 advisory 产物,落 research lane)。
+两层严格分置信:
+- **official_structured(官方结构化层)= 本切片 headless 填**:复用 Slice-1 已验证的 cninfo orgId 取数,
+  按披露日 **PIT**(canonical 且 ≤ as_of)过滤,标题→risk_type 映射,产出带证据的风险事件。
+  status:`risk`(有 PIT 风险事件)/ `clear`(查过、无风险事件、无质量缺陷)/ `unknown`(取数失败 **或**
+  有未来/不可解析/非字典/代码错配等质量缺陷——**绝不把不可信当 clear**;但 PIT 干净行里**真命中风险则
+  优先报 risk**)。
+- **web_llm(Sina/web LLM advisory 层)= skill 在环,本切片留 `unknown`**:headless 跑不了 web+LLM 判断,
+  2b 由 skill 填 status/risk_level/action;本切片仅 best-effort 把 Sina 原始条目喂进 `sources`(不判定、
+  不设 clear)。
+
+**advisory-only 边界(硬约束)**:绝不硬否决、不进 production scoring/decision/veto、不做历史回测证据、
+不写 production 路径、unknown 不伪装 clear、web/LLM 不与官方结构化混同一置信。真取数 = `--confirm-fetch-authorized`
+(用户 `执行`)。纯 build/validate 核心可测;不动 egs_main / Phase5 / V14.2。Slice 2b 出 skill 契约 + 面板渲染 +
+CI 守护(advisory 层已存在 ⇒ 强制 Slice 3 reconciliation;见 tests）。
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from datetime import datetime
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+import jsonschema  # noqa: E402
+
+from engine.data.a_share_board_scope import is_a_share_main_board  # noqa: E402
+from runners.a_short_semantic_risk_probe import (  # noqa: E402
+    main_board_top15, fetch_cninfo, fetch_sina, _parse_disclosure_date,
+    _is_canonical_date, _guard_out_path, _load_watch_pool, TOP15_CAP,
+    MIN_CNINFO_ANNOUNCED_CODES,
+)
+
+# 批量 cninfo sanity:Top15 里有 PIT 公告的代码数低于此门槛 = 疑似 200+空(请求形态/软反爬),
+# 此时空窗口(n_pit=0)的 clear 必须降级 unknown(fail-closed),绝不把批量空壳报成全员无风险。
+# 复用探针 MIN_CNINFO_ANNOUNCED_CODES;小批量(候选数<门槛)则要求全部有公告才算健康。
+MIN_BATCH_ANNOUNCED = MIN_CNINFO_ANNOUNCED_CODES
+
+SCHEMA_NAME = "a_short_semantic_risk_summary"
+SCHEMA_VERSION = "1.0.0"
+SCHEMA_PATH = os.path.join(ROOT, "schemas", "a_short_semantic_risk_summary.schema.json")
+DEEP_RANK_MAX = 5
+CNINFO_STATIC_HOST = "http://static.cninfo.com.cn/"
+
+# 标题关键词 → (category, risk_type)。首个命中的关键词决定分类(顺序=优先级)。
+RISK_KEYWORD_MAP = [
+    ("问询函", "监管函件", "regulatory_inquiry"),
+    ("关注函", "监管函件", "regulatory_inquiry"),
+    ("立案调查", "立案调查", "investigation"),
+    ("立案", "立案调查", "investigation"),
+    ("监管关注", "监管关注", "regulatory_attention"),
+    ("警示函", "警示函", "warning_letter"),
+    ("行政处罚", "处罚", "penalty"),
+    ("处罚", "处罚", "penalty"),
+    ("诉讼", "诉讼仲裁", "litigation"),
+    ("仲裁", "诉讼仲裁", "litigation"),
+    ("资金占用", "资金占用", "fund_occupation"),
+    ("违规担保", "违规担保", "irregular_guarantee"),
+    ("风险警示", "风险警示", "risk_warning"),
+]
+
+
+def _match_risk(title: str):
+    for kw, cat, rtype in RISK_KEYWORD_MAP:
+        if kw in title:
+            return cat, rtype
+    return None
+
+
+# ── 官方结构化层(headless,PIT)──────────────────────────────────────────────
+def build_official_structured(raw: dict, as_of: str):
+    """cninfo 单代码原始结果 → official_structured + fetch_failed。
+    PIT 强制(披露日 canonical 且 ≤ as_of);代码错配/未来/不可解析/非字典 = 质量缺陷。
+    status:有 PIT 风险事件→risk(优先);无风险但全干净→clear;无风险但有缺陷或取数失败→unknown。"""
+    as_of = str(as_of)
+    if not raw.get("ok"):
+        return {"status": "unknown", "events": [], "had_pit_announcements": False}, True   # 取数失败
+    symbol = str(raw.get("ts_code", "")).split(".", 1)[0]
+    raw_list = raw.get("announcements") or []
+    n_defect = 0
+    n_pit = 0                                                       # PIT-干净公告数(含非风险)
+    events: list[dict] = []
+    for a in raw_list:
+        if not isinstance(a, dict):
+            n_defect += 1
+            continue
+        if str(a.get("secCode", "")).strip() != symbol:
+            n_defect += 1                                            # 代码错配 → 不可信,不当证据
+            continue
+        d = _parse_disclosure_date(a.get("announcementTime"))
+        if d is None:
+            n_defect += 1                                            # 不可解析披露日
+            continue
+        if d > as_of:
+            n_defect += 1                                            # 未来日期 → PIT 泄漏,排除
+            continue
+        n_pit += 1
+        title = str(a.get("announcementTitle", ""))
+        hit = _match_risk(title)
+        if hit:
+            cat, rtype = hit
+            url = str(a.get("adjunctUrl", "") or "")
+            if url and not url.startswith("http"):
+                url = CNINFO_STATIC_HOST + url
+            events.append({"source": "cninfo", "title": title[:200], "category": cat,
+                           "disclosure_date": d, "url_or_pdf": url, "risk_type": rtype})
+    if events:
+        status = "risk"                                             # 真命中风险优先(即便另有缺陷行)
+    elif n_defect > 0:
+        status = "unknown"                                         # 不可信行 → 不敢报 clear
+    else:
+        status = "clear"                                           # 含空窗口(n_pit=0);批量空壳由 batch gate 降级
+    return {"status": status, "events": events, "had_pit_announcements": n_pit > 0}, False
+
+
+def _scan_tier(rank: int, official_status: str) -> str:
+    if rank <= DEEP_RANK_MAX:
+        return "deep"
+    return "upgraded" if official_status == "risk" else "light"     # 命中升级(仅 Top6-15)
+
+
+def _batch_announced(candidates: list) -> int:
+    return sum(1 for c in candidates if c["official_structured"]["had_pit_announcements"])
+
+
+def _batch_unhealthy(candidates: list) -> bool:
+    """批量空壳判定:有 PIT 公告的代码数低于门槛 = 疑似 cninfo 200+空(请求形态/软反爬)。
+    候选数 ≥ 门槛时要求 ≥ MIN_BATCH_ANNOUNCED;候选数 < 门槛时要求全部有公告。"""
+    n = len(candidates)
+    if n == 0:
+        return False
+    return _batch_announced(candidates) < min(MIN_BATCH_ANNOUNCED, n)
+
+
+def _sina_sources(sina_raw) -> list[dict]:
+    """best-effort:Sina 原始条目 → sources(source_type=sina);只判定不了,故不设 web_llm 状态。"""
+    if not sina_raw or not sina_raw.get("ok"):
+        return []
+    out = []
+    for it in (sina_raw.get("items") or []):
+        if not isinstance(it, dict):
+            continue
+        title = str(it.get("title", "") or "")
+        url = str(it.get("url", "") or "")
+        if not title or not url:
+            continue
+        out.append({"title": title[:200], "url": url,
+                    "published_at": (str(it.get("published_at")) if it.get("published_at") else None),
+                    "fetched_at": (str(it.get("fetched_at")) if it.get("fetched_at") else None),
+                    "source_type": "sina"})
+    return out
+
+
+def build_candidate(ts_code: str, rank: int, cninfo_raw: dict, sina_raw, as_of: str):
+    official, fetch_failed = build_official_structured(cninfo_raw, as_of)
+    scan_tier = _scan_tier(rank, official["status"])
+    n_ev = len(official["events"])
+    summary = (f"官方结构化: {official['status']}"
+               + (f"({n_ev} 风险事件)" if n_ev else "")
+               + "; web/LLM: 未评估(unknown,待 Slice-2b skill)")
+    candidate = {
+        "ts_code": ts_code, "rank": rank, "scan_tier": scan_tier,
+        "official_structured": official,
+        "web_llm": {"status": "unknown", "risk_level": "unknown", "action": "no_action"},
+        "sources": _sina_sources(sina_raw),
+        "confidence": None, "summary": summary,
+        "boundary": {"advisory_only": True, "not_deterministic_veto": True},
+    }
+    return candidate, fetch_failed
+
+
+def build_summary(universe: dict, candidate_flags: list, as_of: str, generated_at: str) -> dict:
+    candidates = [c for c, _ in candidate_flags]
+    checked = sum(1 for c in candidates if c["official_structured"]["status"] in ("clear", "risk"))
+    unknown = sum(1 for c in candidates if c["official_structured"]["status"] == "unknown")
+    failed = sum(1 for c, f in candidate_flags if f)
+    return {
+        "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
+        "generated_at": generated_at, "as_of": as_of,
+        "universe": {
+            "requested": list(universe.get("requested", [])),
+            "main_board_top15": list(universe.get("main_board_top15", [])),
+            "dropped_non_main": list(universe.get("dropped_non_main", [])),
+        },
+        "coverage": {"checked": checked, "unknown": unknown, "failed": failed},
+        "candidates": candidates,
+        "boundary": {
+            "production": False, "real_money": False, "hard_veto": False,
+            "changes_egs_scoring": False, "changes_phase5_decision": False,
+            "historical_backtest_evidence": False, "writes_production_path": False,
+        },
+    }
+
+
+# ── 一致性硬门(advisory-only / unknown-not-clear / PIT / 主板 / scan-tier)──────
+_WEB_ASSESSED_RISK = ("risk_candidate", "risk", "headwind")
+
+
+def validate_summary_consistency(summary: dict) -> None:
+    if not _is_canonical_date(summary["as_of"]):
+        raise ValueError("as_of 非合法 canonical 日历日期")
+    as_of = summary["as_of"]
+    uni = summary["universe"]
+    main = uni["main_board_top15"]
+    if len(main) > TOP15_CAP:
+        raise ValueError("main_board_top15 超过 15")
+    if any(not is_a_share_main_board(c) for c in main):
+        raise ValueError("main_board_top15 含非主板代码")
+    if any(is_a_share_main_board(c) for c in uni["dropped_non_main"]):
+        raise ValueError("dropped_non_main 含本应保留的主板代码")
+    if set(main) & set(uni["dropped_non_main"]):
+        raise ValueError("main_board_top15 与 dropped_non_main 重叠")
+
+    cands = summary["candidates"]
+    if [c["ts_code"] for c in cands] != list(main):
+        raise ValueError("candidates 必须与 main_board_top15 一一对应同序")
+    for i, c in enumerate(cands):
+        rank = c["rank"]
+        if rank != i + 1:
+            raise ValueError(f"{c['ts_code']}: rank 必须等于位次(1-based)")
+        if not is_a_share_main_board(c["ts_code"]):
+            raise ValueError(f"{c['ts_code']}: 非主板")
+        if c["boundary"] != {"advisory_only": True, "not_deterministic_veto": True}:
+            raise ValueError(f"{c['ts_code']}: boundary 必须 advisory_only + not_deterministic_veto")
+
+        off = c["official_structured"]
+        st = off["status"]
+        # scan_tier:deep⟺rank≤5;rank≥6 → upgraded⟺official risk,else light
+        if rank <= DEEP_RANK_MAX:
+            if c["scan_tier"] != "deep":
+                raise ValueError(f"{c['ts_code']}: rank≤5 必须 deep")
+        else:
+            want = "upgraded" if st == "risk" else "light"
+            if c["scan_tier"] != want:
+                raise ValueError(f"{c['ts_code']}: rank≥6 scan_tier 应为 {want}")
+        # events ⟺ status==risk;事件须带 risk_type + PIT 披露日(canonical 且 ≤ as_of)
+        if st == "risk" and len(off["events"]) < 1:
+            raise ValueError(f"{c['ts_code']}: status=risk 必须有事件")
+        if off["events"] and not off["had_pit_announcements"]:
+            raise ValueError(f"{c['ts_code']}: 有风险事件却 had_pit_announcements=False(自相矛盾)")
+        if st in ("clear", "unknown") and off["events"]:
+            raise ValueError(f"{c['ts_code']}: clear/unknown 不应带风险事件")
+        for ev in off["events"]:
+            if not ev["risk_type"] or not ev["source"]:
+                raise ValueError(f"{c['ts_code']}: 事件缺 risk_type/source")
+            dd = ev["disclosure_date"]
+            if not _is_canonical_date(dd) or dd > as_of:
+                raise ValueError(f"{c['ts_code']}: 事件披露日非 PIT(canonical 且 ≤ as_of)")
+
+        web = c["web_llm"]
+        wst = web["status"]
+        if wst == "unknown" and web["risk_level"] != "unknown":
+            raise ValueError(f"{c['ts_code']}: web unknown ⇒ risk_level unknown")
+        if wst == "clear_light" and web["risk_level"] != "none":
+            raise ValueError(f"{c['ts_code']}: web clear_light ⇒ risk_level none")
+        if wst in _WEB_ASSESSED_RISK:
+            if web["risk_level"] not in ("low", "medium", "high"):
+                raise ValueError(f"{c['ts_code']}: web 风险态 ⇒ risk_level low/medium/high")
+            if not c["sources"]:
+                raise ValueError(f"{c['ts_code']}: web 风险态 ⇒ 必须有 sources 证据")
+        if wst == "tailwind" and web["risk_level"] not in ("none", "low"):
+            raise ValueError(f"{c['ts_code']}: tailwind ⇒ risk_level none/low")
+
+    # batch-level cninfo sanity:批量空壳(有 PIT 公告代码数 < 门槛)时,任何"空窗口 clear"
+    # (clear 且 had_pit_announcements=False)都非法——必须降级 unknown(fail-closed,防 200+空伪装全员无风险)。
+    if _batch_unhealthy(cands):
+        for c in cands:
+            off = c["official_structured"]
+            if off["status"] == "clear" and not off["had_pit_announcements"]:
+                raise ValueError(f"{c['ts_code']}: 批量空壳(announced<门槛)下空窗口不得报 clear,应 unknown")
+
+    cov = summary["coverage"]
+    checked = sum(1 for c in cands if c["official_structured"]["status"] in ("clear", "risk"))
+    unknown = sum(1 for c in cands if c["official_structured"]["status"] == "unknown")
+    if cov["checked"] != checked or cov["unknown"] != unknown:
+        raise ValueError("coverage checked/unknown 与 candidates 不一致")
+    if cov["checked"] + cov["unknown"] != len(cands):
+        raise ValueError("coverage checked+unknown 必须等于候选数")
+    if cov["failed"] > cov["unknown"]:
+        raise ValueError("coverage failed 不能超过 unknown")
+
+
+def write_summary(summary: dict, out_path: str) -> None:
+    _guard_out_path(out_path)
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    jsonschema.validate(summary, schema)
+    validate_summary_consistency(summary)
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    tmp = str(out_path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, out_path)
+
+
+def build_summary_from_fetches(watch_pool, as_of: str, cninfo_results, sina_results, generated_at: str):
+    """纯编排(无 I/O):watch_pool → 主板 Top15 → 逐候选 build。cninfo_results/sina_results 为
+    {ts_code: raw} 映射(注入便于测试)。sina_results 可为 None(未跑 Sina)。"""
+    main_codes, dropped = main_board_top15(watch_pool)
+    universe = {"requested": list(watch_pool), "main_board_top15": main_codes,
+                "dropped_non_main": dropped}
+    flags = []
+    for rank, ts in enumerate(main_codes, start=1):
+        cninfo_raw = cninfo_results.get(ts, {"ts_code": ts, "ok": False,
+                                             "error_category": "not_fetched", "announcements": []})
+        sina_raw = (sina_results or {}).get(ts)
+        flags.append(build_candidate(ts, rank, cninfo_raw, sina_raw, as_of))
+    # batch-level cninfo sanity:大面积空响应(疑似 200+空)→ 空窗口的 clear 降级 unknown(fail-closed)。
+    # 单只真实无公告在健康批量里仍可 clear;批量异常时绝不把空壳报成全员无风险。
+    candidates = [c for c, _ in flags]
+    if _batch_unhealthy(candidates):
+        for c in candidates:
+            off = c["official_structured"]
+            if off["status"] == "clear" and not off["had_pit_announcements"]:
+                off["status"] = "unknown"
+                c["summary"] += "(batch-anomaly: 大面积空响应 → 降级 unknown,疑似 cninfo 请求形态/软反爬)"
+    return build_summary(universe, flags, as_of, generated_at)
+
+
+def main(argv=None, cninfo_fetcher=None, sina_fetcher=None):
+    p = argparse.ArgumentParser(description="A-short 语义风险 advisory summary — Slice 2a headless 骨架")
+    p.add_argument("--as-of", required=True, help="YYYYMMDD")
+    p.add_argument("--watch-pool", required=True, help="逗号分隔 ts_code 或 @path JSON 数组")
+    p.add_argument("--out", required=True, help="summary 落点(禁 result/a_short)")
+    p.add_argument("--confirm-fetch-authorized", action="store_true",
+                   help="确认用户已授权本次 cninfo(+可选 Sina)真实抓取")
+    p.add_argument("--include-sina", action="store_true", help="best-effort Sina sources feeder(LIVE)")
+    p.add_argument("--cninfo-lookback-days", type=int, default=90)
+    args = p.parse_args(argv)
+
+    if not args.confirm_fetch_authorized:
+        raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:本 runner 会真实抓取 cninfo/Sina")
+    if not _is_canonical_date(args.as_of):
+        raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
+    _guard_out_path(args.out)
+
+    requested = _load_watch_pool(args.watch_pool)
+    main_codes, dropped = main_board_top15(requested)
+    print(f"[semantic-summary] universe: requested={len(requested)} → main-board Top15={len(main_codes)} "
+          f"(dropped={len(dropped)})")
+
+    cf = cninfo_fetcher or fetch_cninfo
+    cninfo_list = cf(main_codes, args.as_of, args.cninfo_lookback_days)
+    cninfo_results = {r["ts_code"]: r for r in cninfo_list}
+    sina_results = None
+    if args.include_sina:
+        sf = sina_fetcher or fetch_sina
+        sina_results = {r["ts_code"]: r for r in sf(main_codes)}
+
+    summary = build_summary_from_fetches(requested, args.as_of, cninfo_results, sina_results,
+                                         datetime.now().astimezone().isoformat(timespec="seconds"))
+    write_summary(summary, args.out)
+    cov = summary["coverage"]
+    n_risk = sum(1 for c in summary["candidates"] if c["official_structured"]["status"] == "risk")
+    print(f"[semantic-summary] coverage checked={cov['checked']} unknown={cov['unknown']} "
+          f"failed={cov['failed']}; official risk candidates={n_risk}")
+    print(f"[semantic-summary] web/LLM 全留 unknown(待 Slice-2b skill);summary → {args.out}")
+
+
+if __name__ == "__main__":
+    main()

@@ -652,14 +652,36 @@ def fetch_cninfo(codes, as_of: str, lookback_days: int = 90, session=None,
     return results
 
 
+def _sina_market_symbol(ts_code) -> str:
+    """ts_code → Sina 风格 market 前缀代码(sh600519 / sz000001)。"""
+    code = str(ts_code)
+    sym = code.split(".", 1)[0]
+    pref = "sz" if code.upper().endswith(".SZ") else "sh"
+    return f"{pref}{sym}"
+
+
+def _normalize_sina_item(it) -> dict | None:
+    """把 Sina 新闻条目(键名不一)归一为 {title,url,published_at};缺 title/url → None。
+    形态未治理 → 多键名 fallback;真实端点/键名留 `执行` 实测(完整 web 判断属 Slice 2 skill)。"""
+    if not isinstance(it, dict):
+        return None
+    title = next((str(it[k]) for k in ("title", "stitle", "t", "wapsummary") if it.get(k)), "")
+    url = next((str(it[k]) for k in ("url", "surl", "u", "link") if it.get(k)), "")
+    published = next((str(it[k]) for k in ("ctime", "intime", "mtime", "datetime", "pub_date")
+                      if it.get(k)), None)
+    if not title or not url:
+        return None
+    return {"title": title, "url": url, "published_at": published}
+
+
 def fetch_sina(codes, session=None) -> list[dict]:
-    """执行期(best-effort,LIVE-only):逐代码 GET Sina 新闻条目。形态未证明 → 防御式解析。"""
+    """执行期(best-effort,LIVE-only):逐代码 GET Sina 新闻条目,market 前缀代码 + 防御式键名归一。
+    端点/键名未治理 → 形态实测留 `执行`;完整 web+LLM 判断属 Slice 2 skill 在环,本函数只喂原始 sources。"""
     import requests
     sess = session or requests
     results: list[dict] = []
     for ts_code in codes:
-        symbol = str(ts_code).split(".", 1)[0]
-        url = SINA_NEWS_URL_TEMPLATE.format(symbol=symbol)
+        url = SINA_NEWS_URL_TEMPLATE.format(symbol=_sina_market_symbol(ts_code))
         try:
             resp = sess.get(url, timeout=10)
             if resp.status_code != 200:
@@ -667,10 +689,11 @@ def fetch_sina(codes, session=None) -> list[dict]:
                 results.append({"ts_code": ts_code, "ok": False, "error_category": cat, "items": []})
                 continue
             data = resp.json()
-            items = (data.get("result", {}).get("data") if isinstance(data, dict) else None) \
-                or (data.get("list") if isinstance(data, dict) else None) or []
-            results.append({"ts_code": ts_code, "ok": True, "error_category": None,
-                            "items": items if isinstance(items, list) else []})
+            raw = (data.get("result", {}).get("data") if isinstance(data, dict) else None) \
+                or (data.get("list") if isinstance(data, dict) else None) \
+                or (data.get("data") if isinstance(data, dict) else None) or []
+            items = [n for n in (_normalize_sina_item(x) for x in raw if isinstance(raw, list)) if n]
+            results.append({"ts_code": ts_code, "ok": True, "error_category": None, "items": items})
         except Exception as exc:  # noqa: BLE001
             results.append({"ts_code": ts_code, "ok": False,
                             "error_category": _categorize_error(exc), "items": []})
