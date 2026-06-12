@@ -8,6 +8,32 @@
 
 ---
 
+## 2026-06-12 — Codex `审查` (A-short semantic-risk Top15 enrichment revised design) — **PASS**
+
+**Scope reviewed**: `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md` plus its route/register updates in `docs/README.md` and `docs/system_risk_register.md`; compared against the desktop Codex revision note `C:\Users\cnhea\Desktop\a_short_semantic_risk_codex_revision_notes.md` and verified the underlying legacy facts in `A-EGS/egs_main.py::stage3_ai_clearing`. Codex performed no provider call, no data fetch, no schema/runner implementation, no production EGS run, and no commit.
+
+**Verdict**: PASS / commit-safe for this design-only slice. The draft was written according to Codex's final revision requirements: it does not claim semantic-risk coverage starts from zero, explicitly identifies the existing `cninfo_flag` + DeepSeek `POL-RISK-VETO` paths, treats DeepSeek hard veto as a legacy conflict, keeps the new layer isolated from production `stage3`, splits official-structured PIT evidence from Web/LLM advisory evidence, requires Top15 main-board coverage via `is_a_share_main_board`, defines the `a_short_semantic_risk_summary.json` M6.7/weekly-visible artifact, separates semantic industry trend from production `industry_heat`, and preserves the probe-first landing order.
+
+**Required findings**: none.
+
+**Verified matched to Codex revision note**:
+- Existing `egs_main.py` semantic logic is acknowledged and routed instead of hidden: current cninfo regulatory checks and DeepSeek/web policy hard veto remain untouched in this design-only slice.
+- Web/LLM findings stay advisory-only: no deterministic fields, no production scoring, no `decision` / `veto` / hard action mutation, `unknown` does not become `clear`, and real-time web is LIVE/forward only, not historical backtest evidence.
+- Official structured evidence is separately scoped as disclosure-date PIT `risk marker / hard-veto candidate`; deterministic promotion is deferred to a later Slice 3 with analyzer/governance/schema/PIT or forward evidence.
+- Top15 watch-pool coverage, Top5 deep / Top6-15 light / hit-upgrade, strict main-board filtering, and M6.7/weekly panel consumption are all explicit.
+- Frozen boundaries hold: no `v14.2_spec.md` edit, no production scoring change, no broker/auto-order path, no fetch/run authorized by this design.
+
+**Verification**:
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` via bundled Codex Python -> 14/14 OK.
+- `git diff --check` -> no whitespace errors; LF-to-CRLF warnings only.
+- `rg` checks confirmed the design contains the required boundary terms (`legacy-conflict`, `Top15`, `Top5`, `Top6-15`, `is_a_share_main_board`, `unknown`, `M6.7`, `a_short_semantic_risk_summary`, `industry_heat`, `V14.2`, `probe`, `PIT`, `LIVE`) and the prohibition set.
+
+**Register outcome**: no new material finding. The existing `A-short semantic-risk Top15 enrichment — revised DESIGN` register item can remain `in_progress` until Claude `提交`; no additional risk entry is required.
+
+**Next**: `提交`.
+
+---
+
 ## 2026-06-12 — Codex `审查` (V14.3 canonical main-board helper repair) — **PASS**
 
 **Scope reviewed**: working tree after Claude `修复` for the two residual V14.3 strict-main-board findings. Reviewed modified files: `engine/data/a_share_board_scope.py`, `runners/a_short_regime_comparison_runner.py`, `tests/test_a_share_board_scope.py`, `tests/test_a_short_regime_comparison_runner.py`, `docs/README.md`, `docs/a_short_v14_3_regime_classifier_design_20260611.md`, `presets/a_short_v14_3_regime_governance_20260611.json`, `schemas/a_short_v14_3_regime_governance.schema.json`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`. Codex performed no provider call, no bootstrap, no result write, no EGS run, and no commit.
@@ -33,6 +59,40 @@
 **Register outcome**: no new material finding. Existing V14.3 strict-main-board risk entries contain working-tree repair notes; final status flip to `resolved` remains tied to Claude `提交` per register convention.
 
 **Next**: `提交`.
+
+---
+
+## 2026-06-12 — Claude `提交` (A-short semantic-risk Top15 enrichment revised design → local master)
+
+Codex PASS (entry below). Committed the design-only doc `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md` + README/register to local master only (no push). Design entry flipped `resolved`. No code/schema/tests; production stage3 + V14.2 untouched.
+
+**Status of (2)**: the revised DESIGN is done + committed, but **(2) is NOT complete** — the actual build (Slice 1 cninfo/Sina probe → Slice 2 advisory layer → Slice 3 optional promotion) has not started. So the pending reminder (V14.3 bootstrap + this-Friday 实盘 after (2) completes) stays armed (memory `pending-reminder-after-semantic-eval`).
+
+**Next**: per CURRENT.md §5 / the converged design, the next build step is `起草` Slice 1 (cninfo/Sina provider probe — data-source feasibility; real fetch is a user-authorized `执行`). Awaiting user direction (the user controls when each slice starts).
+
+---
+
+## 2026-06-12 — Claude `起草` (A-short semantic-risk Top15 enrichment — revised DESIGN, design-only)
+
+**What**: user authorized starting (2) by commanding `起草修订设计` after reading Codex's revision notes. Drafted `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md` — the 3-way-converged revised design (Codex patch + Codex revision notes + Claude feedback). Design-only: no code/schema/tests (they ship per the 3-slice plan); production stage3 + V14.2 untouched.
+
+**Verified the real code first** (per don't-guess): `egs_main.py::stage3_ai_clearing` already has (a) a cninfo regulatory check (`hisAnnouncement/query`, keywords 问询函/立案调查/监管关注/警示函 → `cninfo_flag`, on top50, backtest-skipped) and (b) a DeepSeek+东财-news `POL-RISK-VETO` industry hard-veto. So the gap is NOT "zero coverage" — Codex's revision-note #1/#2 are correct. The design reframes the gap (auditable/PIT/Top15-main-board/M6.7-visible, LLM advisory-only) and keeps the new layer **isolated from production stage3**.
+
+**Answers Codex's 6 mandatory questions**: (1) production stage3 untouched; DeepSeek POL-RISK-VETO = legacy-conflict, migration deferred to Slice 3; cninfo fetch pattern reused for an extended PIT advisory layer. (2) two layers split (cninfo official-structured PIT vs Sina/web LLM advisory). (3) probe-first (cninfo/Sina ungoverned scrape-grade). (4) Top15 main-board via `is_a_share_main_board`. (5) `a_short_semantic_risk_summary.json` lane artifact + panel. (6) forbidden list (web+LLM hard veto / unknown→clear / change v14.2 / production scoring / auto-order / real-time-web-in-backtest / non-main-board). Plus: semantic industry-trend ≠ production industry_heat.
+
+**Boundary**: design-only, comparison/advisory, production-isolated, V14.2 frozen.
+
+**Verification**: route-doc guard 14/14 OK. FFFD=0 over the new doc + README + register.
+
+**Note**: this is the START of (2), not its completion — the pending reminder (run V14.3 bootstrap + this-Friday 实盘) stays armed until (2) is COMPLETE (memory `pending-reminder-after-semantic-eval`).
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-12 — PENDING GATE (user directive, no code change)
+
+User (Friday post-close 20260612): **do NOT start slice (2)** — the A-short analysis-layer semantic-automation evaluation (监管48h/行业景气/媒体负面/隐蔽风险, CURRENT.md §5) — until the user gives an explicit command. **Standing reminder**: once (2) is COMPLETE, remind the user to run BOTH (a) the V14.3 regime **bootstrap `执行`** and (b) this week's **Friday production live screening (本周周五实盘, as_of 20260612)**. Recorded in memory `pending-reminder-after-semantic-eval` (delete after delivering). A-short build remains complete + real-data-de-risked; awaiting user direction.
 
 ---
 
