@@ -1,0 +1,168 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_semantic_risk_probe_summary",
+  "description": "A-short semantic-risk provider feasibility-probe summary (Slice 1, probe-only). Characterizes whether the cninfo official-structured provider (and, best-effort, the Sina/web advisory source) can support the formal Slice-2 semantic-risk layer over the main-board Top15 watch pool: field presence, disclosure-date parseability, code-mapping correctness, coverage, and failure modes. feasible (overall) == cninfo.feasible (the structured headless layer is the gating must-have for Slice 2; Sina/web is LIVE-only advisory + skill-in-loop, reported separately). NEVER hard-vetoes / changes EGS scoring / changes Phase5 decision / produces historical-backtest evidence / writes a production path. Provider failure for a code => that code's status is 'unknown', never 'clear'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "as_of",
+               "universe", "thresholds", "cninfo", "sina", "feasible", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_semantic_risk_probe_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested", "main_board_top15", "dropped_non_main"],
+      "properties": {
+        "requested": {"type": "array", "items": {"type": "string"}},
+        "main_board_top15": {"type": "array", "items": {"type": "string"}, "maxItems": 15},
+        "dropped_non_main": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_cninfo_ok_codes", "min_cninfo_ok_ratio", "min_cninfo_announced_codes",
+                   "required_cninfo_fields", "regulator_keywords",
+                   "min_sina_ok_codes", "min_sina_ok_ratio", "min_sina_item_codes"],
+      "properties": {
+        "min_cninfo_ok_codes": {"const": 10},
+        "min_cninfo_ok_ratio": {"const": 0.6},
+        "min_cninfo_announced_codes": {"const": 3},
+        "required_cninfo_fields": {
+          "type": "array", "items": {"type": "string"},
+          "const": ["announcementTitle", "adjunctUrl", "announcementTime", "secCode"]
+        },
+        "regulator_keywords": {"type": "array", "items": {"type": "string"}},
+        "min_sina_ok_codes": {"const": 8},
+        "min_sina_ok_ratio": {"const": 0.5},
+        "min_sina_item_codes": {"const": 3}
+      }
+    },
+    "cninfo": {"$ref": "#/definitions/cninfo_assessment"},
+    "sina": {"$ref": "#/definitions/sina_assessment"},
+    "feasible": {"type": "boolean"},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "real_money", "hard_veto", "changes_egs_scoring",
+                   "changes_phase5_decision", "historical_backtest_evidence", "writes_production_path"],
+      "properties": {
+        "production": {"const": false},
+        "real_money": {"const": false},
+        "hard_veto": {"const": false},
+        "changes_egs_scoring": {"const": false},
+        "changes_phase5_decision": {"const": false},
+        "historical_backtest_evidence": {"const": false},
+        "writes_production_path": {"const": false}
+      }
+    }
+  },
+  "definitions": {
+    "cninfo_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of_is_valid_date", "n_requested", "n_ok", "n_failed", "n_announced",
+                   "n_future_dated_codes", "n_unparseable_date_codes", "n_bad_shape_codes",
+                   "n_required_fields_ok", "n_dates_pit_ok",
+                   "n_code_mapping_ok", "n_risk_candidate", "ok_ratio", "failure_categories",
+                   "per_code", "feasible", "reasons"],
+      "properties": {
+        "as_of_is_valid_date": {"type": "boolean"},
+        "n_requested": {"type": "integer", "minimum": 0},
+        "n_ok": {"type": "integer", "minimum": 0},
+        "n_failed": {"type": "integer", "minimum": 0},
+        "n_announced": {"type": "integer", "minimum": 0},
+        "n_future_dated_codes": {"type": "integer", "minimum": 0},
+        "n_unparseable_date_codes": {"type": "integer", "minimum": 0},
+        "n_bad_shape_codes": {"type": "integer", "minimum": 0},
+        "n_required_fields_ok": {"type": "integer", "minimum": 0},
+        "n_dates_pit_ok": {"type": "integer", "minimum": 0},
+        "n_code_mapping_ok": {"type": "integer", "minimum": 0},
+        "n_risk_candidate": {"type": "integer", "minimum": 0},
+        "ok_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "failure_categories": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "per_code": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ts_code", "ok", "error_category", "n_returned", "n_announcements",
+                         "n_future_dated", "n_unparseable_dates", "n_bad_shape",
+                         "required_fields_ok", "dates_pit_ok", "code_mapping_ok", "status"],
+            "properties": {
+              "ts_code": {"type": "string"},
+              "ok": {"type": "boolean"},
+              "error_category": {"type": ["string", "null"]},
+              "n_returned": {"type": "integer", "minimum": 0},
+              "n_announcements": {"type": "integer", "minimum": 0},
+              "n_future_dated": {"type": "integer", "minimum": 0},
+              "n_unparseable_dates": {"type": "integer", "minimum": 0},
+              "n_bad_shape": {"type": "integer", "minimum": 0},
+              "required_fields_ok": {"type": ["boolean", "null"]},
+              "dates_pit_ok": {"type": ["boolean", "null"]},
+              "code_mapping_ok": {"type": ["boolean", "null"]},
+              "status": {"enum": ["unknown", "clear_light", "risk_candidate"]}
+            }
+          }
+        },
+        "feasible": {"type": "boolean"},
+        "reasons": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "sina_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of_is_valid_date", "pit_capable", "n_requested", "n_ok", "n_failed",
+                   "n_with_items", "n_fields_ok", "ok_ratio", "failure_categories",
+                   "per_code", "feasible", "reasons"],
+      "properties": {
+        "as_of_is_valid_date": {"type": "boolean"},
+        "pit_capable": {"const": false},
+        "n_requested": {"type": "integer", "minimum": 0},
+        "n_ok": {"type": "integer", "minimum": 0},
+        "n_failed": {"type": "integer", "minimum": 0},
+        "n_with_items": {"type": "integer", "minimum": 0},
+        "n_fields_ok": {"type": "integer", "minimum": 0},
+        "ok_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "failure_categories": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "per_code": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ts_code", "ok", "error_category", "n_items", "fields_ok", "status"],
+            "properties": {
+              "ts_code": {"type": "string"},
+              "ok": {"type": "boolean"},
+              "error_category": {"type": ["string", "null"]},
+              "n_items": {"type": "integer", "minimum": 0},
+              "fields_ok": {"type": ["boolean", "null"]},
+              "status": {"enum": ["unknown", "clear_light", "items_found"]}
+            }
+          }
+        },
+        "feasible": {"type": "boolean"},
+        "reasons": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"feasible": {"const": true}}},
+      "then": {"properties": {"cninfo": {"properties": {"feasible": {"const": true}}}}}
+    },
+    {
+      "if": {"properties": {"feasible": {"const": false}}},
+      "then": {"properties": {"cninfo": {"properties": {"feasible": {"const": false}}}}}
+    }
+  ]
+}

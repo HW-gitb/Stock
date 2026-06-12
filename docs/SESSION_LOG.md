@@ -8,6 +8,245 @@
 
 ---
 
+## 2026-06-12 — Claude `提交` (A-short semantic-risk Slice 1 provider feasibility probe → local master)
+
+Codex PASS(entry below)。提交语义风险层第一个 build 切片(独立 cninfo/Sina 可行性探针)到本地 master(无 push)。新增 `runners/a_short_semantic_risk_probe.py` + `schemas/a_short_semantic_risk_probe_summary.schema.json` + `tests/test_a_short_semantic_risk_probe.py`(44 tests)+ README/register/SESSION_LOG。register 5 条 finding(future-date PIT leak / bad-date-shape bypass / bad-row clear-status / README invariant drift / Slice-1 in_progress)全 flip `resolved`。
+
+**经 4 轮审查-修复**:future 日期 PIT 泄漏 → 坏形态/不可解析旁路 → per-code status 伪装 clear → README 措辞漂移。四轮同一类"unknown 不得伪装 clear / PIT 完整性"不变式逐出口被点(per-code status × 聚合计数 × feasibility × consistency × route-doc)。教训已记:下个切片布尔有效性判断第一稿就把"缺陷类 × 所有出口"矩阵一次列全自测。
+
+**边界**:probe-only,非生产;不硬否决/不改 EGS scoring/不改 Phase5 decision/不做历史回测证据/不写 production 路径;V14.2 frozen;production stage3 未碰;无 fetch(真取数 = 单独 `执行` 授权);无 push。
+
+**Next**: Slice 1 探针真取数(用户 `执行` 授权 cninfo/Sina 抓取)→ 评估 feasibility → Slice 2 正式 advisory 层。
+
+---
+
+## 2026-06-12 — Codex `审查` (A-short semantic-risk Slice 1 README status invariant repair) — **PASS**
+
+**Scope reviewed**: latest working-tree repair over `docs/README.md`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, and the still-uncommitted Slice-1 probe files (`runners/a_short_semantic_risk_probe.py`, `schemas/a_short_semantic_risk_probe_summary.schema.json`, `tests/test_a_short_semantic_risk_probe.py`). Codex performed no provider call, no real fetch, no production EGS run, no production behavior edit, and no commit.
+
+**Verdict**: PASS / commit-safe for Slice 1 provider feasibility probe. The last route-doc drift is fixed: the active `docs/README.md` provider-probe row now describes `validate_probe_summary_consistency` with `status invariant [not ok⇒unknown; clear/risk⇒ok+quality-clean]`, matching the implementation. The stale `failure⇔unknown` phrase now remains only in append-only historical review/finding narratives that describe the previous bug, not in the active contract row.
+
+**Findings**: none remaining for this slice.
+
+**Verified**:
+- cninfo PIT/date/shape gates remain correct: raw `n_returned` is partitioned into PIT / future / unparseable / bad_shape; future/unparseable/bad-shape rows block `feasible=true`.
+- per-code status semantics remain correct: `clear_light` / `risk_candidate` require ok + quality-clean; transport failure or provider-quality defect maps to `unknown`.
+- production isolation remains intact: no hard veto, no EGS scoring or Phase5 decision change, no production-path write, and no fetch without explicit authorization.
+- route docs now point to the same status invariant as the code.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_semantic_risk_probe` -> 44/44 OK.
+- `python -m py_compile runners/a_short_semantic_risk_probe.py tests/test_a_short_semantic_risk_probe.py` -> OK.
+- `jsonschema.Draft7Validator.check_schema(schemas/a_short_semantic_risk_probe_summary.schema.json)` -> OK.
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` -> 14/14 OK.
+- `git diff --check` -> no whitespace errors (line-ending warnings only).
+- `rg` scan confirms `docs/README.md` contains the corrected invariant and no active `failure⇔unknown` claim.
+
+**Register outcome**: no new material finding. The open semantic-risk Slice-1 findings (`R-ASHORT-SEMANTIC-PROBE-FUTURE-DATE-PIT-LEAK`, `-BAD-DATE-SHAPE-BYPASS`, `-BAD-ROW-CLEAR-STATUS`, and `-README-STATUS-INVARIANT-DRIFT`) may flip to `resolved` when Claude submits this PASS-reviewed slice.
+
+**Next**: `提交`.
+
+---
+
+## 2026-06-12 — Claude `修复` (Slice 1 探针 — README status 不变式措辞漂移)
+
+**Finding 评估:** `R-ASHORT-SEMANTIC-PROBE-README-STATUS-INVARIANT-DRIFT` (P2) ✅ **成立**。status 代码修复正确,但 README 路由行里 `validate_probe_summary_consistency` 仍写旧的 `failure⇔unknown invariant`——我上轮改了 register 却漏了 README 这处 active 契约。README 是持久路由表,旧措辞会诱导后续 agent 复活 `ok⇔非unknown` 旧不变式。
+
+**Fix (docs-only)**: README 该处改为 `status invariant [not ok⇒unknown; clear/risk⇒ok+quality-clean]`。repo 全扫确认其余 `failure⇔unknown` 仅存在于 append-only 历史 SESSION_LOG entry + finding 叙述(描述缺陷本身),非 active 契约;register Slice-1 active entry 上轮已是正确措辞。
+
+**Boundary**: 纯 README 措辞订正;无代码/schema/behavior 改动;V14.2 frozen;production 未碰。
+
+**Next**: `审查`(复审 README 措辞)。
+
+---
+
+## 2026-06-12 — Codex `审查` (A-short semantic-risk Slice 1 status repair) — **FAIL**
+
+**Scope reviewed**: latest working-tree repair over `runners/a_short_semantic_risk_probe.py`, `schemas/a_short_semantic_risk_probe_summary.schema.json`, `tests/test_a_short_semantic_risk_probe.py`, `docs/README.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`. Codex performed no provider call, no real fetch, no production EGS run, no production behavior edit, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The code-level status repair is correct: future / unparseable / non-dict / missing-field / mapping-mismatch rows now report per-code `status='unknown'`, not `clear_light`, and forged `clear_light` summaries are rejected. The remaining blocker is a route-doc contradiction in `docs/README.md` that still describes the old `failure⇔unknown` invariant.
+
+**Required finding**:
+- `R-ASHORT-SEMANTIC-PROBE-README-STATUS-INVARIANT-DRIFT` (P2): the active route-table row for `A-short semantic-risk provider feasibility probe` correctly says provider-quality defects map to `unknown`, but later in the same row it still summarizes `validate_probe_summary_consistency` as `failure⇔unknown invariant`. That is the pre-repair invariant and is now wrong: the implementation intentionally uses `not ok ⇒ unknown` plus `clear/risk ⇒ ok + quality-clean`; cninfo can be `ok=True` and still `status='unknown'` when provider quality is invalid. This active README row is the durable pointer future agents will follow, so the stale wording can reintroduce the exact bug just fixed. Required repair: replace `failure⇔unknown invariant` with wording aligned to the implementation, e.g. `status invariant [not ok⇒unknown; clear/risk⇒ok+quality-clean]`, and keep SESSION_LOG / risk-register wording unchanged except for marking the repair after review. No code/schema change or provider fetch is required.
+
+**Positive checks**:
+- `R-ASHORT-SEMANTIC-PROBE-CNINFO-BAD-ROW-CLEAR-STATUS` appears fixed in code: future-only, unparseable-only, non-dict-only, missing-field, and mapping-mismatch samples all return `status='unknown'`.
+- The previous feasibility gates remain fixed: future / unparseable / bad-shape rows block `cninfo.feasible`, and forged `feasible=true` is rejected.
+- Production isolation remains intact: no hard veto, no EGS scoring or Phase5 decision change, no production-path write, and no fetch without explicit authorization.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_semantic_risk_probe` -> 44/44 OK.
+- `python -m py_compile runners/a_short_semantic_risk_probe.py tests/test_a_short_semantic_risk_probe.py` -> OK.
+- `jsonschema.Draft7Validator.check_schema(schemas/a_short_semantic_risk_probe_summary.schema.json)` -> OK.
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` -> 14/14 OK.
+- `git diff --check` -> no whitespace errors (line-ending warnings only).
+- Synthetic no-network probes: future / bad-date / bad-shape / missing-field / mapping-mismatch rows all report `unknown`; forged defective `clear_light` and forged missing-field `clear_light` summaries raise `ValueError`.
+- Route-doc scan: `docs/README.md` still contains the stale phrase `failure⇔unknown invariant` in the active semantic-risk provider probe row.
+
+**Register outcome**: one route-doc status-invariant drift finding recorded in `docs/system_risk_register.md`. No production behavior was changed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `修复` (Slice 1 探针 — 坏行 status 仍报 clear_light)
+
+**Finding 评估:** `R-ASHORT-SEMANTIC-PROBE-CNINFO-BAD-ROW-CLEAR-STATUS` (P2) ✅ **成立,同一类第三次**。前两轮我在 feasibility 聚合门处理了质量缺陷,但 per-code `status` 还把有 future/unparseable/非字典行、或 PIT 行字段/映射失败的代码报成 `clear_light` → 违反"failure/unknown 不得伪装 clear",误导 Slice 2 消费者。根因仍是"修聚合没修 per-code 同一不变式"。
+
+**Fix(status 质量语义,复用 `unknown`)**:
+- `quality_ok = 无 future/unparseable/非字典缺陷 且 n_pit>0 且 字段+映射有效`;status:not ok→unknown;ok+空窗口→clear_light;ok+¬quality_ok→**unknown**;ok+quality_ok+风险词→risk_candidate;else→clear_light。
+- consistency 放宽 `ok⇔非unknown` 为 `not ok⇒unknown`(传输失败,两 provider 通用)+ cninfo per-code status-质量门(clear/risk 必须 ok+干净+字段映射有效;risk_candidate 需 PIT 行);sina 仍 `ok⇒非unknown`。
+- **对抗测试**:future / unparseable / 非字典 / 缺字段 / 映射不符 → status `unknown`;+ 一致性测试(坏行标 clear_light → raise)。
+
+**Pre-flight 复跑**:44 tests PASS;schema meta OK(enum 未变,复用 unknown);py_compile OK;README/register doc↔behavior 同步。
+
+**Boundary**: probe-code+docs only;不硬否决/不改 EGS/Phase5/不写 production/无 fetch;V14.2 frozen;production stage3 未碰。
+
+**Next**: `审查`(复审 status 语义门)。
+
+---
+
+## 2026-06-12 — Codex `审查` (A-short semantic-risk Slice 1 bad-row repair) — **FAIL**
+
+**Scope reviewed**: latest working-tree repair over `runners/a_short_semantic_risk_probe.py`, `schemas/a_short_semantic_risk_probe_summary.schema.json`, `tests/test_a_short_semantic_risk_probe.py`, `docs/README.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`. Codex performed no provider call, no real fetch, no production EGS run, no production behavior edit, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The previous P1 feasibility bypass is fixed: future / unparseable / non-dict returned rows now block `cninfo.feasible`, and forged `feasible=true` is rejected. However, the per-code `status` still reports provider-quality-invalid rows as `clear_light`, which contradicts the Slice-1 contract "failure/unknown must not be disguised as clear" and can mislead the future Slice-2 consumer.
+
+**Required finding**:
+- `R-ASHORT-SEMANTIC-PROBE-CNINFO-BAD-ROW-CLEAR-STATUS` (P2): `classify_cninfo_code` sets `status="clear_light"` whenever `ok=True` and there is no PIT-valid announcement, even if the provider returned a future-dated row, an unparseable-date row, or a non-dict malformed row. Synthetic no-network probes now correctly show `feasible=False`, but the affected code still returns `status='clear_light'` with `dates_pit_ok=False` and one of `n_future_dated` / `n_unparseable_dates` / `n_bad_shape` > 0. This is not "successfully checked and clear"; it is a provider-quality failure / unknown state. The same semantic risk applies to PIT rows whose required fields or `secCode` mapping fail: the current status can still read `clear_light` while the evidence is invalid. Required repair: make `clear_light` mean only a genuinely successful clear result (empty successful window, or PIT-clean non-risk rows with required fields and mapping valid). Any code with future rows, unparseable dates, malformed rows, missing required fields, or code-mapping mismatch must be `unknown` or a formally added invalid-status enum. If choosing `unknown`, update `_check_provider_counts` so `ok=True` provider-quality failures may be `unknown` while transport failures still must be `unknown`. Add adversarial tests for future-only, unparseable-only, non-dict-only, missing-field, and mapping-mismatch rows not being `clear_light`, plus a consistency test that a summary containing such a row labelled `clear_light` raises.
+
+**Positive checks**:
+- The previous `R-ASHORT-SEMANTIC-PROBE-CNINFO-BAD-DATE-SHAPE-BYPASS` core is repaired: raw `n_returned` is counted before filtering; PIT / future / unparseable / bad_shape partition sums to `n_returned`; `n_future_dated_codes`, `n_unparseable_date_codes`, and `n_bad_shape_codes` all block feasibility.
+- The earlier `R-ASHORT-SEMANTIC-PROBE-CNINFO-FUTURE-DATE-PIT-LEAK` remains repaired: future rows do not count as `n_announced`, do not produce `risk_candidate`, and cannot coexist with `feasible=true`.
+- Production isolation remains intact: no hard veto, no EGS scoring or Phase5 decision change, no production-path write, and no fetch without explicit authorization.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_semantic_risk_probe` -> 43/43 OK.
+- `python -m py_compile runners/a_short_semantic_risk_probe.py tests/test_a_short_semantic_risk_probe.py` -> OK.
+- `jsonschema.Draft7Validator.check_schema(schemas/a_short_semantic_risk_probe_summary.schema.json)` -> OK.
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` -> 14/14 OK.
+- `git diff --check` -> no whitespace errors (line-ending warnings only).
+- Synthetic no-network probes: `future`, `bad_date`, and `bad_shape` samples all block `feasible` and reject forged `feasible=true`, but each affected code still reports `status='clear_light'`, confirming this residual finding.
+
+**Register outcome**: one material P2 status-semantics finding recorded in `docs/system_risk_register.md`. Existing P1 findings should remain open until the status repair receives Codex PASS and the slice is committed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `修复` (Slice 1 探针 — cninfo 坏形态/不可解析日期旁路)
+
+**Finding 评估:** `R-ASHORT-SEMANTIC-PROBE-CNINFO-BAD-DATE-SHAPE-BYPASS` (P1) ✅ **两处都成立**。PIT 未来日期已修,但同类不变式还有两个洞:(1) 非字典行在计 `n_returned` 前被 `isinstance` 静默丢弃;(2) 不可解析日期的代码因 `n_announcements=0` 不进 `announced` 集 → 逃过聚合 `n_dates_pit_ok` 门。根因 = 我"修了未来日期这一个表现,没修整类"——加 `n_future_dated_codes` 门时没给 unparseable/非字典行同等待遇。
+
+**Fix(把三类坏行统一为 provider 质量缺陷,精确划分 + 各自硬门)**:
+- `n_returned` 改为对**原始返回行**计数(先于 isinstance);每行精确划入 PIT / future / unparseable / bad_shape 四类,consistency 断言四者之和 == n_returned(非字典行不再静默丢)。
+- 三个 provider 质量门:`n_future_dated_codes==0` / `n_unparseable_date_codes==0` / `n_bad_shape_codes==0`,同时是 feasibility 门 + consistency 门 → 坏行既不能报成 clean(`dates_pit_ok`=="全部返回行干净"),也不能与 feasible=true 并存。
+- schema(per_code +`n_unparseable_dates`/`n_bad_shape`;assessment +`n_unparseable_date_codes`/`n_bad_shape_codes`)+ consistency 同步。
+- **对抗测试**:unparseable 行计数不丢 / 非字典行计数不丢 / partition-sums / Codex 两个复现(4 干净+1 不可解析 → feasible=false+reason;4 干净+1 非字典 → feasible=false+reason)。
+
+**Pre-flight 复跑**:43 tests PASS(38+5);schema Draft7 meta OK;py_compile OK;doc↔behavior(README/register)同步改为 raw-count+三门措辞。
+
+**Boundary**: probe-code+docs only;不硬否决/不改 EGS/Phase5/不写 production/无 fetch;V14.2 frozen;production stage3 未碰。
+
+**Next**: `审查`(复审坏形态/不可解析门)。
+
+---
+
+## 2026-06-12 — Codex `审查` (A-short semantic-risk Slice 1 PIT repair) — **FAIL**
+
+**Scope reviewed**: latest working-tree repair over `runners/a_short_semantic_risk_probe.py`, `schemas/a_short_semantic_risk_probe_summary.schema.json`, `tests/test_a_short_semantic_risk_probe.py`, and the route/register/session updates. Codex performed no provider call, no real fetch, no production EGS run, no production behavior edit, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The future-date PIT leak is substantively repaired, but the same provider-shape gate still misses returned rows whose disclosure date is unparseable, and it silently drops non-dict announcement rows.
+
+**Required finding**:
+- `R-ASHORT-SEMANTIC-PROBE-CNINFO-BAD-DATE-SHAPE-BYPASS` (P1): `classify_cninfo_code` now excludes future-dated rows, but it still filters raw announcements with `if isinstance(a, dict)` before counting `n_returned`, so non-dict provider rows vanish from all evidence and feasibility checks. Separately, rows with unparseable `announcementTime` set `dates_pit_ok=False` at the per-code level, but because they produce `n_announcements=0`, they are not included in the aggregate `announced` set; `assess_cninfo_feasibility` only checks `n_dates_pit_ok` among announced codes. Synthetic probes with 4 clean PIT-announced codes plus 1 code whose returned row has `announcementTime='not-a-date'` still returned `feasible=True`, no blocking reasons, and that bad-date code status `clear_light`; 4 clean PIT-announced codes plus one non-dict row also returned `feasible=True` and silently treated the malformed row as no return. This violates the probe's stated purpose of validating cninfo field/date shape before Slice 2. Required repair: count raw returned items before filtering, expose and gate invalid returned rows (`n_unparseable_date_codes` / `n_bad_shape_codes` or equivalent), and ensure any returned row with non-dict shape or unparseable disclosure date cannot be reported as clean and cannot coexist with `feasible=True`. Add adversarial tests for unparseable date rows, non-dict announcement rows, and mixed clean+bad-shape samples; keep the repaired future-date tests passing.
+
+**Positive checks**:
+- `R-ASHORT-SEMANTIC-PROBE-CNINFO-FUTURE-DATE-PIT-LEAK` appears fixed: future `2099-01-01` rows no longer count as `n_announced`, do not produce `risk_candidate`, and block feasibility through `n_future_dated_codes`.
+- Production isolation remains intact: no hard veto, no EGS scoring/Phase5 decision change, no production-path write, and no fetch without explicit authorization.
+- Schema meta-validation, py_compile, semantic-risk probe tests, and route-doc guard all pass before this review finding.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_semantic_risk_probe` -> 38/38 OK.
+- `python -m py_compile runners/a_short_semantic_risk_probe.py tests/test_a_short_semantic_risk_probe.py` -> OK.
+- `jsonschema.Draft7Validator.check_schema(schemas/a_short_semantic_risk_probe_summary.schema.json)` -> OK.
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` -> 14/14 OK.
+- Synthetic no-network probes: future rows are blocked after repair; unparseable-date and non-dict returned rows still allow `feasible=True`, confirming the new finding.
+
+**Register outcome**: one material provider-shape/PIT finding recorded in `docs/system_risk_register.md`. No production behavior was changed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `修复` (Slice 1 探针 — cninfo 未来日期 PIT 泄漏)
+
+**Finding 评估:** `R-ASHORT-SEMANTIC-PROBE-CNINFO-FUTURE-DATE-PIT-LEAK` (P1) ✅ **成立,且是严重 PIT 漏洞**。`classify_cninfo_code` 只验披露日可解析,没验 ≤ as_of → 4 个 2099-01-01 公告令 feasible=True。我 pre-flight 时误以为"fetch 窗口 end=as_of 已 ≤as_of"——**错:纯函数绝不能信赖 fetcher 的窗口,PIT 必须在纯逻辑里强制**。这是我该自 catch 的 no-future-leak 核心不变式,漏了。
+
+**Fix (PIT 在纯 classify 内强制)**:
+- 一行计入证据 ⟺ 披露日 canonical 且 ≤ as_of;未来日期行排除出 `n_announcements`/`risk_candidate`/字段·映射判定/feasibility,单列 per-code `n_future_dated` + 聚合 `n_future_dated_codes`。
+- provider 可行性门新增 `n_future_dated_codes == 0`(belt+suspenders:另有 `dates_pit_ok` 对 announced 代码的门)。
+- `dates_parse_ok`→`dates_pit_ok`(canonical 且 ≤as_of,覆盖全部返回行);per-code 加 `n_returned`。
+- schema(per_code +`n_returned`/`n_future_dated`、rename;assessment +`n_future_dated_codes`、rename)+ consistency 同步。
+- **对抗测试**:future canonical / future epoch-ms / future 监管关键词行(不得 risk_candidate)/ mixed past+future / Codex 的 4×future-only 复现(现 feasible=false, n_announced=0, n_future_dated_codes=4)。
+
+**Pre-flight 复跑**:38 tests PASS(32+6);schema Draft7 meta OK;py_compile OK。doc↔behavior:README/register/docstring 均改为 PIT-enforced 措辞。
+
+**Boundary**: 仍 docs+probe-code only;不硬否决/不改 EGS/Phase5/不写 production/无 fetch;V14.2 frozen;production stage3 未碰。
+
+**Next**: `审查`(复审 PIT 修复)。
+
+---
+
+## 2026-06-12 — Codex `审查` (A-short semantic-risk Slice 1 provider feasibility probe) — **FAIL**
+
+**Scope reviewed**: `runners/a_short_semantic_risk_probe.py`, `schemas/a_short_semantic_risk_probe_summary.schema.json`, `tests/test_a_short_semantic_risk_probe.py`, and route/register updates in `docs/README.md` / `docs/system_risk_register.md` / `docs/SESSION_LOG.md`. Codex performed no provider call, no real fetch, no production EGS run, no business-code edit beyond this review log/register entry, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The probe is well isolated from production and the boundary controls are mostly sound, but the cninfo PIT check is incomplete: future-dated disclosure rows can be counted as valid evidence.
+
+**Required finding**:
+- `R-ASHORT-SEMANTIC-PROBE-CNINFO-FUTURE-DATE-PIT-LEAK` (P1): `classify_cninfo_code(raw, as_of)` receives `as_of` but only checks that `announcementTime` is parseable; it never verifies parsed disclosure dates are `<= as_of` and never filters future rows. `fetch_cninfo` also passes provider `announcements` through without a PIT cap. A synthetic probe with four `2099-01-01` announcements and `as_of=20260630` returned `feasible=True`, `n_announced=4`, `n_dates_parse_ok=4`, and no blocking reasons. This breaks the slice's core claim that cninfo disclosure dates are PIT-capable and can let future provider rows shape Slice 2's official-risk layer. Required repair: make the cninfo date gate PIT-aware. Parsed `announcementTime` must be canonical and `<= as_of`; any future-dated returned row must either be excluded from all counts/status/risk flags with an explicit future-row counter and fail the provider PIT gate, or mark the affected code/date gate invalid so `feasible=false`. Add adversarial tests for future canonical strings, future epoch-ms, and mixed past/future announcements; ensure future rows cannot produce `risk_candidate`, cannot raise `n_announced`, and cannot help feasibility.
+
+**Positive checks**:
+- Probe remains production-isolated: no EGS scoring/Phase5 decision change, no hard-veto output, and no fetch without `--confirm-fetch-authorized`.
+- Main-board Top15 filtering uses the strict `is_a_share_main_board` helper; tests cover major non-main board exclusions and cap/dedup.
+- `failure -> unknown` and production-path guard behavior are unit-tested.
+- Schema boundary consts keep `production`, `real_money`, `hard_veto`, `changes_egs_scoring`, `changes_phase5_decision`, `historical_backtest_evidence`, and `writes_production_path` false.
+
+**Verification**:
+- `python -m unittest tests.test_a_short_semantic_risk_probe` -> 32/32 OK.
+- `python -m py_compile runners/a_short_semantic_risk_probe.py tests/test_a_short_semantic_risk_probe.py` -> OK.
+- `jsonschema.Draft7Validator.check_schema(schemas/a_short_semantic_risk_probe_summary.schema.json)` -> OK.
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` -> 14/14 OK.
+- Synthetic adversarial PIT probe (no network): future `announcementTime=2099-01-01` rows still made cninfo `feasible=True`, confirming the finding.
+
+**Register outcome**: one material PIT finding recorded in `docs/system_risk_register.md`. No production behavior was changed.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `起草` (A-short semantic-risk layer Slice 1 — provider feasibility probe)
+
+**What**: 语义风险层的第一个 build 切片。独立探针(隔离 egs_main),在投全量前验证未治理 provider 的可行性——正式 Slice 2 的解析 schema 被探针真实发现塑形,故 probe-first(减返工)。
+
+**交付物**:
+- `runners/a_short_semantic_risk_probe.py` — 纯 assess 核心(`main_board_top15` / `assess_cninfo_feasibility` / `assess_sina_feasibility` / `validate_probe_summary_consistency`)+ THIN 真取数(cninfo POST 复用 EGS stage3 形态;Sina GET best-effort,env 模板覆盖)。
+- `schemas/a_short_semantic_risk_probe_summary.schema.json` — boundary 全 false consts;feasible⇒cninfo.feasible 的 allOf 硬门。
+- `tests/test_a_short_semantic_risk_probe.py` — 32 tests。
+
+**设计要点**(对齐设计文档 §3/§8 Slice 1):cninfo 官方结构化层 = gating(`feasible`==cninfo.feasible),验字段齐/披露日可解析(含 epoch-ms→Asia/Shanghai,可 PIT)/secCode↔查询代码映射/覆盖率/失败形态;监管关键词只标 `risk_candidate` **绝不否决**。Sina/web = LIVE-only(`pit_capable=false`)best-effort 可达性,完整 web+LLM 判断属 Slice 2 skill 在环。**失败→`unknown` 绝不伪装 `clear`**;成功无公告→`clear_light`。主板 Top15 用 `is_a_share_main_board`。
+
+**与 IV probe 的差别**(已在 docstring/register 写明):IV probe provider 异常时中止不写;本探针逐代码失败是要采集的信号(计入失败形态、写 summary),`feasible=false` 是诚实负向 provider 结论、不会被误读成"股票无风险"。
+
+**Pre-flight sweep(交 Codex 前自跑)**:32 tests PASS;schema Draft7 meta-validation OK;py_compile OK;非有限值(计数 int、ratio 有 zero-denom 守卫)、canonical 日期(8-digit+strftime round-trip)、跨字段不变式(failure⇔unknown / n_ok+n_failed==n_requested / feasible⇒门全过)、API footgun(无 generator 双消费)、doc↔behavior(README/docstring/schema/code 一致)均已对抗自查。
+
+**Boundary**: 不硬否决 / 不改 EGS scoring / 不改 Phase5 decision / 不做历史回测证据 / 不写 production 路径(`result/a_short` 被 `write_probe_summary` 拒)/ 无 `--confirm-fetch-authorized` 不取数;V14.2 frozen;production stage3 未碰;无 push。**真取数 = 单独的用户 `执行` 授权**(本切片不取数)。
+
+**Next**: `审查`(Codex 审 Slice 1 探针 design+code+tests)。
+
+---
+
 ## 2026-06-12 — Claude `修复并提交` (coverage Phase-5 refresh — final register-self-annotation + commit)
 
 **Finding 评估:** `R-ASHORT-COVERAGE-REGISTER-FINDING-ENTRY-NOT-UPDATED` (P2) ✅ **成立**。上一轮我改了 stale-enum-note 指向的目标句,却没给该 finding 自身的 Hot Queue entry 加 `Working-tree repaired` 注记 → entry 仍读作未修复,新 agent 会在已修问题上空转(我反复踩的"修目标却忘标注 entry 自身"模式)。
