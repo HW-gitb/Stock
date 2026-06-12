@@ -52,6 +52,7 @@ Web+LLM 直接硬否决;`unknown`→伪装 `clear`;改 `v14.2_spec.md` 原文;�
 ## 8. 三切片落地计划
 - **Slice 1 — provider/probe**(先行,纯评估,不改生产):cninfo probe runner/design + 新浪/news probe design-or-runner + probe summary schema + 测试(字段存在、PIT 日期、失败→unknown、不写 production、主板 Top15 输入过滤);真取数 = 授权 `执行`。边界:不硬否决/不改 EGS scoring/不改 Phase5 decision/不做历史回测证据。
 - **Slice 2 — semantic risk advisory 正式层**(待 Slice 1 探针过):`a_short_semantic_risk_summary` schema + Top15 主板消费 + Top5deep/Top6-15light/命中升级 + enrichment/skill 契约(复用 `skills/a_short_analysis/prompts/*`)+ weekly/M6.7 面板渲染 + 测试(Top15 全覆盖 / 命中升级 / unknown 不伪装 clear / web+LLM 不硬否决 / soft 不进确定性字段 / sources·date·confidence·action 必填 / 主板过滤)+ coverage 文档。**结构化层 = headless runner;web+LLM 层 = skill 在环**(headless 跑不了 web+LLM)。
+  - **⚠️ 本切片必须顺手加的 CI 守护测试(register `deferred-open` anti-forget 项的强制化,只在本切片做、不要更早)**:加一个 CI 级测试,断言"**只要 advisory 层代码已存在(本 Slice 2 已落地),而 register 里 `A-short semantic-risk layer ↔ production reconciliation` 这条 `deferred-open` 仍未关闭,测试就 FAIL**"——即 advisory 层一旦存在,就强制 Slice 3(cninfo 路径合并 + DeepSeek POL-RISK-VETO legacy-conflict 处置)必须被处理/关闭。把"别忘 Slice 3"从文字提醒变成 build-blocking 守护(同 `tests.test_route_doc_ledger_status_consistency` 的精神)。**Slice 1/probe 阶段不要加**(那时 advisory 层还不存在,加了恒绿无意义)。
 - **Slice 3 — optional deterministic promotion**(仅当决定把 cninfo 官方命中升级为硬否决):analyzer rule + governance + schema/coverage + 回测/PIT 或 forward-only 论证。边界:不与 web+LLM advisory 混切;不让实时 web/LLM 进历史回测;此切片才可能触碰/治理既有 DeepSeek POL-RISK-VETO legacy-conflict。
 
 ## 9. 本切片(本设计文档)交付物

@@ -8,6 +8,183 @@
 
 ---
 
+## 2026-06-12 — Claude `修复并提交` (coverage Phase-5 refresh — final register-self-annotation + commit)
+
+**Finding 评估:** `R-ASHORT-COVERAGE-REGISTER-FINDING-ENTRY-NOT-UPDATED` (P2) ✅ **成立**。上一轮我改了 stale-enum-note 指向的目标句,却没给该 finding 自身的 Hot Queue entry 加 `Working-tree repaired` 注记 → entry 仍读作未修复,新 agent 会在已修问题上空转(我反复踩的"修目标却忘标注 entry 自身"模式)。
+
+**Fix (docs-only)**: stale-enum-note entry 自身补 repaired 注记。
+
+**提交 (用户 `修复并提交` 指令):** 本轮 coverage Phase-5 refresh 全部 finding 已修,Codex positive checks 已确认覆盖表全部实质内容正确(reason 表只列 schema 四值、cadence 标签仅 coverage-status、Rule7/7A 拆分、M5 收窄、反时序恢复)。剩余 delta 仅 register 自注记,无代码/schema/contract 影响。据用户指令把 6 条 coverage 相关 finding(stale-enum-note / enum-drift / cadence-scope / M5-overclaim / sessionlog-not-top / coverage-refresh)全 flip `resolved` 并提交本地 master。**说明:此提交未经本轮 register-self-annotation 微修的单独 Codex re-PASS——按用户显式 `修复并提交` 执行;实质内容 Codex 上一轮已确认。**
+
+**Boundary**: docs-only(`schemas/deterministic_report_coverage.md` + `docs/system_risk_register.md` + `docs/SESSION_LOG.md` + `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md` CI-guard 提醒);无代码/schema/behavior;V14.2 frozen;production 未碰;无 push。
+
+**Next**: (空) — coverage refresh 结束。语义风险层 build(Slice 1 probe)与 V14.3 bootstrap 运行均待用户指令。
+
+---
+
+## 2026-06-12 — Codex `审查` (register stale enum repair note) — **FAIL**
+
+**Scope reviewed**: latest working-tree repair over `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, `schemas/deterministic_report_coverage.md`, and `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md`; rechecked the deterministic-report `unknowns[].reason` contract against `schemas/deterministic_report.schema.json` and `runners/run_analysis_report.py`. Codex performed no provider call, no data fetch, no business-code edit, no production EGS run, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The specific stale sentence inside the cadence-scope entry was repaired, but the Hot Queue entry for `R-ASHORT-COVERAGE-REGISTER-STALE-ENUM-NOTE` itself still reads as an open, unrepaired finding.
+
+**Required finding**:
+- `R-ASHORT-COVERAGE-REGISTER-FINDING-ENTRY-NOT-UPDATED` (P2): `docs/system_risk_register.md` line 36 still says the stale enum repair-note issue is currently present ("However the cadence-scope risk entry below still says...") and only lists the Required repair, with no `Working-tree repaired` note. But the cadence-scope entry below has already been fixed. Because `docs/system_risk_register.md` is the durable Hot Queue, a fresh agent will still see the top risk as unresolved and may keep cycling on a repaired issue. Required repair: update the `R-ASHORT-COVERAGE-REGISTER-STALE-ENUM-NOTE` entry itself to say the cadence entry has been repaired in the working tree, and that closure/status flip waits for Codex PASS + `提交`; do not change the enum contract or reintroduce `out_of_scope_by_weekly_cadence` into `unknowns[].reason`.
+
+**Positive checks**:
+- `schemas/deterministic_report_coverage.md` remains correct: the reason table is the schema four-value set only, and `out_of_scope_by_weekly_cadence` is explicitly coverage-status only.
+- The cadence-scope risk entry itself now correctly says Rule 6.1 / Rule 7A / M3.7 are coverage-status `out_of_scope_by_weekly_cadence`, while the Unknown reason table remains schema-four-values-only.
+- The earlier M5 overclaim and SESSION_LOG ordering repairs still hold.
+- The semantic-risk CI-guard note remains acceptable as a future Slice 2 anti-forget guard and does not alter production behavior.
+
+**Verification**:
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` via bundled Codex Python -> 14/14 OK.
+- `git diff --check` -> no whitespace errors; LF-to-CRLF warnings only.
+- UTF-8 read check for modified docs plus `schemas/deterministic_report.schema.json` and `runners/run_analysis_report.py` -> OK.
+- Contract grep: schema enum has only `requires_llm` / `requires_external` / `data_missing` / `not_implemented_phase4`; runner emits only supported reason values; `out_of_scope_by_weekly_cadence` appears only in coverage/register prose, not schema or runner.
+
+**Register outcome**: the still-open `R-ASHORT-COVERAGE-REGISTER-STALE-ENUM-NOTE` entry was annotated with this partial-repair review outcome.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `修复` (register stale enum repair note)
+
+**Finding 评估:** `R-ASHORT-COVERAGE-REGISTER-STALE-ENUM-NOTE` (P2) ✅ **成立**。enum-drift 窄修本身 Codex 已确认正确,但 cadence-scope entry 的修复注记仍留有上一轮中间态的陈旧句("Unknown 表新增 out_of_scope 定义"),enum-drift 修复后已为假,且与相邻 enum-boundary entry 矛盾。register 是持久跨 LLM 源,陈旧句会重新引入正要消除的 schema-invalid reason 混淆。
+
+**Fix (docs-only)**: 改写 cadence-scope entry 的修复注记——Rule 6.1/7A/M3.7 标为「v14.2 映射」当前状态列的 coverage-status `out_of_scope_by_weekly_cadence`;并明确 `Unknown 原因约定` 表保持 schema 四值全集 + 边界说明,`out_of_scope_by_weekly_cadence` **不是**合法 `unknowns[].reason`(指向 enum-drift entry)。无其他改动。
+
+**Boundary**: docs-only,纯 register 注记文字订正;无代码/schema/behavior 改动;覆盖表本体不动;V14.2 frozen;production 未碰。
+
+**Next**: `审查`(复审 register 注记订正)。
+
+---
+
+## 2026-06-12 — Codex `审查` (deterministic_report_coverage enum-drift repair) — **FAIL**
+
+**Scope reviewed**: latest working-tree repair over `schemas/deterministic_report_coverage.md`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, and the incidental anti-forget addition in `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md`. Cross-checked the `unknowns[].reason` contract against `schemas/deterministic_report.schema.json` and `runners/run_analysis_report.py`. Codex performed no provider call, no data fetch, no business-code edit, no production EGS run, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The actual coverage doc repair is correct, but `docs/system_risk_register.md` still contains a stale repair note that contradicts the just-fixed enum boundary.
+
+**Required finding**:
+- `R-ASHORT-COVERAGE-REGISTER-STALE-ENUM-NOTE` (P2): `docs/system_risk_register.md` still says the cadence-scope repair made the "`Unknown 原因约定` table gained an `out_of_scope_by_weekly_cadence` definition". That was true for the intermediate repair, but it is false after the current enum-drift fix and directly contradicts the adjacent corrected entry saying `out_of_scope_by_weekly_cadence` is not a valid `unknowns[].reason`. Because the risk register is a durable cross-LLM source, this stale note can reintroduce the exact schema-contract confusion the repair is meant to eliminate. Required repair: rewrite the cadence-scope entry's working-tree repair note so it says only that Rule 6.1 / Rule 7A / M3.7 are coverage-status `out_of_scope_by_weekly_cadence`, and explicitly states the Unknown table now remains schema-four-values-only / boundary note only. Do not re-add `out_of_scope_by_weekly_cadence` to `unknowns[].reason`.
+
+**Positive checks**:
+- `schemas/deterministic_report_coverage.md` now correctly lists only the four schema-permitted `unknowns[].reason` values: `requires_llm`, `requires_external`, `data_missing`, `not_implemented_phase4`.
+- The same coverage doc explicitly states `out_of_scope_by_weekly_cadence` is a coverage-status label only and must not be written into deterministic reports.
+- Prior cadence-scope rows remain repaired: Rule 7 and Rule 7A are split; Rule 6.1 / Rule 7A / M3.7竞价校准 are marked `out_of_scope_by_weekly_cadence`; M5 overclaim is narrowed to the simplified star subset.
+- The semantic-risk design/register CI-guard addition is acceptable as a future Slice 2 anti-forget guard; it does not require code now and does not change production behavior.
+
+**Verification**:
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` via bundled Codex Python -> 14/14 OK.
+- `git diff --check` -> no whitespace errors; LF-to-CRLF warnings only.
+- UTF-8 read check for modified docs plus `schemas/deterministic_report.schema.json` and `runners/run_analysis_report.py` -> OK.
+- Schema/runner grep confirms `schemas/deterministic_report.schema.json` only permits the four reason values, and `_build_unknowns` emits only supported values.
+
+**Register outcome**: one new material cross-LLM documentation finding recorded in `docs/system_risk_register.md`.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `修复` (deterministic_report_coverage — unknowns reason enum drift)
+
+**Finding 评估(按约定先审合理性):** `R-ASHORT-COVERAGE-UNKNOWN-REASON-ENUM-DRIFT` (P1) ✅ **成立**。自核 `schemas/deterministic_report.schema.json` line 356 `unknowns[].reason` enum = 恰好 `[requires_llm, requires_external, data_missing, not_implemented_phase4]`(无 out_of_scope);`run_analysis_report.py::_build_unknowns` 也只产这四个(grep 确认)。我上一轮把 `out_of_scope_by_weekly_cadence` 加进「Unknown 原因约定」reason 表确属 docs↔schema 契约漂移——会误导实现者写出 schema-invalid 报告(我的 pre-flight doc↔behavior sweep 该自 catch 却漏了)。
+
+**Fix (docs-only, 采纳 Codex option (a) 窄修)**: 从 reason-enum 表移除 `out_of_scope_by_weekly_cadence`(表恢复为 schema 四值全集);加独立边界说明:四值 = `deterministic_report.schema.json` + `_build_unknowns` 的 `unknowns[].reason` 全集,而 `out_of_scope_by_weekly_cadence` 仅是「v14.2 映射」当前状态列的 **coverage-status 标签**、**绝不可写进 `unknowns[].reason`**(否则 schema-invalid);日后真要升级须正式扩 schema enum + runner + 测试 + Skill 文档。
+
+**Boundary**: docs-only,无代码/schema/behavior 改动;V14.2 frozen;production 未碰。前三 finding(cadence-scope / M5 overclaim / SESSION_LOG 反时序)Codex 已确认修复通过。
+
+**Next**: `审查`(复审 enum-drift 窄修)。
+
+---
+
+## 2026-06-12 — Codex `审查` (deterministic_report_coverage Phase-5 refresh repair) — **FAIL**
+
+**Scope reviewed**: working-tree repair over `schemas/deterministic_report_coverage.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`; rechecked the prior three Required IDs plus a schema-contract consistency pass against `schemas/deterministic_report.schema.json` and `runners/run_analysis_report.py`. Codex performed no provider call, no data fetch, no business-code edit, no production EGS run, and no commit.
+
+**Verdict**: FAIL / not commit-safe yet. The three prior findings are substantively repaired, but the repair introduced a new docs-vs-schema contract mismatch in the `unknowns[].reason` vocabulary.
+
+**Required findings**:
+- `R-ASHORT-COVERAGE-UNKNOWN-REASON-ENUM-DRIFT` (P1): `schemas/deterministic_report_coverage.md` adds `out_of_scope_by_weekly_cadence` to the "Unknown 原因约定" reason table, and the mapping rows for Rule 6.1 / Rule 7A / M3.7 still list `unknowns` as a deterministic-report field. However `schemas/deterministic_report.schema.json` only permits `unknowns[].reason` values `requires_llm`, `requires_external`, `data_missing`, and `not_implemented_phase4`, and `runners/run_analysis_report.py::_build_unknowns` emits only those supported values. A future implementer following the refreshed coverage doc could write a schema-invalid deterministic report. Required repair: do one of the following explicitly, without ambiguity: (a) keep `out_of_scope_by_weekly_cadence` as coverage-status prose only and remove it from the `Unknown 原因约定` reason table / clarify it is not a valid `unknowns[].reason`; or (b) formally extend the deterministic-report schema enum, runner/tests, and any Skill docs to support that new reason. Given this is a docs-only slice, option (a) is the narrow repair.
+
+**Verified repaired from prior FAIL**:
+- `R-ASHORT-COVERAGE-CADENCE-SCOPE-DRIFT`: Rule 7 and Rule 7A are split; Rule 7 ATR remains Phase5-built; Rule 7A, Rule 6.1, and M3.7竞价校准 are now marked `out_of_scope_by_weekly_cadence`.
+- `R-ASHORT-COVERAGE-M5-OVERCLAIM`: the M5 row is narrowed to "仅 M5.4 简化星级子集已建" and explicitly lists M5.1 / M5.2 / full M5.3 / full M5.4 / M2.1-M4 overrides as not implemented.
+- `R-ASHORT-COVERAGE-SESSIONLOG-NOT-TOP`: the coverage `起草` entry now sits below the prior Codex FAIL entry, and the current top order is reverse-chronological after this review entry.
+
+**Verification**:
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` via bundled Codex Python -> 14/14 OK.
+- `git diff --check` -> no whitespace errors; LF-to-CRLF warnings only.
+- UTF-8 read check for `schemas/deterministic_report_coverage.md`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, and `schemas/deterministic_report.schema.json` -> OK.
+- Schema-contract check: `schemas/deterministic_report.schema.json` lines 354-356 do not include `out_of_scope_by_weekly_cadence`; coverage table lines 99-107 currently presents it as a `reason`.
+
+**Register outcome**: one new material docs/schema-contract finding recorded in `docs/system_risk_register.md`. No business-code risk found in this docs-only slice.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `修复` (deterministic_report_coverage Phase-5 refresh — Codex 3 findings)
+
+**Evaluated each finding's reasonableness before fixing (按约定),全部成立:**
+- `R-ASHORT-COVERAGE-CADENCE-SCOPE-DRIFT` (P1) ✅:核对 Phase5 设计 `docs/a_short_theme_overlay_phase5_design_spec_20260610.md` §9 line 159/166 —Rule 6.1 / Rule 7A 织布机 / M3.7 竞价校准 / legacy 盘中入场窗口 明确为 `out_of_scope_by_weekly_cadence`(≠ `requires_external`,**非缺数据,是周频系统本就不依赖**)。覆盖表原把它们标 `requires_external` 且把 Rule 7/7A 并成一行,确属误导。
+- `R-ASHORT-COVERAGE-M5-OVERCLAIM` (P2) ✅:核对 `runners/a_short_phase5_engine.py` 222-231 —`compute_star` 只是 `基线3 +overlay −行业逆风 −过热/组合集中` 的简化子集,未实现 M5.1 效率替代/M5.2 催化剂窗口/完整 M5.3/M5.4/M2.1-M4 override。原行"M5.1-M5.4 已建"过度声称。
+- `R-ASHORT-COVERAGE-SESSIONLOG-NOT-TOP` (P2) ✅:起草 entry 被插在两条更旧的 Codex PASS 下方,违反反时序。
+
+**Fixes (docs-only)**:
+- 覆盖表:Rule 6.1 / M3.7 竞价校准 改标 `out_of_scope_by_weekly_cadence`;**Rule 7/7A 拆成两行**(Rule 7 ATR 子集 = Phase5 已建;Rule 7A 织布机/盘口分钟 = out_of_scope_by_weekly_cadence);M5 行收窄为"仅 M5.4 简化星级子集已建",显式列出未实现项;`Unknown 原因约定`表新增 `out_of_scope_by_weekly_cadence` 定义并从 `requires_external` 移除 Level-2/分钟成交。
+- SESSION_LOG:起草 entry 移到本 FAIL review 正下方,恢复严格反时序。
+
+**Boundary**: docs-only,无代码/schema/behavior 改动;V14.2 frozen;production 未碰。
+
+**Next**: `审查`(复审三 finding 修复)。
+
+---
+
+## 2026-06-12 — Codex `审查` (deterministic_report_coverage Phase-5 refresh) — **FAIL**
+
+**Scope reviewed**: uncommitted working-tree refresh over `schemas/deterministic_report_coverage.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`; cross-checked against `runners/a_short_phase5_engine.py`, `runners/a_short_weekly_pipeline.py`, `schemas/a_short_m67_report.schema.json`, `docs/a_short_theme_overlay_phase5_design_spec_20260610.md`, and `skills/a_short_analysis/reference/v14.2_spec.md`. Codex performed no provider call, no data fetch, no business-code edit, no production EGS run, and no commit.
+
+**Verdict**: FAIL / not commit-safe. The direction is right — the old coverage table was stale and should distinguish Phase-4 `deterministic_report` from the Phase-5 `a_short_m67_report` path. But the current refresh introduces or preserves several misleading coverage claims that would misroute later implementation/review.
+
+**Required findings**:
+- `R-ASHORT-COVERAGE-CADENCE-SCOPE-DRIFT` (P1): `schemas/deterministic_report_coverage.md` still treats cadence-scoped intraday rules as ordinary external/missing coverage, and worse, merges Rule 7A into the "ATR built" row. Current rows say Rule 6.1 is `requires_external`, Rule 7/7A ATR is Phase5-built, and M3.7竞价校准 is `requires_external`; but the parent Phase-5 design explicitly says Rule 6.1, Rule 7A 织布机/盘口分钟, M3.7 竞价校准, and the legacy intraday entry window are `out_of_scope_by_weekly_cadence`, not future-data `requires_external`, and must be marked that way in coverage. Required repair: split Rule 7 and Rule 7A, keep Rule 7 ATR subset as Phase5-built, mark Rule 7A as `out_of_scope_by_weekly_cadence`, and align Rule 6.1 / M3.7 wording to the same cadence boundary.
+- `R-ASHORT-COVERAGE-M5-OVERCLAIM` (P2): the row `M5.1-M5.4 动态目标/星级` says Phase5 is built via `compute_star`, but the code only implements a simplified star subroutine (`3 + overlay eligible - industry headwind - overheat/portfolio hits`). It does not implement M5.1 efficiency substitution / "效率替代,放弃", M5.2 catalyst holding-window derivation, M5.3 total-account state, the full M5.4 defensive/regime/type-linked star formula, or M2.1/M4 downgrade overrides as specified in v14.2. Required repair: narrow the row to "M5.4 simplified star subset built" and explicitly leave M5.1/M5.2/full M5.3/full M5.4 as not implemented / advisory / future governance, rather than implying the whole M5.1-M5.4 block is covered.
+- `R-ASHORT-COVERAGE-SESSIONLOG-NOT-TOP` (P2): the new Claude `起草` entry for this coverage refresh was inserted below older Codex PASS entries, despite `docs/SESSION_LOG.md` declaring reverse chronological order and "latest entry at top". Before this Codex review entry, a fresh agent reading top 1-3 would miss the actual current working-tree change. Required repair: place the coverage `起草` entry immediately below this review entry (or otherwise restore strict reverse chronology) before commit.
+
+**Positive checks**:
+- The refreshed intro correctly states that Phase 5 is a separate downstream `a_short_m67_report` path, not `deterministic_report`, and keeps the non-production / risk_filter_only / no-broker / no-auto-order boundary.
+- The IV, ATR stop, RR floor, liquidity hard-veto, entry/exit/size, and M6.7 honesty-guard claims are directionally supported by `runners/a_short_phase5_engine.py` and the weekly pipeline.
+- The semantic-risk and `industry_heat` distinction is still clear.
+
+**Verification**:
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` via bundled Codex Python -> 14/14 OK.
+- `git diff --check` -> no whitespace errors; LF-to-CRLF warnings only.
+- UTF-8 read check for `schemas/deterministic_report_coverage.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md` -> OK.
+- Manual line checks: coverage rows 66-68 / 88 contradict the parent cadence boundary at `docs/a_short_theme_overlay_phase5_design_spec_20260610.md` 159-166; coverage row 90 overstates the code at `runners/a_short_phase5_engine.py` 222-231 against v14.2 M5.1-M5.4 at `skills/a_short_analysis/reference/v14.2_spec.md` 304-315.
+
+**Register outcome**: three material docs/process findings recorded in `docs/system_risk_register.md`. No business-code risk found in this docs-only slice.
+
+**Next**: `修复`.
+
+---
+
+## 2026-06-12 — Claude `起草` (refresh deterministic_report_coverage.md to Phase-5 reality, docs-only)
+
+**What**: the «v14.2 映射» coverage table was Phase-4-vintage and misleading (many `not_implemented_phase4` rows are now built). Refreshed it to current reality. **Verified against the actual Phase 5 engine code** (`a_short_phase5_engine.py`) before annotating — not from memory: it produces `a_short_m67_report` (a SEPARATE downstream path from deterministic_report), non-production / risk_filter_only / no-buy, implementing MA/RSI14/ATR14/支撑压力, 5 risk families (hard_veto/downgrade), IV gate, ATR stop, RR floor, entry/exit/size (试探仓×0.5), star, action 否决/观察/建仓 (建仓 = research-grade probe advice, NOT a production buy signal).
+
+**Changes (docs-only)**: intro reading-note (Phase-4 vintage + two parallel downstream report paths); rows tagged «→ Phase5(M6.7 path)已建·非买入» (Rule3/7/8/10, M2.7/M3.2/M3.3B/M3.6/M5.x/M5.5/M6.3/M6.7); M1 市场环境 → V14.3 regime comparison; M2.1-2.5/M3.1 行业景气 → semantic-risk enrichment layer (≠ industry_heat); reason-note + file list updated.
+
+**Boundary**: docs-only, no code/schema/behavior change; V14.2 frozen; production untouched.
+
+**Verification**: route-doc guard 14/14 OK; FFFD=0.
+
+**Next**: `审查`.
+
+---
+
 ## 2026-06-12 — Codex `审查` (A-short semantic-risk Top15 enrichment revised design) — **PASS**
 
 **Scope reviewed**: `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md` plus its route/register updates in `docs/README.md` and `docs/system_risk_register.md`; compared against the desktop Codex revision note `C:\Users\cnhea\Desktop\a_short_semantic_risk_codex_revision_notes.md` and verified the underlying legacy facts in `A-EGS/egs_main.py::stage3_ai_clearing`. Codex performed no provider call, no data fetch, no schema/runner implementation, no production EGS run, and no commit.
