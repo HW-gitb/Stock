@@ -24,7 +24,7 @@ from runners.a_short_semantic_risk_probe import (  # noqa: E402
     main_board_top15, classify_cninfo_code, assess_cninfo_feasibility,
     classify_sina_code, assess_sina_feasibility, build_probe_summary,
     validate_probe_summary_consistency, write_probe_summary, _guard_out_path,
-    _parse_disclosure_date, MIN_CNINFO_OK_CODES,
+    _parse_disclosure_date, fetch_cninfo, fetch_cninfo_orgid_map, MIN_CNINFO_OK_CODES,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_semantic_risk_probe_summary.schema.json"
@@ -411,6 +411,73 @@ class SchemaValidation(unittest.TestCase):
         s["cninfo"]["feasible"] = False                  # but top feasible stays true
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(s, self.schema)
+
+
+class _Resp:
+    def __init__(self, status, payload):
+        self.status_code = status
+        self._p = payload
+
+    def json(self):
+        return self._p
+
+
+class _FakeCninfo:
+    """No-network stand-in: get() returns the orgId stock-list JSON, post() returns announcements
+    keyed by the exact `stock` param (so a test can assert the orgId was used in the query)."""
+    def __init__(self, orgmap_status=200, orgmap_rows=None, ann_for_stock=None):
+        self.orgmap_status = orgmap_status
+        self.orgmap_rows = orgmap_rows if orgmap_rows is not None else []
+        self.ann_for_stock = ann_for_stock or {}
+        self.posted_stocks = []
+
+    def get(self, url, **kw):
+        return _Resp(self.orgmap_status, {"stockList": self.orgmap_rows})
+
+    def post(self, url, data=None, **kw):
+        stock = (data or {}).get("stock")
+        self.posted_stocks.append(stock)
+        return _Resp(200, {"announcements": self.ann_for_stock.get(stock, [])})
+
+
+class FetchCninfoOrgId(unittest.TestCase):
+    def test_orgid_map_parsed(self):
+        sess = _FakeCninfo(orgmap_rows=[{"code": "600519", "orgId": "gssh0600519"},
+                                        {"code": "000001", "orgId": "gssz0000001"}])
+        m, ok = fetch_cninfo_orgid_map(sess)
+        self.assertTrue(ok)
+        self.assertEqual(m["600519"], "gssh0600519")
+        self.assertEqual(m["000001"], "gssz0000001")
+
+    def test_orgid_map_fetch_failure(self):
+        m, ok = fetch_cninfo_orgid_map(_FakeCninfo(orgmap_status=500))
+        self.assertFalse(ok)
+        self.assertEqual(m, {})
+
+    def test_fetch_uses_orgid_and_returns_announcements(self):
+        ann = [_ann(code="600519")]
+        sess = _FakeCninfo(orgmap_rows=[{"code": "600519", "orgId": "gssh0600519"}],
+                           ann_for_stock={"600519,gssh0600519": ann})
+        res = fetch_cninfo(["600519.SH"], AS_OF, request_delay=0, session=sess)
+        self.assertTrue(res[0]["ok"])
+        self.assertEqual(res[0]["announcements"], ann)
+        self.assertIn("600519,gssh0600519", sess.posted_stocks)   # orgId actually used in query
+
+    def test_code_without_orgid_is_no_orgid_failure(self):
+        sess = _FakeCninfo(orgmap_rows=[{"code": "600519", "orgId": "gssh0600519"}])
+        res = fetch_cninfo(["000001.SZ"], AS_OF, request_delay=0, session=sess)
+        self.assertFalse(res[0]["ok"])
+        self.assertEqual(res[0]["error_category"], "no_orgid")
+        # flows through pure logic as a failure -> unknown, never clear
+        self.assertEqual(classify_cninfo_code(res[0], AS_OF)["status"], "unknown")
+
+    def test_orgid_map_failed_marks_all_codes(self):
+        sess = _FakeCninfo(orgmap_status=503)
+        res = fetch_cninfo(["600519.SH", "000001.SZ"], AS_OF, request_delay=0, session=sess)
+        self.assertTrue(all(not r["ok"] and r["error_category"] == "orgid_map_failed" for r in res))
+        a = assess_cninfo_feasibility(res, AS_OF)
+        self.assertFalse(a["feasible"])
+        self.assertEqual(a["failure_categories"].get("orgid_map_failed"), 2)
 
 
 class WritePath(unittest.TestCase):

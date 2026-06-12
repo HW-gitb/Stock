@@ -10,8 +10,9 @@
 设计要点(对齐 `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md` §3/§8 Slice 1):
 - 覆盖对象 = EGS 周频候选 **观察池 Top15**,全程主板(复用 `is_a_share_main_board`,排创业板/科创板/
   北交所/B 股/畸形码)。
-- **cninfo(官方结构化层)= 本探针的 gating 项**:headless POST `hisAnnouncement/query`(复用 EGS
-  stage3 已验证的请求形态),按披露日可 PIT。`feasible`(总)== `cninfo.feasible`。
+- **cninfo(官方结构化层)= 本探针的 gating 项**:headless POST `hisAnnouncement/query`,`stock` 参数
+  须为 "代码,orgId"(orgId 从 cninfo 证券清单 JSON 解析;**首版 `执行` 发现仅"代码,sh/sz"会 200+空**,
+  故改 orgId),按披露日可 PIT。`feasible`(总)== `cninfo.feasible`。
 - **Sina/web(advisory 层)= LIVE-only、skill-在环**:headless 探针只做 best-effort 原始可达性检查
   (`--include-sina` opt-in),`pit_capable=false`,**绝不**作历史回测证据;完整 web+LLM 判断属
   Slice 2 的 skill 在环,不在本探针。
@@ -61,6 +62,15 @@ REGULATOR_KEYWORDS = ["问询函", "立案调查", "监管关注", "警示函", 
 SINA_ITEM_FIELDS = ["title", "url"]
 
 CNINFO_QUERY_URL = "http://www.cninfo.com.cn/new/hisAnnouncement/query"
+# cninfo hisAnnouncement/query 的 `stock` 参数需 "代码,orgId";orgId 从 cninfo 的证券清单 JSON 解析。
+# 端点/字段未治理 → 设默认 + 允许环境变量覆盖(逗号分隔多个 URL);best-effort,失败如实记。
+CNINFO_ORGID_URLS = tuple(
+    u.strip() for u in os.environ.get(
+        "CNINFO_ORGID_URLS",
+        "http://www.cninfo.com.cn/new/data/sse_stock.json,"
+        "http://www.cninfo.com.cn/new/data/szse_stock.json",
+    ).split(",") if u.strip()
+)
 # Sina 端点形态未证明 → 设默认 + 允许环境变量覆盖;best-effort,完整验证留 Slice 2 skill 在环。
 SINA_NEWS_URL_TEMPLATE = os.environ.get(
     "SINA_NEWS_URL_TEMPLATE",
@@ -553,13 +563,40 @@ def _categorize_error(exc) -> str:
     return "other"
 
 
-def _cninfo_payload(symbol: str, market: str, start: str, end: str) -> dict:
+def _cninfo_payload(symbol: str, org_id: str, market: str, start: str, end: str) -> dict:
     return {
-        "stock": f"{symbol},{market}", "tabName": "fulltext", "pageSize": 30, "pageNum": 1,
+        "stock": f"{symbol},{org_id}", "tabName": "fulltext", "pageSize": 30, "pageNum": 1,
         "column": "szse" if market == "sz" else "sse", "category": "", "plate": market,
         "seDate": f"{start[:4]}-{start[4:6]}-{start[6:]} ~ {end[:4]}-{end[4:6]}-{end[6:]}",
         "searchkey": "", "secid": "", "sortName": "", "sortType": "", "isHLtitle": True,
     }
+
+
+def fetch_cninfo_orgid_map(session=None, urls=None) -> tuple[dict, bool]:
+    """从 cninfo 证券清单 JSON 解析 {6位代码: orgId}。返回 (map, fetched_ok)。
+    任一 URL 成功解析即 fetched_ok=True;全失败 → ({}, False)(供上层把全部代码记 orgid_map_failed,
+    区别于 fetched_ok=True 但某代码缺 orgId 的 no_orgid)。形态未治理 → 防御式解析,异常吞掉转下一个 URL。"""
+    import requests
+    sess = session or requests
+    mapping: dict[str, str] = {}
+    fetched_ok = False
+    for url in (urls or CNINFO_ORGID_URLS):
+        try:
+            resp = sess.get(url, headers=_CNINFO_HEADERS, timeout=15)
+            if resp.status_code != 200:
+                continue
+            rows = resp.json().get("stockList") or []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                code = str(row.get("code", "")).strip()
+                org = str(row.get("orgId", "")).strip()
+                if code and org:
+                    mapping[code] = org
+            fetched_ok = True
+        except Exception:  # noqa: BLE001 (orgId 清单端点未治理;失败转下一个 URL,最终由 fetched_ok 反映)
+            continue
+    return mapping, fetched_ok
 
 
 _CNINFO_HEADERS = {
@@ -569,30 +606,49 @@ _CNINFO_HEADERS = {
 }
 
 
-def fetch_cninfo(codes, as_of: str, lookback_days: int = 90, session=None) -> list[dict]:
-    """执行期:逐主板代码 POST cninfo hisAnnouncement/query(窗口 [as_of-lookback, as_of],PIT)。
-    返回逐代码原始结果(ok/error_category/announcements);逐代码失败被捕获为该代码的失败信号。"""
+def fetch_cninfo(codes, as_of: str, lookback_days: int = 90, session=None,
+                 request_delay: float = 0.3) -> list[dict]:
+    """执行期:先解析 orgId 清单,再逐主板代码 POST cninfo hisAnnouncement/query(`stock`="代码,orgId";
+    窗口 [as_of-lookback, as_of],PIT)。返回逐代码原始结果(ok/error_category/announcements)。
+    失败语义分层:orgId 清单整体取不到 → 全部 `orgid_map_failed`;清单取到但某代码缺 orgId → 该代码
+    `no_orgid`;HTTP 403/429 → `anti_scrape`;其余异常 → 分类。逐代码失败是要采集的探针信号。
+    `request_delay` 在每次 POST 后小睡(默认 0.3s)以缓解 cninfo 对快速顺序请求的软反爬(返 200+空)。"""
+    import time
+
     import requests
     sess = session or requests
     start = (datetime.strptime(as_of, "%Y%m%d") - timedelta(days=lookback_days)).strftime("%Y%m%d")
+    orgid_map, map_ok = fetch_cninfo_orgid_map(sess)
     results: list[dict] = []
     for ts_code in codes:
         symbol = str(ts_code).split(".", 1)[0]
+        if not map_ok:
+            results.append({"ts_code": ts_code, "ok": False,
+                            "error_category": "orgid_map_failed", "announcements": []})
+            continue
+        org_id = orgid_map.get(symbol)
+        if not org_id:
+            results.append({"ts_code": ts_code, "ok": False,
+                            "error_category": "no_orgid", "announcements": []})
+            continue
         market = "sz" if str(ts_code).upper().endswith(".SZ") else "sh"
         try:
-            resp = sess.post(CNINFO_QUERY_URL, data=_cninfo_payload(symbol, market, start, as_of),
+            resp = sess.post(CNINFO_QUERY_URL,
+                             data=_cninfo_payload(symbol, org_id, market, start, as_of),
                              headers=_CNINFO_HEADERS, timeout=10)
             if resp.status_code != 200:
                 cat = "anti_scrape" if resp.status_code in (403, 429) else "network"
                 results.append({"ts_code": ts_code, "ok": False, "error_category": cat,
                                 "announcements": []})
-                continue
-            anns = resp.json().get("announcements") or []
-            results.append({"ts_code": ts_code, "ok": True, "error_category": None,
-                            "announcements": anns})
+            else:
+                anns = resp.json().get("announcements") or []
+                results.append({"ts_code": ts_code, "ok": True, "error_category": None,
+                                "announcements": anns})
         except Exception as exc:  # noqa: BLE001 (逐代码失败是要采集的探针信号)
             results.append({"ts_code": ts_code, "ok": False,
                             "error_category": _categorize_error(exc), "announcements": []})
+        if request_delay:
+            time.sleep(request_delay)
     return results
 
 

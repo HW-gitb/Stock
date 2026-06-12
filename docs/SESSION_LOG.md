@@ -8,6 +8,77 @@
 
 ---
 
+## 2026-06-12 — Claude `提交` (Slice 1 探针 cninfo orgId fetch 修正 → local master)
+
+Codex PASS(entry below)。提交 cninfo orgId fetch 薄层修正到本地 master(无 push):`runners/a_short_semantic_risk_probe.py`(`fetch_cninfo_orgid_map` + `stock`="代码,orgId" + 分层失败 + 限速)+ `tests`(49)+ README/register。register fetch-fix 项 flip `resolved`。probe 结果 JSON(orgId 前的负向证据)未纳入提交——会被本次重 `执行` 覆盖。**fetch 层 only,纯逻辑/schema 不动;probe-only 非生产;V14.2 frozen;egs_main 未碰。**
+
+**Next**: 重新 `执行` 探针实测 orgId 是否取回真公告(用户已授权"提交并执行下一步")。
+
+---
+
+## 2026-06-12 — Codex 审查 (A-short semantic-risk Slice 1 cninfo orgId fetch-layer repair) — PASS
+
+**Verdict**: PASS。未发现 P0/P1/P2 阻断问题。新增修正只作用于 probe 的 cninfo fetch 薄层:先从 cninfo 证券清单解析 `orgId`,再用 `stock`="code,orgId" 调 `hisAnnouncement/query`;`orgid_map_failed` / `no_orgid` / `anti_scrape` 都保持 per-code fail-closed,进入 summary 后是 provider feasibility 负向信号,不会被当成股票风险 clear 或 hard-veto。
+
+**Reviewed scope**:
+- `runners/a_short_semantic_risk_probe.py`: `fetch_cninfo_orgid_map`, `_cninfo_payload(symbol, org_id, ...)`, `fetch_cninfo(... request_delay=0.3)`, CLI 边界保持 `--confirm-fetch-authorized` + production-path guard。
+- `tests/test_a_short_semantic_risk_probe.py`: 5 个无网络 orgId/failure-semantics regression 测试。
+- `docs/README.md` / `docs/system_risk_register.md` / 本 log: route wording 与 probe-only / non-production / no hard-veto 边界一致。
+- `research/results/a_short/semantic_risk_probe_20260612.json`: 首次 real-fetch 负向证据 artifact, schema+consistency valid,无 URL/raw body/token 泄露；注意它是 orgId 修复前的执行结果,提交后仍需重新 `执行` 验证 orgId 假设。
+
+**Validation run**:
+- `python -m unittest tests.test_a_short_semantic_risk_probe` → 49 tests OK。
+- `python -m py_compile runners/a_short_semantic_risk_probe.py tests/test_a_short_semantic_risk_probe.py` → OK。
+- `research/results/a_short/semantic_risk_probe_20260612.json` schema + `validate_probe_summary_consistency` → OK。
+- `python -m unittest tests.test_route_doc_ledger_status_consistency` → 14 tests OK。
+- `git diff --check` → OK(CRLF warnings only)。
+
+**Residual risk / next evidence**: This PASS validates the fetch-layer repair shape and fail-closed behavior, not that cninfo orgId now empirically returns announcements. The next authorized `执行` must rerun the probe and decide whether cninfo becomes feasible, stays 200+empty, or fails as `orgid_map_failed` / `no_orgid` / `anti_scrape`.
+
+**Next**: Claude Code `提交`, then user-authorized re-`执行` probe.
+
+---
+
+## 2026-06-12 — Claude `起草` (Slice 1 探针 cninfo fetch 修正 — orgId 解析)
+
+**背景**: 首次 `执行`(见下条)发现 cninfo `hisAnnouncement/query` 用 egs-stage3 的 `stock`="代码,sh/sz" 形态对全部 15 代码返 200+空。攻 gating provider:cninfo 该接口的 `stock` 需 "代码,orgId"。
+
+**Fix(纯 fetch 薄层,pure assess/validate 核心不动)**:
+- 新 `fetch_cninfo_orgid_map(session)` — 从 cninfo `sse_stock.json`/`szse_stock.json`(env `CNINFO_ORGID_URLS` 可覆盖)解析 {6位代码: orgId},防御式解析,返回 (map, fetched_ok)。
+- `fetch_cninfo` 改发 `stock`="代码,orgId",分层失败语义:orgId 清单整体取不到→全部 `orgid_map_failed`;清单 OK 但代码缺 orgId→`no_orgid`;403/429→`anti_scrape`。+ 每次 POST 后小睡(默认 0.3s)缓解软反爬。
+- `_cninfo_payload` 签名加 org_id。
+
+**测试**: 5 个无网络 fetch 层用例(FakeSession:orgId map 解析 / map 取失败 / orgId 确实用进 POST 的 stock 参数 / no_orgid / orgid_map_failed→全代码+failure 计数)叠加既有 44 纯用例 = **49 PASS**。schema meta OK;py_compile OK。
+
+**待验证**: orgId 是否真能取回公告 = 下次 `执行` 的实测(本稿实现该假设)。egs_main stage3 同样的裸形态是否长期回空 = 单独 production 观察项,本切片不碰。
+
+**Boundary**: fetch 层 only,无 schema/纯逻辑改动;probe-only,非生产;无硬否决/EGS/Phase5 改动;真取数需 `--confirm-fetch-authorized` 执行;V14.2 frozen。
+
+**Next**: `审查`(审 cninfo orgId fetch 修正)→ 提交 → 重新 `执行` 实测。
+
+---
+
+## 2026-06-12 — Claude `执行` (Slice 1 探针真取数 — cninfo+Sina,样本 15 主板代码)
+
+**命令**: `a_short_semantic_risk_probe --as-of 20260612 --watch-pool <15 主板样本> --include-sina --confirm-fetch-authorized`(用户授权)。产物:`research/results/a_short/semantic_risk_probe_20260612.json`(research lane,非生产)。样本=验 provider 机制用的真实主板代码(600000/600519/601318/000001/000333/002594 等),非 EGS 真实 Top15。
+
+**结果:overall feasible=False(明确负向 provider 发现)。**
+- **cninfo**:15/15 HTTP 调用**成功**(`n_ok=15`,`failure_categories={}`,非网络失败),但**每个代码 `n_returned=0`**(零公告)→ `n_announced=0 < 3` → not feasible。茅台/平安/招行 90 天窗口不可能真的零公告,故是**请求形态/软反爬**问题,不是"真无公告"。
+- **Sina**:15/15 HTTP 200 但 `n_items=0`(端点模板本就是 best-effort 未证明猜测)。
+- 探针行为正确:未把空壳伪装成 clear/feasible,如实报 not-feasible + 诚实 reason;PIT/失败语义未触发(全 clear_light=空成功窗口)。**幸亏 probe-first,没在空壳上建 Slice 2。**
+
+**待验证假设(非定论,scope=LIVE 实时抓取,非 PIT)**:
+1. cninfo `hisAnnouncement/query` 的 `stock` 参数很可能需 **orgId**(格式"代码,orgId"),现用 egs_main 的"代码,sh/sz"形态可能一直回空;
+2. 或 cninfo 对快速顺序请求**软反爬**(返回 200+空 而非 403);
+3. Sina 端点/参数大概率不对。
+*(egs_main 生产 stage3 是否同样受影响 = 单独的潜在 production 观察项,本切片不碰冻结相邻的 egs_main。)*
+
+**结论**:provider 取数薄层(`fetch_cninfo`/`fetch_sina` 请求构造)需迭代修正(orgId/反爬/真实端点)后重新 `执行` 验证。探针**纯函数核心 + 校验 + 边界**经 4 轮审查已 commit-clean,本次是**取数形态**的运行期发现,非探针逻辑 bug。
+
+**Next**: 待用户定——起草 fetch 薄层修正(cninfo orgId + Sina 端点,小 draft→审查)→ 重新 `执行` 探针。
+
+---
+
 ## 2026-06-12 — Claude `提交` (A-short semantic-risk Slice 1 provider feasibility probe → local master)
 
 Codex PASS(entry below)。提交语义风险层第一个 build 切片(独立 cninfo/Sina 可行性探针)到本地 master(无 push)。新增 `runners/a_short_semantic_risk_probe.py` + `schemas/a_short_semantic_risk_probe_summary.schema.json` + `tests/test_a_short_semantic_risk_probe.py`(44 tests)+ README/register/SESSION_LOG。register 5 条 finding(future-date PIT leak / bad-date-shape bypass / bad-row clear-status / README invariant drift / Slice-1 in_progress)全 flip `resolved`。
