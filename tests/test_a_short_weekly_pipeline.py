@@ -25,7 +25,10 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, main, SCHEMA_PATH,
     _fetch_price_series, _load_validated_overlay, MIN_PRICE_OBS,
+    _semantic_panel_from_summary,
 )
+from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
+from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
 from runners.a_short_theme_overlay_comparison import (  # noqa: E402
     assemble_overlay, build_summary,
 )
@@ -108,27 +111,29 @@ def _feed(last_pct=55.0):
     return {"as_of": AS_OF, "n_days": len(series), "series": series}
 
 
-def _valid_overlay(as_of=AS_OF):
-    """Schema + consistency valid overlay summary (reuses the Slice A runner builders)."""
+def _valid_overlay_for(codes, as_of=AS_OF):
+    """Schema + consistency valid overlay summary for an arbitrary candidate set (Slice A builders)."""
     pool = pd.DataFrame([
-        {"ts_code": "600000.SH", "baseline_rank": 1, "esp_score": 60.0, "l4_score": 70.0,
-         "overheat_flag": False, "chasing_high": False, "chase_flag": False, "high_pos_shrink": False},
-        {"ts_code": "000001.SZ", "baseline_rank": 2, "esp_score": 50.0, "l4_score": 70.0,
-         "overheat_flag": False, "chasing_high": False, "chase_flag": False, "high_pos_shrink": False},
-    ])
-    theme_heat = {"score": {"600000.SH": 90.0, "000001.SZ": 88.0},
-                  "best_concept": {"600000.SH": "c1", "000001.SZ": "c1"}}
+        {"ts_code": c, "baseline_rank": i + 1, "esp_score": 60.0 - i, "l4_score": 70.0,
+         "overheat_flag": False, "chasing_high": False, "chase_flag": False, "high_pos_shrink": False}
+        for i, c in enumerate(codes)])
+    theme_heat = {"score": {c: 90.0 - i for i, c in enumerate(codes)},
+                  "best_concept": {c: "c1" for c in codes}}
     industry_heat_by_l2 = {"半导体": 95.0, "银行": 20.0}
-    sw_l2_by_code = {"600000.SH": "半导体", "000001.SZ": "半导体"}
-    breadth = {"600000.SH": {"up_frac": 0.8, "vol_frac": 0.6, "pass": True},
-               "000001.SZ": {"up_frac": 0.8, "vol_frac": 0.6, "pass": True}}
-    persistence = {"600000.SH": 1.0, "000001.SZ": 1.0}
-    fit = {"600000.SH": 0.8, "000001.SZ": 0.8}
+    sw_l2_by_code = {c: "半导体" for c in codes}
+    breadth = {c: {"up_frac": 0.8, "vol_frac": 0.6, "pass": True} for c in codes}
+    persistence = {c: 1.0 for c in codes}
+    fit = {c: 0.8 for c in codes}
     assembled = assemble_overlay(pool, theme_heat, industry_heat_by_l2, breadth,
                                  persistence, fit, sw_l2_by_code)
     return build_summary(assembled, as_of=as_of,
                          pit_source={"concept_membership": "pit", "sw_mapping": "forward"},
                          dropped_at_l0_l5=[], generated_at="2026-06-10T00:00:00+08:00")
+
+
+def _valid_overlay(as_of=AS_OF):
+    """Schema + consistency valid overlay covering exactly the default weekly pool."""
+    return _valid_overlay_for(["600000.SH", "000001.SZ"], as_of)
 
 
 def _normalized(ts_code="600000.SH", iv_pct=55.0, **cand_over):
@@ -455,6 +460,92 @@ class MainWiringTests(unittest.TestCase):
                  price_provider=lambda code: _series())
             self.assertTrue(out.exists())
 
+    def _run_main_with_sem(self, td, summary):
+        # write a semantic-risk summary file and run main with --semantic-risk-summary; returns out path
+        (Path(td) / "sem.json").write_text(json.dumps(summary), encoding="utf-8")
+        out = Path(td) / "weekly.json"
+        main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+              "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+              "--semantic-risk-summary", str(Path(td) / "sem.json"), "--out", str(out)],
+             price_provider=lambda code: _series())
+        return out
+
+    def test_main_valid_semantic_summary_writes_both(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = self._run_main_with_sem(td, _sem_summary_for(WEEKLY_POOL))   # pool matches weekly EGS
+            md = Path(td) / "weekly.md"
+            self.assertTrue(out.exists() and md.exists())
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(loaded["n_stocks"], 2)                 # deterministic JSON shape preserved
+            self.assertNotIn("advisory", json.dumps(loaded))        # advisory NEVER in deterministic JSON
+            self.assertIn("advisory", md.read_text(encoding="utf-8"))
+
+    def _assert_main_sem_aborts_no_file(self, summary=None, drop_file=False, exc=Exception):
+        # R-ASHORT-SEMANTIC-PANEL-MAIN-PARTIAL-WRITE-ON-INVALID-SUMMARY: an invalid semantic-risk
+        # summary must abort BEFORE any write — neither weekly.json nor its .md sibling may exist.
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            md = Path(td) / "weekly.md"
+            if not drop_file:
+                (Path(td) / "sem.json").write_text(json.dumps(summary), encoding="utf-8")
+            with self.assertRaises(exc):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--semantic-risk-summary", str(Path(td) / "sem.json"), "--out", str(out)],
+                     price_provider=lambda code: _series())
+            self.assertFalse(out.exists(), "weekly.json written despite invalid semantic summary")
+            self.assertFalse(md.exists(), "weekly.md written despite invalid semantic summary")
+
+    def test_main_semantic_summary_schema_tamper_writes_no_file(self):
+        s = _sem_summary_for(WEEKLY_POOL); s["schema_version"] = "0.9.0"   # matching pool, schema tamper
+        self._assert_main_sem_aborts_no_file(s, exc=jsonschema.ValidationError)
+
+    def test_main_semantic_summary_boundary_tamper_writes_no_file(self):
+        s = _sem_summary_for(WEEKLY_POOL); s["boundary"]["hard_veto"] = True   # matching pool, boundary const
+        self._assert_main_sem_aborts_no_file(s, exc=jsonschema.ValidationError)
+
+    def test_main_semantic_summary_as_of_mismatch_writes_no_file(self):
+        self._assert_main_sem_aborts_no_file(_sem_summary_for(WEEKLY_POOL, "20260601"), exc=ValueError)
+
+    def test_main_missing_semantic_summary_file_writes_no_file(self):
+        self._assert_main_sem_aborts_no_file(drop_file=True, exc=FileNotFoundError)
+
+    def test_main_semantic_summary_wrong_candidate_pool_writes_no_file(self):
+        # R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH: same-date, schema+consistency-valid
+        # summary but for a DIFFERENT candidate pool must abort before any write.
+        self._assert_main_sem_aborts_no_file(_sem_summary_for(["600000.SH", "600001.SH"]), exc=ValueError)
+
+    def _assert_main_overlay_aborts_no_file(self, overlay_obj):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            (Path(td) / "ov.json").write_text(json.dumps(overlay_obj), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            md = Path(td) / "weekly.md"
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--overlay", str(Path(td) / "ov.json"), "--out", str(out)],
+                     price_provider=lambda code: _series())
+            self.assertFalse(out.exists(), "weekly.json written despite invalid overlay")   # each absent
+            self.assertFalse(md.exists(), "weekly.md written despite invalid overlay")       # separately
+
+    def test_main_overlay_missing_weekly_candidate_writes_no_file(self):
+        # internally-valid overlay covering only 600000.SH while weekly candidates are
+        # [600000.SH, 000001.SZ]; the missing row would silently default to eligible/crowding=false
+        # → MY lineage check (not overlay-internal consistency) must abort before any write.
+        self._assert_main_overlay_aborts_no_file(_valid_overlay_for(["600000.SH"]))
+
+    def test_main_overlay_wrong_candidate_set_writes_no_file(self):
+        # internally-valid overlay for a different same-size set (600002.SH instead of 000001.SZ).
+        self._assert_main_overlay_aborts_no_file(_valid_overlay_for(["600000.SH", "600002.SH"]))
+
+    def test_main_overlay_duplicate_candidate_writes_no_file(self):
+        # schema+consistency-valid overlay with a DUPLICATE current candidate row: dict/set collapse
+        # would hide it (3 rows -> set of 2 == weekly set). The raw-list dup check must abort before write.
+        self._assert_main_overlay_aborts_no_file(_valid_overlay_for(["600000.SH", "000001.SZ", "000001.SZ"]))
+
 
 def _fake_ts(df):
     class _FakeTs:
@@ -565,6 +656,86 @@ class SchemaTests(unittest.TestCase):
         with open(SCHEMA_PATH, encoding="utf-8") as f:
             schema = json.load(f)
         jsonschema.Draft7Validator.check_schema(schema)
+
+
+def _sem_summary_for(codes, as_of=AS_OF):
+    cninfo = {ts: {"ts_code": ts, "ok": True, "error_category": None,
+                   "announcements": [{"announcementTitle": "2025 年年度报告", "adjunctUrl": "u",
+                                      "announcementTime": 1700000000000, "secCode": ts.split(".")[0]}]}
+              for ts in codes}
+    return build_summary_from_fetches(list(codes), as_of, cninfo, None, GEN)
+
+
+def _sem_summary(as_of=AS_OF):
+    return _sem_summary_for([f"6000{i:02d}.SH" for i in range(4)], as_of)
+
+
+# the main-board Top15 pool implied by MainWiringTests._write_inputs default candidates
+WEEKLY_POOL = ["600000.SH", "000001.SZ"]
+
+
+class SemanticRiskPanelWiring(unittest.TestCase):
+    """Slice 2b-ii-B: advisory panel appended to the weekly .md only, never into the deterministic JSON."""
+
+    def test_panel_from_summary_valid(self):
+        panel = _semantic_panel_from_summary(_sem_summary(), AS_OF)
+        self.assertIn("advisory", panel)
+        self.assertIn("as_of 20260609", panel)
+
+    def test_panel_as_of_mismatch_raises(self):
+        with self.assertRaises(ValueError):
+            _semantic_panel_from_summary(_sem_summary("20260601"), AS_OF)
+
+    def test_panel_schema_name_mismatch_raises(self):
+        s = _sem_summary()
+        s["schema_name"] = "wrong"
+        with self.assertRaises(ValueError):
+            _semantic_panel_from_summary(s, AS_OF)
+
+    def test_panel_invalid_summary_raises(self):
+        s = _sem_summary()
+        s["candidates"][0]["ts_code"] = "300750.SZ"   # non-main → validate_summary_consistency raises
+        with self.assertRaises(ValueError):
+            _semantic_panel_from_summary(s, AS_OF)
+
+    def test_panel_rejects_schema_version_tamper(self):
+        s = _sem_summary()
+        s["schema_version"] = "0.9.0"                  # schema const 1.0.0 -> jsonschema rejects
+        with self.assertRaises(jsonschema.ValidationError):
+            _semantic_panel_from_summary(s, AS_OF)
+
+    def test_panel_rejects_boundary_tamper(self):
+        for key in ("hard_veto", "production"):
+            s = _sem_summary()
+            s["boundary"][key] = True                 # boundary consts are all-false
+            with self.assertRaises(jsonschema.ValidationError):
+                _semantic_panel_from_summary(s, AS_OF)
+
+    def test_panel_rejects_extra_top_level_hard_decision_field(self):
+        s = _sem_summary()
+        s["decision"] = "hard_veto"                    # additionalProperties:false -> rejected
+        with self.assertRaises(jsonschema.ValidationError):
+            _semantic_panel_from_summary(s, AS_OF)
+
+    def test_md_appends_panel_after_deterministic_separator(self):
+        weekly = _weekly([_normalized()])
+        panel = _semantic_panel_from_summary(_sem_summary(), AS_OF)
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "weekly.md"
+            write_weekly_markdown(weekly, str(out), semantic_panel=panel)
+            md = out.read_text(encoding="utf-8")
+        deterministic = render_weekly_markdown(weekly)
+        self.assertTrue(md.startswith(deterministic))     # advisory is purely appended after the M6.7 md
+        self.assertIn("\n---\n", md[len(deterministic):])  # separated from deterministic section
+        self.assertIn("advisory", md)
+
+    def test_md_has_no_panel_when_none(self):
+        weekly = _weekly([_normalized()])
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "weekly.md"
+            write_weekly_markdown(weekly, str(out))        # no semantic_panel
+            md = out.read_text(encoding="utf-8")
+        self.assertEqual(md, render_weekly_markdown(weekly))   # identical to deterministic-only render
 
 
 if __name__ == "__main__":

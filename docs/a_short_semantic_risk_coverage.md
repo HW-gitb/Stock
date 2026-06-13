@@ -14,7 +14,7 @@
 | v14.2 语义项 | 本层覆盖 | status |
 |---|---|---|
 | 监管(问询/关注/立案/处罚/警示) | official_structured(cninfo PIT 公告,severity high/medium)+ web_llm 佐证 | 已建(2a 结构化 + 2b-i 分级);精判待 2b-ii skill。**注:当前是配置 lookback(默认 90 天)内、披露日 ≤ as_of 的 PIT 官方公告证据,并非精确"48h 新鲜度"窗口**——精确 48h 时效 / 媒体负面判断属 2b-ii-B skill/prompt 或未来 recency 字段责任,headless 不强制 48h |
-| 媒体负面 | web_llm advisory(skill web 搜索 + 判断) | 契约+合并已建(2b-ii-A);判断 = 2b-ii-B skill 在环 |
+| 媒体负面 | web_llm advisory(skill web 搜索 + 判断) | 契约+合并已建(2b-ii-A);skill prompt 已建(2b-ii-B),运行时 skill 在环产 patch + apply 合并 |
 | 基本面行业景气(≠ industry_heat 动量) | web_llm `status` tailwind/headwind | 同上(2b-ii skill) |
 | 隐蔽风险线索(资金占用/违规担保/诉讼…) | official_structured 粗筛(宽关键词,最窄抑制只压明确否定式)+ web_llm 实质降级 | headless 粗筛已建;**实质判断必须靠 2b-ii skill**(headless 关键词注定粗,见下) |
 
@@ -28,6 +28,9 @@
 - `apply_web_llm_patch(summary, patch)`(headless,纯函数):校验 patch(schema + 跨字段不变式 + 无重复 ts_code)→ **只**写 `web_llm`/`sources`/`confidence`/`summary` 到匹配候选 → **绝不**碰 `official_structured`/`boundary`/`rank`/`scan_tier`/`ts_code`/`coverage` → 合并后整体过 `validate_summary_consistency`。patch 不能引入 universe 外代码;覆盖语义=替换(非追加)。
 - web_llm 不变式矩阵(unknown 中性三元组 `unknown/unknown/no_action`、任何非-unknown 态须带 `sources`、risk_level 配对、action 枚举等)**= 单一来源 `docs/a_short_semantic_risk_contract.md`,本文件不复述**(B2 contract-anchor,防部分复述漂移)。代码侧由 summary + patch 共用的 `_web_llm_consistency_error` 强制。
 
+## web/LLM skill 层 + 面板接入(2b-ii-B,已建)
+- **skill prompt** `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`:编排既有 6 个分类 prompt(regulatory_48h/policy_news/industry_trend/hidden_risk/earnings_no_good_repair/cross_market_linkage)→ 产 `a_short_semantic_risk_web_llm_patch`;运行时 skill 在环、`apply_web_llm_patch` 校验合并。
+- **面板接入 weekly pipeline**:`a_short_weekly_pipeline --semantic-risk-summary <summary.json>` → `_semantic_panel_from_summary`(渲染前过其消费门)→ `render_semantic_risk_panel` **仅追加到周报 .md**(`---` 分隔),**绝不进确定性周报 JSON**。消费门的校验步骤**单一来源** = `_semantic_panel_from_summary` docstring,本处只指向、不复述(防漂移)。
+
 ## 不在本层(deferred)
 - **Slice 3 — deterministic promotion**:把 cninfo 官方命中升级为**生产硬否决** + 处置既有 DeepSeek `POL-RISK-VETO` legacy-conflict + cninfo 两路径去重。门槛高(动冻结相邻 egs_main stage3),设计上待 advisory 跑出几周真实结果后再决定。追踪:`docs/system_risk_register.md` deferred-open 条目 + `tests/test_semantic_risk_slice3_guard.py`(防忘 CI 守护)。
-- **面板接入 weekly pipeline**:`render_semantic_risk_panel` 已是纯函数;接进周报 = 2b-ii-B。

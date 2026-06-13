@@ -155,6 +155,13 @@ def _load_validated_overlay(overlay_path: str, weekly_as_of: str) -> dict:
     if str(ov.get("as_of")) != str(weekly_as_of):
         raise SystemExit(f"[FATAL] overlay as_of {ov.get('as_of')} != 周报 as_of {weekly_as_of}"
                          "(未来/陈旧 overlay,须同一周末批)")
+    # 重复 ts_code 行检测 **在 dict 折叠之前**(#R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH):
+    # `{c["ts_code"]: c}` 会静默用后一行覆盖前一行,使 main 的 set 比对看不到重复(3 行折叠成 2 → set 相等);
+    # 若重复行带不同 eligible/crowding,会悄改 M6.7 星级。重复即拒。
+    raw_codes = [c["ts_code"] for c in ov.get("candidates", [])]
+    if len(raw_codes) != len(set(raw_codes)):
+        dupes = sorted({c for c in raw_codes if raw_codes.count(c) > 1})
+        raise SystemExit(f"[FATAL] overlay 含重复 ts_code {dupes}(dict 折叠会静默覆盖,星级可能被悄改);拒跑")
     return {c["ts_code"]: c for c in ov.get("candidates", [])}
 
 
@@ -201,6 +208,28 @@ def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str) -> l
     return [{"high": r["high"], "low": r["low"], "close": r["close"]} for r in rows]
 
 
+def _semantic_panel_from_summary(summary: dict, weekly_as_of: str) -> str:
+    """把已校验的 `a_short_semantic_risk_summary` 渲染成 advisory 面板 markdown。
+    渲染前执行与 `write_summary` 同一道**完整 schema+consistency 校验门**:先跑
+    `a_short_semantic_risk_summary` JSON Schema(才拦得住 schema_version 篡改 / boundary
+    const / 顶层多余字段),再校验 schema_name + as_of 与周报一致 + `validate_summary_consistency`
+    (绝不渲染 schema 非法 / as_of 错配 / 伪造 / 未校验的 advisory)。返回纯 markdown
+    (只进 .md,不进确定性 JSON)。本 docstring 是这道门的**唯一权威枚举**——耐久文档(README/coverage)
+    只指向"与 write_summary 同款 schema+consistency 门",不得各自再枚举步骤(防遗漏式漂移)。"""
+    from runners.a_short_semantic_risk_summary import (
+        validate_summary_consistency, render_semantic_risk_panel, SCHEMA_PATH as SUMMARY_SCHEMA_PATH)
+    if summary.get("schema_name") != "a_short_semantic_risk_summary":
+        raise ValueError("semantic-risk summary schema_name 不符,拒绝渲染")
+    # full consumer-validation = schema + consistency(同 write_summary 的写盘门)。schema 才拦得住
+    # schema_version 篡改 / boundary const(hard_veto/production…)/ 顶层多余字段(decision 等)。
+    with open(SUMMARY_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        jsonschema.validate(summary, json.load(f))
+    if summary.get("as_of") != weekly_as_of:
+        raise ValueError(f"semantic-risk summary as_of {summary.get('as_of')} 与周报 {weekly_as_of} 不一致")
+    validate_summary_consistency(summary)
+    return render_semantic_risk_panel(summary)
+
+
 def main(argv=None, pro_factory=None, price_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
@@ -212,6 +241,10 @@ def main(argv=None, pro_factory=None, price_provider=None):
     p.add_argument("--overlay", help="overlay artifact(可选)")
     p.add_argument("--account", help="账户/环境 JSON(available_cash / market_regime)")
     p.add_argument("--out", required=True)
+    p.add_argument("--semantic-risk-summary",
+                   help="可选 a_short_semantic_risk_summary.json:渲染 advisory 面板**仅追加到周报 .md**,"
+                        "不进确定性周报 JSON;渲染前过 `_semantic_panel_from_summary` 消费门"
+                        "(校验步骤见其 docstring,单一来源)")
     p.add_argument("--confirm-fetch-authorized", action="store_true")
     args = p.parse_args(argv)
     if not _is_valid_yyyymmdd(args.as_of):
@@ -230,6 +263,13 @@ def main(argv=None, pro_factory=None, price_provider=None):
     feed = _load(args.iv_feed)
     iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位(None → 引擎按 missing 处理)
     overlay = _load_validated_overlay(args.overlay, args.as_of) if args.overlay else {}
+    weekly_candidates = [c.get("ts_code") for c in ai.get("candidates", [])]
+    # overlay 血缘门(#R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH):overlay 必须**恰好覆盖**
+    # 本周报候选集(同一批)。缺行会被 `overlay.get(ts)` 静默 default 成 eligible/crowding=false,悄悄改
+    # M6.7 星级;多行说明非同批。任一不符 → 写盘前 abort。
+    if args.overlay and set(overlay) != set(weekly_candidates):
+        raise SystemExit(f"[FATAL] overlay 候选集 {sorted(overlay)} != 周报候选 {sorted(weekly_candidates)}"
+                         "(同日错批/缺行/多行,缺行会被静默降级;须同一批全覆盖,拒跑)")
     acct = _load(args.account) if args.account else {}
     # 市场 regime 优先取自 analysis_input(EGS 分类),其次账户配置,最后默认震荡期。
     # (EGS 当前可能仍输出 status='unknown' —— 真正的 regime 分类器是上游待建件;在此优雅降级。)
@@ -256,11 +296,28 @@ def main(argv=None, pro_factory=None, price_provider=None):
                          "不写周报(价格抓取失败/停牌须排查,不可静默退化成观察)")
     gen = datetime.now().astimezone().isoformat(timespec="seconds")
     weekly = build_weekly_report(normalized, args.as_of, gen, iv_feed_ref=os.path.basename(args.iv_feed))
-    write_weekly_report(weekly, feed, args.out)
-    # 同时产出易读的 Markdown 面板(只渲染,不改结论)
     from runners.a_short_m67_render import write_weekly_markdown
     md_path = os.path.splitext(args.out)[0] + ".md"
-    write_weekly_markdown(weekly, md_path)
+    # 校验+渲染可选 advisory 面板 **在任何写盘之前**:非法 summary(schema/boundary 篡改、as_of 错配、
+    # 文件缺失/坏 JSON)必须在落盘前 abort,绝不留下 partial weekly.json(与 analysis-input/价格/篡改
+    # 周报一致的 validate-before-write / abort-no-file 模式)。
+    semantic_panel = None
+    if args.semantic_risk_summary:
+        # 血缘门:summary 候选池必须 == 由本周报 EGS analysis_input.candidates 按同一主板 filter/cap
+        # 推出的预期 Top15(`main_board_top15`)。否则同日但错池的 advisory 会被贴到不相干的周报上。
+        from runners.a_short_semantic_risk_probe import main_board_top15
+        expected_pool, _ = main_board_top15(weekly_candidates)
+        with open(args.semantic_risk_summary, "r", encoding="utf-8") as f:
+            sem = json.load(f)
+        got_universe = (sem.get("universe") or {}).get("main_board_top15")
+        got_cands = [c.get("ts_code") for c in sem.get("candidates", [])]
+        if got_universe != expected_pool or got_cands != expected_pool:
+            raise ValueError(
+                f"semantic-risk summary 候选池与周报 EGS 主板 Top15 不一致(同日错池):"
+                f"expected {expected_pool}; universe {got_universe}; candidates {got_cands}")
+        semantic_panel = _semantic_panel_from_summary(sem, args.as_of)
+    write_weekly_report(weekly, feed, args.out)
+    write_weekly_markdown(weekly, md_path, semantic_panel=semantic_panel)
     actions = {}
     for r in weekly["reports"]:
         actions[r["m67"]["table"]["操作"]] = actions.get(r["m67"]["table"]["操作"], 0) + 1

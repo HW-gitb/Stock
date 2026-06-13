@@ -61,8 +61,12 @@ def render_weekly_markdown(weekly: dict) -> str:
     return "\n".join(out)
 
 
-def write_weekly_markdown(weekly: dict, out_path: str) -> None:
+def write_weekly_markdown(weekly: dict, out_path: str, semantic_panel: str = None) -> None:
+    """渲染周报 .md。`semantic_panel`(可选)= 语义风险 advisory 面板 markdown,**仅追加到 .md 末尾、
+    与确定性 M6.7 用 `---` 分隔**;它绝不进确定性周报 JSON(advisory 不混入确定性字段)。"""
     md = render_weekly_markdown(weekly)
+    if semantic_panel:
+        md = md + "\n\n---\n\n" + semantic_panel.rstrip("\n") + "\n"
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp = str(out_path) + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
