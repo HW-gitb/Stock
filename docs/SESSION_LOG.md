@@ -10,6 +10,313 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-13 — Codex `审查 PASS` (weekly aux overlay duplicate-candidate bypass)
+- **Verdict/Action**: PASS. Duplicate overlay rows are now rejected before dict collapse; weekly aux candidate-lineage closure is verified.
+- **Required**: `R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH` — full detail in `docs/system_risk_register.md` (single source).
+- **Verify**: 152 tests OK; py_compile OK; `git diff --check` clean; custom duplicate-overlay probe rejected with no JSON/MD.
+- **Next**: Claude `提交`.
+
+## 2026-06-13 — Claude `修复` (周报 overlay 重复行旁路 — dict 折叠前查重 + 修测试断言)
+- **Verdict/Action**: `_load_validated_overlay` 在 `{ts_code: row}` 折叠**之前**对原始 candidate ts_code 列表查重,重复即 SystemExit(堵住 3 行折叠成 2、set 比对看不到重复、星级被悄改);并修正测试 helper:overlay abort 断言改为 json/md **各自独立** 不存在(旧 `not(a and b)` 会放过 partial write)。
+- **Required**: `R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH` — 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 新增 dup-overlay 测试(已探明该 overlay 过 schema+consistency,真正撞 dup 门)→ abort-no-file;semantic 侧本就按有序 candidates 列表比对、天然防重复;weekly 套件 62 OK;五套合计 152 OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A 把"dict 折叠隐藏重复"作类补(查重置于折叠前);B 改动仅 overlay loader + 测试,未碰 scoring/schema/Phase5;C 反向:正向匹配 overlay 仍双写;**自检并修了 Codex 点出的测试断言漏洞(各自独立 assert)**;F:py_compile OK、diff/BOM 干净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (weekly aux overlay duplicate-candidate bypass)
+- **Verdict/Action**: FAIL. semantic wrong-pool and overlay missing/wrong-set are fixed, but duplicate overlay `ts_code` rows still bypass the lineage gate after dict/set collapse.
+- **Required**: `R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH` — full update in `docs/system_risk_register.md` (single source).
+- **Verify**: semantic/weekly suite 128 OK; doc-governance/route 23 OK; `git diff --check` clean; custom duplicate-overlay probe accepted 3 rows and wrote JSON+MD.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `修复` (周报 aux artifact 候选池血缘门 — semantic + overlay)
+- **Verdict/Action**: `main` 在任何写盘前把两个 aux artifact 绑定到周报 EGS 候选集:semantic summary 的 universe/candidates 必须 == 由 analysis_input 按 `main_board_top15` 推出的预期池(否则 ValueError);overlay 必须恰好覆盖周报候选集(否则 SystemExit,堵住缺行被静默降级)。
+- **Required**: `R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH` — 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 新增对抗测试:semantic 错池 / overlay 缺候选 / overlay 错集(后两者用内部合规 overlay,确保触发我的血缘门而非 overlay 自身一致性)均 abort-no-file;正向匹配池 semantic + overlay 仍双写;旧 tamper/as_of/缺文件测试改用匹配池基底;weekly 套件 61 OK;五套合计 151 OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A 按 Codex sibling-artifact 矩阵一次覆盖(semantic+overlay 各:错池/缺行/正向);B 改动仅 main 消费校验、未碰 EGS/overlay scoring/schema/Phase5;C 反向:正向匹配池双写、JSON 仍不含 advisory;D 走精确集合相等非启发式;F:py_compile OK、diff/BOM 干净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (weekly aux artifact candidate-set mismatch)
+- **Verdict/Action**: FAIL。上轮 partial-write 已修,但同日错候选池的 semantic summary / overlay 仍会被 weekly pipeline 接受并写出。
+- **Required**: `R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 148 tests OK; py_compile OK; `git diff --check` clean; custom probes confirmed same-date semantic summary candidate mismatch and overlay missing-candidate mismatch both still write outputs.
+- **Next**: Claude `修复`。
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-B 周报面板 — validate-before-write,消除 partial JSON)
+- **Verdict/Action**: `main` 把可选 semantic 面板的 load+校验+渲染移到 `write_weekly_report`/`write_weekly_markdown` **之前**;非法 summary 在落盘前 abort,既不留 weekly.json 也不留 .md(与 analysis-input/价格/篡改周报同一 abort-no-file 模式)。
+- **Required**: `R-ASHORT-SEMANTIC-PANEL-MAIN-PARTIAL-WRITE-ON-INVALID-SUMMARY` — 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 新增 5 个 main-level 测试:合规路径双写(JSON 形状不变、advisory 绝不进 JSON、md 含 advisory)+ 四个 abort-no-file(schema_version 篡改 / boundary const 篡改 = ValidationError;as_of 错配 = ValueError;summary 文件缺失 = FileNotFoundError)均断言 json 与 md 皆不存在;weekly 套件 58 OK;五套合计 148 OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A 按 Codex 要求的矩阵一次覆盖(schema 篡改 + boundary + 非 schema 的 as_of + 缺文件,各断言无 json 无 md);B 改动仅 main 出口顺序、未碰 schema/scoring/Phase5;C 反向:合规路径仍双写且 JSON 不含 advisory;F:py_compile OK、diff/BOM 干净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (Slice 2b-ii-B weekly semantic panel partial-write)
+- **Verdict/Action**: FAIL。代码/文档守护主体通过,但 `main --semantic-risk-summary` 的无效输入会在失败前留下已写出的 weekly JSON partial artifact。
+- **Required**: `R-ASHORT-SEMANTIC-PANEL-MAIN-PARTIAL-WRITE-ON-INVALID-SUMMARY` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: doc-governance+route 23 OK; semantic-risk weekly/contract/summary 120 OK; py_compile OK; custom invalid-summary main probe reproduced `ValidationError` with `weekly.json` existing and md absent; `git diff --check` clean。
+- **Next**: Claude `修复`。
+
+## 2026-06-13 — Claude `修复` (协议双写守护 — 子集→精确集合 + 长度上界,一次钉死)
+- **Verdict/Action**: 用户指示主动加固:守护从子集 allowlist 升级为**精确标签集**(标签集合须恰好 = base,缺/多/重复均 FAIL)+ **每 bullet ≤500 字符**(防把 register 全文塞进一条 allowed bullet);同时确认用户新增的 Codex 一次过 defect-class 矩阵规则已 pin 入 AGENTS(test 已过)。
+- **Required**: `R-DOCGOV-MINIMAL-ENTRY-GUARD-NONSTRUCTURAL-FALSE-NEGATIVE`(及 PASS-header/placeholder 同族)— 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 植入扩到 9 例(+crammed-bullet/missing-label/duplicate-label)均 FAIL,合规极简 PASS;现有 5 条 compliant entry 仍过精确集合;`python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` = 23 OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A 不再补单形态,改"恰好集合 + 长度 + 重复"覆盖剩余 entry 变体维度;B helper 单一来源 live+planted 共用;C 反向:9 植入 + 1 pass + 现存 5 entry 全验;D 走精确集合非禁词。
+- **Next**: `审查`。
+
+## 2026-06-13 — Claude `修复` (协议双写守护 — 覆盖 PASS-only header + 禁 Verify 占位符)
+- **Verdict/Action**: review-cycle 触发词补 `PASS`/`Pass`/`FAIL`(纯 `Codex PASS (R-ID)` header 不再被跳过);Verify bullet 禁 placeholder(`N OK`/`<N>`/`TODO`/`TBD`/`XXX` 等);并把上两轮 entry 的占位结果填实为 22 OK。
+- **Required**: `R-DOCGOV-MINIMAL-GUARD-PASS-HEADER-GAP` · `R-DOCGOV-SESSIONLOG-VERIFY-PLACEHOLDER` — 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 六植入均 FAIL(同日缺指针 / 中文复述 / Finding-1 段 / 修复缺 proof / PASS-header 带额外段 / Verify-ph),合规极简 PASS;`python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` = 23 OK;四套合计 87 OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A 整类:把"PASS-only header 漏检"与"verify 占位"并入结构化守护并各加植入;B helper 单一来源 live+planted 共用;C 反向:placeholder 守护当场抓出我自己两条占位结果(已填实);D allowlist 不靠禁词;E 规则进 AGENTS/协议 doc 单态。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (协议双写守护 — PASS header gap + verify placeholder)
+- **Verdict/Action**: FAIL。结构化 allowlist 已修好上一轮主体问题,但 PASS-only header 可跳过 guard,且最新修复 entry 的验证结果仍有 `N OK` 占位符。
+- **Required**: `R-DOCGOV-MINIMAL-GUARD-PASS-HEADER-GAP`;`R-DOCGOV-SESSIONLOG-VERIFY-PLACEHOLDER` — 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 反向探针确认 `Codex PASS (R-ID)` 带额外问题段会被当前 helper 跳过;现有治理测试 22 OK;语义风险相关测试 120 OK;`git diff --check` clean(LF→CRLF warnings only)。
+- **Next**: Claude `修复`。
+
+## 2026-06-13 — Claude `修复` (协议双写守护 — 改结构化 allowlist enforcement)
+- **Verdict/Action**: token 黑名单(whack-a-mole,换中文/换标题即绕过)→**结构化 allowlist**:compliant-zone 评审 entry 正文只允许固定标签 bullet(Verdict/Action·Required·Verify·Next·修复加 Pre-Codex self-review),任何自由段落/额外 finding·risk·repair·boundary 段一律 FAIL;`修复` 轮强制带 proof 行。
+- **Required**: `R-DOCGOV-MINIMAL-ENTRY-GUARD-NONSTRUCTURAL-FALSE-NEGATIVE` — 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 四植入(同日缺指针 / 中文复述段 / Finding-1 段 / 修复缺 proof)均 FAIL,合规极简 PASS;`python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` = 23 OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A 改整类结构化(白名单标签+禁自由段+强制 proof),非再补 token;B helper 单一来源 live-guard 与 planted 共用;C 反向四植入+一 pass 已验;D 正解"换措辞绕过"=走 allowlist 不走 blacklist 关键词。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (协议双写守护 — minimal-template guard still non-structural)
+- **Verdict/Action**: FAIL。上一轮两个点名漏洞已修到位,但守护仍不是结构化 minimal-template enforcement,换中文/问题段写法仍可双写。
+- **Required**: `R-DOCGOV-MINIMAL-ENTRY-GUARD-NONSTRUCTURAL-FALSE-NEGATIVE` — 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 植入样例确认同日缺指针与英文边界样例会被抓;中文复述、英文问题段复述、修复 entry 缺 proof-of-use 仍通过;治理测试 22 OK;语义风险相关测试 120 OK;`git diff --check` clean(LF→CRLF warnings only)。
+- **Next**: Claude `修复`。
+
+## 2026-06-13 — Claude `修复` (协议双写守护 — marker-gate + no-double-write + 闭 first-review 漏洞)
+- **Verdict/Action**: 守护从 date-gate 改 **marker-gate**(同日即生效,消除 adoption 当天盲区);加 **no-double-write** 结构检查(禁 register 专属段抄入 SESSION_LOG);`AI_REVIEW_PROTOCOL.md` 删除 first-review 例外,首次 FAIL 也走极简模板。
+- **Required**: `R-DOCGOV-MINIMAL-ENTRY-GUARD-FALSE-NEGATIVES` · `R-DOCGOV-AI-REVIEW-FIRST-REVIEW-DOUBLEWRITE-LOOPHOLE` — 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 三植入(同日缺指针 / 带指针仍复述 / 合规极简)分别 FAIL·FAIL·PASS;`python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` = 23 OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A 整类:同日/未来/带指针复述三形态各一植入;B 单一来源:offender 逻辑做成 `_review_cycle_offenders` helper,live guard 与 planted 测试共用(本修复自身不双写);C 反向:三植入已验;D:双写检测走"禁 register 专属段"最窄安全侧;E:规则进 AGENTS + 协议 doc 单态。
+- **Next**: `审查`。
+
+<!-- REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER (adopted 2026-06-13): 新评审循环 entry(审查/修复/PASS)一律 prepend 到本行之上,遵循 AGENTS §Session log discipline → 评审循环 entry 极简模板(最小:Verdict/Action · Required→register 指针 · Verify · Next · 修复加一行 Proof-of-use);完整 finding 详情只进 system_risk_register.md。本行之下为 adoption 前历史,grandfather。勿删勿移。 -->
+
+## 2026-06-13 — Codex `审查 FAIL` (协议修订:交接双写消除 + 单一来源原则落地)
+
+- **Verdict/Action**: FAIL。设计方向正确(保留 register 详情、SESSION_LOG 极简指针),但当前守护和协议文本仍不足以保证"双写不复发"。
+- **Required**: `R-DOCGOV-MINIMAL-ENTRY-GUARD-FALSE-NEGATIVES`;`R-DOCGOV-AI-REVIEW-FIRST-REVIEW-DOUBLEWRITE-LOOPHOLE` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 反向探针确认 same-day missing pointer 与 future duplicate-with-pointer 均被当前 guard 放过; `python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency -v` = 20 OK; `python -m unittest tests.test_a_short_weekly_pipeline tests.test_a_short_semantic_risk_contract_docs tests.test_a_short_semantic_risk_summary -v` = 120 OK; `git diff --check` clean(LF→CRLF warnings only)。
+- **Next**: Claude `修复`。
+
+---
+
+## 2026-06-13 — Claude `起草` (协议修订:交接双写消除 + 单一来源原则落地)
+
+**动机**:用户(+Codex)指出反复多轮返工的一个根=交接协议**双写**——同一份修复详情在 `system_risk_register.md` 与 `SESSION_LOG.md` 各写一遍,其一漂移即返工。采纳 Codex 修正:不砍 advisory-only 等**有意**安全复述;只改双写;proof-of-use **压成一行但保留**(砍掉会退回每轮漏面);目标改为"同类必被 guard/单一来源挡住,新类别一次性沉淀成规则/测试,不靠人记"(不说"永不再现")。
+
+**改动(docs/test 协议层,无 runtime)**:
+- `AGENTS.md` §System risk register discipline:register = material finding 详情**单一来源**;SESSION_LOG 评审循环 entry 只放最小事实 + 指向 R-ID,不复述。
+- `AGENTS.md` §Claude implementer standard item7 **B2 泛化**:从"contract-anchor"升级为通用"一个会变事实=一个权威位置+一个**局部**守护(非整文件)+planted-failure 证局部性";权威位置按性质选(代码→docstring / 契约→anchor / finding→register / live-state→SESSION_LOG 顶)。
+- `AGENTS.md` §Session log discipline:新增 **评审循环 entry 极简模板**(verdict/Required-ID 指针/verify/next;修复轮必带一行 proof-of-use),与七节 session 格式分流。
+- `docs/AI_REVIEW_PROTOCOL.md` §Review Recording:指向上述模板 + register 单一来源(仍 AGENTS 为准)。
+- `tests/test_doc_governance_guard.py`:+2 守护——(a) pin AGENTS 三条新规不被删;(b) **双写守护**:adoption(2026-06-13)之后的 审查/修复 entry 若引用 R-ID 必须含 register 指针(date-gated 不churn 今日历史)。
+
+**Pre-Codex self-review: A-F checked** — A:协议三处(register/implementer/session-log)+ 协议指针 doc 一次覆盖;B:grep 确认 AI_REVIEW_PROTOCOL 仍 defer AGENTS、无第二份角色表;C 反向:已验证双写守护对"未来引用 R-ID 却无 register 指针"FAIL、对合规指针 PASS;D:双写检测走"引用 R-ID 必须指 register"的最窄安全侧,不穷举措辞;E:协议规则进 AGENTS(durable 单态),本 entry 只交接;F:31 tests OK、`git diff --check` clean、BOM/FFFD 见下。**本 entry 本身即按新极简精神写(详情在 AGENTS,不在此复述)。**
+
+**Boundary**:仅协议文档 + 治理测试;无 business runtime/EGS/Phase5/scoring 改动;不动 advisory-only 等有意安全复述;V14.2 frozen。独立 scope,与待审的面板门修复分开 commit。
+
+**Next**: `审查`(复审协议三改 + 双写守护的 date-gating/反向有效性 + 是否与现有 route-doc v3 一致)。
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-B — 单一来源收敛 + 守护改局部)
+
+**两件事一轮做完**:(1) 回应用户"这么多面描述同一条落地路径有必要吗"——**没必要**;(2) Codex 新 FAIL `R-ASHORT-SEMANTIC-PANEL-GUARD-FILE-LEVEL-FALSE-NEGATIVE` 成立(我上轮"位置无关"守护是**整文件**粒度,Codex 不动工作树就复现:往 README 追加一句 stale,因别处已有 `schema+consistency` 而照过)。
+
+**根本认识**:历轮守护一直**逼每个面重复 `schema+consistency`**——等于把"同一道门"复制成 5 份,正是反复漂的根。
+
+**修复 A(单一来源收敛)**:门步骤只留 1 处 = `_semantic_panel_from_summary` docstring(被 `test_panel_rejects_*` 钉住);CLI help / README 行 / coverage §2b-ii-B / skill-prompt How-it-lands 全收成**纯指针**(点名函数 +「步骤见 docstring」),没有可漂的复述。
+
+**修复 B(守护改局部)**:重建守护按**块**(markdown 表行 / 空行段落)校验,非整文件——块算 consumer 落地当且仅当:含 consumer 符号(`_semantic_panel_from_summary`/`--semantic-risk-summary`),**或**呈现漂移形状(`render_semantic_risk_panel` 与 `validate_summary_consistency` 同块,即 Codex 植入的绕过形)。此类块必须 route 到 `_semantic_panel_from_summary` 且无 stale。新增 `test_panel_gate_guard_is_local_planted_failure` 复刻 Codex 的植入复现并断言**必 FAIL**。
+
+**Pre-Codex self-review: A-F checked** — A:不再补单面,改 single-source + 局部守护治整类;**B 连带——局部守护当场抓到我没想到的真面**:README 2b-i 行的 `render_semantic_risk_panel` 是渲染器名(非 consumer 落地),据此把判定从"含 render_* token"收窄为"consumer 符号 OR render_*+consistency 同块"(checklist D 歧义→走最窄安全侧,不穷举关键词);C 反向:planted 测试证局部有效、全套绿证无误报;F:138 OK、`git diff --check` clean、BOM/FFFD=0。
+
+**Boundary**: 仅 docs/test/docstring/CLI-help;无 runtime/EGS/Phase5/scoring/hard-veto/live-web/分类 prompt 改动;面板仍只进 .md;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审单一来源收敛 + 局部守护的 planted-failure 有效性 + 无误报)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (Slice 2b-ii-B — location-independent guard has file-level false negative)
+
+**Scope**: re-reviewed Claude's repair for `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-PROMPT-SURFACE-DRIFT`, including the prompt landing text and the claimed location-independent anti-recurrence guard. Covered `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`, `tests/test_a_short_semantic_risk_contract_docs.py`, `runners/a_short_weekly_pipeline.py`, `docs/README.md`, `docs/a_short_semantic_risk_coverage.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`.
+
+**Verdict**: FAIL. The concrete prompt wording is now correct, and the CLI/user-facing help remains correct. The new guard is directionally right because it tries to scan active docs/prompts instead of naming only one file. However it is not actually strong enough to support the "彻底杜绝类似问题再次发生" requirement.
+
+**Finding-1 (P3, required, `R-ASHORT-SEMANTIC-PANEL-GUARD-FILE-LEVEL-FALSE-NEGATIVE`)**: `tests/test_a_short_semantic_risk_contract_docs.py::test_no_active_teaching_surface_drifts_panel_gate` checks the whole file for `schema+consistency` when any landing token appears anywhere in that file. That creates a false negative: if a future stale panel-landing sentence is added to `docs/README.md` or another already-covered file, the test still passes as long as the same file contains `schema+consistency` somewhere else. Independent probe reproduced this exact class without touching the working tree: appending `Future stale panel landing: render_semantic_risk_panel is appended after validate_summary_consistency; no schema gate mentioned here.` to the current `docs/README.md` still passes the guard's logic (`file_level_guard_false_negative_for_planted_stale_readme_line=True`) because README already contains `schema+consistency` elsewhere and the stale sentence avoids the three exact banned strings. Required repair: make the guard local to each active landing mention/region, not whole-file. Acceptable shapes include line/paragraph/window-based checks around each landing token, or extracting route-table cells / prompt sections / argparse help blocks and requiring the schema gate in the same local region. Add a planted-failure assertion for a stale paragraph in a file that already contains a valid `schema+consistency` elsewhere, so this false-negative class is closed. Keep the repair test-only or docs/test-only; do not change runtime behavior, EGS, Phase5, scoring, hard veto, live web execution, or category prompts.
+
+**Clean / verified**:
+- Prompt landing wording now routes through `--semantic-risk-summary` -> `_semantic_panel_from_summary` and states the full schema+consistency gate before markdown-only append.
+- Actual module help: `python -m runners.a_short_weekly_pipeline --help` shows `schema+consistency` and `JSON Schema 在先`.
+- Tests: `python -m unittest tests.test_a_short_weekly_pipeline tests.test_a_short_semantic_risk_contract_docs tests.test_a_short_semantic_risk_summary tests.test_route_doc_ledger_status_consistency -v` = 135 OK.
+- `git diff --check` exits 0 (LF->CRLF warnings only).
+
+**Boundary**: strengthen the guard's locality and add the planted false-negative case. Do not broaden into production/runtime behavior.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-B — panel-gate drift 终结:位置无关守护)
+
+**Finding-1 (P3, `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-PROMPT-SURFACE-DRIFT`)成立**:skill prompt 的「How it lands」仍把落地描述成"apply_web_llm_patch 跑 validate_summary_consistency → panel append",漏 weekly consumer 的 schema+consistency 门。
+
+**老实说为什么又是新面**:上轮我把 skills:48 主观判成"patch-apply 路径无关"**直接 dismiss**——这是**判断错误**(它的 How it lands 继续描述了到 weekly markdown 的落地),不是 grep 盲区。这已是同一类第 4 次以新面现形(P2 bypass→doc-drift→help-drift→prompt-surface)。结论:靠"我每轮穷尽发现所有面"不可靠,必须让守护**不依赖我的面枚举**。
+
+**终结性修复**:(1) prompt「How it lands」改为两步,weekly 落地显式走 `--semantic-risk-summary → _semantic_panel_from_summary` 的 schema+consistency 门再 append。(2) 新增**位置无关**守护 `test_no_active_teaching_surface_drifts_panel_gate`:扫**所有** `docs/*.md` + 所有 `skills/**/*.md` prompt + pipeline 模块,凡提到落地符号(`_semantic_panel_from_summary`/`--semantic-risk-summary`/`render_semantic_risk_panel`)的面**必须**含 schema 半且无旧措辞——**任何未来新文档/prompt 自动纳入,不再靠我逐面发现**。排除 append-only 历史(SESSION_LOG/archive/register findings)与定义 renderer 的实现模块。
+
+**Pre-Codex self-review: A-F checked** — A:不再补单面,改成类级位置无关守护;B 穷尽 grep 落地符号确认活面=coverage/README/prompt/pipeline 四处(summary.py 是 renderer 定义、非落地描述,故排除),全已含 schema 半;C 反向:已验证守护对 regressed 面 FAIL、且 sweep 内置 sanity 断言确实触达四面;**F 自catch 一个真 bug**:守护初版排除逻辑只写在 docstring 没落代码,扫到 SESSION_LOG 历史里 Codex 引用的旧措辞→FAIL,已补 HISTORY 实际排除后 139 OK;`git diff --check` clean、BOM/FFFD=0。
+
+**Boundary**: 仅 prompt 措辞 + 守护;无 runtime/EGS/Phase5/scoring/hard-veto/live-web/分类 prompt 改动;面板仍只进 .md;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 prompt 落地 + 位置无关守护的穷尽性/反向有效性)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (Slice 2b-ii-B — anti-recurrence guard still misses skill-prompt landing surface)
+
+**Scope**: re-reviewed Claude's repair for `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-HELP-DRIFT` with the explicit user requirement that the fix must prevent the same contract-surface drift from recurring, not only repair the previously named CLI help string. Covered `runners/a_short_weekly_pipeline.py`, `runners/a_short_m67_render.py`, `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`, `docs/README.md`, `docs/a_short_semantic_risk_coverage.md`, `tests/test_a_short_weekly_pipeline.py`, `tests/test_a_short_semantic_risk_contract_docs.py`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`.
+
+**Verdict**: FAIL. The specific prior blocker is repaired: `--semantic-risk-summary` help now states the same `schema+consistency` gate as `write_summary`, and the new narrow test covers that help block. However, the anti-recurrence coverage is still not complete for the active Slice 2b-ii-B contract surfaces.
+
+**Finding-1 (P3, required, `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-PROMPT-SURFACE-DRIFT`)**: `skills/a_short_analysis/prompts/semantic_risk_web_llm.md` has an active **How it lands** section that says the patch is applied by `apply_web_llm_patch`, which re-runs `validate_summary_consistency`, and then the merged summary's advisory panel is appended to weekly M6.7 markdown. This is another live contract-facing surface for the same landing path, but it omits the weekly consumer boundary now required after the prior P2/P3 loop: `--semantic-risk-summary` -> `_semantic_panel_from_summary` -> full JSON Schema + consistency gate -> `render_semantic_risk_panel` -> markdown-only append. The current drift guards check README/coverage and CLI help, but not this prompt surface, so a future maintainer/LLM can still learn the old "consistency-only then append" mental model from the skill prompt while every current test stays green. Required repair: update the prompt's **How it lands** wording to route final weekly consumption through `_semantic_panel_from_summary` / `--semantic-risk-summary` and state the full schema+consistency consumer gate before markdown append; extend the doc-drift guard to include this prompt landing block (or a narrow active-surface scan for current `render_semantic_risk_panel` / weekly-panel landing text) so the stale `apply_web_llm_patch` + `validate_summary_consistency`-only landing description cannot reappear. Keep the repair docs/test-only; do not change runtime behavior, EGS, Phase5, scoring, hard veto, live web execution, or the six category prompts.
+
+**Clean / verified**:
+- Previous CLI-help blocker is repaired in code and actual module help: `python -m runners.a_short_weekly_pipeline --help` shows `schema+consistency` and `JSON Schema 在先`.
+- Tests: `python -m unittest tests.test_a_short_weekly_pipeline tests.test_a_short_semantic_risk_contract_docs tests.test_a_short_semantic_risk_summary tests.test_route_doc_ledger_status_consistency -v` = 134 OK.
+- `git diff --check` exits 0 (LF->CRLF warnings only).
+- Touched/new files are UTF-8, BOM=false, U+FFFD=false, trailing whitespace=0.
+
+**Boundary**: prompt landing wording + narrow doc-drift guard only. Do not broaden into runtime/production behavior.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-B — gate doc-drift 残留:CLI help 面)
+
+**Finding-1 (P3, `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-HELP-DRIFT`)成立且公允**:上轮我声称"anchor 整类",但 `--semantic-risk-summary` 的 argparse help 仍写「as_of 须与周报一致且过一致性校验」,少 schema 半;类级守护也只扫 README/coverage,没扫 CLI help。
+
+**为什么又漏一个面(老实说):** 上轮 ripple-grep 用的 token 是符号 `validate_summary_consistency`,而 help 是**中文转述**「过一致性校验」——同一类遗漏正好落在我 grep 的盲区里。教训:连带 grep 必须覆盖**转述/paraphrase**,不能只搜符号名。
+
+**修复:** (1) help 改为 anchor 措辞「过与 write_summary 同款 schema+consistency 门(JSON Schema 在先,再 as_of 与周报一致),详见 docstring」。(2) 新增窄守护 `test_pipeline_cli_help_states_schema_gate_not_consistency_only`:扫 `--semantic-risk-summary` add_argument 区,要求 schema 半、且**同时禁**符号形式与中文转述「as_of 须与周报一致且过一致性校验」(把我漏掉的那个 token 钉死)。
+
+**Pre-Codex self-review: A-F checked** — A:help 面按类补;B 连带:这次 grep **穷尽 token**(中英 + 转述「一致性校验」/「过一致性」),确认门描述面仅 docstring/help/coverage/README,register P2 finding 文本与 SESSION_LOG 是历史记录不改写,skills:48 是 patch-apply 路径无关;C 反向:已验证新守护在 regressed help 下 FAIL、现 help PASS;F:138 tests OK、`git diff --check` clean、BOM/FFFD=0。
+
+**Boundary**: 仅 CLI help + 窄 doc-drift 测试;无 runtime/EGS/Phase5/scoring/hard-veto/live-web/prompt 改动;面板仍只进 .md;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 help anchor 化 + 窄守护;穷尽性确认)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (Slice 2b-ii-B — schema-gate doc drift residual in CLI help)
+
+**Scope**: re-reviewed Claude's repair for `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-DOC-DRIFT`, including the schema-gate code path, durable route docs, new drift guard, and option help. Covered `runners/a_short_weekly_pipeline.py`, `docs/README.md`, `docs/a_short_semantic_risk_coverage.md`, `tests/test_a_short_semantic_risk_contract_docs.py`, `tests/test_a_short_weekly_pipeline.py`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`.
+
+**Verdict**: FAIL. The previous route/coverage/docstring drift is mostly fixed and the schema bypass remains closed, but the repair did not cover one of its own required surfaces: the CLI help for `--semantic-risk-summary`.
+
+**Finding-1 (P3, required, `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-HELP-DRIFT`)**: `runners/a_short_weekly_pipeline.py` still defines the `--semantic-risk-summary` help as `as_of 须与周报一致且过一致性校验`, omitting the JSON Schema half of the consumer gate. The latest register entry for `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-DOC-DRIFT` explicitly required route/docs/docstring/**help** surfaces to say schema+consistency, but the repair updated only docstring/README/coverage/register. The new class-level guard also covers only `docs/a_short_semantic_risk_coverage.md` and `docs/README.md`, so the CLI help can regress back to the exact omission class without a test failure. Required repair: update the `--semantic-risk-summary` help to state the schema+consistency gate (or point to the docstring/`write_summary` same-gate wording), and extend the drift guard to inspect `runners/a_short_weekly_pipeline.py` for this option help so the old consistency-only help text cannot reappear. Keep the guard narrow to this option/help surface.
+
+**Clean / verified**:
+- Counterexample replay: `schema_version="0.9.0"`, `boundary.hard_veto=true`, `boundary.production=true`, and top-level `decision="hard_veto"` are all rejected by `jsonschema.ValidationError`.
+- Tests: `python -m unittest tests.test_a_short_weekly_pipeline tests.test_a_short_semantic_risk_contract_docs tests.test_a_short_semantic_risk_summary tests.test_route_doc_ledger_status_consistency -v` = 133 OK.
+- `git diff --check` exits 0 (LF→CRLF warnings only).
+- Touched/new files are UTF-8, BOM=false, U+FFFD=false, trailing whitespace=0.
+
+**Boundary**: CLI help text + doc-drift test only. Do not change runtime behavior, EGS, Phase5 decisions, scoring, hard veto, live web execution, or prompt content.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-B — gate doc-drift 根治,非再补实例)
+
+**Finding-1 (P3, `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-DOC-DRIFT`)成立**:上轮把 `_semantic_panel_from_summary` 代码门改成 schema+consistency,但 docstring + README 行 + coverage §2b-ii-B 仍写旧门(只 schema_name/as_of/consistency)。
+
+**根因(回答用户"为什么一直漂移、修了好多轮"):** 这一类是**遗漏式漂移**——新增一步不改任何旧符号,checklist B 的"grep 旧符号"抓不住"那句枚举少列了一项";且同一道门被在 docstring/coverage/README **各自独立枚举**(我早把 B2 contract-anchor 用在了 web_llm 矩阵,却漏用在"消费校验门"描述上)。所以历轮"针对性补一句/补一个测试"本身就是病灶(打地鼠)。
+
+**根治(非 per-instance):** 套用已有 anchor 纪律——门只在 `_semantic_panel_from_summary` docstring **唯一权威枚举**(改为 JSON-Schema-first + as_of + consistency);README/coverage/register in_progress 条目都改成"指向 = 与 `write_summary` 同款 schema+consistency 门",不再各自枚举步骤。新增**类级**守护 `test_panel_consumer_gate_docs_state_schema_not_consistency_only`:任何耐久面描述该 consumer 必须含 schema 半、且禁止旧的 consistency-only 枚举。
+
+**Pre-Codex self-review: A-F checked** — A:按"门描述漂移"整类修(docstring+README+coverage+register 四面一次覆盖),非只 Codex 点名的三处;B 连带 grep:`schema_name + as_of + consistency` 全局搜,连 register line 40 旧句一并改(SESSION_LOG 历史 entry 是事实记录、不改写);C 反向失败:已验证守护在 regressed 措辞下会 FAIL、在现文档 PASS(非空操作);F:137 tests OK、`git diff --check` clean、BOM/FFFD=0。
+
+**Boundary**: 仅 docs/test/docstring 同步;不扩 EGS/Phase5/scoring/hard-veto/live-web;面板仍只进 .md;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 anchor 化 + 类级守护)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (Slice 2b-ii-B — schema fix works but route/docs still teach old gate)
+
+**Scope**: re-reviewed Claude's repair for `R-ASHORT-SEMANTIC-PANEL-SUMMARY-SCHEMA-BYPASS` plus the full Slice 2b-ii-B surface. Covered `runners/a_short_weekly_pipeline.py`, `runners/a_short_m67_render.py`, `tests/test_a_short_weekly_pipeline.py`, `tests/test_a_short_semantic_risk_contract_docs.py`, `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`, `docs/a_short_semantic_risk_coverage.md`, `docs/README.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`.
+
+**Verdict**: FAIL. The code-level schema bypass is fixed: the previous four counterexamples (`schema_version="0.9.0"`, `boundary.hard_veto=true`, `boundary.production=true`, top-level `decision="hard_veto"`) are now rejected by JSON Schema. However, the durable route/docs and the function docstring still describe the old weaker consumer gate, so the exact contract that was just repaired is not synchronized.
+
+**Finding-1 (P3, required, `R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-DOC-DRIFT`)**: `docs/README.md` Slice 2b-ii-B row, `docs/a_short_semantic_risk_coverage.md` §2b-ii-B panel wiring, and `runners/a_short_weekly_pipeline.py::_semantic_panel_from_summary` docstring still say the weekly panel consumer checks `schema_name` / `as_of` / `validate_summary_consistency` (or equivalent). They omit the repaired required gate: **full JSON Schema validation of `a_short_semantic_risk_summary` plus consistency validation**. This is not just wording polish: the immediately preceding FAIL was caused by treating `validate_summary_consistency` as sufficient, while `schema_version`, top-level boundary consts, and `additionalProperties:false` live in the JSON Schema. Leaving the old route text/docstring makes the next maintainer likely to remove or bypass the schema half while believing they are following the documented contract. Required repair: update those route/docs/docstring/help surfaces to say `_semantic_panel_from_summary` enforces schema+consistency (JSON Schema first, then as_of/consistency), and add/extend a doc-drift test so the Slice 2b-ii-B route/coverage text cannot regress to the old "schema_name + as_of + consistency only" wording.
+
+**Clean / verified**:
+- Counterexample replay: all four prior mutated summaries are rejected by `jsonschema.ValidationError`.
+- Tests: `python -m unittest tests.test_a_short_weekly_pipeline tests.test_a_short_semantic_risk_contract_docs tests.test_a_short_semantic_risk_summary -v` = 118 OK.
+- Route-doc guard: `tests.test_route_doc_ledger_status_consistency` = 14 OK.
+- `git diff --check` exits 0 (LF→CRLF warnings only).
+
+**Boundary**: docs/test/docstring synchronization only. Do not broaden into EGS, Phase5 decisions, hard veto, scoring, live web execution, or prompt rewrites.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-B — 面板 consumer 补 JSON Schema 校验)
+
+**Finding-1 (P2) 成立**:`_semantic_panel_from_summary` 只跑 `validate_summary_consistency`,没跑 summary 的 JSON Schema → schema_version 篡改 / boundary.hard_veto=true / production=true / 顶层加 decision 等会漏过(这些靠 schema 的 const + additionalProperties 才拦)。**checklist A 漏格**:consumer 校验门 = schema + consistency 两部分,我只做了 consistency 那半(write_summary 是两部分都做的)。
+
+**Fix(consumer-validation + tests only)**:`_semantic_panel_from_summary` 在 as_of/consistency 前先 `jsonschema.validate(summary, a_short_semantic_risk_summary.schema.json)`(用模块 `SCHEMA_PATH`),与 `write_summary` 同门。回归测试:schema_version 篡改 / boundary hard_veto / boundary production / 顶层多余 decision 字段 → 全 `jsonschema.ValidationError` 拒;正向 + 仅进 .md/不进确定性 JSON 测试仍绿。
+
+**Pre-Codex self-review: A-F checked** — A:把"完整 consumer 校验门 = schema + consistency"作整类补齐,4 个篡改形态各一测;C 反向:加 schema 校验不拒合法 summary(_sem_summary 正向仍过);F:136 tests OK、`git diff --check` clean、BOM/FFFD=0。
+
+**Boundary**: 仅 consumer 校验 + 测试;不扩 EGS/Phase5/scoring/hard-veto/live-web;面板仍只进 .md;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 consumer schema 校验)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-ii-B — summary consumer lacks schema validation)
+
+**Scope**: reviewed Claude's Slice 2b-ii-B draft for semantic-risk skill prompt + weekly M6.7 markdown panel wiring. Covered `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`, `runners/a_short_weekly_pipeline.py`, `runners/a_short_m67_render.py`, `tests/test_a_short_weekly_pipeline.py`, `tests/test_a_short_semantic_risk_contract_docs.py`, `docs/a_short_semantic_risk_coverage.md`, `docs/README.md`, `docs/system_risk_register.md`, and `docs/SESSION_LOG.md`.
+
+**Verdict**: FAIL. The prompt routing and markdown-only append direction are basically correct, and existing tests pass, but the new `--semantic-risk-summary` consumer does not run the `a_short_semantic_risk_summary` JSON Schema before rendering the advisory panel. That leaves a contract bypass at the exact new boundary being introduced.
+
+**Finding-1 (P2, required, `R-ASHORT-SEMANTIC-PANEL-SUMMARY-SCHEMA-BYPASS`)**: `runners/a_short_weekly_pipeline.py::_semantic_panel_from_summary` checks only `schema_name`, `as_of`, and `validate_summary_consistency(summary)`. It does not validate against `schemas/a_short_semantic_risk_summary.schema.json`. A direct counterexample rendered successfully in the current working tree after mutating a valid summary to `schema_version="0.9.0"`, `boundary.hard_veto=true`, `boundary.production=true`, or adding top-level `decision="hard_veto"`. The schema would reject all of those. This matters because the Slice 2b-ii-B boundary says the semantic layer is advisory-only, never production/hard-veto, and stable-versioned; the weekly consumer must enforce the same schema contract before making the panel visible. Required repair: load and run `jsonschema.validate(summary, a_short_semantic_risk_summary.schema.json)` inside `_semantic_panel_from_summary` before `validate_summary_consistency`, then keep the existing `schema_name/as_of/consistency` checks. Add regression tests proving the panel rejects at least wrong `schema_version`, top-level boundary tamper (`hard_veto` or `production` true), and extra top-level hard-decision fields, while still appending only to `.md` and never to the deterministic weekly JSON.
+
+**Clean / verified**: current tests are green but insufficient: `python -m unittest tests.test_a_short_weekly_pipeline tests.test_a_short_semantic_risk_contract_docs tests.test_a_short_semantic_risk_summary -v` = 115 OK. `git diff --check` exits 0. Touched/new files are UTF-8, BOM=false, U+FFFD=false, trailing whitespace=0.
+
+**Boundary**: fix is consumer-validation + tests only. Do not broaden into production scoring, hard veto, EGS, Phase5 decision changes, or live web execution. Do not rewrite the existing six category prompts.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Claude `起草` (语义风险 Slice 2b-ii-B — skill prompt + 周报面板接入)
+
+2b-ii 的 skill-在环 + 可见性半边。语义风险层至此功能完整(Slice 1/2a/2b-i/2b-ii-A/2b-ii-B);剩 Slice 3 deferred(有 tracker+guard)。
+
+**交付物**:
+- `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`:编排既有 6 个分类 prompt → 产 `a_short_semantic_risk_web_llm_patch`;路由到稳定契约 + 重申硬规则(advisory-only/绝不硬否决、unknown-not-clear `unknown/unknown/no_action`、非 unknown 须 sources、主板 Top15、LIVE 不可复现)。**复用**6 个现有 prompt,非重写。
+- 面板接入:`a_short_weekly_pipeline --semantic-risk-summary` → `_semantic_panel_from_summary`(校验 schema_name + as_of 一致 + `validate_summary_consistency`)→ `render_semantic_risk_panel` **仅追加到周报 .md**(`---` 分隔),**绝不进确定性周报 JSON**;`write_weekly_markdown` 加可选 `semantic_panel`。
+
+**Pre-Codex self-review: A-F checked** — A:面板接入不变式矩阵(valid / as_of-mismatch / schema_name-mismatch / invalid-summary → raise;md startswith 确定性渲染=advisory 纯追加;无 summary 时 md==确定性渲染=不泄漏)+ prompt 漂移锚;B ripple-grep:coverage/README 的"2b-ii-B/面板 deferred"future 措辞已随落地更新(防"已完成却写未来"漂移);C 反向:advisory **绝不进确定性 JSON**(测 md==确定性 when无 panel)、面板渲染前硬校验防伪造;D:web_llm 实质判断本就 skill-在环、不穷举,headless 只做契约+接线;E register/coverage 单态;F:133 tests OK + `git diff --check` clean + BOM/FFFD=0。
+
+**Boundary**: advisory-only;面板只进 .md 不进确定性 JSON;不硬否决/不改 EGS/Phase5/不写 production;V14.2 frozen;egs_main stage3 未碰。weekly pipeline 是 research-lane 非生产。
+
+**Next**: `审查`(审 Slice 2b-ii-B)。
+
+---
+
 ## 2026-06-13 — Claude `提交` (文档治理精简 + doc-governance guard → local master)
 
 Codex PASS(entry below)。提交本轮文档治理精简 + 防复发 guard 到本地 master(无 push):

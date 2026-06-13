@@ -277,6 +277,8 @@ Stock/
 
 `执行` 前必须检查 register；open P0 风险默认优先于普通 roadmap work，除非用户明确批准更窄的 override。`审查` 必须确认新发现已被修复或入 register；若漏记 material finding，审查不能给 clean Pass。
 
+**Register = material finding 详情的单一来源（2026-06-13）**：一个 finding 的**完整**内容——Required 文本、风险说明、修复条件/边界、closure evidence（working-tree-repaired 注记 + 验证结果）——只写在 `system_risk_register.md` 这一处。`SESSION_LOG.md` 的评审循环 entry（`审查`/`修复`/PASS）**不得复述完整分析**，只放本轮最小交接事实并**指向 Required ID**（详见 §Session log discipline → 评审循环 entry 极简模板）。理由：本会话反复出现的多轮返工，部分来自同一份修复详情在 register 与 SESSION_LOG **双写**、其一漂移。双写由 `tests/test_doc_governance_guard.py` 守护（评审循环 entry 引用 R-ID 时必须含 register 指针）。
+
 ## Multi-LLM Review Protocol
 
 Codex acts as the Independent Reviewer.
@@ -318,6 +320,7 @@ Every Codex `审查` must internalize the full deep review and output only the d
 13. Use negative or weak controls when useful to test the gate, but never tune thresholds after seeing the target result.
 14. Separate verdict layers: computation correctness, schema / ledger validity, PIT / data integrity, statistical alpha claim, risk / deployability, and production / ship-gate readiness.
 15. Route material unresolved risks into `docs/system_risk_register.md` or require a fix before Pass. A material finding left only in chat or SESSION_LOG cannot receive a clean Pass.
+16. **One-pass defect-class matrix before verdict (2026-06-13)**: Codex must not stop after the first obvious finding in a class. After finding any material defect, guard gap, protocol drift, or design hole, continue the review across the same defect class before replying: enumerate the sibling surfaces / producer-consumer exits, run adversarial variants where feasible, and collapse related findings into one complete repair package. For protocol/doc guards, the default matrix includes same-day vs future entries, PASS / FAIL / `修复` headers, Chinese and English wording, free-form paragraphs, extra labels, missing proof-of-use, verification placeholders, grandfathered-history boundaries, and false-positive controls. For code/schema/data slices, use the analogous matrix for the touched contract: valid vs invalid schema, empty / duplicate / malformed / stale / future / boundary inputs, **same-date but wrong lineage/candidate-set artifacts**, partial coverage (missing current candidates / duplicate candidates / extra stale candidates / order drift), sibling artifact sweep, downstream consumption, positive-control matching-lineage pass, and reverse-failure controls. If a P0 blocker or missing artifact prevents a full matrix, state the exact unreviewed dimensions and residual risk; do not claim a complete review. FAIL output must batch all discovered same-class Required fixes instead of drip-feeding one issue per round.
 
 ### Codex review closeout gate
 
@@ -348,7 +351,7 @@ When the user sends `修复` (or any implementation of a Codex-reviewed Required
 7. **Pre-Codex self-review gate (run before EVERY `起草`/`修复` handoff; detail: `docs/pre_codex_self_review_checklist.md`).** Repeated avoidable round-trips came from fixing only the named instance and not tracing a fix's ripple. Before handing to `审查`:
    - **A class-not-instance**: for a classifier/validator/enum/form-set/invariant change, cover the whole `defect-class × all exits` matrix (per-row / per-candidate / aggregate-batch / validator / schema / render / consumers) in one pass, not just the cited input.
    - **B ripple grep**: after any behavior / symbol / mechanism change, repo-grep the old symbol names, every doc sentence asserting the old behavior, and downstream consumers — update/verify ALL.
-   - **B2 contract-anchor drift guard**: when one behavior contract is repeated across runner/schema/README/coverage docs, designate a single stable contract anchor, make other docs point to it instead of re-describing the full matrix, and add a focused doc-drift test that fails on the old wording.
+   - **B2 single-source + drift guard** (generalized 2026-06-13): **一个会变的事实（行为契约 / 校验门 / finding 详情 / 状态）= 一个权威位置 + 一个机器守护禁止他处复述**；所有其他位置只许"点名 + 指过去",不复述步骤/矩阵。权威位置按事实性质选:代码行为→紧贴代码的 docstring(被拒绝测试钉住);跨文档契约→单一 contract 锚点;material finding→`system_risk_register.md`;live-state→`SESSION_LOG` 顶部。守护必须**按局部块(表行/段落)**校验、不是整文件(整文件粒度会被"同文件别处有正确句"骗过——见 `R-ASHORT-SEMANTIC-PANEL-GUARD-FILE-LEVEL-FALSE-NEGATIVE`),并配一个 planted-failure 测试证明其局部性。**目标不是"靠警惕永不再犯"**,而是:同类漂移必须被守护或单一来源机制挡住;**出现新类别时,一次性沉淀成规则/测试,绝不退回靠人记**。
    - **C reverse-failure**: confirm the fix did not create the opposite error (误报↔漏报, over↔under-suppress); add a reverse-direction test.
    - **D ambiguous NL**: do not enumerate keywords/forms for ambiguous natural-language classification (whack-a-mole) — choose the narrowest safe side or delegate to the skill/LLM layer.
    - **E route-doc single-state**: durable route docs (`CURRENT`, READMEs) carry only the FINAL mechanism + settled facts; repair history → one "SUPERSEDED" line. (Transient next-actor/next-command gate goes only in `SESSION_LOG` top; `system_risk_register` MAY hold stable open-risk status + closure criteria.)
@@ -439,6 +442,24 @@ reverse-chronological：**新 dated entry prepend 到文件顶部**。若 H1 int
 ```
 
 `LLM 名` 用 `Claude` / `Codex` / `ChatGPT` 等明显标识。
+
+### 评审循环 entry 极简模板（`审查` FAIL / `修复` / `审查` PASS）
+
+上面的七节格式用于 **session 级**交接(会话收尾、phase 决策)。**单个评审循环回合**(一次 Codex FAIL、一次 Claude 修复、一次 PASS)**不用**七节——material finding 的完整详情是 `system_risk_register.md` 的单一职责(§System risk register discipline),SESSION_LOG 这里只放最小交接事实、并指向 Required ID:
+
+```markdown
+## YYYY-MM-DD — <LLM> <审查 FAIL | 修复 | 审查 PASS> (<Required ID 或 slice 名>)
+- **Verdict/Action**: FAIL→一行结论 | 修复→修了什么/主动没修什么+为何 | PASS
+- **Required**: <R-ID...> — 完整 Required/风险/边界/closure 见 `system_risk_register.md`(单一来源,本处不复述)
+- **Verify**: <命令+结果, 如 "138 tests OK; git diff --check clean; BOM/FFFD=0">
+- **Next**: <下一步>
+```
+
+`修复` 回合**必须**额外带一行 **Proof-of-use**(§Claude implementer standard item 7,压成一行证据,**不可砍**——砍掉就退回"每轮漏一个面")。`审查` verdict 仍须 prepend 后再回用户。
+
+**精确集合契约(最强不变式,非子集放行)**:compliant-zone(marker 之上)引用 R-ID 的评审 entry,正文 bullet 标签集合必须**恰好**= `{Verdict/Action, Required(指 R-ID + register), Verify, Next}`(`修复` 再加恰好一个 `Pre-Codex self-review`/`Proof-of-use`)。**缺项 / 多项 / 重复标签 / 任何自由段落(任何语言)/ `Verify` 占位符(`N OK`/`<N>`/`TODO`/`TBD`/`XXX`/占位)/ 单条 bullet 超 ~500 字符(把 register 全文塞一条)都会 FAIL**——完整 finding 详情只进 `system_risk_register.md`。守护覆盖三类 header:`审查`/`修复`/`PASS`(纯 `Codex PASS (R-ID)` 也照查)。这是结构化精确集合,不靠列举禁词,换措辞/换语言/换 header 形态都绕不过。守护:`tests/test_doc_governance_guard.py::test_review_cycle_minimal_template_enforced_above_marker` + `test_review_cycle_guard_planted_failures`(九植入失败 + 一合规通过)。
+
+**位置(marker 门,非 date 门)**:`SESSION_LOG.md` 顶部 archive 指针下有一行 `REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER`。**新评审循环 entry 一律 prepend 到该 marker 之上**(compliant zone);marker 之下是 adoption 前的历史,grandfather 不动。守护只校验 marker 之上的 entry(`tests/test_doc_governance_guard.py::test_review_cycle_minimal_template_enforced_above_marker`,配同日/带指针复述/合规三植入测试)——故"今天就是 adoption 日"也照样生效(date 门做不到)。**marker 不要删、不要移**。
 
 ### 三层保险机制
 

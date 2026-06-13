@@ -33,19 +33,18 @@ Every reviewer or implementer still follows the startup routing in `AGENTS.md`:
 
 ## Review Recording
 
-Codex review verdicts must be prepended to `docs/SESSION_LOG.md` before replying to the user.
+Codex review verdicts must be prepended to `docs/SESSION_LOG.md` before replying to the user, using the minimal review-cycle template (see Single-source recording below).
 
-The review entry must include:
+Review depth is governed by `AGENTS.md §Codex adversarial review standard`, especially the one-pass defect-class matrix rule. A Codex review must not stop at the first obvious issue when same-class variants remain unreviewed.
 
-- scope manifest: tracked, staged, unstaged, and untracked files reviewed
-- verdict: Pass / Fail / Pass with Required fixes
-- Required findings with materiality and PIT/scope labels
-- Optional findings, if any
-- register outcome: material findings fixed, registered in `docs/system_risk_register.md`, non-material, or already covered by an existing risk id
-- verification: tests, schema checks, recomputation, guard/mutation checks, and any gaps
-- next step
+A review must CAPTURE the following — but split by destination, never duplicated:
 
-A clean Pass still needs a minimal PASS-only `docs/SESSION_LOG.md` entry so the next actor can find the review verdict from repository state.
+- **In `docs/system_risk_register.md` (full detail, single source):** scope manifest (tracked/staged/unstaged/untracked files reviewed), each Required finding with materiality + PIT/scope labels + Required repair + boundary, Optional findings, register outcome (fixed / registered / non-material / covered by existing id), and closure evidence.
+- **In the `docs/SESSION_LOG.md` minimal entry:** verdict (Pass / Fail / Pass-with-Required), the Required ID(s) pointing to the register, the verification run (tests / schema / recompute / guard-mutation + any gaps) in one line, and next step.
+
+A clean Pass still needs a minimal PASS-only `docs/SESSION_LOG.md` entry so the next actor can find the verdict from repository state.
+
+**Single-source recording (2026-06-13):** a material finding's FULL detail (scope manifest, Required text, materiality/risk, repair conditions/boundary, closure evidence) lives in `docs/system_risk_register.md` ONLY. **EVERY review-cycle `docs/SESSION_LOG.md` entry — including the first `审查` FAIL that introduces a Required ID, every `修复`, and PASS — uses the minimal template** in `AGENTS.md §Session log discipline → 评审循环 entry 极简模板` (verdict / Required-ID pointer / verify command / next; `修复` adds the one-line Pre-Codex Proof-of-use, which is NOT optional) and must NOT re-narrate the register's full analysis. There is **no first-review exemption**: the first FAIL records full findings in the register and only the minimal entry in SESSION_LOG, so the duplicate mutable fact never exists. A session-level handoff that genuinely needs broader context is a SEPARATE entry and still must not duplicate register findings. Double-writing + the minimal template are guarded by `tests/test_doc_governance_guard.py` (marker-gated compliant zone). `AGENTS.md` remains authoritative if this pointer drifts.
 
 ## Closeout Gate
 
