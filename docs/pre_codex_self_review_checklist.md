@@ -13,12 +13,14 @@
 3. 问自己:"被点名的 finding 属于哪个**一般类**?这个类还会从哪些输入/出口冒出来?"
 - 反例(本项目真实):PIT 在 future 出口修了,漏了 bad-shape/unparseable/status;feasibility 在 per-candidate 修了,漏了 batch。
 
-## B. 连带 grep(ripple grep,机械步,**改完必做**)
-任何**行为 / 符号名 / 机制**改动后,repo-wide grep 三样,逐一更新或确认:
+## B. 连带 grep(ripple grep,机械步,**改完必做;一次全仓 + 贴零残留证据**)
+任何**行为 / 符号名 / 机制 / 规则措辞**改动后,做**一次全仓 grep 旧形态**(`rg` 跨 `*.py` + `*.md` + 测试),逐一更新或确认,并把**零残留证据**(实际命令 + `0 hits`,排除档案/历史/无关同名)贴进 proof-of-use 行——"我 grep 了"不算,要"0 残留":
 1. **旧符号名**(重命名/删除的常量、函数、字段)→ 期望 0 stale 引用。
-2. **所有断言旧行为的文档句**:README route 行、`system_risk_register.md` 活动条目、design 文档、docstring、SESSION_LOG 顶部活动 gate(历史 append-only entry 不改)。
+2. **所有断言旧行为的文字(不止 .md)**:README route 行、`system_risk_register.md` 活动条目、design 文档、**runner docstring/注释**、**`test_*` 的 docstring 与注释(测试也是教学面!)**、**emit 到输出的字符串字面量**(如 `machine.consumption.*`、log/print、面板/用户可见文案——它们会跑到产物里,不是注释)、SESSION_LOG 顶部活动 gate(历史 append-only 不改)。
 3. **下游消费者**:改的函数/字段/schema 谁在用 → 确认仍成立(含跨 runner import、weekly pipeline、面板)。
-- 反例:换最窄策略改了行为,却把 README/register 里旧的"浦发→clear"结论留着 → 又一轮。
+4. **已跨轮复发的规则 → 加一条全仓 guard 测试禁旧形态**(把 B2 单一来源/守护用到整棵树),让 partial fix 直接测试红,不靠记忆逐面发现。
+- 反例 1:换最窄策略改了行为,却把 README/register 里旧的"浦发→clear"结论留着 → 又一轮。
+- 反例 2(本会话):evidence-full 规则只扫 runner+.md,漏了 **`machine.consumption.semantic` emit 字符串**与 **`SemanticIntoM67` 测试 docstring** → Codex 同 R-ID re-FAIL 3 轮。根治=第 2 点显式含这两面 + 第 1 句的"一次全仓 + 零残留证据"。
 
 ## C. 反向失败自检(reverse-failure)
 交付前问:**这个修复有没有制造相反方向的错?**

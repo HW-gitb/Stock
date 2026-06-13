@@ -226,6 +226,70 @@ class DocGovernanceGuard(unittest.TestCase):
         self.assertEqual(self._review_cycle_offenders(compliant), [],
                          "guard false-positives a compliant minimal entry")
 
+    PRE_CODEX_CHECKLIST = ROOT / "docs" / "pre_codex_self_review_checklist.md"
+    B_ANCHORS = ("零残留", "字符串字面量", "test_", "全仓 guard")   # emit-string + test-surface + evidence + tree-guard
+
+    @classmethod
+    def _b_sections(cls):
+        # the B ripple-grep region in BOTH authoritative surfaces: AGENTS item-7 bullet AND the
+        # detailed checklist implementers are routed to. (Pinning only AGENTS let the checklist drift.)
+        agents = AGENTS.read_text(encoding="utf-8")
+        cl = cls.PRE_CODEX_CHECKLIST.read_text(encoding="utf-8")
+        am = re.search(r"(?ms)- \*\*B ripple grep.*?(?=\n   - \*\*B2)", agents)
+        cm = re.search(r"(?ms)^## B\..*?(?=^## C\.)", cl)
+        return {"AGENTS B": am.group(0) if am else None,
+                "checklist B": cm.group(0) if cm else None}
+
+    def test_b_ripple_grep_anchors_pinned_in_agents_and_checklist(self):
+        # R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP: the strengthened B (exhaustive grep
+        # incl emitted runtime string literals + test docstrings/comments, zero-residual evidence,
+        # recurring-rule tree-wide guard) must be pinned in BOTH AGENTS and the routed-to checklist,
+        # so neither can drift back to the narrow form the same-R-ID re-FAILs came from.
+        for name, region in self._b_sections().items():
+            self.assertIsNotNone(region, f"{name} section not found")
+            for kw in self.B_ANCHORS:
+                self.assertIn(kw, region, f"{name} lost B anchor: {kw}")
+
+    def test_b_ripple_grep_anchor_guard_is_real_planted(self):
+        # proves the guard actually fails when an anchor is dropped from EITHER B section (not a no-op).
+        for name, region in self._b_sections().items():
+            for kw in self.B_ANCHORS:
+                planted = region.replace(kw, "")   # remove ALL occurrences (an anchor may repeat in a section)
+                self.assertFalse(all(a in planted for a in self.B_ANCHORS),
+                                 f"dropping {kw!r} from {name} must fail the anchor check")
+
+    def test_committed_required_entries_are_resolved_not_stale_open(self):
+        # R-RISK-REGISTER-STALE-OPEN-REPAIRED-HOTQUEUE-SWEEP-GAP: a Required entry whose fix is in a
+        # review-passed commit must be `status resolved`, not lingering `status open` (stale-open
+        # pollutes the durable queue + misleads 执行/审查). Regression guard over the swept committed
+        # R-IDs. In-flight (uncommitted) findings are intentionally NOT in this set → no false-positive.
+        reg = (ROOT / "docs" / "system_risk_register.md").read_text(encoding="utf-8")
+        committed_resolved = {
+            "R-ASHORT-M67-SEMANTIC-OFFICIAL-INPUT-CONSISTENCY-GAP",          # 908f95f
+            "R-ASHORT-SEMANTIC-CONTRACT-M67-INTEGRATION-DRIFT",
+            "R-ASHORT-M67-SEMANTIC-OFFICIAL-EVIDENCE-SHAPE-GAP",
+            "R-ASHORT-M67-SEMANTIC-OFFICIAL-EVIDENCE-NONEMPTY-GAP",
+            "R-ASHORT-SEMANTIC-SUMMARY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP",  # 92a32c0
+            "R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH",           # 6709055
+            "R-ASHORT-SEMANTIC-PANEL-MAIN-PARTIAL-WRITE-ON-INVALID-SUMMARY",
+            "R-ASHORT-SEMANTIC-PANEL-GUARD-FILE-LEVEL-FALSE-NEGATIVE",
+            "R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-PROMPT-SURFACE-DRIFT",
+            "R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-HELP-DRIFT",
+            "R-ASHORT-SEMANTIC-PANEL-SCHEMA-GATE-DOC-DRIFT",
+            "R-ASHORT-SEMANTIC-PANEL-SUMMARY-SCHEMA-BYPASS",
+            "R-DOCGOV-MINIMAL-GUARD-PASS-HEADER-GAP",                        # 9918d84
+            "R-DOCGOV-SESSIONLOG-VERIFY-PLACEHOLDER",
+            "R-DOCGOV-MINIMAL-ENTRY-GUARD-NONSTRUCTURAL-FALSE-NEGATIVE",
+            "R-DOCGOV-MINIMAL-ENTRY-GUARD-FALSE-NEGATIVES",
+            "R-DOCGOV-AI-REVIEW-FIRST-REVIEW-DOUBLEWRITE-LOOPHOLE",
+        }
+        stale = []
+        for line in reg.split("\n"):
+            m = re.search(r"Required ID `(R-[A-Z0-9-]+)`", line)
+            if m and m.group(1) in committed_resolved and "status `open`" in line:
+                stale.append(m.group(1))
+        self.assertEqual(stale, [], f"committed-and-fixed entries still stale `status open`: {stale}")
+
     def test_ai_review_protocol_has_no_first_review_doublewrite_carveout(self):
         # Fixes R-DOCGOV-AI-REVIEW-FIRST-REVIEW-DOUBLEWRITE-LOOPHOLE: the protocol must not exempt
         # the first FAIL from the minimal template (that exemption kept the duplicate-fact loophole).

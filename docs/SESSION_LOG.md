@@ -10,6 +10,139 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-13 — Codex `审查 PASS` (B ripple-grep proof command)
+- **Verdict/Action**: PASS. `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` is repaired in working tree: proof command is reproducible as shown, and B ripple-grep anchors are pinned in both `AGENTS.md` and the checklist.
+- **Required**: no new Required. Existing repaired Required closes on Claude `提交` with commit evidence in `docs/system_risk_register.md`.
+- **Verify**: 207 tests OK; py_compile OK; exact `rg -n "test_agents_b_ripple_grep_covers_emit_strings_and_test_surfaces" -g "*.py"` returns 0 hits; diff-check/BOM/FFFD clean; weak-anchor deletion simulation fails.
+- **Next**: Claude `提交`.
+
+## 2026-06-13 — Claude `修复` (B ripple-grep dogfood 改为可复现命令)
+- **Verdict/Action**: 修复 Codex FAIL — 旧 proof 把排除写在命令外、且搜的是一个杜撰占位短语(从来不是真实产物),字面命令会命中 → 不可复现。换成 scope 写进命令、直出为零的真实重命名扫描:`rg -n "test_agents_b_ripple_grep_covers_emit_strings_and_test_surfaces" -g "*.py"` = 0 hits(本次把 doc-governance guard 从该旧名重命名为 `test_b_ripple_grep_anchors_pinned_in_agents_and_checklist`;旧名在 live code 零残留,只存于 append-only SESSION_LOG/register 历史即 `.md`,在 *.py scope 外,故命令复制即得 0)。杜撰占位短语已从所有 Claude proof 行清除(不再逐字复述以免自命中)。
+- **Required**: `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: `rg -n "test_agents_b_ripple_grep_covers_emit_strings_and_test_surfaces" -g "*.py"` 字面输出 = 0 hits;doc-governance 12 OK、相关四套 181 OK;`git diff --check` 仅 CRLF;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:三处我方 proof(register 主条 / 起草 / 上轮修复 Verify)一次全换为该可复现命令;B:dogfood 命令把 scope 写在命令内、字面直出 0,不靠外部 prose 排除;C:不再"声称 0 实则命中"——这次是命令本身的字面输出即 0,且不再逐字复述杜撰短语;F:见 Verify。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (B ripple-grep proof command)
+- **Verdict/Action**: FAIL. Checklist guard widening is repaired, but the dogfood proof command is still not reproducible: the displayed `rg -n "repo-grep the old symbol names, every doc sentence" .` returns hits unless extra exclusions are implied outside the command.
+- **Required**: `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 207 tests OK; py_compile OK; `git diff --check` only CRLF warnings; BOM/FFFD clean; exact displayed `rg` command returns current `SESSION_LOG`/register hits.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `修复` (B ripple-grep dogfood + guard 钉两处 + planted)
+- **Verdict/Action**: 修复 Codex FAIL — (1) dogfood:`起草` proof 行补真实 `rg` + 0-hit(旧窄 B 形态已清);(2) guard 由只钉 `AGENTS.md` 扩到 **AGENTS B + checklist B 两处**锚点(零残留/字符串字面量/test_/全仓 guard)+ planted(删任一锚点必红);旧单文件 guard 重命名为 `test_b_ripple_grep_anchors_pinned_in_agents_and_checklist`。
+- **Required**: `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: doc-governance 12 OK(新 2 测试 + planted)、相关四套 181 OK;dogfood(scope 写进命令、直出为零)`rg -n "test_agents_b_ripple_grep_covers_emit_strings_and_test_surfaces" -g "*.py"` = 0 hits;`git diff --check` 仅 CRLF;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:guard 一次覆盖 AGENTS+checklist 两面;B:dogfood rg=0、planted 证 guard 非空转;C:planted 全删锚点(非删 1)防漏报;F:见 Verify。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (B ripple-grep protocol strengthening)
+- **Verdict/Action**: FAIL. Direction is correct, but the new B rule is not dogfooded and not fully guarded: proof lacks actual `rg` command + `0 hits`, and the guard pins only `AGENTS.md`, not the detailed checklist implementers are routed to.
+- **Required**: `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 206 tests OK; py_compile OK; `git diff --check` only CRLF warnings; BOM/FFFD clean. Diff inspection confirms `test_agents_b_ripple_grep_covers_emit_strings_and_test_surfaces` reads only `AGENTS.md`.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `起草` (协议强化:B ripple-grep → 全仓+零残留证据+emit/测试面+复发全仓 guard)
+
+**动机**(用户问"为何同一问题多轮修复 / 一次修复不完整如何避免"):根因=我把 B 执行窄了——只扫 runner+.md,漏了 **emit 字符串字面量**(machine.consumption)与 **test docstring/注释**,致同一 evidence-full R-ID 被 Codex re-FAIL 3 轮。标准在(AGENTS item7 + checklist),是我**欠执行 + B 清单缺这两面**。
+
+**改动**:
+- `AGENTS.md §item7 B`:强化为"改规则/符号/机制/**措辞**后做**一次全仓 grep 旧形态**(代码+测试[含 docstring/注释]+docs+**emit 字符串字面量** machine.consumption/log/面板/用户文案),贴**零残留证据**(rg+0 hits);**已复发规则→加全仓 guard 禁旧形态**"。
+- `docs/pre_codex_self_review_checklist.md §B`:同步;显式列两漏面 + 零残留证据要求 + 复发→全仓 guard;附本会话反例。
+- `tests/test_doc_governance_guard.py`:新 guard `test_agents_b_ripple_grep_covers_emit_strings_and_test_surfaces` 钉 B 的强化锚点(零残留/字符串字面量/test_/全仓 guard)不被删。
+
+**Pre-Codex self-review: A-F checked** — A:AGENTS B + checklist B + 守护一次覆盖;**B dogfood(scope 写进命令、直出为零)**:`rg -n "test_agents_b_ripple_grep_covers_emit_strings_and_test_surfaces" -g "*.py"` = **0 hits**(本次重命名的旧 guard 名在 live code 零残留;只存于 append-only SESSION_LOG/register 历史,在 *.py scope 外);guard 现钉 **AGENTS B + checklist B 两处**锚点(零残留/字符串字面量/test_/全仓 guard)+ planted(删任一锚点必红);F:25→26 tests(governance+route)OK、五套 OK、`git diff --check` clean、BOM/FFFD=0。
+
+**Boundary**:仅协议文档(AGENTS/checklist)+ 守护;无 runtime/scoring/business 改动。独立 scope,与 Slice 1b 分开 commit。
+
+**Next**: `审查`。
+
+## 2026-06-13 — Claude `修复` (register 卫生 — stale Codex correction 段标 SUPERSEDED)
+- **Verdict/Action**: register line 38 那段 Codex correction 仍称 docstring 修复未完成,与主条 Round 2(已修+零残留)矛盾;标 **SUPERSEDED(Round 2)** 使其历史化,主条 Round 2 注记为 live 真相;两条均 open 至本轮 PASS+提交再闭。
+- **Required**: `R-ASHORT-M67-RISK-REGISTER-REFAIL-CORRECTION-STALE` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: register 内部矛盾消除(correction 段标 SUPERSEDED);doc-governance+route 25 OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:register 矛盾段一次标历史;B:无代码改动、仅 register 措辞,grep 确认无第二处重复该 outstanding 声明;C:RUNTIME-DRIFT 仍 open(未提交)未误闭;F:见 Verify。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (Slice 1b runtime explanation drift — register correction stale)
+- **Verdict/Action**: FAIL. Runtime behavior, emitted consumption text, runner comments, and test docstring are now aligned, but the authoritative risk register still contains the prior Codex correction paragraph saying the docstring repair is outstanding.
+- **Required**: `R-ASHORT-M67-RISK-REGISTER-REFAIL-CORRECTION-STALE` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 205 tests OK; py_compile OK; runtime probe OK; residual scan of active runners/tests/docs found no generic high→veto wording without evidence-full anchors; `git diff --check` and BOM/FFFD clean.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `修复` (Slice 1b — 测试教学面 evidence-full 收尾 + 穷尽扫零残留)
+- **Verdict/Action**: 同 R-ID 第 2 轮(上轮漏了测试面)。改 `SemanticIntoM67` class docstring 为 evidence-full(high 含非空 url_or_pdf→否决;空 URL→待核);并把 test 内泛化措辞的内联/meta 注释也加限定。**穷尽 `rg`** runners+tests+docs 确认零残留泛化 `high→否决/veto`(排除 chasing_high_veto 因子名 + 档案/历史)。
+- **Required**: `R-ASHORT-M67-EVIDENCE-FULL-RUNTIME-EXPLANATION-DRIFT` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 穷尽 rg 零残留;174 tests OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — **A 这次真穷尽**:不只 Codex 点名的 class docstring,全仓 rg 扫所有面(runner/test docstring/test 注释/meta 引述)一次清;**B 反省(连续两轮同 R-ID)**:教训=evidence-full 这类规则改动的 ripple 必须含**测试文件的 docstring/注释**,我前两轮只扫了 runner+.md 漏了 test 教学面——已写进 register lesson;C 反向:证据齐全 high 仍否决(既有测);F:rg 全扫 + diff/BOM 净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (Slice 1b runtime explanation drift — tests surface still stale)
+- **Verdict/Action**: FAIL. Runtime output and runner comments are fixed, but `tests/test_a_short_weekly_pipeline.py::SemanticIntoM67` docstring still teaches generic `high->veto` without the evidence-full / non-empty URL condition.
+- **Required**: `R-ASHORT-M67-EVIDENCE-FULL-RUNTIME-EXPLANATION-DRIFT` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 205 tests OK and runtime probe OK, but UTF-8 line read confirms `tests/test_a_short_weekly_pipeline.py` still has `high->veto` wording in an active test teaching surface.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `修复` (Slice 1b — 运行时解释面去泛化漂移 evidence-full)
+- **Verdict/Action**: 上轮漏修的 runtime-explanation-drift。把所有运行时/教学面更新到 evidence-full:`machine.consumption.semantic`(实际 emit 的 M6.7 trace)从"official high→否决"改为"official high 且证据齐全(非空 url_or_pdf)→否决;缺 URL high→待核";Phase5 语义块注释 + `normalize_candidate` provider 注释同步。
+- **Required**: `R-ASHORT-M67-EVIDENCE-FULL-RUNTIME-EXPLANATION-DRIFT` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 新增 regression 守护 `test_consumption_map_states_evidence_full_rule_not_generic`(emit 的 consumption.semantic 须含 url_or_pdf+证据齐全+待核);`rg` 确认两 runner 无残留泛化 `high→否决`;174 tests OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:运行时输出(consumption map)+ 两处代码注释 + 守护一次覆盖(不只 Codex 点名的 consumption map);**B 连带反省**:这是上轮我只改契约/route-doc、漏了**代码内运行时解释面**——B ripple 应含"emit 到 machine 的字符串"与代码注释,不只 .md;C 反向:证据齐全 high 仍否决(既有测);D:无;F:rg 全扫无残留、diff/BOM 净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (Slice 1b runtime explanation drift still open)
+- **Verdict/Action**: FAIL. No newer Claude repair entry is present, and the same runtime explanation drift remains: behavior is pending for blank-URL high, but active output/teaching text still says generic `official high -> veto`.
+- **Required**: `R-ASHORT-M67-EVIDENCE-FULL-RUNTIME-EXPLANATION-DRIFT` — full detail already in `docs/system_risk_register.md`.
+- **Verify**: `rg` still finds stale `official high->veto` / `high->veto` wording in `runners/a_short_phase5_engine.py` and `runners/a_short_weekly_pipeline.py`; the Required entry remains `status open`.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Codex `审查 FAIL` (Slice 1b runtime explanation drift)
+- **Verdict/Action**: FAIL. Core behavior stays correct, but runtime explanation / active code teaching surfaces still describe the old generic `official high -> veto` rule while blank-URL high now correctly routes to pending.
+- **Required**: `R-ASHORT-M67-EVIDENCE-FULL-RUNTIME-EXPLANATION-DRIFT` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 203-test suite was green before this added finding; custom probe shows blank `url_or_pdf` high gives `impact=pending` and `evidence_incomplete_high=1`, while `machine.consumption.semantic` still says `official high->veto`.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `修复` (Slice 1b 复审 — Hot Queue 全量扫翻 + evidence-full 守护强化)
+- **Verdict/Action**: 两条都修。(1) **全量 Hot Queue 闭合扫**:14 条已提交 review-passed 却仍 stale `open` 的条目翻 `resolved` 带 commit 证据(92a32c0 / 6709055 / 9918d84);本轮 Slice 1b 仍 open;加 regression 守护钉死已提交 R-ID 必 resolved(不误伤 in-flight)。(2) evidence-full 路由守护强化:coverage 须 `url_or_pdf`+`待核`+`不否决`、README 须 `url_or_pdf`+`pending`+`never veto`,不再只查 `url_or_pdf`(防保留词却漂回泛化)。
+- **Required**: `R-RISK-REGISTER-STALE-OPEN-REPAIRED-HOTQUEUE-SWEEP-GAP` · `R-ASHORT-M67-EVIDENCE-FULL-ROUTEDOC-GUARD-WEAKNESS` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 扫翻 14 条(R-ID↔commit 脚本校验输出核对)、regression 守护过、evidence-full 守护加强后过;112 tests OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:不只补 Codex 点名的 92a32c0/6709055,**全队列**按 commit 映射一次扫全(含 9918d84 DOCGOV);B 连带:扫翻用 R-ID↔commit 映射脚本(打印核对)、register Python 写盘保 CRLF/无 BOM;C 反向:in-flight findings(40/42/44 + 本轮 36/38)故意不在已提交集合 → 守护不误伤;D:无;F:diff/BOM 净、register 仍可解析(112 OK)。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (Slice 1b 复审 — Hot Queue closure + evidence-full guard)
+- **Verdict/Action**: FAIL. Slice 1b 代码路径和核心行为探针通过,但全量复审发现 Hot Queue 仍有已提交旧修复保持 `status open`,且 evidence-full route-doc 守护弱于当前重复文字。
+- **Required**: `R-RISK-REGISTER-STALE-OPEN-REPAIRED-HOTQUEUE-SWEEP-GAP`; `R-ASHORT-M67-EVIDENCE-FULL-ROUTEDOC-GUARD-WEAKNESS` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 203 tests OK; py_compile OK; diff-check clean; custom probes confirmed provider Top15/batch-empty/missing-code/bad-lookback and blank-vs-full URL high behavior; git log confirmed `92a32c0`/`6709055` are review-passed commits.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `修复` (Slice 1b — provider 复用已审门 + 契约 evidence-full + register 翻转)
+- **Verdict/Action**: 三条都修。(1) `_build_cninfo_semantic_provider` 改为**复用 `build_summary_from_fetches`**(main_board_top15 + 缺码→unknown + 批量空门),不再绕过;lookback 非正整数→不取数;malformed 行丢弃不建 "None" 键。(2) 契约/coverage顶/README 同步 **evidence-full**(high 含非空 url_or_pdf 才否决;空 URL→待核)+ 守护扩锚点。(3) 前 4 个 Slice-1 Required 翻 `resolved`(closure→`908f95f`),Slice 1b 仍 open。
+- **Required**: `R-ASHORT-M67-CNINFO-PROVIDER-BYPASSES-SEMANTIC-SUMMARY-GATES` · `R-ASHORT-M67-SLICE1B-EVIDENCE-FULL-CONTRACT-DRIFT` · `R-ASHORT-M67-PREVIOUS-REQUIRED-STATUS-DRIFT-AFTER-COMMIT` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: provider 门对抗(批量空→unknown/缺码→unknown/非主板不取不喂/坏lookback不取/malformed无None/risk正常)+ 契约 evidence-full 守护 + 既有 --confirm 测试加 --skip-semantic 保网络无关;172 tests OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:provider 绕过类一次复用已审门覆盖全(top15/缺码/批量空/lookback/malformed)+ 契约漂移三面(contract/coverage/README)+ register 4 条;**B 连带**:复用 summary 而非另写薄版(单一来源)、契约改与代码 evidence-full 一致、注明更广 register stale 超本 finding 范围未盲翻;C 反向:证据齐全 high 仍否决(full+blank 混合测)、批量健康仍 clear;D:url 空走 strip 非关键词;F:py_compile OK、validate_m67_consistency 每出口过、diff/BOM 净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (语义融入 M6.7 Slice 1b — cninfo provider + empty URL evidence contract)
+- **Verdict/Action**: FAIL. 行为测试和 py_compile 通过,但自动 cninfo provider 绕过已审过的 Top15/批量空结果质量门,且 stable contract 未同步 evidence-full high 才能 advisory `否决` 的规则。
+- **Required**: `R-ASHORT-M67-CNINFO-PROVIDER-BYPASSES-SEMANTIC-SUMMARY-GATES`; `R-ASHORT-M67-SLICE1B-EVIDENCE-FULL-CONTRACT-DRIFT`; `R-ASHORT-M67-PREVIOUS-REQUIRED-STATUS-DRIFT-AFTER-COMMIT` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 201 tests OK; py_compile OK; diff-check clean; probes covered mass-empty clear bypass, non-Top15 fetch, negative lookback, malformed row mapping, and doc/contract anchor drift.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `起草` (语义融入 M6.7 Slice 1b — 真 cninfo provider 接入 + 空 URL 方案 A)
+
+**目标**:把真 cninfo 自动接进周报 provider(用户:Slice 1b),并按用户确认的**方案 A** 处理空 URL(不伪造 URL、不崩、证据不全→待核)。
+
+**改动**:
+- `a_short_phase5_engine.py`:`_validate_semantic_official` 放宽 `url_or_pdf` 为 present+string **可空**(其余 6 字段仍非空;非字符串仍 ValueError);`build_m67_report` 把 high 拆 `high_full`(含非空 URL→驱动否决)vs `high_incomplete`(缺 URL→降 pending 待核);trace 加 `evidence_incomplete_high`,severity_max 取全事件(含 incomplete high,诚实)。
+- `a_short_weekly_pipeline.py`:`_build_cninfo_semantic_provider`(批量 cninfo→逐票 build_official_structured;**任何失败→None 全 unknown,非阻断**);`main` 在 `--confirm-fetch-authorized` 且未 `--skip-semantic` 时自动接入(注入优先);加 `--cninfo-lookback-days`/`--skip-semantic`。
+- 测试:空/空白 URL high→待核(非否决非崩)、full+blank 混合 high→否决、provider builder 映射 + 非阻断、`--skip-semantic` 中性、既有 `--confirm` 测试加 `--skip-semantic` 保网络无关。
+
+**Pre-Codex self-review: A-F checked** — A:空 URL × {空/空白/与 full 混合} + provider × {映射/非阻断} + skip 全覆盖;**B 连带 + 测试卫生**:发现并修了"`--confirm` 测试会触发真 cninfo 网络"的隐患(加 `--skip-semantic`),producer(build_official_structured)未改、summary 测试不受影响;C 反向:证据齐全 high 仍否决(full+blank 混合测)、never-rescue 不变;D:url 空判定走 `.strip()` 非关键词;F:py_compile OK、170 tests OK、validate_m67_consistency 每出口过、diff/BOM 净。
+
+**Boundary**:仅 M6.7 advisory(非生产/不进回测);cninfo 取数非阻断旁路、不写 result/a_short;不接 DeepSeek/不改 render/面板/Stage4;V14.2 frozen。真 cninfo 跑一次属之后的 `执行`。
+
+**Next**: `审查`。
+
 ## 2026-06-13 — Codex `审查 PASS` (语义融入 M6.7 Slice 1 — official evidence contract)
 - **Verdict/Action**: PASS. 上一轮 `R-ASHORT-M67-SEMANTIC-OFFICIAL-EVIDENCE-NONEMPTY-GAP` 已修:所有 official event 必填字段现在必须是 trim 后非空字符串;blank / whitespace `title`、`category`、`url_or_pdf` 不再能触发 M6.7 advisory `否决`。
 - **Required**: no new Required. 既有 4 个语义 M6.7 Required 均已在 working tree 修复,详见 `docs/system_risk_register.md`;状态待 `提交` 后按协议翻 resolved。Slice 1b carry-forward:empty-url official event 必须保证 URL/PDF 或路由 non-veto pending/unknown。
