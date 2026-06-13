@@ -10,6 +10,21 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-13 — Claude `执行` (语义风险 advisory 层首次真实运行 — Slice 3 证据时钟起点)
+
+**What ran**: 语义风险 advisory 层首次端到端真实运行(headless cninfo + skill-in-loop web_llm)。
+- watch pool = 最近生产 EGS `result/a_short/20260605/analysis_input.json` 的 15 个主板候选;as_of=20260605。
+- headless 真 cninfo 取数:`python runners/a_short_semantic_risk_summary.py --as-of 20260605 --watch-pool <15码> --out research/results/a_short/semantic_risk_20260605/summary.json --confirm-fetch-authorized`。覆盖 15/15(unknown=0/failed=0),官方结构化 9 个 risk(全 `fund_occupation/medium`、0 high)——经标题确认均为 2025 年报季例行《非经营性资金占用及对外担保情况专项说明》(已知假阳性类)。
+- 2b-ii web_llm skill(我在环,WebSearch 单轮 LIVE)产 `web_llm_patch.json` → `apply_web_llm_patch` 校验合并 → `render_semantic_risk_panel` 出 `panel.md`。
+
+**Result(merged web_llm)**:4 risk_candidate(601375 国元/601688 华泰 投行罚单·警示函=low;600592 龙溪 福建证监局责令改正+诚信档案 / 601211 国泰海通 子公司高管被港 SFC·ICAC 调查=medium·manual_review)+ 1 headwind(600743 华远 2025 预亏+债务集中到期)+ 3 clear_light 降级例行件 FP(000543 皖能/603790 雅运/603916 苏博特)+ 7 unknown(601377 兴业 无近期实质保留 + 6 个 official-clear 本轮未搜)。**无 high 级真实风险**。
+
+**边界**:LIVE/单轮/不可复现/advisory-only;不硬否决、不改 EGS/Phase5/选股;产物全在 research 非生产 lane(`research/results/a_short/semantic_risk_20260605/` summary+patch+panel),未入库(可复现运行产物)。
+
+**意义/留痕**:这是首份真实 `a_short_semantic_risk_summary` advisory artifact → **Slice 3(deterministic promotion)的 ~4 周证据时钟从 2026-06-13 起算**(目标累积窗口 ~2026-07-11 后再评估;由 `project_slice3_reminder_after_advisory_weeks` memory + `test_semantic_risk_slice3_guard` 追踪)。建议后续每周用当周生产 EGS Top15 同批再跑,累积 forward 证据。
+
+**Next(待用户)**: ① V14.3 bootstrap / 20260612 生产实盘;② 下周用新 Top15 再跑一轮 advisory。
+
 ## 2026-06-13 — Codex `审查 PASS` (weekly aux overlay duplicate-candidate bypass)
 - **Verdict/Action**: PASS. Duplicate overlay rows are now rejected before dict collapse; weekly aux candidate-lineage closure is verified.
 - **Required**: `R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH` — full detail in `docs/system_risk_register.md` (single source).
