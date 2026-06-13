@@ -73,17 +73,13 @@ class DocGovernanceGuard(unittest.TestCase):
         # 2026-06-13 protocol revision: the register is the single source for a material finding's
         # full detail, and review-cycle SESSION_LOG entries use a minimal template. Pin both rules
         # so a future edit can't silently delete them (zero-false-positive: AGENTS-only).
+        # (The B2 single-source principle's rule body now lives in the checklist, not AGENTS — see
+        # test_pre_codex_checklist_is_sole_rule_authority; AGENTS item 7 only points to it.)
         text = AGENTS.read_text(encoding="utf-8")
         self.assertIn("Register = material finding 详情的单一来源", text,
                       "AGENTS lost the register-single-source rule")
         self.assertIn("### 评审循环 entry 极简模板", text,
                       "AGENTS lost the minimal review-cycle SESSION_LOG template")
-        # B2 must carry the generalized single-source principle (not just the old contract-anchor wording)
-        m = re.search(r"(?ms)\*\*B2[^\n]*\*\*.*?(?=\n   - \*\*C|\n   \*\*Proof-of-use)", text)
-        self.assertIsNotNone(m, "AGENTS lost the B2 item")
-        b2 = m.group(0)
-        for kw in ("单一来源", "planted-failure", "靠人记"):
-            self.assertIn(kw, b2, f"B2 single-source principle lost anchor: {kw}")
 
     def test_agents_codex_review_requires_one_pass_defect_matrix(self):
         # User-directed 2026-06-13 correction: Codex review must not drip-feed one issue per
@@ -227,36 +223,57 @@ class DocGovernanceGuard(unittest.TestCase):
                          "guard false-positives a compliant minimal entry")
 
     PRE_CODEX_CHECKLIST = ROOT / "docs" / "pre_codex_self_review_checklist.md"
-    B_ANCHORS = ("零残留", "字符串字面量", "test_", "全仓 guard")   # emit-string + test-surface + evidence + tree-guard
+    # Pre-Codex gate single-source contract (2026-06-13 refactor): the checklist is the SOLE rule
+    # body; AGENTS item 7 only points to it. Earlier the rule was restated in BOTH and pinned in
+    # both — that double-write was itself the drift surface, so it was collapsed to one authority.
+    CHECKLIST_GATE_SECTIONS = ("## A.", "## B.", "## B2.", "## C.", "## D.", "## E.", "## F.")
+    CHECKLIST_BODY_ANCHORS = ("零残留", "字符串字面量", "test_", "全仓 guard",   # B body
+                              "单一来源", "planted-failure", "靠人记")           # B2 body
+    # Body phrases that MUST NOT reappear in AGENTS item 7. Naming a rule ("B ripple-grep") is fine;
+    # restating its body is the AGENTS<->checklist drift this refactor eliminates.
+    AGENTS_ITEM7_FORBIDDEN_BODY = ("零残留", "defect-class", "靠人记", "planted-failure")
 
     @classmethod
-    def _b_sections(cls):
-        # the B ripple-grep region in BOTH authoritative surfaces: AGENTS item-7 bullet AND the
-        # detailed checklist implementers are routed to. (Pinning only AGENTS let the checklist drift.)
-        agents = AGENTS.read_text(encoding="utf-8")
-        cl = cls.PRE_CODEX_CHECKLIST.read_text(encoding="utf-8")
-        am = re.search(r"(?ms)- \*\*B ripple grep.*?(?=\n   - \*\*B2)", agents)
-        cm = re.search(r"(?ms)^## B\..*?(?=^## C\.)", cl)
-        return {"AGENTS B": am.group(0) if am else None,
-                "checklist B": cm.group(0) if cm else None}
+    def _agents_item7(cls):
+        text = AGENTS.read_text(encoding="utf-8")
+        m = re.search(r"(?ms)^7\. \*\*Pre-Codex self-review gate.*?(?=^## )", text)
+        return m.group(0) if m else None
 
-    def test_b_ripple_grep_anchors_pinned_in_agents_and_checklist(self):
-        # R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP: the strengthened B (exhaustive grep
-        # incl emitted runtime string literals + test docstrings/comments, zero-residual evidence,
-        # recurring-rule tree-wide guard) must be pinned in BOTH AGENTS and the routed-to checklist,
-        # so neither can drift back to the narrow form the same-R-ID re-FAILs came from.
-        for name, region in self._b_sections().items():
-            self.assertIsNotNone(region, f"{name} section not found")
-            for kw in self.B_ANCHORS:
-                self.assertIn(kw, region, f"{name} lost B anchor: {kw}")
+    def test_pre_codex_checklist_is_sole_rule_authority(self):
+        # single-source: the checklist holds every gate section header + its load-bearing anchors.
+        cl = self.PRE_CODEX_CHECKLIST.read_text(encoding="utf-8")
+        for h in self.CHECKLIST_GATE_SECTIONS:
+            self.assertIn(h, cl, f"checklist lost gate section: {h}")
+        for kw in self.CHECKLIST_BODY_ANCHORS:
+            self.assertIn(kw, cl, f"checklist lost load-bearing anchor: {kw}")
 
-    def test_b_ripple_grep_anchor_guard_is_real_planted(self):
-        # proves the guard actually fails when an anchor is dropped from EITHER B section (not a no-op).
-        for name, region in self._b_sections().items():
-            for kw in self.B_ANCHORS:
-                planted = region.replace(kw, "")   # remove ALL occurrences (an anchor may repeat in a section)
-                self.assertFalse(all(a in planted for a in self.B_ANCHORS),
-                                 f"dropping {kw!r} from {name} must fail the anchor check")
+    def test_agents_item7_points_to_checklist_and_does_not_restate(self):
+        # AGENTS item 7 must be a mandatory pointer (checklist path + 必读必走 + Proof-of-use) and
+        # must NOT restate the rule bodies — restatement is the very drift this refactor removes.
+        region = self._agents_item7()
+        self.assertIsNotNone(region, "AGENTS lost implementer-standard item 7")
+        self.assertIn("pre_codex_self_review_checklist.md", region, "item 7 lost the checklist pointer")
+        self.assertIn("必读必走", region, "item 7 lost the mandatory-read mandate")
+        self.assertIn("Proof-of-use", region, "item 7 lost the Proof-of-use requirement")
+        for body in self.AGENTS_ITEM7_FORBIDDEN_BODY:
+            self.assertNotIn(body, region,
+                             f"AGENTS item 7 restates checklist rule body (single-source drift): {body!r}")
+
+    def test_pre_codex_gate_single_source_guard_is_real_planted(self):
+        # proves BOTH directions fail: dropping a checklist section/anchor, AND injecting a rule-body
+        # phrase back into AGENTS item 7.
+        cl = self.PRE_CODEX_CHECKLIST.read_text(encoding="utf-8")
+        for h in self.CHECKLIST_GATE_SECTIONS:                       # checklist loses a gate section
+            planted = cl.replace(h, "", 1)
+            self.assertFalse(all(x in planted for x in self.CHECKLIST_GATE_SECTIONS),
+                             f"dropping {h} from checklist must fail the authority check")
+        for kw in self.CHECKLIST_BODY_ANCHORS:                       # checklist loses a body anchor
+            planted = cl.replace(kw, "")
+            self.assertFalse(all(a in planted for a in self.CHECKLIST_BODY_ANCHORS),
+                             f"dropping {kw!r} from checklist must fail the authority check")
+        injected = (self._agents_item7() or "") + "\n零残留 defect-class 靠人记 planted-failure"
+        self.assertTrue(any(b in injected for b in self.AGENTS_ITEM7_FORBIDDEN_BODY),  # AGENTS restatement
+                        "injecting a rule-body phrase into AGENTS item 7 must be detectable")
 
     def test_committed_required_entries_are_resolved_not_stale_open(self):
         # R-RISK-REGISTER-STALE-OPEN-REPAIRED-HOTQUEUE-SWEEP-GAP: a Required entry whose fix is in a

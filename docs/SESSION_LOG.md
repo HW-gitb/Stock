@@ -10,6 +10,28 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-13 — Codex `审查 PASS` (pre-Codex gate single-source refactor)
+- **Verdict/Action**: PASS. The refactor correctly collapses the pre-Codex gate rule body into `docs/pre_codex_self_review_checklist.md`; `AGENTS.md` item 7 is now a mandatory pointer and no longer restates A-F/B2 bodies.
+- **Required**: no new Required. `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` remains resolved in `docs/system_risk_register.md`; this refactor supersedes its pin-both mechanism without reopening the risk.
+- **Verify**: doc-governance+route 27 OK; py_compile OK; old pin-both guard names 0 hits in `*.py`; planted probes catch checklist deletion and AGENTS restatement; diff-check/BOM/FFFD clean.
+- **Next**: Claude `提交`.
+
+## 2026-06-13 — Claude `起草` (协议精简:pre-Codex gate 收为单一来源,AGENTS item7 只点名)
+
+**动机**(用户+Codex:"协议规则仍在 AGENTS + checklist 双写,是最大冗余"):上一轮 pin-both guard 只是把双写"守起来";而 A/B/B2/C/D/E/F + Proof-of-use **整组**都在 AGENTS item7 与 checklist 各写一遍——只收 B 是"修实例不修类"(规则 A 本身)。按 B2「一个会变事实=一个权威位置」收敛。
+
+**改动**:
+- `AGENTS.md §item7`:删 A–F+B2+Proof-of-use 正文,收成**框架句 + 强制指针**(全文见 checklist、起草/修复前必读必走、本文只点名不复述);保留 Proof-of-use 行要求(格式→checklist);§Session log discipline 的 item-7 cross-ref 仍成立。
+- `docs/pre_codex_self_review_checklist.md`:新增 `## B2. 单一来源 + drift guard` 段(从 AGENTS 迁入:权威位置选则 / 局部块守护 / planted-failure / 靠人记)→ checklist 成 A–F+B2 **唯一正文**。
+- `docs/README.md`:gate 行去 A–F 罗列,指向 checklist 为唯一正文。
+- `tests/test_doc_governance_guard.py`:pin-both 两测试 + `_b_sections`/`B_ANCHORS` 替换为单一来源版——`test_pre_codex_checklist_is_sole_rule_authority`(checklist 持 7 段 + B/B2 锚点)+ `test_agents_item7_points_to_checklist_and_does_not_restate`(item7 有指针/必读必走/Proof-of-use,且**不得复述** body 锚点 零残留/defect-class/靠人记/planted-failure)+ `test_pre_codex_gate_single_source_guard_is_real_planted`(双向植入:删 checklist 段/锚点必红、向 AGENTS 注 body 必被抓);`test_agents_pins_register_single_source_and_minimal_template` 移除"B2 须在 AGENTS"子检查。
+
+**Pre-Codex self-review: A-F checked** — A:不只收 B,**整组 A–F+B2+Proof-of-use** 一次收敛(避免"修实例不修类");**B 全仓 grep**:旧 pin-both guard 名在 `*.py` **0 残留**(`rg -n "test_b_ripple_grep_anchors_pinned_in_agents_and_checklist|..._anchor_guard_is_real_planted|_b_sections|B_ANCHORS" -g "*.py"` exit=1),`零残留/靠人记/planted-failure` 已不在 AGENTS(line 323 `defect-class` 属 Codex 标准 item16、在 item-7 区外),history 旧名为 append-only 记录不动;B2:本 refactor 即 B2 应用(单一来源+局部守护+双向 planted);C 反向:no-restatement 守护只钉 body 锚点、不钉规则名(指针含"A class-not-instance / B ripple-grep"不误报),authority 守护按段头+锚点(gut body 会丢锚点→被抓);E:本条即收单态,pin-both 机制在 register 标 superseded;F:25 tests OK、py_compile OK、diff-check clean、BOM/FFFD=0。
+
+**Boundary**:仅协议文档(AGENTS/checklist/README)+ doc-governance 守护;无 runtime/scoring/business 改动。supersedes `c76e4b5` 的 pin-both guard 机制(同一防漂移目标、更彻底);`R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` 仍 resolved(漂移风险不回归——已无第二份可漂)。
+
+**Next**: `审查`。
+
 ## 2026-06-13 — Claude `提交` (Slice 1b + 协议 B-strengthening,两 scope 分提交)
 - **`d4beb9b`**(Slice 1b:真 cninfo provider + evidence-full M6.7):closes `R-ASHORT-M67-CNINFO-PROVIDER-BYPASSES-SEMANTIC-SUMMARY-GATES` · `R-ASHORT-M67-SLICE1B-EVIDENCE-FULL-CONTRACT-DRIFT` · `R-ASHORT-M67-PREVIOUS-REQUIRED-STATUS-DRIFT-AFTER-COMMIT` · `R-ASHORT-M67-EVIDENCE-FULL-RUNTIME-EXPLANATION-DRIFT` · `R-ASHORT-M67-EVIDENCE-FULL-ROUTEDOC-GUARD-WEAKNESS` · `R-ASHORT-M67-RISK-REGISTER-REFAIL-CORRECTION-STALE`。
 - **`c76e4b5`**(协议 B ripple-grep 强化 + guard):closes `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` · `R-RISK-REGISTER-STALE-OPEN-REPAIRED-HOTQUEUE-SWEEP-GAP`。

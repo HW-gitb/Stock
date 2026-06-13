@@ -22,6 +22,13 @@
 - 反例 1:换最窄策略改了行为,却把 README/register 里旧的"浦发→clear"结论留着 → 又一轮。
 - 反例 2(本会话):evidence-full 规则只扫 runner+.md,漏了 **`machine.consumption.semantic` emit 字符串**与 **`SemanticIntoM67` 测试 docstring** → Codex 同 R-ID re-FAIL 3 轮。根治=第 2 点显式含这两面 + 第 1 句的"一次全仓 + 零残留证据"。
 
+## B2. 单一来源 + drift guard(generalized)
+**一个会变的事实**(行为契约 / 校验门 / finding 详情 / 状态)**= 一个权威位置 + 一个机器守护禁止他处复述**;所有其他位置只许"点名 + 指过去",不复述步骤/矩阵。
+1. **权威位置按事实性质选**:代码行为→紧贴代码的 docstring(被拒绝测试钉住);跨文档契约→单一 contract 锚点;material finding→`system_risk_register.md`;live-state→`SESSION_LOG` 顶部。
+2. **守护必须按局部块**(表行/段落)校验、**不是整文件**——整文件粒度会被"同文件别处有正确句"骗过(见 `R-ASHORT-SEMANTIC-PANEL-GUARD-FILE-LEVEL-FALSE-NEGATIVE`),并配一个 **planted-failure** 测试证明其局部性。
+3. **目标不是"靠警惕永不再犯"**:同类漂移必须被守护或单一来源机制挡住;**出现新类别时一次性沉淀成规则/测试,绝不退回靠人记**。
+- 反例(本会话):同一规则同时写在 `AGENTS.md` item 7 与本 checklist,靠 guard 钉两处——后来收敛为 item 7 只点名、本 checklist 做唯一正文(单一来源)。
+
 ## C. 反向失败自检(reverse-failure)
 交付前问:**这个修复有没有制造相反方向的错?**
 - 误报 ↔ 漏报、over-suppress ↔ under-suppress、too-strict ↔ too-lax、修了 look-ahead 却把合法当日数据也挡了。
