@@ -10,6 +10,13 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-13 — Claude `提交` (Slice 1b + 协议 B-strengthening,两 scope 分提交)
+- **`d4beb9b`**(Slice 1b:真 cninfo provider + evidence-full M6.7):closes `R-ASHORT-M67-CNINFO-PROVIDER-BYPASSES-SEMANTIC-SUMMARY-GATES` · `R-ASHORT-M67-SLICE1B-EVIDENCE-FULL-CONTRACT-DRIFT` · `R-ASHORT-M67-PREVIOUS-REQUIRED-STATUS-DRIFT-AFTER-COMMIT` · `R-ASHORT-M67-EVIDENCE-FULL-RUNTIME-EXPLANATION-DRIFT` · `R-ASHORT-M67-EVIDENCE-FULL-ROUTEDOC-GUARD-WEAKNESS` · `R-ASHORT-M67-RISK-REGISTER-REFAIL-CORRECTION-STALE`。
+- **`c76e4b5`**(协议 B ripple-grep 强化 + guard):closes `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` · `R-RISK-REGISTER-STALE-OPEN-REPAIRED-HOTQUEUE-SWEEP-GAP`。
+- register 上述 8 条 `open`→`resolved`(本 commit C);本地 master,无 push。
+- 未跟踪保留:`research/results/a_short/semantic_risk_20260605/`(首次语义真跑产物,research lane,待定是否单独留痕)。
+- **Next**: 起草 pre-Codex gate 单一来源 refactor(AGENTS item7 收成指针、checklist 做唯一正文)。
+
 ## 2026-06-13 — Codex `审查 PASS` (B ripple-grep proof command)
 - **Verdict/Action**: PASS. `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` is repaired in working tree: proof command is reproducible as shown, and B ripple-grep anchors are pinned in both `AGENTS.md` and the checklist.
 - **Required**: no new Required. Existing repaired Required closes on Claude `提交` with commit evidence in `docs/system_risk_register.md`.
