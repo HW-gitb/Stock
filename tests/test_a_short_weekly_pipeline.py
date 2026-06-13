@@ -546,6 +546,72 @@ class MainWiringTests(unittest.TestCase):
         # would hide it (3 rows -> set of 2 == weekly set). The raw-list dup check must abort before write.
         self._assert_main_overlay_aborts_no_file(_valid_overlay_for(["600000.SH", "000001.SZ", "000001.SZ"]))
 
+    def test_main_skip_semantic_leaves_semantic_neutral(self):
+        # --skip-semantic (even with --confirm) must NOT auto-fetch cninfo; semantic stays neutral.
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out), "--confirm-fetch-authorized", "--skip-semantic"],
+                 price_provider=lambda code: _series())
+            w = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(w["reports"][0]["machine"]["layer"]["semantic_risk"]["impact"], "none")
+
+    def test_cninfo_provider_reuses_summary_gates(self):
+        # R-ASHORT-M67-CNINFO-PROVIDER-BYPASSES-SEMANTIC-SUMMARY-GATES: provider must reuse the
+        # reviewed summary gates (main_board_top15 + missing->unknown + batch-empty->unknown).
+        from runners.a_short_weekly_pipeline import _build_cninfo_semantic_provider
+        calls = {}
+
+        def fetch_factory(raws):
+            def f(codes, a, l):
+                calls["codes"] = list(codes)
+                return raws
+            return f
+        empty = [{"ts_code": c, "ok": True, "error_category": None, "announcements": []}
+                 for c in ("600000.SH", "000001.SZ", "600519.SH")]
+        prov = _build_cninfo_semantic_provider(["600000.SH", "000001.SZ", "600519.SH"], AS_OF, 90,
+                                               fetcher=fetch_factory(empty))
+        self.assertEqual(prov("600000.SH")["status"], "unknown")     # mass ok-empty -> unknown (NOT clear)
+        # non-main (ChiNext 300750) is neither fetched nor fed
+        prov2 = _build_cninfo_semantic_provider(["600000.SH", "300750.SZ"], AS_OF, 90,
+                                                fetcher=fetch_factory(empty))
+        self.assertNotIn("300750.SZ", calls["codes"])               # not fetched
+        self.assertIsNone(prov2("300750.SZ"))                       # not fed into M6.7
+        # malformed raw (no ts_code) -> no "None" mapping; requested code missing -> unknown
+        prov3 = _build_cninfo_semantic_provider(["600000.SH"], AS_OF, 90,
+                                                fetcher=fetch_factory([{"ok": True, "announcements": []}]))
+        self.assertIsNone(prov3("None"))
+        self.assertEqual(prov3("600000.SH")["status"], "unknown")
+
+    def test_cninfo_provider_rejects_bad_lookback_without_fetch(self):
+        from runners.a_short_weekly_pipeline import _build_cninfo_semantic_provider
+        called = {"n": 0}
+
+        def f(c, a, l):
+            called["n"] += 1
+            return []
+        for bad in (0, -5, "90", None):
+            self.assertIsNone(_build_cninfo_semantic_provider(["600000.SH"], AS_OF, bad, fetcher=f))
+        self.assertEqual(called["n"], 0)                            # never fetched on bad lookback
+
+    def test_cninfo_provider_feeds_official_risk(self):
+        from runners.a_short_weekly_pipeline import _build_cninfo_semantic_provider
+        risk = [{"ts_code": "600000.SH", "ok": True, "error_category": None, "announcements": [
+            {"announcementTitle": "关于立案调查的公告", "adjunctUrl": "http://x/p.pdf",
+             "announcementTime": 1700000000000, "secCode": "600000"}]}]
+        prov = _build_cninfo_semantic_provider(["600000.SH"], AS_OF, 90, fetcher=lambda c, a, l: risk)
+        self.assertEqual(prov("600000.SH")["status"], "risk")       # genuine official risk still feeds
+        self.assertTrue(prov("600000.SH")["events"])
+
+    def test_build_cninfo_semantic_provider_nonblocking_on_failure(self):
+        from runners.a_short_weekly_pipeline import _build_cninfo_semantic_provider
+
+        def boom(codes, a, l):
+            raise RuntimeError("net down")
+        self.assertIsNone(_build_cninfo_semantic_provider(["600000.SH"], AS_OF, 90, fetcher=boom))
+
     def test_main_semantic_provider_folds_into_m67(self):
         # Slice 1 end-to-end: injected semantic_provider (high official) folds into M6.7 → 否决;
         # a stock with no semantic stays neutral (impact none). No network (provider injected).
@@ -560,7 +626,7 @@ class MainWiringTests(unittest.TestCase):
                                                  if code == "600000.SH" else None))
             w = json.loads(out.read_text(encoding="utf-8"))
         by = {r["ts_code"]: r for r in w["reports"]}
-        self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "否决")                # semantic high → 否决
+        self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "否决")                # evidence-full high → 否决
         self.assertEqual(by["000001.SZ"]["machine"]["layer"]["semantic_risk"]["impact"], "none")  # no semantic
 
 
@@ -627,7 +693,8 @@ class PriceFetchTests(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                           "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
-                          "--out", str(out), "--confirm-fetch-authorized"], pro_factory=lambda: object())
+                          "--out", str(out), "--confirm-fetch-authorized",
+                          "--skip-semantic"], pro_factory=lambda: object())  # no real cninfo fetch in unit test
             finally:
                 if old is not None:
                     sys.modules["tushare"] = old
@@ -755,16 +822,17 @@ class SemanticRiskPanelWiring(unittest.TestCase):
         self.assertEqual(md, render_weekly_markdown(weekly))   # identical to deterministic-only render
 
 
-def _official(status, sev=None, rt="x", dd="20260601"):
+def _official(status, sev=None, rt="x", dd="20260601", url="u"):
     # full PIT official_structured evidence shape (matches build_official_structured output)
     evs = [{"source": "cninfo", "title": "t", "category": "c", "disclosure_date": dd,
-            "url_or_pdf": "u", "risk_type": rt, "severity": sev}] if sev else []
+            "url_or_pdf": url, "risk_type": rt, "severity": sev}] if sev else []
     return {"status": status, "events": evs, "had_pit_announcements": bool(evs)}
 
 
 class SemanticIntoM67(unittest.TestCase):
-    """Slice 1: cninfo official_structured folded into M6.7 via the semantic_official family.
-    high→否决; medium/low→待核 (no penalty, no clear); clear/unknown/None→neutral; never rescues;
+    """Slice 1/1b: cninfo official_structured folded into M6.7 via the semantic_official family.
+    official high WITH complete evidence (non-empty url_or_pdf)→否决; high with blank URL→待核 (pending,
+    never veto); medium/low→待核 (no penalty, no clear); clear/unknown/None→neutral; never rescues;
     machine.layer.semantic_risk trace; consistency preserved by construction."""
     GEN = "2026-06-09T00:00:00+08:00"
 
@@ -835,15 +903,47 @@ class SemanticIntoM67(unittest.TestCase):
             {"status": "risk", "events": [{**ev, "risk_type": ""}]},                  # blank risk_type
             {"status": "risk", "events": [{**ev, "title": ""}]},                      # blank title
             {"status": "risk", "events": [{**ev, "category": ""}]},                   # blank category
-            {"status": "risk", "events": [{**ev, "url_or_pdf": ""}]},                 # blank url/pdf
+            {"status": "risk", "events": [{**ev, "url_or_pdf": 123}]},                # url_or_pdf non-string
             {"status": "risk", "events": [{**ev, "title": "   "}]},                   # whitespace-only title
             {"status": "risk", "events": [ev], "had_pit_announcements": False},       # risk but no PIT
             {"status": "risk", "events": [ev]},                                       # missing had_pit_announcements
         ]
+        # NOTE: blank url_or_pdf is NOT fail-closed here — Slice 1b approach A demotes it to 待核
+        # (see test_high_with_empty_url_demotes_to_pending), it must not abort.
         for bad in bad_inputs:
             n = _normalized(); n["semantic"] = bad
             with self.assertRaises(ValueError):
                 build_m67_report(n, AS_OF, self.GEN)
+
+    def test_consumption_map_states_evidence_full_rule_not_generic(self):
+        # R-ASHORT-M67-EVIDENCE-FULL-RUNTIME-EXPLANATION-DRIFT: the runtime consumption trace
+        # (machine.consumption.semantic) must state the evidence-full rule, not the old generic
+        # a generic "veto on any official high" — else the trace contradicts the blank-URL pending behavior.
+        cm = self._report(_official("risk", "high", "立案调查"))["machine"]["consumption"]["semantic"]
+        for kw in ("url_or_pdf", "证据齐全", "待核"):
+            self.assertIn(kw, cm, f"consumption.semantic lost evidence-full anchor: {kw}")
+
+    def test_high_with_empty_url_demotes_to_pending(self):
+        # Slice 1b approach A: a high event with blank/whitespace url_or_pdf is evidence-incomplete →
+        # 待核 (NOT 否决, NOT crash); only full-evidence high vetoes.
+        for blank in ("", "   "):
+            r = self._report(_official("risk", "high", "立案调查", url=blank))
+            self.assertEqual(r["m67"]["table"]["操作"], "建仓")        # demoted, not 否决
+            sr = r["machine"]["layer"]["semantic_risk"]
+            self.assertEqual(sr["impact"], "pending")
+            self.assertEqual(sr["evidence_incomplete_high"], 1)
+            self.assertEqual(sr["severity_max"], "high")               # severity honest, impact demoted
+            self.assertIn("缺 URL/PDF", r["m67"]["精简结论区"]["否决审查触发"])
+
+    def test_full_url_high_vetoes_even_alongside_a_blank_url_high(self):
+        sem = {"status": "risk", "had_pit_announcements": True, "events": [
+            {"source": "cninfo", "title": "t", "category": "c", "disclosure_date": "20260601",
+             "url_or_pdf": "u", "risk_type": "立案", "severity": "high"},
+            {"source": "cninfo", "title": "t2", "category": "c", "disclosure_date": "20260601",
+             "url_or_pdf": "", "risk_type": "处罚", "severity": "high"}]}
+        r = self._report(sem)
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")            # full-evidence high still vetoes
+        self.assertEqual(r["machine"]["layer"]["semantic_risk"]["impact"], "veto")
 
     def test_normalize_semantic_param_threads_through_build_weekly(self):
         n = normalize_candidate(_egs_candidate(), _series(), _overlay_row(), 55.0,

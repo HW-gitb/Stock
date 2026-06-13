@@ -71,7 +71,7 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         "observe_only": list(observe_only or []),
         "llm_enrichment": list(llm_enrichment or []),
         # 语义官方层(Slice 1):official_structured dict {status, events[severity], had_pit_announcements}
-        # 或 None(无输入→引擎按 unknown 中性处理)。Phase5 引擎据此融进 M6.7(high→否决/medium→待核)。
+        # 或 None(无输入→引擎按 unknown 中性处理)。Phase5 引擎据此融进 M6.7(证据齐全[非空URL]high→否决;缺URL high·medium→待核)。
         "semantic": semantic,
     }
 
@@ -233,6 +233,34 @@ def _semantic_panel_from_summary(summary: dict, weekly_as_of: str) -> str:
     return render_semantic_risk_panel(summary)
 
 
+def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None):
+    """非阻断 cninfo official provider(advisory 旁路),**复用 summary 已审门**——不另写薄版:
+    `build_summary_from_fetches` 内含 `main_board_top15`(只取/喂主板 Top15)+ 缺码→unknown + 批量空响应门
+    (大面积 ok-empty → 降 unknown 不报 clear)。返回 ts_code→official_structured;**任何失败 / 非法 lookback
+    → None**(语义全 unknown 中性,绝不阻断周报)。cninfo 偶缺 adjunctUrl → url_or_pdf 空,引擎按方案 A 把
+    缺 URL 的 high 降 pending 待核(不否决、不崩)。"""
+    try:
+        if not (isinstance(lookback_days, int) and lookback_days > 0):
+            return None                                  # 非法窗口 → 不取数(绝不因坏窗口产 false-clear)
+        from runners.a_short_semantic_risk_summary import build_summary_from_fetches
+        from runners.a_short_semantic_risk_probe import fetch_cninfo as _fetch, main_board_top15
+        main_codes, _dropped = main_board_top15(codes)   # 已审有界 universe;非主板/超 Top15 不取不喂
+        if not main_codes:
+            return None
+        raws = (fetcher or _fetch)(main_codes, as_of, lookback_days)
+        # malformed/无 ts_code 行丢弃 → 该码在 build_summary_from_fetches 里缺映射 → not_fetched → unknown
+        # (绝不建 "None" 键、绝不把残缺/缺响应当 clear)。
+        cninfo_results = {str(r["ts_code"]): r for r in raws
+                          if isinstance(r, dict) and r.get("ts_code")}
+        summary = build_summary_from_fetches(main_codes, as_of, cninfo_results, None,
+                                             "weekly-semantic-provider")  # generated_at 仅占位,不被消费
+        by = {c["ts_code"]: c["official_structured"] for c in summary["candidates"]}
+        return lambda ts: by.get(str(ts))
+    except Exception as exc:
+        print(f"[weekly] 语义 cninfo 取数失败({type(exc).__name__});语义层全 unknown(advisory,不阻断周报)")
+        return None
+
+
 def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
@@ -249,6 +277,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                         "不进确定性周报 JSON;渲染前过 `_semantic_panel_from_summary` 消费门"
                         "(校验步骤见其 docstring,单一来源)")
     p.add_argument("--confirm-fetch-authorized", action="store_true")
+    p.add_argument("--cninfo-lookback-days", type=int, default=90,
+                   help="语义官方层 cninfo 取数回溯天数(默认 90;真 run --confirm 时自动取数)")
+    p.add_argument("--skip-semantic", action="store_true",
+                   help="跳过语义官方层自动取数(advisory;不影响 M6.7 确定性 base)")
     args = p.parse_args(argv)
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
@@ -288,6 +320,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         pro = pro_factory() if pro_factory else init_tushare_pro(os.environ["TUSHARE_TOKEN"])
         start = (datetime.strptime(args.as_of, "%Y%m%d") - timedelta(days=120)).strftime("%Y%m%d")
         price_provider = lambda code: _fetch_price_series(ts, pro, code, start, args.as_of)
+    # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
+    # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
+    if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
+        semantic_provider = _build_cninfo_semantic_provider(
+            weekly_candidates, args.as_of, args.cninfo_lookback_days)
     normalized = [normalize_candidate(c, price_provider(c["ts_code"]), overlay.get(c["ts_code"]),
                                       iv_pct, account, regime,
                                       semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None))

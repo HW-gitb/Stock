@@ -218,7 +218,7 @@ class SemanticRiskContractDocs(unittest.TestCase):
         # validated official high MAY produce an advisory 否决 inside non-production M6.7.
         contract = _read("docs/a_short_semantic_risk_contract.md")
         coverage = _read("docs/a_short_semantic_risk_coverage.md")
-        # old absolute whole-layer no-hard-veto wording must be gone (it contradicts M6.7 high→否决)
+        # old absolute whole-layer no-hard-veto wording must be gone (it contradicts M6.7 evidence-full high→否决)
         self.assertNotIn("语义风险层是 advisory-only:不硬否决", contract,
                          "contract still asserts absolute whole-layer no-hard-veto (contradicts M6.7 integration)")
         self.assertNotIn("**advisory-only**。绝不硬否决、不进 production scoring", coverage,
@@ -231,6 +231,18 @@ class SemanticRiskContractDocs(unittest.TestCase):
         # README routes to the distinction too (not the old panel-only-as-final-invariant)
         readme = _read("docs/README.md")
         self.assertIn("semantic_official", readme)
+        # Slice 1b evidence-full rule must be the stated rule (not generic "any high vetoes"):
+        # high needs non-empty url_or_pdf to advisory-否决; blank-URL high routes to pending.
+        for kw in ("url_or_pdf", "证据齐全", "待核"):
+            self.assertIn(kw, contract, f"contract lost the Slice-1b evidence-full anchor: {kw}")
+        # R-ASHORT-M67-EVIDENCE-FULL-ROUTEDOC-GUARD-WEAKNESS: the route docs RESTATE the rule, so each
+        # must carry ALL load-bearing anchors (not just `url_or_pdf`), else they can drift back to a
+        # generic "official high vetoes" row while still containing the word `url_or_pdf`.
+        coverage = _read("docs/a_short_semantic_risk_coverage.md")
+        for kw in ("url_or_pdf", "待核", "不否决"):
+            self.assertIn(kw, coverage, f"coverage evidence-full block lost anchor: {kw}")
+        for kw in ("url_or_pdf", "pending", "never veto"):
+            self.assertIn(kw, readme, f"README evidence-full row lost anchor: {kw}")
 
     def test_coverage_doc_rejects_exact_48h_overclaim(self):
         text = _read("docs/a_short_semantic_risk_coverage.md")

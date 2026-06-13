@@ -108,18 +108,18 @@ def compute_indicators(series: list) -> dict:
 _SEM_STATUSES = ("risk", "clear", "unknown")
 _SEM_SEVERITIES = ("high", "medium", "low")
 # official_structured 事件证据形(与 build_official_structured 产出口径一致):驱动 M6.7 否决/待核
-# 的官方证据必须齐全且 PIT,否则 fail-closed。
-_SEM_EVENT_REQUIRED = ("source", "title", "category", "disclosure_date", "url_or_pdf",
-                       "risk_type", "severity")
+# 的官方证据必须齐全且 PIT,否则 fail-closed。url_or_pdf 单列(present+string,但允许空——见 validator)。
+_SEM_EVENT_NONEMPTY = ("source", "title", "category", "disclosure_date", "risk_type", "severity")
 
 
 def _validate_semantic_official(sem, as_of):
     """语义官方层(official_structured)消费契约,fail-closed:接受 None,或
-    {status∈{risk,clear,unknown}, events:list[dict]}。每个 event 必须是完整 PIT 官方证据:
-    齐备字段 (source/title/category/disclosure_date/url_or_pdf/risk_type/severity)、`source=="cninfo"`、
-    `severity∈{high,medium,low}`、`risk_type` 非空、`disclosure_date` 为 canonical 历法日且 `<= as_of`(PIT);
-    且 clear/unknown 不得带 events、risk 必带 ≥1 合法 event。非法/伪造/未来日/手工源 provider 输出 →
-    ValueError(写盘前 abort,绝不让残缺或非 PIT 证据触发 M6.7 advisory 否决)。返回同一已校验对象,
+    {status∈{risk,clear,unknown}, events:list[dict]}。每个 event:source/title/category/disclosure_date/
+    risk_type/severity 必须 trim 后非空字符串、`source=="cninfo"`、`severity∈{high,medium,low}`、
+    `disclosure_date` canonical 历法日且 `<= as_of`(PIT);`url_or_pdf` 必须 present+string,但**允许为空**
+    (cninfo 偶缺 adjunctUrl——空 URL 不 abort,而在 build_m67_report 把缺 URL 的 high 事件降为 pending 待核,
+    方案 A);且 clear/unknown 不得带 events、risk 必带 ≥1 event、`had_pit_announcements` bool 且 risk 时 True。
+    非法/伪造/未来日/手工源/残缺非 url 字段 → ValueError(写盘前 abort)。返回同一已校验对象,
     family / impact / severity_max / trace 全部据此派生。"""
     if sem is None:
         return None
@@ -134,19 +134,20 @@ def _validate_semantic_official(sem, as_of):
     for e in events:
         if not isinstance(e, dict):
             raise ValueError(f"semantic official event 非 dict:{type(e).__name__}")
-        # 每个证据字段必须是 trim 后非空字符串(present-but-empty / 纯空白 也拒,否则"可审计"
-        # 只是有名无证:无 title/category/URL 的 high 事件不得变成 M6.7 否决)。
-        for k in _SEM_EVENT_REQUIRED:
+        # 证据字段(除 url_or_pdf 外)必须 trim 后非空字符串(present-but-empty/纯空白 拒)。
+        for k in _SEM_EVENT_NONEMPTY:
             v = e.get(k)
             if not (isinstance(v, str) and v.strip()):
                 raise ValueError(f"semantic official event 证据字段 {k} 缺失/空/非字符串:{v!r}")
+        # url_or_pdf 必须 present + string,但**允许为空**(cninfo 偶缺 adjunctUrl,build_official_structured
+        # 会 emit "")。Slice 1b 方案 A:空 URL 不 abort、也不驱动否决——build_m67_report 把"缺 URL 的 high
+        # 事件"降为 pending 待核(证据不全)。这里只保证类型,空值的 veto 降级在 build 层处理。
+        if not isinstance(e.get("url_or_pdf"), str):
+            raise ValueError(f"semantic official event url_or_pdf 非字符串:{e.get('url_or_pdf')!r}")
         if e["source"] != "cninfo":
             raise ValueError(f"semantic official event source 非 official cninfo:{e['source']!r}")
         if e["severity"] not in _SEM_SEVERITIES:
             raise ValueError(f"semantic official event severity 非法:{e['severity']!r}")
-        # 注:build_official_structured 当 adjunctUrl 缺失时会 emit url_or_pdf=""(合法 producer 边界)。
-        # 本消费门按 Codex minimum 要求 url_or_pdf 非空;Slice 1b 接真 cninfo 时必须保证 URL,或把
-        # 空-URL 事件路由到非-veto pending(契约/schema 修订),否则合法空-URL 事件会 abort 周报。
         dd = e["disclosure_date"]
         if not _is_valid_date(dd):
             raise ValueError(f"semantic official event disclosure_date 非 canonical 历法日:{dd!r}")
@@ -303,18 +304,23 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
 
     # 语义官方层(Slice 1,advisory):先 fail-closed 校验(非法 provider 输出 → 写盘前 abort),
     # 再用**同一已校验对象**派生 family / impact / trace(避免 status↔events 不一致 / 非 dict AttributeError)。
-    # 经校验后:有 events ⟺ status==risk,severity 合法。high → semantic_official hard_veto(进下方 hard→否决,
-    # 绝不救回);medium/low → 仅"待核"(不扣分/不清/不降星);clear/unknown/无输入 → 中性。
+    # 经校验后:有 events ⟺ status==risk,severity 合法。**证据齐全(非空 url_or_pdf)的 high** → semantic_official
+    # hard_veto(进下方 hard→否决,绝不救回);**缺 URL 的 high → 待核(不否决)**;medium/low → 仅"待核"
+    # (不扣分/不清/不降星);clear/unknown/无输入 → 中性。(下方 high_full/high_incomplete 实现此分流)
     sem = _validate_semantic_official(inp.get("semantic"), as_of)
     sem_status = sem.get("status") if sem else "unknown"          # None → unknown(中性)
-    sem_sevs = [e["severity"] for e in sem["events"]] if (sem and sem_status == "risk") else []
-    sem_has_high = "high" in sem_sevs
-    sem_pending = bool(sem_sevs) and not sem_has_high             # risk 且仅 medium/low
-    if sem_has_high:
-        highs = [e for e in sem["events"] if e["severity"] == "high"]
+    sem_events = sem["events"] if (sem and sem_status == "risk") else []
+    sem_sevs = [e["severity"] for e in sem_events]
+    # 方案 A(Slice 1b):只有**证据齐全(含非空 url_or_pdf)**的 high 事件才驱动 M6.7 否决;
+    # high 但缺 URL/PDF(cninfo 偶缺 adjunctUrl)→ 证据不全,降为"待核"(不否决、不崩);medium/low 同样仅待核。
+    high_full = [e for e in sem_events if e["severity"] == "high" and e["url_or_pdf"].strip()]
+    high_incomplete = [e for e in sem_events if e["severity"] == "high" and not e["url_or_pdf"].strip()]
+    if high_full:
         fam["semantic_official"].update(
             hit=True, action="hard_veto",
-            reasons=[f"语义官方:{e.get('risk_type', '?')}(high)" for e in highs])
+            reasons=[f"语义官方:{e['risk_type']}(high)" for e in high_full])
+    sem_has_high = bool(high_full)                                # 仅证据齐全 high 计 veto
+    sem_pending = bool(sem_events) and not high_full             # risk 有事件但无证据齐全 high → 待核
 
     hard = [r for f in RISK_FAMILIES if fam[f]["action"] == "hard_veto" for r in fam[f]["reasons"]]
     downgrades = [r for f in RISK_FAMILIES if fam[f]["action"] == "downgrade" for r in fam[f]["reasons"]]
@@ -322,10 +328,12 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     llm_notes = list(inp.get("llm_enrichment") or []) # §10 Tier C:只解释,不改判决
 
     if sem_pending:
-        observe.append("semantic_pending_review=官方medium/low命中(例行件待复核,未扣分)")
+        sem_reason = ("官方 high 缺 URL/PDF 证据(证据不全)" if high_incomplete else "官方 medium/low 命中(例行件)")
+        observe.append(f"semantic_pending_review={sem_reason}(待核,未扣分)")
+    else:
+        sem_reason = ""
     sem_impact = "veto" if sem_has_high else ("pending" if sem_pending else "none")
-    sem_note = ("语义待核:官方 medium/low 命中,例行件待复核(未扣分,待 web/LLM 实判)"
-                if sem_pending else "")
+    sem_note = (f"语义待核:{sem_reason},待复核(未扣分,待 web/LLM 实判)" if sem_pending else "")
 
     # IV 状态(R-ASHORT-PHASE5-IV-MISSING-FAIL-OPEN):feed 缺失不假装执行 IV 风控
     iv_known = iv_pct is not None
@@ -370,8 +378,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
         "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
         "account/liquidity": "→ 仓位上限/冲击成本/100股",
-        "semantic": "→ semantic_official 族(official high→否决)/ medium·low→待核(不扣分,observe)/ "
-                    "trace machine.layer.semantic_risk;clear·unknown·无输入→中性",
+        "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核)"
+                    "/ medium·low→待核(不扣分,observe)/ trace machine.layer.semantic_risk;clear·unknown·无输入→中性",
     }
 
     table = {
@@ -412,11 +420,12 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                       "observe_only": observe, "llm_enrichment": llm_notes,
                       "semantic_risk": {
                           "official_status": sem_status,
-                          "severity_max": ("high" if sem_has_high else
+                          "severity_max": ("high" if "high" in sem_sevs else  # 全事件(含缺证据 high)
                                            ("medium" if "medium" in sem_sevs else
                                             ("low" if "low" in sem_sevs else None))),
                           "events": (list(sem["events"]) if sem else []),
-                          "impact": sem_impact,    # veto(high→否决) / pending(待核) / none
+                          "impact": sem_impact,    # veto(证据齐全 high→否决) / pending(待核) / none
+                          "evidence_incomplete_high": len(high_incomplete),  # high 但缺 URL/PDF → 仅待核
                           "web_llm": {"status": "unknown",
                                       "note": "Slice2(DeepSeek/web)未接,本片仅 cninfo 官方层"}}},
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
