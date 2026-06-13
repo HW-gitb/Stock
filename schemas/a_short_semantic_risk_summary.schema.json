@@ -70,14 +70,16 @@
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["source", "title", "category", "disclosure_date", "url_or_pdf", "risk_type"],
+                "required": ["source", "title", "category", "disclosure_date", "url_or_pdf",
+                             "risk_type", "severity"],
                 "properties": {
                   "source": {"type": "string"},
                   "title": {"type": "string"},
                   "category": {"type": "string"},
                   "disclosure_date": {"type": "string", "pattern": "^[0-9]{8}$"},
                   "url_or_pdf": {"type": "string"},
-                  "risk_type": {"type": "string"}
+                  "risk_type": {"type": "string"},
+                  "severity": {"enum": ["high", "medium", "low"]}
                 }
               }
             }

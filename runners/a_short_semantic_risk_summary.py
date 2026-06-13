@@ -50,28 +50,56 @@ SCHEMA_PATH = os.path.join(ROOT, "schemas", "a_short_semantic_risk_summary.schem
 DEEP_RANK_MAX = 5
 CNINFO_STATIC_HOST = "http://static.cninfo.com.cn/"
 
-# 标题关键词 → (category, risk_type)。首个命中的关键词决定分类(顺序=优先级)。
+# 标题关键词 → (category, risk_type, severity)。首个命中的关键词决定分类(顺序=高 severity 在前=优先级)。
+# severity:high(立案/处罚/ST 严重事件)/ medium(监管函件·关注·资金占用·担保 真问题)/ low(诉讼仲裁,
+# 大公司常为例行)。Slice-2a 执行实测发现宽关键词假阳性(银行年报季"非经营性资金占用…专项说明"=例行合规件
+# 命中 资金占用),故 Slice-2b 加负向模式 + 分级粗筛;实质精判仍交 2b skill(web_llm)。
 RISK_KEYWORD_MAP = [
-    ("问询函", "监管函件", "regulatory_inquiry"),
-    ("关注函", "监管函件", "regulatory_inquiry"),
-    ("立案调查", "立案调查", "investigation"),
-    ("立案", "立案调查", "investigation"),
-    ("监管关注", "监管关注", "regulatory_attention"),
-    ("警示函", "警示函", "warning_letter"),
-    ("行政处罚", "处罚", "penalty"),
-    ("处罚", "处罚", "penalty"),
-    ("诉讼", "诉讼仲裁", "litigation"),
-    ("仲裁", "诉讼仲裁", "litigation"),
-    ("资金占用", "资金占用", "fund_occupation"),
-    ("违规担保", "违规担保", "irregular_guarantee"),
-    ("风险警示", "风险警示", "risk_warning"),
+    ("立案调查", "立案调查", "investigation", "high"),
+    ("立案", "立案调查", "investigation", "high"),
+    ("行政处罚", "处罚", "penalty", "high"),
+    ("处罚", "处罚", "penalty", "high"),
+    ("风险警示", "风险警示", "risk_warning", "high"),
+    ("问询函", "监管函件", "regulatory_inquiry", "medium"),
+    ("关注函", "监管函件", "regulatory_inquiry", "medium"),
+    ("监管关注", "监管关注", "regulatory_attention", "medium"),
+    ("警示函", "警示函", "warning_letter", "medium"),
+    ("资金占用", "资金占用", "fund_occupation", "medium"),
+    ("违规担保", "违规担保", "irregular_guarantee", "medium"),
+    ("诉讼", "诉讼仲裁", "litigation", "low"),
+    ("仲裁", "诉讼仲裁", "litigation", "low"),
 ]
+
+# 例行年报"资金占用情况"的法定披露形式(审计师/独董专项说明·专项审核报告·关联资金往来情况汇总表)。
+ROUTINE_OCCUPATION_FORMS = ("专项说明", "专项审核", "汇总表")
+# 明确"无占用"否定式:标题里明示不存在/未发生/无新增占用 = 真·无风险的例行件,headless 可安全抑制。
+NO_OCCUPATION_NEGATIONS = ("不存在", "未发生", "未形成", "无新增", "未出现",
+                           "不涉及", "无占用", "未占用", "未被占用", "未产生")
+
+
+def _is_routine_occupation_report(title: str) -> bool:
+    """**最窄策略**(终结 routine↔adverse 关键词 whack-a-mole;Codex 同类 5 轮后由用户授权)。
+    headless **只抑制**"例行资金占用披露形式(专项说明/专项审核/汇总表)+ 标题明示无占用否定式"
+    (如"…不存在非经营性资金占用…专项说明")。**其余一切**——包括未带否定式的例行专项说明/汇总表,
+    以及任何明示/可疑占用——一律不抑制 → 报 risk,交 Slice-2b web/LLM skill 精判降级。
+    设计后果:残余误差**只会是误报(可被 skill 降级)**,绝不会是漏报(明示风险被压成 clear);
+    若漏掉某个否定式词,只会让一份无占用报告多显示为 risk,无害。headless 粗筛、skill 精判 = 设计本意。"""
+    routine = ("资金占用" in title and "情况" in title
+               and any(form in title for form in ROUTINE_OCCUPATION_FORMS))
+    if not routine:
+        return False
+    return any(neg in title for neg in NO_OCCUPATION_NEGATIONS)
 
 
 def _match_risk(title: str):
-    for kw, cat, rtype in RISK_KEYWORD_MAP:
-        if kw in title:
-            return cat, rtype
+    """标题 → (category, risk_type, severity);无风险 → None。
+    high severity 永不被抑制;medium/low 仅当命中**窄判**的例行年报资金占用专项说明时视为非风险。"""
+    for kw, cat, rtype, severity in RISK_KEYWORD_MAP:
+        if kw not in title:
+            continue
+        if severity != "high" and _is_routine_occupation_report(title):
+            return None                                     # 例行年报专项说明,非真风险(窄判抑制)
+        return cat, rtype, severity
     return None
 
 
@@ -106,12 +134,13 @@ def build_official_structured(raw: dict, as_of: str):
         title = str(a.get("announcementTitle", ""))
         hit = _match_risk(title)
         if hit:
-            cat, rtype = hit
+            cat, rtype, severity = hit
             url = str(a.get("adjunctUrl", "") or "")
             if url and not url.startswith("http"):
                 url = CNINFO_STATIC_HOST + url
             events.append({"source": "cninfo", "title": title[:200], "category": cat,
-                           "disclosure_date": d, "url_or_pdf": url, "risk_type": rtype})
+                           "disclosure_date": d, "url_or_pdf": url, "risk_type": rtype,
+                           "severity": severity})
     if events:
         status = "risk"                                             # 真命中风险优先(即便另有缺陷行)
     elif n_defect > 0:
@@ -286,6 +315,64 @@ def validate_summary_consistency(summary: dict) -> None:
         raise ValueError("coverage checked+unknown 必须等于候选数")
     if cov["failed"] > cov["unknown"]:
         raise ValueError("coverage failed 不能超过 unknown")
+
+
+_SEVERITY_RANK = {"high": 3, "medium": 2, "low": 1}
+
+
+def _needs_manual_review(c: dict) -> bool:
+    off = c["official_structured"]["status"]
+    web = c["web_llm"]
+    return (off in ("risk", "unknown") or web["action"] == "manual_review_required"
+            or web["status"] in ("risk_candidate", "risk", "headwind"))
+
+
+def _max_severity(events: list) -> str | None:
+    if not events:
+        return None
+    return max((e["severity"] for e in events), key=lambda s: _SEVERITY_RANK.get(s, 0))
+
+
+def render_semantic_risk_panel(summary: dict) -> str:
+    """summary → M6.7/周报可见 markdown 块(纯函数,无 now())。明标 advisory·非确定·web/LLM 不可复现;
+    只列需关注(risk/unknown/需复核)候选,clear 汇总成计数行。绝不把 advisory 混入确定性报告。"""
+    cov = summary["coverage"]
+    cands = summary["candidates"]
+    n = len(cands)
+    n_risk = sum(1 for c in cands if c["official_structured"]["status"] == "risk")
+    n_unknown = sum(1 for c in cands if c["official_structured"]["status"] == "unknown")
+    lines = [
+        f"### A-short 语义风险 advisory(as_of {summary['as_of']})",
+        "> ⚠️ **advisory·非确定·不进生产 scoring/decision/veto**;web/LLM 部分 LIVE 实时、**不可复现**;"
+        "官方结构化层按披露日 PIT。仅供人工参考,非买卖信号。",
+        f"覆盖:checked {cov['checked']} / unknown {cov['unknown']} / failed {cov['failed']}"
+        f"(主板 Top15 共 {n});官方结构化风险候选 {n_risk};unknown {n_unknown}。",
+    ]
+    flagged = [c for c in cands if _needs_manual_review(c)]
+    if not flagged:
+        lines.append("无需关注候选(官方结构化全 clear);web/LLM 待 skill 评估。")
+        return "\n".join(lines)
+    lines.append("")
+    lines.append("| rank | code | tier | 官方结构化 | web/LLM | 需人工复核 |")
+    lines.append("|---|---|---|---|---|---|")
+    for c in flagged:
+        off = c["official_structured"]
+        web = c["web_llm"]
+        if off["status"] == "risk":
+            sev = _max_severity(off["events"])
+            latest = max((e["disclosure_date"] for e in off["events"]), default="-")
+            rtypes = ",".join(sorted({e["risk_type"] for e in off["events"]}))
+            off_cell = f"risk[{sev}] {rtypes}({len(off['events'])}事件,最新{latest})"
+        else:
+            off_cell = off["status"]
+        web_cell = f"{web['status']}/{web['risk_level']}/{web['action']}"
+        review = "是" if _needs_manual_review(c) else "否"
+        lines.append(f"| {c['rank']} | {c['ts_code']} | {c['scan_tier']} | {off_cell} | "
+                     f"{web_cell} | {review} |")
+    lines.append("")
+    lines.append("_web/LLM 全 `unknown` = 尚待 Slice-2b skill 评估(headless 仅官方结构化粗筛);"
+                 "官方风险候选含宽关键词粗筛,实质性判断以 web/LLM advisory 为准。_")
+    return "\n".join(lines)
 
 
 def write_summary(summary: dict, out_path: str) -> None:

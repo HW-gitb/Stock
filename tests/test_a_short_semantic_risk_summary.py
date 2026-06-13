@@ -23,7 +23,8 @@ if str(ROOT) not in sys.path:
 
 from runners.a_short_semantic_risk_summary import (  # noqa: E402
     build_official_structured, _scan_tier, build_candidate, build_summary_from_fetches,
-    validate_summary_consistency, write_summary, _sina_sources,
+    validate_summary_consistency, write_summary, _sina_sources, render_semantic_risk_panel,
+    _match_risk,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_semantic_risk_summary.schema.json"
@@ -94,6 +95,70 @@ class OfficialStructured(unittest.TestCase):
             _ok("600000.SH", [_ann(title="行政处罚决定书"), _ann(t="garbage")]), AS_OF)
         self.assertEqual(off["status"], "risk")
         self.assertEqual(len(off["events"]), 1)
+
+
+class KeywordCalibration(unittest.TestCase):
+    """Narrowest strategy: headless suppresses ONLY 'routine occupation disclosure form +
+    explicit no-occupation negation'; everything else -> risk for the 2b skill to downgrade.
+    Residual errors are false positives only (skill downgrades), never 漏报 (real risk hidden)."""
+
+    def test_only_routine_form_WITH_negation_is_suppressed(self):
+        # explicit no-occupation negation in a routine form -> clear (the only suppressed case)
+        for t in ("关于公司不存在非经营性资金占用情况的专项说明",
+                  "关于公司未发生非经营性资金占用情况的专项说明",
+                  "关于公司无新增非经营性资金占用情况的专项说明",
+                  "2025年度非经营性资金占用及其他关联资金往来情况汇总表(不存在占用)",
+                  "关于公司不存在被控股股东非经营性资金占用情况的专项说明"):
+            self.assertIsNone(_match_risk(t), t)
+
+    def test_bare_routine_without_negation_now_surfaces_as_risk(self):
+        # narrowest strategy: a routine special report WITHOUT an explicit negation is NOT
+        # suppressed headlessly -> risk (skill downgrades). Reverses the earlier over-suppression.
+        for t in ("上海浦发银行股份有限公司2025年度非经营性资金占用及对外担保情况的专项说明",
+                  "控股股东及其他关联方非经营性资金占用及其他关联资金往来情况汇总表"):
+            self.assertIsNotNone(_match_risk(t), t)
+
+    def test_explicit_or_suspected_occupation_surfaces_as_risk(self):
+        for t in ("关于公司存在非经营性资金占用情况的专项说明",
+                  "关于公司发生非经营性资金占用情况的专项说明",
+                  "关于公司被控股股东非经营性资金占用情况的专项说明",
+                  "控股股东非经营性资金占用整改情况的专项报告",
+                  "违规担保事项整改进展的专项报告",
+                  "关于收到问询函的专项说明"):
+            self.assertIsNotNone(_match_risk(t), t)
+
+    def test_high_severity_always_risk(self):
+        off, _ = build_official_structured(
+            _ok("600000.SH", [_ann(title="关于收到立案调查通知书的专项说明")]), AS_OF)
+        self.assertEqual(off["status"], "risk")
+        self.assertEqual(off["events"][0]["severity"], "high")
+
+    def test_severity_grading(self):
+        self.assertEqual(_match_risk("关于立案调查的公告")[2], "high")
+        self.assertEqual(_match_risk("收到监管问询函")[2], "medium")
+        self.assertIsNone(_match_risk("2025年度业绩预告"))
+
+    def test_event_carries_severity(self):
+        off, _ = build_official_structured(
+            _ok("600000.SH", [_ann(title="行政处罚决定书")]), AS_OF)
+        self.assertEqual(off["events"][0]["severity"], "high")
+
+
+class Panel(unittest.TestCase):
+    def test_renders_flagged_with_advisory_labels(self):
+        s = _summary(n_codes=6, risk_idx=(5,))            # rank6 risk(low, 诉讼)
+        md = render_semantic_risk_panel(s)
+        self.assertIn("as_of 20260630", md)
+        self.assertIn("不可复现", md)
+        self.assertIn("advisory", md)
+        self.assertIn(s["candidates"][5]["ts_code"], md)  # the risk candidate listed
+        self.assertIn("risk[", md)
+        self.assertIn("unknown/unknown/no_action", md)    # headless web cell
+
+    def test_all_clear_summarized(self):
+        s = _summary(n_codes=6)                           # no risk
+        md = render_semantic_risk_panel(s)
+        self.assertIn("无需关注候选", md)
 
 
 class ScanTier(unittest.TestCase):

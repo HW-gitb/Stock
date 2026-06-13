@@ -8,6 +8,320 @@
 
 ---
 
+## 2026-06-13 — Claude `提交` (语义风险 Slice 2b-i + pre-Codex self-review checklist → local master)
+
+Codex PASS(entry below,复审 scope 同时含 2b-i pending set + checklist 接线,tests 90/90 OK)。一次提交两 scope(Codex 作为同一 pending set 一并审过,共享 README/register/SESSION_LOG 已交织,不再 hunk 拆分):
+- **Slice 2b-i**:`a_short_semantic_risk_summary.py`(severity 分级 + 最窄 routine 抑制 `ROUTINE_OCCUPATION_FORMS`+`NO_OCCUPATION_NEGATIONS` + `render_semantic_risk_panel`)+ schema(event severity)+ tests。register 项 flip resolved。
+- **pre-Codex self-review checklist**:`docs/pre_codex_self_review_checklist.md` + `AGENTS.md §Claude implementer standard` item 7(A-F gate + proof-of-use)+ README 路由。register 项 resolved。
+
+**Pre-Codex self-review: A-F checked** — A:两 scope 各自类×出口已在前轮覆盖;B ripple-grep:checklist routing 命中 AGENTS+README,旧 `NEGATIVE_PATTERNS`/`ESCALATION_MARKERS` 仅在 SUPERSEDED 历史;C/D N-A(本轮纯提交);E:register 两条均最终态单态;F:route-doc guard 14/14 + summary/probe 90 tests OK + FFFD=0。
+
+**边界**:advisory-only;V14.2 frozen;egs_main stage3 未碰;无 push。
+
+**Next**: 见下方"全项目下一步"。
+
+---
+
+## 2026-06-13 — Codex `审查` PASS (pre-Codex self-review checklist 接线复审)
+
+**Scope**: reviewed tracked working tree and untracked `docs/pre_codex_self_review_checklist.md`: `AGENTS.md`, `docs/README.md`, `docs/system_risk_register.md`, `docs/SESSION_LOG.md`, semantic-risk Slice 2b-i code/schema/tests already in the same pending change set, and the new checklist file.
+
+**Verdict**: PASS。上一轮三条 Required 均已修复。R-1 adoption: compact A-F gate + proof-of-use is now in `AGENTS.md §Claude implementer standard` item 7, and detailed doc is routed from `docs/README.md`; `docs/AI_REVIEW_PROTOCOL.md` remains a pointer, no duplicate checklist. R-2 route-doc semantics: checklist §E now bans only transient next-actor/next-command gate from `CURRENT`/durable route docs and explicitly allows `system_risk_register` stable open-risk status + closure criteria. R-3 proof-of-use: AGENTS + checklist require each Claude `起草`/`修复` SESSION_LOG entry to include `Pre-Codex self-review: A-F checked / N-A` with grep/test evidence.
+
+**Register**: `Pre-Codex self-review checklist adoption gap` is marked `resolved` in `docs/system_risk_register.md`. No new material risk found.
+
+**Verification**: route-doc guard 14/14 OK; semantic-risk related tests 90/90 OK; summary/probe schema meta OK; `py_compile` OK; FFFD=0 for touched docs/code/schema/tests; `git diff --check` only CRLF warnings. Residual scans show old `NEGATIVE_PATTERNS` / `ESCALATION_MARKERS` only in explicit `SUPERSEDED` history, and old checklist adoption-gap text only in historical SESSION_LOG / resolved register narrative.
+
+**Boundary**: process/docs only for checklist repair; no business-code/schema behavior change beyond the previously reviewed semantic-risk Slice 2b-i pending set; V14.2 frozen; `egs_main` untouched.
+
+**Next**: Claude `提交`.
+
+---
+
+## 2026-06-13 — Claude `修复` (pre-Codex self-review checklist — 采纳缺陷 + 语义过宽 + 留痕)
+
+三条都成立(我那份"防遗忘"的 checklist 自身有易遗忘的采纳缺陷,够讽刺):
+
+**R-1 (P2, 采纳缺陷) 成立**:checklist 是孤立未路由文件,无机制强制未来 Claude 读/执行。
+- Fix:把紧凑 A-F gate + proof-of-use 折进 `AGENTS.md §Claude implementer standard` item 7(每次 起草/修复 交付前必走);`docs/README.md` 路由表加指向详细文档的行;`AI_REVIEW_PROTOCOL.md` 保持纯指针(不重复 checklist)。
+
+**R-2 (P2, register ban 过宽) 成立**:checklist §E 说 gate"绝不进 CURRENT/register"——register 部分太宽,`system_risk_register` 是持久 open-risk 队列,合法记 stable status + closure criteria。
+- Fix:§E(+ AGENTS gate)收窄为"只禁 transient next-actor/next-command gate 进 CURRENT/durable route docs;register 可记 stable open-risk status + closure criteria"。
+
+**R-3 (P3, 无留痕契约) 成立**:checklist 不要求留证据。
+- Fix:checklist + AGENTS 现要求每条 起草/修复 SESSION_LOG entry 带 `Pre-Codex self-review: A-F checked / N-A` + grep/test 证据。
+
+**Pre-Codex self-review: A-F checked** — A: 本修类=checklist 采纳,出口=AGENTS+README+register 三处一次覆盖(非只建文件);B ripple-grep:`Select-String pre_codex_self_review_checklist|Pre-Codex self-review` → AGENTS.md:348/355 + README.md:16 命中(routing 就位),旧过宽措辞仅存在于 checklist §E 已改;C 反向:折进 AGENTS 未与既有 item 1-6/§Codex standard 冲突(已读);D N-A;E:register R-PRECODEX 条目用 repaired 注记非流水账,wording 收窄;F:route-doc guard 14/14 OK,FFFD=0(4 文件)。
+
+**Boundary**: 纯 process/docs;无代码/schema/behavior;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 AGENTS 折叠 + README 路由 + §E 收窄 + 留痕)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (Claude pre-Codex self-review checklist — 方向正确但不是最优落地)
+
+**Scope**: reviewed tracked working tree plus untracked `docs/pre_codex_self_review_checklist.md`. Relevant existing authorities checked: `AGENTS.md §Claude implementer standard`, `AGENTS.md §Codex adversarial review standard`, `docs/AI_REVIEW_PROTOCOL.md` pointer/duplication rule, `docs/README.md` routing table, and `docs/system_risk_register.md`.
+
+**Verdict**: FAIL / not optimal as-is. The checklist's A-F content is directionally right and directly targets the repeated failure pattern (fixing only the named instance, missing ripple docs, missing reverse-failure tests, route-doc accretion). But it is currently a standalone untracked/unrouted file; no startup route or Claude implementer rule forces future Claude sessions to read it or attest it. A checklist that is easy to forget is not the optimal repair for "Claude keeps forgetting".
+
+**Required-1 (P2, cross-LLM continuity / adoption gap)**: `docs/pre_codex_self_review_checklist.md` is not referenced by `AGENTS.md`, `docs/README.md`, or `docs/AI_REVIEW_PROTOCOL.md` (`rg` only finds the file itself). Required repair: fold a compact A-F pre-Codex gate into `AGENTS.md §Claude implementer standard` and route the detailed doc from `docs/README.md`, or delete the standalone file and keep only AGENTS bullets. `docs/AI_REVIEW_PROTOCOL.md` should remain a compatibility pointer, not a duplicated checklist.
+
+**Required-2 (P2, route-doc semantics over-broad)**: checklist E.39 says review/commit gate must never enter `CURRENT/register`. The `CURRENT` part is right, but the `register` ban is too broad: `system_risk_register` is the durable open-risk queue and can legitimately record stable status / closure criteria. Required repair: narrow the wording to forbid transient next-actor / next-command state in `CURRENT` and durable route docs, while explicitly allowing stable risk closure criteria in `system_risk_register`.
+
+**Required-3 (P3, no proof-of-use contract)**: the checklist does not require Claude to leave evidence that it ran the checklist. Required repair: Claude `起草` / `修复` SESSION_LOG entries should include a short `Pre-Codex self-review: A-F checked / N-A` line with the actual grep/test/schema evidence, especially for B/C/E.
+
+**Register**: recorded as `Pre-Codex self-review checklist adoption gap` in `docs/system_risk_register.md` with Required IDs `R-PRECODEX-CHECKLIST-UNROUTED` and `R-PRECODEX-CHECKLIST-REGISTER-OVERBROAD`.
+
+**Verification**: read the checklist content with UTF-8 (PowerShell display mojibake was terminal encoding, not file corruption); `rg` confirmed no routing pointer; inspected AGENTS Claude implementer standard and AI review protocol duplication warning. No business code/schema behavior reviewed or changed in this checklist review.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Codex `修复+审查` PASS (语义风险 Slice 2b-i — register 计数残留修复 + 完整复审)
+
+**Fix**: `docs/system_risk_register.md` Slice 2b-i Hot Queue 验证行已从旧的 `38 summary + 1 guard + 49 probe + 14 route-doc tests pass` 改成不带易漂移数字的 "Targeted summary/guard/probe suites pass; route-doc guard passes; schema meta + py_compile OK"。
+
+**Verdict**: PASS。代码、schema、测试、README/register 当前机制描述一致:裸 routine 专项说明/汇总表无明确无占用否定式 → `risk[medium]`;routine + 明确无占用否定式 → clear;正向/可疑占用与高 severity 事件 → risk。`NEGATIVE_PATTERNS` / `ESCALATION_MARKERS` 只保留在 `SUPERSEDED interim` 历史说明中,不再作为当前机制。
+
+**Checks**: behavior probe OK; 90 related tests OK; 14 route-doc guard tests OK; schema meta OK; `py_compile` OK; FFFD=0 for touched docs/code/schema/tests; `git diff --check` only CRLF warnings。
+
+**Boundary**: advisory-only, no hard-veto/EGS/Phase5/production-path/historical-backtest; V14.2 frozen; `egs_main` stage3 untouched; panel render function only, weekly-pipeline wiring deferred to later slice.
+
+**Next**: Claude `提交`。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-i 第七轮复审 — register 验证计数残留)
+
+**Verdict**: FAIL。代码行为、README、register 最终机制描述均已对齐最窄策略:裸 routine 无否定式 → `risk[medium]`;routine + 明确无占用否定式 → clear;正向/可疑风险 → risk。`NEGATIVE_PATTERNS` / `ESCALATION_MARKERS` 只以 `SUPERSEDED interim` 出现,可接受。未发现新的代码/schema 行为阻断。
+
+**Finding-1 (P3, current register verification count stale)**: `docs/system_risk_register.md` 当前 Slice 2b-i Hot Queue 行仍写 `38 summary + 1 guard + 49 probe + 14 route-doc tests pass`。当前实际 targeted run 为 `tests.test_a_short_semantic_risk_summary` + guard + probe = 90 tests OK,其中 summary 已是 40 tests(40 + 1 + 49 = 90),route-doc 14 tests OK。活动 route-doc 不应保留错误验证计数。Required fix: 改成当前真实计数,或更稳妥地改成不带易漂移数字的 "targeted summary/guard/probe + route-doc suites pass; schema meta + py_compile OK"。
+
+**Checks**: behavior probe OK; 90 related tests OK; schema meta OK; route-doc guard OK; FFFD=0 for README/register/SESSION_LOG; `py_compile` OK; `git diff --check` only CRLF warnings。
+
+**Next**: Claude `修复` register verification-count wording 后再交 Codex `审查`。
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-i — register Hot Queue 压成最终状态,清旧机制)
+
+**Finding 1 (P2) 成立**:register Slice 2b-i 活动行把 round 1-4 repair 流水账全堆在内,前半段仍写旧机制(`ESCALATION_MARKERS`/`no escalation marker → clear`),后半段才是 round-4 最窄策略——同一活动 route-doc 并存冲突的当前机制,后续 LLM 易按前半段旧机制改。这是我 route-doc state-duplication 老毛病([[feedback_route_docs_state_duplication]])。
+- Fix:整条 Hot Queue entry 重写——**CURRENT MECHANISM** 段只留最窄策略(`ROUTINE_OCCUPATION_FORMS`+`NO_OCCUPATION_NEGATIONS`,裸 routine→risk),**SUPERSEDED interim** 段把 round 1-3 的 `NEGATIVE_PATTERNS`/`_has_adverse_marker` 压成一句"已删除、勿重引入"。README 已确认无旧机制残留。
+
+**Pre-flight**:README grep 无 ESCALATION_MARKERS/NEGATIVE_PATTERNS 残留;route-doc guard OK;FFFD 待校验。
+
+**Boundary**: 纯 register 文案重排;无代码/schema/behavior 改动;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 Hot Queue 重写)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-i 第六轮复审 — register Hot Queue 仍混入旧机制)
+
+**Verdict**: FAIL。代码行为、测试、schema 都已通过最窄策略复审:裸 routine 浦发专项说明/情况汇总表 → `risk[medium]`;明确否定式 `不存在/未发生/无新增/不存在被...占用` → clear;正向 `存在/发生` → risk。`docs/README.md` 的旧 "浦发 now clear" 也已修正。剩余问题在 current Hot Queue 文案。
+
+**Finding-1 (P2, current register line 仍含已废弃机制且未明确 superseded)**: `docs/system_risk_register.md` 当前 Slice 2b-i Hot Queue 行仍在前半段写 `suppression is NARROW (_is_routine_occupation_report + ESCALATION_MARKERS)`、`with NO escalation marker is suppressed`、以及 earlier repair 中 `only the no-escalation annual occupation special report → clear`。同一行后半段又说 round-4 已删除 `_has_adverse_marker`/`ESCALATION_MARKERS`,改为 `NO_OCCUPATION_NEGATIONS` 最窄策略。虽然能读出后文覆盖前文,但这是 durable current route-doc 的活动行,不应同时保留互相冲突的当前机制;后续 LLM 很容易按前半段旧机制继续修。Required fix: 把 Hot Queue 当前描述压缩成最终状态,或把旧 round 1-3 机制移出/明确标为 `superseded`;当前机制只保留 `ROUTINE_OCCUPATION_FORMS + NO_OCCUPATION_NEGATIONS`,以及"bare routine without explicit negation surfaces as risk"。
+
+**Checks**: behavior probe OK; `tests.test_a_short_semantic_risk_summary` + guard + probe = 90 tests OK; schema meta OK; route-doc guard OK; `py_compile` OK; `git diff --check` 仅 CRLF warning。
+
+**Next**: Claude `修复` register Hot Queue stale wording 后再交 Codex `审查`。
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-i — route-doc 残留"浦发→clear"旧结论)
+
+**Finding 1 (P2) 成立**:我转最窄策略时只改了抑制逻辑描述,漏改更早那句顶层结论 *"unit test reproduces the exact 浦发 专项说明 title → now `clear`"*,留在 `docs/README.md` + `docs/system_risk_register.md` Hot Queue,与当前实现/测试(裸 routine 浦发 → risk[medium])相反。
+- Fix:两处改为"裸 routine 无否定式 → risk[medium] 交 skill 降级;仅 routine+明确无占用否定式 → clear,两向均有单测"。SESSION_LOG 第 15 行那句是 Codex 审查叙述(历史 append-only),不动。
+
+**Pre-flight**:残留扫描确认 active 行无旧结论;54 tests(summary 40 + route-doc 14)OK;FFFD=0。
+
+**Boundary**: 纯 docs 订正;无代码/schema/behavior 改动;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 route-doc 订正)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-i 第五轮复审 — route docs 残留旧结论)
+
+**Verdict**: FAIL。代码行为已切到最窄策略且通过对抗探针:裸 routine 浦发专项说明/情况汇总表 → risk[medium] 交 skill 降级;明确否定式 `不存在/未发生/无新增/不存在被...占用` → clear;`存在/发生` 等正向风险 → risk。旧 JSON 产物仍不存在。测试/schema/route guard 也全过。
+
+**Finding-1 (P2, route-doc active line 与实现相反)**: `docs/README.md` Slice 2b-i 行仍写 "A unit test reproduces the exact 浦发 专项说明 title → now `clear` (false positive fixed headlessly)"。`docs/system_risk_register.md` 当前 Hot Queue 同样残留 "Unit test reproduces the exact 浦发 专项说明 title → now `clear`"。这与当前实现和测试相反: `tests/test_a_short_semantic_risk_summary.py::test_bare_routine_without_negation_now_surfaces_as_risk` 明确断言浦发裸 routine 专项说明 `assertIsNotNone`,实测也返回 `risk[medium]`。提交前必须删除/改写这两处旧结论,改成"裸 routine without explicit negation surfaces as risk; only routine+explicit no-occupation negation clears"。
+
+**Checks**: behavior probe OK; `tests.test_a_short_semantic_risk_summary` + guard + probe = 90 tests OK; schema meta OK; route-doc guard OK; `py_compile` OK; `git diff --check` 仅 CRLF warning。
+
+**Next**: Claude `修复` route-doc stale wording 后再交 Codex `审查`。
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-i — 转最窄抑制策略,终结 routine 关键词 whack-a-mole)
+
+**Finding 1 (P1, 否定式被误判 risk) 成立**:round-3 的 adverse markers 不处理否定语境,`未发生/无新增/不存在被…占用` 被误报 risk。**这是同类第 5 轮**(汇总表 → 存在/发生/被占用 → 未发生/无新增/否定式)。
+
+**按用户授权转最窄策略(终结 whack-a-mole)**:
+- 删掉脆弱的 `_has_adverse_marker`/`ESCALATION_MARKERS` 穷举。
+- `_is_routine_occupation_report` **只抑制**"例行披露形式(`ROUTINE_OCCUPATION_FORMS` 专项说明/专项审核/汇总表)+ 标题明示无占用否定式(`NO_OCCUPATION_NEGATIONS` 不存在/未发生/无新增/无占用/…)"。
+- **其余一切**(裸 routine 无否定式、明示/可疑占用、high)→ 报 risk,交 2b skill 降级。
+- **设计后果**:残余误差**只会是误报(skill 可降级),绝不漏报**;漏掉某否定式只是让一份无占用报告多显示 risk,无害。**裸 routine 报告现 surface 为 risk[medium](逆转早前"3 银行归 clear")——这是 headless 粗筛、skill 精判的设计本意。**
+
+**Finding 2 (P3)**:README 旧符号已在 round-3 部分改,本轮再校正为 `ROUTINE_OCCUPATION_FORMS`+`NO_OCCUPATION_NEGATIONS`。
+
+**Pre-flight 复跑**:40 summary + 1 guard + 49 probe + 14 route-doc OK;py_compile OK。测试覆盖否定式(含 不存在被…占用)→ clear;裸 routine / 存在 / 发生 / 被占用 / 整改 / 违规担保 / 问询 → risk。
+
+**教训(已落实)**:对"歧义自然语言分类"别走关键词穷举(必然 whack-a-mole);要么收到最窄安全侧(只抑制明确否定式,其余留 skill),要么直接交 skill。本轮即此修正。
+
+**Boundary**: advisory-only;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审最窄策略)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-i 第四轮复审 — adverse marker 未处理否定式)
+
+**Verdict**: FAIL。上轮的 `存在/发生/被占用` 漏报已修；README 旧 `NEGATIVE_PATTERNS` 符号也已改掉。但 `_has_adverse_marker` 新增后又引入一类系统性假阳性。
+
+**Finding-1 (P1, 明确否定式被误判为 risk)**: `_has_adverse_marker` 只判断 marker 子串，不先处理否定语境。Unicode 探针确认以下标题当前都返回 `('资金占用','fund_occupation','medium')`：`关于公司未发生非经营性资金占用情况的专项说明`、`关于公司未形成非经营性资金占用情况的专项说明`、`关于公司无新增非经营性资金占用情况的专项说明`、`关于公司不存在被控股股东非经营性资金占用情况的专项说明`。这些标题明确是否定/无新增/不存在，占用风险不应由 headless 层报 risk。尤其 `不存在被...占用` 与本轮实现注释的 "`不存在`/`未存在` 不算 adverse" 冲突，因为后面的 `被 + 占用` 特判又把它拉回 risk。
+
+**Required fix**: 在 adverse marker 前先做 explicit-negative guard，至少覆盖 `不存在`/`未存在`/`未发生`/`未形成`/`无新增`/`不存在被...占用` 等否定式；同时保留 `存在`/`发生`/`形成`/`新增`/`被...占用` 明示风险为 risk。补 adversarial tests，不能只测正向 marker。
+
+**Checks**: 91 个相关单测 OK；schema meta OK；route-doc guard OK；`git diff --check` 仅 CRLF warning。测试未覆盖否定式 marker，所以仍 FAIL。
+
+**Next**: Claude `修复` 后再交 Codex `审查`。
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-i — 补 adverse/existence override 防明示风险漏报 + README 符号)
+
+**Finding 1 (P1, 漏报) 成立**:escalation 不含 `存在/发生/被…占用`,导致"关于公司**存在**非经营性资金占用情况的专项说明"等明示风险标题被压成 clear(比 routine 误报更严重)。
+- Fix:加 `_has_adverse_marker`——ESCALATION_MARKERS 扩(发生/形成/新增/未归还/未清偿/尚未归还/余额)+ 特判:`存在`(明示有占用)adverse 但 `不存在`/`未存在` 不算;`被…占用` adverse。routine 抑制改为 `routine form AND not _has_adverse_marker`。
+- 测试:存在/发生/被占用 → risk;`不存在…专项说明` routine → 仍 clear。
+
+**Finding 2 (P3, doc) 成立**:README 2b-i 行文件列表仍写已删的 `NEGATIVE_PATTERNS` → 改 `ROUTINE_OCCUPATION_FORMS`+`ESCALATION_MARKERS`。
+
+**Pre-flight 复跑**:41 summary + 1 guard + 49 probe + 14 route-doc OK;py_compile OK。
+
+**反思(同类第 4 轮)**:routine↔adverse 的歧义本质是 skill 的活,headless 关键词层注定有边界 case。我连续被点(汇总表→存在/发生/被占用)说明**穷举关键词形式集这条路本身脆**。本轮已尽量保守(adverse 全覆盖、宁误报不漏报);若 Codex 仍有边界 case,应考虑把 headless 抑制收到最窄(只压"不存在…占用"明确否定式),其余一律留给 web/LLM skill 降级——这才是设计本意(headless 粗筛、skill 精判)。
+
+**Boundary**: advisory-only;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 adverse override + README)。
+
+---
+
+## 2026-06-12 — Codex `审查` FAIL (语义风险 Slice 2b-i 第三轮复审 — routine 抑制仍有真实风险漏报)
+
+**Verdict**: FAIL。上轮指出的 `情况汇总表` 假阳性已经修掉；旧产物也已删除；整改/问询/处罚样例仍能正确浮出。但 routine 抑制仍有新的真实风险漏报。
+
+**Finding-1 (P1, 漏报)**: `_is_routine_occupation_report` 现在用 `资金占用 + 情况 + (专项说明/专项审核/汇总表) + 无 ESCALATION_MARKERS` 判 clear，但 `ESCALATION_MARKERS` 不含 `存在` / `发生` / `被...占用` 这类明确实质风险措辞。Unicode 探针确认以下标题当前全被判 `clear`、events 为空：`关于公司存在非经营性资金占用情况的专项说明`、`关于公司发生非经营性资金占用情况的专项说明`、`关于公司被控股股东非经营性资金占用情况的专项说明`。这比 routine false positive 更严重，因为它会把标题已经明示的资金占用风险压掉。
+
+**Required fix**: 将 adverse/existence markers 补入 escalation override，并加 tests：至少覆盖 `存在`、`发生`、`被控股股东...占用` 仍为 risk；同时保留 routine annual `非经营性资金占用及其他关联资金往来情况的专项说明/情况汇总表` clear。原则仍是宁可把可疑标题留给 web/LLM 降级，也不能把明示风险压成 clear。
+
+**Finding-2 (P3, 文档残留)**: `docs/README.md` Slice 2b-i route row 的交付物列表仍写 `RISK_KEYWORD_MAP/NEGATIVE_PATTERNS/severity`，但代码已删除 `NEGATIVE_PATTERNS`，当前真实入口是 `ROUTINE_OCCUPATION_FORMS` + `ESCALATION_MARKERS`。这不是行为 blocker，但提交前应顺手改掉，避免后续 LLM 按旧符号找实现。
+
+**Checks**: 90 个相关单测 OK；schema meta OK；route-doc guard OK；`py_compile` OK；`git diff --check` 仅 CRLF warning。测试未覆盖 `存在/发生/被占用` 标题，所以仍 FAIL。
+
+**Next**: Claude `修复` 后再交 Codex `审查`。
+
+---
+
+## 2026-06-12 — Claude `修复` (Slice 2b-i — routine 第三类"情况汇总表"补抑制)
+
+**Finding 1 (P1) 成立**:上轮窄判只覆盖 `专项说明/专项审核`,漏了 执行 真实数据里第三类例行标题"(关联资金往来)**情况汇总表**"(控股股东及其他关联方非经营性资金占用…情况汇总表)→ 仍 fund_occupation risk 假阳性。
+- Fix:routine 形式集 `ROUTINE_OCCUPATION_FORMS` 加 `汇总表`(专项说明/专项审核/汇总表),escalation override 保留。
+- 测试:情况汇总表两种真实标题 → clear;`整改情况汇总表`(带 escalation)→ 仍 risk。
+
+**Pre-flight 复跑**:40 summary + 1 guard + 49 probe + 14 route-doc OK;py_compile OK。
+
+**反思**:这是窄判"逐个例行格式补"的第 2 次——routine 形式应一次穷举(专项说明/专项审核/汇总表/…)而非被点一个补一个。已记。
+
+**Boundary**: advisory-only;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 汇总表 补抑制)。
+
+---
+
+## 2026-06-12 — Codex `审查` FAIL (语义风险 Slice 2b-i 修复复审 — routine 汇总表残留)
+
+**Verdict**: FAIL。上轮两个 blocker 中，旧 JSON 产物已删除；真实风险被 `专项报告/核查意见/专项说明` 一刀切压成 clear 的漏报也已修正。但仍有一个阻断残留。
+
+**Finding-1 (P1, 上次真实假阳性未完整修掉)**: `_is_routine_occupation_report` 只抑制 `资金占用 + 情况 + 专项说明/专项审核`，没有覆盖 Slice-2a 真实执行产物里的第三类例行标题：`控股股东及其他关联方非经营性资金占用及其他关联资金往来情况汇总表` / `2025年度非经营性资金占用及其他关联资金往来情况汇总表`。Unicode 探针确认这类标题当前仍返回 `('资金占用','fund_occupation','medium')` 并输出 `status=risk`。这与文档里"上次 3 个银行假阳性会归为 clear"冲突，也意味着真实重跑仍可能留下 routine annual filing false positive。
+
+**Required fix**: 将 routine annual occupation filing 的窄判扩展到 `情况汇总表` 这类年报/关联资金往来汇总表，但仍保留 escalation override：含 `整改/进展/收到/问询/关注函/立案/处罚/违规/警示/...` 的标题必须继续 risk。补测试：至少覆盖上次真实的 `情况汇总表` 标题 clear，同时保留整改/问询/处罚样例 risk。
+
+**Checks**: 89 个相关单测 OK；schema meta OK；route-doc guard OK；`git diff --check` 仅 CRLF warning。测试未覆盖 `情况汇总表` 残留，所以仍 FAIL。
+
+**Next**: Claude `修复` 后再交 Codex `审查`。
+
+---
+
+## 2026-06-12 — Claude `修复` (Slice 2b-i — 窄化负向抑制防漏报 + 删陈旧产物)
+
+**两条都成立。**
+
+**Finding 1 (P1, 过度抑制/漏报)** ✅:我的 `NEGATIVE_PATTERNS` 一刀切抑制所有带 专项报告/专项说明/核查意见 的 medium/low 命中——但真风险文书也常带这些词(资金占用整改专项报告 / 违规担保整改进展 / 收到问询函专项说明)→ 全被误判 clear = 漏报(比误报更糟)。
+- Fix:删掉一刀切 `NEGATIVE_PATTERNS`,改 **窄判** `_is_routine_occupation_report`(仅"资金占用+情况+专项说明/专项审核" 且**无任何 escalation 标记**)+ `ESCALATION_MARKERS`(整改/进展/收到/问询/关注函/立案/处罚/违规/警示/冻结/逾期/败诉/…)。high 永不抑制。
+- 对抗测试:Codex 三个漏报样例(整改/违规担保整改/问询专项说明)现仍 risk;只有无 escalation 的例行年报资金占用专项说明 → clear。**宁可误报(交 web/LLM skill 降级)也不漏报真风险。**
+
+**Finding 2 (P1, 陈旧产物)** ✅:未跟踪的 `research/results/a_short/semantic_risk_summary_20260612.json` 是 Slice-2a 旧 shape(events 无 severity、3 个 routine 银行 fund_occupation 假阳性),对新 schema validation FAIL。
+- Fix:**删除**(非本切片交付物,重 `执行` 可重生)。
+
+**Pre-flight 复跑**:39 summary + 1 guard + 49 probe + 14 route-doc tests OK;py_compile OK。
+
+**Boundary**: advisory-only;不硬否决/不进 production/不写 production;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审窄判 + 产物删除)。
+
+---
+
+## 2026-06-12 — Codex `审查` FAIL (语义风险 Slice 2b-i — 关键词校准 + 面板渲染)
+
+**Verdict**: FAIL。测试集通过不等于设计闭环通过；本轮存在两个阻断问题。
+
+**Finding-1 (P1, 漏报)**: `NEGATIVE_PATTERNS` 现在对所有 medium/low 关键词一刀切抑制。例行年报"非经营性资金占用及对外担保情况的专项说明"确实应压掉，但真实风险文书也常带这些词，例如"控股股东非经营性资金占用整改情况的专项报告"、"违规担保事项整改进展的专项报告"、"收到问询函的专项说明"。Unicode 探针确认这些样例当前全部被判 `clear`。修复方向: 负向抑制必须窄化为"例行年度/无占用/合规审计类"组合，不得按 `专项报告/核查意见/专项说明` 全局抑制；加入 adversarial tests 覆盖整改/进展/问询/违规担保。
+
+**Finding-2 (P1, 产物/schema 不一致)**: 未跟踪产物 `research/results/a_short/semantic_risk_summary_20260612.json` 仍是 Slice-2a 旧 shape：events 无 `severity`，且仍含 3 个 routine bank `fund_occupation` risk。当前 schema 已要求 event `severity`，实测该 JSON schema validation FAIL。修复方向: 若该文件不是本切片交付物就删除/不提交；若要保留为证据，则用 2b-i 新逻辑重生并确保 schema + consistency 都通过，且 routine 年报专项说明不再显示为 risk。
+
+**Checks**: `tests.test_a_short_semantic_risk_summary` + guard + probe 共 88 tests OK；`tests.test_route_doc_ledger_status_consistency` OK；`py_compile` OK；`git diff --check` 仅 CRLF warning。以上不能覆盖两个阻断问题。
+
+**Next**: Claude `修复` 后再交 Codex `审查`。
+
+---
+
+## 2026-06-12 — Claude `起草` (语义风险 Slice 2b-i — 关键词校准 + 面板渲染)
+
+**切片决策**: Slice 2b 拆 **2b-i(headless 关键词校准 + 面板,全可测)+ 2b-ii(skill enrichment 契约填 web_llm + coverage 文档,skill-在环)**。由 Slice-2a `执行` 发现驱动:宽关键词 `资金占用` 命中银行年报季例行"非经营性资金占用…专项说明"= 假阳性。
+
+**交付物(2b-i)**:
+- `RISK_KEYWORD_MAP` 加 `severity`(high 立案/处罚/ST · medium 监管函件/关注/资金占用/担保 · low 诉讼/仲裁);`NEGATIVE_PATTERNS`(专项说明/专项审核/核查意见/独立董事/鉴证报告…)抑制 medium+low 的例行合规件命中,**high severity 永不被抑制**(立案/处罚/ST 无论何种文书都浮出)。
+- official_structured 事件加 `severity`(schema enum)。
+- `render_semantic_risk_panel(summary)` — 纯函数 M6.7/周报可见 markdown 块:advisory·非确定·不可复现 标注 + 覆盖 + 只列 flagged(risk/unknown/需复核)候选(官方 severity+最新日期 + web_llm cell + 需人工复核),clear 汇总;绝不混入确定性报告。
+- 测试:**复现 执行 那个浦发"专项说明"标题 → 现 `clear`**(headless 证伪,无需重 执行)+ high 不抑制 + severity 分级 + 面板内容。
+
+**含义**: 校准后,上次 3 个银行"假阳性 risk"(全是例行专项说明)会归为 clear;真风险(立案/处罚/真资金占用/问询函)仍 risk。headless 只做粗筛 + 分级,实质语境判断仍交 2b-ii 的 web/LLM skill。
+
+**Pre-flight**: 38 summary + 1 guard + 49 probe + 14 route-doc tests OK;schema meta OK;py_compile OK;不变式矩阵(severity enum / 负向模式 / 面板 advisory 标注 / 既有 batch-gate·PIT·主板·scan-tier 未回归)对抗自测。
+
+**Boundary**: advisory-only;不硬否决/不进 production/不写 production 路径/不做历史回测;面板**仅 render 函数,未接入 weekly pipeline**(接线后置);V14.2 frozen;egs_main stage3 未碰。
+
+**Next**: `审查`(审 2b-i)→ 提交 → Slice 2b-ii(skill enrichment 契约 + coverage 文档)。
+
+---
+
+## 2026-06-12 — Claude `执行` (Slice 2a summary 实跑 — 真实官方结构化输出 + 2b 校准发现)
+
+**命令**: `a_short_semantic_risk_summary --as-of 20260612 --watch-pool <样本15主板> --confirm-fetch-authorized`(cninfo-only;用户授权)。产物:`research/results/a_short/semantic_risk_summary_20260612.json`(research lane,未纳入提交,可重生)。
+
+**机制结果(全正常)**:`coverage checked=15 unknown=0 failed=0`;batch 健康(announced 15/15,无降级);3 个官方风险候选 `risk`,scan_tier 升级正确(rank 8/10 银行 → upgraded);事件披露日 2026-03(年报季)PIT 正确(≤ as_of)。orgId fetch + batch gate + PIT + scan-tier 端到端跑通。
+
+**关键校准发现(给 Slice 2b)— 宽关键词假阳性**:3 个 risk 全是 `fund_occupation`,标题均为 *"…2025年度**非经营性资金占用及对外担保情况的专项说明**"*(浦发/兴业/平安)。这是**每家上市公司年报季例行合规专项说明**(结论通常"无占用"),**非真实资金占用风险** → 关键词 `资金占用` 命中例行报告 = 假阳性(同上次银行 `诉讼/仲裁` 宽口径问题)。
+- **2b 必须处理**:(a) 关键词加**负向模式**(排除 `专项说明/专项审核报告/专项核查/独立董事…意见` 等例行合规件)+ risk_type 分级;(b) web/LLM advisory 层做**实质性语境判断**(把例行合规件 downgrade)——这正是 2b skill-在环的价值。headless 关键词层只做粗筛,精判靠 skill。
+- 官方结构化层**机制无误**(忠实报告了 PIT 披露事件);问题在 risk_type 口径,留 2b 校准,不动 2a 已审代码。
+
+**Next**: 待用户定——起草 Slice 2b(skill enrichment 契约填 web_llm + 关键词负向模式/分级 + M6.7/周报面板 + coverage 文档)。
+
+---
+
 ## 2026-06-12 — Claude `提交` (语义风险 Slice 2a headless 骨架 → local master)
 
 Codex PASS(entry below)。提交 Slice 2a 到本地 master(无 push):`runners/a_short_semantic_risk_summary.py` + `schemas/a_short_semantic_risk_summary.schema.json` + `tests/test_a_short_semantic_risk_summary.py` + `tests/test_semantic_risk_slice3_guard.py`(CI 防忘守护)+ `runners/a_short_semantic_risk_probe.py`(Sina 稳健化)+ README/register/design 更新 + `research/results/a_short/semantic_risk_probe_20260612.json`(orgId 重跑正向证据,Codex 已审 valid)。register Slice-2a 项 flip `resolved`(连同上轮 batch-gate/CI-guard 两 finding 修复)。
