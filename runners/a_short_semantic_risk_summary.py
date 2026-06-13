@@ -21,6 +21,7 @@ CI 守护(advisory 层已存在 ⇒ 强制 Slice 3 reconciliation;见 tests）�
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import sys
@@ -47,6 +48,8 @@ MIN_BATCH_ANNOUNCED = MIN_CNINFO_ANNOUNCED_CODES
 SCHEMA_NAME = "a_short_semantic_risk_summary"
 SCHEMA_VERSION = "1.0.0"
 SCHEMA_PATH = os.path.join(ROOT, "schemas", "a_short_semantic_risk_summary.schema.json")
+PATCH_SCHEMA_NAME = "a_short_semantic_risk_web_llm_patch"
+PATCH_SCHEMA_PATH = os.path.join(ROOT, "schemas", "a_short_semantic_risk_web_llm_patch.schema.json")
 DEEP_RANK_MAX = 5
 CNINFO_STATIC_HOST = "http://static.cninfo.com.cn/"
 
@@ -233,6 +236,29 @@ def build_summary(universe: dict, candidate_flags: list, as_of: str, generated_a
 _WEB_ASSESSED_RISK = ("risk_candidate", "risk", "headwind")
 
 
+def _web_llm_consistency_error(web: dict, sources: list):
+    """web_llm advisory tier 跨字段不变式(summary 与 web_llm patch 共用,单一来源避免漂移)。
+    返回错误字符串或 None。核心边界:**未检索/无证据 → 必须 unknown,绝不伪装 clear/tailwind**——
+    任何**非 unknown**(已评估)态都必须带 sources 证据(coverage);只有 `unknown` 可空 sources。"""
+    wst = web["status"]
+    if wst == "unknown":
+        if web["risk_level"] != "unknown":
+            return "web unknown ⇒ risk_level unknown"
+        if web["action"] != "no_action":
+            return "web unknown ⇒ action no_action(无证据不得带 downgrade/manual_review 动作)"
+        return None                                      # 未评估:unknown/unknown/no_action,可空 sources
+    # 已评估态(clear_light/risk_candidate/risk/tailwind/headwind)一律须有证据
+    if not sources:
+        return "web 已评估态(clear_light/tailwind/risk/…)⇒ 必须有 sources 证据,否则应 unknown(不伪装 clear)"
+    if wst == "clear_light" and web["risk_level"] != "none":
+        return "web clear_light ⇒ risk_level none"
+    if wst in _WEB_ASSESSED_RISK and web["risk_level"] not in ("low", "medium", "high"):
+        return "web 风险态 ⇒ risk_level low/medium/high"
+    if wst == "tailwind" and web["risk_level"] not in ("none", "low"):
+        return "tailwind ⇒ risk_level none/low"
+    return None
+
+
 def validate_summary_consistency(summary: dict) -> None:
     if not _is_canonical_date(summary["as_of"]):
         raise ValueError("as_of 非合法 canonical 日历日期")
@@ -284,19 +310,9 @@ def validate_summary_consistency(summary: dict) -> None:
             if not _is_canonical_date(dd) or dd > as_of:
                 raise ValueError(f"{c['ts_code']}: 事件披露日非 PIT(canonical 且 ≤ as_of)")
 
-        web = c["web_llm"]
-        wst = web["status"]
-        if wst == "unknown" and web["risk_level"] != "unknown":
-            raise ValueError(f"{c['ts_code']}: web unknown ⇒ risk_level unknown")
-        if wst == "clear_light" and web["risk_level"] != "none":
-            raise ValueError(f"{c['ts_code']}: web clear_light ⇒ risk_level none")
-        if wst in _WEB_ASSESSED_RISK:
-            if web["risk_level"] not in ("low", "medium", "high"):
-                raise ValueError(f"{c['ts_code']}: web 风险态 ⇒ risk_level low/medium/high")
-            if not c["sources"]:
-                raise ValueError(f"{c['ts_code']}: web 风险态 ⇒ 必须有 sources 证据")
-        if wst == "tailwind" and web["risk_level"] not in ("none", "low"):
-            raise ValueError(f"{c['ts_code']}: tailwind ⇒ risk_level none/low")
+        web_err = _web_llm_consistency_error(c["web_llm"], c["sources"])
+        if web_err:
+            raise ValueError(f"{c['ts_code']}: {web_err}")
 
     # batch-level cninfo sanity:批量空壳(有 PIT 公告代码数 < 门槛)时,任何"空窗口 clear"
     # (clear 且 had_pit_announcements=False)都非法——必须降级 unknown(fail-closed,防 200+空伪装全员无风险)。
@@ -386,6 +402,60 @@ def write_summary(summary: dict, out_path: str) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
     os.replace(tmp, out_path)
+
+
+# ── Slice 2b-ii web_llm enrichment 契约(skill 产出 patch,headless 校验+合并)────
+def validate_web_llm_patch(patch: dict) -> None:
+    """patch schema + 跨字段不变式 + 无重复 ts_code。web_llm 不变式复用 `_web_llm_consistency_error`。"""
+    with open(PATCH_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    jsonschema.validate(patch, schema)
+    if not _is_canonical_date(patch["target"]["as_of"]):
+        raise ValueError("patch target.as_of 非 canonical 日历日期")
+    seen = set()
+    for pc in patch["candidates"]:
+        ts = pc["ts_code"]
+        if ts in seen:
+            raise ValueError(f"patch 重复 ts_code: {ts}")
+        seen.add(ts)
+        err = _web_llm_consistency_error(pc["web_llm"], pc["sources"])
+        if err:
+            raise ValueError(f"{ts}: {err}")
+
+
+def apply_web_llm_patch(summary: dict, patch: dict) -> dict:
+    """把 skill 的 web_llm 判断合并进 summary(纯函数,返回新 dict)。**只**写 web_llm/sources/confidence/
+    summary(可选)到匹配候选;绝不碰 official_structured/boundary/rank/scan_tier/ts_code/coverage。
+    patch 不能引入 universe 外的代码;合并后整体过 `validate_summary_consistency`(authoritative)。
+    覆盖语义:同一候选的 web_llm/sources 被替换(非追加);未在 patch 内的候选保持原 web_llm(headless unknown)。"""
+    validate_web_llm_patch(patch)
+    tgt = patch["target"]
+    if tgt["as_of"] != summary["as_of"]:
+        raise ValueError("patch target.as_of 与 summary.as_of 不一致")
+    if tgt["summary_schema_name"] != summary["schema_name"] or summary["schema_name"] != SCHEMA_NAME:
+        raise ValueError("patch target.summary_schema_name 与 summary.schema_name 不一致")
+    if tgt["summary_schema_version"] != summary["schema_version"]:
+        raise ValueError("patch target.summary_schema_version 与 summary 不一致")
+    main = set(summary["universe"]["main_board_top15"])
+    by_code = {c["ts_code"]: c for c in summary["candidates"]}
+    new = copy.deepcopy(summary)
+    new_by_code = {c["ts_code"]: c for c in new["candidates"]}
+    for pc in patch["candidates"]:
+        ts = pc["ts_code"]
+        if ts not in main or ts not in by_code:
+            raise ValueError(f"patch 引入了 universe 外/不存在的候选: {ts}")
+        c = new_by_code[ts]
+        web = dict(pc["web_llm"])
+        c["web_llm"] = web                               # 替换,非追加
+        c["sources"] = [dict(s) for s in pc["sources"]]
+        c["confidence"] = pc["confidence"]
+        # summary 也是替换语义:patch 带则用;不带则按当前 official+web 态**重生**,绝不留旧 summary
+        c["summary"] = pc["summary"] if "summary" in pc else (
+            f"官方结构化: {c['official_structured']['status']}; "
+            f"web/LLM: {web['status']}/{web['risk_level']}/{web['action']}")
+        # official_structured / boundary / rank / scan_tier / ts_code 一律不动
+    validate_summary_consistency(new)                    # 合并后 web 不变式 + 全局一致性硬门
+    return new
 
 
 def build_summary_from_fetches(watch_pool, as_of: str, cninfo_results, sina_results, generated_at: str):

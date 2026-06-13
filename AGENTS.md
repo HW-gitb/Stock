@@ -348,11 +348,12 @@ When the user sends `修复` (or any implementation of a Codex-reviewed Required
 7. **Pre-Codex self-review gate (run before EVERY `起草`/`修复` handoff; detail: `docs/pre_codex_self_review_checklist.md`).** Repeated avoidable round-trips came from fixing only the named instance and not tracing a fix's ripple. Before handing to `审查`:
    - **A class-not-instance**: for a classifier/validator/enum/form-set/invariant change, cover the whole `defect-class × all exits` matrix (per-row / per-candidate / aggregate-batch / validator / schema / render / consumers) in one pass, not just the cited input.
    - **B ripple grep**: after any behavior / symbol / mechanism change, repo-grep the old symbol names, every doc sentence asserting the old behavior, and downstream consumers — update/verify ALL.
+   - **B2 contract-anchor drift guard**: when one behavior contract is repeated across runner/schema/README/coverage docs, designate a single stable contract anchor, make other docs point to it instead of re-describing the full matrix, and add a focused doc-drift test that fails on the old wording.
    - **C reverse-failure**: confirm the fix did not create the opposite error (误报↔漏报, over↔under-suppress); add a reverse-direction test.
    - **D ambiguous NL**: do not enumerate keywords/forms for ambiguous natural-language classification (whack-a-mole) — choose the narrowest safe side or delegate to the skill/LLM layer.
    - **E route-doc single-state**: durable route docs (`CURRENT`, READMEs) carry only the FINAL mechanism + settled facts; repair history → one "SUPERSEDED" line. (Transient next-actor/next-command gate goes only in `SESSION_LOG` top; `system_risk_register` MAY hold stable open-risk status + closure criteria.)
    - **F** the existing pre-flight sweep (non-finite / canonical dates / cross-field invariants / API footguns / design-self-check / doc↔behavior).
-   **Proof-of-use**: the `起草`/`修复` SESSION_LOG entry must carry a one-line `Pre-Codex self-review: A-F checked / N-A` with the actual grep/test/schema evidence (especially B/C/E). "Tests passing ≠ design closure."
+   **Proof-of-use**: the `起草`/`修复` SESSION_LOG entry must carry a one-line `Pre-Codex self-review: A-F checked / N-A; B2 applied when applicable` with the actual grep/test/schema evidence (especially B/B2/C/E). "Tests passing ≠ design closure."
 
 This judge-before-execute duty is symmetric to the Codex adversarial review standard; "reviewed" or "Required" does not remove Claude's responsibility to catch a wrong instruction before it lands.
 

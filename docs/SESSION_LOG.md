@@ -1,10 +1,313 @@
-﻿# Session Log
+# Session Log
 
 跨 LLM 认知交接日志。**reverse-chronological，最新 entry 在顶部**。
 
 本文件存在的目的：commit message 和 handoff 记录"改了什么 / 为什么改"，但不记录 "试过什么没成 / 试过的方案为什么被否决 / 当前 LLM 的纠结点 / 下一步该做什么的判断"。这一层认知信息在跨 LLM 协作时最容易丢失。
 
 进项目前每个 LLM 必读：本文顶部 1-3 条最近 entry。完整规则见 `AGENTS.md §Session log discipline`。
+
+---
+
+## 2026-06-13 — Claude `提交` (语义风险 Slice 2b-ii-A web_llm enrichment 契约 → local master)
+
+Codex PASS(entry below)。提交 Slice 2b-ii-A(web_llm enrichment 契约的 headless 半)到本地 master(无 push)。一次提交本切片整 pending set(Codex 作为同一集审过):
+- 代码:`runners/a_short_semantic_risk_summary.py`(`validate_web_llm_patch` / `apply_web_llm_patch` / 共享 `_web_llm_consistency_error`,evidence 不变式:非 unknown 须 sources、unknown⇒unknown/no_action)+ `schemas/a_short_semantic_risk_web_llm_patch.schema.json` + `tests/test_a_short_semantic_risk_summary.py`。
+- 契约/文档:`docs/a_short_semantic_risk_contract.md`(稳定契约锚点)+ `docs/a_short_semantic_risk_coverage.md` + `tests/test_a_short_semantic_risk_contract_docs.py`(B2 drift-guard)+ README 路由 + `AGENTS.md` B2 anchor 规则 + `docs/pre_codex_self_review_checklist.md`(F 补 BOM 检查)。
+- register:本切片 5 条 finding(stale-summary / schema-name / clear+tailwind-coverage / 48h / unknown-action(代码+doc)/ enrichment 契约)全 flip `resolved`。
+
+**经多轮审查**:stale summary → schema_name → clear/tailwind 无证据 → unknown 无证据 action → 文档矩阵 de-dup(B2)→ BOM。
+
+**Pre-Codex self-review: A-F checked** — 纯提交;register 全 resolved 单态;route-doc guard 14/14;全 changeset 无 BOM/FFFD=0(已含新 checklist F BOM 检查);advisory-only / V14.2 frozen / egs_main 未碰 / 无 push。
+
+**Next**: 见下方"全项目下一步"。
+
+---
+
+## 2026-06-13 — Codex `审查` PASS (语义风险 Slice 2b-ii-A — BOM repair + contract clean)
+
+**Scope**: re-reviewed the latest Claude BOM repair after the prior Codex FAIL. Covered `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `docs/pre_codex_self_review_checklist.md`, `AGENTS.md`, `docs/README.md`, `docs/a_short_semantic_risk_contract.md`, `docs/a_short_semantic_risk_coverage.md`, `schemas/a_short_semantic_risk_web_llm_patch.schema.json`, `runners/a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_summary.py`, and `tests/test_a_short_semantic_risk_contract_docs.py`.
+
+**Verdict**: PASS. The previous BOM blocker is repaired, and no Required findings remain for Slice 2b-ii-A.
+
+**What is clean**:
+- Encoding: every changed/new file in this slice decodes as UTF-8, has no UTF-8 BOM prefix, no U+FFFD replacement characters, and no trailing whitespace. `docs/SESSION_LOG.md` and `docs/system_risk_register.md` now both start with `# S`, not `EF BB BF`.
+- Process guard: `docs/pre_codex_self_review_checklist.md` now explicitly includes UTF-8-without-BOM checking, so this exact pre-flight blind spot is covered going forward.
+- Contract behavior: patch validator rejects `unknown/unknown/downgrade`, `unknown/unknown/manual_review_required`, `unknown/unknown/observe`, empty-source `clear_light`, and empty-source `tailwind`; summary consistency rejects `unknown/unknown/downgrade`; `unknown/unknown/no_action` with empty sources remains accepted.
+- Contract anchoring: README / coverage / patch-schema description route web_llm rules to `docs/a_short_semantic_risk_contract.md`; old weak active prose only appears inside `assertNotIn` regression tests.
+
+**Clarification**: Claude's top entry says "零内容/行为改动"; read that as zero business/runtime behavior change. There is one intentional process-doc content change: the checklist now includes the BOM pre-flight check. This is acceptable and not a blocker.
+
+**Verification**: semantic-risk contract/summary/guard/probe suite = 114 OK; route-doc guard = 14 OK; summary/probe/web-patch schema Draft7 meta = 3 OK; `py_compile` OK; `git diff --check` OK (CRLF warnings only); independent web_llm evidence probes all match the contract.
+
+**Register**: no new material risk. Existing semantic-risk Hot Queue items can be flipped to `resolved` as part of `提交` after this PASS is committed.
+
+**Next**: Claude `提交`.
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-A — 去除 register/SESSION_LOG 的 UTF-8 BOM)
+
+**Finding-1 (P3, BOM churn) 成立**:`docs/system_risk_register.md` 被加了 UTF-8 BOM(`EF BB BF`),durable route/risk 文档不该带 BOM。**根因:我的 pre-flight 只查 U+FFFD、没查 BOM(checklist F 编码盲点);BOM 大概率某次编辑/linter 触碰引入。**
+
+**Fix(修整类不修实例)**:.NET 裸字节读写去 BOM(避免 PowerShell `Out-File -Encoding utf8` 反而写回 BOM),保内容不变。扫**整个 changeset 10 文件**,除 Codex 点的 register 外,**ripple 还抓到 SESSION_LOG.md 也带 BOM**(Codex 没点),一并去除;其余 8 个无 BOM。两文件现以 `# S`(23 20 53)开头。
+- **checklist F 补 BOM 检查**(`docs/pre_codex_self_review_checklist.md`):编码项加"UTF-8 无 BOM(查 `EF BB BF` 前缀,不只 U+FFFD)",堵这个 pre-flight 盲点。
+
+**Pre-Codex self-review: A-F checked** — A:BOM 作整类扫全 changeset(非只修 register 一处),多抓 SESSION_LOG;B:扫确认仅这两文件有 BOM;C:裸字节去 3 字节不改内容(78 tests + FFFD=0 验内容完好);F:盲点已补进 checklist。
+
+**Boundary**: 纯编码 hygiene,零内容/行为改动;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 BOM 去除)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-ii-A — B2 de-duplicate repair, BOM churn)
+
+**Scope**: reviewed the latest Claude B2 de-duplicate repair after the prior Codex PASS. Covered `docs/SESSION_LOG.md` top ordering, `docs/README.md`, `docs/a_short_semantic_risk_contract.md`, `docs/a_short_semantic_risk_coverage.md`, `schemas/a_short_semantic_risk_web_llm_patch.schema.json`, `tests/test_a_short_semantic_risk_contract_docs.py`, `runners/a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_summary.py`, and `docs/system_risk_register.md`.
+
+**Verdict**: FAIL, but only for a hidden document hygiene blocker. The B2 contract-anchor repair itself is correct: active README / coverage / patch-schema prose now routes to `docs/a_short_semantic_risk_contract.md` instead of restating the old partial web_llm matrix, and regression tests prevent the old weak wording from returning.
+
+**Finding-1 (P3, hidden encoding churn in a route/risk doc)**: `docs/system_risk_register.md` now starts with a UTF-8 BOM (`bytes0 = b'\xef\xbb\xbf#'`), shown in git diff as `+﻿# System Risk Register`. This is unrelated to the semantic-risk logic but should not be committed into a durable route/risk register file. Required repair: rewrite `docs/system_risk_register.md` as UTF-8 without BOM, preserving all current content, then rerun the same checks.
+
+**Clean / verified**:
+- Contract behavior probes: patch validator rejects `unknown/unknown/downgrade`, `unknown/unknown/manual_review_required`, `unknown/unknown/observe`, empty-source `clear_light`, and empty-source `tailwind`; summary consistency rejects `unknown/unknown/downgrade`; `unknown/unknown/no_action` with empty sources is accepted.
+- Active-doc grep: old weak wording only appears inside `assertNotIn` tests, not in README / coverage / schema description.
+- Encoding: new contract/coverage docs are valid UTF-8 without mojibake or U+FFFD; the apparent terminal mojibake was display-layer only.
+
+**Verification**: semantic-risk contract/summary/guard/probe suite = 114 OK; route-doc guard = 14 OK; summary/probe/web-patch schema Draft7 meta = 3 OK; `git diff --check` OK (CRLF warnings only). Text check found FFFD/trailing whitespace = 0 for reviewed files, but BOM = true for `docs/system_risk_register.md`.
+
+**Register**: no new business/system risk registered; this is submit-blocking hygiene on an already-touched durable risk document.
+
+**Next**: Claude `修复` (remove the BOM only, preserve content).
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-A — 文档矩阵 de-duplicate 到契约锚点,B2)
+
+**Finding-1 (P3, doc drift) 成立**:代码已正确拒 `unknown/unknown/downgrade`,但 active 路由/schema 文档(coverage/README/schema desc)仍复述旧/部分 unknown 不变式、漏 `unknown ⇒ action no_action`,与契约不一致、违反 B2。**根因:我上轮修代码时没做彻底的 checklist B(连带 grep)——改了 helper+测试,却没 grep 所有复述旧 unknown 不变式的文档。**
+
+**Fix(选 B2 强制的 de-duplicate,不是补全措辞)**:
+- 契约锚点 `a_short_semantic_risk_contract.md` web_llm 段补全为 `unknown ⇒ risk_level unknown AND action no_action`(原缺 action 半句)。
+- coverage §web_llm 矩阵 → 单一来源指针;README Slice-2a 行 + 契约 route 行去掉部分复述 → topic gloss + 指针;patch schema description → 指向契约不列规则。
+- drift 测试重写:coverage/README/schema 必须**指向契约且不复述矩阵/旧弱措辞**;保留 `unknown/unknown/no_action` 行为锚 + 契约锚 + 48h。
+
+**Pre-Codex self-review: A-F checked; B2 applied** — A:把"所有复述旧 unknown 不变式的 active 文档"作整类一次清(coverage/README:78/README:76 契约行/schema desc——比 Codex 点的 3 处多抓了 README:76);**B(本轮重点,补上轮欠的)**:`Select-String` 全扫 README/coverage 残留矩阵措辞=0;B2 单一锚点=契约其余指向;C:de-dup 不改行为(代码已锁)无反向;E register 注记单态;F:128 tests OK、patch schema meta OK、FFFD=0、route-doc guard 14/14。
+
+**Boundary**: 纯文档/测试(无 runner 行为改动);advisory-only;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 B2 de-duplicate)。
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-A — unknown 态须 action no_action)
+
+**Finding-1 (P2) 成立**:`_web_llm_consistency_error` 的 unknown 分支只校验 risk_level,漏了 action → `unknown/unknown/downgrade`(空 sources)被接受,违反契约(`docs/a_short_semantic_risk_contract.md` line 11-12:无证据时 web 须 `unknown/unknown/no_action`)。同一证据边界类、经 action 字段(我上轮 unknown 分支只覆盖 risk_level 一格、漏 action 格)。
+- Fix:helper(summary+patch 共享)unknown 分支加 `action == no_action` 校验。`unknown/unknown/no_action` 空 sources 仍放行。
+- 回归(两侧,Codex 要求):patch validator(contract-docs `test_behavior_anchor_unknown_requires_no_action`)+ summary consistency(`test_web_unknown_with_soft_action_raises`)+ 契约 drift-guard 锚定 unknown 三元组。
+
+**Pre-Codex self-review: A-F checked** — A:unknown 态的"完整中性三元组(unknown/unknown/no_action)"两格都覆盖(risk_level+action);**scope 守住**——按 Codex de-scope 未扩到完整 status×action 矩阵(契约只锁 unknown 三元组),non-blocking 的 clear/tailwind/risk-action 观察已承认+deferred,不静默扩。B:helper 单一来源,summary+patch 两侧自动同改;契约文档已述该规则,无新漂移。C 反向:强制 unknown⇒no_action 不引入漏报(无证据→中性,更保守)。D N-A。E register 注记单态。F:127 tests OK、py_compile OK、FFFD=0、route-doc guard 14/14。
+
+**Boundary**: advisory-only;不碰 official/boundary;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 unknown-action 不变式)。
+
+---
+
+## 2026-06-13 — Codex `审查` PASS (语义风险 Slice 2b-ii-A — evidence-contract + contract-anchor clean)
+
+**Scope**: re-reviewed the working-tree repair after the prior `unknown ⇒ action no_action` doc-drift FAIL. Covered `runners/a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_contract_docs.py`, `docs/a_short_semantic_risk_contract.md`, `docs/a_short_semantic_risk_coverage.md`, `schemas/a_short_semantic_risk_web_llm_patch.schema.json`, `docs/README.md`, `docs/system_risk_register.md`, and the adjacent B2 process rule in `AGENTS.md`.
+
+**Verdict**: PASS. No Required findings remain for Slice 2b-ii-A.
+
+**What is now clean**:
+- Behavior: `_web_llm_consistency_error` is the shared summary+patch authority. Empty-source `clear_light` / `tailwind` are rejected; `unknown/unknown/no_action` with empty sources is accepted; `unknown/unknown/downgrade|manual_review_required|observe` is rejected; stale web summary replacement and summary-schema-name matching are enforced.
+- Contract anchoring: `docs/a_short_semantic_risk_contract.md` is the single durable web_llm invariant source. README / coverage / patch-schema description no longer restate a partial matrix; they route to the contract anchor instead.
+- 48h wording: coverage states official_structured is configured-lookback PIT official-announcement evidence (default 90d), not an exact 48h freshness implementation.
+- Boundary: advisory-only; no production/EGS/Phase5 behavior, data fetch, hard veto, historical-backtest claim, or full status/action matrix expansion.
+
+**Independent probes**: patch validator rejects `unknown/unknown/downgrade`, `unknown/unknown/manual_review_required`, and `unknown/unknown/observe`; summary consistency rejects `unknown/unknown/downgrade`; patch validator accepts `unknown/unknown/no_action` with empty sources.
+
+**Verification**: semantic-risk contract/summary/guard/probe suite = 114 OK; route-doc guard = 14 OK; summary/probe/web-patch schema Draft7 meta = 3 OK; `py_compile` OK; `git diff --check` OK (CRLF warnings only); custom text/FFFD/trailing-whitespace check OK. Old weak active prose grep only matches `assertNotIn` regression tests.
+
+**Register**: existing semantic-risk Hot Queue items may flip to `resolved` during `提交` after this PASS is committed; no new material risk was found.
+
+**Next**: Claude `提交`.
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-ii-A — unknown-action doc drift)
+
+**Scope**: reviewed the working-tree repair for `R-SEMANTIC-WEBPATCH-UNKNOWN-ACTION-WITHOUT-EVIDENCE` across `runners/a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_contract_docs.py`, `docs/a_short_semantic_risk_contract.md`, `docs/a_short_semantic_risk_coverage.md`, `schemas/a_short_semantic_risk_web_llm_patch.schema.json`, `docs/README.md`, and `docs/system_risk_register.md`.
+
+**Verdict**: FAIL. Code behavior is repaired, but active route/schema docs still restate the old weaker invariant and omit `unknown ⇒ action no_action`.
+
+**Finding-1 (P3, route/schema summaries omit the newly fixed `unknown ⇒ action no_action` invariant)**: `_web_llm_consistency_error` now correctly rejects no-evidence actions: independent probes show `unknown/unknown/downgrade`, `unknown/unknown/manual_review_required`, and `unknown/unknown/observe` are rejected in patch validation, `summary` consistency rejects `unknown/unknown/downgrade`, and `unknown/unknown/no_action` with empty sources remains accepted. However the active docs still restate a partial matrix. `docs/a_short_semantic_risk_coverage.md:29` says `unknown ⇒ risk_level unknown` and only says action is one of the enum values; it omits `unknown ⇒ action no_action`. `docs/README.md:78` says unknown may have empty sources and must keep `risk_level unknown`, also omitting `action no_action`. `schemas/a_short_semantic_risk_web_llm_patch.schema.json:4` describes the cross-field authority as unknown may have empty sources plus non-unknown requires sources, again omitting the neutral-action rule. This conflicts with the stable contract at `docs/a_short_semantic_risk_contract.md:11-12` and violates the B2 rule just added to avoid partial repeated contracts. Required repair: update these active summaries to either stop restating the matrix and point only to the stable contract, or explicitly include `unknown ⇒ risk_level unknown AND action no_action`; extend `tests/test_a_short_semantic_risk_contract_docs.py` so coverage/README/schema prose cannot regress to the weaker wording again.
+
+**Already verified clean**: the runner-level blocker is fixed. Probe output: `PATCH_UNKNOWN_downgrade REJECTED`, `PATCH_UNKNOWN_manual_review_required REJECTED`, `PATCH_UNKNOWN_observe REJECTED`, `SUMMARY_UNKNOWN_DOWNGRADE_REJECTED`, `PATCH_UNKNOWN_NO_ACTION_ACCEPTED`. Semantic-risk contract/summary/guard/probe suite = 113 OK; route-doc guard = 14 OK.
+
+**Register**: recorded as `R-SEMANTIC-WEBPATCH-UNKNOWN-ACTION-DOC-DRIFT` in `docs/system_risk_register.md`.
+
+**Boundary**: no production/EGS/Phase5 behavior, data fetch, hard veto, historical-backtest claim, or full status/action matrix expansion is authorized. This is a documentation/contract-drift repair only.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-ii-A — unknown action evidence-contract gap)
+
+**Scope**: reviewed current working tree for the A-short semantic-risk Slice 2b-ii-A evidence-contract repair after the prior FAILs: `runners/a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_summary.py`, `schemas/a_short_semantic_risk_web_llm_patch.schema.json`, `docs/a_short_semantic_risk_coverage.md`, `docs/a_short_semantic_risk_contract.md`, `tests/test_a_short_semantic_risk_contract_docs.py`, `docs/README.md`, and the related risk-register note. The extra B2 contract-anchor process-doc change in `AGENTS.md` was treated as adjacent hygiene, not as business logic.
+
+**Verdict**: FAIL. The previously named blockers are largely repaired: empty-source `clear_light` is rejected, empty-source `tailwind` is rejected, empty-source `unknown` is accepted, stale `summary` is replaced, schema-name mismatch is rejected, coverage no longer overclaims exact 48h, and README/coverage now route to the stable contract. One material evidence-contract gap remains.
+
+**Finding-1 (P2, `unknown` can still carry a no-evidence action)**: `runners/a_short_semantic_risk_summary.py:244` returns success for `web_llm.status == "unknown"` once `risk_level == "unknown"`; it does not require `action == "no_action"`. This conflicts with `docs/a_short_semantic_risk_contract.md:11`, which states that 未检索/检索失败/证据缺失时 web must remain `unknown/unknown/no_action`. Independent probe: `validate_web_llm_patch` accepts `web_llm.status=unknown, risk_level=unknown, action=downgrade, sources=[]`. Materiality: a candidate with no search/evidence can still carry a soft downgrade/manual-review action into the advisory/M6.7 layer, which is the same evidence-boundary class as "unknown must not masquerade as clear", just through the action field. Required repair: enforce `unknown ⇒ risk_level unknown AND action no_action` in the shared `_web_llm_consistency_error`, and add regression tests for both patch validation and summary consistency rejecting `unknown/unknown/downgrade` (or `manual_review_required`) while preserving acceptance of `unknown/unknown/no_action` with empty `sources`.
+
+**Non-blocking observation**: probes also show `clear_light/downgrade`, `tailwind/downgrade`, and `risk/no_action` are accepted. I am not making that a Required fix in this round because the current stable contract only explicitly locks the `unknown/unknown/no_action` triple and otherwise merely restricts the action enum to non-hard-veto/non-buy actions. A full status/action matrix can be designed later if desired.
+
+**Register**: recorded as `R-SEMANTIC-WEBPATCH-UNKNOWN-ACTION-WITHOUT-EVIDENCE` in `docs/system_risk_register.md`.
+
+**Verification**: semantic-risk contract/summary/guard/probe suite = 110 OK; route-doc guard = 14 OK; `git diff --check` OK (CRLF warnings only); `py_compile` OK. Independent probe result: `UNKNOWN_DOWNGRADE_ACCEPTED`, which is the blocker above.
+
+**Boundary**: advisory-only; no production/EGS/Phase5 behavior, data fetch, hard veto, or historical-backtest claim is authorized. V14.2 remains frozen. 2b-ii-B skill prompts and weekly-panel wiring are still not part of this PASS gate.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Codex user-authorized implementation (semantic-risk contract-doc drift guard)
+
+**Scope**: user approved the lightweight repair for the repeated "code/schema/doc contract drift" pattern. This implementation is process/document/test scope only; no EGS, production scoring, provider call, data fetch, hard veto, historical-backtest, or V14.2 behavior changed.
+
+**Changed**:
+- Added `docs/a_short_semantic_risk_contract.md` as the stable A-short semantic-risk contract anchor: advisory-only boundary, official_structured PIT/default-lookback wording, web_llm evidence invariant, patch merge whitelist, and drift-guard owner.
+- Updated `docs/a_short_semantic_risk_coverage.md`, `docs/README.md`, and `schemas/a_short_semantic_risk_web_llm_patch.schema.json` to point at the stable contract and stop restating the stale weaker web invariant.
+- Added `tests/test_a_short_semantic_risk_contract_docs.py` to bind behavior and docs: empty-source `clear_light`/`tailwind` are rejected, empty-source `unknown` is accepted, README/coverage old wording is rejected, and the 90-day-not-exact-48h caveat is present.
+- Added the general B2 contract-anchor drift-guard rule to `AGENTS.md` so future repeated behavior contracts must have one stable anchor plus a focused doc-drift test.
+- Updated `docs/system_risk_register.md` Hot Queue note for `R-SEMANTIC-COVERAGE-WEB-INVARIANT-STALE` to describe the working-tree repair; status still resolves only after re-`审查` PASS + `提交`.
+
+**Verification**: semantic-risk contract/doc tests 5 OK; semantic-risk summary/probe/guard suite 105 OK; combined semantic-risk suite 110 OK; route-doc guard 14 OK; summary/probe/web-patch schema meta OK; `py_compile` OK; FFFD=0; `git diff --check` OK (CRLF warnings only).
+
+**Boundary**: this does not complete Slice 2b-ii-B skill prompts or weekly-pipeline panel wiring; it only removes the recurring contract drift gap for the current semantic-risk layer and records the generic guardrail.
+
+**Next**: `审查`.
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-ii-A — web_llm evidence invariant docs drift)
+
+**Scope**: reviewed current working tree after commit `d47db96`: tracked changes in `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `runners/a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_summary.py`; untracked `docs/a_short_semantic_risk_coverage.md`, `schemas/a_short_semantic_risk_web_llm_patch.schema.json`. Re-reviewed the previous Required fixes and the new repair for "non-unknown web status must have evidence".
+
+**Verdict**: FAIL, but the remaining issue is documentation/contract drift, not runner behavior. Code-level repairs are correct: `clear_light` with empty sources is rejected, `tailwind` with empty sources is rejected, `unknown` with empty sources is accepted, stale-summary replacement remains fixed, and schema-name mismatch remains rejected.
+
+**Finding-1 (P3, coverage/route docs still describe the old weaker web evidence invariant)**: `docs/a_short_semantic_risk_coverage.md` still states the web invariant as `风险态(risk_candidate/risk/headwind) ⇒ ... 必有 sources`, then separately lists `clear_light ⇒ risk_level none` and `tailwind ⇒ none/low`. That is the old weaker contract and omits the actual new rule implemented in `_web_llm_consistency_error`: **any non-unknown web status** (`clear_light`, `tailwind`, `risk_candidate`, `risk`, `headwind`) must carry `sources`; only `unknown` may have empty sources. `docs/README.md` also has an older Slice-2a route sentence summarizing `validate_summary_consistency` as `web risk-status ⇒ sources required`, which is no longer the full validator contract. Materiality: this is exactly the class of doc-contract drift that can cause 2b-ii-B or a later maintainer to reintroduce empty-source `clear_light`/`tailwind` while believing the coverage doc allows it. Required fix: update the coverage doc web_llm invariant bullet and the README validator summary to say "non-unknown / evaluated web status requires sources; unknown may have empty sources".
+
+**Already verified clean**: prior P2 behavior blocker fixed. `clear_light_empty_sources=rejected`; `tailwind_empty_sources=rejected`; `unknown_empty_sources=accepted`. Stale-summary probe: `stale_present=False`, `sources_len=1`. Schema-name mismatch probe rejected.
+
+**Register**: recorded as `R-SEMANTIC-COVERAGE-WEB-INVARIANT-STALE` under the existing semantic-risk web_llm Hot Queue item. No new production/EGS/Phase5 behavior, data fetch, hard veto, or historical-backtest claim is authorized.
+
+**Verification**: semantic-risk/probe/guard tests = 105 OK; route-doc guard = 14 OK; summary/probe/web-patch schema Draft7 meta OK; `py_compile` OK; FFFD=0; `git diff --check` only CRLF warnings. `docs/a_short_semantic_risk_coverage.md` exact 48h wording is repaired.
+
+**Boundary**: advisory-only; no EGS/Phase5/production-path write/hard-veto/historical-backtest; V14.2 frozen; `egs_main` untouched.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-A — 非 unknown 态须有证据 + coverage 48h 收措辞)
+
+两条都成立:
+
+**Finding-1 (P2, clear/tailwind 无证据) ✅**:又是 unknown-not-clear 核心边界——我只对 risk 态要 sources,`clear_light`/`tailwind` 空 sources 也被接受 → 无证据的清白/顺风结论与"没检索"无法区分。
+- Fix:`_web_llm_consistency_error`(summary+patch 共享)改为**任何非 `unknown` 态都必须有 sources**;只有 `unknown` 可空。headless summary(web 恒 unknown)不受影响。
+- 测试:clear_light 空 sources→拒、tailwind 空 sources→拒、unknown 空 sources→放行;既有 patch 测改为带证据(`_pc` 默认 sources 非空)。
+
+**Finding-2 (P3, 48h 过度声称) ✅**:coverage 文档把"监管48h"说成 official_structured 已建,但实际 90 天 lookback、只 ≤as_of、无 48h 窗口。
+- Fix:措辞改为"配置 lookback 内 PIT 官方公告证据,非精确 48h;精确时效/媒体负面属 2b-ii-B skill 或未来 recency 字段"。
+
+**Pre-Codex self-review: A-F checked** — A:把"非 unknown ⇒ 须证据"作为整类一条规则覆盖所有已评估态(clear_light/tailwind/risk*),非只补 clear;B ripple-grep:helper 为单一来源,headless summary web=unknown 不回归(119 tests 确认);C 反向:要求 clear 带证据不会反向漏报(无证据→留 unknown 更保守);D N-A;E register 注记单态;F:py_compile OK、FFFD=0、119 tests OK、route-doc guard 14/14。
+
+**Boundary**: advisory-only;不碰 official/boundary;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 evidence 不变式 + coverage 措辞)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-ii-A — web_llm patch evidence contract)
+
+**Scope**: reviewed current working tree after commit `d47db96`: tracked changes in `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `runners/a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_summary.py`; untracked `docs/a_short_semantic_risk_coverage.md`, `schemas/a_short_semantic_risk_web_llm_patch.schema.json`. Re-reviewed the prior Codex FAIL repairs plus the new web_llm patch schema/merge contract, tests, coverage doc, README route row, and relevant prompt/design assertions.
+
+**Verdict**: FAIL。上轮两个 Required 已实际修复: stale summary 探针现在 `stale_present=False`; schema-name mismatch 探针现在 rejected。新的 blocker 是 web_llm patch 仍允许无检索证据的正向/清白结论,会破坏 "未检索/失败必须 unknown,不能伪装 clear" 的核心边界。
+
+**Finding-1 (P2, clear/tailwind without evidence can masquerade unknown as clear)**: `validate_web_llm_patch` / `_web_llm_consistency_error` currently requires `sources` only for risk statuses (`risk_candidate` / `risk` / `headwind`). Independent probes show both `clear_light/none/no_action` with `sources=[]` and `tailwind/none/observe` with `sources=[]` are accepted. This conflicts with the frozen design text in `docs/a_short_semantic_risk_top15_enrichment_design_20260612.md`: "未检索/失败→unknown,绝不伪装 clear", "无命中但检索成功→clear_light(须带 source coverage / checked_at / scope)", and Slice-2 tests requirement "sources·date·confidence·action 必填". Materiality: a skill or future weekly panel can present a web/LLM `clear_light` or `tailwind` conclusion with no source/coverage evidence, which is indistinguishable from "not actually checked" and can under-warn the user. Required fix: encode a positive evidence/coverage invariant before any non-unknown web status can be written. Recommended narrow repair: require `sources` (or a newly explicit per-candidate `checked_scope`/coverage object) for `clear_light` and `tailwind` as well as risk statuses; if no source/coverage check exists, status must remain `unknown/unknown/no_action`. Add regression tests rejecting `clear_light` with empty coverage and `tailwind` with empty coverage, and update existing tests that currently treat empty-source clear patches as valid.
+
+**Finding-2 (P3, coverage doc overclaims exact 48h regulatory coverage)**: `docs/a_short_semantic_risk_coverage.md` maps "监管 48h" to `official_structured(cninfo PIT 公告...)` and says the structured part is built, but the actual cninfo runner default is `--cninfo-lookback-days 90` and `build_official_structured` only filters `disclosure_date <= as_of`; it does not enforce a 48h recency window. This is not a code contamination bug, but the coverage map should not imply exact 48h implementation. Required doc repair: state that official_structured currently provides broader PIT official-announcement evidence over the configured lookback, while exact 48h freshness / media-negative judgment remains a 2b-ii-B skill/prompt or future recency-field responsibility.
+
+**Register**: material contract/doc gaps recorded in `docs/system_risk_register.md` as `R-SEMANTIC-WEBPATCH-CLEAR-WITHOUT-COVERAGE`, `R-SEMANTIC-WEBPATCH-TAILWIND-WITHOUT-COVERAGE`, and `R-SEMANTIC-COVERAGE-48H-OVERCLAIM`.
+
+**Verification**: targeted semantic-risk/probe/guard tests = 102 OK; route-doc guard 14 OK; summary/probe/web-patch schema Draft7 meta OK; `py_compile` OK; FFFD=0; `git diff --check` produced only CRLF warnings. Independent probes: stale-summary replacement repaired; schema-name mismatch repaired; `clear_light_empty_sources=accepted`; `tailwind_empty_sources=accepted`.
+
+**Boundary**: advisory-only; no EGS/Phase5/production-path write/hard-veto/historical-backtest; V14.2 frozen; `egs_main` untouched.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Claude `修复` (Slice 2b-ii-A — patch merge 替换不全 + target schema_name 未校验)
+
+两条都成立(我的 merge 矩阵漏了两格,checklist A 没把"所有可替换字段都真替换"+"所有 target 字段都校验"列全):
+
+**Finding-1 (P2, stale summary) ✅**:`apply_web_llm_patch` 声称替换语义,却只在 patch 带 summary 时覆盖 → risk(带 summary)→ clear(不带 summary)后旧风险 summary 残留,与当前 web 态矛盾。
+- Fix:每次 patch 候选**总是**设 `c["summary"]`——带则用,不带则按当前 official+web 态**重生**,绝不留旧文。
+
+**Finding-2 (P3, schema_name 未校验) ✅**:只校验 as_of+version,漏 summary_schema_name。
+- Fix:merge 前校验 `target.summary_schema_name == summary.schema_name == SCHEMA_NAME`。
+
+**Pre-Codex self-review: A-F checked** — A:补全"替换字段矩阵"(web_llm/sources/confidence/**summary**)+"target 校验矩阵"(as_of/version/**schema_name**),每格一回归测试;B ripple-grep:summary 重生用现有 official_structured 字段,无新符号,既有 50 patch/summary 测无回归;C 反向:重生 summary 反映当前态(降级后不残留旧风险文)= 正是反向失败的修复,`test_no_stale_summary_after_clear_overwrite` 守;D N-A;E register 注记非流水账;F:py_compile OK,FFFD=0,116 tests OK。
+
+**Boundary**: advisory-only;不碰 official/boundary;V14.2 frozen;egs_main 未碰。
+
+**Next**: `审查`(复审 summary 替换 + schema_name 校验)。
+
+---
+
+## 2026-06-13 — Codex `审查` FAIL (语义风险 Slice 2b-ii-A — web_llm patch merge contract)
+
+**Scope**: reviewed current working tree after commit `d47db96`: tracked changes in `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `runners/a_short_semantic_risk_summary.py`, `tests/test_a_short_semantic_risk_summary.py`; untracked `docs/a_short_semantic_risk_coverage.md`, `schemas/a_short_semantic_risk_web_llm_patch.schema.json`.
+
+**Verdict**: FAIL。Slice 2b-ii-A 的方向正确:patch schema + validate/apply 纯函数 + shared web invariant + coverage doc 都符合 advisory-only 边界。但 merge 契约还有两个测试未覆盖的漏洞。
+
+**Finding-1 (P2, stale web summary after replacement)**: `apply_web_llm_patch` 声称 `web_llm/sources/confidence/summary` 是替换语义,但代码只在 patch candidate 携带 `summary` 时才覆盖 `c["summary"]`。独立探针:先对候选打 `risk/high/manual_review_required + summary="old risk summary"`,再用同一候选的 `clear_light/none/no_action` patch(不带 summary)覆盖,结果 `web_llm.status=clear_light`, `sources=[]`,但 `summary` 仍是 `old risk summary`。这会让面板/人工阅读看到与当前 web 状态相反的风险说明。Required fix: 明确定义 optional summary 的替换语义;建议每次候选被 patch 时都设置 `c["summary"] = pc.get("summary", "")` 或其他明确中性值,并加回归测试:风险 patch 带 summary → clear patch 不带 summary 后旧 summary 必须消失。
+
+**Finding-2 (P3, target summary_schema_name not enforced)**: patch schema 有 `target.summary_schema_name`,但 `apply_web_llm_patch` 只校验 `as_of` 和 `summary_schema_version`。独立探针把 summary 的 `schema_name` 改成 `wrong_schema_name`,version 保持 `1.0.0`;patch 仍被接受并返回 `schema_name=wrong_schema_name`。Required fix: merge 前校验 `patch["target"]["summary_schema_name"] == summary["schema_name"] == "a_short_semantic_risk_summary"`(或等价),并加回归测试。
+
+**Register**: material contract gaps recorded in `docs/system_risk_register.md` as `R-SEMANTIC-WEBPATCH-STALE-SUMMARY` and `R-SEMANTIC-WEBPATCH-SCHEMA-NAME-MISMATCH`.
+
+**Verification**: `tests.test_a_short_semantic_risk_summary + tests.test_semantic_risk_slice3_guard + tests.test_a_short_semantic_risk_probe` = 100 tests OK; route-doc guard 14/14 OK; summary/probe/web-patch schema meta OK; `py_compile` OK. These pass because the two adversarial probes above are not yet covered by tests.
+
+**Boundary**: advisory-only; no EGS/Phase5/production-path write/hard-veto/historical-backtest; V14.2 frozen; `egs_main` untouched.
+
+**Next**: Claude `修复`.
+
+---
+
+## 2026-06-13 — Claude `起草` (语义风险 Slice 2b-ii-A — web_llm enrichment 契约 + coverage 文档)
+
+**切片**: 2b-ii 拆 **2b-ii-A(headless 契约+merge+coverage,可测)+ 2b-ii-B(skill prompts + 面板接入 weekly,skill 在环)**。本轮 2b-ii-A。
+
+**交付物**:
+- `schemas/a_short_semantic_risk_web_llm_patch.schema.json` — skill 产出的 patch 契约(per-candidate web_llm status/risk_level/action + sources + confidence + 可选 summary;boundary advisory_only/not_deterministic_veto/never_touches_official const)。
+- `runners/a_short_semantic_risk_summary.py`:`validate_web_llm_patch`(schema + canonical target.as_of + 无重复 ts_code + web 不变式)、纯 `apply_web_llm_patch`(校验 + target.as_of/schema-version 匹配 + 拒 universe 外代码 + **只**写 web_llm/sources/confidence/summary、**绝不**碰 official_structured/boundary/rank/scan_tier/ts_code/coverage、替换非追加、合并后跑 `validate_summary_consistency` 作 authority)。web 不变式抽成共享 `_web_llm_consistency_error`(summary 与 patch 单一来源,防漂移)。
+- `docs/a_short_semantic_risk_coverage.md` — 覆盖 map。
+
+**Pre-Codex self-review: A-F checked** —
+- **A 类不修实例**:patch merge 不变式矩阵一次覆盖——target 不匹配 / universe 外代码 / 重复 ts / 改 official·boundary(schema additionalProperties:false + merge 白名单)/ web 不变式(unknown·风险态需 sources·clear_light·tailwind)/ idempotent,每格一测(10 patch tests)。
+- **B ripple-grep**:`a_short_semantic_risk_web_llm_patch` 引用命中 README:79 + coverage:10/27 + runner:51/52(契约已路由);抽取 `_web_llm_consistency_error` 后既有 40 summary tests 无回归。
+- **C 反向失败**:merge 不得篡改 official/降级官方风险——`test_happy_merge_and_official_untouched` 深比 official_structured/boundary/scan_tier 合并前后相等。
+- **D**:N-A(无歧义 NL 分类新增)。
+- **E route-doc 单态**:register 新条目最终态;coverage 文档单态。
+- **F**:schema Draft7 meta OK;canonical target.as_of 校验;py_compile OK;FFFD=0(6 文件);114 tests OK。
+
+**Boundary**: advisory-only;web action 永不硬否决/买入;LIVE 不可复现/绝不进历史回测;不写 production;V14.2 frozen;egs_main stage3 未碰。
+
+**Next**: `审查`(审 2b-ii-A)→ 提交 → 2b-ii-B(skill prompts + 面板接入 weekly pipeline)。
 
 ---
 
@@ -11786,7 +12089,7 @@ This recommendation is the reviewer's strategic judgment for the Final Approver;
 - **Behavior preserved (this is a governance/labeling change, not a logic change).** Both `main()` paths still `return 0` (canary never blocks); weekly `.ps1` block is purely additive and leaves the `$CanaryExitCode` / EGS-exit semantics untouched.
 - **No field regression in the error-path refactor.** The `error_akshare_fetch_failed` path was switched from an inline dict to `_skip_payload(...)`; confirmed `_skip_payload` sets `ran_at = _now_iso()` (line 202) plus `as_of/status/summary.overall_status/message` and forwards `source/candidates_source` via `**extra` — so all prior fields survive and it additionally gains the scope fields. Strict improvement.
 - **ps1 enrichment wiring connects (not just graceful-degrade).** `_write_log` writes `LOG_DIR/data_canary_<as_of>.json` UTF-8 (line 174/179); the ps1 reads `logs\data_canary_$AsOf.json` with `-Encoding UTF8` — filename/dir/encoding all match, so the advisory line is printed with real `status=` for every outcome (incl. the akshare-error case, which covers the canary's own still-`[ERROR]` console line at the operator layer).
-- **Tests** (read in full, key assertions hand-checked): payload scope fields + `summary.overall_status`; console `[ADVISORY-OK]` present while bare `[OK]` correctly absent (`[OK]` is not a substring of `[ADVISORY-OK]`); ps1 static wording. 
+- **Tests** (read in full, key assertions hand-checked): payload scope fields + `summary.overall_status`; console `[ADVISORY-OK]` present while bare `[OK]` correctly absent (`[OK]` is not a substring of `[ADVISORY-OK]`); ps1 static wording.
 - **Completeness sweep** — grepped all 14 `canary` references: every active consumer/doc is either in the changeset (updated) or characterizes it accurately as non-gating (`AGENTS.md:427` "不阻断选股"; `egs_main.py:1057` only describes the data source; `forward_tracker.py:18` cites it as a "monitoring, not gating" analogy). No code treats canary status as data-pass / ship-gate evidence; historical handoffs are point-in-time and need no change.
 - CURRENT = 149; register SR-CANARY-001 closure accurate; `Commits` uses the corrected pending-form.
 

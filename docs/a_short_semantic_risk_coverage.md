@@ -1,0 +1,33 @@
+# A-short 语义风险层覆盖说明(coverage map)
+
+**边界(贯穿全层)**:**advisory-only**。绝不硬否决、不进 production scoring/`decision`/`veto`、不写 production 路径(`result/a_short`)、不做历史回测证据、`unknown` 绝不伪装 `clear`。稳定契约锚点见 `docs/a_short_semantic_risk_contract.md`;本文件只说明覆盖映射。产物 = `a_short_semantic_risk_summary`(独立 advisory artifact,落 research lane),被 M6.7/周报面板**引用**而非混入确定性报告。对应 v14.2 语义项 M2.1-M2.5(生态/资金生态)/ M3.1(基本面行业景气)中**语义/检索类**的那部分;`industry_heat`(生产动量热度)是**另一回事**,不在此层、不混算。
+
+## 两个置信层(严格分置)
+
+| 层 | 源 | 口径 | 谁产出 | 切片 |
+|---|---|---|---|---|
+| **official_structured** | 巨潮 cninfo `hisAnnouncement/query`(`stock`="code,orgId") | 按披露日 **PIT**(canonical 且 ≤ as_of);标题→risk_type+severity 粗筛 | **headless**(`a_short_semantic_risk_summary.py`) | 1 / 2a / 2b-i |
+| **web_llm** | 新浪/通用 web/用户上下文 | **LIVE-only**(`pit_capable=false`,不可复现、绝不进历史回测);soft flag | **skill 在环**(LLM 产 `a_short_semantic_risk_web_llm_patch`,headless 校验+合并) | 2b-ii |
+
+## 覆盖矩阵(v14.2 语义风险项 → 本层)
+
+| v14.2 语义项 | 本层覆盖 | status |
+|---|---|---|
+| 监管(问询/关注/立案/处罚/警示) | official_structured(cninfo PIT 公告,severity high/medium)+ web_llm 佐证 | 已建(2a 结构化 + 2b-i 分级);精判待 2b-ii skill。**注:当前是配置 lookback(默认 90 天)内、披露日 ≤ as_of 的 PIT 官方公告证据,并非精确"48h 新鲜度"窗口**——精确 48h 时效 / 媒体负面判断属 2b-ii-B skill/prompt 或未来 recency 字段责任,headless 不强制 48h |
+| 媒体负面 | web_llm advisory(skill web 搜索 + 判断) | 契约+合并已建(2b-ii-A);判断 = 2b-ii-B skill 在环 |
+| 基本面行业景气(≠ industry_heat 动量) | web_llm `status` tailwind/headwind | 同上(2b-ii skill) |
+| 隐蔽风险线索(资金占用/违规担保/诉讼…) | official_structured 粗筛(宽关键词,最窄抑制只压明确否定式)+ web_llm 实质降级 | headless 粗筛已建;**实质判断必须靠 2b-ii skill**(headless 关键词注定粗,见下) |
+
+## official_structured 关键词粗筛的已知边界(为什么必须有 web_llm)
+- 宽关键词(如 `资金占用`)会命中年报季**例行合规件**("…非经营性资金占用…情况专项说明/汇总表",结论通常无占用)。最窄抑制只压**明确无占用否定式**(不存在/未发生/无新增…);**裸例行件仍报 `risk[medium]`**,交 web_llm/skill 降级。
+- 取舍:headless 残余误差**只会是误报(skill 降级),绝不漏报**真风险。`high` severity(立案/处罚/ST)永不被抑制。
+- 故 official_structured 是**粗筛 + 证据(PIT 公告 title/category/date/url)**,**实质性"是不是真风险"由 web_llm advisory(2b-ii skill)判**。
+
+## web_llm enrichment 契约(2b-ii-A)
+- skill 产出 `a_short_semantic_risk_web_llm_patch`(schema:`schemas/a_short_semantic_risk_web_llm_patch.schema.json`)。
+- `apply_web_llm_patch(summary, patch)`(headless,纯函数):校验 patch(schema + 跨字段不变式 + 无重复 ts_code)→ **只**写 `web_llm`/`sources`/`confidence`/`summary` 到匹配候选 → **绝不**碰 `official_structured`/`boundary`/`rank`/`scan_tier`/`ts_code`/`coverage` → 合并后整体过 `validate_summary_consistency`。patch 不能引入 universe 外代码;覆盖语义=替换(非追加)。
+- web_llm 不变式矩阵(unknown 中性三元组 `unknown/unknown/no_action`、任何非-unknown 态须带 `sources`、risk_level 配对、action 枚举等)**= 单一来源 `docs/a_short_semantic_risk_contract.md`,本文件不复述**(B2 contract-anchor,防部分复述漂移)。代码侧由 summary + patch 共用的 `_web_llm_consistency_error` 强制。
+
+## 不在本层(deferred)
+- **Slice 3 — deterministic promotion**:把 cninfo 官方命中升级为**生产硬否决** + 处置既有 DeepSeek `POL-RISK-VETO` legacy-conflict + cninfo 两路径去重。门槛高(动冻结相邻 egs_main stage3),设计上待 advisory 跑出几周真实结果后再决定。追踪:`docs/system_risk_register.md` deferred-open 条目 + `tests/test_semantic_risk_slice3_guard.py`(防忘 CI 守护)。
+- **面板接入 weekly pipeline**:`render_semantic_risk_panel` 已是纯函数;接进周报 = 2b-ii-B。

@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_semantic_risk_web_llm_patch",
+  "description": "Skill-in-loop enrichment patch that fills the web_llm advisory tier of an a_short_semantic_risk_summary (Slice 2b-ii). The 2b-ii skill (web/LLM in the loop) produces this patch from its web search + judgment; the headless merger validates it and writes ONLY web_llm / sources / confidence / summary into the matching candidates, NEVER touching official_structured / boundary / rank / scan_tier / ts_code. Cross-field invariants are enforced by validate_web_llm_patch / _web_llm_consistency_error; the canonical web_llm rule matrix is NOT restated here — single source is docs/a_short_semantic_risk_contract.md (B2 contract-anchor). ADVISORY ONLY: web action can never be a hard veto or buy; the patch cannot introduce candidates or change the official PIT tier.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "target", "source",
+               "candidates", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_semantic_risk_web_llm_patch"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of", "summary_schema_name", "summary_schema_version"],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "summary_schema_name": {"const": "a_short_semantic_risk_summary"},
+        "summary_schema_version": {"const": "1.0.0"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "prompt_refs"],
+      "properties": {
+        "kind": {"type": "string"},
+        "prompt_refs": {"type": "array", "items": {"type": "string"}},
+        "note": {"type": "string"}
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "web_llm", "sources", "confidence"],
+        "properties": {
+          "ts_code": {"type": "string"},
+          "web_llm": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "risk_level", "action"],
+            "properties": {
+              "status": {"enum": ["clear_light", "risk_candidate", "risk", "tailwind", "headwind", "unknown"]},
+              "risk_level": {"enum": ["none", "low", "medium", "high", "unknown"]},
+              "action": {"enum": ["no_action", "observe", "downgrade", "manual_review_required"]}
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title", "url", "published_at", "fetched_at", "source_type"],
+              "properties": {
+                "title": {"type": "string"},
+                "url": {"type": "string"},
+                "published_at": {"type": ["string", "null"]},
+                "fetched_at": {"type": ["string", "null"]},
+                "source_type": {"enum": ["cninfo", "sina", "web", "user"]}
+              }
+            }
+          },
+          "confidence": {
+            "anyOf": [
+              {"type": "number", "minimum": 0, "maximum": 1},
+              {"type": "null"}
+            ]
+          },
+          "summary": {"type": "string"}
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["advisory_only", "not_deterministic_veto", "never_touches_official"],
+      "properties": {
+        "advisory_only": {"const": true},
+        "not_deterministic_veto": {"const": true},
+        "never_touches_official": {"const": true}
+      }
+    }
+  }
+}
