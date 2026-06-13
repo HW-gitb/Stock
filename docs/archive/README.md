@@ -15,3 +15,4 @@ This directory stores historical source material. It is not part of the active L
 
 - `a_short_analysis_old_versions/` — old A-share framework `.docx` versions.
 - `us_short_analysis_old_versions/` — old US-share framework `.docx` versions.
+- `session_log/` — verbatim archived older `docs/SESSION_LOG.md` entries (moved out to keep the active log small; reverse-chronological, zero content loss). Historical record only — the active log keeps the most recent ~30 entries. See `AGENTS.md §Session log discipline → 归档`.

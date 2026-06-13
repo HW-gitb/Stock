@@ -40,7 +40,7 @@ durable route docs(`CURRENT`、READMEs)+ register 活动条目**只陈述当前�
 - **例外**:`system_risk_register` 是持久 open-risk 队列,**可**记 stable open-risk status + closure criteria(如 "closure on Codex PASS + 提交");这不算 transient gate。(详见 `AGENTS.md` route-doc 约定)
 
 ## F. 既有 pre-flight sweep(仍适用)
-非有限值(NaN/Inf)/ canonical 日期严格性 / 跨字段不变式 / API footgun(generator 双消费、静默去重、旁路)/ 设计自查(新约束是否误拒合法正常态)/ **doc↔behavior 一致**(refactor 后 re-grep 旧函数名)/ **编码:UTF-8 无 BOM**(查文件前缀 `EF BB BF`,**不只查 U+FFFD**——Windows PowerShell `Out-File -Encoding utf8` 会写回 BOM;改文件后用 .NET 裸字节读写避免)+ 无 mojibake。
+非有限值(NaN/Inf)/ canonical 日期严格性 / 跨字段不变式 / API footgun(generator 双消费、静默去重、旁路)/ 设计自查(新约束是否误拒合法正常态)/ **doc↔behavior 一致**(refactor 后 re-grep 旧函数名)/ **编码:UTF-8 无 BOM**(查文件前缀 `EF BB BF`,**不只查 U+FFFD**——Windows PowerShell `Out-File -Encoding utf8` 会写回 BOM;改文件后用 .NET 裸字节读写避免)+ 无 mojibake / **`git diff --check`**(末尾空行 / 行尾空白 / 冲突标记——Codex 会跑,pre-flight 先跑)。
 
 ---
 

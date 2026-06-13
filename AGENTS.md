@@ -359,21 +359,7 @@ This judge-before-execute duty is symmetric to the Codex adversarial review stan
 
 ## 交接记录
 
-任何 AI 助手，包括 ChatGPT、Codex 或其他 LLM，继续 Phase 2 / Phase 3、A 股短线筛选、rank 回测、analyzer、state、`A-EGS/egs_main.py`、`runners/backtest_rank.py`、`analysis_input.json` 或 findings 相关工作前，**按时间顺序读取以下 handoff**：
-
-1. `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — EGS v7.8/v7.9 的脚本修改、正式周五实盘重跑、24 期 production 回测验收、当前有效 findings、下一步策略优化优先级
-2. `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Tier1-only 主口径切片实施、stats CSV 加 `subset` 列、schema 升 1.6.0、settings.primary_subset 字段
-3. `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — **项目首次进入 git 管理**（初始为私密本地仓库；2026-05-26 起允许受约束 private remote）、`.gitignore` 排除清单、commit hash `dca8367`、git 私密性约束
-4. `docs/handoff/2026-05-24_phase2_validation_tooling_handoff.md` — EGS v7.10、rank backtest schema 1.8.0、split/variant/eligible benchmark/T+1 不可买/portfolio stats/reason observability
-5. `docs/handoff/2026-05-24_phase2_6_datahub_guardrail_handoff.md` — Phase 2.6 DataHub guardrail，固定“先补 lineage、不做大重构”的边界
-6. `docs/handoff/2026-05-24_phase2_24p_v710_results_handoff.md` — v7.10 24 期 production 实跑结果、schema 校验、核心 findings 和结论边界
-7. `docs/handoff/2026-05-24_phase2_tier1_count_warning_handoff.md` — rank backtest schema 1.9.0，report 增加日期级 Tier1-count 告警
-8. `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — rank backtest schema 1.10.0，新增 `data_lineage` 对象，Phase 2.6 lineage 闭环
-9. `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格：minimal veto analyzer + JSON state + replay/ablation 完成线（含 3.3 子分数预测力 + 3.4 ESP 反向 PIT 调查 + 3.5 实盘 forward tracker）
-10. `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md` — Phase 4 开工规格：deterministic_report schema first + runner 纯 Python + Skill 是使用文档（非执行入口）
-11. `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` — Phase 5 kickoff 规格：execution backtest contract 边界；schema / runner / simulator 代码尚未开始
-12. `docs/handoff/2026-05-26_phase6a_kickoff_spec_handoff.md` — Phase 6a 开工边界：forward evidence、A 短 benchmark sensitivity、forward tracker → aggregate evidence flow、steady/variant/burst/long-spec 边界
-13. `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` — Phase 7 开工边界：provider capability / field catalog contract v1.0.0；schema-first，不选 provider、不抓数据、不建 adapter / DataHub table
+任何 AI 助手（ChatGPT / Codex / 其他 LLM）继续 Phase 2-7、A 股短线筛选、rank 回测、analyzer、state、`A-EGS/egs_main.py`、`runners/backtest_rank.py`、`analysis_input.json` 或 findings 相关工作前：**默认不全量读 handoff**；按 `docs/handoff/README.md`（单一带注解索引，每个 handoff 一行"何时点读"）**点读**——只在当前任务触及该 phase / schema / runner / policy / 历史 finding 时打开对应文件。逐文件说明都在该索引,本节不再重复列表（避免与"不要全量读"冲突）。
 
 完成一轮重要修改后，收尾时必须同步更新 handoff。**默认追加到同 phase 主 handoff，不要轻易新建文件**（2026-05-24 当天 8 个 handoff 是历史教训：碎片化让接手者读到第 5 个就开始跳读）。
 
@@ -412,9 +398,13 @@ This judge-before-execute duty is symmetric to the Codex adversarial review stan
 
 **何时不写**：纯问答会话（没有任何文件改动、没有设计决定）；纯探索式 grep / read 而无任何结论；用户主动说"这次不用记"。
 
+### 归档（防文件膨胀）
+
+`docs/SESSION_LOG.md` 每次会话必读（顶部 1-3 条）、每次 prepend/grep/打开都整文件加载，**不能无限增长**（2026-06-13 曾达 2.68MB / 15k 行 / 891 条）。过大时（经验阈值 >~150 条或 >~500KB）归档：**保留最近 ~30 条 entry + H1 header**，更早 entry **逐字**移到 `docs/archive/session_log/session_log_archive_<oldest>_to_<newest>.md`（reverse-chrono 不变），活跃文件 H1 后留一行归档指针。**零内容丢失**（归档=移位非删除；迁移后断言 `head + kept + archived == 原文`）。用 Python `utf-8` 写盘（**不要** PowerShell `Out-File -Encoding utf8`，它写 UTF-8 BOM）。归档文件是历史档案、不在活跃阅读路径。
+
 ### Entry 格式（七节）
 
-reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1 header 之后。
+reverse-chronological：**新 dated entry prepend 到文件顶部**。若 H1 intro 之后有稳定的归档指针(`> 📦 历史归档…`,见 §Session log discipline → 归档),它是 H1 之后的固定 meta，新 entry 紧跟在**该指针之后**;无指针时紧跟 H1 intro 之后。entry 之间保持 reverse-chronological(最新在上)。
 
 ```markdown
 ## YYYY-MM-DD — <LLM 名> (<本次 session 主题简述>)
@@ -585,18 +575,7 @@ reverse-chronological：**新 entry 永远 prepend 到文件顶部**，紧跟 H1
 - `docs/burst_lane_spec.md` — Phase 6c A / US 短线 burst lane docs-only baseline（独立 signal / risk / sizing / ship gate；不继承 steady lane gate）
 - `docs/long_alpha_spec.md` — Phase 6d 长线 alpha 共同规格与 A / US 长线 skeleton（docs-only；不锁 provider / runner / schema）
 - `docs/provider_data_requirements_audit.md` — Phase 6e provider / data requirements audit（docs-only；不锁最终 provider / schema / DataHub implementation）
-- `docs/handoff/2026-05-24_phase2_v7.9_handoff.md` — Phase 2 v7.9 交接记录
-- `docs/handoff/2026-05-24_phase2_tier1only_subset_handoff.md` — Phase 2 Tier1-only 主口径切片交接记录
-- `docs/handoff/2026-05-24_phase2_git_init_handoff.md` — Phase 2 git init 交接记录（初始 local-only；2026-05-26 amendment 允许受约束 private remote）
-- `docs/handoff/2026-05-24_phase2_validation_tooling_handoff.md` — Phase 2 验证工具升级交接记录
-- `docs/handoff/2026-05-24_phase2_6_datahub_guardrail_handoff.md` — Phase 2.6 DataHub guardrail 交接记录
-- `docs/handoff/2026-05-24_phase2_24p_v710_results_handoff.md` — Phase 2 v7.10 24 期 production 实跑交接记录
-- `docs/handoff/2026-05-24_phase2_tier1_count_warning_handoff.md` — Phase 2 Tier1-count 日期告警交接记录
-- `docs/handoff/2026-05-24_phase2_data_lineage_handoff.md` — Phase 2 data_lineage 交接记录（schema 1.10.0，Phase 2.6 闭环）
-- `docs/handoff/2026-05-24_phase3_kickoff_spec_handoff.md` — Phase 3 开工规格交接记录（minimal veto analyzer + JSON state + replay/ablation）
-- `docs/handoff/2026-05-25_phase4_kickoff_spec_handoff.md` — Phase 4 开工规格交接记录（deterministic_report schema first + runner-as-executor + Skill-as-doc）
-- `docs/handoff/2026-05-25_phase5_kickoff_spec_handoff.md` — Phase 5 kickoff 规格交接记录（execution backtest contract 边界；代码未开始）
-- `docs/handoff/2026-05-27_phase7_kickoff_spec_handoff.md` — Phase 7 kickoff 规格交接记录（provider capability / field catalog contract）
+- `docs/handoff/README.md` — **所有 phase handoff 的单一带注解索引**（每个 handoff 一行"何时点读")。本节不再单列各 handoff(避免与 §交接记录 + 该索引重复/漂移);按该索引点读。
 - `result/a_short/backtest/Phase2_rank_backtest_findings_codex_24p_v7.10.md` — 当前有效 Phase 2 findings（Codex 24p v7.10 视角）
 - `result/a_short/backtest/Phase2_rank_backtest_findings_cc_24p.md` — 当前有效 Phase 2 findings（cc 互补合并版，含 OVERHEAT/entry_flag/LOCK 三个负信号 + 2024 vs 2025 regime 拆分）
 ## DataHub / Data Middle Platform Guardrail
