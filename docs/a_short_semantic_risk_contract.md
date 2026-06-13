@@ -3,13 +3,19 @@
 本文件是 A-short semantic-risk advisory 层的稳定契约锚点。详细背景和覆盖说明仍在
 `docs/a_short_semantic_risk_coverage.md`;README 只做路由,不要重复本文件的规则矩阵。
 
-## Scope
+## Scope(边界:生产 vs 非生产 M6.7 advisory,2026-06-13 起区分)
 
-- 语义风险层是 advisory-only:不硬否决、不进 production scoring / decision / veto、不写
-  `result/a_short`、不作为历史回测证据。
-- `official_structured` 与 `web_llm` 是两个置信层,不得混成一个状态。
-- `unknown` 不能伪装成 clear。未检索、检索失败、证据缺失时,web 侧必须保持
-  `unknown/unknown/no_action`。
+- **生产边界(永久禁止)**:语义层**绝不**进 **production EGS** scoring / decision / veto、**绝不**写
+  `result/a_short`、**绝不**作为历史回测证据。
+- **web_llm 永久 advisory-only**:web/LLM 层**绝不硬否决**、绝不作买入因子;无证据/未检索 → `unknown/unknown/no_action`。
+- **official_structured 可进非生产 M6.7 advisory 打分(M6.7 集成)**:经 `_validate_semantic_official` 校验后的
+  official_structured,其 **high severity**(立案/处罚/ST/退市)**可**在**非生产 Phase 5 / M6.7** 报告内经
+  `semantic_official` risk family 产生 **advisory `否决`**(复用引擎 hard_veto 路径,**绝不救回**);**medium/low** 仅"待核"
+  (不扣分/不清/不降星);clear/unknown/无输入 → 中性。**这是 M6.7 advisory 否决,不是 production hard veto** —— 它不改
+  EGS 选股、不进 `result/a_short`、不进回测。
+- `official_structured` 与 `web_llm` 是两个置信层,不得混成一个状态;M6.7 集成后两层来源在 `machine.layer.semantic_risk` 仍可追溯。
+- `unknown` 不能伪装成 clear。未检索、检索失败、证据缺失时保持 unknown(web 侧 `unknown/unknown/no_action`)。
+- **迁移说明**:独立 `a_short_semantic_risk_summary` artifact + 周报 .md 单独面板是**迁移期过渡形态**,非最终不变式;最终语义直接体现在 M6.7(见 `docs/a_short_semantic_risk_coverage.md` §融入 M6.7)。
 
 ## official_structured
 

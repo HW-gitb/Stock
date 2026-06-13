@@ -10,6 +10,67 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-13 — Codex `审查 PASS` (语义融入 M6.7 Slice 1 — official evidence contract)
+- **Verdict/Action**: PASS. 上一轮 `R-ASHORT-M67-SEMANTIC-OFFICIAL-EVIDENCE-NONEMPTY-GAP` 已修:所有 official event 必填字段现在必须是 trim 后非空字符串;blank / whitespace `title`、`category`、`url_or_pdf` 不再能触发 M6.7 advisory `否决`。
+- **Required**: no new Required. 既有 4 个语义 M6.7 Required 均已在 working tree 修复,详见 `docs/system_risk_register.md`;状态待 `提交` 后按协议翻 resolved。Slice 1b carry-forward:empty-url official event 必须保证 URL/PDF 或路由 non-veto pending/unknown。
+- **Verify**: 196 tests OK; py_compile OK; `git diff --check` clean; custom evidence probe confirmed valid high/medium/low/clear/unknown/None pass and missing/blank/whitespace/non-string required fields, non-cninfo source, bad/future date, bad severity, hpa=false all fail-closed; BOM/FFFD=0。
+- **Next**: `提交`。
+
+## 2026-06-13 — Claude `修复` (语义融入 M6.7 Slice 1 — official 证据字段非空门)
+- **Verdict/Action**: `_validate_semantic_official` 事件字段从"present"升级为"**trim 后非空字符串**"(present-but-empty / 纯空白 也拒);high 事件若 title/category/url_or_pdf 空,不再能变成 M6.7 否决。source/severity/PIT-date/had_pit 门保留。
+- **Required**: `R-ASHORT-M67-SEMANTIC-OFFICIAL-EVIDENCE-NONEMPTY-GAP` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 对抗测试 +blank title/category/url_or_pdf/whitespace-only 全 ValueError;有效 PIT cninfo 全绿;165 tests OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:把"非空"作整类(所有必填字段一次,非逐个)+ whitespace 也覆盖;**B 连带 + 已知边界显式上交**:核实 build_official_structured 当 adjunctUrl 缺会 emit url_or_pdf="",本消费门按 Codex minimum 要非空,已在 register/代码注释把"Slice 1b 必须保证 URL 或路由空-URL 到 pending"上交(避免合法空-URL 崩周报的漏报);C 反向:有效 PIT 证据仍正常否决/待核;F:py_compile OK、diff/BOM 净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (语义融入 M6.7 Slice 1 — official evidence non-empty gate residual)
+- **Verdict/Action**: FAIL. 最新修复已堵住缺字段、非 cninfo、未来日、坏日期、blank risk_type、had_pit 矛盾,但 present-but-empty `title` / `category` / `url_or_pdf` 仍能触发 M6.7 advisory `否决`。
+- **Required**: `R-ASHORT-M67-SEMANTIC-OFFICIAL-EVIDENCE-NONEMPTY-GAP` — full detail in `docs/system_risk_register.md` (single source).
+- **Verify**: 196 tests OK; py_compile OK; `git diff --check` clean before this FAIL note; custom probes confirmed blank `title` / `category` / `url_or_pdf` are accepted as `否决` / `impact=veto`.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `修复` (语义融入 M6.7 Slice 1 — official 证据契约 + PIT fail-closed)
+- **Verdict/Action**: `_validate_semantic_official` 升级为完整 official_structured PIT 证据契约(取 as_of):每 event 必备 source/title/category/disclosure_date/url_or_pdf/risk_type/severity、`source=="cninfo"`、risk_type 非空、severity 枚举、disclosure_date canonical 且 ≤ as_of(PIT)、`had_pit_announcements` 为 bool 且 risk 时为 True。残缺/伪造/未来日/手工源/非 PIT → ValueError 写盘前 abort,绝不让其触发 M6.7 否决。
+- **Required**: `R-ASHORT-M67-SEMANTIC-OFFICIAL-EVIDENCE-SHAPE-GAP` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 对抗测试扩到证据契约全维(severity-only/缺任一字段/blank risk_type/非cninfo源/未来日/坏日期/had_pit false 或缺)全 ValueError;有效 PIT cninfo high/medium/clear/unknown/None 全绿;165 tests OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:把 Codex 列的整套证据契约(字段齐备+source+risk_type+PIT 日+had_pit)一次补齐(非逐条),对抗例覆盖每个出口;B 连带:校验仍单一来源(family/impact/trace 同源)、validator 取 as_of 与 build_official_structured/summary 的 PIT 口径一致;C 反向:有效 PIT 证据仍正常 否决/待核;F:py_compile OK、validate_m67_consistency 每出口过、diff/BOM 净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (语义融入 M6.7 Slice 1 — official_structured evidence gate)
+- **Verdict/Action**: FAIL. 先前两条 Required 主体已修,但 `_validate_semantic_official` 只校验 status/events/severity,未校验 official_structured 的 PIT 证据字段;缺 source/risk_type/date 或未来披露日也能触发 M6.7 advisory `否决`.
+- **Required**: `R-ASHORT-M67-SEMANTIC-OFFICIAL-EVIDENCE-SHAPE-GAP` — full detail in `docs/system_risk_register.md` (single source).
+- **Verify**: 196 tests OK; py_compile OK; `git diff --check` clean; custom probes confirmed severity-only / future-date / manual-source official events are accepted and hard-vetoed.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `修复` (语义融入 M6.7 Slice 1 — 输入 fail-closed 校验 + 契约去漂移)
+- **Verdict/Action**: 两条都修。(1) 加 `_validate_semantic_official`(fail-closed),family/impact/severity_max/trace 全部从同一已校验对象派生(消除"clear/unknown+high event→impact=veto 但 action=建仓"矛盾 + 非 dict event 的 AttributeError);非法 provider 输出 → ValueError 写盘前 abort。(2) 契约/coverage/README 改为 production-vs-M6.7 区分(生产 EGS/回测 永禁;web_llm 永不硬否决;official high 可在非生产 M6.7 产 advisory 否决),面板/独立 artifact 标过渡。
+- **Required**: `R-ASHORT-M67-SEMANTIC-OFFICIAL-INPUT-CONSISTENCY-GAP` · `R-ASHORT-SEMANTIC-CONTRACT-M67-INTEGRATION-DRIFT` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 新增对抗测试(clear/unknown-with-high、missing-status、risk-empty、invalid-severity、non-list/non-dict event、non-dict sem)全 ValueError fail-closed;新增契约去漂移守护(禁旧绝对无硬否决 + 必含 production/web/official 区分锚点);有效形态全绿;165 tests(weekly+contract+summary+governance+route)OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:输入契约 × 所有非法/矛盾形态一次覆盖(8 例)+ 文档漂移类(契约/coverage/README)一次同步;B 连带:校验集中单一来源(family/impact/trace 同源)、契约锚点单一权威 + README/coverage 指向;C 反向:有效形态仍正确、guard 在旧措辞下会 FAIL;D:severity 枚举非关键词;F:py_compile OK、validate_m67_consistency 每出口过、diff/BOM 净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (语义融入 M6.7 — official_structured → M6.7 引擎集成)
+- **Verdict/Action**: FAIL. 方向正确,但 semantic official 输入边界未校验会产生 action/trace 矛盾,且稳定契约仍写着绝不硬否决/面板-only,与本轮 M6.7 advisory 否决迁移冲突。
+- **Required**: `R-ASHORT-M67-SEMANTIC-OFFICIAL-INPUT-CONSISTENCY-GAP`; `R-ASHORT-SEMANTIC-CONTRACT-M67-INTEGRATION-DRIFT` — full detail in `docs/system_risk_register.md` (single source).
+- **Verify**: 194 tests OK; py_compile OK; `git diff --check` clean; custom semantic probes reproduced clear/unknown/missing-status high-event -> `impact=veto` with action `建仓`, plus malformed events raising uncontrolled `AttributeError`.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `起草` (语义融入 M6.7 — Slice 1:official_structured → M6.7 引擎集成)
+
+**目标**(用户+Codex 收敛设计,桌面 `semantic_into_m67_design_20260613.md` §8):把语义层融进 M6.7 打分,不再独立 artifact/面板。本片=最小、最安全单元:**只做 cninfo official → M6.7**,不接 DeepSeek、不改 render/不拆面板/不改 Stage4(留 Slice 1b/2/3)。
+
+**集成法(关键)**:语义做成引擎**新 risk family `semantic_official`**,复用既有 family→action→table→validate 机制,**绝不在外硬改 操作**(否则 violate `validate_m67_consistency`)。
+
+**规则(确定性)**:official **high**(立案/处罚/ST/退市)→ family hard_veto → **否决**(引擎自动 null trade、machine action 一致);**medium/low** → 仅 observe 待核 + 精简结论区"否决审查触发"挂「语义待核(未扣分)」,**不扣分/不清/不降星**;**clear/unknown/无输入** → 中性(向后兼容,无 semantic 行为不变)。trace 全进 `machine.layer.semantic_risk`(machine 开放,**无需改 schema**)。**never-rescue**:语义只 ADD hard_veto、不进 compute_star,构造上不可能救回 base 否决。
+
+**改动**:`a_short_phase5_engine.py`(RISK_FAMILIES +semantic_official、classify high→hard_veto、build_m67_report medium 待核+trace+consumption 映射);`a_short_weekly_pipeline.py`(normalize_candidate `semantic=` 参数、main `semantic_provider` 注入 thread);测试 6 个(high→否决+null、medium 待核不扣分、clear/unknown/None 中性、never-rescue、normalize 参数透传、main 端到端 semantic_provider)。真 cninfo provider 接入 = Slice 1b。
+
+**Pre-Codex self-review: A-F checked** — A:defect-class×出口矩阵一次覆盖(high/medium/low/clear/unknown/None + never-rescue + 管线透传 + 端到端);B 连带:RISK_FAMILIES 加族 → grep 确认无硬编码 family 数/render 无严格 layer key 假设;新消费输入 `semantic` 已进引擎 consumption 映射(§4 完整性);163 tests OK 无向后兼容断裂;C 反向:medium 不当 clear 也不扣分、unknown 不当 clear、never-rescue 各有测;D:用 severity 枚举非关键词猜;F:py_compile OK、`git diff --check` clean、BOM/FFFD=0、`validate_m67_consistency` 每个语义出口都过。
+
+**Boundary**:仅 M6.7(非生产/不进回测/advisory);不碰 EGS 生产打分、不进 production scoring/decision、不硬否决(`否决` 是 advisory 建议非生产 veto);不接 DeepSeek/不改 render/面板/Stage4;V14.2 frozen。
+
+**Next**: `审查`。
+
 ## 2026-06-13 — Codex `审查 PASS` (semantic-risk Step1 analysis_input consumer validation)
 - **Verdict/Action**: PASS; 未发现新的 material Required。`--analysis-input` 已走 analysis_input 契约校验并强制 `trade_date == --as-of`; weekly Stage 4 仍是 advisory-only 旁路。
 - **Required**: `R-ASHORT-SEMANTIC-SUMMARY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP` — 修复详情与 working-tree repaired 注记见 `docs/system_risk_register.md`(单一来源); no new Required.

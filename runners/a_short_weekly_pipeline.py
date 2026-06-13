@@ -33,7 +33,7 @@ OVERLAY_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspa
 
 def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pct,
                         account: dict, regime: str, industry_trend: str = "neutral",
-                        llm_enrichment=None, observe_only=None) -> dict:
+                        llm_enrichment=None, observe_only=None, semantic=None) -> dict:
     """把一个 EGS analysis_input 候选 + 价格序列 + overlay 行 + 市场级 IV 分位 + 账户/环境
     归一化成 Phase 5 引擎输入。字段缺失 → 引擎按保守/observe 处理。"""
     d = cand.get("derived_flags", {}) or {}
@@ -70,6 +70,9 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         "portfolio": {},
         "observe_only": list(observe_only or []),
         "llm_enrichment": list(llm_enrichment or []),
+        # 语义官方层(Slice 1):official_structured dict {status, events[severity], had_pit_announcements}
+        # 或 None(无输入→引擎按 unknown 中性处理)。Phase5 引擎据此融进 M6.7(high→否决/medium→待核)。
+        "semantic": semantic,
     }
 
 
@@ -230,7 +233,7 @@ def _semantic_panel_from_summary(summary: dict, weekly_as_of: str) -> str:
     return render_semantic_risk_panel(summary)
 
 
-def main(argv=None, pro_factory=None, price_provider=None):
+def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -286,7 +289,8 @@ def main(argv=None, pro_factory=None, price_provider=None):
         start = (datetime.strptime(args.as_of, "%Y%m%d") - timedelta(days=120)).strftime("%Y%m%d")
         price_provider = lambda code: _fetch_price_series(ts, pro, code, start, args.as_of)
     normalized = [normalize_candidate(c, price_provider(c["ts_code"]), overlay.get(c["ts_code"]),
-                                      iv_pct, account, regime)
+                                      iv_pct, account, regime,
+                                      semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None))
                   for c in ai.get("candidates", [])]
     # 价格覆盖门(#2):任一被纳入候选缺足够价格 → 中止不写(不可 fail-open 成观察)
     short = [(n["ts_code"], len(n["price_series"])) for n in normalized

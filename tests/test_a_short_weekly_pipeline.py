@@ -546,6 +546,23 @@ class MainWiringTests(unittest.TestCase):
         # would hide it (3 rows -> set of 2 == weekly set). The raw-list dup check must abort before write.
         self._assert_main_overlay_aborts_no_file(_valid_overlay_for(["600000.SH", "000001.SZ", "000001.SZ"]))
 
+    def test_main_semantic_provider_folds_into_m67(self):
+        # Slice 1 end-to-end: injected semantic_provider (high official) folds into M6.7 → 否决;
+        # a stock with no semantic stays neutral (impact none). No network (provider injected).
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)],
+                 price_provider=lambda code: _series(),
+                 semantic_provider=lambda code: (_official("risk", "high", "立案调查")
+                                                 if code == "600000.SH" else None))
+            w = json.loads(out.read_text(encoding="utf-8"))
+        by = {r["ts_code"]: r for r in w["reports"]}
+        self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "否决")                # semantic high → 否决
+        self.assertEqual(by["000001.SZ"]["machine"]["layer"]["semantic_risk"]["impact"], "none")  # no semantic
+
 
 def _fake_ts(df):
     class _FakeTs:
@@ -736,6 +753,105 @@ class SemanticRiskPanelWiring(unittest.TestCase):
             write_weekly_markdown(weekly, str(out))        # no semantic_panel
             md = out.read_text(encoding="utf-8")
         self.assertEqual(md, render_weekly_markdown(weekly))   # identical to deterministic-only render
+
+
+def _official(status, sev=None, rt="x", dd="20260601"):
+    # full PIT official_structured evidence shape (matches build_official_structured output)
+    evs = [{"source": "cninfo", "title": "t", "category": "c", "disclosure_date": dd,
+            "url_or_pdf": "u", "risk_type": rt, "severity": sev}] if sev else []
+    return {"status": status, "events": evs, "had_pit_announcements": bool(evs)}
+
+
+class SemanticIntoM67(unittest.TestCase):
+    """Slice 1: cninfo official_structured folded into M6.7 via the semantic_official family.
+    high→否决; medium/low→待核 (no penalty, no clear); clear/unknown/None→neutral; never rescues;
+    machine.layer.semantic_risk trace; consistency preserved by construction."""
+    GEN = "2026-06-09T00:00:00+08:00"
+
+    def _report(self, semantic, **over):
+        from runners.a_short_phase5_engine import build_m67_report, validate_m67_consistency
+        n = _normalized(**over)
+        n["semantic"] = semantic
+        r = build_m67_report(n, AS_OF, self.GEN)
+        validate_m67_consistency(r)          # must ALWAYS stay consistent (table↔action, 否决→null, …)
+        return r
+
+    def test_high_official_forces_fouju_and_nulls_trade(self):
+        r = self._report(_official("risk", "high", "立案调查"))
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")
+        for k in ("股数", "入", "盈一", "盈二", "损"):
+            self.assertIsNone(r["m67"]["table"][k])
+        self.assertEqual(r["machine"]["layer"]["semantic_risk"]["impact"], "veto")
+        self.assertIn("语义官方", r["m67"]["精简结论区"]["否决审查触发"])
+
+    def test_medium_official_is_pending_no_penalty(self):
+        base = self._report(None)
+        self.assertEqual(base["m67"]["table"]["操作"], "建仓")
+        r = self._report(_official("risk", "medium", "fund_occupation"))
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")                       # NOT downgraded
+        self.assertEqual(r["m67"]["table"]["优先级"], base["m67"]["table"]["优先级"])  # star unchanged
+        self.assertEqual(r["machine"]["layer"]["semantic_risk"]["impact"], "pending")
+        self.assertIn("语义待核", r["m67"]["精简结论区"]["否决审查触发"])
+        self.assertTrue(any("semantic_pending_review" in o
+                            for o in r["machine"]["layer"]["observe_only"]))
+
+    def test_clear_unknown_none_are_neutral(self):
+        base = self._report(None)
+        for sem in (_official("clear"), _official("unknown"), None):
+            r = self._report(sem)
+            self.assertEqual(r["m67"]["table"]["操作"], base["m67"]["table"]["操作"])
+            self.assertEqual(r["machine"]["layer"]["semantic_risk"]["impact"], "none")
+        self.assertEqual(self._report(None)["machine"]["layer"]["semantic_risk"]["official_status"],
+                         "unknown")
+
+    def test_semantic_never_rescues_base_hard_veto(self):
+        from runners.a_short_phase5_engine import build_m67_report, validate_m67_consistency
+        n = _normalized(); n["derived"]["hard_veto"] = True       # base = 否决
+        n["semantic"] = _official("clear")                        # semantic clear must NOT upgrade
+        r = build_m67_report(n, AS_OF, self.GEN); validate_m67_consistency(r)
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")
+
+    def test_invalid_semantic_input_fails_closed(self):
+        # R-ASHORT-M67-SEMANTIC-OFFICIAL-INPUT-CONSISTENCY-GAP + ...-EVIDENCE-SHAPE-GAP: malformed /
+        # inconsistent / non-PIT / fabricated provider output must ValueError before any report
+        # (no action↔trace contradiction; residual/non-PIT evidence cannot trigger M6.7 否决).
+        from runners.a_short_phase5_engine import build_m67_report
+        ev = {"source": "cninfo", "title": "t", "category": "c", "disclosure_date": "20260601",
+              "url_or_pdf": "u", "risk_type": "立案", "severity": "high"}    # one valid PIT event
+        bad_inputs = [
+            {"status": "clear", "events": [ev]},                        # clear cannot carry events
+            {"status": "unknown", "events": [ev]},                      # unknown cannot carry events
+            {"events": [ev]},                                           # missing status
+            {"status": "risk", "events": []},                           # risk must carry an event
+            {"status": "risk", "events": [{**ev, "severity": "huge"}]}, # invalid severity
+            {"status": "risk", "events": "abc"},                        # non-list events
+            {"status": "risk", "events": ["x"]},                        # non-dict event
+            "not-a-dict",                                               # non-dict semantic
+            {"status": "risk", "events": [{"severity": "high", "risk_type": "x"}]},  # severity-only, no evidence
+            {"status": "risk", "events": [{**ev, "source": "web"}]},    # non-official (manual/web) source
+            {"status": "risk", "events": [{**ev, "disclosure_date": "20260701"}]},   # future date > as_of
+            {"status": "risk", "events": [{**ev, "disclosure_date": "notadate"}]},   # non-canonical date
+            {"status": "risk", "events": [{k: v for k, v in ev.items() if k != "risk_type"}]},  # missing risk_type
+            {"status": "risk", "events": [{**ev, "risk_type": ""}]},                  # blank risk_type
+            {"status": "risk", "events": [{**ev, "title": ""}]},                      # blank title
+            {"status": "risk", "events": [{**ev, "category": ""}]},                   # blank category
+            {"status": "risk", "events": [{**ev, "url_or_pdf": ""}]},                 # blank url/pdf
+            {"status": "risk", "events": [{**ev, "title": "   "}]},                   # whitespace-only title
+            {"status": "risk", "events": [ev], "had_pit_announcements": False},       # risk but no PIT
+            {"status": "risk", "events": [ev]},                                       # missing had_pit_announcements
+        ]
+        for bad in bad_inputs:
+            n = _normalized(); n["semantic"] = bad
+            with self.assertRaises(ValueError):
+                build_m67_report(n, AS_OF, self.GEN)
+
+    def test_normalize_semantic_param_threads_through_build_weekly(self):
+        n = normalize_candidate(_egs_candidate(), _series(), _overlay_row(), 55.0,
+                                {"available_cash": 500000.0}, "震荡期",
+                                semantic=_official("risk", "high", "立案调查"))
+        self.assertEqual(n["semantic"]["status"], "risk")
+        w = build_weekly_report([n], AS_OF, self.GEN)
+        self.assertEqual(w["reports"][0]["m67"]["table"]["操作"], "否决")
 
 
 if __name__ == "__main__":

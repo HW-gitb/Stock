@@ -57,7 +57,7 @@ GOVERNANCE = {
 }
 
 RISK_FAMILIES = ("overheat_crowding", "liquidity_execution", "negative_event",
-                 "market_regime", "portfolio_concentration")
+                 "market_regime", "portfolio_concentration", "semantic_official")
 
 
 # ── 技术指标(纯函数;price_series oldest→newest,每项 high/low/close)──────────
@@ -102,6 +102,66 @@ def compute_indicators(series: list) -> dict:
     sup, res = support_resistance(series)
     return {"ma5": ma(closes, 5), "ma10": ma(closes, 10), "ma20": ma(closes, 20),
             "rsi14": rsi14(closes), "atr14": atr14(series), "support": sup, "resistance": res}
+
+
+# ── 语义官方层消费方校验(fail-closed,单一来源)────────────────────────────────
+_SEM_STATUSES = ("risk", "clear", "unknown")
+_SEM_SEVERITIES = ("high", "medium", "low")
+# official_structured 事件证据形(与 build_official_structured 产出口径一致):驱动 M6.7 否决/待核
+# 的官方证据必须齐全且 PIT,否则 fail-closed。
+_SEM_EVENT_REQUIRED = ("source", "title", "category", "disclosure_date", "url_or_pdf",
+                       "risk_type", "severity")
+
+
+def _validate_semantic_official(sem, as_of):
+    """语义官方层(official_structured)消费契约,fail-closed:接受 None,或
+    {status∈{risk,clear,unknown}, events:list[dict]}。每个 event 必须是完整 PIT 官方证据:
+    齐备字段 (source/title/category/disclosure_date/url_or_pdf/risk_type/severity)、`source=="cninfo"`、
+    `severity∈{high,medium,low}`、`risk_type` 非空、`disclosure_date` 为 canonical 历法日且 `<= as_of`(PIT);
+    且 clear/unknown 不得带 events、risk 必带 ≥1 合法 event。非法/伪造/未来日/手工源 provider 输出 →
+    ValueError(写盘前 abort,绝不让残缺或非 PIT 证据触发 M6.7 advisory 否决)。返回同一已校验对象,
+    family / impact / severity_max / trace 全部据此派生。"""
+    if sem is None:
+        return None
+    if not isinstance(sem, dict):
+        raise ValueError(f"semantic official 非 dict:{type(sem).__name__}")
+    status = sem.get("status")
+    if status not in _SEM_STATUSES:
+        raise ValueError(f"semantic official status 非法:{status!r}")
+    events = sem.get("events", [])
+    if not isinstance(events, list):
+        raise ValueError(f"semantic official events 非 list:{type(events).__name__}")
+    for e in events:
+        if not isinstance(e, dict):
+            raise ValueError(f"semantic official event 非 dict:{type(e).__name__}")
+        # 每个证据字段必须是 trim 后非空字符串(present-but-empty / 纯空白 也拒,否则"可审计"
+        # 只是有名无证:无 title/category/URL 的 high 事件不得变成 M6.7 否决)。
+        for k in _SEM_EVENT_REQUIRED:
+            v = e.get(k)
+            if not (isinstance(v, str) and v.strip()):
+                raise ValueError(f"semantic official event 证据字段 {k} 缺失/空/非字符串:{v!r}")
+        if e["source"] != "cninfo":
+            raise ValueError(f"semantic official event source 非 official cninfo:{e['source']!r}")
+        if e["severity"] not in _SEM_SEVERITIES:
+            raise ValueError(f"semantic official event severity 非法:{e['severity']!r}")
+        # 注:build_official_structured 当 adjunctUrl 缺失时会 emit url_or_pdf=""(合法 producer 边界)。
+        # 本消费门按 Codex minimum 要求 url_or_pdf 非空;Slice 1b 接真 cninfo 时必须保证 URL,或把
+        # 空-URL 事件路由到非-veto pending(契约/schema 修订),否则合法空-URL 事件会 abort 周报。
+        dd = e["disclosure_date"]
+        if not _is_valid_date(dd):
+            raise ValueError(f"semantic official event disclosure_date 非 canonical 历法日:{dd!r}")
+        if str(dd) > str(as_of):
+            raise ValueError(f"semantic official event disclosure_date {dd} > as_of {as_of}(PIT 泄漏)")
+    if status in ("clear", "unknown") and events:
+        raise ValueError(f"semantic official status={status} 不得带 events(自相矛盾)")
+    if status == "risk" and not events:
+        raise ValueError("semantic official status=risk 必带 ≥1 event(自相矛盾)")
+    hpa = sem.get("had_pit_announcements")
+    if not isinstance(hpa, bool):
+        raise ValueError(f"semantic official had_pit_announcements 非 bool:{type(hpa).__name__}")
+    if status == "risk" and not hpa:
+        raise ValueError("semantic official status=risk 但 had_pit_announcements=False(自相矛盾)")
+    return sem
 
 
 # ── 风险族分类(§5 归并:每族最多一次硬处理)──────────────────────────────────
@@ -163,6 +223,8 @@ def classify_risk_families(inp: dict, ind: dict) -> dict:
         pc.append("因子共振")
     if pc:
         fam["portfolio_concentration"].update(hit=True, action="downgrade", reasons=pc)
+    # semantic_official 由 build_m67_report 用 _validate_semantic_official 校验后的对象统一填充
+    # (family / impact / trace 同源,避免 status↔events 不一致)。
     return fam
 
 
@@ -239,10 +301,31 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
     eligible = bool((inp.get("overlay") or {}).get("eligible"))
 
+    # 语义官方层(Slice 1,advisory):先 fail-closed 校验(非法 provider 输出 → 写盘前 abort),
+    # 再用**同一已校验对象**派生 family / impact / trace(避免 status↔events 不一致 / 非 dict AttributeError)。
+    # 经校验后:有 events ⟺ status==risk,severity 合法。high → semantic_official hard_veto(进下方 hard→否决,
+    # 绝不救回);medium/low → 仅"待核"(不扣分/不清/不降星);clear/unknown/无输入 → 中性。
+    sem = _validate_semantic_official(inp.get("semantic"), as_of)
+    sem_status = sem.get("status") if sem else "unknown"          # None → unknown(中性)
+    sem_sevs = [e["severity"] for e in sem["events"]] if (sem and sem_status == "risk") else []
+    sem_has_high = "high" in sem_sevs
+    sem_pending = bool(sem_sevs) and not sem_has_high             # risk 且仅 medium/low
+    if sem_has_high:
+        highs = [e for e in sem["events"] if e["severity"] == "high"]
+        fam["semantic_official"].update(
+            hit=True, action="hard_veto",
+            reasons=[f"语义官方:{e.get('risk_type', '?')}(high)" for e in highs])
+
     hard = [r for f in RISK_FAMILIES if fam[f]["action"] == "hard_veto" for r in fam[f]["reasons"]]
     downgrades = [r for f in RISK_FAMILIES if fam[f]["action"] == "downgrade" for r in fam[f]["reasons"]]
     observe = list(inp.get("observe_only") or [])     # 缺数据项(§3 层3 / §9 盘中类不在此,见 out_of_scope)
     llm_notes = list(inp.get("llm_enrichment") or []) # §10 Tier C:只解释,不改判决
+
+    if sem_pending:
+        observe.append("semantic_pending_review=官方medium/low命中(例行件待复核,未扣分)")
+    sem_impact = "veto" if sem_has_high else ("pending" if sem_pending else "none")
+    sem_note = ("语义待核:官方 medium/low 命中,例行件待复核(未扣分,待 web/LLM 实判)"
+                if sem_pending else "")
 
     # IV 状态(R-ASHORT-PHASE5-IV-MISSING-FAIL-OPEN):feed 缺失不假装执行 IV 风控
     iv_known = iv_pct is not None
@@ -287,6 +370,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
         "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
         "account/liquidity": "→ 仓位上限/冲击成本/100股",
+        "semantic": "→ semantic_official 族(official high→否决)/ medium·low→待核(不扣分,observe)/ "
+                    "trace machine.layer.semantic_risk;clear·unknown·无输入→中性",
     }
 
     table = {
@@ -307,7 +392,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "波动率状态": (f"IV分位≈{iv_pct}% | Rule3减半:{'是' if iv_halve else '否'}"
                           if iv_known else "IV未知(feed 缺失,未执行 IV 风控,保守减半)"),
             "现价与成本": f"{inp.get('close')} | 试探仓",
-            "否决审查触发": ("|".join(hard) if hard else "无"),
+            "否决审查触发": (("|".join(hard) + (" | " + sem_note if sem_note else "")) if hard
+                              else (sem_note if sem_note else "无")),
             "板块资金事件": (inp.get("industry_trend") or "unknown") +
                             (f" | {'/'.join(llm_notes)}" if llm_notes else ""),
             "风控触发": ("|".join(downgrades) if downgrades else "无"),
@@ -323,7 +409,16 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "machine": {
             "indicators": ind, "risk_families": fam,
             "layer": {"hard_veto": hard, "downgrade": downgrades,
-                      "observe_only": observe, "llm_enrichment": llm_notes},
+                      "observe_only": observe, "llm_enrichment": llm_notes,
+                      "semantic_risk": {
+                          "official_status": sem_status,
+                          "severity_max": ("high" if sem_has_high else
+                                           ("medium" if "medium" in sem_sevs else
+                                            ("low" if "low" in sem_sevs else None))),
+                          "events": (list(sem["events"]) if sem else []),
+                          "impact": sem_impact,    # veto(high→否决) / pending(待核) / none
+                          "web_llm": {"status": "unknown",
+                                      "note": "Slice2(DeepSeek/web)未接,本片仅 cninfo 官方层"}}},
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
                                      "star": star, "plan": plan, "reject_reason": reject},
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status},

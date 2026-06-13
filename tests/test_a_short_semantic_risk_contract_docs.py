@@ -210,6 +210,28 @@ class SemanticRiskContractDocs(unittest.TestCase):
             for b in self._landing_blocks(planted):
                 self._assert_landing_block_ok("README.md(planted)", b)
 
+    def test_contract_expresses_m67_advisory_distinction_not_absolute_no_hard_veto(self):
+        # R-ASHORT-SEMANTIC-CONTRACT-M67-INTEGRATION-DRIFT: after the M6.7 integration, active docs
+        # must NOT keep the old absolute whole-layer "no hard veto / panel-only" wording while the
+        # engine makes official high → advisory 否决. One authoritative distinction in the contract:
+        # production EGS scoring/decision/veto + backtest forbidden; web_llm never hard-veto; but
+        # validated official high MAY produce an advisory 否决 inside non-production M6.7.
+        contract = _read("docs/a_short_semantic_risk_contract.md")
+        coverage = _read("docs/a_short_semantic_risk_coverage.md")
+        # old absolute whole-layer no-hard-veto wording must be gone (it contradicts M6.7 high→否决)
+        self.assertNotIn("语义风险层是 advisory-only:不硬否决", contract,
+                         "contract still asserts absolute whole-layer no-hard-veto (contradicts M6.7 integration)")
+        self.assertNotIn("**advisory-only**。绝不硬否决、不进 production scoring", coverage,
+                         "coverage still asserts absolute whole-layer no-hard-veto")
+        # contract must carry the production-vs-M6.7 advisory distinction
+        for kw in ("production EGS", "web_llm", "official_structured", "semantic_official", "否决"):
+            self.assertIn(kw, contract, f"contract lost the M6.7-distinction anchor: {kw}")
+        # web_llm must STILL be pinned as never-hard-veto (only official-high may advisory-否决)
+        self.assertIn("绝不硬否决", contract)
+        # README routes to the distinction too (not the old panel-only-as-final-invariant)
+        readme = _read("docs/README.md")
+        self.assertIn("semantic_official", readme)
+
     def test_coverage_doc_rejects_exact_48h_overclaim(self):
         text = _read("docs/a_short_semantic_risk_coverage.md")
         self.assertIn("默认 90 天", text)
