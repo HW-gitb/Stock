@@ -1,0 +1,552 @@
+{
+  "schema_name": "a_short_semantic_risk_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-13T17:19:04+08:00",
+  "as_of": "20260605",
+  "universe": {
+    "requested": [
+      "002768.SZ",
+      "601375.SH",
+      "601138.SH",
+      "000543.SZ",
+      "601688.SH",
+      "002283.SZ",
+      "603790.SH",
+      "603916.SH",
+      "002015.SZ",
+      "002516.SZ",
+      "600592.SH",
+      "601211.SH",
+      "601377.SH",
+      "600743.SH",
+      "603337.SH"
+    ],
+    "main_board_top15": [
+      "002768.SZ",
+      "601375.SH",
+      "601138.SH",
+      "000543.SZ",
+      "601688.SH",
+      "002283.SZ",
+      "603790.SH",
+      "603916.SH",
+      "002015.SZ",
+      "002516.SZ",
+      "600592.SH",
+      "601211.SH",
+      "601377.SH",
+      "600743.SH",
+      "603337.SH"
+    ],
+    "dropped_non_main": []
+  },
+  "coverage": {
+    "checked": 15,
+    "unknown": 0,
+    "failed": 0
+  },
+  "candidates": [
+    {
+      "ts_code": "002768.SZ",
+      "rank": 1,
+      "scan_tier": "deep",
+      "official_structured": {
+        "status": "clear",
+        "events": [],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "unknown",
+        "risk_level": "unknown",
+        "action": "no_action"
+      },
+      "sources": [],
+      "confidence": null,
+      "summary": "官方结构化: clear; web/LLM: 未评估(unknown,待 Slice-2b skill)",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "601375.SH",
+      "rank": 2,
+      "scan_tier": "deep",
+      "official_structured": {
+        "status": "risk",
+        "events": [
+          {
+            "source": "cninfo",
+            "title": "中原证券股份有限公司2025年度非经营性资金占用及其他关联资金往来的专项说明",
+            "category": "资金占用",
+            "disclosure_date": "20260328",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-03-28/1225047806.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          }
+        ],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "risk_candidate",
+        "risk_level": "low",
+        "action": "observe"
+      },
+      "sources": [
+        {
+          "title": "投行再出问题，国元证券月内又接罚单",
+          "url": "https://www.cls.cn/detail/2001465",
+          "published_at": null,
+          "fetched_at": null,
+          "source_type": "web"
+        }
+      ],
+      "confidence": 0.55,
+      "summary": "官方资金占用命中=年报例行专项说明(非真实占用)。web:2026 年内多次投行业务罚单(含安徽证监局),合规 soft-negative,建议观察。",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "601138.SH",
+      "rank": 3,
+      "scan_tier": "deep",
+      "official_structured": {
+        "status": "clear",
+        "events": [],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "unknown",
+        "risk_level": "unknown",
+        "action": "no_action"
+      },
+      "sources": [],
+      "confidence": null,
+      "summary": "官方结构化: clear; web/LLM: 未评估(unknown,待 Slice-2b skill)",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "000543.SZ",
+      "rank": 4,
+      "scan_tier": "deep",
+      "official_structured": {
+        "status": "risk",
+        "events": [
+          {
+            "source": "cninfo",
+            "title": "容诚对非经营性资金占用及其他关联资金往来情况专项说明",
+            "category": "资金占用",
+            "disclosure_date": "20260424",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-24/1225170336.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          }
+        ],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "clear_light",
+        "risk_level": "none",
+        "action": "downgrade"
+      },
+      "sources": [
+        {
+          "title": "皖能电力(000543) 最新动态_F10_同花顺",
+          "url": "https://basic.10jqka.com.cn/000543/",
+          "published_at": null,
+          "fetched_at": null,
+          "source_type": "web"
+        }
+      ],
+      "confidence": 0.5,
+      "summary": "官方资金占用命中=年报例行专项说明。web(单轮检索)未见监管/占用负面;稳定电力,2025 年报+Q1 业绩说明会正常。降级例行件 FP。",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "601688.SH",
+      "rank": 5,
+      "scan_tier": "deep",
+      "official_structured": {
+        "status": "risk",
+        "events": [
+          {
+            "source": "cninfo",
+            "title": "华泰证券股份有限公司2025年度非经营性资金占用及其他关联资金往来情况的专项说明",
+            "category": "资金占用",
+            "disclosure_date": "20260331",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-03-31/1225050731.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          }
+        ],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "risk_candidate",
+        "risk_level": "low",
+        "action": "observe"
+      },
+      "sources": [
+        {
+          "title": "华泰证券再收监管警示函，合规防线频失守",
+          "url": "https://cj.sina.com.cn/articles/view/1850649324/6e4eaaec001028mi2",
+          "published_at": null,
+          "fetched_at": null,
+          "source_type": "sina"
+        }
+      ],
+      "confidence": 0.55,
+      "summary": "官方资金占用命中=年报例行件。web:2026 合规风控警示(分支警示函/自营把关不到位),2025 业绩偏弱,soft-negative 观察。",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "002283.SZ",
+      "rank": 6,
+      "scan_tier": "light",
+      "official_structured": {
+        "status": "clear",
+        "events": [],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "unknown",
+        "risk_level": "unknown",
+        "action": "no_action"
+      },
+      "sources": [],
+      "confidence": null,
+      "summary": "官方结构化: clear; web/LLM: 未评估(unknown,待 Slice-2b skill)",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "603790.SH",
+      "rank": 7,
+      "scan_tier": "upgraded",
+      "official_structured": {
+        "status": "risk",
+        "events": [
+          {
+            "source": "cninfo",
+            "title": "上海雅运纺织化工股份有限公司2025年非经营性资金占用及其他关联资金往来情况",
+            "category": "资金占用",
+            "disclosure_date": "20260425",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-25/1225175942.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          },
+          {
+            "source": "cninfo",
+            "title": "立信会计师事务所（特殊普通合伙）关于上海雅运纺织化工股份有限公司2025年度非经营性资金占用及其他关联资金往来情况的专项报告",
+            "category": "资金占用",
+            "disclosure_date": "20260425",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-25/1225175929.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          }
+        ],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "clear_light",
+        "risk_level": "none",
+        "action": "downgrade"
+      },
+      "sources": [
+        {
+          "title": "雅运股份(603790.SH)：2026年一季报净利润为3661.46万元",
+          "url": "https://finance.sina.com.cn/jjxw/2026-04-25/doc-inhvsqpm0921377.shtml",
+          "published_at": "2026-04-25",
+          "fetched_at": null,
+          "source_type": "sina"
+        }
+      ],
+      "confidence": 0.5,
+      "summary": "官方资金占用命中=年报例行件。web(单轮)未见监管/占用负面;2025 净利约+26%、Q1 2026 净利 3661 万,经营稳健。降级例行件 FP。",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "603916.SH",
+      "rank": 8,
+      "scan_tier": "upgraded",
+      "official_structured": {
+        "status": "risk",
+        "events": [
+          {
+            "source": "cninfo",
+            "title": "非经营性资金占用及其他关联资金往来情况的专项报告",
+            "category": "资金占用",
+            "disclosure_date": "20260416",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-16/1225107616.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          }
+        ],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "clear_light",
+        "risk_level": "none",
+        "action": "downgrade"
+      },
+      "sources": [
+        {
+          "title": "苏博特(603916) 最新动态_F10_同花顺",
+          "url": "http://basic.10jqka.com.cn/603916/",
+          "published_at": null,
+          "fetched_at": null,
+          "source_type": "web"
+        }
+      ],
+      "confidence": 0.5,
+      "summary": "官方资金占用命中=年报例行件。web(单轮)未见监管/占用负面;2025 内控评价报告正常。降级例行件 FP。",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "002015.SZ",
+      "rank": 9,
+      "scan_tier": "light",
+      "official_structured": {
+        "status": "clear",
+        "events": [],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "unknown",
+        "risk_level": "unknown",
+        "action": "no_action"
+      },
+      "sources": [],
+      "confidence": null,
+      "summary": "官方结构化: clear; web/LLM: 未评估(unknown,待 Slice-2b skill)",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "002516.SZ",
+      "rank": 10,
+      "scan_tier": "light",
+      "official_structured": {
+        "status": "clear",
+        "events": [],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "unknown",
+        "risk_level": "unknown",
+        "action": "no_action"
+      },
+      "sources": [],
+      "confidence": null,
+      "summary": "官方结构化: clear; web/LLM: 未评估(unknown,待 Slice-2b skill)",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "600592.SH",
+      "rank": 11,
+      "scan_tier": "upgraded",
+      "official_structured": {
+        "status": "risk",
+        "events": [
+          {
+            "source": "cninfo",
+            "title": "容诚会计师事务所(特殊普通合伙)关于福建龙溪轴承(集团)股份有限公司非经营性资金占用及其他关联资金往来情况汇总表的专项审计报告",
+            "category": "资金占用",
+            "disclosure_date": "20260427",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-27/1225197417.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          }
+        ],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "risk_candidate",
+        "risk_level": "medium",
+        "action": "manual_review_required"
+      },
+      "sources": [
+        {
+          "title": "龙溪股份(600592.SH)收到福建证监局采取责令改正措施",
+          "url": "https://cn.investing.com/news/stock-market-news/article-3135531",
+          "published_at": "2025-12-19",
+          "fetched_at": null,
+          "source_type": "web"
+        }
+      ],
+      "confidence": 0.6,
+      "summary": "官方资金占用命中=年报例行件。web:2025-12 福建证监局责令改正+记入证券期货市场诚信档案(信息披露违规),实质监管措施,需人工复核。",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "601211.SH",
+      "rank": 12,
+      "scan_tier": "upgraded",
+      "official_structured": {
+        "status": "risk",
+        "events": [
+          {
+            "source": "cninfo",
+            "title": "关于国泰海通证券股份有限公司2025年度非经营性资金占用及其他关联资金往来情况的专项说明",
+            "category": "资金占用",
+            "disclosure_date": "20260328",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-03-28/1225048185.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          }
+        ],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "risk_candidate",
+        "risk_level": "medium",
+        "action": "manual_review_required"
+      },
+      "sources": [
+        {
+          "title": "百万年薪的合规总监，护不住违规罚单频发的国泰海通",
+          "url": "https://user.guancha.cn/main/content?id=1631427",
+          "published_at": null,
+          "fetched_at": null,
+          "source_type": "web"
+        }
+      ],
+      "confidence": 0.6,
+      "summary": "官方资金占用命中=年报例行件。web:子公司国泰君安国际 ECM 负责人 2026-03 被港 SFC/ICAC 调查(投行/内幕交易),深交所 IPO 保荐处分,合规问题频发,需人工复核。",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "601377.SH",
+      "rank": 13,
+      "scan_tier": "upgraded",
+      "official_structured": {
+        "status": "risk",
+        "events": [
+          {
+            "source": "cninfo",
+            "title": "兴业证券2025年度非经营性资金占用及其他关联资金往来情况的专项说明",
+            "category": "资金占用",
+            "disclosure_date": "20260328",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-03-28/1225047878.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          }
+        ],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "unknown",
+        "risk_level": "unknown",
+        "action": "no_action"
+      },
+      "sources": [],
+      "confidence": null,
+      "summary": "官方结构化: risk(1 风险事件); web/LLM: 未评估(unknown,待 Slice-2b skill)",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "600743.SH",
+      "rank": 14,
+      "scan_tier": "upgraded",
+      "official_structured": {
+        "status": "risk",
+        "events": [
+          {
+            "source": "cninfo",
+            "title": "中兴华会计师事务所出具的北京华远新航控股股份有限公司非经营性资金占用及其他关联资金往来情况汇总表的专项说明",
+            "category": "资金占用",
+            "disclosure_date": "20260422",
+            "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-22/1225136370.PDF",
+            "risk_type": "fund_occupation",
+            "severity": "medium"
+          }
+        ],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "headwind",
+        "risk_level": "medium",
+        "action": "observe"
+      },
+      "sources": [
+        {
+          "title": "600743，实控人筹划对下属部分企业重组，股价已3连板",
+          "url": "https://finance.sina.com.cn/wm/2026-04-09/doc-inhtxcuy0910002.shtml",
+          "published_at": "2026-04-09",
+          "fetched_at": null,
+          "source_type": "sina"
+        }
+      ],
+      "confidence": 0.55,
+      "summary": "官方资金占用命中=年报例行件。web:2025 预亏 -0.85~-1.15 亿,地产转型培育期,债券 2026-01 集中到期、流动性压力;近期投机性 3 连板/天地板。基本面+债务 headwind。",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    },
+    {
+      "ts_code": "603337.SH",
+      "rank": 15,
+      "scan_tier": "light",
+      "official_structured": {
+        "status": "clear",
+        "events": [],
+        "had_pit_announcements": true
+      },
+      "web_llm": {
+        "status": "unknown",
+        "risk_level": "unknown",
+        "action": "no_action"
+      },
+      "sources": [],
+      "confidence": null,
+      "summary": "官方结构化: clear; web/LLM: 未评估(unknown,待 Slice-2b skill)",
+      "boundary": {
+        "advisory_only": true,
+        "not_deterministic_veto": true
+      }
+    }
+  ],
+  "boundary": {
+    "production": false,
+    "real_money": false,
+    "hard_veto": false,
+    "changes_egs_scoring": false,
+    "changes_phase5_decision": false,
+    "historical_backtest_evidence": false,
+    "writes_production_path": false
+  }
+}

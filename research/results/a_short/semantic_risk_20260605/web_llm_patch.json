@@ -1,0 +1,102 @@
+{
+  "schema_name": "a_short_semantic_risk_web_llm_patch",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-13T17:35:00+08:00",
+  "target": {
+    "as_of": "20260605",
+    "summary_schema_name": "a_short_semantic_risk_summary",
+    "summary_schema_version": "1.0.0"
+  },
+  "source": {
+    "kind": "skill_web_llm",
+    "prompt_refs": [
+      "skills/a_short_analysis/prompts/semantic_risk_web_llm.md",
+      "skills/a_short_analysis/prompts/regulatory_48h.md",
+      "skills/a_short_analysis/prompts/policy_news.md",
+      "skills/a_short_analysis/prompts/industry_trend.md",
+      "skills/a_short_analysis/prompts/hidden_risk.md",
+      "skills/a_short_analysis/prompts/earnings_no_good_repair.md",
+      "skills/a_short_analysis/prompts/cross_market_linkage.md"
+    ],
+    "note": "LIVE web 检索 (WebSearch, 单轮) 2026-06-13;官方 fund_occupation 命中均为 2025 年报季例行《非经营性资金占用及对外担保情况专项说明》,本层判其实质并补监管/媒体/基本面 soft 信号。LIVE/不可复现,不进回测。"
+  },
+  "candidates": [
+    {
+      "ts_code": "601375.SH",
+      "web_llm": {"status": "risk_candidate", "risk_level": "low", "action": "observe"},
+      "sources": [
+        {"title": "投行再出问题，国元证券月内又接罚单", "url": "https://www.cls.cn/detail/2001465", "published_at": null, "fetched_at": null, "source_type": "web"}
+      ],
+      "confidence": 0.55,
+      "summary": "官方资金占用命中=年报例行专项说明(非真实占用)。web:2026 年内多次投行业务罚单(含安徽证监局),合规 soft-negative,建议观察。"
+    },
+    {
+      "ts_code": "601688.SH",
+      "web_llm": {"status": "risk_candidate", "risk_level": "low", "action": "observe"},
+      "sources": [
+        {"title": "华泰证券再收监管警示函，合规防线频失守", "url": "https://cj.sina.com.cn/articles/view/1850649324/6e4eaaec001028mi2", "published_at": null, "fetched_at": null, "source_type": "sina"}
+      ],
+      "confidence": 0.55,
+      "summary": "官方资金占用命中=年报例行件。web:2026 合规风控警示(分支警示函/自营把关不到位),2025 业绩偏弱,soft-negative 观察。"
+    },
+    {
+      "ts_code": "600592.SH",
+      "web_llm": {"status": "risk_candidate", "risk_level": "medium", "action": "manual_review_required"},
+      "sources": [
+        {"title": "龙溪股份(600592.SH)收到福建证监局采取责令改正措施", "url": "https://cn.investing.com/news/stock-market-news/article-3135531", "published_at": "2025-12-19", "fetched_at": null, "source_type": "web"}
+      ],
+      "confidence": 0.6,
+      "summary": "官方资金占用命中=年报例行件。web:2025-12 福建证监局责令改正+记入证券期货市场诚信档案(信息披露违规),实质监管措施,需人工复核。"
+    },
+    {
+      "ts_code": "601211.SH",
+      "web_llm": {"status": "risk_candidate", "risk_level": "medium", "action": "manual_review_required"},
+      "sources": [
+        {"title": "百万年薪的合规总监，护不住违规罚单频发的国泰海通", "url": "https://user.guancha.cn/main/content?id=1631427", "published_at": null, "fetched_at": null, "source_type": "web"}
+      ],
+      "confidence": 0.6,
+      "summary": "官方资金占用命中=年报例行件。web:子公司国泰君安国际 ECM 负责人 2026-03 被港 SFC/ICAC 调查(投行/内幕交易),深交所 IPO 保荐处分,合规问题频发,需人工复核。"
+    },
+    {
+      "ts_code": "600743.SH",
+      "web_llm": {"status": "headwind", "risk_level": "medium", "action": "observe"},
+      "sources": [
+        {"title": "600743，实控人筹划对下属部分企业重组，股价已3连板", "url": "https://finance.sina.com.cn/wm/2026-04-09/doc-inhtxcuy0910002.shtml", "published_at": "2026-04-09", "fetched_at": null, "source_type": "sina"}
+      ],
+      "confidence": 0.55,
+      "summary": "官方资金占用命中=年报例行件。web:2025 预亏 -0.85~-1.15 亿,地产转型培育期,债券 2026-01 集中到期、流动性压力;近期投机性 3 连板/天地板。基本面+债务 headwind。"
+    },
+    {
+      "ts_code": "000543.SZ",
+      "web_llm": {"status": "clear_light", "risk_level": "none", "action": "downgrade"},
+      "sources": [
+        {"title": "皖能电力(000543) 最新动态_F10_同花顺", "url": "https://basic.10jqka.com.cn/000543/", "published_at": null, "fetched_at": null, "source_type": "web"}
+      ],
+      "confidence": 0.5,
+      "summary": "官方资金占用命中=年报例行专项说明。web(单轮检索)未见监管/占用负面;稳定电力,2025 年报+Q1 业绩说明会正常。降级例行件 FP。"
+    },
+    {
+      "ts_code": "603790.SH",
+      "web_llm": {"status": "clear_light", "risk_level": "none", "action": "downgrade"},
+      "sources": [
+        {"title": "雅运股份(603790.SH)：2026年一季报净利润为3661.46万元", "url": "https://finance.sina.com.cn/jjxw/2026-04-25/doc-inhvsqpm0921377.shtml", "published_at": "2026-04-25", "fetched_at": null, "source_type": "sina"}
+      ],
+      "confidence": 0.5,
+      "summary": "官方资金占用命中=年报例行件。web(单轮)未见监管/占用负面;2025 净利约+26%、Q1 2026 净利 3661 万,经营稳健。降级例行件 FP。"
+    },
+    {
+      "ts_code": "603916.SH",
+      "web_llm": {"status": "clear_light", "risk_level": "none", "action": "downgrade"},
+      "sources": [
+        {"title": "苏博特(603916) 最新动态_F10_同花顺", "url": "http://basic.10jqka.com.cn/603916/", "published_at": null, "fetched_at": null, "source_type": "web"}
+      ],
+      "confidence": 0.5,
+      "summary": "官方资金占用命中=年报例行件。web(单轮)未见监管/占用负面;2025 内控评价报告正常。降级例行件 FP。"
+    }
+  ],
+  "boundary": {
+    "advisory_only": true,
+    "not_deterministic_veto": true,
+    "never_touches_official": true
+  }
+}
