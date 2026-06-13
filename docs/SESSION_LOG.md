@@ -10,6 +10,41 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-13 — Codex `审查 PASS` (semantic-risk Step1 analysis_input consumer validation)
+- **Verdict/Action**: PASS; 未发现新的 material Required。`--analysis-input` 已走 analysis_input 契约校验并强制 `trade_date == --as-of`; weekly Stage 4 仍是 advisory-only 旁路。
+- **Required**: `R-ASHORT-SEMANTIC-SUMMARY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP` — 修复详情与 working-tree repaired 注记见 `docs/system_risk_register.md`(单一来源); no new Required.
+- **Verify**: stale/future/schema-invalid no-write probes OK; semantic-risk+weekly+contract+governance+route suites = 158 OK; PowerShell ParseFile OK; py_compile OK; `git diff --check` clean; touched files have no BOM-at-start/FFFD; SESSION_LOG has one pre-existing internal FEFF in historical text.
+- **Next**: `提交`.
+
+## 2026-06-13 — Claude `修复` (语义 Step1 — --analysis-input 走契约校验 + trade_date 门)
+- **Verdict/Action**: `--analysis-input` 分支改为 `validate_analysis_input_file`(schema+PIT 契约)+ 强制 `trade_date == --as-of`,均在取数/写盘前 abort;堵住旧/未来/坏批次候选池被贴当前 as_of。与 weekly pipeline 同门;`--watch-pool` 与 exactly-one 守护不变。
+- **Required**: `R-ASHORT-SEMANTIC-SUMMARY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP` — 完整详情见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: 新增对抗测试:stale trade_date / schema-invalid 均 abort-no-write;正向用 schema-valid analysis_input(trade_date==as_of,300750 创业板被 drop);summary 套件 61 OK、加 weekly+governance 共 132 OK;`git diff --check` clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A 按消费校验全维(schema-invalid + stale/future trade_date + 正向)一次覆盖;B 复用仓库既有契约函数(同 weekly pipeline)、未碰 cninfo/exit-code/Step2/lane;C 反向:正向匹配批次仍正常产出且 abort 不留文件;F:py_compile OK、diff/BOM 干净。
+- **Next**: `审查`。
+
+## 2026-06-13 — Codex `审查 FAIL` (semantic-risk Step1 analysis_input consumer validation)
+- **Verdict/Action**: FAIL. `--analysis-input` wiring is directionally right, but the runner accepts stale/schema-invalid analysis_input and can label an old candidate pool as a new `as_of`.
+- **Required**: `R-ASHORT-SEMANTIC-SUMMARY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP` — full detail in `docs/system_risk_register.md` (single source).
+- **Verify**: 83 tests OK; PowerShell ParseFile OK; `git diff --check` clean; custom stale-analysis_input probe wrote `as_of=20260612` from `trade_date=20260605`.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `起草` (语义风险 Step1 接入 weekly_screening — 旁路 Stage 4)
+
+**目标**:把语义层 Step1(headless cninfo official_structured)接进生产周报脚本,每周自动产出官方结构化层;Step2(web_llm)仍需 LLM 在环另跑(不能纯自动化)。
+
+**改动**:
+- `runners/a_short_semantic_risk_summary.py`:加纯函数 `_watch_pool_from_analysis_input(ai)`(从 EGS analysis_input.candidates 抽 ts_code,按序去空)+ CLI `--analysis-input`(与 `--watch-pool` **二选一**,exactly-one 校验);供周报脚本直接喂生产 analysis_input。
+- `runners/weekly_screening.ps1`:新增 **Stage 4 semantic-risk 旁路**(同 canary/tracker 模式):egs_main 成功后,以 `result/a_short/<as_of>/analysis_input.json` 为 watch pool,产 `research/results/a_short/semantic_risk_<as_of>/summary.json`。**advisory-only 旁路**:cninfo 失败/反爬不影响 exit code、不阻断周报;落 research 非生产 lane;`-SkipSemanticRisk` 可关。整体 exit code 仍取 egs_main。
+- `docs/a_short_semantic_risk_coverage.md`:加"运行接入(cadence)"节。
+- 测试:`_watch_pool_from_analysis_input` 顺序/去空/非 dict 容错;`main(--analysis-input)` 注入 cninfo_fetcher 无网产 summary(主板过滤:300750 创业板被 drop);exactly-one 源校验(neither/both → SystemExit)。
+
+**Pre-Codex self-review: A-F checked** — A:watch-pool 双源(--watch-pool/--analysis-input)exactly-one 全覆盖 + 主板 drop 验证;B:grep 确认 egs_main/weekly_screening 原无 semantic 接入,新增不动主流程;旁路失败语义与 canary/tracker 一致(exit code 不受影响);C 反向:300750 创业板确被 drop、合法主板保留;D:无歧义 NL;**F 自catch**:python round-trip .ps1 把 CRLF→LF 致 PS5.1 ParseFile 在中文注释行报错,已转回 CRLF 并 `ParseFile` OK;204 tests OK、`git diff --check` clean、BOM/FFFD=0(.ps1 no-BOM CRLF)。
+
+**Boundary**:仅 runner CLI 选项 + 周报脚本旁路 + 测试 + coverage 说明;advisory-only 不阻断周报、不进 result/a_short、不进 production scoring/decision;Step2 仍人工;V14.2 frozen;egs_main 主流程未碰。
+
+**Next**: `审查`(复审旁路非阻断性 / lane 隔离 / exactly-one 源 / .ps1 CRLF)。
+
 ## 2026-06-13 — Claude `执行` (语义风险 advisory 层首次真实运行 — Slice 3 证据时钟起点)
 
 **What ran**: 语义风险 advisory 层首次端到端真实运行(headless cninfo + skill-in-loop web_llm)。

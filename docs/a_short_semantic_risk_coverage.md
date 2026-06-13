@@ -32,5 +32,10 @@
 - **skill prompt** `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`:编排既有 6 个分类 prompt(regulatory_48h/policy_news/industry_trend/hidden_risk/earnings_no_good_repair/cross_market_linkage)→ 产 `a_short_semantic_risk_web_llm_patch`;运行时 skill 在环、`apply_web_llm_patch` 校验合并。
 - **面板接入 weekly pipeline**:`a_short_weekly_pipeline --semantic-risk-summary <summary.json>` → `_semantic_panel_from_summary`(渲染前过其消费门)→ `render_semantic_risk_panel` **仅追加到周报 .md**(`---` 分隔),**绝不进确定性周报 JSON**。消费门的校验步骤**单一来源** = `_semantic_panel_from_summary` docstring,本处只指向、不复述(防漂移)。
 
+## 运行接入(cadence)
+- **Step 1(headless official_structured)接入 `runners/weekly_screening.ps1`**(Stage 4,旁路):周报 run egs_main 成功后,以当次 `result/a_short/<as_of>/analysis_input.json` 候选为 watch pool(`--analysis-input`,runner 内再过主板 Top15),真 cninfo 取数产 `research/results/a_short/semantic_risk_<as_of>/summary.json`。**advisory-only 旁路**:cninfo 失败/反爬绝不阻断周报(同 canary/tracker),落 research 非生产 lane(禁 result/a_short),`-SkipSemanticRisk` 可关。
+- **Step 2(web_llm)仍需 2b-ii skill(LLM 在环)另跑**——脚本只产官方结构化层(web_llm 全留 unknown),不能纯自动化。
+- watch pool 抽取 = `a_short_semantic_risk_summary._watch_pool_from_analysis_input`(纯函数,单测)。
+
 ## 不在本层(deferred)
 - **Slice 3 — deterministic promotion**:把 cninfo 官方命中升级为**生产硬否决** + 处置既有 DeepSeek `POL-RISK-VETO` legacy-conflict + cninfo 两路径去重。门槛高(动冻结相邻 egs_main stage3),设计上待 advisory 跑出几周真实结果后再决定。追踪:`docs/system_risk_register.md` deferred-open 条目 + `tests/test_semantic_risk_slice3_guard.py`(防忘 CI 守护)。

@@ -482,10 +482,19 @@ def build_summary_from_fetches(watch_pool, as_of: str, cninfo_results, sina_resu
     return build_summary(universe, flags, as_of, generated_at)
 
 
+def _watch_pool_from_analysis_input(ai: dict) -> list:
+    """从 EGS analysis_input 抽候选 ts_code(按原顺序、去空)作 watch pool;
+    runner 内部再过 `main_board_top15`。让 weekly_screening 能直接用生产 analysis_input 接入语义层。"""
+    return [str(c["ts_code"]) for c in (ai.get("candidates") or [])
+            if isinstance(c, dict) and c.get("ts_code")]
+
+
 def main(argv=None, cninfo_fetcher=None, sina_fetcher=None):
     p = argparse.ArgumentParser(description="A-short 语义风险 advisory summary — Slice 2a headless 骨架")
     p.add_argument("--as-of", required=True, help="YYYYMMDD")
-    p.add_argument("--watch-pool", required=True, help="逗号分隔 ts_code 或 @path JSON 数组")
+    p.add_argument("--watch-pool", help="逗号分隔 ts_code 或 @path JSON 数组(与 --analysis-input 二选一)")
+    p.add_argument("--analysis-input", help="EGS analysis_input.json:从其 candidates 抽 watch pool"
+                                            "(与 --watch-pool 二选一;供 weekly_screening 接入)")
     p.add_argument("--out", required=True, help="summary 落点(禁 result/a_short)")
     p.add_argument("--confirm-fetch-authorized", action="store_true",
                    help="确认用户已授权本次 cninfo(+可选 Sina)真实抓取")
@@ -497,9 +506,22 @@ def main(argv=None, cninfo_fetcher=None, sina_fetcher=None):
         raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:本 runner 会真实抓取 cninfo/Sina")
     if not _is_canonical_date(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
+    if bool(args.watch_pool) == bool(args.analysis_input):
+        raise SystemExit("[FATAL] 须且仅须提供 --watch-pool 或 --analysis-input 之一")
     _guard_out_path(args.out)
 
-    requested = _load_watch_pool(args.watch_pool)
+    if args.analysis_input:
+        # 消费方校验(#R-ASHORT-SEMANTIC-SUMMARY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP):
+        # 走仓库 analysis_input 契约(schema+PIT),并强制 trade_date == --as-of,**在取数/写盘前** abort,
+        # 否则会把旧/未来/坏批次候选池贴上当前 as_of 标签(与 weekly pipeline 同一道门)。
+        from engine.data.analysis_input_contract import validate_analysis_input_file
+        ai = validate_analysis_input_file(args.analysis_input, label="semantic-risk analysis_input")
+        if str(ai.get("trade_date")) != str(args.as_of):
+            raise SystemExit(f"[FATAL] analysis_input.trade_date {ai.get('trade_date')} != --as-of "
+                             f"{args.as_of}(批次错配/未来/陈旧,拒建语义层)")
+        requested = _watch_pool_from_analysis_input(ai)
+    else:
+        requested = _load_watch_pool(args.watch_pool)
     main_codes, dropped = main_board_top15(requested)
     print(f"[semantic-summary] universe: requested={len(requested)} → main-board Top15={len(main_codes)} "
           f"(dropped={len(dropped)})")

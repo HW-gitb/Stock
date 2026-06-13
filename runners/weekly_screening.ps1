@@ -1,13 +1,18 @@
 # weekly_screening.ps1 — 周五实盘选股 + 数据保险一键脚本
 #
 # 顺序：
-#   1) A-EGS\egs_main.py          (主选股；产 data_health.json by Codex layer)
-#   2) runners\data_canary.py     (旁路跨源对账；sina 默认，VPN-agnostic)
-#   3) runners\forward_tracker.py (Phase 3.5 实盘 forward 累计；不影响主流程)
+#   1) A-EGS\egs_main.py                       (主选股；产 data_health.json by Codex layer)
+#   2) runners\data_canary.py                  (旁路跨源对账；sina 默认，VPN-agnostic)
+#   3) runners\forward_tracker.py              (Phase 3.5 实盘 forward 累计；不影响主流程)
+#   4) runners\a_short_semantic_risk_summary.py(语义风险 advisory Step1：cninfo 官方结构化层；
+#                                               watch pool = 当次 EGS analysis_input 候选；
+#                                               Step2 web_llm 仍需 2b-ii skill 在环,本脚本不做)
 #
 # 设计约束：
-# - canary / tracker 在 egs_main 失败时不跑（拿不到当次 candidates，意义为零）
-# - canary / tracker 自身失败不影响整体 exit code（旁路约束：不阻断选股）
+# - canary / tracker / semantic 在 egs_main 失败时不跑（拿不到当次 candidates，意义为零）
+# - canary / tracker / semantic 自身失败不影响整体 exit code（旁路约束：不阻断选股）
+# - semantic 是 advisory-only:cninfo 取数失败/反爬绝不阻断周报;落 research 非生产 lane,
+#   绝不进 result/a_short、不进 production scoring/decision/veto
 # - 整体 exit code 取 egs_main 的 exit code
 #
 # Usage:
@@ -17,6 +22,7 @@
 #   .\runners\weekly_screening.ps1 -PythonExe C:\Path\To\python.exe   # python 不在 PATH 时
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
 #   .\runners\weekly_screening.ps1 -SkipTracker                       # 不跑 forward tracker capture
+#   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # 不跑语义风险 advisory Step1
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard
 
 param(
@@ -29,7 +35,8 @@ param(
     [string]$PythonExe = 'python',
     [switch]$AllowHistoricalOverwrite,
     [switch]$SkipCanary,
-    [switch]$SkipTracker
+    [switch]$SkipTracker,
+    [switch]$SkipSemanticRisk
 )
 
 # We rely on $LASTEXITCODE from native exes (python.exe), not PowerShell
@@ -113,6 +120,7 @@ Write-Host "l3 mode:       $EffectiveL3Mode"
 Write-Host "canary source: $CanarySource"
 Write-Host "skip canary:   $SkipCanary"
 Write-Host "skip tracker:  $SkipTracker"
+Write-Host "skip semantic: $SkipSemanticRisk"
 Write-Host ""
 
 # --- Stage 1: egs_main ---
@@ -121,24 +129,24 @@ if ($EffectiveL3Mode -eq 'pit') {
     $EgsArgs += '--l3-pit-strict'
 }
 
-Write-Host "[1/3] Running $PythonExe $($EgsArgs -join ' ') ..." -ForegroundColor Yellow
+Write-Host "[1/4] Running $PythonExe $($EgsArgs -join ' ') ..." -ForegroundColor Yellow
 & $PythonExe @EgsArgs
 $EgsExitCode = $LASTEXITCODE
 if ($null -eq $EgsExitCode) { $EgsExitCode = 1 }
 
 if ($EgsExitCode -ne 0) {
     Write-Host ""
-    Write-Host "[SKIP] egs_main exit $EgsExitCode -> skipping canary + tracker (no fresh candidates)" -ForegroundColor Red
+    Write-Host "[SKIP] egs_main exit $EgsExitCode -> skipping canary + tracker + semantic (no fresh candidates)" -ForegroundColor Red
     exit $EgsExitCode
 }
 
 # --- Stage 2: data_canary ---
 if ($SkipCanary) {
     Write-Host ""
-    Write-Host "[2/3] -SkipCanary set, canary not run" -ForegroundColor DarkGray
+    Write-Host "[2/4] -SkipCanary set, canary not run" -ForegroundColor DarkGray
 } else {
     Write-Host ""
-    Write-Host "[2/3] Running runners\data_canary.py --as-of $AsOf --source $CanarySource ..." -ForegroundColor Yellow
+    Write-Host "[2/4] Running runners\data_canary.py --as-of $AsOf --source $CanarySource ..." -ForegroundColor Yellow
     & $PythonExe runners\data_canary.py --as-of $AsOf --source $CanarySource
     $CanaryExitCode = $LASTEXITCODE
     if ($null -eq $CanaryExitCode) { $CanaryExitCode = 1 }
@@ -165,10 +173,10 @@ if ($SkipCanary) {
 # --- Stage 3: forward_tracker capture ---
 if ($SkipTracker) {
     Write-Host ""
-    Write-Host "[3/3] -SkipTracker set, forward tracker not run" -ForegroundColor DarkGray
+    Write-Host "[3/4] -SkipTracker set, forward tracker not run" -ForegroundColor DarkGray
 } else {
     Write-Host ""
-    Write-Host "[3/3] Running runners\forward_tracker.py capture --as-of $AsOf ..." -ForegroundColor Yellow
+    Write-Host "[3/4] Running runners\forward_tracker.py capture --as-of $AsOf ..." -ForegroundColor Yellow
     & $PythonExe runners\forward_tracker.py capture --as-of $AsOf
     $TrackerExitCode = $LASTEXITCODE
     if ($null -eq $TrackerExitCode) { $TrackerExitCode = 1 }
@@ -177,6 +185,34 @@ if ($SkipTracker) {
         # tracker capture 失败不影响主流程退出码（旁路约束）。
         # 失败原因通常是 analysis_input.json 缺失或 Python 异常，不是数据问题。
         Write-Host "[WARN] forward_tracker exit $TrackerExitCode (check logs/forward_tracker.csv)" -ForegroundColor Yellow
+    }
+}
+
+# --- Stage 4: semantic-risk advisory (Step1 headless cninfo official_structured) ---
+# 旁路约束(同 canary/tracker):advisory-only,失败绝不阻断周报;落 research 非生产 lane(禁 result/a_short);
+# watch pool = 当次 EGS analysis_input 候选(runner 内部再过主板 Top15)。
+# Step2 web_llm 需 2b-ii skill(LLM 在环)另跑——本脚本只产官方结构化层(web_llm 全留 unknown)。
+if ($SkipSemanticRisk) {
+    Write-Host ""
+    Write-Host "[4/4] -SkipSemanticRisk set, semantic-risk advisory not run" -ForegroundColor DarkGray
+} else {
+    Write-Host ""
+    $SemAnalysisInput = Join-Path $ProjectRoot "result\a_short\$AsOf\analysis_input.json"
+    if (-not (Test-Path $SemAnalysisInput)) {
+        Write-Host "[WARN] semantic-risk skipped: analysis_input not found at $SemAnalysisInput (advisory sidecar, weekly not blocked)" -ForegroundColor Yellow
+    } else {
+        $SemOut = Join-Path $ProjectRoot "research\results\a_short\semantic_risk_$AsOf\summary.json"
+        Write-Host "[4/4] Running runners\a_short_semantic_risk_summary.py --as-of $AsOf --analysis-input <egs> ..." -ForegroundColor Yellow
+        & $PythonExe runners\a_short_semantic_risk_summary.py --as-of $AsOf --analysis-input $SemAnalysisInput --out $SemOut --confirm-fetch-authorized
+        $SemExitCode = $LASTEXITCODE
+        if ($null -eq $SemExitCode) { $SemExitCode = 1 }
+
+        if ($SemExitCode -ne 0) {
+            # cninfo 取数失败/反爬/anti-scrape 不影响主流程退出码（旁路约束:advisory 绝不阻断选股）
+            Write-Host "[WARN] semantic-risk exit $SemExitCode (advisory sidecar; cninfo fetch/anti-scrape failure does NOT block the weekly)" -ForegroundColor Yellow
+        } else {
+            Write-Host "[ADVISORY] semantic-risk official_structured summary -> $SemOut. web_llm tier stays UNKNOWN until the 2b-ii skill (LLM in loop) fills it; advisory-only, not a veto/ship-gate." -ForegroundColor Yellow
+        }
     }
 }
 
