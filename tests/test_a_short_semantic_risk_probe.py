@@ -25,6 +25,7 @@ from runners.a_short_semantic_risk_probe import (  # noqa: E402
     classify_sina_code, assess_sina_feasibility, build_probe_summary,
     validate_probe_summary_consistency, write_probe_summary, _guard_out_path,
     _parse_disclosure_date, fetch_cninfo, fetch_cninfo_orgid_map, MIN_CNINFO_OK_CODES,
+    fetch_em_news,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_semantic_risk_probe_summary.schema.json"
@@ -493,6 +494,64 @@ class WritePath(unittest.TestCase):
             reloaded = json.loads(out.read_text(encoding="utf-8"))
         self.assertTrue(reloaded["feasible"])
         self.assertEqual(reloaded["schema_name"], "a_short_semantic_risk_probe_summary")
+
+
+class FetchEmNews(unittest.TestCase):
+    """em 资讯 fetch:JSONP 剥壳 → result.cmsArticleWeb → normalize → PIT 近 N 天窗过滤 + 倒序 cap;
+    fail-closed(无 name / 非 200 / 坏 as_of → ok:False、items:[])。合成 fixture,无真 HTTP(对齐 `执行` 实测 shape)。"""
+    class _Resp:
+        def __init__(self, text, status=200):
+            self.text, self.status_code = text, status
+
+    class _Sess:
+        def __init__(self, body, status=200):
+            self._body, self._status = body, status
+
+        def get(self, url, headers=None, timeout=None):
+            return FetchEmNews._Resp(self._body, self._status)
+
+    def _jsonp(self, items):
+        return "cb(" + json.dumps({"code": 0, "result": {"cmsArticleWeb": items}}, ensure_ascii=False) + ")"
+
+    def test_jsonp_parse_recency_filter_and_cap(self):
+        items = [
+            {"title": "近期负面A", "url": "http://e/a", "date": "2026-06-07 10:00:00"},   # in window, newest
+            {"title": "近期负面B", "url": "http://e/b", "date": "2026-05-20 09:00:00"},   # in window
+            {"title": "陈年旧文", "url": "http://e/old", "date": "2024-02-19 17:48:16"},  # out of window → drop
+            {"title": "未来文PIT泄漏", "url": "http://e/f", "date": "2026-06-20 08:00:00"},  # > as_of → drop
+            {"title": "缺URL", "url": "", "date": "2026-06-06 08:00:00"},                  # no url → drop
+        ]
+        out = fetch_em_news(["600519.SH"], {"600519.SH": "贵州茅台"}, "20260609",
+                            lookback_days=30, cap=5, session=self._Sess(self._jsonp(items)))
+        self.assertEqual(len(out), 1)
+        self.assertTrue(out[0]["ok"])
+        self.assertEqual([it["title"] for it in out[0]["items"]], ["近期负面A", "近期负面B"])  # in-window, date-desc
+        self.assertEqual(out[0]["items"][0]["published_at"], "2026-06-07 10:00:00")
+        self.assertEqual(set(out[0]["items"][0]), {"title", "url", "published_at"})
+
+    def test_cap_limits_to_newest(self):
+        items = [{"title": f"t{i}", "url": f"http://e/{i}", "date": f"2026-06-0{i} 10:00:00"} for i in range(1, 6)]
+        out = fetch_em_news(["600519.SH"], {"600519.SH": "茅台"}, "20260609",
+                            lookback_days=60, cap=2, session=self._Sess(self._jsonp(items)))
+        self.assertEqual(len(out[0]["items"]), 2)                       # capped
+        self.assertEqual(out[0]["items"][0]["published_at"], "2026-06-05 10:00:00")  # newest first
+
+    def test_no_name_is_ok_false(self):
+        out = fetch_em_news(["600519.SH"], {}, "20260609", session=self._Sess(self._jsonp([])))
+        self.assertFalse(out[0]["ok"])
+        self.assertEqual(out[0]["error_category"], "no_name")
+
+    def test_non_200_is_ok_false(self):
+        out = fetch_em_news(["600519.SH"], {"600519.SH": "茅台"}, "20260609",
+                            session=self._Sess("blocked", status=403))
+        self.assertFalse(out[0]["ok"])
+        self.assertEqual(out[0]["error_category"], "anti_scrape")
+
+    def test_bad_as_of_all_ok_false(self):
+        out = fetch_em_news(["600519.SH"], {"600519.SH": "茅台"}, "2026-06-09",
+                            session=self._Sess("x"))
+        self.assertFalse(out[0]["ok"])
+        self.assertEqual(out[0]["error_category"], "bad_as_of")
 
 
 if __name__ == "__main__":

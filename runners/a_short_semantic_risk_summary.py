@@ -9,9 +9,10 @@
   status:`risk`(有 PIT 风险事件)/ `clear`(查过、无风险事件、无质量缺陷)/ `unknown`(取数失败 **或**
   有未来/不可解析/非字典/代码错配等质量缺陷——**绝不把不可信当 clear**;但 PIT 干净行里**真命中风险则
   优先报 risk**)。
-- **web_llm(Sina/web LLM advisory 层)= 本 standalone summary 留 `unknown`(过渡 sidecar;web 产出路径单一来源见
-  `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径;独立 summary CLI 已 Slice 3b-2 退役)**:headless 跑不了 web/LLM 判断,
-  本切片仅 best-effort 把 Sina 原始条目喂进 `sources`(不判定、不设 clear);web 层判断产出路径见上述契约 §web_llm 产出路径。
+- **web_llm(web/LLM advisory 层)= 本 standalone summary 留 `unknown`(过渡 sidecar;**独立 summary CLI 已 Slice 3b-2 退役**;
+  web 产出路径单一来源见 `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径)**:headless 跑不了 web/LLM 判断。
+  **当前 weekly web_llm 主源 = em(`fetch_em_news` → `_em_sources`,取代失效 sina);** 本退役切片曾 best-effort 把 Sina 原始
+  条目喂进 `sources`(不判定、不设 clear),仅 legacy。
 
 **advisory-only 边界(硬约束)**:绝不硬否决、不进 production scoring/decision/veto、不做历史回测证据、
 不写 production 路径、unknown 不伪装 clear、web/LLM 不与官方结构化混同一置信。纯 build/validate 核心可测;不动 egs_main / Phase5 / V14.2。web/LLM 判断 + M6.7 融入见契约 §web_llm 产出路径与后续切片;
@@ -164,12 +165,13 @@ def _batch_unhealthy(candidates: list) -> bool:
     return _batch_announced(candidates) < min(MIN_BATCH_ANNOUNCED, n)
 
 
-def _sina_sources(sina_raw) -> list[dict]:
-    """best-effort:Sina 原始条目 → sources(source_type=sina);只判定不了,故不设 web_llm 状态。"""
-    if not sina_raw or not sina_raw.get("ok"):
+def _news_sources(raw, source_type: str) -> list[dict]:
+    """best-effort:fetch 原始结果(`{ok, items:[{title,url,published_at}]}`) → judge sources(标 `source_type`);
+    只供证据/喂判官,不设 web_llm 状态。未 ok / 无条目 → [];title/url 缺失的条目丢弃。"""
+    if not raw or not raw.get("ok"):
         return []
     out = []
-    for it in (sina_raw.get("items") or []):
+    for it in (raw.get("items") or []):
         if not isinstance(it, dict):
             continue
         title = str(it.get("title", "") or "")
@@ -179,8 +181,21 @@ def _sina_sources(sina_raw) -> list[dict]:
         out.append({"title": title[:200], "url": url,
                     "published_at": (str(it.get("published_at")) if it.get("published_at") else None),
                     "fetched_at": (str(it.get("fetched_at")) if it.get("fetched_at") else None),
-                    "source_type": "sina"})
+                    "source_type": source_type})
     return out
+
+
+def _sina_sources(sina_raw) -> list[dict]:
+    """sina 原始条目 → sources(source_type=sina)。**注:sina roll 端点 2026-06-14 已失效**(见
+    `a_short_semantic_risk_probe.fetch_sina` DEPRECATED);weekly 判官主源已切 em(`_em_sources`)。
+    保留给 build_candidate / 旧测试。"""
+    return _news_sources(sina_raw, "sina")
+
+
+def _em_sources(em_raw) -> list[dict]:
+    """em 资讯条目 → sources(source_type=em)= weekly web_llm 判官**主源**(见
+    `a_short_semantic_risk_probe.fetch_em_news`)。"""
+    return _news_sources(em_raw, "em")
 
 
 def build_candidate(ts_code: str, rank: int, cninfo_raw: dict, sina_raw, as_of: str):

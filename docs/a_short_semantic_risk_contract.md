@@ -28,7 +28,7 @@
 
 ## web_llm
 
-- 来源:新浪、通用 web、用户上下文等 LIVE-only 证据;不可复现,不得进入历史回测。
+- 来源:em(东方财富)资讯=主源(取代失效 sina,见 §web_llm 产出路径)、通用 web、用户上下文等 LIVE-only 证据;不可复现,不得进入历史回测。
 - `web_llm.status == "unknown"` 时,`risk_level` 必须是 `unknown`、`action` 必须是 `no_action`(无证据的中性三元组 `unknown/unknown/no_action`,见 Scope),且可以空 `sources`。
 - 任何非 `unknown` 的 web 状态都必须带 `sources` 证据:
   `clear_light`, `risk_candidate`, `risk`, `tailwind`, `headwind`。
@@ -51,6 +51,17 @@
 - **当前结论路(current)**:周报 `runners/a_short_weekly_pipeline.py` M6.7 内 **DeepSeek adapter 自动判** web
   (`--confirm-fetch-authorized` 且未 `--skip-semantic` 时自动接入,**主板 Top15** 边界;缺 key/SDK/抓取失败 → `unknown`
   中性、非阻断)。判官判已抓取文本(非搜索器);影响规则见上 §web_llm「M6.7 集成」。
+- **web 源 = em(东方财富)资讯**(`fetch_em_news`,search-api/cmsArticleWeb;剥 JSONP → `result.cmsArticleWeb`,
+  **客户端 PIT 近 N 天窗过滤 + 倒序 cap**(em 按相关度排、sort 参数实测被忽略,故客户端兜近期);`--web-news-lookback-days`
+  默认 30)。**sina roll 端点已弃用**:`执行`(2026-06-14)实测其对任意关键词返回 `code=11 列表未注册`、`data` 恒空——
+  非关键词/编码/反爬问题,是频道失效;`fetch_sina` 标 DEPRECATED,仅留 legacy probe `--include-sina`。**cls(财联社)个股
+  资讯需签名(`errno 50101`),暂缓**(未来 best-effort 二源)。
+- **EM 源的 tracked owner / 可审路径(非 ad-hoc)**:em 源的可复现/可审 owner = `fetch_em_news`(probe 模块内的 live fetcher)
+  + `tests/test_a_short_semantic_risk_probe.py::FetchEmNews`(对**实测真 shape**钉 JSONP 解析 / PIT 近 N 天窗 / cap / fail-closed)
+  + 本契约本节。**`a_short_semantic_risk_probe.main()` / `build_probe_summary` / probe schema 是 Slice-1 cninfo(+ legacy Sina)
+  可行性工具,不建模 em**;em 的 live 可行性由 weekly `--confirm-fetch-authorized` `执行`(调 `fetch_em_news`)验证,真 shape 已固化
+  进 FetchEmNews fixture。一次性诊断脚本 `_diag_web_sources.py` 仅用于初次端点勘察,**不提交、不作为 ad-hoc root helper**
+  (其结论已落入 FetchEmNews fixture + 本节)。
 - **过渡路已全退役(Slice 3b)**:独立 `a_short_semantic_risk_summary` summary CLI + `weekly_screening.ps1`
   Stage-4 sidecar + 独立面板均已退役;**周五入口 `weekly_screening.ps1` 现直接跑 M6.7 pipeline**(一键串联,语义 cninfo+DeepSeek 行内,3b-2);`a_short_semantic_risk_summary` 仅留被 M6.7 复用的 official_structured builders。**2b-ii skill-patch(`a_short_semantic_risk_web_llm_patch`)路径已在 Slice 3a 退役**(被 M6.7 内 DeepSeek adapter 取代)。
 - 不变式见上 §web_llm + §Scope(advisory-only、unknown-not-clear、never hard-veto)。

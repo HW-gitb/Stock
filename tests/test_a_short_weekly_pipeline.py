@@ -1141,9 +1141,9 @@ class SemanticWebLLMIntoM67(unittest.TestCase):
 
 
 class DeepSeekWebProviderWiring(unittest.TestCase):
-    """Slice 2 pipeline glue: _build_deepseek_web_llm_provider (sina fetch + DeepSeek judge, non-blocking).
-    Injected fake sina_fetcher + fake ds_client → no network. Covers per-code judge, no-items→None,
-    no-key→whole-layer-None, fetch-failure→None (advisory non-blocking)."""
+    """Slice 2 pipeline glue: _build_deepseek_web_llm_provider (em news fetch + DeepSeek judge, non-blocking).
+    Injected fake news_fetcher(codes, names, as_of, lookback) + fake ds_client → no network. Covers per-code
+    judge, no-items→None, no-key→whole-layer-None, fetch-failure→None, main-board Top15 gate (non-blocking)."""
     def _client(self, content):
         from tests.test_a_short_deepseek_semantic_adapter import _FakeClient
         return _FakeClient(content)
@@ -1153,11 +1153,12 @@ class DeepSeekWebProviderWiring(unittest.TestCase):
         raws = [{"ts_code": "600000.SH", "ok": True, "items": [{"title": "公司被立案调查", "url": "u"}]},
                 {"ts_code": "600001.SH", "ok": True, "items": []}]      # no items → judge unknown → None
         prov = _build_deepseek_web_llm_provider(
-            ["600000.SH", "600001.SH"], {"600000.SH": "A", "600001.SH": "B"},
-            sina_fetcher=lambda codes: raws,
+            ["600000.SH", "600001.SH"], {"600000.SH": "A", "600001.SH": "B"}, AS_OF,
+            news_fetcher=lambda codes, names, as_of, lookback: raws,
             ds_client=self._client('{"status":"risk","risk_level":"high","action":"downgrade","summary":"立案"}'))
         self.assertIsNotNone(prov)
         self.assertEqual(prov("600000.SH")["web_llm"]["status"], "risk")
+        self.assertEqual(prov("600000.SH")["sources"][0]["source_type"], "em")   # em-sourced evidence
         self.assertIsNone(prov("600001.SH"))                            # unknown → None (中性)
 
     def test_provider_none_without_client(self):
@@ -1166,20 +1167,21 @@ class DeepSeekWebProviderWiring(unittest.TestCase):
         from runners.a_short_weekly_pipeline import _build_deepseek_web_llm_provider
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("DEEPSEEK_API_KEY", None)                    # no key + no injected client
-            prov = _build_deepseek_web_llm_provider(["600000.SH"], {}, sina_fetcher=lambda codes: [])
+            prov = _build_deepseek_web_llm_provider(
+                ["600000.SH"], {}, AS_OF, news_fetcher=lambda codes, names, as_of, lookback: [])
         self.assertIsNone(prov)                                         # whole web layer unknown (non-blocking)
 
     def test_provider_none_on_fetch_failure(self):
         from runners.a_short_weekly_pipeline import _build_deepseek_web_llm_provider
-        def boom(codes):
-            raise RuntimeError("sina down")
-        prov = _build_deepseek_web_llm_provider(["600000.SH"], {}, sina_fetcher=boom,
+        def boom(codes, names, as_of, lookback):
+            raise RuntimeError("em down")
+        prov = _build_deepseek_web_llm_provider(["600000.SH"], {}, AS_OF, news_fetcher=boom,
                                                 ds_client=self._client("{}"))
         self.assertIsNone(prov)                                         # fetch fail → non-blocking None
 
     def test_provider_filters_to_main_board_top15(self):
         # R-ASHORT-M67-DEEPSEEK-WEBLLM-TOP15-SCOPE-BYPASS: provider must reuse the official main_board_top15
-        # gate BEFORE any Sina fetch / DeepSeek judge — only the deduped main-board Top15 is fetched, and a
+        # gate BEFORE any em fetch / DeepSeek judge — only the deduped main-board Top15 is fetched, and a
         # non-main-board (or beyond-cap) candidate gets neutral None even if the weekly report still lists it.
         from runners.a_short_weekly_pipeline import _build_deepseek_web_llm_provider
         from runners.a_short_semantic_risk_probe import main_board_top15
@@ -1188,11 +1190,11 @@ class DeepSeekWebProviderWiring(unittest.TestCase):
         self.assertLessEqual(len(main_codes), 15)
         self.assertNotIn("300750.SZ", main_codes)
         seen = {}
-        def fetcher(cs):
+        def fetcher(cs, names, as_of, lookback):
             seen["codes"] = list(cs)
             return [{"ts_code": c, "ok": True, "items": [{"title": "公司被立案", "url": "u"}]} for c in cs]
         prov = _build_deepseek_web_llm_provider(
-            codes, {}, sina_fetcher=fetcher,
+            codes, {}, AS_OF, news_fetcher=fetcher,
             ds_client=self._client('{"status":"risk","risk_level":"high","action":"downgrade","summary":"x"}'))
         self.assertEqual(seen["codes"], list(main_codes))    # fetcher 只收过滤后的主板 Top15(不含 300750/688/超界)
         self.assertNotIn("300750.SZ", seen["codes"])

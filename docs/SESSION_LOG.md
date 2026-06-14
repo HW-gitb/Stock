@@ -10,6 +10,57 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Codex `审查 PASS` (R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT-R2)
+- **Verdict/Action**: PASS. R2 三个残留面已清:weekly wrapper 真取数清单改 em,probe CLI 标 legacy opt-in,README 设计行标历史并指向 EM contract;guard 覆盖 R1/R2 残留形态。
+- **Required**: `R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT-R2` addressed;`R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT` 也随本切片闭合。提交时按 register 翻 resolved。
+- **Verify**: targeted 245 OK;py_compile OK;diff-check clean;PS ParseFile OK;BOM/FFFD OK;full discover 1821 only 6 known `C:\Users\cnhea\tk.csv` PermissionError。
+- **Next**: Claude `提交`。
+
+## 2026-06-14 — Claude `修复` (R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT-R2)
+- **Verdict/Action**: R2 残留 sina-as-current 全清(详情见 register):ps1 Stage4 真取数清单 sina→em(×2)、probe CLI help/fatal/`--include-sina` help 标 legacy+非当前源(×3)、probe docstring 行标 legacy、README design 行标「历史设计·当前已切 em」。drift guard 强化:加 `weekly_screening.ps1` 入扫描集 + per-line scan(R1+R2 全形态:`cninfo+sina`/`cninfo/sina`/`可选 sina`/`新浪/web`/`抓 sina`/`web_llm=sina`)+ per-line legacy/canary 豁免 + planted 五形态。零 runtime 语义改动。
+- **Required**: `R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT-R2`;详情见 register。
+- **Verify**: 全量 1842 OK;contract-docs 14 OK;强化 guard 的残留扫描全活跃面 = clean(自抓到 probe docstring 一处漏标、已修);ps1 ParseFile 0 errors 无 BOM;py_compile OK;diff-check 干净;_diag/_em_slice.patch 已删(R1)、仅 m67_validation byproduct untracked。
+- **Next**: 审查。
+- **Pre-Codex self-review**: A(整类一次扫全:不带 legacy 排除的全 sina/新浪 grep 逐行分 current-vs-legacy);B(连带:guard 同步覆盖 ps1 + 全形态,自跑 guard 抓出并修了 docstring 残留);C(反向:planted 五形态证 guard 真抓 + legacy/canary 豁免不误杀,canary 行非 web 源不动)。边界=docs/comments/CLI-help/guard。Tests passing ≠ design closure.
+
+## 2026-06-14 — Codex `审查` FAIL (R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT-R2)
+- **Verdict/Action**: FAIL. CC 修复了 Python 主路径和多数契约面,但当前一键入口/CLI help/README 路由仍残留 Sina-as-current 口径,且新增 guard 未覆盖这些形态;详情见 register。
+- **Required**: `R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT-R2`;详情见 `docs/system_risk_register.md`。
+- **Verify**: semantic/weekly/doc targeted 245 OK;py_compile OK;diff-check clean;active grep still hits `weekly_screening.ps1` true-fetch list, probe CLI help/fatal, README design row。
+- **Next**: Claude `修复`。
+
+## 2026-06-14 — Claude `修复` (R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT)
+- **Verdict/Action**: 三部分全办(详情见 register):① 全活跃当前路面 sina→em + sina 标 legacy(coverage / 两 schema desc / README probe 行 / probe+summary docstring);② drift guard 加 em-source 扫描(含 schema 描述 + route docs)+ planted;③ option-b:契约 §web_llm 定 EM tracked owner(`fetch_em_news` + `FetchEmNews` 测试)、probe 标 Slice-1 legacy 不建模 em、删 `_diag_web_sources.py` + `_em_slice.patch`(不作 ad-hoc 提交)。
+- **Required**: `R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT`;详情见 register。零 runtime 语义改动(不碰 DeepSeek/M6.7/生产 EGS/V14.2)。
+- **Verify**: 全量 1842 OK(+2 守护);contract-docs 14 OK;py_compile OK;残留 active sina-as-current grep=0;`git diff --check` 干净;`_diag`/`_em_slice.patch` 已删、仅 `m67_validation_20260605` byproduct untracked。
+- **Next**: 审查。
+- **Pre-Codex self-review**: A(sina-as-current 整类:全活跃面 grep 改全、含 schema 描述)/ B(连带:drift guard 同步加 em-source 扫描含 schema+route docs;契约权威面定 owner)/ C(反向:legacy-marked sina 不误判 + planted 证 guard 真抓)。边界=源契约/docs/schema 描述/probe wiring/tests。Tests passing ≠ design closure.
+
+## 2026-06-14 — Claude (session handoff:下一步序列 + /clear 启动须读)
+**已提交(durable)**:Slice 3a/3b/3b-2(weekly_screening M6.7 一键串联 + standalone 退役 + run_lineage)、regime_fallback(`6046cfc`)、cadence 重命名(`659b677`)、account-state Rule12/13+持有(`3ef40497`)。
+**未提交(working tree)**:em 主源接入 slice(probe `fetch_em_news` + summary `_em_sources` + schema source_type=em + pipeline provider 切 em + 测试 + 文档)——Codex 已审 **FAIL**,待 Claude `修复`。`_em_slice.patch` / `_diag_web_sources.py` / `research/results/a_short/m67_validation_20260605/` 为 untracked,勿误提交。
+**下一步序列**:
+1. **em `修复`** `R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT`(全文见 register Hot Queue):① 所有活跃当前路面 sina→em(coverage / 两个 schema 的 description / README / probe+summary 顶 docstring + CLI help),sina 标 deprecated/legacy opt-in、无任何活跃行说 weekly provider "抓 sina";② 强化 `tests/test_a_short_semantic_risk_contract_docs.py` drift guard(含 schema 描述 + route docs + planted stale-Sina offender);③ 闭 EM 审计缺口(二选一:EM 加成 first-class tracked probe/feasibility 路径,或把 contract/README 降级标 probe=legacy-Sina-only + weekly EM 另立 tracked owner/test;**别把 `_diag_web_sources.py` 当 ad-hoc root helper 提交**)。边界:源契约/docs/schema 描述/probe wiring/tests;不改 DeepSeek/M6.7 语义、生产 EGS/V14.2/下单。修复前必走 `docs/pre_codex_self_review_checklist.md`。
+2. em 修复 → Codex `审查` → PASS 后 `提交`(em-only;勿 add patch/diag/byproduct)。
+3. em 提交后:删 `_em_slice.patch`(已用尽)+ 按 ①③ 决定处置 `_diag_web_sources.py`。
+4. register 卫生:account-state 已提交 → 将 `R-ASHORT-ACCOUNT-STATE-RULE12-13-FINALIZE` 标 resolved。
+5. 暂不触发(gated):cls 第二源(需签名);Slice 3 确定性升级(等 ~4 周 advisory 证据,见 memory `project_slice3_reminder_after_advisory_weeks`);A-long 2 clue forward-live。
+**/clear 启动须读**:CLAUDE.md(自动加载,路由)→ `AGENTS.md` → `docs/CURRENT.md` → `docs/SESSION_LOG.md` 顶部(本条 + em FAIL/起草 + account-state)→ `docs/system_risk_register.md` Hot Queue(尤其 `R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT` 全文)→ `git status`。`MEMORY.md` 自动加载 = 记忆索引(含本会话固化的 persist-findings-to-register / propose-codex-command 等规则)。
+
+## 2026-06-14 — Codex `审查` FAIL (R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT)
+- **Verdict/Action**: FAIL. 运行代码方向基本正确(weekly provider 已切 EM、Top15 gate、fail-closed、targeted tests 绿),但活跃契约/coverage/schema/README/docstring 仍多处把 Sina 教成当前 web_llm 源,且 EM 主源可审计 probe/evidence 未进入正式 artifact 路径。
+- **Required**: `R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT` 已登记到 register。范围:源契约/route/schema 描述/probe wiring/guard;不改 DeepSeek/M6.7 语义、不改生产 EGS/V14.2/下单。
+- **Verify**: targeted semantic/weekly/doc tests 243 OK; `py_compile` touched runners OK; `git diff --check` OK(仅 LF/CRLF warning); active scan confirmed stale Sina current-source wording in coverage/schema/README/probe/summary surfaces。
+- **Next**: Claude `修复`。
+
+## 2026-06-14 — Claude `起草` (web_llm em 主源接入 / sina 退役 / cls 暂缓)
+- 背景:`执行` 实测 sina roll 端点失效(对任意 k 返回 `code=11 列表未注册`、`data` 恒空)→ web_llm 层一直暗着;诊断 `_diag_web_sources.py` 确认 em search-api/cmsArticleWeb 可用、cls 需签名(errno 50101)。
+- 改动:probe 加 `fetch_em_news`(JSONP 剥壳 → `result.cmsArticleWeb` → normalize → PIT 近 N 天窗 + 倒序 cap;fail-closed)+ EM 常量;`fetch_sina`/`SINA_NEWS_URL_TEMPLATE` 标 DEPRECATED(仅留 legacy probe `--include-sina`)。summary `_sina_sources` 泛化为 `_news_sources` + 加 `_em_sources`(source_type=em);summary-schema source_type enum 加 `em`。pipeline `_build_deepseek_web_llm_provider` 切 em(`fetch_em_news`+`_em_sources`,签名加 `as_of`/`lookback_days`)+ `--web-news-lookback-days`(默认 30)+ main 接线。
+- 测试:`FetchEmNews`(JSONP/recency 窗/cap/no-name/non-200/bad-as-of)+ `_em_sources` + `DeepSeekWebProviderWiring` 切 em(断言 source_type=em)。文档:契约 §web_llm 产出路径(权威)+ §来源 + coverage 表格 cell 同步(em 主源 / sina 弃用 / cls 暂缓)。
+- Verify:全量 1840 OK;契约漂移 + 治理守护 OK;diff-check 干净;web_llm 仍 advisory-only / 绝不 hard_veto / unknown 不伪 clear / fail-closed,不碰确定性 base。account-state 已先提交(`3ef40497`),em 为独立 diff(em-only 3 文件 + pipeline/test 的 web 段)。
+- Pre-Codex self-review:A(`fetch_em_news` 全出口覆盖)/ B(sina 消费点核全:provider 已切、probe main + build_candidate 保留 sina=dev/None、source_type enum 加 em、契约权威面更新)/ C(fail-closed 不伪 clear、PIT 拒未来文)。
+- Next:审查(交 Codex 复审 em slice)。
+
 ## 2026-06-14 — Claude `审查 PASS` (account-state Rule12/13 + 持有 切片收尾)
 - **Verdict/Action**: PASS。Codex 按 register 全数收尾:① `test_markdown_structure` 断言改「持有」计数;② **held+hard_veto→否决 安全边界测试**已加且真钉(构造 held+ST/退市 → 断言 操作==否决 + 「不得加仓/手动执行」,非 持有);③ `持有` m67_render 测试已加(持仓明细 / 类型=已有持仓 / 禁加仓);④ Optional-5 schema 安全旗标入 required(example/fixture 同步)。运行时逻辑未变(前轮已验无 bug)。
 - **Required**: `R-ASHORT-ACCOUNT-STATE-RULE12-13-FINALIZE` 全部 Addressed;无新增。详情见 register。

@@ -7,7 +7,7 @@
 | 层 | 源 | 口径 | 谁产出 | 切片 |
 |---|---|---|---|---|
 | **official_structured** | 巨潮 cninfo `hisAnnouncement/query`(`stock`="code,orgId") | 按披露日 **PIT**(canonical 且 ≤ as_of);标题→risk_type+severity 粗筛 | **headless**(`a_short_semantic_risk_summary.py`) | 1 / 2a / 2b-i |
-| **web_llm** | 新浪/通用 web/用户上下文 | **LIVE-only**(`pit_capable=false`,不可复现、绝不进历史回测);soft flag | 产出路径(当前/过渡)单一来源见契约 §web_llm 产出路径 | 1 / 2 / 2b-ii |
+| **web_llm** | em 资讯(主源;sina 已弃用、cls 暂缓)/通用 web/用户上下文 | **LIVE-only**(`pit_capable=false`,不可复现、绝不进历史回测);soft flag | 产出路径(当前/过渡)+ 源单一来源见契约 §web_llm 产出路径 | 1 / 2 / 2b-ii |
 
 ## 覆盖矩阵(v14.2 语义风险项 → 本层)
 
@@ -38,7 +38,7 @@
 > 方向见桌面设计 `semantic_into_m67_design_20260613.md`(用户+Codex 收敛)。分片落地。
 - **Slice 1(已建)**:official_structured 经引擎 **`semantic_official` risk family** 融进 M6.7——official **high**(证据齐全)→否决(复用引擎 hard_veto 机制,绝不救回)、**medium/low**→"待核"(不扣分/不清/不降星)、**clear/unknown/无输入**→中性;消费门 `_validate_semantic_official` fail-closed(完整 PIT 证据契约);trace 进 `machine.layer.semantic_risk`。
 - **Slice 1b(已建)**:真 cninfo 自动接入周报——`main` 在真 run(`--confirm-fetch-authorized` 且未 `--skip-semantic`)时,`_build_cninfo_semantic_provider` 批量 cninfo 取数 → 逐票 `build_official_structured` → 喂进 M6.7;**advisory 旁路非阻断**(取数失败→全 unknown 中性,不阻断周报)。**方案 A(空 URL)**:cninfo 偶缺 adjunctUrl → official event url_or_pdf 空 → 引擎把**缺 URL 的 high 事件降为 pending 待核**(不否决、不崩),只有证据齐全(含非空 URL)的 high 才驱动否决。
-- **Slice 2(已建)**:DeepSeek web/LLM **判官**接进 M6.7——周报内 `_build_deepseek_web_llm_provider`(一次性批量抓 sina → 逐票 `runners/a_short_deepseek_semantic_adapter.judge_web_llm` 让 DeepSeek 判,**缺 key/SDK/抓取失败/答复不可解析/违反契约 → 全 unknown 中性,非阻断、绝不打印 key**)产 `web_llm`;引擎 `semantic_web_llm` 族:web **risk/risk_candidate/headwind 且有 sources 证据 → downgrade**(**绝不 hard_veto**),tailwind/clear_light 不救回硬风控,unknown/无输入/违反契约 → 中性化(trace 标 `invalid_neutralized`,非静默)。web_llm 跨字段不变式复用 `_web_llm_consistency_error`(单一来源)。两层来源仍在 `machine.layer.semantic_risk` 可追溯。
+- **Slice 2(已建)**:DeepSeek web/LLM **判官**接进 M6.7——周报内 `_build_deepseek_web_llm_provider`(一次性批量抓 **em 资讯**(`fetch_em_news`,取代失效 sina;见契约 §web_llm 产出路径)→ 逐票 `runners/a_short_deepseek_semantic_adapter.judge_web_llm` 让 DeepSeek 判,**缺 key/SDK/抓取失败/答复不可解析/违反契约 → 全 unknown 中性,非阻断、绝不打印 key**)产 `web_llm`;引擎 `semantic_web_llm` 族:web **risk/risk_candidate/headwind 且有 sources 证据 → downgrade**(**绝不 hard_veto**),tailwind/clear_light 不救回硬风控,unknown/无输入/违反契约 → 中性化(trace 标 `invalid_neutralized`,非静默)。web_llm 跨字段不变式复用 `_web_llm_consistency_error`(单一来源)。两层来源仍在 `machine.layer.semantic_risk` 可追溯。
 - **Slice 3b 已收口**:render 行内化 + 废弃独立面板(3b-1)+ 退役独立 summary CLI/Stage-4 + weekly_screening 跑 M6.7(3b-2,M6.7 端到端 `执行` 验证通过)。**待**:deterministic promotion(见下,~4 周真实 advisory 证据门槛)。advisory-only / unknown-not-clear / 不进 production scoring / 不进回测 边界全程保留。
 
 ## 不在本层(deferred)

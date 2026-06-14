@@ -259,6 +259,70 @@ class SemanticRiskContractDocs(unittest.TestCase):
             self.assertIn(self.SINGLE_SOURCE_POINTER, _read(rel),
                           f"{rel} lost the pointer to the contract single source")
 
+    # ── EM main-source drift guard (R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT[-R2]) ──
+    EM_DRIFT_ACTIVE = (
+        "docs/a_short_semantic_risk_coverage.md", "docs/README.md",
+        "docs/a_short_semantic_risk_contract.md",
+        "runners/weekly_screening.ps1",                                  # R2: the one-click weekly wrapper
+        "runners/a_short_semantic_risk_summary.py", "runners/a_short_semantic_risk_probe.py",
+        "runners/a_short_weekly_pipeline.py",
+        "schemas/a_short_semantic_risk_summary.schema.json",
+        "schemas/a_short_semantic_risk_probe_summary.schema.json",
+    )
+    # lower-cased substrings that teach Sina as the CURRENT web_llm source. Covers R1 shapes + the R2 residual
+    # shapes Codex found (a current-fetch list grouping cninfo+sina, cninfo/sina, the probe CLI 可选 Sina, and
+    # the Chinese 新浪/web advisory route cell).
+    SINA_CURRENT_SHAPES = (
+        "cninfo + sina", "cninfo+sina", "cninfo/sina", "cninfo/新浪", "cninfo + 新浪",
+        "可选 sina", "可选 新浪", "新浪/web", "sina/web llm advisory", "sina/web advisory",
+        "抓 sina", "抓sina", "web_llm = sina", "web_llm=sina",
+    )
+    # a line carrying any of these is exempt: Sina explicitly historical/legacy, OR the data_canary
+    # cross-source line (NOT the web_llm source).
+    EM_DRIFT_EXEMPT = ("legacy", "deprecated", "弃用", "退役", "失效", "已切", "historical",
+                       "superseded", "历史", "opt-in", "canary", "对账", "canarysource", "data_canary")
+
+    @classmethod
+    def _em_drift_offenders(cls, text):
+        out = []
+        for ln in text.splitlines():
+            low = ln.lower()
+            if any(s in low for s in cls.SINA_CURRENT_SHAPES) and not any(m in low for m in cls.EM_DRIFT_EXEMPT):
+                out.append(ln.strip()[:160])
+        return out
+
+    def test_em_is_current_web_source_not_sina(self):
+        # active current-path surfaces (route docs + coverage + runner docstrings/CLI + the weekly wrapper +
+        # SCHEMA DESCRIPTIONS) must teach EM as the current web_llm main source. Any line teaching Sina as the
+        # current source (cninfo+sina fetch list / cninfo/sina / 可选 Sina / 新浪/web / web_llm=sina) must carry
+        # a legacy/historical marker on that same line, else it is drift. data_canary cross-source lines exempt.
+        for rel in self.EM_DRIFT_ACTIVE:
+            off = self._em_drift_offenders(_read(rel))
+            self.assertEqual(off, [], f"{rel}: active surface teaches Sina as the current web_llm source "
+                                      f"without a legacy/historical marker (EM-source drift): {off}")
+        # the authoritative contract + coverage must carry the EM current-source pointer
+        for rel in ("docs/a_short_semantic_risk_contract.md", "docs/a_short_semantic_risk_coverage.md"):
+            self.assertIn("fetch_em_news", _read(rel), f"{rel}: missing the EM current-source pointer `fetch_em_news`")
+
+    def test_em_source_drift_guard_is_real_planted(self):
+        # the guard must FAIL (1 offender) on each residual stale-Sina shape (R1 + the R2 residuals Codex found),
+        # and PASS (0) when the same line carries a legacy/historical marker.
+        offenders = (
+            "真取数:IV options + 前复权价 + cninfo + sina + DeepSeek",          # R2: weekly wrapper fetch list
+            "本 probe 会真实抓取 cninfo/Sina,须用户授权",                          # R2: probe CLI fatal
+            "cninfo 官方结构化层 + 新浪/web LLM advisory 层",                      # R2: README design route cell
+            "一次性批量抓 sina → 逐票判",                                          # R1: weekly provider fetch
+            "web_llm = Sina/web LLM advisory (LIVE-only)",                        # R1: schema description
+        )
+        for bad in offenders:
+            self.assertEqual(len(self._em_drift_offenders(bad)), 1, f"guard missed residual stale-Sina shape: {bad}")
+        for ok in (
+            "cninfo/sina(legacy opt-in,非当前 web 源)",                          # shape + legacy marker
+            "新浪/web LLM advisory(原设计——历史;当前已切 em)",                    # shape + 历史/已切 marker
+            "data_canary.py 旁路跨源对账;cninfo/sina 价对账",                     # shape + canary/对账 marker
+        ):
+            self.assertEqual(self._em_drift_offenders(ok), [], f"guard false-positived on an exempt line: {ok}")
+
     def test_separate_web_workflow_guard_is_real_planted(self):
         # the EXACT Codex round-5 false negatives must now FAIL on a STRICT surface, pointer notwithstanding.
         ptr_plus_renarration = ("This Stage-4 is a transitional standalone sidecar (web_llm UNKNOWN here); "

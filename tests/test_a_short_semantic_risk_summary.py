@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
 
 from runners.a_short_semantic_risk_summary import (  # noqa: E402
     build_official_structured, _scan_tier, build_candidate, build_summary_from_fetches,
-    validate_summary_consistency, _sina_sources,
+    validate_summary_consistency, _sina_sources, _em_sources,
     _match_risk,
 )
 
@@ -173,6 +173,16 @@ class Candidate(unittest.TestCase):
 
     def test_sina_not_ok_yields_no_sources(self):
         self.assertEqual(_sina_sources({"ts_code": "x", "ok": False, "items": []}), [])
+
+    def test_em_sources_normalized(self):
+        em_raw = {"ts_code": "600519.SH", "ok": True,
+                  "items": [{"title": "x" * 250, "url": "http://e/1", "published_at": "2026-06-07 10:00:00"}]}
+        srcs = _em_sources(em_raw)
+        self.assertEqual(len(srcs), 1)
+        self.assertEqual(srcs[0]["source_type"], "em")              # em-tagged provenance
+        self.assertEqual(len(srcs[0]["title"]), 200)               # title truncated to 200
+        self.assertEqual(srcs[0]["published_at"], "2026-06-07 10:00:00")
+        self.assertEqual(_em_sources({"ts_code": "x", "ok": False, "items": []}), [])  # not ok → []
 
 
 def _summary(n_codes=6, risk_idx=(), as_of=AS_OF, extra_pool=None):

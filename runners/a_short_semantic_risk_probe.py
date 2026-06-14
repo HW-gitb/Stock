@@ -2,7 +2,11 @@
 # -*- coding: utf-8 -*-
 """A-short 语义风险层 provider 可行性探针(Slice 1, probe-first, 不改生产).
 
-正式 Slice-2 语义风险层(官方结构化 cninfo PIT 层 + Sina/web LLM advisory 层)要建在
+**当前(2026-06-14):weekly web_llm 判官主源 = em 资讯(`fetch_em_news`,见契约 §web_llm 产出路径);本探针的 Sina
+可达性项 = LEGACY opt-in,sina roll 端点已失效(`code=11 列表未注册`),不代表当前源。** 本探针仍是 Slice-1 cninfo(gating)
++ legacy 可选 Sina 可达性的可行性工具(opt-in,非当前 web 源)。
+
+正式 Slice-2 语义风险层(官方结构化 cninfo PIT 层 + web/LLM advisory 层;Slice-1 原设想 Sina,当前已切 em)要建在
 **未治理** 的数据源上(无 token、有频率限制、字段/分类/反爬形态未证明)。本探针在投全量前
 独立验证 provider 机制:字段是否齐、披露日能否解析(可 PIT 过滤)、返回的证券代码是否对得上
 查询代码、覆盖率、失败形态——**只表征 provider 可行性,绝不据此对股票下任何风控结论**。
@@ -13,8 +17,9 @@
 - **cninfo(官方结构化层)= 本探针的 gating 项**:headless POST `hisAnnouncement/query`,`stock` 参数
   须为 "代码,orgId"(orgId 从 cninfo 证券清单 JSON 解析;**首版 `执行` 发现仅"代码,sh/sz"会 200+空**,
   故改 orgId),按披露日可 PIT。`feasible`(总)== `cninfo.feasible`。
-- **Sina/web(advisory 层)= LIVE-only**:headless 探针只做 best-effort 原始可达性检查
-  (`--include-sina` opt-in),`pit_capable=false`,**绝不**作历史回测证据;完整 web+LLM 判断不在本探针
+- **Sina/web(本探针 advisory 可达性项)= LEGACY,LIVE-only**:headless 探针只做 best-effort 原始可达性检查
+  (`--include-sina` opt-in),`pit_capable=false`,**绝不**作历史回测证据。**sina roll 端点已失效(`code=11`),当前 weekly
+  web_llm 主源 = em(`fetch_em_news`)——本项仅 legacy 可达性、不代表当前源**;完整 web+LLM 判断不在本探针
   (web 产出路径见契约 `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径)。
 - **失败 → `unknown`,绝不伪装 `clear`**:某代码 provider 调用失败 → 该代码 status=`unknown`;
   调用成功但窗口内无公告 → `clear_light`(真·查过、无事)。两者语义严格区分。
@@ -71,11 +76,25 @@ CNINFO_ORGID_URLS = tuple(
         "http://www.cninfo.com.cn/new/data/szse_stock.json",
     ).split(",") if u.strip()
 )
-# Sina 端点形态未证明 → 设默认 + 允许环境变量覆盖;best-effort,完整验证不在本探针(见契约 §web_llm 产出路径)。
+# Sina 端点(**DEPRECATED 2026-06-14**:`执行` 实测此 roll 端点对任意 k 返回 `code=11 列表未注册` + data 空,
+# 已失效;weekly web_llm 主源已切到下面的 em。本模板仅留给 legacy probe `--include-sina` 可达性探测)。
 SINA_NEWS_URL_TEMPLATE = os.environ.get(
     "SINA_NEWS_URL_TEMPLATE",
     "https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=1686&num=10&k={symbol}",
 )
+# em(东方财富)资讯搜索 = weekly web_llm 判官**主源**(取代失效 sina;`执行` 实测可用)。JSONP;
+# 命中数组 result.cmsArticleWeb[].{date,title,url,content,mediaName};sort 参数实测被忽略 → 按相关度返回,
+# 故 fetch_em_news 客户端按 published_at 做 PIT 近 N 天窗过滤 + 倒序取 top。端点/参数允许环境变量覆盖。
+EM_NEWS_SEARCH_URL = os.environ.get(
+    "EM_NEWS_SEARCH_URL",
+    "https://search-api-web.eastmoney.com/search/jsonp?cb=cb&param={param}",
+)
+EM_NEWS_REFERER = os.environ.get("EM_NEWS_REFERER", "https://so.eastmoney.com/")
+EM_NEWS_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+EM_NEWS_PAGE_SIZE = 50          # 拉大页:em 按相关度排,大页 + 客户端日期过滤才兜得住近期突发
+EM_NEWS_LOOKBACK_DAYS = 30      # 风险层新闻新鲜度窗(近 N 天;更老的不喂判官)
+EM_NEWS_CAP = 15                # 每票最多喂判官的近期条数
 
 
 # ── 日期工具 ──────────────────────────────────────────────────────────────────
@@ -675,8 +694,10 @@ def _normalize_sina_item(it) -> dict | None:
 
 
 def fetch_sina(codes, session=None) -> list[dict]:
-    """执行期(best-effort,LIVE-only):逐代码 GET Sina 新闻条目,market 前缀代码 + 防御式键名归一。
-    端点/键名未治理 → 形态实测留 `执行`;完整 web+LLM 判断不在本探针(见契约 §web_llm 产出路径),本函数只喂原始 sources。"""
+    """**DEPRECATED(2026-06-14)**:`执行` 实测此 sina roll 端点已失效(对任意 k 返回 `code=11 列表未注册`、
+    data 恒空),weekly web_llm 判官主源已切到 `fetch_em_news`(em);本函数仅留给 legacy probe
+    `--include-sina` 可达性探测,**不再用于 weekly 判官喂数**。
+    执行期(best-effort,LIVE-only):逐代码 GET Sina 新闻条目,market 前缀代码 + 防御式键名归一。"""
     import requests
     sess = session or requests
     results: list[dict] = []
@@ -700,6 +721,85 @@ def fetch_sina(codes, session=None) -> list[dict]:
     return results
 
 
+def _strip_jsonp(text: str) -> str:
+    """剥 JSONP 外壳 `cb(...)` → 内层 JSON 文本;非 JSONP 原样返回。"""
+    import re
+    m = re.search(r"\((.*)\)\s*;?\s*$", str(text).strip(), re.S)
+    return m.group(1) if m else text
+
+
+def _normalize_em_news_item(it) -> dict | None:
+    """em cmsArticleWeb 条目 → `{title,url,published_at}`;缺 title/url/date → None。
+    date 形如 'YYYY-MM-DD HH:MM:SS'(em 实测);正文不入(判官只用标题)。"""
+    if not isinstance(it, dict):
+        return None
+    title = str(it.get("title", "") or "").strip()
+    url = str(it.get("url", "") or "").strip()
+    date = str(it.get("date", "") or "").strip()
+    if not title or not url or not date:
+        return None
+    return {"title": title, "url": url, "published_at": date}
+
+
+def _em_news_in_window(published_at, as_of, lookback_days) -> bool:
+    """published_at('YYYY-MM-DD…') 是否落在 [as_of-lookback, as_of](PIT:拒未来文;坏日期→False)。"""
+    try:
+        d = datetime.strptime(str(published_at)[:10], "%Y-%m-%d").date()
+        a = datetime.strptime(str(as_of), "%Y%m%d").date()
+    except (ValueError, TypeError):
+        return False
+    return (a - timedelta(days=int(lookback_days))) <= d <= a
+
+
+def fetch_em_news(codes, names_by_code, as_of, lookback_days=EM_NEWS_LOOKBACK_DAYS,
+                  cap=EM_NEWS_CAP, session=None) -> list[dict]:
+    """执行期(best-effort,LIVE-only):em 资讯搜索逐股近期新闻 = weekly web_llm 判官**主源**(取代失效 sina)。
+    em 按相关度排(sort 参数实测被忽略)→ 拉大页 + **客户端按 published_at PIT 过滤到 [as_of-lookback, as_of]
+    + 倒序取 top cap**(安静票无近期文 → 空 → 上游判 unknown,fail-closed)。返回 `[{ts_code, ok,
+    error_category, items:[{title,url,published_at}]}]`(与 fetch_sina 同形,下游 `_news_sources` 统一消费)。
+    任何失败(缺 name / 非 200 / JSONP 解析 / 异常)→ 该码 ok:False、items:[](绝不阻断、绝不伪 clear、不打印 key)。"""
+    import json as _json
+    import requests
+    from urllib.parse import quote
+    sess = session or requests
+    if not _is_canonical_date(str(as_of)):
+        return [{"ts_code": c, "ok": False, "error_category": "bad_as_of", "items": []}
+                for c in (codes or [])]
+    if not (isinstance(lookback_days, int) and lookback_days > 0):
+        lookback_days = EM_NEWS_LOOKBACK_DAYS
+    headers = {"User-Agent": EM_NEWS_UA, "Accept": "application/json, text/plain, */*",
+               "Referer": EM_NEWS_REFERER}
+    out: list[dict] = []
+    for ts_code in (codes or []):
+        name = (names_by_code or {}).get(str(ts_code)) or (names_by_code or {}).get(ts_code)
+        if not name:
+            out.append({"ts_code": ts_code, "ok": False, "error_category": "no_name", "items": []})
+            continue
+        param = {"uid": "", "keyword": str(name), "type": ["cmsArticleWeb"],
+                 "client": "web", "clientType": "web", "clientVersion": "curr",
+                 "param": {"cmsArticleWeb": {"searchScope": "default", "sort": "default",
+                                             "pageIndex": 1, "pageSize": EM_NEWS_PAGE_SIZE,
+                                             "preTag": "", "postTag": ""}}}
+        url = EM_NEWS_SEARCH_URL.format(param=quote(_json.dumps(param, ensure_ascii=False)))
+        try:
+            resp = sess.get(url, headers=headers, timeout=12)
+            if resp.status_code != 200:
+                cat = "anti_scrape" if resp.status_code in (403, 429) else "network"
+                out.append({"ts_code": ts_code, "ok": False, "error_category": cat, "items": []})
+                continue
+            data = _json.loads(_strip_jsonp(resp.text))
+            raw = (((data or {}).get("result") or {}).get("cmsArticleWeb")) if isinstance(data, dict) else None
+            raw = raw if isinstance(raw, list) else []
+            norm = [n for n in (_normalize_em_news_item(x) for x in raw) if n]
+            recent = [n for n in norm if _em_news_in_window(n["published_at"], as_of, lookback_days)]
+            recent.sort(key=lambda n: n["published_at"], reverse=True)
+            out.append({"ts_code": ts_code, "ok": True, "error_category": None, "items": recent[:cap]})
+        except Exception as exc:  # noqa: BLE001
+            out.append({"ts_code": ts_code, "ok": False,
+                        "error_category": _categorize_error(exc), "items": []})
+    return out
+
+
 def _load_watch_pool(spec: str) -> list[str]:
     """`@path.json`(JSON list)或逗号分隔代码串。"""
     if spec.startswith("@"):
@@ -718,14 +818,14 @@ def main(argv=None, cninfo_fetcher=None, sina_fetcher=None):
                    help="主板 Top15 候选:逗号分隔 ts_code,或 @path 指向 JSON 数组")
     p.add_argument("--out", required=True, help="probe summary 落点(禁 result/a_short)")
     p.add_argument("--confirm-fetch-authorized", action="store_true",
-                   help="确认用户已授权本次 cninfo(+可选 Sina)真实 HTTP 探测调用")
+                   help="确认用户已授权本次 cninfo(+ legacy opt-in Sina,非当前 web 源)真实 HTTP 探测调用")
     p.add_argument("--include-sina", action="store_true",
-                   help="best-effort Sina 原始可达性探测(LIVE-only,默认关闭)")
+                   help="best-effort legacy Sina 原始可达性探测(LIVE-only,默认关闭;非当前 web 源——当前 = em,见契约)")
     p.add_argument("--cninfo-lookback-days", type=int, default=90)
     args = p.parse_args(argv)
 
     if not args.confirm_fetch_authorized:
-        raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:本 probe 会真实抓取 cninfo/Sina,须用户授权")
+        raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:本 probe 会真实抓取 cninfo(+ legacy opt-in Sina,非当前 web 源),须用户授权")
     if not _is_canonical_date(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
     _guard_out_path(args.out)              # 取数前先挡掉生产路径,别白抓

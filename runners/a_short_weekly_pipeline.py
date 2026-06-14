@@ -418,28 +418,30 @@ def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None):
         return None
 
 
-def _build_deepseek_web_llm_provider(codes, names_by_code, sina_fetcher=None, ds_client=None):
-    """非阻断 DeepSeek web/LLM 判官 provider(Slice 2,advisory 旁路)。一次性批量抓 sina,逐票经 DeepSeek 判 →
-    `{web_llm, sources}`(非 unknown)或 None(unknown/中性)。**缺 key/SDK → None(整层 unknown)**;抓取失败
-    → None;单票判定异常 → 该票 None。任何失败都不阻断周报、不伪装 clear、不返回/打印 key。"""
+def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=None,
+                                     news_fetcher=None, ds_client=None):
+    """非阻断 DeepSeek web/LLM 判官 provider(advisory 旁路)。**em 资讯为主源**(取代失效的 sina roll):一次性批量
+    抓 em 逐股近期新闻(PIT 近 N 天),逐票经 DeepSeek 判 → `{web_llm, sources}`(非 unknown)或 None(unknown/
+    中性)。**缺 key/SDK → None(整层 unknown)**;抓取失败 → None;单票判定异常 → 该票 None。任何失败都不阻断周报、
+    不伪装 clear、不返回/打印 key。"""
     from runners.a_short_deepseek_semantic_adapter import judge_web_llm, build_deepseek_client
     client = ds_client if ds_client is not None else build_deepseek_client()
     if client is None:
         return None                                      # 缺 key/SDK → 整层 unknown(advisory,不阻断)
     try:
-        from runners.a_short_semantic_risk_probe import fetch_sina, main_board_top15
-        from runners.a_short_semantic_risk_summary import _sina_sources
-        # 复用 cninfo provider 同一已审门:主板 Top15(去重 + 有界 cap15 + 非主板剔除)。**抓 sina/判 DeepSeek 前先过滤**,
-        # 否则非标/扩大 analysis_input(如含创业板 300/科创 688)会触发超界的 sina/DeepSeek 成本与覆盖。
+        from runners.a_short_semantic_risk_probe import fetch_em_news, main_board_top15
+        from runners.a_short_semantic_risk_summary import _em_sources
+        # 复用 cninfo provider 同一已审门:主板 Top15(去重 + 有界 cap15 + 非主板剔除)。**抓 em/判 DeepSeek 前先过滤**,
+        # 否则非标/扩大 analysis_input(如含创业板 300/科创 688)会触发超界的 em/DeepSeek 成本与覆盖。
         main_codes, _dropped = main_board_top15(codes)
         if not main_codes:
             return None
         allowed = {str(c) for c in main_codes}
-        raws = (sina_fetcher or fetch_sina)(list(main_codes))      # 只抓主板 Top15
-        items_by = {str(r["ts_code"]): _sina_sources(r) for r in raws
+        raws = (news_fetcher or fetch_em_news)(list(main_codes), names_by_code, as_of, lookback_days)
+        items_by = {str(r["ts_code"]): _em_sources(r) for r in raws
                     if isinstance(r, dict) and r.get("ts_code")}
     except Exception as exc:
-        print(f"[weekly] 语义 web/LLM sina 抓取失败({type(exc).__name__});web 层全 unknown(advisory,不阻断)")
+        print(f"[weekly] 语义 web/LLM em 抓取失败({type(exc).__name__});web 层全 unknown(advisory,不阻断)")
         return None
     cache = {}
     def provider(code):
@@ -473,6 +475,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--confirm-fetch-authorized", action="store_true")
     p.add_argument("--cninfo-lookback-days", type=int, default=90,
                    help="语义官方层 cninfo 取数回溯天数(默认 90;真 run --confirm 时自动取数)")
+    p.add_argument("--web-news-lookback-days", type=int, default=30,
+                   help="web_llm em 资讯新鲜度窗(天,默认 30;只把近 N 天新闻喂判官)")
     p.add_argument("--skip-semantic", action="store_true",
                    help="跳过语义官方层自动取数(advisory;不影响 M6.7 确定性 base)")
     args = p.parse_args(argv)
@@ -535,7 +539,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         _cands = ai.get("candidates", [])
         web_llm_provider = _build_deepseek_web_llm_provider(
             [c.get("ts_code") for c in _cands],
-            {str(c.get("ts_code")): c.get("name", "") for c in _cands})
+            {str(c.get("ts_code")): c.get("name", "") for c in _cands},
+            args.as_of, args.web_news_lookback_days)
     normalized = [normalize_candidate(c, price_provider(c["ts_code"]), overlay.get(c["ts_code"]),
                                       iv_pct, account, regime,
                                       regime_fallback=regime_fallback,

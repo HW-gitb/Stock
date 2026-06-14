@@ -193,7 +193,7 @@ if ($SkipTracker) {
 # --- Stage 4: M6.7 advisory weekly report (Slice 3b-2: replaces the standalone semantic-risk summary
 #     sidecar; ONE Friday entry now also runs the M6.7 pipeline with semantic [cninfo official + DeepSeek
 #     web] rendered inline). 旁路约束(同 canary/tracker):advisory-only,失败绝不阻断周报;落 research 非生产
-#     lane(禁 result/a_short)。真取数:IV options + 前复权价 + cninfo + sina + DeepSeek。run-path 见契约 §web_llm 产出路径。
+#     lane(禁 result/a_short)。真取数:IV options + 前复权价 + cninfo + em 资讯(web 源)+ DeepSeek。web 源 = em(取代失效 sina);run-path 见契约 §web_llm 产出路径。
 if ($SkipSemanticRisk) {
     Write-Host ""
     Write-Host "[4/4] -SkipSemanticRisk set, M6.7 advisory not run" -ForegroundColor DarkGray
@@ -234,7 +234,7 @@ if ($SkipSemanticRisk) {
                 $M67ExitCode = $LASTEXITCODE
                 if ($null -eq $M67ExitCode) { $M67ExitCode = 1 }
                 if ($M67ExitCode -ne 0) {
-                    # 真取数失败(IV/价/cninfo/sina/DeepSeek)不影响主流程退出码(旁路约束:advisory 绝不阻断选股)
+                    # 真取数失败(IV/价/cninfo/em/DeepSeek)不影响主流程退出码(旁路约束:advisory 绝不阻断选股)
                     Write-Host "[WARN] M6.7 advisory exit $M67ExitCode (advisory sidecar; real-fetch/cninfo/DeepSeek failure does NOT block the weekly)" -ForegroundColor Yellow
                 } else {
                     Write-Host "[ADVISORY] M6.7 weekly report (semantic inline) -> $M67Out. Standalone summary sidecar retired (Slice 3b-2); advisory-only, not a veto/ship-gate." -ForegroundColor Yellow
