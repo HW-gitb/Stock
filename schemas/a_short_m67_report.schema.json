@@ -38,7 +38,7 @@
           "additionalProperties": false,
           "required": ["操作", "股数", "入", "盈一", "盈二", "损", "类型", "优先级", "触发条件"],
           "properties": {
-            "操作": {"enum": ["建仓", "观察", "否决"]},
+            "操作": {"enum": ["建仓", "观察", "否决", "持有"]},
             "股数": {"type": ["integer", "null"]},
             "入": {"type": ["number", "null"]},
             "盈一": {"type": ["number", "null"]},

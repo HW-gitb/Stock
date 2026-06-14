@@ -58,7 +58,7 @@ GOVERNANCE = {
 
 RISK_FAMILIES = ("overheat_crowding", "liquidity_execution", "negative_event",
                  "market_regime", "portfolio_concentration", "semantic_official",
-                 "semantic_web_llm")
+                 "semantic_web_llm", "stateful_risk")
 
 # 语义 web/LLM 层(Slice 2)只允许产生 downgrade 的已评估风险态(绝不 hard_veto;tailwind/clear_light/unknown 不降级)
 _WEB_DOWNGRADE_STATUSES = ("risk_candidate", "risk", "headwind")
@@ -179,6 +179,8 @@ def classify_risk_families(inp: dict, ind: dict) -> dict:
     regime_fallback = inp.get("regime_fallback") or {}
     regime_unknown_fallback = bool(regime_fallback.get("active"))
     regime_fallback_reason = regime_fallback.get("reason") or "market_regime unknown→按震荡期保守处理"
+    stateful = inp.get("stateful_risk") or {}
+    has_position = stateful.get("position_state") == "held"
     fam = {f: {"hit": False, "action": None, "reasons": []} for f in RISK_FAMILIES}
 
     # overheat_crowding(含 overlay crowding;一次硬处理)
@@ -237,6 +239,33 @@ def classify_risk_families(inp: dict, ind: dict) -> dict:
         pc.append("因子共振")
     if pc:
         fam["portfolio_concentration"].update(hit=True, action="downgrade", reasons=pc)
+
+    # stateful_risk(Rule12/Rule13 + 当前持仓):已有持仓只做持仓管理/禁止加仓;
+    # flat candidate 在 Rule12 冷静期或 Rule13 再入冷静期内不可新建仓。
+    sr_hard = []
+    sr_down = []
+    if has_position:
+        sr_down.append("已有持仓:按持仓管理输出,不按新开仓处理")
+    r12 = stateful.get("rule12") or {}
+    if r12.get("status") == "active_cooldown":
+        if has_position:
+            sr_down.append("Rule12 active_cooldown:已有持仓仅管理/不加仓")
+        else:
+            sr_hard.append("Rule12 active_cooldown:禁止新开仓")
+    elif r12.get("status") == "recovery_1":
+        mult = stateful.get("size_multiplier")
+        sr_down.append(f"Rule12 recovery_1:恢复首笔仓位上限×{mult if mult is not None else 0.5}")
+    r13 = stateful.get("rule13") or {}
+    if not has_position:
+        if r13.get("reentry_blocked") or r13.get("status") == "active_cooldown":
+            sr_hard.append(f"Rule13 {r13.get('status', 'active_cooldown')}:禁止止损后再入")
+        elif r13.get("status") in ("pending_recheck", "cleared_for_reentry"):
+            mult = stateful.get("size_multiplier")
+            sr_down.append(f"Rule13 {r13.get('status')}:再入仓位上限×{mult if mult is not None else 0.5}")
+    if sr_hard:
+        fam["stateful_risk"].update(hit=True, action="hard_veto", reasons=sr_hard)
+    elif sr_down:
+        fam["stateful_risk"].update(hit=True, action="downgrade", reasons=sr_down)
     # semantic_official 由 build_m67_report 用 _validate_semantic_official 校验后的对象统一填充
     # (family / impact / trace 同源,避免 status↔events 不一致)。
     return fam
@@ -257,7 +286,8 @@ def entry_type(inp: dict, ind: dict):
     return "观察", "未到低吸/突破触发"
 
 
-def exit_and_size(inp: dict, ind: dict, regime: str, extra_halve: bool = False, halve_reason: str = ""):
+def exit_and_size(inp: dict, ind: dict, regime: str, extra_halve: bool = False, halve_reason: str = "",
+                  size_multiplier: float = 1.0, size_multiplier_reason: str = ""):
     """返回 (entry, stop, t1, t2, rr, rr_floor, shares, sizing_notes) 或拒绝原因。
     extra_halve:IV>80(Rule3)或 IV feed 缺失(保守)时在试探仓基础上再减半。"""
     close, sup, res, atr = inp.get("close"), ind.get("support"), ind.get("resistance"), ind.get("atr14")
@@ -287,6 +317,9 @@ def exit_and_size(inp: dict, ind: dict, regime: str, extra_halve: bool = False, 
     if extra_halve:
         cap *= 0.5
         notes.append(halve_reason or "保守再减半")
+    if size_multiplier < 1.0:
+        cap *= size_multiplier
+        notes.append(size_multiplier_reason or f"状态风控仓位上限×{size_multiplier}")
     shares = int(cap // close // 100) * 100 if close > 0 else 0
     if shares < MIN_SHARES or shares * close < MIN_AMOUNT:
         return None, "可建股数/金额不足(放弃)"
@@ -330,6 +363,16 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     regime_fallback_reason = regime_fallback.get("reason") or "EGS market_regime unknown/missing→按震荡期保守处理"
     iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
     eligible = bool((inp.get("overlay") or {}).get("eligible"))
+    stateful = inp.get("stateful_risk") or {}
+    has_position = stateful.get("position_state") == "held"
+    position = stateful.get("position") or {}
+    try:
+        state_size_multiplier = float(stateful.get("size_multiplier", 1.0))
+    except (TypeError, ValueError):
+        state_size_multiplier = 1.0
+    if state_size_multiplier <= 0 or state_size_multiplier > 1:
+        state_size_multiplier = 1.0
+    state_size_reason = "；".join(str(x) for x in (stateful.get("reasons") or []))
 
     # 语义官方层(Slice 1,advisory):先 fail-closed 校验(非法 provider 输出 → 写盘前 abort),
     # 再用**同一已校验对象**派生 family / impact / trace(避免 status↔events 不一致 / 非 dict AttributeError)。
@@ -404,12 +447,17 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     # 决策
     if hard:
         action, etype, plan, reject = "否决", "N/A", None, "|".join(hard)
+    elif has_position:
+        action, etype, plan = "持有", "已有持仓", None
+        reject = "已有持仓:按持仓管理输出,不按新开仓处理;禁止自动加仓"
     else:
         etype, etype_reason = entry_type(inp, ind)
         if etype == "观察":
             action, plan, reject = "观察", None, etype_reason
         else:
-            plan, reject = exit_and_size(inp, ind, regime, extra_halve, halve_reason)
+            plan, reject = exit_and_size(inp, ind, regime, extra_halve, halve_reason,
+                                         size_multiplier=state_size_multiplier,
+                                         size_multiplier_reason=state_size_reason)
             action = "建仓" if plan else "观察"
     star = compute_star(inp, fam, eligible) if action != "否决" else 0
 
@@ -423,8 +471,16 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                   f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**。" + iv_caveat + regime_caveat)
     elif action == "观察":
         advice = f"观察,不建仓。原因:{reject}。" + (f"降级:{'/'.join(downgrades)}。" if downgrades else "")
+    elif action == "持有":
+        stop_hint = position.get("stop_loss", "未填写")
+        cost_hint = position.get("avg_cost", "未知")
+        shares_hint = position.get("shares", "未知")
+        advice = (f"已有持仓,本周不按新开仓处理,禁止自动加仓。持仓 {shares_hint} 股/均价 {cost_hint};"
+                  f"手动止损 {stop_hint},触发后由你盘中无条件手动执行。"
+                  + (f"降级:{'/'.join(downgrades)}。" if downgrades else ""))
     else:
-        advice = f"否决,禁止建仓。硬否决:{reject}。"
+        held_suffix = ("已有持仓也不得加仓;如硬风控触发止损/清仓条件,由你手动执行。" if has_position else "")
+        advice = f"否决,禁止建仓。硬否决:{reject}。{held_suffix}"
 
     # 消费映射(§4 消费完整性:每个被消费输入 → 它对 m67 的影响)
     consumption = {
@@ -436,6 +492,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
         "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
         "account/liquidity": "→ 仓位上限/冲击成本/100股",
+        "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
         "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;"
                     "medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;"
                     "tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk",
@@ -448,18 +505,23 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "盈一": (plan["t1"] if plan else None),
         "盈二": (plan["t2"] if plan else None),
         "损": (plan["stop"] if plan else None),
-        "类型": (etype if action == "建仓" else "N/A"),
+        "类型": (etype if action in ("建仓", "持有") else "N/A"),
         "优先级": (f"⭐×{star}" if star else "—"),
         "触发条件": (f"现价≤{plan['entry']};持仓周期1-3周;{';'.join(plan['sizing_notes'])}"
                      if plan else (reject or "")),
     }
+    price_cost = f"{inp.get('close')} | 试探仓"
+    if has_position:
+        price_cost = (f"{inp.get('close')} | 持仓:{position.get('shares')}股/"
+                      f"均价{position.get('avg_cost')}/建仓{position.get('entry_date')}/"
+                      f"手动止损{position.get('stop_loss')}")
     m67 = {
         "精简结论区": {
             "当前环境": (regime if not regime_unknown_fallback
                          else f"{regime}(EGS regime unknown,保守fallback)"),
             "波动率状态": (f"IV分位≈{iv_pct}% | Rule3减半:{'是' if iv_halve else '否'}"
                           if iv_known else "IV未知(feed 缺失,未执行 IV 风控,保守减半)"),
-            "现价与成本": f"{inp.get('close')} | 试探仓",
+            "现价与成本": price_cost,
             "否决审查触发": (("|".join(hard) + (" | " + sem_note if sem_note else "")) if hard
                               else (sem_note if sem_note else "无")),
             "板块资金事件": (inp.get("industry_trend") or "unknown") +
@@ -495,6 +557,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
                                      "star": star, "plan": plan, "reject_reason": reject},
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status},
+            "stateful_risk": stateful,
             "consumption": consumption,
         },
         "boundary": {"production": False, "real_money": False,

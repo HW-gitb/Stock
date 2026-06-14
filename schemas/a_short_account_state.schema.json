@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_account_state",
+  "description": "Manual A-short account/position state consumed by weekly M6.7. This is a user-maintained local state input; it does not connect to brokers, place orders, fetch account data, or authorize real-money automation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "available_cash", "positions", "rule12", "rule13_cooldowns",
+               "manual_order_only", "broker_connection_allowed"],
+  "properties": {
+    "schema_name": {"const": "a_short_account_state"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "available_cash": {"type": "number", "exclusiveMinimum": 0},
+    "total_equity": {"type": ["number", "null"], "exclusiveMinimum": 0},
+    "current_gross_exposure": {"type": ["number", "null"], "minimum": 0},
+    "positions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/position"}
+    },
+    "rule12": {"$ref": "#/$defs/rule12"},
+    "rule13_cooldowns": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rule13Cooldown"}
+    },
+    "manual_order_only": {"const": true},
+    "broker_connection_allowed": {"const": false}
+  },
+  "$defs": {
+    "positiveNumber": {"type": "number", "exclusiveMinimum": 0},
+    "dateOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{8}$"
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts_code", "name", "shares", "avg_cost", "entry_date", "stop_loss"],
+      "properties": {
+        "ts_code": {"type": "string", "pattern": "^[0-9]{6}\\.(SH|SZ)$"},
+        "name": {"type": "string"},
+        "shares": {"type": "integer", "exclusiveMinimum": 0},
+        "avg_cost": {"$ref": "#/$defs/positiveNumber"},
+        "entry_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "stop_loss": {"$ref": "#/$defs/positiveNumber"},
+        "take_profit_1": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "take_profit_2": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "last_exit_date": {"$ref": "#/$defs/dateOrNull"},
+        "last_exit_reason": {"type": ["string", "null"]}
+      }
+    },
+    "rule12": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["inactive", "active_cooldown", "recovery_1"]},
+        "reason": {"type": ["string", "null"]},
+        "triggered_at": {"$ref": "#/$defs/dateOrNull"},
+        "cooldown_until": {"$ref": "#/$defs/dateOrNull"},
+        "recovery_position_multiplier": {"type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 1},
+        "consecutive_stop_losses_window": {"type": ["integer", "null"], "minimum": 0},
+        "drawdown_pct": {"type": ["number", "null"], "minimum": 0},
+        "iv_change_abs_1d_pctpt": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "rule13Cooldown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts_code", "status", "cooldown_until"],
+      "properties": {
+        "ts_code": {"type": "string", "pattern": "^[0-9]{6}\\.(SH|SZ)$"},
+        "status": {"enum": ["active_cooldown", "pending_recheck", "cleared_for_reentry"]},
+        "exit_date": {"$ref": "#/$defs/dateOrNull"},
+        "exit_reason": {"type": ["string", "null"]},
+        "cooldown_until": {"$ref": "#/$defs/dateOrNull"},
+        "requires_new_catalyst": {"type": "boolean"},
+        "new_catalyst_confirmed": {"type": "boolean"},
+        "requires_m4_recheck": {"type": "boolean"},
+        "m4_recheck_passed": {"type": "boolean"},
+        "max_reentry_position_pct": {"type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 1},
+        "notes": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

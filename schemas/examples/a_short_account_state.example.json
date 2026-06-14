@@ -1,0 +1,49 @@
+{
+  "schema_name": "a_short_account_state",
+  "schema_version": "1.0.0",
+  "as_of": "20260609",
+  "available_cash": 500000.0,
+  "total_equity": 1200000.0,
+  "current_gross_exposure": 300000.0,
+  "positions": [
+    {
+      "ts_code": "600000.SH",
+      "name": "浦发银行",
+      "shares": 1000,
+      "avg_cost": 2.75,
+      "entry_date": "20260601",
+      "stop_loss": 2.68,
+      "take_profit_1": 3.1,
+      "take_profit_2": 3.3,
+      "last_exit_date": null,
+      "last_exit_reason": null
+    }
+  ],
+  "rule12": {
+    "status": "inactive",
+    "reason": null,
+    "triggered_at": null,
+    "cooldown_until": null,
+    "recovery_position_multiplier": null,
+    "consecutive_stop_losses_window": 0,
+    "drawdown_pct": 0.0,
+    "iv_change_abs_1d_pctpt": 0.0
+  },
+  "rule13_cooldowns": [
+    {
+      "ts_code": "000001.SZ",
+      "status": "active_cooldown",
+      "exit_date": "20260607",
+      "exit_reason": "stop_loss",
+      "cooldown_until": "20260610",
+      "requires_new_catalyst": true,
+      "new_catalyst_confirmed": false,
+      "requires_m4_recheck": true,
+      "m4_recheck_passed": false,
+      "max_reentry_position_pct": 0.5,
+      "notes": "Rule13: stopped-out stock cannot be re-entered until cooldown, new catalyst, and M4 recheck are complete."
+    }
+  ],
+  "manual_order_only": true,
+  "broker_connection_allowed": false
+}

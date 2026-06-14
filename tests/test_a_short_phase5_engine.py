@@ -62,6 +62,42 @@ def _good_input(**over):
     return inp
 
 
+def _held_state():
+    return {
+        "position_state": "held",
+        "position": {"ts_code": "600000.SH", "shares": 1000, "avg_cost": 2.70,
+                     "entry_date": "20260601", "stop_loss": 2.55},
+        "rule12": {"status": "inactive"},
+        "rule13": {"status": "none"},
+        "size_multiplier": 1.0,
+        "reasons": [],
+    }
+
+
+def _flat_rule12_active():
+    return {
+        "position_state": "flat",
+        "position": None,
+        "rule12": {"status": "active_cooldown", "new_entry_blocked": True,
+                   "cooldown_until": "20260610"},
+        "rule13": {"status": "none"},
+        "size_multiplier": 1.0,
+        "reasons": ["Rule12 active_cooldown:block_new_entries"],
+    }
+
+
+def _flat_rule13_active():
+    return {
+        "position_state": "flat",
+        "position": None,
+        "rule12": {"status": "inactive"},
+        "rule13": {"status": "active_cooldown", "reentry_blocked": True,
+                   "cooldown_until": "20260610"},
+        "size_multiplier": 1.0,
+        "reasons": ["Rule13 active_cooldown:block_reentry"],
+    }
+
+
 class IndicatorTests(unittest.TestCase):
     def test_indicators(self):
         ind = compute_indicators(_series())
@@ -102,6 +138,13 @@ class EntryExitTests(unittest.TestCase):
         full, _ = exit_and_size(_good_input(), self.ind, "震荡期", extra_halve=False)
         half, _ = exit_and_size(_good_input(), self.ind, "震荡期", extra_halve=True, halve_reason="x")
         self.assertLess(half["shares"], full["shares"])
+
+    def test_exit_size_stateful_multiplier_smaller(self):
+        full, _ = exit_and_size(_good_input(), self.ind, "震荡期", extra_halve=False)
+        limited, _ = exit_and_size(_good_input(), self.ind, "震荡期", extra_halve=False,
+                                   size_multiplier=0.5, size_multiplier_reason="Rule12 recovery")
+        self.assertLess(limited["shares"], full["shares"])
+        self.assertTrue(any("Rule12 recovery" in x for x in limited["sizing_notes"]))
 
     def test_exit_size_shrink_regime_blocked(self):
         plan, rej = exit_and_size(_good_input(), self.ind, "收缩期", extra_halve=False)
@@ -145,11 +188,81 @@ class RiskFamilyTests(unittest.TestCase):
         r = build_m67_report(_good_input(derived=d), AS_OF, "t")
         self.assertEqual(r["m67"]["table"]["操作"], "否决")
 
+    def test_stateful_rule12_active_blocks_flat_new_entry(self):
+        fam = classify_risk_families(_good_input(stateful_risk=_flat_rule12_active()), self.ind)
+        self.assertEqual(fam["stateful_risk"]["action"], "hard_veto")
+        self.assertIn("Rule12", "|".join(fam["stateful_risk"]["reasons"]))
+
+    def test_stateful_existing_position_is_downgrade_not_hard(self):
+        st = _held_state()
+        st["rule12"] = {"status": "active_cooldown", "new_entry_blocked": True}
+        fam = classify_risk_families(_good_input(stateful_risk=st), self.ind)
+        self.assertEqual(fam["stateful_risk"]["action"], "downgrade")
+        self.assertIn("已有持仓", "|".join(fam["stateful_risk"]["reasons"]))
+
 
 class BuildReportTests(unittest.TestCase):
     def test_buildable_m67(self):
         r = build_m67_report(_good_input(), AS_OF, "t")
         self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+
+    def test_existing_position_yields_hold_not_new_entry(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertEqual(r["machine"]["entry_exit_size_star"]["type"], "已有持仓")
+        self.assertIsNone(r["m67"]["table"]["股数"])
+        self.assertIn("已有持仓", r["m67"]["精简结论区"]["操作建议"])
+        self.assertIn("手动止损", r["m67"]["精简结论区"]["操作建议"])
+        validate_m67_consistency(r)
+        jsonschema.validate(r, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
+
+    def test_existing_position_with_hard_veto_is_denied_not_held(self):
+        r = build_m67_report(_good_input(
+            stateful_risk=_held_state(),
+            event={"holder_reduction_active": False,
+                   "st_or_delisting": True,
+                   "regulatory_legacy_vetoed": False},
+        ), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")
+        self.assertNotEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertIn("ST/退市", "|".join(r["machine"]["layer"]["hard_veto"]))
+        self.assertIn("已有持仓也不得加仓", r["m67"]["精简结论区"]["操作建议"])
+        self.assertIn("手动执行", r["m67"]["精简结论区"]["操作建议"])
+        for k in ("股数", "入", "盈一", "盈二", "损"):
+            self.assertIsNone(r["m67"]["table"][k])
+        validate_m67_consistency(r)
+
+    def test_rule12_active_flat_candidate_is_denied(self):
+        r = build_m67_report(_good_input(stateful_risk=_flat_rule12_active()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")
+        self.assertIn("Rule12", "|".join(r["machine"]["layer"]["hard_veto"]))
+        validate_m67_consistency(r)
+
+    def test_rule12_active_existing_position_holds(self):
+        st = _held_state()
+        st["rule12"] = {"status": "active_cooldown", "new_entry_blocked": True}
+        r = build_m67_report(_good_input(stateful_risk=st), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertIn("Rule12", "|".join(r["machine"]["layer"]["downgrade"]))
+        validate_m67_consistency(r)
+
+    def test_rule13_active_flat_reentry_is_denied(self):
+        r = build_m67_report(_good_input(stateful_risk=_flat_rule13_active()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")
+        self.assertIn("Rule13", "|".join(r["machine"]["layer"]["hard_veto"]))
+        validate_m67_consistency(r)
+
+    def test_stateful_recovery_multiplier_reduces_new_entry_size(self):
+        base = build_m67_report(_good_input(), AS_OF, "t")
+        st = {"position_state": "flat", "position": None,
+              "rule12": {"status": "recovery_1", "recovery_position_multiplier": 0.5},
+              "rule13": {"status": "none"},
+              "size_multiplier": 0.5,
+              "reasons": ["Rule12 recovery_1:size_multiplier=0.50"]}
+        r = build_m67_report(_good_input(stateful_risk=st), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        self.assertLess(r["m67"]["table"]["股数"], base["m67"]["table"]["股数"])
+        self.assertIn("Rule12 recovery", r["m67"]["table"]["触发条件"])
 
     def test_breakout_m67_path_active_with_vol_confirm(self):
         # M6.7 breakout branch is no longer dormant: is_breakout+vol_confirm reaches type=突破.

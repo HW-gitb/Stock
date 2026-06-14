@@ -25,6 +25,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, main, SCHEMA_PATH,
     _fetch_price_series, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
+    validate_account_state, stateful_risk_for_candidate,
 )
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
@@ -100,7 +101,28 @@ def _overlay_row(eligible=True, crowding=False):
 
 
 def _account():
-    return {"available_cash": 500000.0, "market_regime": "震荡期"}
+    return {
+        "schema_name": "a_short_account_state",
+        "schema_version": "1.0.0",
+        "as_of": AS_OF,
+        "available_cash": 500000.0,
+        "total_equity": 1000000.0,
+        "current_gross_exposure": 0.0,
+        "positions": [],
+        "rule12": {
+            "status": "inactive",
+            "reason": None,
+            "triggered_at": None,
+            "cooldown_until": None,
+            "recovery_position_multiplier": None,
+            "consecutive_stop_losses_window": 0,
+            "drawdown_pct": 0.0,
+            "iv_change_abs_1d_pctpt": 0.0,
+        },
+        "rule13_cooldowns": [],
+        "manual_order_only": True,
+        "broker_connection_allowed": False,
+    }
 
 
 def _feed(last_pct=55.0):
@@ -202,6 +224,51 @@ class NormalizeTests(unittest.TestCase):
         n = normalize_candidate(_egs_candidate(), _series(), _overlay_row(), 55.0, {},
                                 "震荡期", regime_fallback={"active": True, "reason": "x"})
         self.assertTrue(n["regime_fallback"]["active"])
+
+
+class AccountStateTests(unittest.TestCase):
+    def test_validate_account_state_accepts_contract_shape(self):
+        acct = validate_account_state(copy.deepcopy(_account()), AS_OF)
+        self.assertEqual(acct["available_cash"], 500000.0)
+
+    def test_validate_account_state_rejects_duplicate_positions(self):
+        acct = copy.deepcopy(_account())
+        pos = {"ts_code": "600000.SH", "name": "测试", "shares": 1000,
+               "avg_cost": 2.70, "entry_date": "20260601", "stop_loss": 2.55}
+        acct["positions"] = [copy.deepcopy(pos), copy.deepcopy(pos)]
+        with self.assertRaises(SystemExit):
+            validate_account_state(acct, AS_OF)
+
+    def test_validate_account_state_rejects_stale_rule12_active(self):
+        acct = copy.deepcopy(_account())
+        acct["rule12"] = {"status": "active_cooldown", "cooldown_until": "20260608"}
+        with self.assertRaises(SystemExit):
+            validate_account_state(acct, AS_OF)
+
+    def test_stateful_risk_maps_held_position(self):
+        acct = copy.deepcopy(_account())
+        acct["positions"] = [{"ts_code": "600000.SH", "name": "测试", "shares": 1000,
+                              "avg_cost": 2.70, "entry_date": "20260601", "stop_loss": 2.55}]
+        ctx = stateful_risk_for_candidate(acct, "600000.SH", AS_OF)
+        self.assertEqual(ctx["position_state"], "held")
+        self.assertEqual(ctx["position"]["avg_cost"], 2.70)
+
+    def test_stateful_risk_maps_rule13_cooldown(self):
+        acct = copy.deepcopy(_account())
+        acct["rule13_cooldowns"] = [{
+            "ts_code": "600000.SH",
+            "status": "active_cooldown",
+            "exit_date": "20260608",
+            "cooldown_until": "20260610",
+            "requires_new_catalyst": True,
+            "new_catalyst_confirmed": False,
+            "requires_m4_recheck": True,
+            "m4_recheck_passed": False,
+            "max_reentry_position_pct": 0.5,
+        }]
+        ctx = stateful_risk_for_candidate(acct, "600000.SH", AS_OF)
+        self.assertEqual(ctx["position_state"], "flat")
+        self.assertTrue(ctx["rule13"]["reentry_blocked"])
 
 
 class BuildWeeklyTests(unittest.TestCase):
@@ -404,6 +471,48 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(w["run_lineage"]["sizing_mode"], "sized")
         self.assertEqual(w["reports"][0]["m67"]["table"]["操作"], "建仓")     # sized -> buildable
 
+    def test_main_account_position_outputs_hold_for_held_candidate(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            acct = _account()
+            acct["positions"] = [{"ts_code": "600000.SH", "name": "测试", "shares": 1000,
+                                  "avg_cost": 2.70, "entry_date": "20260601", "stop_loss": 2.55}]
+            (Path(td) / "acct.json").write_text(json.dumps(acct), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            w = json.loads(out.read_text(encoding="utf-8"))
+        by = {r["ts_code"]: r for r in w["reports"]}
+        self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "持有")
+        self.assertIn("已有持仓", by["600000.SH"]["m67"]["精简结论区"]["操作建议"])
+        self.assertEqual(by["000001.SZ"]["m67"]["table"]["操作"], "建仓")
+
+    def test_main_rule13_active_blocks_flat_reentry(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            acct = _account()
+            acct["rule13_cooldowns"] = [{
+                "ts_code": "600000.SH",
+                "status": "active_cooldown",
+                "exit_date": "20260608",
+                "cooldown_until": "20260610",
+                "requires_new_catalyst": True,
+                "new_catalyst_confirmed": False,
+                "requires_m4_recheck": True,
+                "m4_recheck_passed": False,
+                "max_reentry_position_pct": 0.5,
+            }]
+            (Path(td) / "acct.json").write_text(json.dumps(acct), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            w = json.loads(out.read_text(encoding="utf-8"))
+        by = {r["ts_code"]: r for r in w["reports"]}
+        self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "否决")
+        self.assertIn("Rule13", "|".join(by["600000.SH"]["machine"]["layer"]["hard_veto"]))
+
     def test_main_without_account_is_observation_only_and_artifact_labeled(self):
         # the same candidate that builds WITH account becomes 观察 with NO account; the durable artifact
         # (json run_lineage + md banner) marks it sizing-less so a reader can't mistake it for a real avoid.
@@ -493,11 +602,11 @@ class MainWiringTests(unittest.TestCase):
             self.assertFalse(out.exists())
 
     def test_main_regime_from_analysis_input_takes_precedence(self):
-        # market_regime sourced from analysis_input.market_context (EGS), overriding the account file.
+        # market_regime sourced from analysis_input.market_context (EGS); account state is cash/position only.
         with tempfile.TemporaryDirectory() as td:
             ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
             ai["market_context"]["market_regime"]["status"] = "attack"   # → 进攻期
-            self._write_inputs(td, ai=ai)                                # account.json says 震荡期
+            self._write_inputs(td, ai=ai)
             out = Path(td) / "weekly.json"
             main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                   "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
@@ -510,9 +619,6 @@ class MainWiringTests(unittest.TestCase):
             ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
             ai["market_context"]["market_regime"]["status"] = "unknown"
             self._write_inputs(td, ai=ai)
-            (Path(td) / "acct.json").write_text(
-                json.dumps({"available_cash": 500000.0, "market_regime": "进攻期"}),
-                encoding="utf-8")
             out = Path(td) / "weekly.json"
             main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                   "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),

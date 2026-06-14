@@ -10,6 +10,25 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Claude `审查 PASS` (account-state Rule12/13 + 持有 切片收尾)
+- **Verdict/Action**: PASS。Codex 按 register 全数收尾:① `test_markdown_structure` 断言改「持有」计数;② **held+hard_veto→否决 安全边界测试**已加且真钉(构造 held+ST/退市 → 断言 操作==否决 + 「不得加仓/手动执行」,非 持有);③ `持有` m67_render 测试已加(持仓明细 / 类型=已有持仓 / 禁加仓);④ Optional-5 schema 安全旗标入 required(example/fixture 同步)。运行时逻辑未变(前轮已验无 bug)。
+- **Required**: `R-ASHORT-ACCOUNT-STATE-RULE12-13-FINALIZE` 全部 Addressed;无新增。详情见 register。
+- **Verify**: 全量 1834 OK;git diff --check 干净;tracked diff em 标记=0(em 仍 parked 在 `_em_slice.patch`、未混入);schema required 含两安全旗标 + example 携带。
+- **Next**: Codex 提交(账户状态文件;勿 add `_em_slice.patch` / `_diag_web_sources.py` / `m67_validation_20260605`)。
+
+## 2026-06-14 — Codex `修复` (account-state Rule12/13 final test closure)
+- **Verdict/Action**: 按 `R-ASHORT-ACCOUNT-STATE-RULE12-13-FINALIZE` 修复提交前阻断:① 更新 `test_markdown_structure` 的 action tally 断言为 `建仓/持有/观察/否决`;② 新增 held+hard_veto→`否决` 安全边界测试,钉住 ST/退市等硬风控优先于 `持有`;③ 新增 `持有` markdown render 测试,覆盖持仓股数/均价/手动止损、`类型=已有持仓`、禁止自动加仓建议。另将账户 schema 的 `manual_order_only` / `broker_connection_allowed` 纳入 required(执行 Optional-5,不改运行行为)。
+- **Required**: `R-ASHORT-ACCOUNT-STATE-RULE12-13-FINALIZE` working-tree repaired;等待复审。未触碰 `_em_slice.patch` / `_diag_web_sources.py` / `research/results/a_short/m67_validation_20260605/`。
+- **Verify**: targeted 148 OK;py_compile OK;full discover 1813 only 6 known `C:\Users\cnhea\tk.csv` PermissionError(setUpClass imports `A-EGS/egs_main.py`);`git diff --check` 待最终复跑。
+- **Pre-Codex self-review**: A/B2/C/E/F checked — 只补 register 指定测试缺口 + schema safety required;无 runtime 逻辑改动,不碰 em parked patch/production EGS/V14.2/broker/order。
+- **Next**: 审查。
+
+## 2026-06-14 — Claude `审查` (account-state Rule12/13 + 持有 切片:逻辑 PASS,补测试后可提交)
+- **Verdict/Action**: 运行时逻辑正确、无 correctness bug(held/veto 优先级、Rule12/13 flat-block via `hard` 聚合含 stateful_risk、size_multiplier clamp (0,1]、account schema 严格、validate_m67 认 `持有`、account_ref 入默认 lineage)。但未 commit-ready。em 已拆出(`_em_slice.patch`),工作树现为纯账户状态。
+- **Required**: `R-ASHORT-ACCOUNT-STATE-RULE12-13-FINALIZE`(详情见 register):①(RED)`test_markdown_structure` 断言补「持有」计数;② **held+hard_veto→否决 安全边界零测试**须补(变 ST/退市的持仓票必 否决 不是 持有);③ `持有` m67_render 路径须补测试。Optional:ts_code 限主板、安全旗标进 required。
+- **Verify**: 全量 1832,唯一失败 = `test_markdown_structure`(账户状态自身,非 em);两共享文件 em 标记=0(已拆净);held/veto 优先级、`hard` 聚合含 stateful_risk、size_multiplier clamp 均读码验过。
+- **Next**: Codex `修复`(按 register 逐条;**勿 add** `_em_slice.patch` / `_diag_web_sources.py` / `m67_validation_20260605`)。
+
 ## 2026-06-14 — Claude `审查` (Codex regime_fallback 文案 cleanup:PASS,提交阻塞未解)
 - **Verdict/Action**: PASS。v14_3 §7 切换提醒文案逗号已改全角 `，`(U+FF0C,符用户「中文逗号」要求);纯 doc、engine/pipeline/tests 未动、无 runtime 改动。但此 cleanup **未解决提交阻塞**:scope 仍混装(regime_fallback / cadence 重命名 / v14_3 doc)、cadence 重命名仍待决——与 Codex 本条自述「提交前仍需分拆 scope」一致。
 - **Required**: 无新增 Required;register 无新条目;提交前仍须拆 scope + 决定 cadence 重命名(见下方上一条 PASS verdict)。

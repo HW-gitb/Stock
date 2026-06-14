@@ -28,11 +28,12 @@
     "run_lineage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["analysis_input", "selection_bucket", "iv_feed", "account_status", "sizing_mode"],
+      "required": ["analysis_input", "selection_bucket", "iv_feed", "account_ref", "account_status", "sizing_mode"],
       "properties": {
         "analysis_input": {"type": "string"},
         "selection_bucket": {"type": "string"},
         "iv_feed": {"type": "string"},
+        "account_ref": {"type": "string"},
         "account_status": {"enum": ["provided", "absent"]},
         "sizing_mode": {"enum": ["sized", "observation_only_no_account"]}
       }

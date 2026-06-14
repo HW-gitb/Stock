@@ -20,12 +20,19 @@ def _report(ts_code, action, **tbl):
     table = {"操作": action, "股数": None, "入": None, "盈一": None, "盈二": None, "损": None,
              "类型": "N/A", "优先级": "—", "触发条件": "未到低吸/突破触发"}
     table.update(tbl)
+    advice = "观察,不建仓。"
+    if action == "建仓":
+        advice = "低吸建仓建议。试探仓。止损无条件。未验证。"
+    elif action == "持有":
+        advice = "已有持仓,本周不按新开仓处理,禁止自动加仓。手动止损 2.55,触发后由你盘中无条件手动执行。"
+    elif action == "否决":
+        advice = "否决,禁止建仓。硬否决:ST/退市。已有持仓也不得加仓;如硬风控触发止损/清仓条件,由你手动执行。"
     return {
         "ts_code": ts_code, "name": "测试",
         "m67": {
             "精简结论区": {"当前环境": "震荡期", "波动率状态": "IV分位≈55%", "现价与成本": "2.90 | 试探仓",
                           "否决审查触发": "无", "板块资金事件": "neutral", "风控触发": "无",
-                          "操作建议": "观察,不建仓。" if action == "观察" else "低吸建仓建议。试探仓。止损无条件。未验证。"},
+                          "操作建议": advice},
             "table": table,
         },
     }
@@ -47,10 +54,22 @@ class RenderTests(unittest.TestCase):
         self.assertIn("edge 未验证", md)                 # honesty banner present
         self.assertIn("## 一览", md)
         self.assertIn("| 票 | 名称 | 操作 |", md)         # summary table header
-        self.assertIn("建仓 1 / 观察 1 / 否决 0", md)     # action tally
+        self.assertIn("建仓 1 / 持有 0 / 观察 1 / 否决 0", md)     # action tally
         self.assertIn("000001.SZ", md)
         self.assertIn("执行清单:入 2.9", md)             # 建仓 shows the plan
         self.assertIn("## 逐票", md)
+
+    def test_holding_report_renders_position_management_path(self):
+        held = _report("600000.SH", "持有", 类型="已有持仓", 优先级="⭐×3",
+                       触发条件="已有持仓:按持仓管理输出,不按新开仓处理;禁止自动加仓")
+        held["m67"]["精简结论区"]["现价与成本"] = "2.90 | 持仓:1000股/均价2.7/建仓20260601/手动止损2.55"
+        md = render_weekly_markdown(_weekly([held]))
+        self.assertIn("建仓 0 / 持有 1 / 观察 0 / 否决 0", md)
+        self.assertIn("| 600000.SH | 测试 | 持有 | ⭐×3 | 已有持仓 |", md)
+        self.assertIn("持仓:1000股/均价2.7/建仓20260601/手动止损2.55", md)
+        self.assertIn("禁止自动加仓", md)
+        self.assertIn("已有持仓:按持仓管理输出", md)
+        self.assertNotIn("执行清单:入", md)
 
     def test_empty(self):
         md = render_weekly_markdown(_weekly([]))

@@ -23,7 +23,7 @@
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
 #   .\runners\weekly_screening.ps1 -SkipTracker                       # 不跑 forward tracker capture
 #   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # skip the M6.7 advisory (semantic)
-#   .\runners\weekly_screening.ps1 -Account path\to\account.json      # M6.7 sizing (available_cash); omit = no-sizing observation only
+#   .\runners\weekly_screening.ps1 -Account path\to\account.json      # M6.7 account-state JSON (cash/positions/Rule12/Rule13); omit = no-sizing observation only
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard
 
 param(
@@ -226,7 +226,7 @@ if ($SkipSemanticRisk) {
                     $RunM67 = $false
                 }
             } else {
-                Write-Host "[WARN] M6.7 no -Account: observation-only (no position sizing). The weekly_m67 artifact is marked sizing_mode=observation_only_no_account - 建仓 candidates render as 观察 (sizing artifact, NOT a real avoid signal). Pass -Account <account.json> (available_cash) for real sizing." -ForegroundColor Yellow
+                Write-Host "[WARN] M6.7 no -Account: observation-only (no position sizing/holding-state). The weekly_m67 artifact is marked sizing_mode=observation_only_no_account - 建仓 candidates render as 观察 (sizing artifact, NOT a real avoid signal). Pass -Account <account-state.json> (cash/positions/Rule12/Rule13) for real sizing and holding-state decisions." -ForegroundColor Yellow
             }
             if ($RunM67) {
                 Write-Host "[4/4] Running M6.7 pipeline: runners\a_short_weekly_pipeline.py --as-of $AsOf ..." -ForegroundColor Yellow

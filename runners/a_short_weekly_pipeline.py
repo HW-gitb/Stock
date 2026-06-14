@@ -29,12 +29,149 @@ M67_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(_
                                "schemas", "a_short_m67_report.schema.json")
 OVERLAY_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                    "schemas", "a_short_theme_overlay_comparison.schema.json")
+ACCOUNT_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                   "schemas", "a_short_account_state.schema.json")
+
+
+def _is_valid_date(s) -> bool:
+    from datetime import datetime
+    try:
+        datetime.strptime(str(s), "%Y%m%d")
+        return True
+    except ValueError:
+        return False
+
+
+def _date_leq_as_of(value, as_of: str, field: str) -> None:
+    if value in (None, ""):
+        return
+    if not _is_valid_date(value):
+        raise SystemExit(f"[FATAL] --account {field}={value!r} 不是合法 YYYYMMDD")
+    if str(value) > str(as_of):
+        raise SystemExit(f"[FATAL] --account {field}={value} > --as-of {as_of}(未来状态,拒跑)")
+
+
+def validate_account_state(account: dict, as_of: str) -> dict:
+    """Validate the manual account/position state consumed by weekly M6.7.
+
+    This is deliberately a user-maintained local JSON state. It records cash, current holdings,
+    Rule12 portfolio-circuit status, and Rule13 per-stock re-entry cooldowns; it never connects to
+    brokers or updates itself from live accounts.
+    """
+    if not isinstance(account, dict):
+        raise SystemExit(f"[FATAL] --account 须为 JSON object, got {type(account).__name__}")
+    with open(ACCOUNT_SCHEMA_PATH, encoding="utf-8") as f:
+        schema = json.load(f)
+    try:
+        jsonschema.validate(account, schema)
+    except jsonschema.ValidationError as exc:
+        path = ".".join(str(p) for p in exc.absolute_path) or "<root>"
+        raise SystemExit(f"[FATAL] --account schema invalid at {path}: {exc.message}") from exc
+    if str(account.get("as_of")) != str(as_of):
+        raise SystemExit(f"[FATAL] --account as_of {account.get('as_of')} != --as-of {as_of}(账户状态错批/陈旧/未来)")
+
+    seen_pos = set()
+    for idx, pos in enumerate(account.get("positions") or []):
+        code = str(pos.get("ts_code"))
+        if code in seen_pos:
+            raise SystemExit(f"[FATAL] --account positions 含重复 ts_code {code}")
+        seen_pos.add(code)
+        _date_leq_as_of(pos.get("entry_date"), as_of, f"positions[{idx}].entry_date")
+        _date_leq_as_of(pos.get("last_exit_date"), as_of, f"positions[{idx}].last_exit_date")
+
+    r12 = account.get("rule12") or {}
+    _date_leq_as_of(r12.get("triggered_at"), as_of, "rule12.triggered_at")
+    if r12.get("cooldown_until") is not None and not _is_valid_date(r12.get("cooldown_until")):
+        raise SystemExit(f"[FATAL] --account rule12.cooldown_until={r12.get('cooldown_until')!r} 不是合法 YYYYMMDD")
+    if r12.get("status") == "active_cooldown" and str(r12.get("cooldown_until") or "") < str(as_of):
+        raise SystemExit("[FATAL] --account rule12 active_cooldown 但 cooldown_until 已早于 as_of;请先更新为 recovery_1/inactive")
+
+    seen_cd = set()
+    for idx, cd in enumerate(account.get("rule13_cooldowns") or []):
+        code = str(cd.get("ts_code"))
+        if code in seen_cd:
+            raise SystemExit(f"[FATAL] --account rule13_cooldowns 含重复 ts_code {code}")
+        seen_cd.add(code)
+        _date_leq_as_of(cd.get("exit_date"), as_of, f"rule13_cooldowns[{idx}].exit_date")
+        if cd.get("cooldown_until") is not None and not _is_valid_date(cd.get("cooldown_until")):
+            raise SystemExit(f"[FATAL] --account rule13_cooldowns[{idx}].cooldown_until 非合法 YYYYMMDD")
+        if cd.get("status") == "active_cooldown" and str(cd.get("cooldown_until") or "") < str(as_of):
+            raise SystemExit(f"[FATAL] --account Rule13 {code} active_cooldown 已过期;请更新为 pending_recheck/cleared_for_reentry")
+    return account
+
+
+def stateful_risk_for_candidate(account: dict | None, ts_code: str, as_of: str) -> dict:
+    """Derive per-candidate Rule12/Rule13/position context from the validated account state."""
+    if not account:
+        return {}
+    positions = {str(p.get("ts_code")): p for p in (account.get("positions") or [])}
+    cooldowns = {str(c.get("ts_code")): c for c in (account.get("rule13_cooldowns") or [])}
+    position = positions.get(str(ts_code))
+    has_position = position is not None
+    ctx = {
+        "position_state": "held" if has_position else "flat",
+        "position": position,
+        "rule12": {"status": (account.get("rule12") or {}).get("status", "inactive")},
+        "rule13": {"status": "none"},
+        "size_multiplier": 1.0,
+        "reasons": [],
+        "as_of": as_of,
+    }
+
+    r12 = account.get("rule12") or {"status": "inactive"}
+    if r12.get("status") == "active_cooldown":
+        ctx["rule12"] = {
+            "status": "active_cooldown",
+            "cooldown_until": r12.get("cooldown_until"),
+            "reason": r12.get("reason"),
+            "new_entry_blocked": True,
+            "existing_position_only": has_position,
+        }
+        ctx["reasons"].append("Rule12 active_cooldown:block_new_entries")
+    elif r12.get("status") == "recovery_1":
+        mult = r12.get("recovery_position_multiplier")
+        if not isinstance(mult, (int, float)) or mult <= 0 or mult > 1:
+            mult = 0.5
+        ctx["rule12"] = {
+            "status": "recovery_1",
+            "cooldown_until": r12.get("cooldown_until"),
+            "reason": r12.get("reason"),
+            "new_entry_blocked": False,
+            "recovery_position_multiplier": float(mult),
+        }
+        ctx["size_multiplier"] = min(ctx["size_multiplier"], float(mult))
+        ctx["reasons"].append(f"Rule12 recovery_1:size_multiplier={float(mult):.2f}")
+
+    cd = cooldowns.get(str(ts_code))
+    if cd and not has_position:
+        ctx["rule13"] = dict(cd)
+        status = cd.get("status")
+        if status == "active_cooldown":
+            ctx["rule13"]["reentry_blocked"] = True
+            ctx["reasons"].append("Rule13 active_cooldown:block_reentry")
+        elif status == "pending_recheck":
+            needs_catalyst = bool(cd.get("requires_new_catalyst")) and not bool(cd.get("new_catalyst_confirmed"))
+            needs_m4 = bool(cd.get("requires_m4_recheck")) and not bool(cd.get("m4_recheck_passed"))
+            if needs_catalyst or needs_m4:
+                ctx["rule13"]["reentry_blocked"] = True
+                ctx["reasons"].append("Rule13 pending_recheck:block_reentry")
+            else:
+                mult = cd.get("max_reentry_position_pct") if isinstance(cd.get("max_reentry_position_pct"), (int, float)) else 0.5
+                ctx["size_multiplier"] = min(ctx["size_multiplier"], float(mult))
+                ctx["reasons"].append(f"Rule13 pending_recheck:size_multiplier={float(mult):.2f}")
+        elif status == "cleared_for_reentry":
+            mult = cd.get("max_reentry_position_pct") if isinstance(cd.get("max_reentry_position_pct"), (int, float)) else 0.5
+            ctx["size_multiplier"] = min(ctx["size_multiplier"], float(mult))
+            ctx["reasons"].append(f"Rule13 cleared_for_reentry:size_multiplier={float(mult):.2f}")
+    elif cd and has_position:
+        ctx["rule13"] = {"status": "not_applicable_existing_position", "source_status": cd.get("status")}
+    return ctx
 
 
 def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pct,
                         account: dict, regime: str, industry_trend: str = "neutral",
                         llm_enrichment=None, observe_only=None, semantic=None,
-                        semantic_web_llm=None, regime_fallback=None) -> dict:
+                        semantic_web_llm=None, regime_fallback=None, stateful_risk=None) -> dict:
     """把一个 EGS analysis_input 候选 + 价格序列 + overlay 行 + 市场级 IV 分位 + 账户/环境
     归一化成 Phase 5 引擎输入。字段缺失 → 引擎按保守/observe 处理。"""
     d = cand.get("derived_flags", {}) or {}
@@ -70,6 +207,7 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         "regime_fallback": dict(regime_fallback or {}),
         "account": account or {},
         "portfolio": {},
+        "stateful_risk": dict(stateful_risk or {}),
         "observe_only": list(observe_only or []),
         "llm_enrichment": list(llm_enrichment or []),
         # 语义官方层(Slice 1):official_structured dict {status, events[severity], had_pit_announcements}
@@ -90,6 +228,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     # default = no-account observation-only,使直接 builder/测试仍 schema-valid。
     lineage = run_lineage if run_lineage is not None else {
         "analysis_input": "", "selection_bucket": "", "iv_feed": iv_feed_ref,
+        "account_ref": "",
         "account_status": "absent", "sizing_mode": "observation_only_no_account"}
     return {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
@@ -329,7 +468,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--analysis-input", required=True, help="EGS analysis_input.json (top-N 候选)")
     p.add_argument("--iv-feed", required=True, help="a_short_iv_feed.json")
     p.add_argument("--overlay", help="overlay artifact(可选)")
-    p.add_argument("--account", help="账户/环境 JSON(available_cash / market_regime)")
+    p.add_argument("--account", help="账户状态 JSON(available_cash / positions / rule12 / rule13_cooldowns)")
     p.add_argument("--out", required=True)
     p.add_argument("--confirm-fetch-authorized", action="store_true")
     p.add_argument("--cninfo-lookback-days", type=int, default=90,
@@ -360,7 +499,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if args.overlay and set(overlay) != set(weekly_candidates):
         raise SystemExit(f"[FATAL] overlay 候选集 {sorted(overlay)} != 周报候选 {sorted(weekly_candidates)}"
                          "(同日错批/缺行/多行,缺行会被静默降级;须同一批全覆盖,拒跑)")
-    acct = _load(args.account) if args.account else {}
+    acct = validate_account_state(_load(args.account), args.as_of) if args.account else {}
     # 市场 regime 只取自 analysis_input(EGS 分类)。unknown/missing 不允许被账户配置覆盖成进攻期;
     # 按 2026-06-14 用户决策:unknown → 震荡期 + 降级 + 保守减半 + M6.7 明确提示。
     regime, regime_fallback = resolve_market_regime(ai)
@@ -373,7 +512,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         account_status, sizing_mode = "provided", "sized"
     else:
         account_status, sizing_mode = "absent", "observation_only_no_account"
-    account = {"available_cash": available_cash}
+    account = {"available_cash": available_cash,
+               "total_equity": acct.get("total_equity"),
+               "current_gross_exposure": acct.get("current_gross_exposure"),
+               "positions_count": len(acct.get("positions") or [])}
     # 价格序列:注入(测试)或执行期抓取(需授权)
     if price_provider is None:
         if not args.confirm_fetch_authorized:
@@ -397,6 +539,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     normalized = [normalize_candidate(c, price_provider(c["ts_code"]), overlay.get(c["ts_code"]),
                                       iv_pct, account, regime,
                                       regime_fallback=regime_fallback,
+                                      stateful_risk=stateful_risk_for_candidate(acct, c["ts_code"], args.as_of),
                                       semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None),
                                       semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None))
                   for c in ai.get("candidates", [])]
@@ -415,6 +558,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     run_lineage = {"analysis_input": _rel(args.analysis_input),
                    "selection_bucket": _rel(os.path.dirname(args.analysis_input)),
                    "iv_feed": _rel(args.iv_feed),
+                   "account_ref": (_rel(args.account) if args.account else ""),
                    "account_status": account_status, "sizing_mode": sizing_mode}
     weekly = build_weekly_report(normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage)
