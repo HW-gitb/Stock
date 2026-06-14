@@ -1,8 +1,15 @@
 # Semantic-Risk web/LLM Advisory — produce `a_short_semantic_risk_web_llm_patch`
 
-Purpose: this is the **Slice 2b-ii web/LLM advisory layer** (skill-in-loop). For the main-board Top15
-watch pool, do the LIVE web/LLM judgment that the headless `a_short_semantic_risk_summary` cannot, and
-emit a single `a_short_semantic_risk_web_llm_patch` that the headless merger
+> **过渡组件 / transitional (Slice 3 retires this skill path).** The web_llm run-path (current vs
+> transitional) is single-sourced in `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径. This
+> prompt is the **transitional 2b-ii skill path**, NOT the current weekly conclusion path; do not read it
+> as the current run-path. The current weekly web_llm conclusion path is described only in that contract section.
+
+Purpose (transitional / legacy skill-patch path — Slice 3 retires; run-path single-source: contract
+§web_llm 产出路径): this is the **transitional Slice 2b-ii web/LLM skill-patch prompt** (skill-in-loop;
+NOT the current run-path). When this transitional path is used, for the main-board Top15 watch pool produce
+a single `a_short_semantic_risk_web_llm_patch` (the LIVE web/LLM judgment the headless
+`a_short_semantic_risk_summary` cannot do) that the headless merger
 (`runners/a_short_semantic_risk_summary.py::apply_web_llm_patch`) validates and merges into `web_llm`.
 
 **Stable contract — read first, do not restate the matrix here**: `docs/a_short_semantic_risk_contract.md`

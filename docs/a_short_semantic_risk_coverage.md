@@ -7,21 +7,21 @@
 | 层 | 源 | 口径 | 谁产出 | 切片 |
 |---|---|---|---|---|
 | **official_structured** | 巨潮 cninfo `hisAnnouncement/query`(`stock`="code,orgId") | 按披露日 **PIT**(canonical 且 ≤ as_of);标题→risk_type+severity 粗筛 | **headless**(`a_short_semantic_risk_summary.py`) | 1 / 2a / 2b-i |
-| **web_llm** | 新浪/通用 web/用户上下文 | **LIVE-only**(`pit_capable=false`,不可复现、绝不进历史回测);soft flag | **当前路 = 周报 M6.7 内 DeepSeek adapter 自动判(Slice 2)**;skill 在环 patch 是**过渡**旁路 | 1 / 2 / 2b-ii |
+| **web_llm** | 新浪/通用 web/用户上下文 | **LIVE-only**(`pit_capable=false`,不可复现、绝不进历史回测);soft flag | 产出路径(当前/过渡)单一来源见契约 §web_llm 产出路径 | 1 / 2 / 2b-ii |
 
 ## 覆盖矩阵(v14.2 语义风险项 → 本层)
 
 | v14.2 语义项 | 本层覆盖 | status |
 |---|---|---|
-| 监管(问询/关注/立案/处罚/警示) | official_structured(cninfo PIT 公告,severity high/medium)+ web_llm 佐证 | 已建(2a 结构化 + 2b-i 分级);精判经 web_llm(周报 M6.7 内 DeepSeek 自动判,Slice 2;2b-ii skill 为过渡旁路)。**注:当前是配置 lookback(默认 90 天)内、披露日 ≤ as_of 的 PIT 官方公告证据,并非精确"48h 新鲜度"窗口**——精确 48h 时效 / 媒体负面判断属 2b-ii-B skill/prompt 或未来 recency 字段责任,headless 不强制 48h |
-| 媒体负面 | web_llm advisory(web 文本经判官判断) | **当前 = 周报 M6.7 内 DeepSeek adapter 自动判(Slice 2)**;2b-ii skill 在环产 patch 为**过渡**旁路(契约+合并 2b-ii-A、skill prompt 2b-ii-B 已建) |
-| 基本面行业景气(≠ industry_heat 动量) | web_llm `status` tailwind/headwind | 同上(M6.7 DeepSeek 自动,Slice 2;2b-ii skill 为过渡旁路) |
-| 隐蔽风险线索(资金占用/违规担保/诉讼…) | official_structured 粗筛(宽关键词,最窄抑制只压明确否定式)+ web_llm 实质降级 | headless 粗筛已建;**实质判断靠 web_llm(当前 = M6.7 DeepSeek 自动,Slice 2;或过渡 2b-ii skill)**(headless 关键词注定粗,见下) |
+| 监管(问询/关注/立案/处罚/警示) | official_structured(cninfo PIT 公告,severity high/medium)+ web_llm 佐证 | 已建(2a 结构化 + 2b-i 分级);精判经 web_llm(产出路径见契约 §web_llm 产出路径)。**注:当前是配置 lookback(默认 90 天)内、披露日 ≤ as_of 的 PIT 官方公告证据,并非精确"48h 新鲜度"窗口**——精确 48h 时效 / 媒体负面判断属 2b-ii-B skill/prompt 或未来 recency 字段责任,headless 不强制 48h |
+| 媒体负面 | web_llm advisory(web 文本经判官判断) | web_llm 已建(2b-ii-A 契约+合并、2b-ii-B skill prompt);产出路径见契约 §web_llm 产出路径 |
+| 基本面行业景气(≠ industry_heat 动量) | web_llm `status` tailwind/headwind | 同上(产出路径见契约 §web_llm 产出路径) |
+| 隐蔽风险线索(资金占用/违规担保/诉讼…) | official_structured 粗筛(宽关键词,最窄抑制只压明确否定式)+ web_llm 实质降级 | headless 粗筛已建;**实质判断靠 web_llm(产出路径见契约 §web_llm 产出路径)**(headless 关键词注定粗,见下) |
 
 ## official_structured 关键词粗筛的已知边界(为什么必须有 web_llm)
 - 宽关键词(如 `资金占用`)会命中年报季**例行合规件**("…非经营性资金占用…情况专项说明/汇总表",结论通常无占用)。最窄抑制只压**明确无占用否定式**(不存在/未发生/无新增…);**裸例行件仍报 `risk[medium]`**,交 web_llm/skill 降级。
 - 取舍:headless 残余误差**只会是误报(skill 降级),绝不漏报**真风险。`high` severity(立案/处罚/ST)永不被抑制。
-- 故 official_structured 是**粗筛 + 证据(PIT 公告 title/category/date/url)**,**实质性"是不是真风险"由 web_llm advisory(当前 = M6.7 内 DeepSeek adapter 自动判,Slice 2;或过渡 2b-ii skill)判**。
+- 故 official_structured 是**粗筛 + 证据(PIT 公告 title/category/date/url)**,**实质性"是不是真风险"由 web_llm advisory 判**(产出路径见契约 §web_llm 产出路径)。
 
 ## web_llm enrichment 契约(2b-ii-A)
 - skill 产出 `a_short_semantic_risk_web_llm_patch`(schema:`schemas/a_short_semantic_risk_web_llm_patch.schema.json`)。
@@ -29,12 +29,12 @@
 - web_llm 不变式矩阵(unknown 中性三元组 `unknown/unknown/no_action`、任何非-unknown 态须带 `sources`、risk_level 配对、action 枚举等)**= 单一来源 `docs/a_short_semantic_risk_contract.md`,本文件不复述**(B2 contract-anchor,防部分复述漂移)。代码侧由 summary + patch 共用的 `_web_llm_consistency_error` 强制。
 
 ## web/LLM skill 层 + 面板接入(2b-ii-B,已建)
-- **skill prompt(过渡旁路;当前 web 结论走周报 M6.7 内 DeepSeek adapter 自动判,Slice 2)** `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`:编排既有 6 个分类 prompt(regulatory_48h/policy_news/industry_trend/hidden_risk/earnings_no_good_repair/cross_market_linkage)→ 产 `a_short_semantic_risk_web_llm_patch`;运行时 skill 在环、`apply_web_llm_patch` 校验合并。
+- **skill prompt(过渡组件;产出路径见契约 §web_llm 产出路径)** `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`:编排既有 6 个分类 prompt(regulatory_48h/policy_news/industry_trend/hidden_risk/earnings_no_good_repair/cross_market_linkage)→ 产 `a_short_semantic_risk_web_llm_patch`;`apply_web_llm_patch` 校验合并。
 - **面板接入 weekly pipeline**:`a_short_weekly_pipeline --semantic-risk-summary <summary.json>` → `_semantic_panel_from_summary`(渲染前过其消费门)→ `render_semantic_risk_panel` **仅追加到周报 .md**(`---` 分隔),**绝不进确定性周报 JSON**。消费门的校验步骤**单一来源** = `_semantic_panel_from_summary` docstring,本处只指向、不复述(防漂移)。
 
 ## 运行接入(cadence)
 - **Step 1(headless official_structured)接入 `runners/weekly_screening.ps1`**(Stage 4,旁路):周报 run egs_main 成功后,以当次 `result/a_short/<as_of>/analysis_input.json` 候选为 watch pool(`--analysis-input`,runner 内再过主板 Top15),真 cninfo 取数产 `research/results/a_short/semantic_risk_<as_of>/summary.json`。**advisory-only 旁路**:cninfo 失败/反爬绝不阻断周报(同 canary/tracker),落 research 非生产 lane(禁 result/a_short),`-SkipSemanticRisk` 可关。
-- **Step 2(web_llm)当前结论路 = 周报 `a_short_weekly_pipeline.py` M6.7 内 DeepSeek adapter 自动判**(`--confirm-fetch-authorized` 且未 `--skip-semantic` 时自动接入,**主板 Top15 边界**,缺 key/SDK/抓取失败→unknown 中性、非阻断;详见 §融入 M6.7 Slice 2)。`weekly_screening.ps1` Stage-4 跑的是**过渡 standalone summary sidecar**(只产官方结构化层、web 留 unknown),**Slice 3** 会把该入口串到 M6.7 pipeline;2b-ii skill patch 是另一条**过渡**的人工 web 路。
+- **Step 2(web_llm)产出路径见契约 §web_llm 产出路径(单一来源)**。`weekly_screening.ps1` Stage-4 是过渡 sidecar(只产官方结构化层);watch pool 同 Step 1。
 - watch pool 抽取 = `a_short_semantic_risk_summary._watch_pool_from_analysis_input`(纯函数,单测)。
 
 ## 融入 M6.7 打分(迁移中,目标:不再独立 artifact/面板)

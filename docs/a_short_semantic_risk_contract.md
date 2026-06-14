@@ -42,6 +42,20 @@
   违反不变式 → 中性化(引擎记 `machine.layer.semantic_risk.web_llm.invalid_neutralized`,非静默)。DeepSeek 不可用
   (缺 key/SDK/异常)绝不失败周报、绝不伪装 clear,该层 `unknown`。来源在 `machine.layer.semantic_risk` 可追溯。
 
+## web_llm 产出路径(单一来源 / single source of run-path)
+
+> 本节是 web_llm「谁产出 / 当前走哪条路 / 哪些是过渡」的**唯一权威陈述**。`coverage` / `README` /
+> `runners/weekly_screening.ps1` / `runners/a_short_semantic_risk_summary.py` 等只**指过来**、不复述(防 N 面漂移;
+> 守护 `tests/test_a_short_semantic_risk_contract_docs.py`)。
+
+- **当前结论路(current)**:周报 `runners/a_short_weekly_pipeline.py` M6.7 内 **DeepSeek adapter 自动判** web
+  (`--confirm-fetch-authorized` 且未 `--skip-semantic` 时自动接入,**主板 Top15** 边界;缺 key/SDK/抓取失败 → `unknown`
+  中性、非阻断)。判官判已抓取文本(非搜索器);影响规则见上 §web_llm「M6.7 集成」。
+- **过渡路(transitional;Slice 3 退役)**:独立 `a_short_semantic_risk_summary` summary + 2b-ii skill
+  `a_short_semantic_risk_web_llm_patch` + `weekly_screening.ps1` Stage-4 sidecar。它们仍可产/补 web_llm,**但不是当前
+  结论路**;Slice 3 把周五入口串到 M6.7 pipeline 并退役独立面板 / sidecar / skill-patch。
+- 不变式见上 §web_llm + §Scope(advisory-only、unknown-not-clear、never hard-veto)。
+
 ## Patch Merge
 
 - `a_short_semantic_risk_web_llm_patch` 只能写入候选的

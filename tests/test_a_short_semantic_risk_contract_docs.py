@@ -195,7 +195,9 @@ class SemanticRiskContractDocs(unittest.TestCase):
                 reached.append(name)
             for b in blocks:
                 self._assert_landing_block_ok(name, b)
-        for expect in ("README.md", "a_short_semantic_risk_coverage.md", "semantic_risk_web_llm.md"):
+        # README no longer teaches the panel landing (the semantic-web rows were consolidated to a single
+        # pointer row in the run-path single-source refactor); coverage + skill-prompt still teach + route it.
+        for expect in ("a_short_semantic_risk_coverage.md", "semantic_risk_web_llm.md"):
             self.assertIn(expect, reached, f"single-source sweep failed to reach {expect}")
 
     def test_panel_gate_guard_is_local_planted_failure(self):
@@ -250,68 +252,125 @@ class SemanticRiskContractDocs(unittest.TestCase):
         self.assertIn("并非精确\"48h 新鲜度\"窗口", text)
         self.assertIn("未来 recency 字段", text)
 
-    # ---- R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT drift guard ----
-    # After DeepSeek web_llm was wired into the weekly M6.7 pipeline (Slice 2), active surfaces must
-    # teach ONE weekly run (M6.7 auto official + DeepSeek web, main-board Top15, failures neutral) as
-    # the current web conclusion path. A "web runs separately / web_llm stays unknown / 待 skill" line
-    # is allowed ONLY when explicitly scoped transitional / standalone-sidecar (Slice 3 retirement).
-    # The load-bearing STALE signal is "web_llm is PRODUCED BY THE SKILL / left unknown as the workflow"
-    # (the producer / separate-run claim) — NOT the rule value "unknown" (which legitimately appears in
-    # "unknown → neutral" rule text). Targeting the producer signal avoids both the synonym whack-a-mole
-    # (rule D) and false-positives on rule lines. Codex round-2 residuals (skill 在环 / skill-in-loop /
-    # 2b-ii skill / left unknown here) are now covered.
-    STALE_WEB_SEPARATE = ("skill 在环", "skill-in-loop", "2b-ii skill", "Slice-2b skill", "2b-ii-B skill",
-                          "left unknown here", "全留 unknown", "全 `unknown`", "web 留 unknown",
-                          "不能纯自动化", "web_llm 另跑", "stays UNKNOWN until")
-    # a producer/separate-web line is RECONCILED ONLY by an EXPLICIT transitional label — NOT by merely
-    # co-mentioning DeepSeek on the same line. Codex round-3: "DeepSeek 自动 / 或 2b-ii skill" still teaches
-    # the skill as a co-equal CURRENT alternative; since DeepSeek is the current path, any skill mention is
-    # transitional and must be labelled so. (Lines with NO producer phrase are never checked, so the new
-    # DeepSeek Slice-2 row is unaffected.)
-    RECONCILED_MARKERS = ("过渡", "transitional", "legacy", "sidecar", "Slice 3", "迁移", "旧路",
-                          "standalone", "旁挂", "historical")
-    SEPARATE_RUN_SURFACES = ("docs/a_short_semantic_risk_coverage.md", "docs/README.md",
-                             "runners/weekly_screening.ps1", "runners/a_short_semantic_risk_summary.py")
+    # ---- R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP — REAL single-source guard ----
+    # The web_llm run-path (current = weekly M6.7 DeepSeek auto / transitional = standalone summary +
+    # 2b-ii skill-patch + Stage-4 sidecar) is stated ONCE, in the contract §web_llm 产出路径. Codex round-5:
+    # the prior guard let "pointer somewhere on the line" exempt a line that ALSO re-narrated the path, and
+    # missed current-path narration (`current auto web path` / `web_llm UNKNOWN here` / `DeepSeek auto-provider`).
+    # FIX: a STRICT surface that re-narrates the run-path (any RUNPATH_NARRATION phrase) is an offender
+    # REGARDLESS of a co-located pointer — a route surface must POINT only, never re-narrate (current OR
+    # transitional). The non-archive DESIGN doc may keep historical wording ONLY if the line carries an
+    # inline supersession pointer to the contract section.
+    RUNPATH_NARRATION = (
+        # current-path narration (must live only in the contract)
+        "current auto web path", "current web conclusion", "CURRENT web conclusion", "web_llm UNKNOWN here",
+        "DeepSeek auto-provider", "auto-connects", "web 自动判走",
+        # producer / transitional narration
+        "skill-in-loop", "left unknown here", "skill to fill", "skill fills", "skill 在环",
+        "2b-ii skill", "Slice-2b skill", "Slice 2 skill", "Slice-2 web layer", "formal Slice-2 layer",
+        "Slice 2 formal advisory layer", "全留 unknown", "web 留 unknown", "未评估(unknown",
+        "stays UNKNOWN until", "不能纯自动化", "web_llm 另跑",
+    )
+    SINGLE_SOURCE_POINTER = "§web_llm 产出路径"     # the one authority section (in the contract)
 
     @classmethod
-    def _separate_run_offenders(cls, text):
-        # shared by the live guard AND the planted test (so guard + proof can't drift): a line carrying a
-        # stale producer/separate-web phrase but NO explicit transitional label is an offender (a DeepSeek
-        # co-mention does NOT reconcile a skill-producer line — see RECONCILED_MARKERS, R3).
-        return [ln.strip()[:200] for ln in text.splitlines()
-                if any(s in ln for s in cls.STALE_WEB_SEPARATE)
-                and not any(m in ln for m in cls.RECONCILED_MARKERS)]
+    def _strict_surfaces(cls):
+        # GLOB-DISCOVERED (not a hand-curated list — Codex round-6/7 kept finding a missed surface, e.g.
+        # the Slice-1 probe runner). Every non-archive semantic-risk DOC + the semantic-risk RUNNERS
+        # (probe / summary = `runners/a_short_semantic_risk_*.py`) + the weekly orchestration script are
+        # checked. The contract (authority) and pure implementation files (adapter / engine / pipeline,
+        # which are NOT named a_short_semantic_risk_*) are deliberately excluded.
+        import glob
+        files = ["docs/a_short_semantic_risk_coverage.md", "docs/README.md", "runners/weekly_screening.ps1"]
+        files += sorted(str(Path(p).relative_to(ROOT)).replace("\\", "/")
+                        for p in glob.glob(str(ROOT / "runners" / "a_short_semantic_risk_*.py")))
+        return files
+    DESIGN_SURFACES = ("docs/a_short_semantic_risk_top15_enrichment_design_20260612.md",)
+    # The 2b-ii skill prompt is the transitional COMPONENT's own instruction file (every line is about the
+    # skill doing the web/LLM judgment — a per-line "point only" rule is nonsensical). It is instead checked
+    # at FILE level: it must carry a supersession banner = a transitional marker + the run-path pointer, so a
+    # reader sees it is the transitional path and that the current run-path is single-sourced in the contract.
+    BANNER_SUPERSEDED_SURFACES = ("skills/a_short_analysis/prompts/semantic_risk_web_llm.md",)
+    TRANSITIONAL_MARKERS = ("过渡", "transitional", "SUPERSEDED", "Slice 3")
+
+    @classmethod
+    def _separate_run_offenders(cls, text, pointer_exempts=False):
+        # shared by the live guard AND the planted test. STRICT (pointer_exempts=False): a line that
+        # re-narrates the run-path is an offender even if it also carries the pointer (a route surface
+        # must POINT only). DESIGN (pointer_exempts=True): a historical-design line may keep the wording
+        # if it carries an inline supersession pointer to the contract section.
+        out = []
+        for ln in text.splitlines():
+            if not any(s in ln for s in cls.RUNPATH_NARRATION):
+                continue
+            if pointer_exempts and cls.SINGLE_SOURCE_POINTER in ln:
+                continue
+            out.append(ln.strip()[:200])
+        return out
 
     def test_no_pre_slice2_separate_web_workflow_taught_as_current(self):
-        for rel in self.SEPARATE_RUN_SURFACES:
+        # authority: the contract holds the §web_llm 产出路径 section with the canonical current-vs-transitional
+        # statement; no other surface re-states it.
+        contract = _read("docs/a_short_semantic_risk_contract.md")
+        self.assertIn("## web_llm 产出路径", contract, "contract lost the single-source web run-path section")
+        for kw in ("当前结论路", "DeepSeek adapter 自动", "过渡路", "Slice 3"):
+            self.assertIn(kw, contract, f"contract run-path section lost anchor: {kw}")
+        # STRICT route surfaces (glob-discovered): ZERO run-path narration (point only — a co-located
+        # pointer does NOT exempt). Glob ensures a new semantic-risk runner/doc can't silently escape.
+        for rel in self._strict_surfaces():
             off = self._separate_run_offenders(_read(rel))
-            self.assertEqual(off, [], f"{rel} teaches the pre-Slice-2 separate/unknown web workflow as "
-                                      f"current (each such line needs a transitional/standalone-sidecar "
-                                      f"label now that M6.7 auto-judges web via DeepSeek): {off}")
-        # positive: the current M6.7 auto DeepSeek web path IS documented (not only the old skill path)
-        for rel in ("docs/a_short_semantic_risk_coverage.md", "docs/README.md"):
+            self.assertEqual(off, [], f"{rel} re-narrates the web run-path (must POINT only to {self.SINGLE_SOURCE_POINTER}, "
+                                      f"never re-narrate current/transitional path): {off}")
+        # non-archive DESIGN doc: historical wording allowed ONLY with an inline supersession pointer
+        for rel in self.DESIGN_SURFACES:
+            off = self._separate_run_offenders(_read(rel), pointer_exempts=True)
+            self.assertEqual(off, [], f"{rel} teaches the old run-path without an inline supersession pointer "
+                                      f"({self.SINGLE_SOURCE_POINTER}): {off}")
+        # transitional COMPONENT prompt(s): FILE-LEVEL supersession banner (transitional marker + run-path pointer)
+        for rel in self.BANNER_SUPERSEDED_SURFACES:
             t = _read(rel)
-            self.assertIn("DeepSeek", t, f"{rel} lost the DeepSeek auto-web route")
-            self.assertIn("M6.7", t, f"{rel} lost the M6.7 web route")
-            self.assertTrue(("自动" in t) or ("auto" in t), f"{rel} must state web auto-judge in M6.7")
+            self.assertIn(self.SINGLE_SOURCE_POINTER, t,
+                          f"{rel} lost the run-path pointer to the contract single source")
+            self.assertTrue(any(mk in t for mk in self.TRANSITIONAL_MARKERS),
+                            f"{rel} must carry a transitional/SUPERSEDED component banner")
+        # coverage + README must carry the pointer (route to the single source)
+        for rel in ("docs/a_short_semantic_risk_coverage.md", "docs/README.md"):
+            self.assertIn(self.SINGLE_SOURCE_POINTER, _read(rel),
+                          f"{rel} lost the pointer to the contract single source")
 
     def test_separate_web_workflow_guard_is_real_planted(self):
-        bare = "Step 2 web_llm 全留 unknown,需 2b-ii skill 另跑(当前必跑)。"
-        self.assertTrue(self._separate_run_offenders(bare),
-                        "guard misses a bare stale-as-current web line")
-        skill_only = "web_llm filled by the 2b-ii skill (skill-in-loop), web 留 unknown until then."
-        self.assertTrue(self._separate_run_offenders(skill_only),
-                        "guard misses a bare skill-producer line (the round-2 synonym class)")
-        labeled = "Step 2 web_llm 全留 unknown —— 过渡 standalone sidecar(M6.7 已 DeepSeek 自动判)。"
-        self.assertEqual(self._separate_run_offenders(labeled), [],
-                         "guard false-positives a transitional-labeled line")
-        ds_or_skill = "web judged auto by the M6.7 DeepSeek adapter, or via the 2b-ii skill."
-        self.assertTrue(self._separate_run_offenders(ds_or_skill),
-                        "a line offering the skill as a co-equal CURRENT alternative must FAIL even when it "
-                        "co-mentions DeepSeek — DeepSeek presence alone no longer reconciles a skill mention")
-        skill_transitional = "web judged auto by the M6.7 DeepSeek adapter; the 2b-ii skill is a 过渡 sidecar."
-        self.assertEqual(self._separate_run_offenders(skill_transitional), [],
-                         "a skill mention explicitly labelled transitional is reconciled")
+        # the EXACT Codex round-5 false negatives must now FAIL on a STRICT surface, pointer notwithstanding.
+        ptr_plus_renarration = ("This Stage-4 is a transitional standalone sidecar (web_llm UNKNOWN here); "
+                                "the current auto web path is the M6.7 weekly pipeline. 产出路径见契约 §web_llm 产出路径")
+        self.assertTrue(self._separate_run_offenders(ptr_plus_renarration),
+                        "STRICT: pointer + local current-path re-narration must FAIL (the round-5 false negative)")
+        skill_renarration = "web_llm (skill-in-loop, left unknown here) for the Slice-2b skill to fill. §web_llm 产出路径"
+        self.assertTrue(self._separate_run_offenders(skill_renarration),
+                        "STRICT: a header pointer must not mask local skill-in-loop / left-unknown-here run-path wording")
+        probe_variant = "完整 web+LLM 判断属 Slice 2 skill 在环,本函数只喂原始 sources。"  # Codex round-7 non-hyphen probe variant
+        self.assertTrue(self._separate_run_offenders(probe_variant),
+                        "STRICT: the non-hyphen 'Slice 2 skill 在环' probe variant must FAIL")
+        pure_pointer = "web_llm run path: see contract §web_llm 产出路径 (transitional sidecar)."
+        self.assertEqual(self._separate_run_offenders(pure_pointer), [],
+                         "a pure pointer line (no run-path narration) is fine")
+        # DESIGN doc: old wording WITH an inline supersession pointer is allowed; WITHOUT it fails.
+        design_superseded = "web+LLM 层 = skill 在环(已超越:run-path 单一来源见契约 §web_llm 产出路径)"
+        self.assertEqual(self._separate_run_offenders(design_superseded, pointer_exempts=True), [],
+                         "DESIGN: a historical line with an inline supersession pointer is allowed")
+        self.assertTrue(self._separate_run_offenders("web+LLM 层 = skill 在环", pointer_exempts=True),
+                        "DESIGN: a historical run-path line without a supersession pointer must FAIL")
+        # BANNER tier (skill prompt): a prompt-style file WITHOUT the supersession banner (no pointer +
+        # no transitional marker) must fail the file-level banner check.
+        prompt_no_banner = ("Purpose: this is the Slice 2b-ii web/LLM advisory layer (skill-in-loop). "
+                            "Do the LIVE web/LLM judgment and emit the patch.")
+        self.assertFalse(self.SINGLE_SOURCE_POINTER in prompt_no_banner
+                         and any(mk in prompt_no_banner for mk in self.TRANSITIONAL_MARKERS),
+                         "BANNER planted: a prompt without the supersession banner must fail the banner check")
+        prompt_with_banner = ("过渡组件 / transitional (Slice 3 retires); run-path 见契约 §web_llm 产出路径. "
+                              "Purpose: produce the patch (skill-in-loop).")
+        self.assertTrue(self.SINGLE_SOURCE_POINTER in prompt_with_banner
+                        and any(mk in prompt_with_banner for mk in self.TRANSITIONAL_MARKERS),
+                        "BANNER planted: a prompt WITH the supersession banner passes the banner check")
 
 
 if __name__ == "__main__":

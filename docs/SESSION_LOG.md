@@ -10,6 +10,72 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Claude `提交` (语义 doc 单一来源 refactor)
+- 提交单一来源 refactor(本地 master,无 push):契约 §web_llm 产出路径 = web run-path 唯一来源;coverage/README/weekly_screening/summary/probe 收成纯指针(README 5 切片行并 1 行);design doc 行内 + skill-prompt 文件级 supersession;guard 三 tier(STRICT glob route/runner per-line、DESIGN 设计行内、BANNER 组件 prompt 文件级)。
+- closes `R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP`(register 三条翻 resolved)。
+- 残留 stale-open(**非本提交 scope**):`R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` 旧 corrections(其 producer-class guard 已被本 refactor superseded)+ 2 条 deferred roadmap——留下一轮 register 卫生。
+- **Next**: 用户已定方向——真正消除剩余多面叙述靠 **Slice 3 退役过渡组件**(删独立 summary/skill/面板/Stage-4),非继续守 N 面;doc-drift 守护标准已够(主路由+行为+过渡打标)。
+
+## 2026-06-14 — Codex `审查 PASS` (语义单一来源 R8:prompt banner + 三层 guard)
+- **Verdict/Action**: PASS. R8 的 active prompt 漏扫已补:prompt 顶部有过渡/Slice-3 退役 banner + `§web_llm 产出路径` 指针,Purpose 行也明确 NOT current run-path;guard 现在覆盖 STRICT route/runner、DESIGN inline-superseded、BANNER component-prompt 三类 surface。
+- **Required**: `R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP` — 可随本次提交关闭;完整详情见 `docs/system_risk_register.md`。
+- **Verify**: semantic contract/summary/probe/slice3 tests 125 OK; weekly/adapter tests 104 OK; doc-governance/route tests 27 OK; `git diff --check` clean; `weekly_screening.ps1` parse OK;py_compile OK;STRICT/DESIGN offenders=0;BANNER prompt has pointer+transitional marker;active scan only leaves allowed superseded design + banner prompt + test fixtures。
+- **Next**: Claude `提交`。
+
+## 2026-06-14 — Claude `修复` (语义单一来源 R8:skill-prompt banner + guard 加 BANNER tier)
+- **Verdict/Action**: 又一面 = skill prompt(.md,不在 runners glob)仍写 skill-in-loop/do LIVE judgment、未标过渡未指 run-path。它是组件自身指令(全篇讲 skill),不能 per-line STRICT。本轮:prompt 顶加**文件级 supersession banner**(过渡/transitional/Slice 3 + §web_llm 产出路径 指针)+ Purpose 行加行内过渡边界 + 指针;guard 加 **BANNER tier**(`BANNER_SUPERSEDED_SURFACES` 文件须含指针 + 过渡标记)+ planted(无 banner 红 / 有 banner 绿)。
+- **Required**: `R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: STRICT/DESIGN offenders=0;banner ptr+transitional ✓;active 扫描残留 skill-in-loop 仅 design(inline-superseded)+ prompt(banner-superseded);272 tests OK;diff-check clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:三类 surface tier 齐(STRICT route per-line glob / DESIGN inline-pointer / BANNER 组件文件级)覆盖 doc/runner/prompt 全类;B:active 全仓扫,残留只在两个带 supersession 的历史/组件文件;C:BANNER 文件级不误伤(prompt 全篇是 skill 内容)、planted 双向;F:diff/BOM 净。**注**:该 finding 第 8 轮——面类(doc/runner/prompt)现三 tier 全覆盖。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (语义单一来源 R8:skill prompt 漏扫)
+- **Verdict/Action**: FAIL. probe/README 漏面已修,guard glob 也覆盖了 semantic-risk runners;但 active prompt `skills/a_short_analysis/prompts/semantic_risk_web_llm.md` 仍本地写 `skill-in-loop` / "do LIVE web/LLM judgment",没有标为过渡组件并把 run-path 指回契约。
+- **Required**: `R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP` — 完整修复要求见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: semantic contract/summary/probe/slice3 tests 125 OK; weekly/adapter tests 104 OK; doc-governance/route tests 27 OK; `git diff --check` clean; `_strict_surfaces()` offenders=0;`rg` 排除 history 后仅剩 active prompt 的 `skill-in-loop` 命中(测试自体命中除外)。
+- **Next**: Claude `修复`。
+
+## 2026-06-14 — Claude `修复` (语义单一来源 R7:probe surface 收口 + guard 改 glob 自动发现)
+- **Verdict/Action**: 漏面 = probe.py(4 个 `skill 在环` note,curated 列表没含它)+ README row 77(probe→Slice-2 web layer 复述)。本轮:probe.py 5 处 note + README row 77 三处 Slice-2-layer 收成契约指针;**guard STRICT 面改 glob 自动发现**(`_strict_surfaces()` = coverage+README+weekly+`runners/a_short_semantic_risk_*.py`,自动含 probe/summary/未来 runner,排除 impl adapter/engine/pipeline);RUNPATH_NARRATION 补 `Slice 2 skill`/`Slice-2 web layer`/`formal Slice-2 layer`/`Slice 2 formal advisory layer`;planted 加非连字符 `Slice 2 skill 在环`。
+- **Required**: `R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: glob 集 STRICT offenders=0、DESIGN offenders=0;272 tests OK;py_compile OK;.ps1 CRLF+parse OK;diff-check clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — **根治漏面**:STRICT 面由 curated→glob,新 semantic-risk runner 自动纳入、不再靠手列(前几轮"又漏一面"的根因);A:probe 5 处一次清;B:dogfood glob 集 offenders=0、全仓 grep 契约外无残留;C:glob 只含 `a_short_semantic_risk_*`(probe/summary)不误纳 impl、design pointer-exempt 不误伤历史设计;F:.ps1/parse/BOM/diff 净。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (语义 doc 单一来源 refactor:Slice-1 probe 漏扫)
+- **Verdict/Action**: FAIL. 当前修复把 coverage/README/weekly/summary/design 这一组收口了,但 active Slice-1 probe surface 仍在本地复述旧 web_llm 路径,且 guard 没覆盖该 runner/README 旧行。
+- **Required**: `R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP` — 完整修复要求见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: semantic contract/docs + doc-governance/route tests 41 OK; weekly/adapter tests 104 OK; `git diff --check` clean; `weekly_screening.ps1` parse OK;自定义盲区探针显示 STRICT/DESIGN=0,但 `runners/a_short_semantic_risk_probe.py` 有 4 个 run-path offender,且 `docs/README.md` row 77 仍复述 probe→Slice-2 web layer 路径。
+- **Next**: Claude `修复`。
+
+## 2026-06-14 — Claude `修复` (语义 doc 单一来源真落住:run-path 复述全收 + guard 严格化)
+- **Verdict/Action**: 上轮单一来源是名义的(guard"有指针即放行"放过 pointer+本地复述;只收 producer、漏 current-path 复述)。本轮真落住:契约 §web_llm 产出路径 = 唯一陈述;weekly_screening(头/Stage-4/console)+ summary 字符串 + coverage tier/matrix/skill-bullet 全收成纯指针;README 5 条切片叙述**合并为 1 条无叙述路由行**;design doc line 54 加行内 SUPERSEDED 指针。guard 改严格:STRICT 面任何 run-path 复述(current/transitional)都是 offender(**指针不豁免**),design 面 pointer-exempt;planted 覆盖 Codex 点名 false negatives。
+- **Required**: `R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: STRICT/DESIGN offenders=0;223 tests OK;契约外全仓 grep 无第二份 run-path 叙述;weekly_screening.ps1 CRLF+PS parse OK;diff-check clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:dogfood-driven 穷尽收全 offender(coverage/README/weekly/summary/design 一次清);B:全文件 grep run-path 短语 0 残留(契约权威节除外);**B2/D(根治)**:guard 改"指针不豁免"消除 pointer+复述 false negative,README 5→1 结构性消除多面叙述;C:design pointer-exempt 不误伤历史设计、panel-gate guard expect 同步去 README(连带);F:.ps1/parse/BOM/diff 净。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (语义 doc 单一来源 refactor:web 产出路径收口)
+- **Verdict/Action**: FAIL. 方向正确,但单一来源没有真正落住:活跃 surface 仍有本地 run-path 复述,且新 guard 有 false negative。
+- **Required**: `R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: semantic contract/docs + doc-governance/route tests 41 OK; weekly/adapter tests 104 OK; `git diff --check` clean;自定义探针证明 `web_llm UNKNOWN here/current auto web path` 与 pointer+本地复述可逃过 `_separate_run_offenders`。
+- **Next**: Claude `修复`。
+
+## 2026-06-14 — Claude `起草` (语义 doc 单一来源 refactor:web 产出路径收口)
+
+**动机**(用户精简提案 + 同一 doc-drift finding 4 轮均一行残留):症状级逐面调和 + 关键词守护会一直生轮次;根治 = 单一来源(一处权威 + 其余指针 + 结构化守护)。
+
+**改动**:
+- 契约 `docs/a_short_semantic_risk_contract.md` 新增 `## web_llm 产出路径(单一来源)`:**唯一**陈述"当前 = 周报 M6.7 DeepSeek 自动(Top15、失败中性)/ 过渡(Slice 3 退役)= standalone summary + 2b-ii skill + Stage-4"。
+- coverage(tier/matrix/skill-bullet/cadence)、README(切片行 77-81)、weekly_screening(文件头+Stage-4)、summary(docstring/candidate/panel/print)**全部把路径复述收成统一指针** `(产出路径见契约 §web_llm 产出路径)`,删重复解释、留各自独有内容。
+- 守护改单一来源版:producer 行**必须含指针** `§web_llm 产出路径` 才放行——过渡标签 / co-mention DeepSeek 都不够;契约权威节须含 canonical 锚点(当前结论路/DeepSeek adapter 自动/过渡路/Slice 3);planted(无指针必红、含指针放行、纯过渡标签必红)。
+
+**Pre-Codex self-review: A-F checked** — A:全 ~13 面 producer 行一次收口(非部分);**B**:dogfood 4 面 offenders=0 + 全仓 grep 契约外无路径复述残留;**B2/D(根治)**:单一来源 + 结构化指针守护(不再枚举同义词、治本——这是前 4 轮症状的根治);C:契约权威节不在被检面(不自误报)、§融入 impl-log 保留(是 build 记录非路径声明)、跨物理行 producer+指针已合并同行(panel append 修一处);F:py_compile OK、.ps1 CRLF/parse OK、BOM/FFFD=0、diff clean、223 tests OK。
+
+**Boundary**:仅 doc 措辞 + 守护;无 runtime/scoring/business 改动。supersedes Slice 2(`cf4bc49`)的 producer-class drift guard(同防漂目标、更彻底)。独立 scope,单独 commit。
+
+**Next**: `审查`。
+
 ## 2026-06-14 — Claude `提交` (语义融入 M6.7 Slice 2:DeepSeek web/LLM 判官)
 - 提交 Slice 2(本地 master,无 push):新 `a_short_deepseek_semantic_adapter.py`(DeepSeek 判官 + 全失败 fail-closed unknown、不打印 key)+ 引擎 `semantic_web_llm` 族(有 sources 证据 risk/headwind→downgrade、**绝不 hard_veto/救回**、非法 web 中性化)+ 周报 provider(**主板 Top15** 边界、批量 sina + 逐票判、非阻断)+ 契约/coverage/README/weekly_screening/summary 调和为"M6.7 DeepSeek 自动=当前路、旧 standalone/skill/Stage-4=过渡"+ 漂移守护(producer 信号、过渡标签放行)+ adapter/engine/provider 测试。
 - closes `R-ASHORT-M67-DEEPSEEK-WEBLLM-TOP15-SCOPE-BYPASS` · `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT`(register 翻 resolved)。

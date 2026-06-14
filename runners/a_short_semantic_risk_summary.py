@@ -9,8 +9,8 @@
   status:`risk`(有 PIT 风险事件)/ `clear`(查过、无风险事件、无质量缺陷)/ `unknown`(取数失败 **或**
   有未来/不可解析/非字典/代码错配等质量缺陷——**绝不把不可信当 clear**;但 PIT 干净行里**真命中风险则
   优先报 risk**)。
-- **web_llm(Sina/web LLM advisory 层)= 本 standalone summary 留 `unknown`(过渡 sidecar;**当前结论路是周报
-  `a_short_weekly_pipeline.py` M6.7,已由 DeepSeek adapter 自动判 web,见 Slice 2;Slice 3 退役本独立 summary**)**:headless 跑不了 web+LLM 判断,
+- **web_llm(Sina/web LLM advisory 层)= 本 standalone summary 留 `unknown`(过渡 sidecar;web 产出路径单一来源见
+  `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径;Slice 3 退役本独立 summary)**:headless 跑不了 web+LLM 判断,
   2b 由 skill 填 status/risk_level/action;本切片仅 best-effort 把 Sina 原始条目喂进 `sources`(不判定、
   不设 clear)。
 
@@ -198,7 +198,7 @@ def build_candidate(ts_code: str, rank: int, cninfo_raw: dict, sina_raw, as_of: 
     n_ev = len(official["events"])
     summary = (f"官方结构化: {official['status']}"
                + (f"({n_ev} 风险事件)" if n_ev else "")
-               + "; web/LLM: 未评估(unknown,待 Slice-2b skill);过渡 sidecar——周报 M6.7 已 DeepSeek 自动判 web(Slice 2)")
+               + "; web/LLM: 本 standalone summary 未判(过渡 sidecar,产出路径见契约 §web_llm 产出路径)")
     candidate = {
         "ts_code": ts_code, "rank": rank, "scan_tier": scan_tier,
         "official_structured": official,
@@ -387,9 +387,8 @@ def render_semantic_risk_panel(summary: dict) -> str:
         lines.append(f"| {c['rank']} | {c['ts_code']} | {c['scan_tier']} | {off_cell} | "
                      f"{web_cell} | {review} |")
     lines.append("")
-    lines.append("_web/LLM 全 `unknown` = 本 standalone summary 面板尚待 Slice-2b skill 评估(过渡 sidecar;"
-                 "周报 M6.7 已由 DeepSeek 自动判 web,见 Slice 2);官方风险候选含宽关键词粗筛,"
-                 "实质性判断以 web/LLM advisory 为准。_")
+    lines.append("_web/LLM = 本 standalone summary 未判(过渡 sidecar;产出路径见契约 §web_llm 产出路径);"
+                 "官方风险候选含宽关键词粗筛,实质性判断以 web/LLM advisory 为准。_")
     return "\n".join(lines)
 
 
@@ -543,7 +542,7 @@ def main(argv=None, cninfo_fetcher=None, sina_fetcher=None):
     n_risk = sum(1 for c in summary["candidates"] if c["official_structured"]["status"] == "risk")
     print(f"[semantic-summary] coverage checked={cov['checked']} unknown={cov['unknown']} "
           f"failed={cov['failed']}; official risk candidates={n_risk}")
-    print(f"[semantic-summary] web/LLM 全留 unknown(待 Slice-2b skill;过渡 sidecar——周报 M6.7 已 DeepSeek 自动判 web,Slice 2);summary → {args.out}")
+    print(f"[semantic-summary] web/LLM 本 standalone summary 未判(过渡 sidecar,产出路径见契约 §web_llm 产出路径);summary → {args.out}")
 
 
 if __name__ == "__main__":

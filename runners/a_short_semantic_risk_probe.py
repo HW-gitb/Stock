@@ -13,9 +13,9 @@
 - **cninfo(官方结构化层)= 本探针的 gating 项**:headless POST `hisAnnouncement/query`,`stock` 参数
   须为 "代码,orgId"(orgId 从 cninfo 证券清单 JSON 解析;**首版 `执行` 发现仅"代码,sh/sz"会 200+空**,
   故改 orgId),按披露日可 PIT。`feasible`(总)== `cninfo.feasible`。
-- **Sina/web(advisory 层)= LIVE-only、skill-在环**:headless 探针只做 best-effort 原始可达性检查
-  (`--include-sina` opt-in),`pit_capable=false`,**绝不**作历史回测证据;完整 web+LLM 判断属
-  Slice 2 的 skill 在环,不在本探针。
+- **Sina/web(advisory 层)= LIVE-only**:headless 探针只做 best-effort 原始可达性检查
+  (`--include-sina` opt-in),`pit_capable=false`,**绝不**作历史回测证据;完整 web+LLM 判断不在本探针
+  (web 产出路径见契约 `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径)。
 - **失败 → `unknown`,绝不伪装 `clear`**:某代码 provider 调用失败 → 该代码 status=`unknown`;
   调用成功但窗口内无公告 → `clear_light`(真·查过、无事)。两者语义严格区分。
 - 与 IV probe 的差别:IV probe 在 provider 异常时**中止不写**(否则"无访问"会被误读成"无期权")。
@@ -71,7 +71,7 @@ CNINFO_ORGID_URLS = tuple(
         "http://www.cninfo.com.cn/new/data/szse_stock.json",
     ).split(",") if u.strip()
 )
-# Sina 端点形态未证明 → 设默认 + 允许环境变量覆盖;best-effort,完整验证留 Slice 2 skill 在环。
+# Sina 端点形态未证明 → 设默认 + 允许环境变量覆盖;best-effort,完整验证不在本探针(见契约 §web_llm 产出路径)。
 SINA_NEWS_URL_TEMPLATE = os.environ.get(
     "SINA_NEWS_URL_TEMPLATE",
     "https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=1686&num=10&k={symbol}",
@@ -347,7 +347,7 @@ def assess_sina_feasibility(per_code_raw: list[dict], as_of: str) -> dict:
     if not as_of_is_valid_date:
         reasons.append(f"as_of {as_of} 不是合法日历日期")
     if n_requested == 0:
-        reasons.append("Sina 探针未运行(best-effort,--include-sina opt-in;web+LLM advisory 属 Slice 2 skill 在环)")
+        reasons.append("Sina 探针未运行(best-effort,--include-sina opt-in;web+LLM advisory 不在本探针,见契约 §web_llm 产出路径)")
     else:
         if n_ok < MIN_SINA_OK_CODES:
             reasons.append(f"成功响应代码数 {n_ok} < {MIN_SINA_OK_CODES}")
@@ -662,7 +662,7 @@ def _sina_market_symbol(ts_code) -> str:
 
 def _normalize_sina_item(it) -> dict | None:
     """把 Sina 新闻条目(键名不一)归一为 {title,url,published_at};缺 title/url → None。
-    形态未治理 → 多键名 fallback;真实端点/键名留 `执行` 实测(完整 web 判断属 Slice 2 skill)。"""
+    形态未治理 → 多键名 fallback;真实端点/键名留 `执行` 实测(完整 web 判断不在本探针,见契约 §web_llm 产出路径)。"""
     if not isinstance(it, dict):
         return None
     title = next((str(it[k]) for k in ("title", "stitle", "t", "wapsummary") if it.get(k)), "")
@@ -676,7 +676,7 @@ def _normalize_sina_item(it) -> dict | None:
 
 def fetch_sina(codes, session=None) -> list[dict]:
     """执行期(best-effort,LIVE-only):逐代码 GET Sina 新闻条目,market 前缀代码 + 防御式键名归一。
-    端点/键名未治理 → 形态实测留 `执行`;完整 web+LLM 判断属 Slice 2 skill 在环,本函数只喂原始 sources。"""
+    端点/键名未治理 → 形态实测留 `执行`;完整 web+LLM 判断不在本探针(见契约 §web_llm 产出路径),本函数只喂原始 sources。"""
     import requests
     sess = session or requests
     results: list[dict] = []
