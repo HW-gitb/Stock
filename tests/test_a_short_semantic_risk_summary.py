@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
 
 from runners.a_short_semantic_risk_summary import (  # noqa: E402
     build_official_structured, _scan_tier, build_candidate, build_summary_from_fetches,
-    validate_summary_consistency, write_summary, _sina_sources, render_semantic_risk_panel,
+    validate_summary_consistency, write_summary, _sina_sources,
     _match_risk,
     _watch_pool_from_analysis_input, main as summary_main,
 )
@@ -144,23 +144,6 @@ class KeywordCalibration(unittest.TestCase):
         off, _ = build_official_structured(
             _ok("600000.SH", [_ann(title="行政处罚决定书")]), AS_OF)
         self.assertEqual(off["events"][0]["severity"], "high")
-
-
-class Panel(unittest.TestCase):
-    def test_renders_flagged_with_advisory_labels(self):
-        s = _summary(n_codes=6, risk_idx=(5,))            # rank6 risk(low, 诉讼)
-        md = render_semantic_risk_panel(s)
-        self.assertIn("as_of 20260630", md)
-        self.assertIn("不可复现", md)
-        self.assertIn("advisory", md)
-        self.assertIn(s["candidates"][5]["ts_code"], md)  # the risk candidate listed
-        self.assertIn("risk[", md)
-        self.assertIn("unknown/unknown/no_action", md)    # headless web cell
-
-    def test_all_clear_summarized(self):
-        s = _summary(n_codes=6)                           # no risk
-        md = render_semantic_risk_panel(s)
-        self.assertIn("无需关注候选", md)
 
 
 class ScanTier(unittest.TestCase):

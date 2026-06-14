@@ -330,64 +330,6 @@ def validate_summary_consistency(summary: dict) -> None:
         raise ValueError("coverage failed 不能超过 unknown")
 
 
-_SEVERITY_RANK = {"high": 3, "medium": 2, "low": 1}
-
-
-def _needs_manual_review(c: dict) -> bool:
-    off = c["official_structured"]["status"]
-    web = c["web_llm"]
-    return (off in ("risk", "unknown") or web["action"] == "manual_review_required"
-            or web["status"] in ("risk_candidate", "risk", "headwind"))
-
-
-def _max_severity(events: list) -> str | None:
-    if not events:
-        return None
-    return max((e["severity"] for e in events), key=lambda s: _SEVERITY_RANK.get(s, 0))
-
-
-def render_semantic_risk_panel(summary: dict) -> str:
-    """summary → M6.7/周报可见 markdown 块(纯函数,无 now())。明标 advisory·非确定·web/LLM 不可复现;
-    只列需关注(risk/unknown/需复核)候选,clear 汇总成计数行。绝不把 advisory 混入确定性报告。"""
-    cov = summary["coverage"]
-    cands = summary["candidates"]
-    n = len(cands)
-    n_risk = sum(1 for c in cands if c["official_structured"]["status"] == "risk")
-    n_unknown = sum(1 for c in cands if c["official_structured"]["status"] == "unknown")
-    lines = [
-        f"### A-short 语义风险 advisory(as_of {summary['as_of']})",
-        "> ⚠️ **advisory·非确定·不进生产 scoring/decision/veto**;web/LLM 部分 LIVE 实时、**不可复现**;"
-        "官方结构化层按披露日 PIT。仅供人工参考,非买卖信号。",
-        f"覆盖:checked {cov['checked']} / unknown {cov['unknown']} / failed {cov['failed']}"
-        f"(主板 Top15 共 {n});官方结构化风险候选 {n_risk};unknown {n_unknown}。",
-    ]
-    flagged = [c for c in cands if _needs_manual_review(c)]
-    if not flagged:
-        lines.append("无需关注候选(官方结构化全 clear);web/LLM 见契约 §web_llm 产出路径。")
-        return "\n".join(lines)
-    lines.append("")
-    lines.append("| rank | code | tier | 官方结构化 | web/LLM | 需人工复核 |")
-    lines.append("|---|---|---|---|---|---|")
-    for c in flagged:
-        off = c["official_structured"]
-        web = c["web_llm"]
-        if off["status"] == "risk":
-            sev = _max_severity(off["events"])
-            latest = max((e["disclosure_date"] for e in off["events"]), default="-")
-            rtypes = ",".join(sorted({e["risk_type"] for e in off["events"]}))
-            off_cell = f"risk[{sev}] {rtypes}({len(off['events'])}事件,最新{latest})"
-        else:
-            off_cell = off["status"]
-        web_cell = f"{web['status']}/{web['risk_level']}/{web['action']}"
-        review = "是" if _needs_manual_review(c) else "否"
-        lines.append(f"| {c['rank']} | {c['ts_code']} | {c['scan_tier']} | {off_cell} | "
-                     f"{web_cell} | {review} |")
-    lines.append("")
-    lines.append("_web/LLM = 本 standalone summary 未判(过渡 sidecar;产出路径见契约 §web_llm 产出路径);"
-                 "官方风险候选含宽关键词粗筛,实质性判断以 web/LLM advisory 为准。_")
-    return "\n".join(lines)
-
-
 def write_summary(summary: dict, out_path: str) -> None:
     _guard_out_path(out_path)
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:

@@ -57,5 +57,39 @@ class RenderTests(unittest.TestCase):
         self.assertIn("共 0 只", md)
 
 
+def _report_sem(ts_code, semantic_risk):
+    # a report carrying the engine's machine.layer.semantic_risk trace (Slice 3b inline render source)
+    r = _report(ts_code, "观察")
+    r["machine"] = {"layer": {"semantic_risk": semantic_risk}}
+    return r
+
+
+class SemanticInlineTests(unittest.TestCase):
+    """Slice 3b: semantic advisory is rendered INLINE per-票 (from machine.layer.semantic_risk),
+    replacing the retired standalone panel. Render-only; it's the engine trace shown, no logic."""
+
+    def test_semantic_line_rendered_inline(self):
+        sr = {"official_status": "risk", "severity_max": "high", "events": [{}, {}], "impact": "veto",
+              "web_llm": {"status": "risk", "risk_level": "high", "action": "downgrade",
+                          "sources_count": 2, "impact": "downgrade", "invalid_neutralized": False}}
+        md = render_weekly_markdown(_weekly([_report_sem("600000.SH", sr)]))
+        self.assertIn("语义风险(advisory", md)
+        self.assertIn("官方 risk[high]·2事件·impact=veto", md)
+        self.assertIn("web risk/high/downgrade·2源·impact=downgrade", md)
+
+    def test_invalid_neutralized_flag_shown(self):
+        sr = {"official_status": "clear", "severity_max": None, "events": [], "impact": "none",
+              "web_llm": {"status": "unknown", "risk_level": "unknown", "action": "no_action",
+                          "sources_count": 0, "impact": "none", "invalid_neutralized": True}}
+        md = render_weekly_markdown(_weekly([_report_sem("600000.SH", sr)]))
+        self.assertIn("官方 clear·impact=none", md)
+        self.assertIn("已中性化", md)
+
+    def test_no_semantic_line_when_no_machine_layer(self):
+        # legacy report dicts without machine.layer.semantic_risk render with NO semantic line (no crash)
+        md = render_weekly_markdown(_weekly([_report("600000.SH", "观察")]))
+        self.assertNotIn("语义风险(advisory", md)
+
+
 if __name__ == "__main__":
     unittest.main()

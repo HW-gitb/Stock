@@ -10,6 +10,26 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Claude `提交` (Slice 3b-1:语义面板行内化进 M6.7)
+- 提交(本地 master,无 push):语义 advisory 逐票**行内化**进 M6.7 周报 .md(`a_short_m67_render._semantic_line` 从 `machine.layer.semantic_risk` 渲染);退役独立面板渲染路径(`render_semantic_risk_panel` + 仅其用 helper / `_semantic_panel_from_summary` / `--semantic-risk-summary` / `write_weekly_markdown` semantic_panel 参数)。测试:+3 行内测试;退役 panel-gate 单一来源 guard → panel-retired guard;docs coverage/contract/README 改 panel 退役·行内化。
+- Codex `审查 PASS`(Required none)。全量 1799 tests OK;活跃 runners/schemas 零面板引用;编码/diff 净。
+- 保留(= **Slice 3b-2**,待 `执行` 验证 M6.7 后):独立 summary + weekly_screening Stage-4 退役 + 一键串联(需 IV feed + 真抓价,M6.7 端到端未验证,盲接投机)。
+- **Next**: `执行` 验证 M6.7(cninfo+DeepSeek+IV+价格 端到端)→ 再 `起草 Slice 3b-2`。
+
+## 2026-06-14 — Codex `审查 PASS` (Slice 3b-1:语义面板行内化进 M6.7)
+- **Verdict/Action**: PASS. 语义 advisory 已从独立 weekly 面板改为逐票行内渲染到 M6.7 markdown;旧 `_semantic_panel_from_summary` / `--semantic-risk-summary` / `render_semantic_risk_panel` 生产入口已退役,活跃面未见旧面板入口残留。
+- **Required**: none.
+- **Verify**: 152 semantic/weekly/DeepSeek/doc tests OK; doc-governance/route tests 27 OK; full unittest discover 1799 OK(非沙箱复跑;沙箱内仅命中已知 `C:\Users\cnhea\tk.csv` 权限边界); py_compile OK; semantic schemas parse OK; active old-panel scan clean except retired-symbol absence assertions; `git diff --check` clean except LF/CRLF warnings; BOM/FFFD=0.
+- **Next**: Claude `提交`.
+
+## 2026-06-14 — Claude `起草` (Slice 3b-1:语义面板行内化进 M6.7 + 退役独立面板渲染)
+- **动机/切分**: 读码发现 3b 的"一键串联"需 `a_short_weekly_pipeline.main` 端到端跑(要 `--iv-feed` 独立产物 + 真 Tushare 抓价 + account——weekly_screening 都没有),而 M6.7 端到端从没在真数据上跑过。盲接重管线进周五生产入口=投机必生轮次。故 3b 拆:**3b-1(本轮,安全解耦)= 面板行内化 + 删独立面板渲染**(纯渲染、不碰 IV/价格/ps1);**3b-2(待一次 `执行` 验证 M6.7 后)= 独立 summary/Stage-4 退役 + weekly_screening 一键串联**。
+- **改动(本地,未提交)**: `a_short_m67_render` 加 `_semantic_line`——逐票从 `machine.layer.semantic_risk` 行内渲染语义 advisory(官方 status/severity/事件/impact + web status/level/action/源/impact/已中性化),`write_weekly_markdown` 去 `semantic_panel` 参数;`a_short_weekly_pipeline` 删 `_semantic_panel_from_summary` + `--semantic-risk-summary` + main 面板接线;`a_short_semantic_risk_summary` 删 `render_semantic_risk_panel` + 仅其用的 `_needs_manual_review`/`_max_severity`/`_SEVERITY_RANK`。测试:m67_render 加 3 行内测试(有 machine→渲染、invalid_neutralized 显示、无 machine→不渲染不崩);删 summary `Panel` 类 + weekly 的 panel/`--semantic-risk-summary` 测试;contract-docs **退役 panel-gate 单一来源 guard**(面板没了即 obsolete)→ 换 `test_semantic_panel_retired_inline_in_m67`(断言面板符号/flag 已删 + 渲染器带 `_semantic_line`)。docs coverage/contract/README 改 panel 退役·行内化、标 独立 summary/Stage-4 = 3b-2。
+- **保留(反向自检)**: 独立 `a_short_semantic_risk_summary` + weekly_screening Stage-4 **不动**(= 3b-2,删了会让周五无语义);M6.7 fold-in(Slice 1/1b/2)+ `_web_llm_consistency_error` + engine 全不动(纯渲染层改)。语义结论(否决/降级)本就 inline(否决审查触发/风控触发),本轮加的是**明细**行。
+- **Verify**: 全量 1799 tests OK(面板测试 -15、行内测试 +3);全仓 grep:活跃 runners/schemas 零面板引用,仅剩 panel-retired guard 断言其不存在;BOM/FFFD=0;diff-check 净(仅 LF/CRLF 警告)。
+- **Pre-Codex self-review A-F**: A 缺陷类(面板渲染路径)×全出口(renderer/consumer/param/tests/docs)一次覆盖 + 行内替代加测;B ripple grep 0 活跃残留;C 反向自检——语义可见性不丢(行内化加明细)、独立 summary/Stage-4 保留不致周五无语义、无-machine 老报告优雅不崩;E coverage/contract/README 单态(panel 退役);F 编码/diff/ast 净。
+- **Next**: `审查`。
+
 ## 2026-06-14 — Claude `提交` (Slice 3a 退役 skill-patch + doc-drift 收敛)
 - 提交(本地 master,无 push):Slice 3a 退役 2b-ii web_llm skill-patch 路径(删 patch schema + skill-prompt + validate/apply_web_llm_patch;schemas/coverage/contract/README/adapter/summary 去 skill/patch 措辞;web_llm 不变式重锚到共用 `_web_llm_consistency_error`);drift guard 从短语黑名单重构为退役词根 vocabulary(SPECIFIC + GENERIC web_llm 语境 + 标记豁免、域限定 glob);doc-drift materiality gate(AGENTS 15a + closeout + checklist B2)。
 - closes `R-ASHORT-SEMANTIC-SLICE3A-RETIRED-SKILLPATH-ACTIVE-SURFACE-DRIFT`(register round-1/2/4 三条翻 resolved;over-broad round-4 留 superseded)。4 轮收敛轨迹:全删 → 词根重构 → materiality 收窄到 1 个 material route-doc 声明。

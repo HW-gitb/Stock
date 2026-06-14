@@ -1,6 +1,6 @@
 # A-short 语义风险层覆盖说明(coverage map)
 
-**边界(贯穿全层;生产 vs 非生产 M6.7 区分,稳定锚点见 `docs/a_short_semantic_risk_contract.md`)**:**不进 production EGS scoring/`decision`/`veto`、不写 `result/a_short`、不做历史回测证据、`unknown` 绝不伪装 `clear`**(永久)。**web_llm 永久 advisory-only、绝不硬否决**。**但**经校验的 official_structured **high 且证据齐全(`url_or_pdf` 非空)** 才可在**非生产 M6.7** 内产 **advisory `否决`**(`semantic_official` family,绝不救回);**high 缺 URL/PDF → pending 待核、不否决**;详见 §融入 M6.7——这是 M6.7 advisory 否决、非 production hard veto。对应 v14.2 语义项 M2.1-M2.5 / M3.1 中**语义/检索类**那部分;`industry_heat`(生产动量热度)是**另一回事**,不在此层。**迁移期**:独立 `a_short_semantic_risk_summary` artifact + 周报面板是过渡形态(非最终不变式),最终语义直接进 M6.7。
+**边界(贯穿全层;生产 vs 非生产 M6.7 区分,稳定锚点见 `docs/a_short_semantic_risk_contract.md`)**:**不进 production EGS scoring/`decision`/`veto`、不写 `result/a_short`、不做历史回测证据、`unknown` 绝不伪装 `clear`**(永久)。**web_llm 永久 advisory-only、绝不硬否决**。**但**经校验的 official_structured **high 且证据齐全(`url_or_pdf` 非空)** 才可在**非生产 M6.7** 内产 **advisory `否决`**(`semantic_official` family,绝不救回);**high 缺 URL/PDF → pending 待核、不否决**;详见 §融入 M6.7——这是 M6.7 advisory 否决、非 production hard veto。对应 v14.2 语义项 M2.1-M2.5 / M3.1 中**语义/检索类**那部分;`industry_heat`(生产动量热度)是**另一回事**,不在此层。**迁移期**:独立 `a_short_semantic_risk_summary` artifact 是过渡形态(非最终不变式);周报面板已 Slice 3b 行内化进 M6.7,最终语义直接进 M6.7。
 
 ## 两个置信层(严格分置)
 
@@ -26,8 +26,8 @@
 ## web_llm 不变式单一来源
 - web_llm 不变式矩阵(unknown 中性三元组 `unknown/unknown/no_action`、任何非-unknown 态须带 `sources`、risk_level 配对、action 枚举等)**= 单一来源 `docs/a_short_semantic_risk_contract.md`,本文件不复述**(B2 contract-anchor,防部分复述漂移)。代码侧由 summary + DeepSeek adapter 共用的 `_web_llm_consistency_error` 强制;skill-patch 路径已在 Slice 3a 退役。
 
-## 面板接入(weekly pipeline;过渡组件,Slice 3 退役)
-- **面板接入 weekly pipeline**:`a_short_weekly_pipeline --semantic-risk-summary <summary.json>` → `_semantic_panel_from_summary`(渲染前过其消费门)→ `render_semantic_risk_panel` **仅追加到周报 .md**(`---` 分隔),**绝不进确定性周报 JSON**。消费门的校验步骤**单一来源** = `_semantic_panel_from_summary` docstring,本处只指向、不复述(防漂移)。
+## 语义行内化进 M6.7 周报(Slice 3b:独立面板已退役)
+- 语义 advisory 自 **Slice 3b 逐票行内化**进 M6.7 周报 .md(`runners/a_short_m67_render._semantic_line`,从每票 `machine.layer.semantic_risk` 渲染);**独立面板渲染已退役**。advisory 仍只是引擎层 trace 的渲染,**绝不进确定性周报 JSON**、不改任何结论。
 
 ## 运行接入(cadence)
 - **Step 1(headless official_structured)接入 `runners/weekly_screening.ps1`**(Stage 4,旁路):周报 run egs_main 成功后,以当次 `result/a_short/<as_of>/analysis_input.json` 候选为 watch pool(`--analysis-input`,runner 内再过主板 Top15),真 cninfo 取数产 `research/results/a_short/semantic_risk_<as_of>/summary.json`。**advisory-only 旁路**:cninfo 失败/反爬绝不阻断周报(同 canary/tracker),落 research 非生产 lane(禁 result/a_short),`-SkipSemanticRisk` 可关。
@@ -39,7 +39,7 @@
 - **Slice 1(已建)**:official_structured 经引擎 **`semantic_official` risk family** 融进 M6.7——official **high**(证据齐全)→否决(复用引擎 hard_veto 机制,绝不救回)、**medium/low**→"待核"(不扣分/不清/不降星)、**clear/unknown/无输入**→中性;消费门 `_validate_semantic_official` fail-closed(完整 PIT 证据契约);trace 进 `machine.layer.semantic_risk`。
 - **Slice 1b(已建)**:真 cninfo 自动接入周报——`main` 在真 run(`--confirm-fetch-authorized` 且未 `--skip-semantic`)时,`_build_cninfo_semantic_provider` 批量 cninfo 取数 → 逐票 `build_official_structured` → 喂进 M6.7;**advisory 旁路非阻断**(取数失败→全 unknown 中性,不阻断周报)。**方案 A(空 URL)**:cninfo 偶缺 adjunctUrl → official event url_or_pdf 空 → 引擎把**缺 URL 的 high 事件降为 pending 待核**(不否决、不崩),只有证据齐全(含非空 URL)的 high 才驱动否决。
 - **Slice 2(已建)**:DeepSeek web/LLM **判官**接进 M6.7——周报内 `_build_deepseek_web_llm_provider`(一次性批量抓 sina → 逐票 `runners/a_short_deepseek_semantic_adapter.judge_web_llm` 让 DeepSeek 判,**缺 key/SDK/抓取失败/答复不可解析/违反契约 → 全 unknown 中性,非阻断、绝不打印 key**)产 `web_llm`;引擎 `semantic_web_llm` 族:web **risk/risk_candidate/headwind 且有 sources 证据 → downgrade**(**绝不 hard_veto**),tailwind/clear_light 不救回硬风控,unknown/无输入/违反契约 → 中性化(trace 标 `invalid_neutralized`,非静默)。web_llm 跨字段不变式复用 `_web_llm_consistency_error`(单一来源)。两层来源仍在 `machine.layer.semantic_risk` 可追溯。
-- **待后续片(Slice 3)**:render 行内化 + 废弃独立面板/Stage4、weekly_screening 一键串联;及 deterministic promotion(见下)。advisory-only / unknown-not-clear / 不进 production scoring / 不进回测 边界全程保留。
+- **Slice 3b-1(已做)**:render 行内化 + 废弃独立面板。**待 3b-2(M6.7 真跑验证后)**:废弃独立 summary/Stage4 + weekly_screening 一键串联;及 deterministic promotion(见下)。advisory-only / unknown-not-clear / 不进 production scoring / 不进回测 边界全程保留。
 
 ## 不在本层(deferred)
 - **Slice 3 — deterministic promotion**:把 cninfo 官方命中升级为**生产硬否决** + 处置既有 DeepSeek `POL-RISK-VETO` legacy-conflict + cninfo 两路径去重。门槛高(动冻结相邻 egs_main stage3),设计上待 advisory 跑出几周真实结果后再决定。追踪:`docs/system_risk_register.md` deferred-open 条目 + `tests/test_semantic_risk_slice3_guard.py`(防忘 CI 守护)。

@@ -21,6 +21,25 @@ def _cell(v):
     return "" if v is None else str(v)
 
 
+def _semantic_line(report: dict) -> str:
+    """逐票语义风险 advisory 明细行(Slice 3b 行内化:取代独立面板),从该票
+    `machine.layer.semantic_risk` 读;advisory·非确定·不进确定性字段(它已是引擎层 trace 的渲染,
+    不改任何结论)。无语义层(老报告)→ 空串(不渲染)。"""
+    sr = ((report.get("machine") or {}).get("layer") or {}).get("semantic_risk") or {}
+    if not sr:
+        return ""
+    sev = sr.get("severity_max")
+    n_ev = len(sr.get("events") or [])
+    off = (f"官方 {sr.get('official_status', 'unknown')}"
+           + (f"[{sev}]" if sev else "") + (f"·{n_ev}事件" if n_ev else "")
+           + f"·impact={sr.get('impact', 'none')}")
+    w = sr.get("web_llm") or {}
+    web = (f"web {w.get('status', 'unknown')}/{w.get('risk_level', 'unknown')}/{w.get('action', 'no_action')}"
+           + f"·{w.get('sources_count', 0)}源·impact={w.get('impact', 'none')}"
+           + ("·已中性化" if w.get("invalid_neutralized") else ""))
+    return f"- 语义风险(advisory·非确定·不进确定性字段):{off} / {web}"
+
+
 def render_weekly_markdown(weekly: dict) -> str:
     reports = weekly.get("reports", [])
     as_of = weekly.get("as_of", "")
@@ -52,6 +71,9 @@ def render_weekly_markdown(weekly: dict) -> str:
         out.append(f"### {_cell(r.get('ts_code'))} {_cell(r.get('name'))} — {t['操作']}　{_cell(t['优先级'])}")
         for k in ("当前环境", "波动率状态", "现价与成本", "否决审查触发", "板块资金事件", "风控触发"):
             out.append(f"- {k}:{jq.get(k, '')}")
+        sl = _semantic_line(r)
+        if sl:
+            out.append(sl)
         out.append(f"- **操作建议**:{jq.get('操作建议', '')}")
         if t["操作"] == "建仓":
             out.append(f"- 执行清单:入 {_cell(t['入'])} / 损 {_cell(t['损'])} / 盈一 {_cell(t['盈一'])} "
@@ -61,12 +83,11 @@ def render_weekly_markdown(weekly: dict) -> str:
     return "\n".join(out)
 
 
-def write_weekly_markdown(weekly: dict, out_path: str, semantic_panel: str = None) -> None:
-    """渲染周报 .md。`semantic_panel`(可选)= 语义风险 advisory 面板 markdown,**仅追加到 .md 末尾、
-    与确定性 M6.7 用 `---` 分隔**;它绝不进确定性周报 JSON(advisory 不混入确定性字段)。"""
+def write_weekly_markdown(weekly: dict, out_path: str) -> None:
+    """渲染周报 .md。语义风险 advisory 自 Slice 3b 起**逐票行内化**(见 `_semantic_line`,从每票
+    `machine.layer.semantic_risk` 渲染),不再有独立面板参数;advisory 仍只是引擎层 trace 的渲染,
+    不进确定性周报 JSON、不改任何结论。"""
     md = render_weekly_markdown(weekly)
-    if semantic_panel:
-        md = md + "\n\n---\n\n" + semantic_panel.rstrip("\n") + "\n"
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp = str(out_path) + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
