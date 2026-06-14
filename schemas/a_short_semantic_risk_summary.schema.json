@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "a_short_semantic_risk_summary",
-  "description": "A-short semantic-risk advisory summary over the main-board Top15 watch pool (Slice 2). TWO clearly-separated confidence tiers: (1) official_structured = cninfo disclosure-date-PIT evidence (headless, deterministic-ish); (2) web_llm = Sina/web LLM advisory (skill-in-loop, LIVE-only, soft-flag). ADVISORY ONLY: never a hard veto, never enters production scoring / decision / veto, never disguises unknown as clear, never feeds historical backtests, never writes a production path. The headless Slice-2a builder fills official_structured + scan_tier + sources scaffold and leaves web_llm at status=unknown for the Slice-2b skill to fill.",
+  "description": "A-short semantic-risk advisory summary over the main-board Top15 watch pool (Slice 2). TWO clearly-separated confidence tiers: (1) official_structured = cninfo disclosure-date-PIT evidence (headless, deterministic-ish); (2) web_llm = Sina/web LLM advisory (LIVE-only, soft-flag; web run-path single-sourced in docs/a_short_semantic_risk_contract.md §web_llm 产出路径). ADVISORY ONLY: never a hard veto, never enters production scoring / decision / veto, never disguises unknown as clear, never feeds historical backtests, never writes a production path. The headless Slice-2a builder fills official_structured + scan_tier + sources scaffold and leaves web_llm at status=unknown (web run-path: see contract §web_llm 产出路径).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "generated_at", "as_of",

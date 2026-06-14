@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import os
 
-# 单一来源:web_llm 跨字段不变式校验器(summary / patch / 本 adapter 共用)
+# 单一来源:web_llm 跨字段不变式校验器(summary / engine / 本 adapter 共用)
 from runners.a_short_semantic_risk_summary import _web_llm_consistency_error
 
 DEEPSEEK_MODEL = "deepseek-chat"

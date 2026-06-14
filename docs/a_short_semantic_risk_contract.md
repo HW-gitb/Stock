@@ -23,7 +23,7 @@
 - 来源:巨潮 cninfo `hisAnnouncement/query`(`stock` = `code,orgId`)。
 - PIT 口径:披露日必须 canonical 且 `<= as_of`。
 - 当前实现提供的是配置 lookback 内的 PIT 官方公告证据;默认 cninfo lookback 为 90 天。
-- 当前实现不是精确 48h 新鲜度窗口。精确 48h 时效判断属于 2b-ii-B skill/prompt 或未来
+- 当前实现不是精确 48h 新鲜度窗口。精确 48h 时效 / 媒体负面的实质判断属 web_llm advisory(产出路径见 §web_llm 产出路径)或未来
   recency 字段责任。
 
 ## web_llm
@@ -51,19 +51,10 @@
 - **当前结论路(current)**:周报 `runners/a_short_weekly_pipeline.py` M6.7 内 **DeepSeek adapter 自动判** web
   (`--confirm-fetch-authorized` 且未 `--skip-semantic` 时自动接入,**主板 Top15** 边界;缺 key/SDK/抓取失败 → `unknown`
   中性、非阻断)。判官判已抓取文本(非搜索器);影响规则见上 §web_llm「M6.7 集成」。
-- **过渡路(transitional;Slice 3 退役)**:独立 `a_short_semantic_risk_summary` summary + 2b-ii skill
-  `a_short_semantic_risk_web_llm_patch` + `weekly_screening.ps1` Stage-4 sidecar。它们仍可产/补 web_llm,**但不是当前
-  结论路**;Slice 3 把周五入口串到 M6.7 pipeline 并退役独立面板 / sidecar / skill-patch。
+- **过渡路(transitional;Slice 3 退役)**:独立 `a_short_semantic_risk_summary` summary + `weekly_screening.ps1`
+  Stage-4 sidecar(只产官方结构化层)。它仍可产 official_structured,**但不是当前结论路**;Slice 3 把周五入口串到
+  M6.7 pipeline 并退役独立面板 / sidecar。**2b-ii skill-patch(`a_short_semantic_risk_web_llm_patch`)路径已在 Slice 3a 退役**(被 M6.7 内 DeepSeek adapter 取代)。
 - 不变式见上 §web_llm + §Scope(advisory-only、unknown-not-clear、never hard-veto)。
-
-## Patch Merge
-
-- `a_short_semantic_risk_web_llm_patch` 只能写入候选的
-  `web_llm` / `sources` / `confidence` / `summary`。
-- patch 不能新增候选,不能改 `official_structured` / `boundary` / `rank` / `scan_tier` /
-  `ts_code` / `coverage`。
-- `sources` 和 `summary` 都是替换语义,不是追加语义。候选被 patch 时,旧 web summary 不得残留。
-- merge 前必须匹配 `target.as_of`, `target.summary_schema_name`, `target.summary_schema_version`。
 
 ## Drift Guard
 

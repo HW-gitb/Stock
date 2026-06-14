@@ -23,6 +23,8 @@
 - 反例 2(本会话):evidence-full 规则只扫 runner+.md,漏了 **`machine.consumption.semantic` emit 字符串**与 **`SemanticIntoM67` 测试 docstring** → Codex 同 R-ID re-FAIL 3 轮。根治=第 2 点显式含这两面 + 第 1 句的"一次全仓 + 零残留证据"。
 
 ## B2. 单一来源 + drift guard(generalized)
+**Materiality gate (2026-06-14)**: ripple grep is evidence gathering, not an automatic "zero every stale word" mandate. Treat drift as blocking only when it affects a current authority contract, required route/startup doc, run entry / CLI help, schema description used by consumers, test assertion / guard explanation that defines expected behavior, live-state gate, or another surface that can mislead execution or review. Clearly historical / archived / superseded text and low-impact comments may be left alone or listed as Optional; do not create Required work for doc drift that has no system-quality or review-quality impact.
+
 **一个会变的事实**(行为契约 / 校验门 / finding 详情 / 状态)**= 一个权威位置 + 一个机器守护禁止他处复述**;所有其他位置只许"点名 + 指过去",不复述步骤/矩阵。
 1. **权威位置按事实性质选**:代码行为→紧贴代码的 docstring(被拒绝测试钉住);跨文档契约→单一 contract 锚点;material finding→`system_risk_register.md`;live-state→`SESSION_LOG` 顶部。
 2. **守护必须按局部块**(表行/段落)校验、**不是整文件**——整文件粒度会被"同文件别处有正确句"骗过(见 `R-ASHORT-SEMANTIC-PANEL-GUARD-FILE-LEVEL-FALSE-NEGATIVE`),并配一个 **planted-failure** 测试证明其局部性。
@@ -38,7 +40,7 @@
 ## D. 歧义自然语言分类:别穷举关键词
 对"标题/文本是不是某类风险"这种**歧义自然语言**判断:
 - **不要**靠枚举关键词/形式集去精判(必然 whack-a-mole,被点一个补一个)。
-- 走**最窄安全侧**:只在能确定的最小集合上动作,让残余误差落在**无害方向**(如 advisory 层宁误报、交 skill 降级,绝不漏报)。或直接**交 skill/LLM 层**精判。
+- 走**最窄安全侧**:只在能确定的最小集合上动作,让残余误差落在**无害方向**(如 advisory 层宁误报、交 LLM 层降级,绝不漏报)。或直接**交 LLM 层**精判。
 - 反例:routine↔adverse 关键词走了 6 轮才转最窄。
 
 ## E. route-doc 单态(no accretion)

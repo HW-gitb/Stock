@@ -10,6 +10,67 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Claude `提交` (Slice 3a 退役 skill-patch + doc-drift 收敛)
+- 提交(本地 master,无 push):Slice 3a 退役 2b-ii web_llm skill-patch 路径(删 patch schema + skill-prompt + validate/apply_web_llm_patch;schemas/coverage/contract/README/adapter/summary 去 skill/patch 措辞;web_llm 不变式重锚到共用 `_web_llm_consistency_error`);drift guard 从短语黑名单重构为退役词根 vocabulary(SPECIFIC + GENERIC web_llm 语境 + 标记豁免、域限定 glob);doc-drift materiality gate(AGENTS 15a + closeout + checklist B2)。
+- closes `R-ASHORT-SEMANTIC-SLICE3A-RETIRED-SKILLPATH-ACTIVE-SURFACE-DRIFT`(register round-1/2/4 三条翻 resolved;over-broad round-4 留 superseded)。4 轮收敛轨迹:全删 → 词根重构 → materiality 收窄到 1 个 material route-doc 声明。
+- 保留(非本 scope):独立 summary / 面板 / Stage-4 = Slice 3b(单独切片,M6.7 验证后);6 个分类 prompt(`egs_main` 生产在用)。
+- **Next**: Slice 3b 退役收口(面板行内化 + 独立 summary/Stage-4 退役 + weekly_screening 一键串联)= 真正消除剩余过渡面,待用户 `起草`;建议先 `执行` 验证 M6.7+DeepSeek。
+
+## 2026-06-14 — Codex `审查 PASS` (Slice 3a round-4:materiality-corrected)
+- **Verdict/Action**: PASS. Required README live-contract drift is fixed; materiality gate is documented; non-impact stale prose is non-blocking/Optional under the new rule.
+- **Required**: `R-ASHORT-SEMANTIC-SLICE3A-RETIRED-SKILLPATH-ACTIVE-SURFACE-DRIFT` addressed; see `docs/system_risk_register.md`.
+- **Verify**: 1814 tests OK; targeted semantic/weekly/doc tests OK; py_compile OK; schemas parsed; active patch-merge route-doc no hits; diff-check clean except LF/CRLF warnings.
+- **Next**: Claude `提交`.
+
+## 2026-06-14 — Claude `修复` (Slice 3a round-4:README patch-merge-whitelist 活契约声明)
+- **Verdict/Action**: 按 materiality 收窄,只修 Required = `docs/README.md` 契约锚点行删 `patch merge whitelist`(§Patch Merge 已 Slice 3a 退役,patch schema/prompt/函数均删);guard SPECIFIC 加 `patch merge`/`merge whitelist` 补 route-doc gap + planted;Optional 顺手清 summary 测试 stale docstring。详情见 register。
+- **Required**: `R-ASHORT-SEMANTIC-SLICE3A-RETIRED-SKILLPATH-ACTIVE-SURFACE-DRIFT` — round-4 Addressed 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 全量 1814 tests OK;guard 12 OK(含 patch-merge planted);active route-doc 扫描无未标记 patch-merge 声明;BOM/FFFD=0;diff-check clean。
+- **Pre-Codex self-review**: A-F checked — A README + guard 一次覆盖该类;B 全仓扫 patch merge/whitelist 0 未标记残留;C 反向自检 `patch merge` 为特定短语、不误伤 Codex-patch / merge_rows;E README 路由行单态;F 编码/diff 净。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (Slice 3a round-4:materiality-corrected)
+- **Verdict/Action**: FAIL, but narrowed by user materiality direction. Non-impact doc drift is non-blocking; stale test prose is Optional/non-blocking. Required is only the active `docs/README.md` route-doc `patch merge whitelist` live-contract claim.
+- **Required**: `R-ASHORT-SEMANTIC-SLICE3A-RETIRED-SKILLPATH-ACTIVE-SURFACE-DRIFT` materiality-corrected Round-4 entry in `docs/system_risk_register.md`.
+- **Verify**: active scan still hits `docs/README.md:76`; `tests.test_a_short_semantic_risk_contract_docs` 12 OK shows the route-doc guard gap; `git diff --check` clean except LF/CRLF warnings.
+- **Next**: Claude `修复`.
+
+## 2026-06-14 — Claude `修复` (Slice 3a round-3:散文收口 + guard 词根 vocabulary 重构)
+- **Verdict/Action**: summary.py 6 处 + coverage 2 处旧 skill/patch 散文 → web_llm advisory / 指针(full-file grep:summary.py 净、coverage 仅退役标记行);guard 按 Codex-agreed 优化思路重构为退役词根 vocabulary(SPECIFIC 无需语境 + GENERIC 仅 web_llm 语境;bare skill/patch 不用——避 us_short/Codex-patch/checklist 误伤)+ glob 域限定(a_short_semantic_risk_* + README + weekly + 语义 runners);checklist stale 示例去 skill 耦合。详情见 register。
+- **Required**: `R-ASHORT-SEMANTIC-SLICE3A-RETIRED-SKILLPATH-ACTIVE-SURFACE-DRIFT` — 完整 Addressed(round-3)见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 全量 1814 tests OK;guard 12 OK(含 round-3 变体 planted + 跨域非误伤 planted);广域闭环扫描活跃面零未标记退役引用(余 4 命中均带 退役/SUPERSEDED 标记或权威/design tier);BOM/FFFD=0;diff-check clean。
+- **Pre-Codex self-review**: A-F checked — A 缺陷类(retired 散文)×全出口(summary.py/coverage 全实例 grep 清,非只修点名);B 广扫旧词根+变体 0 未标记残留;C 反向自检 bare 词撤回避误伤、域限定避跨域、活不变式+48h-token 保留;F JSON/编码/diff 净。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (Slice 3a 5 面修复复审:summary/coverage 活跃残留)
+- **Verdict/Action**: FAIL. 5 个被点名面本身修对了(schema descriptions、coverage 16/17、contract 48h、adapter 注释、schema guard),但 closure 不成立:活跃 `summary.py` 与 coverage 仍有旧 skill/patch 口径,且 guard 没覆盖这些变体。
+- **Required**: `R-ASHORT-SEMANTIC-SLICE3A-RETIRED-SKILLPATH-ACTIVE-SURFACE-DRIFT` — 复审修复要求已追加到 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: semantic contract/summary/probe/slice3 tests 111 OK; weekly/DeepSeek adapter tests 104 OK; doc-governance/route tests 27 OK; py_compile OK; two schema JSON parse OK; `git diff --check` clean. Broader active scan still hit `runners/a_short_semantic_risk_summary.py` lines 56/84-86/237/366 and `docs/a_short_semantic_risk_coverage.md` lines 22-23.
+- **Proof-of-use**: Re-review used current worktree diff, targeted tests, schema JSON parse, `git diff --check`, and broad active-surface `rg`; full repair detail is stored only in the register.
+- **Next**: Claude `修复`.
+
+## 2026-06-14 — Claude `修复` (Slice 3a 退役 skill-patch:活跃 schema/docs 残留收口)
+- **Verdict/Action**: Codex 点的 5 活跃面残留全收(2 schema description + coverage 16/17 + contract 48h + adapter 注释 → 指针 / 当前 web_llm advisory 措辞),guard 加扫 `schemas/a_short_semantic_risk_*.schema.json` + 补 4 变体 + schema-desc planted。详情见 register。
+- **Required**: `R-ASHORT-SEMANTIC-SLICE3A-RETIRED-SKILLPATH-ACTIVE-SURFACE-DRIFT` — 完整 Addressed 详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 全量 1814 tests OK;guard 12 OK(schema 扫描 + schema-desc planted + 48h-overclaim);两 schema JSON valid;BOM/FFFD=0;diff-check clean;闭环扫描活跃面净(唯一 design-doc DESIGN-tier inline-superseded,合规)。
+- **Pre-Codex self-review**: A-F checked — A 缺陷类×全出口(schema/coverage/contract/注释/guard)一次覆盖;B 闭环 grep 0 残留;C 48h-token/schema-JSON/活不变式保留;F JSON/编码/diff 净。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (Slice 3a 退役 skill-patch 路径:活跃 schema/docs 残留)
+- **Verdict/Action**: FAIL. 方向正确:patch schema / skill prompt 已删除,`validate_web_llm_patch`/`apply_web_llm_patch` 已移除,DeepSeek/M6.7 目标测试仍过。但活跃 schema/docs/comment 仍残留旧 `skill-in-loop` / `Slice-2b skill to fill` / `2b-ii-B skill prompt` 口径,且当前 guard 没扫 schema descriptions、也没覆盖这些变体。
+- **Required**: `R-ASHORT-SEMANTIC-SLICE3A-RETIRED-SKILLPATH-ACTIVE-SURFACE-DRIFT` — 完整修复要求见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: semantic contract/summary/probe/slice3 tests 111 OK; weekly/DeepSeek adapter tests 104 OK; doc-governance/route tests 27 OK; py_compile OK; `git diff --check` clean. Residual scan excluding SESSION_LOG/register/archive hit active `schemas/a_short_semantic_risk_summary.schema.json`, `schemas/a_short_semantic_risk_probe_summary.schema.json`, `docs/a_short_semantic_risk_coverage.md`, `docs/a_short_semantic_risk_contract.md`, and `runners/a_short_deepseek_semantic_adapter.py`.
+- **Next**: Claude `修复`.
+
+## 2026-06-14 — Claude `起草` (Slice 3a 退役 skill-patch 路径)
+- **动机**: 用户定向"退役过渡组件"。读码发现退役分两半:**3a(本轮,解耦)= 退役 2b-ii skill-patch 路径**(被 Slice 2 DeepSeek adapter 取代,M6.7 从不用 patch);**3b(后续,耦合+生产相邻)= 面板行内化 + 独立 summary/Stage-4 退役 + weekly_screening 一键串联**(需读 engine 报告 schema、改生产 ps1,最好待 M6.7 真跑验证后)。面板/独立 summary 非纯冗余(显语义明细),故不在 3a 删。
+- **改动(8 文件,本地,无 push)**: 删 `schemas/a_short_semantic_risk_web_llm_patch.schema.json` + `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`;`summary.py` 去 `validate_web_llm_patch`/`apply_web_llm_patch` + PATCH_SCHEMA 常量 + `import copy` + docstring 收指针;summary 测试删 `WebLlmPatch` 类 + 其 helper,加退役防回归测试;guard 行为锚从死 `validate_web_llm_patch` **重指到活 `_web_llm_consistency_error`**(DeepSeek adapter/engine 在用)、删读已删文件的两测试、BANNER tier 置空、panel-gate expect 去 skill-prompt;契约 §web_llm 产出路径 transitional 去 skill-patch + 删已死的 §Patch Merge;coverage 2b-ii-A patch 节 → 不变式单一来源指针 + 删 skill 层 bullet(panel bullet 留 3b);README 路由行去两删文件 + lineage 去 patch-contract。
+- **保留(反向自检)**: `_web_llm_consistency_error`、`render_semantic_risk_panel`/`_semantic_panel_from_summary`/`--semantic-risk-summary`(3b)、`build_official_structured` 等复用件、6 个分类 prompt(生产 `egs_main` 在用)、slice3-guard 的 production-reconciliation tracker(gated promotion,不动)。
+- **Verify**: 全量 **1814 tests OK**;退役防回归测试断言 patch 符号/文件已 gone + 不变式仍由 `_web_llm_consistency_error` 强制;契约外 grep 残留全为预期(契约退役命名 / 防回归测试 / register 历史 / research 旧 artifact);6 编辑文件 BOM/FFFD=0;git status 8 项净(4M+2D+2M)。
+- **Pre-Codex self-review A-F**: A 缺陷类×全出口一次覆盖(code/schema/prompt/tests/docs/guard);B 连带 grep 旧符号+文件名全仓清,category prompts 确认生产仍用故保留;C 反向自检活不变式/面板 3b/slice3-guard 未误删,re-anchor 保不变式覆盖不漏报;E 单一来源:契约仍权威、退役只减面不增叙述;F .py 编译 / .md 编码 / diff 净。
+- **未删(说明)**: `research/results/a_short/semantic_risk_20260605/{panel.md,summary.json,web_llm_patch.json}` = 过去运行的历史研究数据(非生产 lane、非代码依赖),退役只动代码/文档故保留。
+- **Next**: `审查`。
+
 ## 2026-06-14 — Claude `提交` (语义 doc 单一来源 refactor)
 - 提交单一来源 refactor(本地 master,无 push):契约 §web_llm 产出路径 = web run-path 唯一来源;coverage/README/weekly_screening/summary/probe 收成纯指针(README 5 切片行并 1 行);design doc 行内 + skill-prompt 文件级 supersession;guard 三 tier(STRICT glob route/runner per-line、DESIGN 设计行内、BANNER 组件 prompt 文件级)。
 - closes `R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP`(register 三条翻 resolved)。

@@ -13,23 +13,20 @@
 
 | v14.2 语义项 | 本层覆盖 | status |
 |---|---|---|
-| 监管(问询/关注/立案/处罚/警示) | official_structured(cninfo PIT 公告,severity high/medium)+ web_llm 佐证 | 已建(2a 结构化 + 2b-i 分级);精判经 web_llm(产出路径见契约 §web_llm 产出路径)。**注:当前是配置 lookback(默认 90 天)内、披露日 ≤ as_of 的 PIT 官方公告证据,并非精确"48h 新鲜度"窗口**——精确 48h 时效 / 媒体负面判断属 2b-ii-B skill/prompt 或未来 recency 字段责任,headless 不强制 48h |
-| 媒体负面 | web_llm advisory(web 文本经判官判断) | web_llm 已建(2b-ii-A 契约+合并、2b-ii-B skill prompt);产出路径见契约 §web_llm 产出路径 |
+| 监管(问询/关注/立案/处罚/警示) | official_structured(cninfo PIT 公告,severity high/medium)+ web_llm 佐证 | 已建(2a 结构化 + 2b-i 分级);精判经 web_llm(产出路径见契约 §web_llm 产出路径)。**注:当前是配置 lookback(默认 90 天)内、披露日 ≤ as_of 的 PIT 官方公告证据,并非精确"48h 新鲜度"窗口**——精确 48h 时效 / 媒体负面的实质精判见契约 §web_llm 产出路径(或未来 recency 字段),headless 不强制 48h |
+| 媒体负面 | web_llm advisory(web 文本经判官判断) | web_llm 已建;产出路径见契约 §web_llm 产出路径 |
 | 基本面行业景气(≠ industry_heat 动量) | web_llm `status` tailwind/headwind | 同上(产出路径见契约 §web_llm 产出路径) |
 | 隐蔽风险线索(资金占用/违规担保/诉讼…) | official_structured 粗筛(宽关键词,最窄抑制只压明确否定式)+ web_llm 实质降级 | headless 粗筛已建;**实质判断靠 web_llm(产出路径见契约 §web_llm 产出路径)**(headless 关键词注定粗,见下) |
 
 ## official_structured 关键词粗筛的已知边界(为什么必须有 web_llm)
-- 宽关键词(如 `资金占用`)会命中年报季**例行合规件**("…非经营性资金占用…情况专项说明/汇总表",结论通常无占用)。最窄抑制只压**明确无占用否定式**(不存在/未发生/无新增…);**裸例行件仍报 `risk[medium]`**,交 web_llm/skill 降级。
-- 取舍:headless 残余误差**只会是误报(skill 降级),绝不漏报**真风险。`high` severity(立案/处罚/ST)永不被抑制。
+- 宽关键词(如 `资金占用`)会命中年报季**例行合规件**("…非经营性资金占用…情况专项说明/汇总表",结论通常无占用)。最窄抑制只压**明确无占用否定式**(不存在/未发生/无新增…);**裸例行件仍报 `risk[medium]`**,交 web_llm advisory 降级(见契约 §web_llm 产出路径)。
+- 取舍:headless 残余误差**只会是误报(web_llm advisory 降级),绝不漏报**真风险。`high` severity(立案/处罚/ST)永不被抑制。
 - 故 official_structured 是**粗筛 + 证据(PIT 公告 title/category/date/url)**,**实质性"是不是真风险"由 web_llm advisory 判**(产出路径见契约 §web_llm 产出路径)。
 
-## web_llm enrichment 契约(2b-ii-A)
-- skill 产出 `a_short_semantic_risk_web_llm_patch`(schema:`schemas/a_short_semantic_risk_web_llm_patch.schema.json`)。
-- `apply_web_llm_patch(summary, patch)`(headless,纯函数):校验 patch(schema + 跨字段不变式 + 无重复 ts_code)→ **只**写 `web_llm`/`sources`/`confidence`/`summary` 到匹配候选 → **绝不**碰 `official_structured`/`boundary`/`rank`/`scan_tier`/`ts_code`/`coverage` → 合并后整体过 `validate_summary_consistency`。patch 不能引入 universe 外代码;覆盖语义=替换(非追加)。
-- web_llm 不变式矩阵(unknown 中性三元组 `unknown/unknown/no_action`、任何非-unknown 态须带 `sources`、risk_level 配对、action 枚举等)**= 单一来源 `docs/a_short_semantic_risk_contract.md`,本文件不复述**(B2 contract-anchor,防部分复述漂移)。代码侧由 summary + patch 共用的 `_web_llm_consistency_error` 强制。
+## web_llm 不变式单一来源
+- web_llm 不变式矩阵(unknown 中性三元组 `unknown/unknown/no_action`、任何非-unknown 态须带 `sources`、risk_level 配对、action 枚举等)**= 单一来源 `docs/a_short_semantic_risk_contract.md`,本文件不复述**(B2 contract-anchor,防部分复述漂移)。代码侧由 summary + DeepSeek adapter 共用的 `_web_llm_consistency_error` 强制;skill-patch 路径已在 Slice 3a 退役。
 
-## web/LLM skill 层 + 面板接入(2b-ii-B,已建)
-- **skill prompt(过渡组件;产出路径见契约 §web_llm 产出路径)** `skills/a_short_analysis/prompts/semantic_risk_web_llm.md`:编排既有 6 个分类 prompt(regulatory_48h/policy_news/industry_trend/hidden_risk/earnings_no_good_repair/cross_market_linkage)→ 产 `a_short_semantic_risk_web_llm_patch`;`apply_web_llm_patch` 校验合并。
+## 面板接入(weekly pipeline;过渡组件,Slice 3 退役)
 - **面板接入 weekly pipeline**:`a_short_weekly_pipeline --semantic-risk-summary <summary.json>` → `_semantic_panel_from_summary`(渲染前过其消费门)→ `render_semantic_risk_panel` **仅追加到周报 .md**(`---` 分隔),**绝不进确定性周报 JSON**。消费门的校验步骤**单一来源** = `_semantic_panel_from_summary` docstring,本处只指向、不复述(防漂移)。
 
 ## 运行接入(cadence)

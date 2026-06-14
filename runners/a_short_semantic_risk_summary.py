@@ -10,19 +10,17 @@
   有未来/不可解析/非字典/代码错配等质量缺陷——**绝不把不可信当 clear**;但 PIT 干净行里**真命中风险则
   优先报 risk**)。
 - **web_llm(Sina/web LLM advisory 层)= 本 standalone summary 留 `unknown`(过渡 sidecar;web 产出路径单一来源见
-  `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径;Slice 3 退役本独立 summary)**:headless 跑不了 web+LLM 判断,
-  2b 由 skill 填 status/risk_level/action;本切片仅 best-effort 把 Sina 原始条目喂进 `sources`(不判定、
-  不设 clear)。
+  `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径;Slice 3 退役本独立 summary)**:headless 跑不了 web/LLM 判断,
+  本切片仅 best-effort 把 Sina 原始条目喂进 `sources`(不判定、不设 clear);web 层判断产出路径见上述契约 §web_llm 产出路径。
 
 **advisory-only 边界(硬约束)**:绝不硬否决、不进 production scoring/decision/veto、不做历史回测证据、
 不写 production 路径、unknown 不伪装 clear、web/LLM 不与官方结构化混同一置信。真取数 = `--confirm-fetch-authorized`
-(用户 `执行`)。纯 build/validate 核心可测;不动 egs_main / Phase5 / V14.2。Slice 2b 出 skill 契约 + 面板渲染 +
+(用户 `执行`)。纯 build/validate 核心可测;不动 egs_main / Phase5 / V14.2。web/LLM 判断 + M6.7 融入见契约 §web_llm 产出路径与后续切片;
 CI 守护(advisory 层已存在 ⇒ 强制 Slice 3 reconciliation;见 tests）。
 """
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 import os
 import sys
@@ -49,15 +47,13 @@ MIN_BATCH_ANNOUNCED = MIN_CNINFO_ANNOUNCED_CODES
 SCHEMA_NAME = "a_short_semantic_risk_summary"
 SCHEMA_VERSION = "1.0.0"
 SCHEMA_PATH = os.path.join(ROOT, "schemas", "a_short_semantic_risk_summary.schema.json")
-PATCH_SCHEMA_NAME = "a_short_semantic_risk_web_llm_patch"
-PATCH_SCHEMA_PATH = os.path.join(ROOT, "schemas", "a_short_semantic_risk_web_llm_patch.schema.json")
 DEEP_RANK_MAX = 5
 CNINFO_STATIC_HOST = "http://static.cninfo.com.cn/"
 
 # 标题关键词 → (category, risk_type, severity)。首个命中的关键词决定分类(顺序=高 severity 在前=优先级)。
 # severity:high(立案/处罚/ST 严重事件)/ medium(监管函件·关注·资金占用·担保 真问题)/ low(诉讼仲裁,
 # 大公司常为例行)。Slice-2a 执行实测发现宽关键词假阳性(银行年报季"非经营性资金占用…专项说明"=例行合规件
-# 命中 资金占用),故 Slice-2b 加负向模式 + 分级粗筛;实质精判仍交 2b skill(web_llm)。
+# 命中 资金占用),故 Slice-2b 加负向模式 + 分级粗筛;实质精判由 web_llm advisory 给出(产出路径见契约 §web_llm 产出路径)。
 RISK_KEYWORD_MAP = [
     ("立案调查", "立案调查", "investigation", "high"),
     ("立案", "立案调查", "investigation", "high"),
@@ -85,9 +81,9 @@ def _is_routine_occupation_report(title: str) -> bool:
     """**最窄策略**(终结 routine↔adverse 关键词 whack-a-mole;Codex 同类 5 轮后由用户授权)。
     headless **只抑制**"例行资金占用披露形式(专项说明/专项审核/汇总表)+ 标题明示无占用否定式"
     (如"…不存在非经营性资金占用…专项说明")。**其余一切**——包括未带否定式的例行专项说明/汇总表,
-    以及任何明示/可疑占用——一律不抑制 → 报 risk,交 Slice-2b web/LLM skill 精判降级。
-    设计后果:残余误差**只会是误报(可被 skill 降级)**,绝不会是漏报(明示风险被压成 clear);
-    若漏掉某个否定式词,只会让一份无占用报告多显示为 risk,无害。headless 粗筛、skill 精判 = 设计本意。"""
+    以及任何明示/可疑占用——一律不抑制 → 报 risk,交 web_llm advisory 精判降级(产出路径见契约 §web_llm 产出路径)。
+    设计后果:残余误差**只会是误报(可被 web_llm advisory 降级)**,绝不会是漏报(明示风险被压成 clear);
+    若漏掉某个否定式词,只会让一份无占用报告多显示为 risk,无害。headless 粗筛、web_llm advisory 精判 = 设计本意。"""
     routine = ("资金占用" in title and "情况" in title
                and any(form in title for form in ROUTINE_OCCUPATION_FORMS))
     if not routine:
@@ -238,7 +234,7 @@ _WEB_ASSESSED_RISK = ("risk_candidate", "risk", "headwind")
 
 
 def _web_llm_consistency_error(web: dict, sources: list):
-    """web_llm advisory tier 跨字段不变式(summary 与 web_llm patch 共用,单一来源避免漂移)。
+    """web_llm advisory tier 跨字段不变式(summary / engine / adapter 共用,单一来源避免漂移)。
     返回错误字符串或 None。核心边界:**未检索/无证据 → 必须 unknown,绝不伪装 clear/tailwind**——
     任何**非 unknown**(已评估)态都必须带 sources 证据(coverage);只有 `unknown` 可空 sources。"""
     wst = web["status"]
@@ -367,7 +363,7 @@ def render_semantic_risk_panel(summary: dict) -> str:
     ]
     flagged = [c for c in cands if _needs_manual_review(c)]
     if not flagged:
-        lines.append("无需关注候选(官方结构化全 clear);web/LLM 待 skill 评估。")
+        lines.append("无需关注候选(官方结构化全 clear);web/LLM 见契约 §web_llm 产出路径。")
         return "\n".join(lines)
     lines.append("")
     lines.append("| rank | code | tier | 官方结构化 | web/LLM | 需人工复核 |")
@@ -403,60 +399,6 @@ def write_summary(summary: dict, out_path: str) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
     os.replace(tmp, out_path)
-
-
-# ── Slice 2b-ii web_llm enrichment 契约(skill 产出 patch,headless 校验+合并)────
-def validate_web_llm_patch(patch: dict) -> None:
-    """patch schema + 跨字段不变式 + 无重复 ts_code。web_llm 不变式复用 `_web_llm_consistency_error`。"""
-    with open(PATCH_SCHEMA_PATH, "r", encoding="utf-8") as f:
-        schema = json.load(f)
-    jsonschema.validate(patch, schema)
-    if not _is_canonical_date(patch["target"]["as_of"]):
-        raise ValueError("patch target.as_of 非 canonical 日历日期")
-    seen = set()
-    for pc in patch["candidates"]:
-        ts = pc["ts_code"]
-        if ts in seen:
-            raise ValueError(f"patch 重复 ts_code: {ts}")
-        seen.add(ts)
-        err = _web_llm_consistency_error(pc["web_llm"], pc["sources"])
-        if err:
-            raise ValueError(f"{ts}: {err}")
-
-
-def apply_web_llm_patch(summary: dict, patch: dict) -> dict:
-    """把 skill 的 web_llm 判断合并进 summary(纯函数,返回新 dict)。**只**写 web_llm/sources/confidence/
-    summary(可选)到匹配候选;绝不碰 official_structured/boundary/rank/scan_tier/ts_code/coverage。
-    patch 不能引入 universe 外的代码;合并后整体过 `validate_summary_consistency`(authoritative)。
-    覆盖语义:同一候选的 web_llm/sources 被替换(非追加);未在 patch 内的候选保持原 web_llm(headless unknown)。"""
-    validate_web_llm_patch(patch)
-    tgt = patch["target"]
-    if tgt["as_of"] != summary["as_of"]:
-        raise ValueError("patch target.as_of 与 summary.as_of 不一致")
-    if tgt["summary_schema_name"] != summary["schema_name"] or summary["schema_name"] != SCHEMA_NAME:
-        raise ValueError("patch target.summary_schema_name 与 summary.schema_name 不一致")
-    if tgt["summary_schema_version"] != summary["schema_version"]:
-        raise ValueError("patch target.summary_schema_version 与 summary 不一致")
-    main = set(summary["universe"]["main_board_top15"])
-    by_code = {c["ts_code"]: c for c in summary["candidates"]}
-    new = copy.deepcopy(summary)
-    new_by_code = {c["ts_code"]: c for c in new["candidates"]}
-    for pc in patch["candidates"]:
-        ts = pc["ts_code"]
-        if ts not in main or ts not in by_code:
-            raise ValueError(f"patch 引入了 universe 外/不存在的候选: {ts}")
-        c = new_by_code[ts]
-        web = dict(pc["web_llm"])
-        c["web_llm"] = web                               # 替换,非追加
-        c["sources"] = [dict(s) for s in pc["sources"]]
-        c["confidence"] = pc["confidence"]
-        # summary 也是替换语义:patch 带则用;不带则按当前 official+web 态**重生**,绝不留旧 summary
-        c["summary"] = pc["summary"] if "summary" in pc else (
-            f"官方结构化: {c['official_structured']['status']}; "
-            f"web/LLM: {web['status']}/{web['risk_level']}/{web['action']}")
-        # official_structured / boundary / rank / scan_tier / ts_code 一律不动
-    validate_summary_consistency(new)                    # 合并后 web 不变式 + 全局一致性硬门
-    return new
 
 
 def build_summary_from_fetches(watch_pool, as_of: str, cninfo_results, sina_results, generated_at: str):

@@ -25,7 +25,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_semantic_risk_summary import (  # noqa: E402
     build_official_structured, _scan_tier, build_candidate, build_summary_from_fetches,
     validate_summary_consistency, write_summary, _sina_sources, render_semantic_risk_panel,
-    _match_risk, validate_web_llm_patch, apply_web_llm_patch,
+    _match_risk,
     _watch_pool_from_analysis_input, main as summary_main,
 )
 
@@ -101,8 +101,8 @@ class OfficialStructured(unittest.TestCase):
 
 class KeywordCalibration(unittest.TestCase):
     """Narrowest strategy: headless suppresses ONLY 'routine occupation disclosure form +
-    explicit no-occupation negation'; everything else -> risk for the 2b skill to downgrade.
-    Residual errors are false positives only (skill downgrades), never 漏报 (real risk hidden)."""
+    explicit no-occupation negation'; everything else -> risk for web_llm advisory to downgrade.
+    Residual errors are false positives only (web_llm advisory downgrades), never 漏报 (real risk hidden)."""
 
     def test_only_routine_form_WITH_negation_is_suppressed(self):
         # explicit no-occupation negation in a routine form -> clear (the only suppressed case)
@@ -115,7 +115,7 @@ class KeywordCalibration(unittest.TestCase):
 
     def test_bare_routine_without_negation_now_surfaces_as_risk(self):
         # narrowest strategy: a routine special report WITHOUT an explicit negation is NOT
-        # suppressed headlessly -> risk (skill downgrades). Reverses the earlier over-suppression.
+        # suppressed headlessly -> risk (web_llm advisory downgrades). Reverses the earlier over-suppression.
         for t in ("上海浦发银行股份有限公司2025年度非经营性资金占用及对外担保情况的专项说明",
                   "控股股东及其他关联方非经营性资金占用及其他关联资金往来情况汇总表"):
             self.assertIsNotNone(_match_risk(t), t)
@@ -352,154 +352,6 @@ class SchemaValidation(unittest.TestCase):
             jsonschema.validate(s, self.schema)
 
 
-_SRC = [{"title": "媒体负面报道", "url": "http://x", "published_at": "2026-06-10",
-         "fetched_at": None, "source_type": "web"}]
-
-
-def _pc(ts, status="clear_light", risk_level="none", action="no_action", sources=None,
-        confidence=0.7, summary=None):
-    # default carries evidence: any non-unknown web status now REQUIRES sources (unknown-not-clear).
-    d = {"ts_code": ts, "web_llm": {"status": status, "risk_level": risk_level, "action": action},
-         "sources": [dict(s) for s in _SRC] if sources is None else sources, "confidence": confidence}
-    if summary is not None:
-        d["summary"] = summary
-    return d
-
-
-def _patch(summary, items):
-    return {
-        "schema_name": "a_short_semantic_risk_web_llm_patch", "schema_version": "1.0.0",
-        "generated_at": "2026-06-30T13:00:00+08:00",
-        "target": {"as_of": summary["as_of"], "summary_schema_name": "a_short_semantic_risk_summary",
-                   "summary_schema_version": "1.0.0"},
-        "source": {"kind": "skill_web_llm", "prompt_refs": ["skills/a_short_analysis/prompts/x.md"]},
-        "candidates": items,
-        "boundary": {"advisory_only": True, "not_deterministic_veto": True,
-                     "never_touches_official": True},
-    }
-
-
-class WebLlmPatch(unittest.TestCase):
-    def test_happy_merge_and_official_untouched(self):
-        s = _summary(n_codes=6, risk_idx=(5,))
-        before_official = copy.deepcopy([c["official_structured"] for c in s["candidates"]])
-        before_boundary = copy.deepcopy([c["boundary"] for c in s["candidates"]])
-        before_scan = [c["scan_tier"] for c in s["candidates"]]
-        ts0, ts1 = s["candidates"][0]["ts_code"], s["candidates"][5]["ts_code"]
-        patch = _patch(s, [_pc(ts0, status="clear_light", risk_level="none", action="no_action"),
-                           _pc(ts1, status="risk", risk_level="high",
-                               action="manual_review_required", sources=_SRC, summary="实质风险")])
-        new = apply_web_llm_patch(s, patch)
-        self.assertEqual(new["candidates"][0]["web_llm"]["status"], "clear_light")
-        self.assertEqual(new["candidates"][5]["web_llm"]["status"], "risk")
-        self.assertEqual(new["candidates"][5]["summary"], "实质风险")
-        # reverse-failure (checklist C): official_structured / boundary / scan_tier UNCHANGED
-        self.assertEqual([c["official_structured"] for c in new["candidates"]], before_official)
-        self.assertEqual([c["boundary"] for c in new["candidates"]], before_boundary)
-        self.assertEqual([c["scan_tier"] for c in new["candidates"]], before_scan)
-        validate_summary_consistency(new)
-
-    def test_partial_patch_leaves_others_unknown(self):
-        s = _summary(n_codes=6)
-        new = apply_web_llm_patch(s, _patch(s, [_pc(s["candidates"][0]["ts_code"])]))
-        self.assertEqual(new["candidates"][0]["web_llm"]["status"], "clear_light")
-        self.assertEqual(new["candidates"][1]["web_llm"]["status"], "unknown")   # unpatched stays unknown
-
-    def test_risk_status_without_sources_raises(self):
-        s = _summary()
-        p = _patch(s, [_pc(s["candidates"][0]["ts_code"], status="risk", risk_level="high",
-                           action="downgrade", sources=[])])
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(p)
-
-    def test_clear_light_without_coverage_raises(self):
-        # unknown-not-clear: a clear conclusion with no evidence is indistinguishable from "not checked"
-        s = _summary()
-        p = _patch(s, [_pc(s["candidates"][0]["ts_code"], status="clear_light",
-                           risk_level="none", action="no_action", sources=[])])
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(p)
-
-    def test_tailwind_without_coverage_raises(self):
-        s = _summary()
-        p = _patch(s, [_pc(s["candidates"][0]["ts_code"], status="tailwind",
-                           risk_level="low", action="observe", sources=[])])
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(p)
-
-    def test_unknown_may_have_empty_sources(self):
-        s = _summary()
-        validate_web_llm_patch(_patch(s, [_pc(s["candidates"][0]["ts_code"], status="unknown",
-                                              risk_level="unknown", action="no_action", sources=[])]))
-
-    def test_unknown_with_risklevel_raises(self):
-        s = _summary()
-        p = _patch(s, [_pc(s["candidates"][0]["ts_code"], status="unknown", risk_level="high")])
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(p)
-
-    def test_tailwind_high_raises(self):
-        s = _summary()
-        p = _patch(s, [_pc(s["candidates"][0]["ts_code"], status="tailwind", risk_level="high",
-                           sources=_SRC)])
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(p)
-
-    def test_duplicate_ts_code_raises(self):
-        s = _summary()
-        ts = s["candidates"][0]["ts_code"]
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(_patch(s, [_pc(ts), _pc(ts)]))
-
-    def test_ts_code_not_in_summary_raises(self):
-        s = _summary(n_codes=3)
-        with self.assertRaises(ValueError):
-            apply_web_llm_patch(s, _patch(s, [_pc("600099.SH")]))
-
-    def test_as_of_mismatch_raises(self):
-        s = _summary()
-        p = _patch(s, [_pc(s["candidates"][0]["ts_code"])])
-        p["target"]["as_of"] = "20260601"
-        with self.assertRaises(ValueError):
-            apply_web_llm_patch(s, p)
-
-    def test_extra_key_in_patch_candidate_rejected_by_schema(self):
-        s = _summary()
-        pc = _pc(s["candidates"][0]["ts_code"])
-        pc["official_structured"] = {"status": "clear", "events": [], "had_pit_announcements": True}
-        with self.assertRaises(jsonschema.ValidationError):     # additionalProperties:false
-            validate_web_llm_patch(_patch(s, [pc]))
-
-    def test_no_stale_summary_after_clear_overwrite(self):
-        # risk patch with a summary, then a clear patch WITHOUT summary -> old risk summary must vanish
-        s = _summary(n_codes=6)
-        ts = s["candidates"][0]["ts_code"]
-        risky = apply_web_llm_patch(s, _patch(s, [_pc(ts, status="risk", risk_level="high",
-                                                      action="manual_review_required", sources=_SRC,
-                                                      summary="old risk summary")]))
-        self.assertEqual(risky["candidates"][0]["summary"], "old risk summary")
-        cleared = apply_web_llm_patch(risky, _patch(s, [_pc(ts, status="clear_light",
-                                                            risk_level="none", action="no_action")]))
-        self.assertNotIn("old risk summary", cleared["candidates"][0]["summary"])
-        self.assertIn("clear_light", cleared["candidates"][0]["summary"])   # reflects current web state
-
-    def test_summary_schema_name_mismatch_raises(self):
-        s = _summary()
-        s2 = copy.deepcopy(s)
-        s2["schema_name"] = "wrong_schema_name"
-        with self.assertRaises(ValueError):
-            apply_web_llm_patch(s2, _patch(s, [_pc(s["candidates"][0]["ts_code"])]))
-
-    def test_idempotent_overwrite_replaces_sources(self):
-        s = _summary(n_codes=6)
-        ts = s["candidates"][0]["ts_code"]
-        p = _patch(s, [_pc(ts, status="risk", risk_level="medium", action="observe", sources=_SRC)])
-        once = apply_web_llm_patch(s, p)
-        twice = apply_web_llm_patch(once, p)        # re-apply same patch
-        self.assertEqual(once["candidates"][0]["sources"], twice["candidates"][0]["sources"])
-        self.assertEqual(len(twice["candidates"][0]["sources"]), 1)   # replaced, not appended
-
-
 class WritePath(unittest.TestCase):
     def test_guard_rejects_production_path(self):
         from runners.a_short_semantic_risk_summary import _guard_out_path
@@ -582,6 +434,28 @@ class AnalysisInputWatchPoolWiring(unittest.TestCase):
                               "--analysis-input", str(ai_path), "--out", out,
                               "--confirm-fetch-authorized"], cninfo_fetcher=self._fake_cninfo)
 
+
+class SkillPatchPathRetired(unittest.TestCase):
+    """Slice 3a retired the skill-patch web path (the DeepSeek adapter superseded it). These
+    symbols/files must STAY gone; M6.7 uses runners/a_short_deepseek_semantic_adapter.judge_web_llm."""
+    def test_patch_merge_functions_gone(self):
+        import runners.a_short_semantic_risk_summary as m
+        self.assertFalse(hasattr(m, "validate_web_llm_patch"))
+        self.assertFalse(hasattr(m, "apply_web_llm_patch"))
+        self.assertFalse(hasattr(m, "PATCH_SCHEMA_PATH"))
+
+    def test_patch_schema_and_skill_prompt_files_gone(self):
+        self.assertFalse((ROOT / "schemas" / "a_short_semantic_risk_web_llm_patch.schema.json").exists())
+        self.assertFalse((ROOT / "skills" / "a_short_analysis" / "prompts" / "semantic_risk_web_llm.md").exists())
+
+    def test_web_llm_invariant_still_enforced_by_shared_fn(self):
+        # the invariant the retired patch validator used now lives ONLY in _web_llm_consistency_error
+        # (shared by the DeepSeek adapter + engine): no-evidence non-unknown rejected; neutral triple ok.
+        from runners.a_short_semantic_risk_summary import _web_llm_consistency_error
+        self.assertIsNotNone(_web_llm_consistency_error(
+            {"status": "clear_light", "risk_level": "none", "action": "no_action"}, []))
+        self.assertIsNone(_web_llm_consistency_error(
+            {"status": "unknown", "risk_level": "unknown", "action": "no_action"}, []))
 
 if __name__ == "__main__":
     unittest.main()

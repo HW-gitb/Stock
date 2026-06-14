@@ -10,11 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from runners.a_short_semantic_risk_summary import validate_web_llm_patch  # noqa: E402
+from runners.a_short_semantic_risk_summary import _web_llm_consistency_error  # noqa: E402
 
 
-AS_OF = "20260630"
-TS_CODE = "600000.SH"
 SRC = {
     "title": "checked source",
     "url": "https://example.invalid/news",
@@ -24,31 +22,13 @@ SRC = {
 }
 
 
-def _patch(status: str, risk_level: str, action: str, sources: list[dict] | None = None) -> dict:
-    return {
-        "schema_name": "a_short_semantic_risk_web_llm_patch",
-        "schema_version": "1.0.0",
-        "generated_at": "2026-06-30T13:00:00+08:00",
-        "target": {
-            "as_of": AS_OF,
-            "summary_schema_name": "a_short_semantic_risk_summary",
-            "summary_schema_version": "1.0.0",
-        },
-        "source": {"kind": "skill_web_llm", "prompt_refs": ["skills/a_short_analysis/prompts/x.md"]},
-        "candidates": [
-            {
-                "ts_code": TS_CODE,
-                "web_llm": {"status": status, "risk_level": risk_level, "action": action},
-                "sources": [] if sources is None else sources,
-                "confidence": 0.7,
-            }
-        ],
-        "boundary": {
-            "advisory_only": True,
-            "not_deterministic_veto": True,
-            "never_touches_official": True,
-        },
-    }
+def _web(status: str, risk_level: str, action: str, sources: list[dict] | None = None):
+    # Slice 3a: the web_llm cross-field invariant is enforced by the shared _web_llm_consistency_error
+    # (DeepSeek adapter + engine). The retired skill-patch validator delegated to the same fn, so these
+    # behavior anchors still pin the LIVE invariant. Returns an error string, or None if the triple is valid.
+    return _web_llm_consistency_error(
+        {"status": status, "risk_level": risk_level, "action": action},
+        [] if sources is None else sources)
 
 
 def _read(rel_path: str) -> str:
@@ -57,20 +37,16 @@ def _read(rel_path: str) -> str:
 
 class SemanticRiskContractDocs(unittest.TestCase):
     def test_behavior_anchor_non_unknown_requires_sources(self):
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(_patch("clear_light", "none", "no_action"))
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(_patch("tailwind", "low", "observe"))
-        validate_web_llm_patch(_patch("unknown", "unknown", "no_action"))
-        validate_web_llm_patch(_patch("clear_light", "none", "no_action", [SRC]))
+        self.assertIsNotNone(_web("clear_light", "none", "no_action"))      # no evidence -> rejected
+        self.assertIsNotNone(_web("tailwind", "low", "observe"))
+        self.assertIsNone(_web("unknown", "unknown", "no_action"))          # neutral triple ok
+        self.assertIsNone(_web("clear_light", "none", "no_action", [SRC]))  # with evidence ok
 
     def test_behavior_anchor_unknown_requires_no_action(self):
         # contract: 无证据 ⇒ unknown/unknown/no_action; a no-evidence candidate cannot carry a soft action
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(_patch("unknown", "unknown", "downgrade"))
-        with self.assertRaises(ValueError):
-            validate_web_llm_patch(_patch("unknown", "unknown", "manual_review_required"))
-        validate_web_llm_patch(_patch("unknown", "unknown", "no_action"))   # the only neutral triple
+        self.assertIsNotNone(_web("unknown", "unknown", "downgrade"))
+        self.assertIsNotNone(_web("unknown", "unknown", "manual_review_required"))
+        self.assertIsNone(_web("unknown", "unknown", "no_action"))          # the only neutral triple
 
     def test_stable_contract_locks_unknown_neutral_triple(self):
         text = _read("docs/a_short_semantic_risk_contract.md")
@@ -100,21 +76,6 @@ class SemanticRiskContractDocs(unittest.TestCase):
         self.assertNotIn("any non-unknown/evaluated web status requires sources", text)
         self.assertNotIn("web risk-status ⇒ sources required", text)
         self.assertNotIn("clear_light ⇒ risk_level none", text)
-
-    def test_schema_description_points_to_contract_not_matrix(self):
-        text = _read("schemas/a_short_semantic_risk_web_llm_patch.schema.json")
-        self.assertIn("a_short_semantic_risk_contract.md", text)
-        self.assertNotIn("any non-unknown/evaluated web status requires sources", text)
-
-    def test_web_llm_skill_prompt_routes_to_contract_and_states_core_rules(self):
-        # Slice 2b-ii-B skill prompt must route to the contract and restate the load-bearing
-        # advisory rules (so a future edit can't quietly drop them); it must not become a hard veto.
-        text = _read("skills/a_short_analysis/prompts/semantic_risk_web_llm.md")
-        self.assertIn("docs/a_short_semantic_risk_contract.md", text)        # routes to the anchor
-        self.assertIn("a_short_semantic_risk_web_llm_patch", text)           # produces the patch
-        self.assertIn("unknown/unknown/no_action", text)                    # unknown-not-clear neutral triple
-        for kw in ("Advisory only", "hard veto", "Main-board Top15", "Evidence required"):
-            self.assertIn(kw, text, f"web_llm skill prompt lost rule anchor: {kw}")
 
     # ---- single-source + LOCAL panel-gate drift guard (helpers shared with the planted test) ----
     # CONSUMER symbols denote the weekly consumer landing (the function + its CLI flag). The
@@ -195,9 +156,9 @@ class SemanticRiskContractDocs(unittest.TestCase):
                 reached.append(name)
             for b in blocks:
                 self._assert_landing_block_ok(name, b)
-        # README no longer teaches the panel landing (the semantic-web rows were consolidated to a single
-        # pointer row in the run-path single-source refactor); coverage + skill-prompt still teach + route it.
-        for expect in ("a_short_semantic_risk_coverage.md", "semantic_risk_web_llm.md"):
+        # README no longer teaches the panel landing (consolidated to a single pointer row); coverage still
+        # teaches + routes the panel landing (the 2b-ii skill-prompt that also taught it was retired in Slice 3a).
+        for expect in ("a_short_semantic_risk_coverage.md",):
             self.assertIn(expect, reached, f"single-source sweep failed to reach {expect}")
 
     def test_panel_gate_guard_is_local_planted_failure(self):
@@ -254,58 +215,87 @@ class SemanticRiskContractDocs(unittest.TestCase):
 
     # ---- R-ASHORT-SEMANTIC-WEBLLM-RUNPATH-SINGLE-SOURCE-GUARD-GAP — REAL single-source guard ----
     # The web_llm run-path (current = weekly M6.7 DeepSeek auto / transitional = standalone summary +
-    # 2b-ii skill-patch + Stage-4 sidecar) is stated ONCE, in the contract §web_llm 产出路径. Codex round-5:
+    # Stage-4 sidecar; the 2b-ii skill-patch path was retired in Slice 3a) is stated ONCE, in the contract
+    # §web_llm 产出路径. Codex round-5:
     # the prior guard let "pointer somewhere on the line" exempt a line that ALSO re-narrated the path, and
     # missed current-path narration (`current auto web path` / `web_llm UNKNOWN here` / `DeepSeek auto-provider`).
-    # FIX: a STRICT surface that re-narrates the run-path (any RUNPATH_NARRATION phrase) is an offender
-    # REGARDLESS of a co-located pointer — a route surface must POINT only, never re-narrate (current OR
-    # transitional). The non-archive DESIGN doc may keep historical wording ONLY if the line carries an
-    # inline supersession pointer to the contract section.
-    RUNPATH_NARRATION = (
-        # current-path narration (must live only in the contract)
+    # Slice 3a convergence (Codex 2026-06-14): the recurring drift class was a never-ending PHRASE
+    # blacklist over an under-covered surface set. Replaced by (a) a CLOSED retired-workflow ROOT
+    # vocabulary checked in web/semantic context and only when NOT carrying a retired/historical marker
+    # (so new phrasings — combinations of the same roots — can't escape, and a correctly-labelled
+    # "retired in Slice 3a" mention is allowed), plus (b) a small CURRENT-narration phrase set that a
+    # route surface must never restate even with a pointer (round-5 fix). Bare over-broad words
+    # ("skill" / "patch" / "2b-ii") are deliberately NOT roots — every root is specific.
+    CURRENT_NARRATION = (
         "current auto web path", "current web conclusion", "CURRENT web conclusion", "web_llm UNKNOWN here",
-        "DeepSeek auto-provider", "auto-connects", "web 自动判走",
-        # producer / transitional narration
-        "skill-in-loop", "left unknown here", "skill to fill", "skill fills", "skill 在环",
-        "2b-ii skill", "Slice-2b skill", "Slice 2 skill", "Slice-2 web layer", "formal Slice-2 layer",
-        "Slice 2 formal advisory layer", "全留 unknown", "web 留 unknown", "未评估(unknown",
-        "stays UNKNOWN until", "不能纯自动化", "web_llm 另跑",
+        "DeepSeek auto-provider", "auto-connects", "web 自动判走", "left unknown here", "全留 unknown",
+        "web 留 unknown", "stays UNKNOWN until", "不能纯自动化", "web_llm 另跑",
+        "Slice-2 web layer", "formal Slice-2", "Slice 2 formal advisory layer",
     )
+    # SPECIFIC roots: strings inherently part of the retired a_short skill-patch web workflow — they do
+    # not occur legitimately elsewhere, so each is an offender on its own (no context needed).
+    SPECIFIC_ROOTS = (
+        "skill-in-loop", "skill 在环", "skill-patch", "skill to fill", "skill fills",
+        "skill 降级", "skill 精判", "待 skill", "skill 评估", "2b skill", "web/llm skill", "web_llm skill",
+        "2b-ii skill", "2b-ii-a", "2b-ii-b skill", "slice-2b skill", "slice 2 skill",
+        "apply_web_llm_patch", "validate_web_llm_patch", "web_llm_patch", "web_llm patch", "semantic_risk_web_llm",
+        "patch merge", "merge whitelist",   # round-4: the retired §Patch Merge / patch-merge-whitelist claim
+    )
+    # GENERIC roots: short phrases that CAN appear in unrelated docs, caught ONLY in a_short web_llm context.
+    # Bare "skill"/"patch" are deliberately NOT roots (Codex: too broad — "Codex patch" / analysis "skill"
+    # are legitimate); the retired Chinese/compound variants (2b skill / skill 降级 / web_llm patch / …) are
+    # enumerated in SPECIFIC_ROOTS above instead, so coverage stays high without bare-word false positives.
+    GENERIC_ROOTS = ("skill prompt", "skill/prompt")
+    WEB_CONTEXT = ("web_llm", "web/llm", "web+llm")
+    RETIRED_MARKERS = ("退役", "retired", "superseded", "已超越", "历史", "过渡", "transitional",
+                       "slice 3", "取代", "replaced", "已删", "deleted", "不再", "旧", "old")
     SINGLE_SOURCE_POINTER = "§web_llm 产出路径"     # the one authority section (in the contract)
 
     @classmethod
     def _strict_surfaces(cls):
-        # GLOB-DISCOVERED (not a hand-curated list — Codex round-6/7 kept finding a missed surface, e.g.
-        # the Slice-1 probe runner). Every non-archive semantic-risk DOC + the semantic-risk RUNNERS
-        # (probe / summary = `runners/a_short_semantic_risk_*.py`) + the weekly orchestration script are
-        # checked. The contract (authority) and pure implementation files (adapter / engine / pipeline,
-        # which are NOT named a_short_semantic_risk_*) are deliberately excluded.
+        # GLOB-DISCOVERED across the active surface CLASSES, SCOPED to the a_short semantic-risk DOMAIN
+        # (Codex 2026-06-14 "glob all active classes", scoped by `a_short_semantic_risk_*` prefix + the
+        # cross-cutting route README + the weekly entry/pipeline + semantic runners). Domain-scoping is the
+        # same anti-false-positive principle Codex applied to bare words: scanning EVERY docs/*.md tripped
+        # cross-domain (`us_short_spec.md`) and meta (`pre_codex_self_review_checklist.md`) files that merely
+        # mention "skill" as an example. Excluded: history (SESSION_LOG / register / archive / handoff),
+        # research data, frozen skill `reference/` specs, the DESIGN doc (scanned separately), the contract
+        # (authority). A new semantic-risk doc/schema/runner is still auto-covered by the prefix glob.
         import glob
-        files = ["docs/a_short_semantic_risk_coverage.md", "docs/README.md", "runners/weekly_screening.ps1"]
-        files += sorted(str(Path(p).relative_to(ROOT)).replace("\\", "/")
-                        for p in glob.glob(str(ROOT / "runners" / "a_short_semantic_risk_*.py")))
-        return files
+        rel = lambda q: str(Path(q).relative_to(ROOT)).replace("\\", "/")
+        skip = {"docs/a_short_semantic_risk_contract.md"} | set(cls.DESIGN_SURFACES)
+        files = ["runners/weekly_screening.ps1", "runners/a_short_weekly_pipeline.py", "docs/README.md"]
+        files += [rel(q) for q in glob.glob(str(ROOT / "docs" / "a_short_semantic_risk_*.md")) if rel(q) not in skip]
+        files += [rel(q) for q in glob.glob(str(ROOT / "schemas" / "a_short_semantic_risk_*.schema.json"))]
+        files += [rel(q) for q in glob.glob(str(ROOT / "runners" / "a_short_*semantic*.py"))]
+        return sorted(set(files))
     DESIGN_SURFACES = ("docs/a_short_semantic_risk_top15_enrichment_design_20260612.md",)
-    # The 2b-ii skill prompt is the transitional COMPONENT's own instruction file (every line is about the
-    # skill doing the web/LLM judgment — a per-line "point only" rule is nonsensical). It is instead checked
-    # at FILE level: it must carry a supersession banner = a transitional marker + the run-path pointer, so a
-    # reader sees it is the transitional path and that the current run-path is single-sourced in the contract.
-    BANNER_SUPERSEDED_SURFACES = ("skills/a_short_analysis/prompts/semantic_risk_web_llm.md",)
+    # BANNER tier: a transitional COMPONENT's own instruction file (every line is about the component, so a
+    # per-line "point only" rule is nonsensical) is checked at FILE level — it must carry a supersession
+    # banner (transitional marker + run-path pointer). Slice 3a retired the only such file (the 2b-ii skill
+    # prompt), so BANNER_SUPERSEDED_SURFACES is empty; the mechanism + planted test stay for future prompts.
+    BANNER_SUPERSEDED_SURFACES = ()   # Slice 3a retired the 2b-ii skill-patch prompt; none remain
     TRANSITIONAL_MARKERS = ("过渡", "transitional", "SUPERSEDED", "Slice 3")
 
     @classmethod
     def _separate_run_offenders(cls, text, pointer_exempts=False):
-        # shared by the live guard AND the planted test. STRICT (pointer_exempts=False): a line that
-        # re-narrates the run-path is an offender even if it also carries the pointer (a route surface
-        # must POINT only). DESIGN (pointer_exempts=True): a historical-design line may keep the wording
-        # if it carries an inline supersession pointer to the contract section.
+        # Shared by the live guard AND the planted tests. Two complementary per-line rules:
+        #  (1) CURRENT_NARRATION: a route surface restating the current/transitional path is an offender
+        #      even WITH a pointer (round-5 fix); pointer_exempts=True (DESIGN doc only) relaxes this.
+        #  (2) retired-workflow roots: a SPECIFIC root (alone) OR a GENERIC root in a_short web_llm context,
+        #      WITHOUT a retired/historical marker on the line = offender (teaches a deleted path as live).
+        #      A correctly-labelled retired/superseded line (marker present) is allowed on any surface.
         out = []
         for ln in text.splitlines():
-            if not any(s in ln for s in cls.RUNPATH_NARRATION):
-                continue
-            if pointer_exempts and cls.SINGLE_SOURCE_POINTER in ln:
-                continue
-            out.append(ln.strip()[:200])
+            low = ln.lower()
+            if any(ph.lower() in low for ph in cls.CURRENT_NARRATION):
+                if not (pointer_exempts and cls.SINGLE_SOURCE_POINTER in ln):
+                    out.append(ln.strip()[:200])
+                    continue
+            hit = any(r in low for r in cls.SPECIFIC_ROOTS) or (
+                any(r in low for r in cls.GENERIC_ROOTS) and any(c in low for c in cls.WEB_CONTEXT))
+            if hit and not any(m in low for m in cls.RETIRED_MARKERS):
+                out.append(ln.strip()[:200])
         return out
 
     def test_no_pre_slice2_separate_web_workflow_taught_as_current(self):
@@ -321,6 +311,9 @@ class SemanticRiskContractDocs(unittest.TestCase):
             off = self._separate_run_offenders(_read(rel))
             self.assertEqual(off, [], f"{rel} re-narrates the web run-path (must POINT only to {self.SINGLE_SOURCE_POINTER}, "
                                       f"never re-narrate current/transitional path): {off}")
+        # Slice 3a: schema descriptions must stay in the scanned strict set (anti-regression on the glob)
+        self.assertIn("schemas/a_short_semantic_risk_summary.schema.json", self._strict_surfaces(),
+                      "schema descriptions dropped from the strict drift-scan set")
         # non-archive DESIGN doc: historical wording allowed ONLY with an inline supersession pointer
         for rel in self.DESIGN_SURFACES:
             off = self._separate_run_offenders(_read(rel), pointer_exempts=True)
@@ -350,6 +343,24 @@ class SemanticRiskContractDocs(unittest.TestCase):
         probe_variant = "完整 web+LLM 判断属 Slice 2 skill 在环,本函数只喂原始 sources。"  # Codex round-7 non-hyphen probe variant
         self.assertTrue(self._separate_run_offenders(probe_variant),
                         "STRICT: the non-hyphen 'Slice 2 skill 在环' probe variant must FAIL")
+        schema_desc_offender = ('"description": "web_llm = Sina/web advisory (skill-in-loop); the headless '
+                                'builder leaves it for the 2b-ii-B skill prompt to fill"')  # Slice 3a schema-desc variant
+        self.assertTrue(self._separate_run_offenders(schema_desc_offender),
+                        "STRICT: a schema description re-narrating the retired skill-patch path must FAIL")
+        # Slice 3a round-3 variants (Codex broad-scan residuals) must all FAIL — incl. lines with NO
+        # same-line web context (caught by SPECIFIC compounds) and the space-form `web_llm patch`.
+        for v in ("实质精判仍交 2b skill(web_llm)。",
+                  "残余误差只会是误报(可被 skill 降级),绝不漏报",
+                  "跨字段不变式(summary 与 web_llm patch 共用)",
+                  "web/LLM 待 skill 评估。",
+                  "stable contract anchors the boundary, evidence invariant, patch merge whitelist, and guard"):
+            self.assertTrue(self._separate_run_offenders(v), f"STRICT: retired variant must FAIL: {v}")
+        # cross-domain / code-review uses of generic skill/patch (no a_short web_llm context) are NOT offenders
+        for ok in ("Semantic news can later become Skill prompt fragments.",       # another product's prompt
+                   "Top15 enrichment DESIGN-only (Codex patch + revision notes).",  # a git patch, not web_llm_patch
+                   "the analysis skill enriches llm_notes for regulatory checks"):  # general analysis skill
+            self.assertEqual(self._separate_run_offenders(ok), [],
+                             f"cross-domain generic skill/patch must NOT be flagged: {ok}")
         pure_pointer = "web_llm run path: see contract §web_llm 产出路径 (transitional sidecar)."
         self.assertEqual(self._separate_run_offenders(pure_pointer), [],
                          "a pure pointer line (no run-path narration) is fine")
