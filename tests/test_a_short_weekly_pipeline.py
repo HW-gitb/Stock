@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, main, SCHEMA_PATH,
-    _fetch_price_series, _load_validated_overlay, MIN_PRICE_OBS,
+    _fetch_price_series, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
 )
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
@@ -197,6 +197,11 @@ class NormalizeTests(unittest.TestCase):
             _series(), _overlay_row(), 55.0, {}, "震荡期")
         self.assertTrue(n["derived"]["vol_confirm"])
         self.assertTrue(n["derived"]["breakout"])
+
+    def test_regime_fallback_flows_to_engine_input(self):
+        n = normalize_candidate(_egs_candidate(), _series(), _overlay_row(), 55.0, {},
+                                "震荡期", regime_fallback={"active": True, "reason": "x"})
+        self.assertTrue(n["regime_fallback"]["active"])
 
 
 class BuildWeeklyTests(unittest.TestCase):
@@ -499,6 +504,32 @@ class MainWiringTests(unittest.TestCase):
                   "--out", str(out)], price_provider=lambda code: _series())
             loaded = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(loaded["reports"][0]["m67"]["精简结论区"]["当前环境"], "进攻期")
+
+    def test_unknown_regime_fallback_cannot_be_overridden_by_account(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
+            ai["market_context"]["market_regime"]["status"] = "unknown"
+            self._write_inputs(td, ai=ai)
+            (Path(td) / "acct.json").write_text(
+                json.dumps({"available_cash": 500000.0, "market_regime": "进攻期"}),
+                encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        rep = loaded["reports"][0]
+        self.assertIn("震荡期", rep["m67"]["精简结论区"]["当前环境"])
+        self.assertIn("EGS regime unknown", rep["m67"]["精简结论区"]["当前环境"])
+        self.assertEqual(rep["machine"]["risk_families"]["market_regime"]["action"], "downgrade")
+        self.assertIn("regime unknown", rep["m67"]["精简结论区"]["操作建议"])
+
+    def test_resolve_market_regime_unknown_returns_conservative_fallback(self):
+        ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
+        ai["market_context"]["market_regime"]["status"] = "unknown"
+        regime, fallback = resolve_market_regime(ai)
+        self.assertEqual(regime, "震荡期")
+        self.assertEqual(fallback["action"], "downgrade_and_halve")
 
     def test_main_with_valid_overlay_accepted(self):
         with tempfile.TemporaryDirectory() as td:

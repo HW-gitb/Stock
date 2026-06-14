@@ -56,6 +56,8 @@ V14.2 M1 用含糊的"涨停指数"(3/4 档都依赖它),且收缩窄、震荡�
 ## 7. switch-candidate 提醒门槛(切片3 规格,本切片入 governance)
 仅当全部满足才输出"考虑切换"提醒(**只提醒、不自动切**):forward-live ≥12 周 或 回测 ≥2 年;分歧样本 ≥8 次;分歧样本净改善明显(更早识别防御/收缩、减回撤、不显著错过进攻);经审查非偶然/数据污染。
 
+**提醒文案固定**:门槛达成且审查确认后,必须向用户明确提示: **"V14.3 regime 可能优于 V14.2，是否进入生产切换审查?"**。若用户确认,再单独起 production-switch 切片;该切片才允许讨论让 V14.3 接管 production regime、接线动作矩阵、更新 EGS/analysis_input/Phase5 消费与测试。未得到用户确认前,继续 comparison-only,绝不自动替换。
+
 ## 8. 对刚完成的 overlay/面板的影响
 面板加一个**常驻、独立、明确 comparison-only 的 "Regime comparison" 段**(`Production: V14.2 X | Candidate: V14.3 Y | comparison-only | 证据 n/12 周`),**绝不**与 overlay 星级 / M6.7 动作 / 建仓结论混写。切片2 实现。
 

@@ -126,6 +126,12 @@ class RiskFamilyTests(unittest.TestCase):
         fam = classify_risk_families(_good_input(iv={"iv_percentile_252d": 85.0}), self.ind)
         self.assertEqual(fam["market_regime"]["action"], "downgrade")
 
+    def test_unknown_regime_fallback_downgrades(self):
+        fam = classify_risk_families(_good_input(regime_fallback={
+            "active": True, "reason": "EGS market_regime unknown/missing→按震荡期保守处理"}), self.ind)
+        self.assertEqual(fam["market_regime"]["action"], "downgrade")
+        self.assertIn("EGS market_regime unknown", "|".join(fam["market_regime"]["reasons"]))
+
     def test_overheat_downgrade(self):
         d = _good_input()["derived"]; d["overheat"] = True
         fam = classify_risk_families(_good_input(derived=d), self.ind)
@@ -186,6 +192,25 @@ class BuildReportTests(unittest.TestCase):
             validate_m67_consistency(r)
             if r["m67"]["table"]["操作"] == "建仓":
                 self.assertIn("IV feed 缺失", r["m67"]["精简结论区"]["操作建议"])
+
+    def test_unknown_regime_fallback_is_shock_downgrade_and_halve(self):
+        base = build_m67_report(_good_input(), AS_OF, "t")
+        r = build_m67_report(_good_input(regime_fallback={
+            "active": True,
+            "source_status": "unknown",
+            "fallback_regime": "震荡期",
+            "reason": "EGS market_regime unknown/missing→按震荡期保守处理",
+            "action": "downgrade_and_halve",
+        }), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        self.assertEqual(r["machine"]["risk_families"]["market_regime"]["action"], "downgrade")
+        self.assertLess(r["m67"]["table"]["股数"], base["m67"]["table"]["股数"])
+        self.assertIn("EGS regime unknown", r["m67"]["精简结论区"]["当前环境"])
+        self.assertIn("regime unknown", r["m67"]["精简结论区"]["操作建议"])
+        self.assertIn("market_regime_status=unknown_fallback_to_shock",
+                      r["machine"]["layer"]["observe_only"])
+        validate_m67_consistency(r)
+        jsonschema.validate(r, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
 
 
 class InvariantTests(unittest.TestCase):

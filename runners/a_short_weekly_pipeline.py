@@ -34,7 +34,7 @@ OVERLAY_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspa
 def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pct,
                         account: dict, regime: str, industry_trend: str = "neutral",
                         llm_enrichment=None, observe_only=None, semantic=None,
-                        semantic_web_llm=None) -> dict:
+                        semantic_web_llm=None, regime_fallback=None) -> dict:
     """把一个 EGS analysis_input 候选 + 价格序列 + overlay 行 + 市场级 IV 分位 + 账户/环境
     归一化成 Phase 5 引擎输入。字段缺失 → 引擎按保守/observe 处理。"""
     d = cand.get("derived_flags", {}) or {}
@@ -67,6 +67,7 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         "liquidity": {"avg_amount_5d": liq.get("avg_amount_5d"), "avg_amount_20d": liq.get("avg_amount_20d")},
         "iv": {"iv_percentile_252d": iv_pct},
         "market_regime": regime,
+        "regime_fallback": dict(regime_fallback or {}),
         "account": account or {},
         "portfolio": {},
         "observe_only": list(observe_only or []),
@@ -197,6 +198,25 @@ def latest_iv_percentile(iv_feed_summary: dict):
 MIN_PRICE_OBS = 20               # 指标(支撑/压力 20d、ATR 14d)所需最少 PIT 交易日
 # analysis_input.market_context.market_regime.status(EGS 英文枚举)→ 引擎中文 regime
 REGIME_MAP = {"attack": "进攻期", "shock": "震荡期", "defense": "防御期", "contraction": "收缩期"}
+
+
+def resolve_market_regime(ai: dict) -> tuple[str, dict | None]:
+    """Resolve production regime for M6.7.
+
+    EGS still emits ``unknown`` for the production V14.2 M1 slot. Per 2026-06-14 decision, that
+    state must NOT be upgraded by an account-file override; it is treated as shock with conservative
+    downgrade/halving and an explicit M6.7 caveat.
+    """
+    status = ((ai.get("market_context") or {}).get("market_regime") or {}).get("status")
+    if status in REGIME_MAP:
+        return REGIME_MAP[status], None
+    return "震荡期", {
+        "active": True,
+        "source_status": status or "missing",
+        "fallback_regime": "震荡期",
+        "reason": "EGS market_regime unknown/missing→按震荡期保守处理",
+        "action": "downgrade_and_halve",
+    }
 
 
 def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str) -> list:
@@ -341,10 +361,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit(f"[FATAL] overlay 候选集 {sorted(overlay)} != 周报候选 {sorted(weekly_candidates)}"
                          "(同日错批/缺行/多行,缺行会被静默降级;须同一批全覆盖,拒跑)")
     acct = _load(args.account) if args.account else {}
-    # 市场 regime 优先取自 analysis_input(EGS 分类),其次账户配置,最后默认震荡期。
-    # (EGS 当前可能仍输出 status='unknown' —— 真正的 regime 分类器尚未在生产 egs_main 接线(V14.3 切片 2a/2b 在建);在此优雅降级。)
-    _mr_status = ((ai.get("market_context") or {}).get("market_regime") or {}).get("status")
-    regime = REGIME_MAP.get(_mr_status) or acct.get("market_regime") or "震荡期"
+    # 市场 regime 只取自 analysis_input(EGS 分类)。unknown/missing 不允许被账户配置覆盖成进攻期;
+    # 按 2026-06-14 用户决策:unknown → 震荡期 + 降级 + 保守减半 + M6.7 明确提示。
+    regime, regime_fallback = resolve_market_regime(ai)
     # available_cash 是用户必填输入。**--account 提供则必须有正数 available_cash**(拒静默无 sizing);
     # 未提供 --account → observation-only(sizing_mode 标进 run_lineage,读者不会把 sizing 假象的「观察」当真 avoid 信号)。
     available_cash = acct.get("available_cash")
@@ -377,6 +396,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             {str(c.get("ts_code")): c.get("name", "") for c in _cands})
     normalized = [normalize_candidate(c, price_provider(c["ts_code"]), overlay.get(c["ts_code"]),
                                       iv_pct, account, regime,
+                                      regime_fallback=regime_fallback,
                                       semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None),
                                       semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None))
                   for c in ai.get("candidates", [])]

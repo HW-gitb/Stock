@@ -10,6 +10,25 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Claude `审查` (Codex regime_fallback 文案 cleanup:PASS,提交阻塞未解)
+- **Verdict/Action**: PASS。v14_3 §7 切换提醒文案逗号已改全角 `，`(U+FF0C,符用户「中文逗号」要求);纯 doc、engine/pipeline/tests 未动、无 runtime 改动。但此 cleanup **未解决提交阻塞**:scope 仍混装(regime_fallback / cadence 重命名 / v14_3 doc)、cadence 重命名仍待决——与 Codex 本条自述「提交前仍需分拆 scope」一致。
+- **Required**: 无新增 Required;register 无新条目;提交前仍须拆 scope + 决定 cadence 重命名(见下方上一条 PASS verdict)。
+- **Verify**: governance guard 16 OK;全角逗号 U+FF0C 已核;doc-only(`git diff --stat` 确认 runners/tests/schemas 无本轮新增改动);`?` 仍 ASCII(用户只要求逗号,非阻断)。
+- **Next**: 拆 scope 后单独提交 regime_fallback;cadence 重命名 revert 或同步 register。
+
+## 2026-06-14 — Codex `修复` (regime_fallback submit-readiness cleanup)
+- **Verdict/Action**: 统一 V14.3 切换提醒文案为用户要求的中文逗号版本;未改 runtime。提交前仍需按上一条 PASS 提醒分拆 scope/staging。
+- **Required**: 无新增 Required;关联上一条 PASS 的 submit-readiness cleanup,register 无新条目。
+- **Verify**: targeted 236 OK;py_compile OK;route-doc guard 14 OK;old cadence active-surface scan clean;diff-check clean except LF/CRLF warnings。
+- **Pre-Codex self-review**: A/B2/E/F checked — 只改活跃 V14.3 提醒文案一致性,不新增 durable gate/状态复述,历史日志/register 旧词不作为本轮 Required。
+- **Next**: 审查。
+
+## 2026-06-14 — Claude `审查` (regime_fallback 切片:实质 PASS;混装 cadence-rename/v14_3 doc 待拆)
+- **Verdict/Action**: PASS(实质)。regime_fallback = 真安全修复:EGS `unknown`/missing 不再被账户配置抬成进攻期,统一 震荡期 + downgrade + 保守减半 + M6.7 caveat + observe 标记(`resolve_market_regime` + engine classify/build_m67/compute_star 一致)。`compute_star` 的 `hit`→`action=="downgrade"` 经核 overheat/portfolio 命中只设 downgrade = 等价零回归。
+- **Required**: 无新增 Required(PASS);register 无 regime_fallback 条目。但**别按现状一把提交**——这批未提交混了 3 个无关 scope(regime_fallback / `out_of_scope_by_weekly_cadence`→`_by_cadence` 重命名 / v14_3 切换提醒文案 doc)。
+- **Verify**: 全量 1812 OK(+5 regime 测试);diff-check 干净;关键测试均过(classify→downgrade、build_m67 halve 股数<base+caveat+schema、账户不能覆盖 unknown、resolve 单测);cadence 重命名无 .py/test 引用(不破测试)但 `system_risk_register.md` 4 条历史条目仍用旧词 = 用词不一致。
+- **Next**: 提交前拆 scope(regime_fallback 单独 commit)+ 决定 cadence 重命名(revert 或同步 register)+ 归位 v14_3 doc;Optional:`compute_star` 改用 `inp.regime_fallback.active`、补 star 值/缺 market_context 测试。
+
 ## 2026-06-14 — Codex `审查 PASS` (Slice 3b-2 R4 + optional hardening)
 - **Verdict/Action**: PASS. 覆盖 weekly pipeline / ps1 Stage4 / schema / render / standalone summary CLI 退役 / route docs / doc-governance anti-drift guard / Claude 后续 #1/#2 Optional hardening;未发现新的阻断问题。
 - **Required**: `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` R4 已 Addressed;无新增 Required。详情见 `docs/system_risk_register.md`。

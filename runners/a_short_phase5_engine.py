@@ -176,6 +176,9 @@ def classify_risk_families(inp: dict, ind: dict) -> dict:
     liq = inp.get("liquidity", {})
     iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
     regime = inp.get("market_regime", "震荡期")
+    regime_fallback = inp.get("regime_fallback") or {}
+    regime_unknown_fallback = bool(regime_fallback.get("active"))
+    regime_fallback_reason = regime_fallback.get("reason") or "market_regime unknown→按震荡期保守处理"
     fam = {f: {"hit": False, "action": None, "reasons": []} for f in RISK_FAMILIES}
 
     # overheat_crowding(含 overlay crowding;一次硬处理)
@@ -212,13 +215,19 @@ def classify_risk_families(inp: dict, ind: dict) -> dict:
 
     # market_regime(IV 闸门 + 防御/收缩)
     mr = []
+    if regime_unknown_fallback:
+        mr.append(regime_fallback_reason)
     if iv_pct is not None and iv_pct > IV_NOBUILD_PCT:
         mr.append(f"IV分位{iv_pct}>{IV_NOBUILD_PCT} 不可建仓")
         fam["market_regime"].update(hit=True, action="hard_veto", reasons=mr)
     elif regime == "收缩期":
-        fam["market_regime"].update(hit=True, action="hard_veto", reasons=["收缩期禁新建仓"])
+        mr.append("收缩期禁新建仓")
+        fam["market_regime"].update(hit=True, action="hard_veto", reasons=mr)
     elif iv_pct is not None and iv_pct > IV_HALVE_PCT:
-        fam["market_regime"].update(hit=True, action="downgrade", reasons=[f"IV分位{iv_pct}>{IV_HALVE_PCT} 减半"])
+        mr.append(f"IV分位{iv_pct}>{IV_HALVE_PCT} 减半")
+        fam["market_regime"].update(hit=True, action="downgrade", reasons=mr)
+    elif regime_unknown_fallback:
+        fam["market_regime"].update(hit=True, action="downgrade", reasons=mr)
 
     # portfolio_concentration
     pc = []
@@ -293,8 +302,11 @@ def compute_star(inp: dict, fam: dict, eligible: bool) -> int:
     if inp.get("industry_trend") == "headwind":
         star -= 1
     for f in ("overheat_crowding", "portfolio_concentration"):
-        if fam[f]["hit"]:
+        if fam[f]["action"] == "downgrade":
             star -= 1
+    if (fam["market_regime"]["action"] == "downgrade"
+            and any("unknown" in str(r) for r in fam["market_regime"].get("reasons", []))):
+        star -= 1                         # EGS regime unknown fallback: explicit downgrade
     return max(1, min(5, star))
 
 
@@ -313,6 +325,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     ind = compute_indicators(inp.get("price_series", []))
     fam = classify_risk_families(inp, ind)
     regime = inp.get("market_regime", "震荡期")
+    regime_fallback = inp.get("regime_fallback") or {}
+    regime_unknown_fallback = bool(regime_fallback.get("active"))
+    regime_fallback_reason = regime_fallback.get("reason") or "EGS market_regime unknown/missing→按震荡期保守处理"
     iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
     eligible = bool((inp.get("overlay") or {}).get("eligible"))
 
@@ -374,9 +389,17 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     iv_halve = (iv_known and IV_HALVE_PCT < iv_pct <= IV_NOBUILD_PCT and regime != "收缩期")
     if not iv_known:
         observe.append("iv_regime_status=observe_only_missing_feed")
-    extra_halve = iv_halve or (not iv_known)
-    halve_reason = ("IV>80分位 Rule3 再减半" if iv_halve
-                    else ("IV feed 缺失,保守再减半" if not iv_known else ""))
+    if regime_unknown_fallback:
+        observe.append("market_regime_status=unknown_fallback_to_shock")
+    halve_reasons = []
+    if iv_halve:
+        halve_reasons.append("IV>80分位 Rule3 再减半")
+    if not iv_known:
+        halve_reasons.append("IV feed 缺失,保守再减半")
+    if regime_unknown_fallback:
+        halve_reasons.append("regime unknown→震荡期保守减半")
+    extra_halve = bool(halve_reasons)
+    halve_reason = "；".join(halve_reasons)
 
     # 决策
     if hard:
@@ -393,9 +416,11 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     # 操作建议行(诚实护栏:建仓必带置信/试探/止损)
     if action == "建仓":
         iv_caveat = "" if iv_known else " **IV feed 缺失,未执行 IV 风控,仓位已保守再减半**。"
+        regime_caveat = (" **EGS regime unknown,按震荡期保守降级并减半**。"
+                         if regime_unknown_fallback else "")
         advice = (f"低吸/突破建仓建议(类型:{etype})。⭐×{star}、盈亏比 {plan['rr']}。"
                   f"**试探仓**(edge 未验证,A-short 仅 risk_filter_only)。"
-                  f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**。" + iv_caveat)
+                  f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**。" + iv_caveat + regime_caveat)
     elif action == "观察":
         advice = f"观察,不建仓。原因:{reject}。" + (f"降级:{'/'.join(downgrades)}。" if downgrades else "")
     else:
@@ -430,7 +455,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     }
     m67 = {
         "精简结论区": {
-            "当前环境": regime,
+            "当前环境": (regime if not regime_unknown_fallback
+                         else f"{regime}(EGS regime unknown,保守fallback)"),
             "波动率状态": (f"IV分位≈{iv_pct}% | Rule3减半:{'是' if iv_halve else '否'}"
                           if iv_known else "IV未知(feed 缺失,未执行 IV 风控,保守减半)"),
             "现价与成本": f"{inp.get('close')} | 试探仓",
