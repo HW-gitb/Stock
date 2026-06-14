@@ -10,6 +10,16 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Claude `执行` (M6.7 端到端真跑验证:cninfo + DeepSeek 融入)
+- 真跑(research lane 非生产;as_of 20260605 复用既有 EGS analysis_input;artifacts 在 `research/results/a_short/m67_validation_20260605/`,**未提交**——一次性 plumbing 验证、可复跑):现建 PIT IV feed(`a_short_iv_feed_build`,n_days=282,latest_iv_pct=65.5)→ `a_short_weekly_pipeline --confirm-fetch-authorized`(真 Tushare 价 + cninfo + sina + DeepSeek),n=15 全观察。
+- **验证结论(多票横截面)**:
+  - ✅ **cninfo official_structured**:真 PIT 取数+分类+融入引擎——15 票 = 6 clear / 9 risk(全 impact=pending 待核;无证据齐全 high → 不否决,故全 15 观察,符合 advisory 不硬杀)。
+  - ✅ **DeepSeek 判官**:直测确认本体工作(`deepseek_layer_status` 全 True;对合成"立案调查"新闻判出 `risk/high/downgrade` + 中文 summary,契约合规)。
+  - ✅ **M6.7 端到端 + 3b-1 行内渲染**:price+IV+engine+render 无中止;weekly.md 15 行语义明细格式正确(官方/web 行内)。
+  - ⚠️ **管线内 web 层全 unknown**:**sina 连通正常(ok=True、无 error)但这 15 票 items=0**(确无近期 sina 新闻命中)→ web 层正确 fail-closed 成中性、非阻断(设计行为)。即 DeepSeek 判官已单验,但管线内本次未喂到真 sina 文本。**待查(非阻断)**:sina 对全 15 票均 0 命中是真空还是 parse/endpoint 低产,值得后续看一眼。
+- **意义**:Slice 3b-2 的前置(M6.7 端到端真跑)已过 —— cninfo+DeepSeek 融入工作、fail-closed 正确。
+- **Next**: 可 `起草 Slice 3b-2`(独立 summary/Stage-4 退役 + weekly_screening 一键串联);Slice-3 promotion 仍按 ~4 周真实 advisory 证据门槛(本次为 plumbing 验证、web 空,非 forward 证据第一笔)。
+
 ## 2026-06-14 — Claude `提交` (Slice 3b-1:语义面板行内化进 M6.7)
 - 提交(本地 master,无 push):语义 advisory 逐票**行内化**进 M6.7 周报 .md(`a_short_m67_render._semantic_line` 从 `machine.layer.semantic_risk` 渲染);退役独立面板渲染路径(`render_semantic_risk_panel` + 仅其用 helper / `_semantic_panel_from_summary` / `--semantic-risk-summary` / `write_weekly_markdown` semantic_panel 参数)。测试:+3 行内测试;退役 panel-gate 单一来源 guard → panel-retired guard;docs coverage/contract/README 改 panel 退役·行内化。
 - Codex `审查 PASS`(Required none)。全量 1799 tests OK;活跃 runners/schemas 零面板引用;编码/diff 净。
