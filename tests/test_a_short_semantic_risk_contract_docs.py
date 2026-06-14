@@ -89,6 +89,18 @@ class SemanticRiskContractDocs(unittest.TestCase):
         self.assertIn("def _semantic_line", render)        # semantic now inline in the M6.7 card
         self.assertNotIn("semantic_panel", render)          # no separate-panel param
 
+    def test_weekly_screening_runs_m67_not_standalone_summary(self):
+        # Slice 3b-2: the standalone summary CLI + Stage-4 sidecar are retired — the Friday entry runs the
+        # M6.7 pipeline (build IV feed + a_short_weekly_pipeline, semantic inline). Pin the wiring so it
+        # can't regress to the deleted standalone summary call.
+        ps1 = _read("runners/weekly_screening.ps1")
+        self.assertIn("a_short_weekly_pipeline.py", ps1)
+        self.assertIn("a_short_iv_feed_build.py", ps1)
+        self.assertNotIn("a_short_semantic_risk_summary.py", ps1)   # standalone summary CLI no longer invoked
+        summ = _read("runners/a_short_semantic_risk_summary.py")
+        self.assertNotIn("def main(", summ)                          # standalone CLI retired
+        self.assertIn("def build_summary_from_fetches", summ)        # builders kept (reused by M6.7 provider)
+
     def test_contract_expresses_m67_advisory_distinction_not_absolute_no_hard_veto(self):
         # R-ASHORT-SEMANTIC-CONTRACT-M67-INTEGRATION-DRIFT: after the M6.7 integration, active docs
         # must NOT keep the old absolute whole-layer "no hard veto / panel-only" wording while the

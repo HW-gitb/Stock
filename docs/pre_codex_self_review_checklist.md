@@ -25,6 +25,8 @@
 ## B2. 单一来源 + drift guard(generalized)
 **Materiality gate (2026-06-14)**: ripple grep is evidence gathering, not an automatic "zero every stale word" mandate. Treat drift as blocking only when it affects a current authority contract, required route/startup doc, run entry / CLI help, schema description used by consumers, test assertion / guard explanation that defines expected behavior, live-state gate, or another surface that can mislead execution or review. Clearly historical / archived / superseded text and low-impact comments may be left alone or listed as Optional; do not create Required work for doc drift that has no system-quality or review-quality impact.
 
+**活跃设计文档 current-state gate (2026-06-14)**: 如果某个设计文档仍在 `docs/README.md` / `CURRENT` / 当前切片中作为活跃入口,它的"仍未来 / 未来工作 / 未接线 / stub"列表必须只包含真实未完成项。凡代码、schema、route doc 已证明完成的事实(如已接线、已消费、已 schema 化),不得继续出现在未来项里;要么改成已完成事实 + 指针,要么把整篇文档降级为 historical / superseded 并移出活跃入口。已跨轮复发的 completed-vs-future 类错误必须加 registry/guard,不能只改一个句子。
+
 **一个会变的事实**(行为契约 / 校验门 / finding 详情 / 状态)**= 一个权威位置 + 一个机器守护禁止他处复述**;所有其他位置只许"点名 + 指过去",不复述步骤/矩阵。
 1. **权威位置按事实性质选**:代码行为→紧贴代码的 docstring(被拒绝测试钉住);跨文档契约→单一 contract 锚点;material finding→`system_risk_register.md`;live-state→`SESSION_LOG` 顶部。
 2. **守护必须按局部块**(表行/段落)校验、**不是整文件**——整文件粒度会被"同文件别处有正确句"骗过(见 `R-ASHORT-SEMANTIC-PANEL-GUARD-FILE-LEVEL-FALSE-NEGATIVE`),并配一个 **planted-failure** 测试证明其局部性。

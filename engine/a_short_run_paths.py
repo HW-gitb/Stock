@@ -2,17 +2,17 @@
 # -*- coding: utf-8 -*-
 """A-short 单次 run 的统一产物文件夹约定(单一真相源).
 
-用户(2026-06-11)要求把每次 run 的选股 + 分析产物放在**一个文件夹**里方便找。
+用户(2026-06-11)要求把每次 run 的选股 + EGS comparison-diff 放在**一个文件夹**里方便找。
 **约定:一个 run 的桶 = `<该 run 的 EGS --output-root>/<as_of>/`**(本模块的解析逻辑逐字镜像
 `egs_main.export_analysis_input`:`--output-root` 绝对/项目相对皆可,缺省 = `result/a_short`)。
-egs_main 把选股(analysis_input/candidates/snapshot)与 comparison-diff 都落到这一个桶;周报 pipeline
-的 M6.7 也落同桶。这样 comparison-diff **永远和 analysis_input 同桶**(从同一个 output_root 派生,
+egs_main 把选股(analysis_input/candidates/snapshot)与 comparison-diff 都落到这一个桶;周报 M6.7 的落点**按流分**(见下两条流):分析流与选股同桶;**生产流(weekly_screening)是有意 hybrid**
+——选股落 result/a_short、M6.7 advisory 落 research lane,靠 run_lineage 绑定(M6.7 非生产)。这样 comparison-diff **永远和 analysis_input 同桶**(从同一个 output_root 派生,
 不硬编码),消除"选股落一处、分析落另一处"的割裂。
 
 **两条流(显式边界,不混):**
 - **生产流**(`A-EGS/egs_main.py --as-of <d>` 缺省 output-root):桶 = `result/a_short/<as_of>/`;
   `runners/forward_tracker.py` 从这里读 analysis_input。受 CLAUDE.md 保护、周报 pipeline 写盘护栏
-  硬拒 `result/a_short/`——所以**生产桶里不放 pipeline 的 M6.7**(生产流本就不跑 pipeline)。
+  硬拒 `result/a_short/`——所以**生产桶 `result/a_short` 里不放 M6.7**(护栏硬拒)。**注(Slice 3b-2)**:周五 `weekly_screening.ps1` 现会跑 M6.7 advisory,但 M6.7 落 **research lane**(`research/results/a_short/<as_of>/weekly_m67.json`,IV feed 落 `research/results/a_short/iv_feed_<as_of>/`),**不进生产桶**——selection 在生产桶、advisory M6.7 在 research lane 的有意 hybrid(M6.7 非生产)。
 - **分析流**(我们用:EGS `--output-root research/results/a_short` + 周报 pipeline):桶 =
   `research/results/a_short/<as_of>/`,含选股 + comparison + M6.7。该路径含 `results`(带 s),
   不触发 pipeline 的 `result/a_short` 护栏(测试钉死)。

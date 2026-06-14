@@ -10,32 +10,28 @@
   有未来/不可解析/非字典/代码错配等质量缺陷——**绝不把不可信当 clear**;但 PIT 干净行里**真命中风险则
   优先报 risk**)。
 - **web_llm(Sina/web LLM advisory 层)= 本 standalone summary 留 `unknown`(过渡 sidecar;web 产出路径单一来源见
-  `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径;Slice 3 退役本独立 summary)**:headless 跑不了 web/LLM 判断,
+  `docs/a_short_semantic_risk_contract.md` §web_llm 产出路径;独立 summary CLI 已 Slice 3b-2 退役)**:headless 跑不了 web/LLM 判断,
   本切片仅 best-effort 把 Sina 原始条目喂进 `sources`(不判定、不设 clear);web 层判断产出路径见上述契约 §web_llm 产出路径。
 
 **advisory-only 边界(硬约束)**:绝不硬否决、不进 production scoring/decision/veto、不做历史回测证据、
-不写 production 路径、unknown 不伪装 clear、web/LLM 不与官方结构化混同一置信。真取数 = `--confirm-fetch-authorized`
-(用户 `执行`)。纯 build/validate 核心可测;不动 egs_main / Phase5 / V14.2。web/LLM 判断 + M6.7 融入见契约 §web_llm 产出路径与后续切片;
+不写 production 路径、unknown 不伪装 clear、web/LLM 不与官方结构化混同一置信。纯 build/validate 核心可测;不动 egs_main / Phase5 / V14.2。web/LLM 判断 + M6.7 融入见契约 §web_llm 产出路径与后续切片;
 CI 守护(advisory 层已存在 ⇒ 强制 Slice 3 reconciliation;见 tests）。
 """
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
-from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import jsonschema  # noqa: E402
 
 from engine.data.a_share_board_scope import is_a_share_main_board  # noqa: E402
 from runners.a_short_semantic_risk_probe import (  # noqa: E402
-    main_board_top15, fetch_cninfo, fetch_sina, _parse_disclosure_date,
-    _is_canonical_date, _guard_out_path, _load_watch_pool, TOP15_CAP,
+    main_board_top15, _parse_disclosure_date,
+    _is_canonical_date, TOP15_CAP,
     MIN_CNINFO_ANNOUNCED_CODES,
 )
 
@@ -46,7 +42,6 @@ MIN_BATCH_ANNOUNCED = MIN_CNINFO_ANNOUNCED_CODES
 
 SCHEMA_NAME = "a_short_semantic_risk_summary"
 SCHEMA_VERSION = "1.0.0"
-SCHEMA_PATH = os.path.join(ROOT, "schemas", "a_short_semantic_risk_summary.schema.json")
 DEEP_RANK_MAX = 5
 CNINFO_STATIC_HOST = "http://static.cninfo.com.cn/"
 
@@ -330,19 +325,6 @@ def validate_summary_consistency(summary: dict) -> None:
         raise ValueError("coverage failed 不能超过 unknown")
 
 
-def write_summary(summary: dict, out_path: str) -> None:
-    _guard_out_path(out_path)
-    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-        schema = json.load(f)
-    jsonschema.validate(summary, schema)
-    validate_summary_consistency(summary)
-    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
-    tmp = str(out_path) + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, out_path)
-
-
 def build_summary_from_fetches(watch_pool, as_of: str, cninfo_results, sina_results, generated_at: str):
     """纯编排(无 I/O):watch_pool → 主板 Top15 → 逐候选 build。cninfo_results/sina_results 为
     {ts_code: raw} 映射(注入便于测试)。sina_results 可为 None(未跑 Sina)。"""
@@ -365,69 +347,3 @@ def build_summary_from_fetches(watch_pool, as_of: str, cninfo_results, sina_resu
                 off["status"] = "unknown"
                 c["summary"] += "(batch-anomaly: 大面积空响应 → 降级 unknown,疑似 cninfo 请求形态/软反爬)"
     return build_summary(universe, flags, as_of, generated_at)
-
-
-def _watch_pool_from_analysis_input(ai: dict) -> list:
-    """从 EGS analysis_input 抽候选 ts_code(按原顺序、去空)作 watch pool;
-    runner 内部再过 `main_board_top15`。让 weekly_screening 能直接用生产 analysis_input 接入语义层。"""
-    return [str(c["ts_code"]) for c in (ai.get("candidates") or [])
-            if isinstance(c, dict) and c.get("ts_code")]
-
-
-def main(argv=None, cninfo_fetcher=None, sina_fetcher=None):
-    p = argparse.ArgumentParser(description="A-short 语义风险 advisory summary — Slice 2a headless 骨架")
-    p.add_argument("--as-of", required=True, help="YYYYMMDD")
-    p.add_argument("--watch-pool", help="逗号分隔 ts_code 或 @path JSON 数组(与 --analysis-input 二选一)")
-    p.add_argument("--analysis-input", help="EGS analysis_input.json:从其 candidates 抽 watch pool"
-                                            "(与 --watch-pool 二选一;供 weekly_screening 接入)")
-    p.add_argument("--out", required=True, help="summary 落点(禁 result/a_short)")
-    p.add_argument("--confirm-fetch-authorized", action="store_true",
-                   help="确认用户已授权本次 cninfo(+可选 Sina)真实抓取")
-    p.add_argument("--include-sina", action="store_true", help="best-effort Sina sources feeder(LIVE)")
-    p.add_argument("--cninfo-lookback-days", type=int, default=90)
-    args = p.parse_args(argv)
-
-    if not args.confirm_fetch_authorized:
-        raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:本 runner 会真实抓取 cninfo/Sina")
-    if not _is_canonical_date(args.as_of):
-        raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
-    if bool(args.watch_pool) == bool(args.analysis_input):
-        raise SystemExit("[FATAL] 须且仅须提供 --watch-pool 或 --analysis-input 之一")
-    _guard_out_path(args.out)
-
-    if args.analysis_input:
-        # 消费方校验(#R-ASHORT-SEMANTIC-SUMMARY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP):
-        # 走仓库 analysis_input 契约(schema+PIT),并强制 trade_date == --as-of,**在取数/写盘前** abort,
-        # 否则会把旧/未来/坏批次候选池贴上当前 as_of 标签(与 weekly pipeline 同一道门)。
-        from engine.data.analysis_input_contract import validate_analysis_input_file
-        ai = validate_analysis_input_file(args.analysis_input, label="semantic-risk analysis_input")
-        if str(ai.get("trade_date")) != str(args.as_of):
-            raise SystemExit(f"[FATAL] analysis_input.trade_date {ai.get('trade_date')} != --as-of "
-                             f"{args.as_of}(批次错配/未来/陈旧,拒建语义层)")
-        requested = _watch_pool_from_analysis_input(ai)
-    else:
-        requested = _load_watch_pool(args.watch_pool)
-    main_codes, dropped = main_board_top15(requested)
-    print(f"[semantic-summary] universe: requested={len(requested)} → main-board Top15={len(main_codes)} "
-          f"(dropped={len(dropped)})")
-
-    cf = cninfo_fetcher or fetch_cninfo
-    cninfo_list = cf(main_codes, args.as_of, args.cninfo_lookback_days)
-    cninfo_results = {r["ts_code"]: r for r in cninfo_list}
-    sina_results = None
-    if args.include_sina:
-        sf = sina_fetcher or fetch_sina
-        sina_results = {r["ts_code"]: r for r in sf(main_codes)}
-
-    summary = build_summary_from_fetches(requested, args.as_of, cninfo_results, sina_results,
-                                         datetime.now().astimezone().isoformat(timespec="seconds"))
-    write_summary(summary, args.out)
-    cov = summary["coverage"]
-    n_risk = sum(1 for c in summary["candidates"] if c["official_structured"]["status"] == "risk")
-    print(f"[semantic-summary] coverage checked={cov['checked']} unknown={cov['unknown']} "
-          f"failed={cov['failed']}; official risk candidates={n_risk}")
-    print(f"[semantic-summary] web/LLM 本 standalone summary 未判(过渡 sidecar,产出路径见契约 §web_llm 产出路径);summary → {args.out}")
-
-
-if __name__ == "__main__":
-    main()

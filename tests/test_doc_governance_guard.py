@@ -19,6 +19,46 @@ AGENTS = ROOT / "AGENTS.md"
 HANDOFF_DIR = ROOT / "docs" / "handoff"
 HANDOFF_INDEX = HANDOFF_DIR / "README.md"
 ARCHIVE_SESSION_LOG_DIR = ROOT / "docs" / "archive" / "session_log"
+ACTIVE_DESIGN_DOCS = (
+    ROOT / "docs" / "a_short_weekly_pipeline_design_20260610.md",
+)
+CURRENT_FACT_REGISTRY = (
+    {
+        "name": "a_short_slice_a_overlay_wiring",
+        "future_terms": (
+            "overlay",
+            "Slice A",
+            "赛道红利",
+            "build_overlay_summary_from_panels",
+        ),
+        "anchors": (
+            (ROOT / "docs" / "README.md", (
+                "Data-loading WIRED",
+                "build_overlay_summary_from_panels",
+                "--overlay",
+            )),
+            (ROOT / "A-EGS" / "egs_main.py", (
+                "build_overlay_summary_from_panels",
+            )),
+            (ROOT / "runners" / "weekly_screening.ps1", (
+                "--overlay",
+                "overlay.json",
+            )),
+            (ROOT / "runners" / "a_short_weekly_pipeline.py", (
+                "--overlay",
+                "_load_validated_overlay",
+            )),
+        ),
+    },
+)
+FUTURE_WORK_MARKERS = (
+    "仍未来",
+    "未来工作",
+    "未接线",
+    "尚未接线",
+    "not wired",
+    "stub",
+)
 
 
 def _archive_header(text: str) -> str:
@@ -27,6 +67,55 @@ def _archive_header(text: str) -> str:
 
 
 class DocGovernanceGuard(unittest.TestCase):
+    @staticmethod
+    def _contains_term(text: str, term: str) -> bool:
+        if term.isascii():
+            return term.lower() in text.lower()
+        return term in text
+
+    @classmethod
+    def _line_lists_completed_fact_as_future(cls, line: str, fact: dict) -> bool:
+        if not any(cls._contains_term(line, marker) for marker in FUTURE_WORK_MARKERS):
+            return False
+        return any(cls._contains_term(line, term) for term in fact["future_terms"])
+
+    def test_current_fact_registry_anchors_are_live(self):
+        # The registry is intentionally small: only facts with concrete code/route anchors belong
+        # here. If an implementation is refactored, update the registry and this guard together.
+        missing = []
+        for fact in CURRENT_FACT_REGISTRY:
+            for path, anchors in fact["anchors"]:
+                text = path.read_text(encoding="utf-8")
+                for anchor in anchors:
+                    if anchor not in text:
+                        missing.append((fact["name"], str(path.relative_to(ROOT)), anchor))
+        self.assertEqual(missing, [], f"current-fact registry anchor(s) are stale/missing: {missing}")
+
+    def test_active_design_docs_do_not_list_completed_facts_as_future_work(self):
+        # This closes the recurring drift shape behind R4: an active design doc's remaining-work
+        # list can silently keep a completed wiring item. Historical docs may be archived; active
+        # design docs must either state current truth or avoid live-state remaining-work claims.
+        offenders = []
+        for path in ACTIVE_DESIGN_DOCS:
+            text = path.read_text(encoding="utf-8")
+            for line_no, line in enumerate(text.splitlines(), start=1):
+                for fact in CURRENT_FACT_REGISTRY:
+                    if self._line_lists_completed_fact_as_future(line, fact):
+                        offenders.append((str(path.relative_to(ROOT)), line_no, fact["name"], line.strip()))
+        self.assertEqual(offenders, [], f"active design doc lists completed current fact as future: {offenders}")
+
+    def test_active_design_future_guard_planted_failure(self):
+        stale = "- **仍未来**: Slice A overlay 数据装载接线(M6.7 赛道红利星级)"
+        current = "- **已接线**: Slice A overlay 数据装载接线(M6.7 赛道红利星级)"
+        unrelated_future = "- **仍未来**: EGS regime 分类器尚未生产接线"
+        fact = CURRENT_FACT_REGISTRY[0]
+        self.assertTrue(self._line_lists_completed_fact_as_future(stale, fact),
+                        "guard must catch a completed overlay wiring item listed as future")
+        self.assertFalse(self._line_lists_completed_fact_as_future(current, fact),
+                         "guard must not flag a completed-fact line that states it is done")
+        self.assertFalse(self._line_lists_completed_fact_as_future(unrelated_future, fact),
+                         "guard must not block unrelated true future work such as regime classifier")
+
     def test_session_log_entry_rule_teaches_archive_pointer_exception(self):
         text = AGENTS.read_text(encoding="utf-8")
         # Scope to the `### Entry 格式` section ONLY. `归档指针` also appears in §归档, so a whole-file
@@ -228,7 +317,8 @@ class DocGovernanceGuard(unittest.TestCase):
     # both — that double-write was itself the drift surface, so it was collapsed to one authority.
     CHECKLIST_GATE_SECTIONS = ("## A.", "## B.", "## B2.", "## C.", "## D.", "## E.", "## F.")
     CHECKLIST_BODY_ANCHORS = ("零残留", "字符串字面量", "test_", "全仓 guard",   # B body
-                              "单一来源", "planted-failure", "靠人记")           # B2 body
+                              "单一来源", "planted-failure", "靠人记",
+                              "活跃设计文档")                                   # B2 body
     # Body phrases that MUST NOT reappear in AGENTS item 7. Naming a rule ("B ripple-grep") is fine;
     # restating its body is the AGENTS<->checklist drift this refactor eliminates.
     AGENTS_ITEM7_FORBIDDEN_BODY = ("零残留", "defect-class", "靠人记", "planted-failure")

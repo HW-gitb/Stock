@@ -286,6 +286,18 @@ class ValidateWeeklyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_weekly_report(w, _feed())
 
+    def test_rejects_run_lineage_status_mode_mismatch(self):
+        # #1 hardening: (account_status, sizing_mode) is a STRICT bijection. A contradictory pair must not
+        # pass, else a mislabeled lineage could let a sizing-less 观察 read as account-backed (or vice versa).
+        # Both off-diagonal pairings must raise — incl. (provided, observation_only_no_account), which the
+        # prior two-rule check let through.
+        for acct_st, size_md in [("provided", "observation_only_no_account"), ("absent", "sized")]:
+            w = _weekly()
+            w["run_lineage"]["account_status"] = acct_st
+            w["run_lineage"]["sizing_mode"] = size_md
+            with self.assertRaises(ValueError):
+                validate_weekly_report(w, _feed())
+
 
 class WriteWeeklyTests(unittest.TestCase):
     def test_write_roundtrip(self):
@@ -373,6 +385,46 @@ class MainWiringTests(unittest.TestCase):
         self.assertIn("# A-short 周报 M6.7", text)
         self.assertIn("edge 未验证", text)        # honesty banner
         self.assertIn("## 一览", text)
+
+    def test_main_with_account_records_sized_lineage(self):
+        # R-ASHORT-WEEKLYSCREENING-M67-MISSING-ACCOUNT (behavioral): a valid account -> run_lineage sized + 建仓.
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            w = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(w["run_lineage"]["account_status"], "provided")
+        self.assertEqual(w["run_lineage"]["sizing_mode"], "sized")
+        self.assertEqual(w["reports"][0]["m67"]["table"]["操作"], "建仓")     # sized -> buildable
+
+    def test_main_without_account_is_observation_only_and_artifact_labeled(self):
+        # the same candidate that builds WITH account becomes 观察 with NO account; the durable artifact
+        # (json run_lineage + md banner) marks it sizing-less so a reader can't mistake it for a real avoid.
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly_m67.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],   # NO --account
+                 price_provider=lambda code: _series())
+            w = json.loads(out.read_text(encoding="utf-8"))
+            md = (Path(td) / "weekly_m67.md").read_text(encoding="utf-8")
+        self.assertEqual(w["run_lineage"]["account_status"], "absent")
+        self.assertEqual(w["run_lineage"]["sizing_mode"], "observation_only_no_account")
+        self.assertNotEqual(w["reports"][0]["m67"]["table"]["操作"], "建仓")   # no sizing -> not 建仓
+        self.assertIn("无账户", md)                                            # durable no-sizing banner in the .md
+        self.assertIn("sizing 假象", md)
+
+    def test_main_account_file_with_bad_cash_aborts_no_silent_sizingless(self):
+        # account FILE supplied but available_cash missing/non-numeric -> refuse (do not silently run sizing-less)
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            (Path(td) / "bad_acct.json").write_text(json.dumps({"market_regime": "震荡期"}), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "bad_acct.json"),
+                      "--out", str(Path(td) / "w.json")], price_provider=lambda code: _series())
 
     def test_main_invalid_as_of_aborts(self):
         with tempfile.TemporaryDirectory() as td:
@@ -682,6 +734,31 @@ class SchemaTests(unittest.TestCase):
         with open(SCHEMA_PATH, encoding="utf-8") as f:
             schema = json.load(f)
         jsonschema.Draft7Validator.check_schema(schema)
+
+    def test_weekly_design_doc_documents_schema_required_run_lineage(self):
+        # R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT R3: the active weekly pipeline DESIGN doc must
+        # not drift back to omitting run_lineage / its account semantics while the schema requires them.
+        # Doc↔schema sync guard: every schema-required run_lineage subfield must be named in the design doc.
+        with open(SCHEMA_PATH, encoding="utf-8") as f:
+            schema = json.load(f)
+        self.assertIn("run_lineage", schema["required"])
+        required_subfields = schema["properties"]["run_lineage"]["required"]
+        design = (ROOT / "docs" / "a_short_weekly_pipeline_design_20260610.md").read_text(encoding="utf-8")
+        self.assertIn("run_lineage", design)
+        for field in required_subfields:        # analysis_input/selection_bucket/iv_feed/account_status/sizing_mode
+            self.assertIn(field, design, f"weekly design doc omits schema-required run_lineage.{field}")
+
+    def test_weekly_design_doc_marks_overlay_wiring_done_not_future(self):
+        # R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT R4: Slice A overlay data-loading is WIRED
+        # (A-EGS/egs_main.py calls build_overlay_summary_from_panels; weekly_screening.ps1 passes --overlay;
+        # the pipeline consumes it via _load_validated_overlay). Regression-pin so the active design doc cannot
+        # drift back to listing overlay data-loading as 仍未来/future while README + code already wire it.
+        import re
+        design = (ROOT / "docs" / "a_short_weekly_pipeline_design_20260610.md").read_text(encoding="utf-8")
+        self.assertIn("--overlay", design)                          # positive: overlay consumption documented
+        for seg in re.findall(r"仍未来[^\n]*", design):              # no future-heading may list overlay
+            self.assertNotIn("overlay", seg.lower(),
+                             f"weekly design lists overlay as 仍未来 while code/README wire it: {seg!r}")
 
 
 def _official(status, sev=None, rt="x", dd="20260601", url="u"):

@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "generated_at", "as_of",
-               "iv_feed_ref", "n_stocks", "reports", "boundary"],
+               "iv_feed_ref", "n_stocks", "reports", "run_lineage", "boundary"],
   "properties": {
     "schema_name": {"const": "a_short_weekly_report"},
     "schema_version": {"const": "1.0.0"},
@@ -23,6 +23,18 @@
           "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
           "ts_code": {"type": "string"}
         }
+      }
+    },
+    "run_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["analysis_input", "selection_bucket", "iv_feed", "account_status", "sizing_mode"],
+      "properties": {
+        "analysis_input": {"type": "string"},
+        "selection_bucket": {"type": "string"},
+        "iv_feed": {"type": "string"},
+        "account_status": {"enum": ["provided", "absent"]},
+        "sizing_mode": {"enum": ["sized", "observation_only_no_account"]}
       }
     },
     "boundary": {

@@ -10,6 +10,89 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Codex `审查 PASS` (Slice 3b-2 R4 + optional hardening)
+- **Verdict/Action**: PASS. 覆盖 weekly pipeline / ps1 Stage4 / schema / render / standalone summary CLI 退役 / route docs / doc-governance anti-drift guard / Claude 后续 #1/#2 Optional hardening;未发现新的阻断问题。
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` R4 已 Addressed;无新增 Required。详情见 `docs/system_risk_register.md`。
+- **Verify**: targeted 186 tests passed;py_compile passed;schema parse passed;PowerShell ParseFile passed;full discover 1786 only 6 known `C:\Users\cnhea\tk.csv` permission errors;diff-check 仅 LF/CRLF warning;BOM/FFFD `BAD=[]`。
+- **Next**: 提交。
+
+## 2026-06-14 — Claude `审查` (Slice 3b-2 self-review:PASS,补 #1/#2 Optional hardening)
+- **Verdict/Action**: 完整通读 changeset(pipeline 全文 / ps1 Stage4 / schema / render / 退役 dangling 扫描 / 测试覆盖 + Codex anti-drift governance guard)→ PASS、无阻断。补两处自审 Optional:#1 `validate_weekly_report` 的 run_lineage 一致性收紧为严格双态 `{(provided,sized),(absent,observation_only_no_account)}`(原只查两向、漏矛盾对 (provided,observation_only))+ 加错配测试;#2 对齐 `a_short_weekly_pipeline.py` regime 注释(「待建件」→「尚未生产接线、slice 2a/2b 在建」)与设计文档一致。
+- **Required**: 关联 `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT`(R4 已 Addressed + Codex anti-drift hardened,详情见 register);#1/#2 为自审 Optional、非新 Required。
+- **Verify**: 全量 1807 OK(+1 错配测试;稳定 x2、0 fail/0 error);B-ripple grep 无其他 regime「待建」残留;C 反向:收紧不误拒合法对(_weekly 默认 (absent,obs)、main 产 (provided,sized) 均过);git diff --check 干净。
+- **Next**: 审查(新代码 #1/#2 交 Codex 复审)。
+
+## 2026-06-14 — Codex `修复` (R4 anti-drift:active design completed-vs-future guard)
+- **Verdict/Action**: 补机制防线,不是再补一个措辞:`tests/test_doc_governance_guard.py` 新增 current-fact registry、代码/route anchor 校验、活跃设计文档 future-work 扫描和 planted failure;`docs/pre_codex_self_review_checklist.md` 新增活跃设计文档 current-state gate。零 runtime 改动。
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` R4 anti-recurrence extension;详情见 `docs/system_risk_register.md`。
+- **Verify**: targeted 185 tests OK;`git diff --check` 只有 LF/CRLF warning;PowerShell ParseFile OK;新增文件 BOM/FFFD `BAD=[]`;`research/results/a_short/m67_validation_20260605/` 仍 untracked。
+- **Pre-Codex self-review**: A/B2/C/E/F checked — 把 completed-vs-future 漂移类沉淀成 registry+guard;guard 正向钉 anchors、负向钉未来项、不误杀真实 pending regime;历史/低影响文本不纳入 Required。
+- **Next**: 审查。
+
+## 2026-06-14 — Claude `修复` (Slice 3b-2 R4:weekly-design remaining-work drift)
+- **Verdict/Action**: weekly pipeline 设计 §5 把已接线的 Slice A overlay 数据装载(M6.7 赛道红利星级)从「仍未来」改为「已接线」(probe 证实:egs_main:3318 `build_overlay_summary_from_panels`→overlay.json、ps1:218 传 `--overlay`、pipeline:331 `_load_validated_overlay` 消费),仍未来仅留真未决的 EGS regime 分类器;并修 §4 line 44 内部矛盾(首次端到端执行已发生、artifact 在 m67_validation_20260605)→ 仍未来 scope 到每周常态 cadence + ≥12周/12月 ship-gate 前向验证。零 runtime 改动。
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` R4;详情见 register。
+- **Verify**: 全量 1803 OK(+1=overlay-done 回归守护);active grep overlay-as-future 全仓=0(假阳:拒未来日期 / 绝不混写);git diff --check 干净;m67_validation byproduct 仍 untracked;ps1 未改、ParseFile 维持 0。
+- **Next**: 审查。
+- **Pre-Codex self-review**: 这次先跑 reviewer 探针——读全份设计文档逐条 future-claim 对现实核(非只改被点名句),probe 代码确认 overlay 真接线、看 artifact 确认首跑真发生;B 连带 grep 全活跃文档无其他 overlay-future;C 反向(守护正向断言 `--overlay` 在场 + 负向钉「仍未来」无 overlay,不假过);boundary=docs+1 测试、零 runtime。
+
+## 2026-06-14 — Codex `审查 FAIL` (Slice 3b-2 R4:weekly-design remaining-work drift)
+- **Verdict/Action**: FAIL. R3 的 run_lineage/account/path 文档修复通过,但同一个活跃 weekly pipeline 设计文档 §5 仍把已完成的 Slice A overlay 数据装载/M6.7 赛道红利接线列为未来工作,会误导下一步判断。
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` R4 remains open; details in `docs/system_risk_register.md`.
+- **Verify**: targeted 181 tests OK; full discover only hits known `C:\Users\cnhea\tk.csv` permission boundary (6 errors); PS ParseFile OK; diff-check clean except LF/CRLF warnings; validation artifacts remain untracked.
+- **Next**: Claude `修复`。
+
+## 2026-06-14 — Claude `修复` (Slice 3b-2 R3:active path+weekly-design contract sync)
+- **Verdict/Action**: blanket「同桶/M6.7 同桶」scope 到选股+EGS comparison(run_paths docstring + convention §动因/§1);周报 M6.7 落点改述「按流分」(分析流同桶 / 生产 hybrid 靠 run_lineage);weekly pipeline 设计 §3 加 required `run_lineage`(5 子字段)+ §3 不变量 + §5 account 语义重写(valid→sized / 坏路径→跳 M6.7 / 缺省→observation-only artifact+banner / 非法 available_cash→FATAL);零 runtime 改动。
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` R3;详情见 register。
+- **Verify**: 全量 1802 OK(+1=doc↔schema 守护 `test_weekly_design_doc_documents_schema_required_run_lineage`);残留 blanket-同桶/旧 available_cash 全仓 grep=0;PS ParseFile 0 errors 无 BOM;git diff --check 干净;m67_validation byproduct 仍 untracked 未 staged。
+- **Next**: 审查。
+- **Pre-Codex self-review**: A 一次覆盖全类(blanket-同桶=run_paths+convention;旧 schema/account=weekly_design §3+§5);B 连带 grep(iv_feed_ref/a_short_weekly_report→README route 行只指 schema 不复述、不动;industry_heat 11/36=comparison 真同桶、不动;收紧 dangling §-ref);C 反向(守护断言 5 子字段在场非缺席、不假过);boundary=docs+1 测试、零 runtime。
+
+## 2026-06-14 — Codex `审查 FAIL` (Slice 3b-2 R3:active path+weekly-design contract sync)
+- **Verdict/Action**: FAIL. Runtime/account/run_lineage 修复本身通过 targeted 行为测试,但活跃契约面仍不同步:run-bundle/path 总述仍保留 blanket same-bucket/M6.7 同桶说法,weekly pipeline 设计文档仍列旧 schema 且未记录当前 account_status/sizing_mode 语义。
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` R3 remains open; details in `docs/system_risk_register.md`.
+- **Verify**: targeted 180 tests OK; active doc scan found stale claims in `engine/a_short_run_paths.py`, `docs/a_short_run_bundle_convention_20260611.md`, and `docs/a_short_weekly_pipeline_design_20260610.md`; no runtime change made.
+- **Next**: Claude `修复`。
+
+## 2026-06-14 — Claude `修复` (Slice 3b-2 R2:account artifact 标 + run_lineage 闭合)
+- **Verdict/Action**: ① ps1 三态(有效 -Account→真 sizing / 坏路径→跳过 M6.7 不静默 / 缺省→observation-only);pipeline 把 durable `run_lineage.sizing_mode`+`account_status` 写进 weekly_m67.json + .md no-sizing banner(读 artifact 即知 sizing 假象),并拒非法 available_cash。② schema 化 `run_lineage`(analysis_input/selection_bucket/iv_feed/account_status/sizing_mode)绑 selection↔M6.7 + validate 校验 + convention 匹配实际字段。③ 删温件、validation artifacts 明确不追踪。详情见 register。
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-MISSING-ACCOUNT` + `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` — R2 Addressed 见 `docs/system_risk_register.md`。
+- **Verify**: 全量 1801 tests OK(行为 account 测试:有账户 sized+建仓 / 无账户 observation+观察+.md banner / 坏 cash SystemExit;render banner;guardrails 坏路径);PS 5.1 ParseFile 0;BOM/FFFD=0;diff-check 净;无 root 温件。
+- **Pre-Codex self-review**: A-F checked — A 两 Required×全出口(ps1/pipeline/schema/render/convention/3 测试)一次覆盖,**行为测试非仅静态串**;B grep 无旧 lineage 假声明/温件残留;C 反向自检 坏路径跳过(非静默)、默认 run_lineage 保旧 builder/测试 valid、render 无 lineage 优雅;F ps1 parse/编码/diff/git-status 净。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (Slice 3b-2 R2:account artifact + lineage closure gap)
+- **Verdict/Action**: FAIL. `-Account` 只在路径存在时传给 M6.7;坏路径会落入无账户分支继续跑,且无账户 warning 只在终端,`weekly_m67.json/.md` 本身没有 no-sizing 标记,仍会把可建仓票渲染成 `观察`。bundle 侧文档声称 `weekly_m67.json` 记录 analysis_input/iv-feed lineage,但实际 schema/report 只有 basename `iv_feed_ref`,没有 analysis_input/account/selection-bucket lineage。另有 root 临时 `_fix_bundle_docs.py` 未清。
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-MISSING-ACCOUNT` + `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` remain open; see Codex re-review correction in `docs/system_risk_register.md`.
+- **Verify**: targeted 169 tests OK; no-network probe confirmed no-account artifact `has_no_sizing_text=false` while action changes from `建仓` to `观察`; `git diff --check` clean except LF/CRLF warnings; git status still has untracked `_fix_bundle_docs.py` + validation artifacts.
+- **Next**: Claude `修复`.
+
+## 2026-06-14 — Claude `修复` (Slice 3b-2 P1:M6.7 缺账户 sizing + bundle 契约漂移)
+- **Verdict/Action**: ① `weekly_screening.ps1` 加 `-Account`(给则传 `--account`、不给则**响亮标** no-sizing observation-only,不再静默把 建仓 误显成 观察)+ guardrails 测试钉死;② bundle 契约定为**有意 hybrid**(egs_main 选股→`result/a_short`、M6.7 advisory→research lane、weekly_m67 记 lineage),改 run_paths.py/convention/runners-README 删"生产流本就不跑 pipeline"假命题;ps1 IV feed 移到 convention 的市场级 `iv_feed_<as_of>/`。详情见 register。
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-MISSING-ACCOUNT` + `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT` — Addressed 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 全量 1795 tests OK(含 guardrails 账户 guard);PS 5.1 ParseFile 0 errors;BOM/FFFD=0;diff-check 净。
+- **Pre-Codex self-review**: A-F checked — A 两 Required×出口(ps1/run_paths/convention/README/test)一次覆盖;B grep 无残留"生产流不跑 pipeline"/旧 Stage-4 调用;C 反向自检 -Account 缺失不再静默(响亮标)、egs_main/生产桶/护栏未动、ps1 CRLF+parse 0;E 路由文档单态(hybrid 已 documented);F 编码/diff/parse 净。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (Slice 3b-2:weekly_screening M6.7 一键串联)
+- **Verdict/Action**: FAIL. Slice 3b-2 方向正确,但当前一键周报路径有两个提交前阻断: M6.7 没传账户 sizing 输入; 路径/文档仍按旧边界写,导致 selection 与 M6.7 artifacts 分散且契约自相矛盾.
+- **Required**: `R-ASHORT-WEEKLYSCREENING-M67-MISSING-ACCOUNT` + `R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT`; details in `docs/system_risk_register.md`.
+- **Verify**: targeted 168 tests OK(说明现有 guard 漏检); PS ParseFile OK; `git diff --check` clean; no-network repro showed same candidate with account = `建仓`, without account = `观察` / `可建股数/金额不足(放弃)`.
+- **Next**: Claude `修复`.
+
+## 2026-06-14 — Claude `起草` (Slice 3b-2:退役独立 summary CLI/Stage-4 + weekly_screening 一键串联)
+- **动机**: 3b-1 行内化 + `执行`(M6.7 端到端验证通过)后,3b-2 前置已满足;本轮收口最后的过渡组件。
+- **改动(本地,未提交)**:
+  - `weekly_screening.ps1` Stage-4(原跑独立 summary)→ **M6.7 一键串联**:egs_main 成功后建市场 IV feed(`a_short_iv_feed_build`)+ 跑 `a_short_weekly_pipeline`(真 price+cninfo+sina+DeepSeek,语义逐票行内),落 research lane;advisory 旁路非阻断(同 canary/tracker),`-SkipSemanticRisk` 可关;**CRLF 保留、PS 5.1 ParseFile 0 errors**。
+  - `a_short_semantic_risk_summary.py` 退役 standalone CLI(`main` + `write_summary` + `_watch_pool_from_analysis_input` + 随之 unused 的 argparse/datetime/jsonschema/SCHEMA_PATH/4 个 probe import)+ docstring 去 CLI 口径;**保留** M6.7 复用的 builders(`build_summary_from_fetches`/`build_official_structured`/`_sina_sources`/`_web_llm_consistency_error` 等)。
+  - 测试:删 summary 的 `WritePath` + `AnalysisInputWatchPoolWiring`(CLI 测试)+ 加 `test_standalone_summary_cli_retired`;contract-docs 加 `test_weekly_screening_runs_m67_not_standalone_summary`(钉 ps1 跑 M6.7、不再调 standalone)。
+  - docs:contract/coverage/README 标 standalone CLI + Stage-4 退役、weekly_screening 跑 M6.7(过渡路全退役);coverage 修 watch-pool 引用(`_watch_pool_from_analysis_input` 已删)。
+- **保留(反向自检)**:egs_main / 生产 screening 输出(`result/a_short`)不动;M6.7 advisory 仍落 research lane、非阻断;独立 summary 的 builders 留(M6.7 cninfo provider 复用)。
+- **Verify**: 全量 1794 tests OK;ps1 PS 5.1 ParseFile 0 errors + CRLF + 无 BOM/FFFD;全仓 grep 无 standalone-CLI 符号 stale 引用(coverage 35 已修);diff-check 净。
+- **Pre-Codex self-review A-F**: A 退役类×全出口(summary.py / ps1 / tests / docs / guard)一次覆盖;B ripple grep 0 stale(`_watch_pool`/`write_summary`/standalone call);C 反向自检——egs_main/生产输出/builders 复用未动、ps1 advisory 非阻断保留、ps1 调的是 `执行` 已验证的命令;E 路由文档单态(3b-2 done、无 pending);F ps1 CRLF+parse / 编码 / diff 净。
+- **Next**: `审查`。
+
 ## 2026-06-14 — Claude `执行` (M6.7 端到端真跑验证:cninfo + DeepSeek 融入)
 - 真跑(research lane 非生产;as_of 20260605 复用既有 EGS analysis_input;artifacts 在 `research/results/a_short/m67_validation_20260605/`,**未提交**——一次性 plumbing 验证、可复跑):现建 PIT IV feed(`a_short_iv_feed_build`,n_days=282,latest_iv_pct=65.5)→ `a_short_weekly_pipeline --confirm-fetch-authorized`(真 Tushare 价 + cninfo + sina + DeepSeek),n=15 全观察。
 - **验证结论(多票横截面)**:

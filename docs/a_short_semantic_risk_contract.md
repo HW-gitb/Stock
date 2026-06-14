@@ -16,7 +16,7 @@
   **这是 M6.7 advisory 否决,不是 production hard veto** —— 它不改 EGS 选股、不进 `result/a_short`、不进回测。
 - `official_structured` 与 `web_llm` 是两个置信层,不得混成一个状态;M6.7 集成后两层来源在 `machine.layer.semantic_risk` 仍可追溯。
 - `unknown` 不能伪装成 clear。未检索、检索失败、证据缺失时保持 unknown(web 侧 `unknown/unknown/no_action`)。
-- **迁移说明**:独立 `a_short_semantic_risk_summary` artifact 是**迁移期过渡形态**,非最终不变式;周报 .md 单独面板已 Slice 3b 行内化进 M6.7;最终语义直接体现在 M6.7(见 `docs/a_short_semantic_risk_coverage.md` §融入 M6.7)。
+- **迁移说明**:独立 summary CLI + 周报 .md 单独面板已 Slice 3b 全退役(CLI/Stage-4 退役、面板行内化);`a_short_semantic_risk_summary` 仅留被 M6.7 复用的 builders;最终语义直接体现在 M6.7(见 `docs/a_short_semantic_risk_coverage.md` §融入 M6.7)。
 
 ## official_structured
 
@@ -51,8 +51,8 @@
 - **当前结论路(current)**:周报 `runners/a_short_weekly_pipeline.py` M6.7 内 **DeepSeek adapter 自动判** web
   (`--confirm-fetch-authorized` 且未 `--skip-semantic` 时自动接入,**主板 Top15** 边界;缺 key/SDK/抓取失败 → `unknown`
   中性、非阻断)。判官判已抓取文本(非搜索器);影响规则见上 §web_llm「M6.7 集成」。
-- **过渡路(transitional;Slice 3 退役)**:独立 `a_short_semantic_risk_summary` summary + `weekly_screening.ps1`
-  Stage-4 sidecar(只产官方结构化层)。它仍可产 official_structured,**但不是当前结论路**;Slice 3b 已把语义**行内化**进 M6.7 周报、退役独立面板(3b-1);独立 summary / Stage-4 sidecar / weekly_screening 一键串联待 **3b-2**(M6.7 真跑验证后)。**2b-ii skill-patch(`a_short_semantic_risk_web_llm_patch`)路径已在 Slice 3a 退役**(被 M6.7 内 DeepSeek adapter 取代)。
+- **过渡路已全退役(Slice 3b)**:独立 `a_short_semantic_risk_summary` summary CLI + `weekly_screening.ps1`
+  Stage-4 sidecar + 独立面板均已退役;**周五入口 `weekly_screening.ps1` 现直接跑 M6.7 pipeline**(一键串联,语义 cninfo+DeepSeek 行内,3b-2);`a_short_semantic_risk_summary` 仅留被 M6.7 复用的 official_structured builders。**2b-ii skill-patch(`a_short_semantic_risk_web_llm_patch`)路径已在 Slice 3a 退役**(被 M6.7 内 DeepSeek adapter 取代)。
 - 不变式见上 §web_llm + §Scope(advisory-only、unknown-not-clear、never hard-veto)。
 
 ## Drift Guard

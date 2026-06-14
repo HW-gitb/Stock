@@ -24,9 +24,8 @@ if str(ROOT) not in sys.path:
 
 from runners.a_short_semantic_risk_summary import (  # noqa: E402
     build_official_structured, _scan_tier, build_candidate, build_summary_from_fetches,
-    validate_summary_consistency, write_summary, _sina_sources,
+    validate_summary_consistency, _sina_sources,
     _match_risk,
-    _watch_pool_from_analysis_input, main as summary_main,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_semantic_risk_summary.schema.json"
@@ -335,89 +334,6 @@ class SchemaValidation(unittest.TestCase):
             jsonschema.validate(s, self.schema)
 
 
-class WritePath(unittest.TestCase):
-    def test_guard_rejects_production_path(self):
-        from runners.a_short_semantic_risk_summary import _guard_out_path
-        with self.assertRaises(ValueError):
-            _guard_out_path("result/a_short/sem.json")
-
-    def test_write_roundtrip(self):
-        s = _summary(risk_idx=(5,))
-        with tempfile.TemporaryDirectory() as d:
-            out = Path(d) / "sub" / "sem.json"
-            write_summary(s, str(out))
-            reloaded = json.loads(out.read_text(encoding="utf-8"))
-        self.assertEqual(reloaded["schema_name"], "a_short_semantic_risk_summary")
-
-
-class AnalysisInputWatchPoolWiring(unittest.TestCase):
-    """Slice 2b-ii-B+: weekly_screening Step-1 wiring — derive the watch pool from an EGS
-    analysis_input + main(--analysis-input ...). cninfo_fetcher injected → no live HTTP."""
-
-    def test_watch_pool_from_analysis_input_preserves_order_and_skips_blank(self):
-        ai = {"trade_date": "20260605", "candidates": [
-            {"ts_code": "600000.SH"}, {"ts_code": "000001.SZ"}, {"ts_code": ""},
-            {"no_code": 1}, "not-a-dict", {"ts_code": "300750.SZ"}]}
-        self.assertEqual(_watch_pool_from_analysis_input(ai),
-                         ["600000.SH", "000001.SZ", "300750.SZ"])
-        self.assertEqual(_watch_pool_from_analysis_input({}), [])
-
-    def _fake_cninfo(self, main_codes, as_of, lookback_days):
-        return [_empty(c) for c in main_codes]      # all clear, no network
-
-    def _valid_ai(self, trade_date, codes):
-        # schema+PIT-valid analysis_input (reuse the weekly test's repo-fixture builder)
-        from tests.test_a_short_weekly_pipeline import _analysis_input, _ai_candidate
-        return _analysis_input(trade_date=trade_date, candidates=[_ai_candidate(c) for c in codes])
-
-    def test_main_analysis_input_builds_summary_from_egs_candidates(self):
-        td = "20260609"
-        with tempfile.TemporaryDirectory() as d:
-            ai = self._valid_ai(td, ["600000.SH", "000001.SZ", "300750.SZ"])   # last ChiNext -> dropped
-            ai_path = Path(d) / "analysis_input.json"
-            ai_path.write_text(json.dumps(ai), encoding="utf-8")
-            out = Path(d) / "sem.json"
-            summary_main(["--as-of", td, "--analysis-input", str(ai_path), "--out", str(out),
-                          "--confirm-fetch-authorized"], cninfo_fetcher=self._fake_cninfo)
-            s = json.loads(out.read_text(encoding="utf-8"))
-        self.assertEqual(s["universe"]["requested"], ["600000.SH", "000001.SZ", "300750.SZ"])
-        self.assertEqual(s["universe"]["main_board_top15"], ["600000.SH", "000001.SZ"])  # ChiNext dropped
-
-    def test_main_analysis_input_stale_trade_date_aborts_no_write(self):
-        # R-ASHORT-SEMANTIC-SUMMARY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP: trade_date must == --as-of.
-        with tempfile.TemporaryDirectory() as d:
-            ai_path = Path(d) / "ai.json"
-            ai_path.write_text(json.dumps(self._valid_ai("20260605", ["600000.SH"])), encoding="utf-8")
-            out = Path(d) / "sem.json"
-            with self.assertRaises(SystemExit):     # invoked with a different as_of
-                summary_main(["--as-of", "20260609", "--analysis-input", str(ai_path), "--out", str(out),
-                              "--confirm-fetch-authorized"], cninfo_fetcher=self._fake_cninfo)
-            self.assertFalse(out.exists())
-
-    def test_main_analysis_input_schema_invalid_aborts_no_write(self):
-        with tempfile.TemporaryDirectory() as d:
-            bad = self._valid_ai("20260609", ["600000.SH"]); del bad["source"]   # drop required field
-            ai_path = Path(d) / "ai.json"; ai_path.write_text(json.dumps(bad), encoding="utf-8")
-            out = Path(d) / "sem.json"
-            with self.assertRaises((ValueError, SystemExit)):
-                summary_main(["--as-of", "20260609", "--analysis-input", str(ai_path), "--out", str(out),
-                              "--confirm-fetch-authorized"], cninfo_fetcher=self._fake_cninfo)
-            self.assertFalse(out.exists())
-
-    def test_main_requires_exactly_one_pool_source(self):
-        with tempfile.TemporaryDirectory() as d:
-            ai = {"trade_date": AS_OF, "candidates": [{"ts_code": "600000.SH"}]}
-            ai_path = Path(d) / "ai.json"; ai_path.write_text(json.dumps(ai), encoding="utf-8")
-            out = str(Path(d) / "o.json")
-            with self.assertRaises(SystemExit):     # neither
-                summary_main(["--as-of", AS_OF, "--out", out, "--confirm-fetch-authorized"],
-                             cninfo_fetcher=self._fake_cninfo)
-            with self.assertRaises(SystemExit):     # both
-                summary_main(["--as-of", AS_OF, "--watch-pool", "600000.SH",
-                              "--analysis-input", str(ai_path), "--out", out,
-                              "--confirm-fetch-authorized"], cninfo_fetcher=self._fake_cninfo)
-
-
 class SkillPatchPathRetired(unittest.TestCase):
     """Slice 3a retired the skill-patch web path (the DeepSeek adapter superseded it). These
     symbols/files must STAY gone; M6.7 uses runners/a_short_deepseek_semantic_adapter.judge_web_llm."""
@@ -426,6 +342,15 @@ class SkillPatchPathRetired(unittest.TestCase):
         self.assertFalse(hasattr(m, "validate_web_llm_patch"))
         self.assertFalse(hasattr(m, "apply_web_llm_patch"))
         self.assertFalse(hasattr(m, "PATCH_SCHEMA_PATH"))
+
+    def test_standalone_summary_cli_retired(self):
+        # Slice 3b-2: the standalone summary CLI is retired (weekly_screening runs the M6.7 pipeline
+        # instead); the reused builders stay for the M6.7 cninfo provider.
+        import runners.a_short_semantic_risk_summary as m
+        self.assertFalse(hasattr(m, "main"))
+        self.assertFalse(hasattr(m, "write_summary"))
+        self.assertFalse(hasattr(m, "_watch_pool_from_analysis_input"))
+        self.assertTrue(hasattr(m, "build_summary_from_fetches"))   # reused by the M6.7 cninfo provider
 
     def test_patch_schema_and_skill_prompt_files_gone(self):
         self.assertFalse((ROOT / "schemas" / "a_short_semantic_risk_web_llm_patch.schema.json").exists())

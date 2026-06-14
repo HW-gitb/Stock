@@ -102,6 +102,20 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
             text,
         )
 
+    def test_m67_stage_passes_account_and_labels_missing(self) -> None:
+        # R-ASHORT-WEEKLYSCREENING-M67-MISSING-ACCOUNT: the one-click M6.7 stage must pass --account when a
+        # reviewed account is provided, and the missing-account path must be LOUDLY labelled (not silently
+        # emit a sizing-less 观察 that reads like a real avoid signal).
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("[string]$Account", text)                          # -Account param exists
+        self.assertIn("$M67Args += @('--account', $Account)", text)      # valid account -> passed to the M6.7 pipeline
+        self.assertIn("-Account path not found", text)                   # bad supplied path -> labelled
+        self.assertIn("$RunM67 = $false", text)                          # bad supplied path -> SKIP (no silent sizing-less run)
+        self.assertIn("no -Account: observation-only", text)             # omitted account -> observation-only, labelled
+        self.assertIn("sizing_mode=observation_only_no_account", text)   # points at the durable artifact marker
+        self.assertIn("a_short_weekly_pipeline.py", text)                # the one-click stage IS the M6.7 pipeline
+        self.assertNotIn("a_short_semantic_risk_summary.py", text)       # standalone summary CLI no longer invoked
+
 
 if __name__ == "__main__":
     unittest.main()

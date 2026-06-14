@@ -81,13 +81,20 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
 
 
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
-                        iv_feed_ref: str = "") -> dict:
+                        iv_feed_ref: str = "", run_lineage: dict = None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report
     reports = [build_m67_report(n, as_of, generated_at) for n in normalized_list]
+    # run_lineage ties the consumed selection + IV feed + account/sizing status to this M6.7 artifact
+    # (Slice 3b-2: selection 在 result/a_short、M6.7 在 research lane,靠此机器可读 lineage 绑定);
+    # default = no-account observation-only,使直接 builder/测试仍 schema-valid。
+    lineage = run_lineage if run_lineage is not None else {
+        "analysis_input": "", "selection_bucket": "", "iv_feed": iv_feed_ref,
+        "account_status": "absent", "sizing_mode": "observation_only_no_account"}
     return {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
         "iv_feed_ref": iv_feed_ref, "n_stocks": len(reports), "reports": reports,
+        "run_lineage": lineage,
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
     }
@@ -114,6 +121,15 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         raise ValueError("n_stocks 与 reports 长度不一致")
     if any(b for b in weekly["boundary"].values()):
         raise ValueError("weekly boundary 必须全 false")
+    rl = weekly.get("run_lineage") or {}
+    # (account_status, sizing_mode) 是严格双态:恰为 (provided,sized) 或 (absent,observation_only_no_account)。
+    # 任何其他配对——含矛盾的 (provided, observation_only_no_account)——都必须 raise,以免错标的 lineage 让
+    # sizing-less 的「观察」被读成有账户支撑(或反之)。main 只会产出合法配对;此处兜住外部/手构的报告。
+    if (rl.get("account_status"), rl.get("sizing_mode")) not in {
+            ("provided", "sized"), ("absent", "observation_only_no_account")}:
+        raise ValueError(
+            f"run_lineage 配对非法 (account_status={rl.get('account_status')!r}, "
+            f"sizing_mode={rl.get('sizing_mode')!r});须 (provided,sized) 或 (absent,observation_only_no_account)")
     seen = set()
     for rep in weekly["reports"]:
         if rep["as_of"] != weekly["as_of"]:
@@ -326,11 +342,19 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                          "(同日错批/缺行/多行,缺行会被静默降级;须同一批全覆盖,拒跑)")
     acct = _load(args.account) if args.account else {}
     # 市场 regime 优先取自 analysis_input(EGS 分类),其次账户配置,最后默认震荡期。
-    # (EGS 当前可能仍输出 status='unknown' —— 真正的 regime 分类器是上游待建件;在此优雅降级。)
+    # (EGS 当前可能仍输出 status='unknown' —— 真正的 regime 分类器尚未在生产 egs_main 接线(V14.3 切片 2a/2b 在建);在此优雅降级。)
     _mr_status = ((ai.get("market_context") or {}).get("market_regime") or {}).get("status")
     regime = REGIME_MAP.get(_mr_status) or acct.get("market_regime") or "震荡期"
-    # available_cash 是用户必填输入(账户现金,系统无法推导);缺失则为 None → 引擎不出建仓股数。
-    account = {"available_cash": acct.get("available_cash")}
+    # available_cash 是用户必填输入。**--account 提供则必须有正数 available_cash**(拒静默无 sizing);
+    # 未提供 --account → observation-only(sizing_mode 标进 run_lineage,读者不会把 sizing 假象的「观察」当真 avoid 信号)。
+    available_cash = acct.get("available_cash")
+    if args.account:
+        if isinstance(available_cash, bool) or not isinstance(available_cash, (int, float)) or available_cash <= 0:
+            raise SystemExit(f"[FATAL] --account {args.account} 提供但 available_cash 缺失/非正数;拒跑(不静默退化成无 sizing 的观察)")
+        account_status, sizing_mode = "provided", "sized"
+    else:
+        account_status, sizing_mode = "absent", "observation_only_no_account"
+    account = {"available_cash": available_cash}
     # 价格序列:注入(测试)或执行期抓取(需授权)
     if price_provider is None:
         if not args.confirm_fetch_authorized:
@@ -363,7 +387,17 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit(f"[FATAL] 以下候选价格序列不足(<{MIN_PRICE_OBS} 交易日):{short};"
                          "不写周报(价格抓取失败/停牌须排查,不可静默退化成观察)")
     gen = datetime.now().astimezone().isoformat(timespec="seconds")
-    weekly = build_weekly_report(normalized, args.as_of, gen, iv_feed_ref=os.path.basename(args.iv_feed))
+    def _rel(pth):
+        try:
+            return os.path.relpath(pth).replace("\\", "/")
+        except Exception:
+            return os.path.basename(pth)
+    run_lineage = {"analysis_input": _rel(args.analysis_input),
+                   "selection_bucket": _rel(os.path.dirname(args.analysis_input)),
+                   "iv_feed": _rel(args.iv_feed),
+                   "account_status": account_status, "sizing_mode": sizing_mode}
+    weekly = build_weekly_report(normalized, args.as_of, gen,
+                                 iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage)
     from runners.a_short_m67_render import write_weekly_markdown
     md_path = os.path.splitext(args.out)[0] + ".md"
     write_weekly_report(weekly, feed, args.out)

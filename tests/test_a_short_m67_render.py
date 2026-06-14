@@ -91,5 +91,34 @@ class SemanticInlineTests(unittest.TestCase):
         self.assertNotIn("语义风险(advisory", md)
 
 
+class RunLineageBannerTests(unittest.TestCase):
+    """Slice 3b-2: the weekly .md carries a durable run_lineage banner — esp. a no-account no-sizing
+    warning so a reader of the artifact can't mistake a sizing-artifact 观察 for a real avoid signal."""
+
+    def _with_lineage(self, sizing_mode, account_status):
+        w = _weekly([_report("600000.SH", "观察")])
+        w["run_lineage"] = {"analysis_input": "result/a_short/20260609/analysis_input.json",
+                            "selection_bucket": "result/a_short/20260609", "iv_feed": "iv_feed.json",
+                            "account_status": account_status, "sizing_mode": sizing_mode}
+        return w
+
+    def test_no_sizing_banner_when_observation_only(self):
+        md = render_weekly_markdown(self._with_lineage("observation_only_no_account", "absent"))
+        self.assertIn("无账户", md)
+        self.assertIn("sizing 假象", md)
+        self.assertIn("result/a_short/20260609/analysis_input.json", md)   # lineage ties selection to M6.7
+        self.assertIn("sizing=observation_only_no_account", md)
+
+    def test_no_banner_when_sized(self):
+        md = render_weekly_markdown(self._with_lineage("sized", "provided"))
+        self.assertNotIn("无账户", md)            # no no-sizing banner when sized
+        self.assertIn("sizing=sized", md)         # lineage line still present
+
+    def test_no_lineage_renders_clean(self):
+        md = render_weekly_markdown(_weekly([_report("600000.SH", "观察")]))   # legacy dict, no run_lineage
+        self.assertNotIn("无账户", md)
+        self.assertNotIn("lineage", md)
+
+
 if __name__ == "__main__":
     unittest.main()

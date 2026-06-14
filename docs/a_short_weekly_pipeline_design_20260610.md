@@ -32,21 +32,22 @@ EGS top-N(analysis_input.json)
 - **价格抓取在执行期。** 纯核(normalize / build / validate / write)合成 fixture 全可测;`main` 薄层读 artifacts + 抓前复权价(`--confirm-fetch-authorized`,可注入 `price_provider` 供测试),不在引擎/纯核里碰网络。
 
 ## 3. 输出契约(周报)
-`schemas/a_short_weekly_report.schema.json`:`schema_name`(const)/`schema_version`(const)/`generated_at`/`as_of`(8位)/`iv_feed_ref`/`n_stocks`/`reports`(每项 ≥ {schema_name=a_short_m67_report, as_of, ts_code, m67, machine, boundary};**完整 m67 校验由 `write_weekly_report` 逐条另跑 m67 schema + `validate_m67_consistency`**)/`boundary`(全 false)。`additionalProperties:false`。
+`schemas/a_short_weekly_report.schema.json`:`schema_name`(const)/`schema_version`(const)/`generated_at`/`as_of`(8位)/`iv_feed_ref`/`n_stocks`/`reports`(每项 ≥ {schema_name=a_short_m67_report, as_of, ts_code, m67, machine, boundary};**完整 m67 校验由 `write_weekly_report` 逐条另跑 m67 schema + `validate_m67_consistency`**)/**`run_lineage`**(`{analysis_input, selection_bucket, iv_feed, account_status∈{provided,absent}, sizing_mode∈{sized,observation_only_no_account}}`,机器可读绑定 selection↔M6.7;Slice 3b-2)/`boundary`(全 false)。`additionalProperties:false`。
 
-不变量(`validate_weekly_report`):`n_stocks==len(reports)`;`boundary` 全 false;每张 `report.as_of==weekly.as_of`;`ts_code` 不重复;逐票 §4 不变量;读入的 feed 过 `validate_feed_summary_consistency`。
+不变量(`validate_weekly_report`):`n_stocks==len(reports)`;`boundary` 全 false;每张 `report.as_of==weekly.as_of`;`ts_code` 不重复;逐票 §4 不变量;读入的 feed 过 `validate_feed_summary_consistency`;`run_lineage` 一致(account_status=absent ⇒ sizing_mode=observation_only_no_account、sized ⇒ provided)。
 
 ## 4. 边界
 - 非 production、不真钱、不 ship-gate、不接券商/不自动下单;A-short 仍 `risk_filter_only`,M6.7 为辅助建议、**edge 未验证**。
 - 不动 `egs_main` / V14.2 / final_score / tier / admission(冻结)。
 - 真实前复权价抓取(`pro_bar adj=qfq`)= 用户授权 `执行`;输出路径调用方指定(约定 `research/results/`),**绝不写 production 根 `result/a_short/<date>`**(写入路径硬校验)。
 - 本切片 = 设计 + pipeline 纯核(normalize / build_weekly_report / validate_weekly_report / write_weekly_report)+ 周报 schema + `main` 执行接线 + 测试。
-- **仍未来:** 真实周末跑的授权 `执行`(产一份真实周报);comparison-track ≥12 周与 12 个月 ship-gate 的前向验证(纯执行,等数据)。
+- **仍未来:** 常态化每周授权 `执行` 的正式周报产出;comparison-track ≥12 周与 12 个月 ship-gate 的前向验证(纯执行,等数据)。(首次端到端授权 `执行` 已跑通并据此修复 §5 首跑缺口。)
 
 ## 5. 首跑缺口修复(2026-06-11 follow-up,首次端到端 `执行` 后)
 首跑(as-of 20260609)暴露并修复:
 - **vol_confirm 解休眠**:EGS 一直在算 `vol_confirm`(up/down 量能,egs_main 2052-2093)但没导出 → 加 `derived_flags.vol_confirm` 到 analysis_input + schema(可选,旧 artifact 仍合法);normalize 早已映射 → **突破入场不再永久休眠**(is_breakout∧站稳 MA10∧vol_confirm)。**这一项动了生产 egs_main(仅多导出一个已算字段,加性低风险)。**
-- **market_regime 取自 analysis_input**:pipeline 不再用账户配置里的硬编码 regime;改为读 `market_context.market_regime.status`(EGS 英文枚举 attack/shock/defense/contraction → `REGIME_MAP` 映射到 进攻/震荡/防御/收缩),缺失或 unknown → 降级到账户配置 → 默认震荡期。**注:EGS 当前仍可能输出 `unknown`(真正的 regime 分类器是上游未建件,另立切片);本改只是消除"pipeline 侧硬编码占位"。**
-- **available_cash = 用户必填输入**(账户现金,系统无法推导):非 bug;缺失则引擎不出建仓股数。文档化。
+- **market_regime 取自 analysis_input**:pipeline 不再用账户配置里的硬编码 regime;改为读 `market_context.market_regime.status`(EGS 英文枚举 attack/shock/defense/contraction → `REGIME_MAP` 映射到 进攻/震荡/防御/收缩),缺失或 unknown → 降级到账户配置 → 默认震荡期。**注:EGS 当前仍可能输出 `unknown`(真正的 regime 分类器尚未在生产 egs_main 接线,V14.3 另立切片 2a/2b 在建;见 §5 末「仍未来」);本改只是消除"pipeline 侧硬编码占位"。**
+- **available_cash 账户语义(Slice 3b-2 升级)**:`--account` 提供则必须有正数 `available_cash`,否则 **FATAL 拒跑**(不静默退化无 sizing);未提供 `--account` → **observation-only**,周报标 `run_lineage.account_status=absent` / `sizing_mode=observation_only_no_account` + `.md` no-sizing banner(读 artifact 即知:建仓票显成「观察」是 sizing 假象、非真 avoid);提供有效账户 → `sized`。`weekly_screening.ps1 -Account` 传该文件;**坏路径跳过 M6.7**(不静默无 sizing)。
 - **控制台中文乱码**:非代码缺陷,是 Windows 控制台 GBK 显示;产物已是干净 UTF-8。运行 egs_main 时设 `PYTHONIOENCODING=utf-8`(或 chcp 65001)即可避免日志乱码。
-- **仍未来(不在本修复)**:Slice A overlay 数据装载接线(M6.7 赛道红利星级)、EGS regime 分类器。
+- **Slice A overlay 数据装载接线(M6.7 赛道红利星级)已接线**:`build_overlay_summary_from_panels` 在 EGS run 内(pit-mode)写 `result/a_short/<as_of>/overlay.json`,`weekly_screening.ps1` 存在即传 `--overlay`,pipeline 经 `_load_validated_overlay` 消费(见 §2 overlay 消费校验 + `docs/README.md`)。
+- **仍未来(不在本修复)**:EGS regime 分类器(生产 egs_main 仍可能输出 `unknown`;V14.3 分类器在 slice 2a/2b 在建,尚未生产接线)。

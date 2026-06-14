@@ -53,10 +53,21 @@ def render_weekly_markdown(weekly: dict) -> str:
 
     out = [f"# A-short 周报 M6.7 — {as_of}", "", _BANNER,
            f"**环境**:{env}　|　**波动率**:{vol}",
-           f"**共 {n} 只** — 建仓 {acts.get('建仓',0)} / 观察 {acts.get('观察',0)} / 否决 {acts.get('否决',0)}",
-           "", "## 一览",
-           "| 票 | 名称 | 操作 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",
-           "|---|---|---|---|---|---|---|---|---|---|"]
+           f"**共 {n} 只** — 建仓 {acts.get('建仓',0)} / 观察 {acts.get('观察',0)} / 否决 {acts.get('否决',0)}"]
+    # Slice 3b-2: durable run_lineage banner — esp. the no-account no-sizing warning so a reader of THIS
+    # artifact (not just the terminal) cannot mistake a sizing-artifact 观察 for a real avoid signal.
+    rl = weekly.get("run_lineage") or {}
+    if rl.get("sizing_mode") and rl.get("sizing_mode") != "sized":
+        out.append("> ⚠️ **无账户(account_status=" + str(rl.get("account_status", "?")) +
+                   "):仓位 sizing N/A —— 建仓候选会渲染为「观察」(可建股数/金额不足),这是 **sizing 假象、非真 avoid 信号**;"
+                   "传 `--account` / `-Account`(available_cash)以获真 sizing。**")
+    if rl:
+        out.append("**lineage**:analysis_input=`" + str(rl.get("analysis_input", "?")) + "` | iv_feed=`" +
+                   str(rl.get("iv_feed", "?")) + "` | account=" + str(rl.get("account_status", "?")) +
+                   " | sizing=" + str(rl.get("sizing_mode", "?")))
+    out += ["", "## 一览",
+            "| 票 | 名称 | 操作 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",
+            "|---|---|---|---|---|---|---|---|---|---|"]
     for r in reports:
         t = r["m67"]["table"]
         out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(

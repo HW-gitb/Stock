@@ -4,9 +4,9 @@
 #   1) A-EGS\egs_main.py                       (主选股；产 data_health.json by Codex layer)
 #   2) runners\data_canary.py                  (旁路跨源对账；sina 默认，VPN-agnostic)
 #   3) runners\forward_tracker.py              (Phase 3.5 实盘 forward 累计；不影响主流程)
-#   4) runners\a_short_semantic_risk_summary.py(语义风险 advisory Step1：cninfo 官方结构化层；
-#                                               watch pool = 当次 EGS analysis_input 候选；
-#                                               Step2 web_llm:本脚本不做(Stage-4 过渡 sidecar);产出路径见契约 §web_llm 产出路径)
+#   4) M6.7 advisory 周报(a_short_iv_feed_build + a_short_weekly_pipeline:建市场 IV feed → 跑
+#                                               M6.7 pipeline,语义 cninfo+DeepSeek 行内;watch pool =
+#                                               当次 EGS analysis_input;run-path 见契约 §web_llm 产出路径)
 #
 # 设计约束：
 # - canary / tracker / semantic 在 egs_main 失败时不跑（拿不到当次 candidates，意义为零）
@@ -22,7 +22,8 @@
 #   .\runners\weekly_screening.ps1 -PythonExe C:\Path\To\python.exe   # python 不在 PATH 时
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
 #   .\runners\weekly_screening.ps1 -SkipTracker                       # 不跑 forward tracker capture
-#   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # 不跑语义风险 advisory Step1
+#   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # skip the M6.7 advisory (semantic)
+#   .\runners\weekly_screening.ps1 -Account path\to\account.json      # M6.7 sizing (available_cash); omit = no-sizing observation only
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard
 
 param(
@@ -33,6 +34,7 @@ param(
     [ValidateSet('pit', 'today', 'neutralize')]
     [string]$L3Mode = $null,
     [string]$PythonExe = 'python',
+    [string]$Account = $null,
     [switch]$AllowHistoricalOverwrite,
     [switch]$SkipCanary,
     [switch]$SkipTracker,
@@ -188,34 +190,59 @@ if ($SkipTracker) {
     }
 }
 
-# --- Stage 4: semantic-risk advisory sidecar (过渡;Step1 headless cninfo official only;web run-path 见契约 §web_llm 产出路径) ---
-# 旁路约束(同 canary/tracker):advisory-only,失败绝不阻断周报;落 research 非生产 lane(禁 result/a_short);
-# watch pool = 当次 EGS analysis_input 候选(runner 内部再过主板 Top15)。
-# 本 Stage-4 = 过渡 standalone summary sidecar(只产官方结构化层)。web 产出路径(当前/过渡)见契约 §web_llm 产出路径;Slice 3 把本入口串到 M6.7 pipeline。
+# --- Stage 4: M6.7 advisory weekly report (Slice 3b-2: replaces the standalone semantic-risk summary
+#     sidecar; ONE Friday entry now also runs the M6.7 pipeline with semantic [cninfo official + DeepSeek
+#     web] rendered inline). 旁路约束(同 canary/tracker):advisory-only,失败绝不阻断周报;落 research 非生产
+#     lane(禁 result/a_short)。真取数:IV options + 前复权价 + cninfo + sina + DeepSeek。run-path 见契约 §web_llm 产出路径。
 if ($SkipSemanticRisk) {
     Write-Host ""
-    Write-Host "[4/4] -SkipSemanticRisk set, semantic-risk advisory not run" -ForegroundColor DarkGray
+    Write-Host "[4/4] -SkipSemanticRisk set, M6.7 advisory not run" -ForegroundColor DarkGray
 } else {
     Write-Host ""
     $SemAnalysisInput = Join-Path $ProjectRoot "result\a_short\$AsOf\analysis_input.json"
     if (-not (Test-Path $SemAnalysisInput)) {
-        Write-Host "[WARN] semantic-risk skipped: analysis_input not found at $SemAnalysisInput (advisory sidecar, weekly not blocked)" -ForegroundColor Yellow
+        Write-Host "[WARN] M6.7 advisory skipped: analysis_input not found at $SemAnalysisInput (advisory sidecar, weekly not blocked)" -ForegroundColor Yellow
     } else {
-        $SemOut = Join-Path $ProjectRoot "research\results\a_short\semantic_risk_$AsOf\summary.json"
-        Write-Host "[4/4] Running runners\a_short_semantic_risk_summary.py --as-of $AsOf --analysis-input <egs> ..." -ForegroundColor Yellow
-        & $PythonExe runners\a_short_semantic_risk_summary.py --as-of $AsOf --analysis-input $SemAnalysisInput --out $SemOut --confirm-fetch-authorized
-        $SemExitCode = $LASTEXITCODE
-        if ($null -eq $SemExitCode) { $SemExitCode = 1 }
-
-        if ($SemExitCode -ne 0) {
-            # cninfo 取数失败/反爬/anti-scrape 不影响主流程退出码（旁路约束:advisory 绝不阻断选股）
-            Write-Host "[WARN] semantic-risk exit $SemExitCode (advisory sidecar; cninfo fetch/anti-scrape failure does NOT block the weekly)" -ForegroundColor Yellow
+        $M67Dir = Join-Path $ProjectRoot "research\results\a_short\$AsOf"
+        $IvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
+        $M67Out = Join-Path $M67Dir "weekly_m67.json"
+        $OverlayPath = Join-Path $ProjectRoot "result\a_short\$AsOf\overlay.json"
+        Write-Host "[4/4] Building market IV feed: runners\a_short_iv_feed_build.py --as-of $AsOf ..." -ForegroundColor Yellow
+        & $PythonExe runners\a_short_iv_feed_build.py --as-of $AsOf --out $IvFeed --confirm-fetch-authorized
+        $IvExitCode = $LASTEXITCODE
+        if ($null -eq $IvExitCode) { $IvExitCode = 1 }
+        if ($IvExitCode -ne 0 -or -not (Test-Path $IvFeed)) {
+            Write-Host "[WARN] M6.7 advisory skipped: IV feed build failed (exit $IvExitCode; advisory sidecar, weekly not blocked)" -ForegroundColor Yellow
         } else {
-            Write-Host "[ADVISORY] semantic-risk official_structured summary -> $SemOut. Transitional standalone sidecar; web_llm run path: see contract docs/a_short_semantic_risk_contract.md §web_llm 产出路径. advisory-only, not a veto/ship-gate." -ForegroundColor Yellow
+            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
+            if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
+            $RunM67 = $true
+            if ($Account) {
+                if (Test-Path $Account) {
+                    $M67Args += @('--account', $Account)
+                } else {
+                    # bad -Account path: refuse to silently run sizing-less M6.7 (skip, not a misleading 观察 artifact)
+                    Write-Host "[WARN] M6.7 advisory skipped: -Account path not found: $Account (refusing to run sizing-less with a bad account path; fix the path, or omit -Account for observation-only)" -ForegroundColor Yellow
+                    $RunM67 = $false
+                }
+            } else {
+                Write-Host "[WARN] M6.7 no -Account: observation-only (no position sizing). The weekly_m67 artifact is marked sizing_mode=observation_only_no_account - 建仓 candidates render as 观察 (sizing artifact, NOT a real avoid signal). Pass -Account <account.json> (available_cash) for real sizing." -ForegroundColor Yellow
+            }
+            if ($RunM67) {
+                Write-Host "[4/4] Running M6.7 pipeline: runners\a_short_weekly_pipeline.py --as-of $AsOf ..." -ForegroundColor Yellow
+                & $PythonExe @M67Args
+                $M67ExitCode = $LASTEXITCODE
+                if ($null -eq $M67ExitCode) { $M67ExitCode = 1 }
+                if ($M67ExitCode -ne 0) {
+                    # 真取数失败(IV/价/cninfo/sina/DeepSeek)不影响主流程退出码(旁路约束:advisory 绝不阻断选股)
+                    Write-Host "[WARN] M6.7 advisory exit $M67ExitCode (advisory sidecar; real-fetch/cninfo/DeepSeek failure does NOT block the weekly)" -ForegroundColor Yellow
+                } else {
+                    Write-Host "[ADVISORY] M6.7 weekly report (semantic inline) -> $M67Out. Standalone summary sidecar retired (Slice 3b-2); advisory-only, not a veto/ship-gate." -ForegroundColor Yellow
+                }
+            }
         }
     }
 }
 
-Write-Host ""
 Write-Host "=== Pipeline done ===" -ForegroundColor Cyan
 exit 0
