@@ -250,6 +250,69 @@ class SemanticRiskContractDocs(unittest.TestCase):
         self.assertIn("并非精确\"48h 新鲜度\"窗口", text)
         self.assertIn("未来 recency 字段", text)
 
+    # ---- R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT drift guard ----
+    # After DeepSeek web_llm was wired into the weekly M6.7 pipeline (Slice 2), active surfaces must
+    # teach ONE weekly run (M6.7 auto official + DeepSeek web, main-board Top15, failures neutral) as
+    # the current web conclusion path. A "web runs separately / web_llm stays unknown / 待 skill" line
+    # is allowed ONLY when explicitly scoped transitional / standalone-sidecar (Slice 3 retirement).
+    # The load-bearing STALE signal is "web_llm is PRODUCED BY THE SKILL / left unknown as the workflow"
+    # (the producer / separate-run claim) — NOT the rule value "unknown" (which legitimately appears in
+    # "unknown → neutral" rule text). Targeting the producer signal avoids both the synonym whack-a-mole
+    # (rule D) and false-positives on rule lines. Codex round-2 residuals (skill 在环 / skill-in-loop /
+    # 2b-ii skill / left unknown here) are now covered.
+    STALE_WEB_SEPARATE = ("skill 在环", "skill-in-loop", "2b-ii skill", "Slice-2b skill", "2b-ii-B skill",
+                          "left unknown here", "全留 unknown", "全 `unknown`", "web 留 unknown",
+                          "不能纯自动化", "web_llm 另跑", "stays UNKNOWN until")
+    # a producer/separate-web line is RECONCILED ONLY by an EXPLICIT transitional label — NOT by merely
+    # co-mentioning DeepSeek on the same line. Codex round-3: "DeepSeek 自动 / 或 2b-ii skill" still teaches
+    # the skill as a co-equal CURRENT alternative; since DeepSeek is the current path, any skill mention is
+    # transitional and must be labelled so. (Lines with NO producer phrase are never checked, so the new
+    # DeepSeek Slice-2 row is unaffected.)
+    RECONCILED_MARKERS = ("过渡", "transitional", "legacy", "sidecar", "Slice 3", "迁移", "旧路",
+                          "standalone", "旁挂", "historical")
+    SEPARATE_RUN_SURFACES = ("docs/a_short_semantic_risk_coverage.md", "docs/README.md",
+                             "runners/weekly_screening.ps1", "runners/a_short_semantic_risk_summary.py")
+
+    @classmethod
+    def _separate_run_offenders(cls, text):
+        # shared by the live guard AND the planted test (so guard + proof can't drift): a line carrying a
+        # stale producer/separate-web phrase but NO explicit transitional label is an offender (a DeepSeek
+        # co-mention does NOT reconcile a skill-producer line — see RECONCILED_MARKERS, R3).
+        return [ln.strip()[:200] for ln in text.splitlines()
+                if any(s in ln for s in cls.STALE_WEB_SEPARATE)
+                and not any(m in ln for m in cls.RECONCILED_MARKERS)]
+
+    def test_no_pre_slice2_separate_web_workflow_taught_as_current(self):
+        for rel in self.SEPARATE_RUN_SURFACES:
+            off = self._separate_run_offenders(_read(rel))
+            self.assertEqual(off, [], f"{rel} teaches the pre-Slice-2 separate/unknown web workflow as "
+                                      f"current (each such line needs a transitional/standalone-sidecar "
+                                      f"label now that M6.7 auto-judges web via DeepSeek): {off}")
+        # positive: the current M6.7 auto DeepSeek web path IS documented (not only the old skill path)
+        for rel in ("docs/a_short_semantic_risk_coverage.md", "docs/README.md"):
+            t = _read(rel)
+            self.assertIn("DeepSeek", t, f"{rel} lost the DeepSeek auto-web route")
+            self.assertIn("M6.7", t, f"{rel} lost the M6.7 web route")
+            self.assertTrue(("自动" in t) or ("auto" in t), f"{rel} must state web auto-judge in M6.7")
+
+    def test_separate_web_workflow_guard_is_real_planted(self):
+        bare = "Step 2 web_llm 全留 unknown,需 2b-ii skill 另跑(当前必跑)。"
+        self.assertTrue(self._separate_run_offenders(bare),
+                        "guard misses a bare stale-as-current web line")
+        skill_only = "web_llm filled by the 2b-ii skill (skill-in-loop), web 留 unknown until then."
+        self.assertTrue(self._separate_run_offenders(skill_only),
+                        "guard misses a bare skill-producer line (the round-2 synonym class)")
+        labeled = "Step 2 web_llm 全留 unknown —— 过渡 standalone sidecar(M6.7 已 DeepSeek 自动判)。"
+        self.assertEqual(self._separate_run_offenders(labeled), [],
+                         "guard false-positives a transitional-labeled line")
+        ds_or_skill = "web judged auto by the M6.7 DeepSeek adapter, or via the 2b-ii skill."
+        self.assertTrue(self._separate_run_offenders(ds_or_skill),
+                        "a line offering the skill as a co-equal CURRENT alternative must FAIL even when it "
+                        "co-mentions DeepSeek — DeepSeek presence alone no longer reconciles a skill mention")
+        skill_transitional = "web judged auto by the M6.7 DeepSeek adapter; the 2b-ii skill is a 过渡 sidecar."
+        self.assertEqual(self._separate_run_offenders(skill_transitional), [],
+                         "a skill mention explicitly labelled transitional is reconciled")
+
 
 if __name__ == "__main__":
     unittest.main()

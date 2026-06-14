@@ -33,7 +33,8 @@ OVERLAY_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspa
 
 def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pct,
                         account: dict, regime: str, industry_trend: str = "neutral",
-                        llm_enrichment=None, observe_only=None, semantic=None) -> dict:
+                        llm_enrichment=None, observe_only=None, semantic=None,
+                        semantic_web_llm=None) -> dict:
     """把一个 EGS analysis_input 候选 + 价格序列 + overlay 行 + 市场级 IV 分位 + 账户/环境
     归一化成 Phase 5 引擎输入。字段缺失 → 引擎按保守/observe 处理。"""
     d = cand.get("derived_flags", {}) or {}
@@ -73,6 +74,9 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         # 语义官方层(Slice 1):official_structured dict {status, events[severity], had_pit_announcements}
         # 或 None(无输入→引擎按 unknown 中性处理)。Phase5 引擎据此融进 M6.7(证据齐全[非空URL]high→否决;缺URL high·medium→待核)。
         "semantic": semantic,
+        # 语义 web/LLM 层(Slice 2):{"web_llm": {...}, "sources": [...]} 或 None(无输入→引擎按 unknown 中性)。
+        # DeepSeek 判官产出;引擎据此 downgrade(有 sources 证据的 risk/headwind;**绝不 hard_veto**);非法→中性化。
+        "semantic_web_llm": semantic_web_llm,
     }
 
 
@@ -261,7 +265,48 @@ def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None):
         return None
 
 
-def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None):
+def _build_deepseek_web_llm_provider(codes, names_by_code, sina_fetcher=None, ds_client=None):
+    """非阻断 DeepSeek web/LLM 判官 provider(Slice 2,advisory 旁路)。一次性批量抓 sina,逐票经 DeepSeek 判 →
+    `{web_llm, sources}`(非 unknown)或 None(unknown/中性)。**缺 key/SDK → None(整层 unknown)**;抓取失败
+    → None;单票判定异常 → 该票 None。任何失败都不阻断周报、不伪装 clear、不返回/打印 key。"""
+    from runners.a_short_deepseek_semantic_adapter import judge_web_llm, build_deepseek_client
+    client = ds_client if ds_client is not None else build_deepseek_client()
+    if client is None:
+        return None                                      # 缺 key/SDK → 整层 unknown(advisory,不阻断)
+    try:
+        from runners.a_short_semantic_risk_probe import fetch_sina, main_board_top15
+        from runners.a_short_semantic_risk_summary import _sina_sources
+        # 复用 cninfo provider 同一已审门:主板 Top15(去重 + 有界 cap15 + 非主板剔除)。**抓 sina/判 DeepSeek 前先过滤**,
+        # 否则非标/扩大 analysis_input(如含创业板 300/科创 688)会触发超界的 sina/DeepSeek 成本与覆盖。
+        main_codes, _dropped = main_board_top15(codes)
+        if not main_codes:
+            return None
+        allowed = {str(c) for c in main_codes}
+        raws = (sina_fetcher or fetch_sina)(list(main_codes))      # 只抓主板 Top15
+        items_by = {str(r["ts_code"]): _sina_sources(r) for r in raws
+                    if isinstance(r, dict) and r.get("ts_code")}
+    except Exception as exc:
+        print(f"[weekly] 语义 web/LLM sina 抓取失败({type(exc).__name__});web 层全 unknown(advisory,不阻断)")
+        return None
+    cache = {}
+    def provider(code):
+        code = str(code)
+        if code not in allowed:
+            return None                                  # 主板 Top15 之外 → 中性(不抓不判,边界一致)
+        if code not in cache:
+            try:
+                web, sources, _trace = judge_web_llm(
+                    code, names_by_code.get(code, ""), items_by.get(code, []), client=client)
+                cache[code] = ({"web_llm": web, "sources": sources}
+                               if web["status"] != "unknown" else None)
+            except Exception:
+                cache[code] = None                       # 单票判定异常 → 中性(不阻断)
+        return cache[code]
+    return provider
+
+
+def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None,
+         web_llm_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -325,9 +370,17 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
         semantic_provider = _build_cninfo_semantic_provider(
             weekly_candidates, args.as_of, args.cninfo_lookback_days)
+    # 语义 web/LLM provider(Slice 2,advisory 旁路,非阻断):注入优先;否则真 run(--confirm 且未 --skip-semantic)
+    # 自动建 DeepSeek 判官 provider(缺 key/SDK/抓取失败 → None,该层全 unknown 中性,绝不阻断周报)。
+    if web_llm_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
+        _cands = ai.get("candidates", [])
+        web_llm_provider = _build_deepseek_web_llm_provider(
+            [c.get("ts_code") for c in _cands],
+            {str(c.get("ts_code")): c.get("name", "") for c in _cands})
     normalized = [normalize_candidate(c, price_provider(c["ts_code"]), overlay.get(c["ts_code"]),
                                       iv_pct, account, regime,
-                                      semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None))
+                                      semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None),
+                                      semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None))
                   for c in ai.get("candidates", [])]
     # 价格覆盖门(#2):任一被纳入候选缺足够价格 → 中止不写(不可 fail-open 成观察)
     short = [(n["ts_code"], len(n["price_series"])) for n in normalized

@@ -10,6 +10,86 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Claude `提交` (语义融入 M6.7 Slice 2:DeepSeek web/LLM 判官)
+- 提交 Slice 2(本地 master,无 push):新 `a_short_deepseek_semantic_adapter.py`(DeepSeek 判官 + 全失败 fail-closed unknown、不打印 key)+ 引擎 `semantic_web_llm` 族(有 sources 证据 risk/headwind→downgrade、**绝不 hard_veto/救回**、非法 web 中性化)+ 周报 provider(**主板 Top15** 边界、批量 sina + 逐票判、非阻断)+ 契约/coverage/README/weekly_screening/summary 调和为"M6.7 DeepSeek 自动=当前路、旧 standalone/skill/Stage-4=过渡"+ 漂移守护(producer 信号、过渡标签放行)+ adapter/engine/provider 测试。
+- closes `R-ASHORT-M67-DEEPSEEK-WEBLLM-TOP15-SCOPE-BYPASS` · `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT`(register 翻 resolved)。
+- **Next**: 起草单一来源 refactor(语义 doc 收口:一处权威 + 其余指针 + 单一来源守护)。
+
+## 2026-06-14 — Codex `审查 PASS` (语义 Slice 2 R4:guard helper 注释收尾复审)
+- **Verdict/Action**: PASS. 当前工作树已修复 R4 guard helper 注释漂移;DeepSeek co-mention 不再作为 skill-producer 行的放行条件,旧 standalone/skill 路径均已显式标为过渡/sidecar,当前 web 结论路清晰指向周报 M6.7 DeepSeek adapter。
+- **Required**: `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` — 完整详情见 `docs/system_risk_register.md`(单一来源);此 Required 可随本次提交关闭。
+- **Verify**: 118 targeted semantic/weekly/adapter tests OK; doc-governance+route 27 OK; `git diff --check` clean; provider Top15 probe = `15 15 True False True True`;关键实现与 coverage 抽查通过。
+- **Next**: Claude `提交`。
+
+## 2026-06-14 — Claude `修复` (语义 Slice 2:guard helper 注释 stale 收尾)
+- **Verdict/Action**: R3 去掉 DeepSeek 放行后,漏改 `_separate_run_offenders` helper 注释(还写 "NOR the DeepSeek auto path",与新规矛盾)。改为 "NO explicit transitional label(DeepSeek co-mention 不放行)"。纯注释,行为/测试/offenders 不变。
+- **Required**: `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 27 tests OK;offenders=0;全文件 `rg DeepSeek` 当前规则 stale=0(其余均当前路描述/正向锚/R3 正确规则/Round-2 历史);diff-check clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — B:不只改 Codex 点名的 line 279,全文件 grep `DeepSeek` 逐条核;C:注释改不动行为(测试不变验证);F:diff/BOM 净。**注**:同一 finding 第 4 轮均一行残留——根治是单一来源 refactor(你提的精简,Slice 2 提交后)。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (语义 Slice 2 R3:guard comment drift)
+- **Verdict/Action**: FAIL. Runtime behavior and tests pass, but the active guard helper comment still says a stale producer line is reconciled by the DeepSeek auto path, contradicting the R3 rule that only explicit transitional labels reconcile skill-producer mentions.
+- **Required**: `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 118 targeted semantic/weekly/adapter tests OK; doc-governance+route 27 OK; `git diff --check` clean; residual is `tests/test_a_short_semantic_risk_contract_docs.py` helper comment line 279.
+- **Next**: Claude `修复`.
+
+## 2026-06-14 — Claude `修复` (语义 Slice 2 R3:守护"DeepSeek co-mention"放行过松)
+- **Verdict/Action**: 上轮把"同行含 `DeepSeek`"当放行,于是 `DeepSeek 自动 / 或 2b-ii skill`(coverage 行 16 + 我的 `ds_only` planted)蒙混过关——仍把 skill 当当前并列选项。本轮:从 `RECONCILED_MARKERS` **去掉 `DeepSeek`**,skill/producer 提及**只能靠显式过渡标签**放行;coverage 行 16 `/ 或 2b-ii skill` → `2b-ii skill 为过渡旁路`;planted 翻转。
+- **Required**: `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 223 tests OK;**去 DeepSeek 后 4 面 offenders 仍=0**(每个 skill 提及都靠显式过渡标签放行);planted `ds_or_skill`→红、`skill_transitional`→绿;diff-check clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:不只改 row 16,dogfood 去 DeepSeek 后重扫全 4 面确认无第二处靠 co-mention 蒙混;C 反向:去 DeepSeek 不误伤纯 DeepSeek 当前路行(无 producer 短语的行根本不被检,Slice-2 行不受影响);**D**:放行只认显式过渡标签(结构),不靠"提了 DeepSeek 就算";F:diff/BOM 净。**注**:这仍是症状级收口;根治是单一来源 refactor(你提的精简,排在 Slice 2 提交后)。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (语义 Slice 2 R2:DeepSeek-or-skill guard gap)
+- **Verdict/Action**: FAIL. Most stale skill-only wording is now marked transitional, but the guard treats any line containing DeepSeek as reconciled, so `DeepSeek ... / 或 2b-ii skill` can still pass as a current-path alternative.
+- **Required**: `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 118 targeted semantic/weekly/adapter tests OK; doc-governance+route 27 OK; `git diff --check` clean; residual issue is coverage row 16 plus planted `ds_only` false negative.
+- **Next**: Claude `修复`.
+
+## 2026-06-14 — Claude `修复` (语义 Slice 2 R2:separate-run 漂移同义词穷尽 + 守护升级)
+- **Verdict/Action**: 上轮 STALE 清单只匹配精确短语,producer 同义词(`skill 在环`/`skill-in-loop`/`2b-ii skill`/`Slice-2b skill`/`left unknown here`)逃过调和与守护。本轮:穷尽 `rg` 出全部 13 命中行逐行调和(coverage tier/matrix/skill-prompt、weekly_screening 文件头+Stage-4 头、README 切片行 77-81)为"DeepSeek 自动=当前路 / 或标过渡";守护信号改为 **producer/separate-run 类**,同行有过渡标签或提 `DeepSeek` 即放行;丢弃歧义 `未评估`(误匹配 unknown→中性规则注释)。
+- **Required**: `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 223 tests OK;**4 面 offenders=0**(含 producer 同义词);planted 覆盖 producer-only(红)+ DeepSeek-only(绿);weekly_screening.ps1 CRLF-uniform + PS parse OK;diff-check clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:不只补 Codex 点名 3 处,**穷尽 rg 13 行一次清**;B:`_separate_run_offenders` 扫 4 面=0 残留;**D(根因)**:不再枚举无穷同义词(whack-a-mole),改钉 producer 信号 + DeepSeek/过渡正向放行(最窄安全侧);C:放行含 DeepSeek 不误掩盖(正向锚另验 coverage/README 有 M6.7 auto)、丢 `未评估` 防误报规则注释;F:CRLF/parse/BOM/diff 净。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (语义 Slice 2 修复复审:separate-run 文档漂移)
+- **Verdict/Action**: FAIL. Top15 provider scope is repaired, but separate-run doc drift remains; active surfaces still teach skill-only/separate web wording and the guard misses those synonyms.
+- **Required**: `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 118 targeted tests OK; doc-governance+route 27 OK; provider probe `15 15 True False True True`; residual scan still hits weekly_screening header, README rows 78/81, coverage rows 17-19.
+- **Proof-of-use**: Review used current worktree, targeted tests, provider probe, and residual `rg`; full finding text is stored only in the register.
+- **Next**: Claude `修复`.
+
+## 2026-06-14 — Claude `修复` (语义 Slice 2:web provider Top15 边界 + separate-run 文档漂移)
+- **Verdict/Action**: 两条都修。(1) `_build_deepseek_web_llm_provider` 抓 sina/判 DeepSeek **前先过 `main_board_top15`**(同 cninfo provider 已审门),只抓过滤后主板 Top15,主板外候选→`None`;加回归测试。(2) 穷尽调和 separate-run/web-unknown 面(coverage/README/weekly_screening/summary)为"M6.7 自动判 web=当前路、standalone/Stage-4/skill=过渡 sidecar",加 per-line 漂移守护(stale 无过渡标记必红)+ planted + 正向锚。
+- **Required**: `R-ASHORT-M67-DEEPSEEK-WEBLLM-TOP15-SCOPE-BYPASS` · `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` — 完整详情见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 223 tests OK(含 provider Top15 过滤测试 + 漂移守护 + planted);**B 全仓扫 4 面 offenders=0**(每条 stale-web 行均带过渡标签);weekly_screening.ps1 CRLF 保持 + PS parse OK;diff-check clean;BOM/FFFD=0。
+- **Pre-Codex self-review**: A-F — A:Top15 绕过类一次覆盖(provider 过滤 + 主板外→None)+ 文档漂移**穷尽 4 面**(非只 Codex 点名);B:`_separate_run_offenders` 扫 4 面 = 0 残留(非"我改了"是"0 offender");C:过滤不误伤主板内(测主板内正常判)、过渡标签不掩盖当前路(正向锚验 M6.7 auto 已写);F:CRLF/parse/BOM/diff 净。
+- **Next**: `审查`。
+
+## 2026-06-14 — Codex `审查 FAIL` (语义融入 M6.7 Slice 2:DeepSeek web/LLM 判官接线)
+- **Verdict/Action**: FAIL. DeepSeek adapter and M6.7 downgrade behavior are directionally correct and targeted tests pass, but the weekly web_llm provider currently bypasses the semantic-risk main-board Top15 boundary, and active docs/scripts still teach the old separate-run / web_llm-unknown workflow.
+- **Required**: `R-ASHORT-M67-DEEPSEEK-WEBLLM-TOP15-SCOPE-BYPASS`; `R-ASHORT-M67-DEEPSEEK-WEBLLM-SEPARATE-RUN-DOC-DRIFT` — full detail in `docs/system_risk_register.md`.
+- **Verify**: 234 targeted tests OK; py_compile OK; independent provider probe showed a 23-code list including `300750.SZ` is passed straight to the fake Sina fetcher; active scan still finds separate-run/unknown wording in coverage, README, weekly_screening, and standalone summary surfaces.
+- **Next**: Claude `修复`.
+
+## 2026-06-13 — Claude `起草` (语义融入 M6.7 Slice 2:DeepSeek web/LLM 判官接进 M6.7)
+
+**目标**(用户 #1:"DeepSeek web_llm adapter 接进 M6.7"):补语义的 web/LLM 半边。DeepSeek 当**判官**(判已抓取文本,非搜索器),advisory-only,绝不硬否决/救回/伪装 clear。设计=桌面 doc §8 + 契约,已收敛。
+
+**改动**:
+- 新 `runners/a_short_deepseek_semantic_adapter.py`:`deepseek_layer_status`(只报 present/ready 布尔,不泄 key)、`build_deepseek_client`(缺 key/SDK→None,不抛/不打印 key)、`judge_web_llm(...)`——DeepSeek 判 sina 标题 → 契约 web_llm + sources;**全失败路径 fail-closed 到 unknown/unknown/no_action**(无条目/无客户端/API 异常/不可解析/违反契约/无 sources);复用 `_web_llm_consistency_error`(单一来源);prompt-injection 卫生(折叠换行/去反引号/截断/限量)。
+- 引擎 `a_short_phase5_engine.py`:`RISK_FAMILIES += semantic_web_llm`;`build_m67_report` 消费 `inp["semantic_web_llm"]={web_llm,sources}`——risk/risk_candidate/headwind 且有 sources→`downgrade`(**绝不 hard_veto**),tailwind/clear_light 不降级不救回,unknown/无输入 中性;**非法 web 中性化 + trace `invalid_neutralized`(advisory 非阻断,不 raise——区别 official 的 fail-closed abort)**;trace web_llm 用真实判断填充;消费映射加 web_llm 行。
+- 周报 `a_short_weekly_pipeline.py`:`_build_deepseek_web_llm_provider`(批量抓 sina 一次 → 逐票判,缺 key/SDK/抓取失败/单票异常→None 中性,非阻断);`normalize_candidate` 加 `semantic_web_llm` 参数;`main` 加 `web_llm_provider` 参数 + 真 run(`--confirm` 且未 `--skip-semantic`)自动接入(注入优先)。
+- 契约/coverage:web_llm M6.7 集成(Slice 2)= advisory downgrade、绝不 hard_veto、unknown-not-clear、来源可追溯;coverage Slice 2 标已建,待后续片收窄为 Slice 3。
+
+**Pre-Codex self-review: A-F checked**(完整规则见 checklist 单一来源)— A:web 消费按 per-status×outcome 矩阵一次全覆盖(6 态 + 6 非法形 + None)+ adapter 6 条降级路径;**B 全仓 grep**:`rg "未接|web_llm adapter\(2\)" -g"*.py" -g"*.md"`(排除 history)= **0 相关残留**,引擎旧 "Slice2 未接" note 已删(`rg "Slice2|未接" engine` = 0),standalone summary 的"待 Slice-2b skill"是旧路(Slice 3 退役)非本片故不动;B2:`_web_llm_consistency_error` 单一来源,adapter+引擎复用(lazy import 防循环);C 反向:web 绝不 hard_veto(测)、tailwind 绝不救回 official/base 硬否决(测)、非法 web 不静默旁路(`invalid_neutralized` 可见)、unknown 不当 clear;D:NL 判断委托 DeepSeek、不枚举关键词,模糊一律 fail-closed unknown;E:coverage/契约单态(Slice 2 已建 / 待后续片=Slice 3),无修复流水账;F:py_compile OK、无循环依赖、缺 key/SDK 优雅降级、绝不打印 key、220 tests OK、diff-check clean、BOM/FFFD=0。
+
+**Boundary**:仅非生产 M6.7 advisory;web 绝不进 production EGS scoring/decision/veto、不进回测、不写 result/a_short、不自动下单;V14.2 frozen;egs_main stage3(legacy DeepSeek)不碰。真 DeepSeek/sina 调用是之后的 `执行`(本片注入 mock 测)。不含 Slice 3(render 行内化/废面板/weekly_screening 串联)。
+
+**Next**: `审查`。
+
 ## 2026-06-13 — Codex `审查 PASS` (pre-Codex gate single-source refactor)
 - **Verdict/Action**: PASS. The refactor correctly collapses the pre-Codex gate rule body into `docs/pre_codex_self_review_checklist.md`; `AGENTS.md` item 7 is now a mandatory pointer and no longer restates A-F/B2 bodies.
 - **Required**: no new Required. `R-DOCGOV-B-RIPPLE-GREP-PROOF-AND-CHECKLIST-GUARD-GAP` remains resolved in `docs/system_risk_register.md`; this refactor supersedes its pin-both mechanism without reopening the risk.

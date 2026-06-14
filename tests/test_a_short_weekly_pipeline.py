@@ -829,6 +829,12 @@ def _official(status, sev=None, rt="x", dd="20260601", url="u"):
     return {"status": status, "events": evs, "had_pit_announcements": bool(evs)}
 
 
+def _web(status, risk, action="downgrade", n_sources=1):
+    # Slice 2 engine input shape: {"web_llm": {...}, "sources": [...]} (DeepSeek 判官产出)
+    src = [{"title": "t", "url": "http://x/%d" % i, "source_type": "sina"} for i in range(n_sources)]
+    return {"web_llm": {"status": status, "risk_level": risk, "action": action}, "sources": src}
+
+
 class SemanticIntoM67(unittest.TestCase):
     """Slice 1/1b: cninfo official_structured folded into M6.7 via the semantic_official family.
     official high WITH complete evidence (non-empty url_or_pdf)→否决; high with blank URL→待核 (pending,
@@ -952,6 +958,170 @@ class SemanticIntoM67(unittest.TestCase):
         self.assertEqual(n["semantic"]["status"], "risk")
         w = build_weekly_report([n], AS_OF, self.GEN)
         self.assertEqual(w["reports"][0]["m67"]["table"]["操作"], "否决")
+
+
+class SemanticWebLLMIntoM67(unittest.TestCase):
+    """Slice 2: DeepSeek web_llm folded into M6.7 via the semantic_web_llm family.
+    web risk/risk_candidate/headwind WITH sources → downgrade (**NEVER hard_veto**); tailwind/clear_light →
+    no downgrade + never rescues hard risk; unknown/None → neutral; contract-violating/malformed web →
+    neutralized with a trace flag (advisory non-blocking, NOT a fail-closed abort like official)."""
+    GEN = "2026-06-09T00:00:00+08:00"
+
+    def _report(self, web, **over):
+        from runners.a_short_phase5_engine import build_m67_report, validate_m67_consistency
+        n = _normalized(**over)
+        n["semantic_web_llm"] = web
+        r = build_m67_report(n, AS_OF, self.GEN)
+        validate_m67_consistency(r)              # must ALWAYS stay consistent
+        return r
+
+    def _wtrace(self, r):
+        return r["machine"]["layer"]["semantic_risk"]["web_llm"]
+
+    def _web_downgrades(self, r):
+        return [d for d in r["machine"]["layer"]["downgrade"] if "语义web/LLM" in d]
+
+    def test_web_risk_with_sources_downgrades_never_vetoes(self):
+        r = self._report(_web("risk", "high"))
+        self.assertNotEqual(r["m67"]["table"]["操作"], "否决")     # web NEVER hard_veto
+        self.assertEqual(self._wtrace(r)["impact"], "downgrade")
+        self.assertTrue(self._web_downgrades(r))
+
+    def test_web_risk_candidate_and_headwind_downgrade(self):
+        for st in ("risk_candidate", "headwind"):
+            r = self._report(_web(st, "medium"))
+            self.assertEqual(self._wtrace(r)["impact"], "downgrade")
+            self.assertNotEqual(r["m67"]["table"]["操作"], "否决")
+            self.assertTrue(self._web_downgrades(r))
+
+    def test_web_tailwind_and_clear_light_no_downgrade(self):
+        for web in (_web("tailwind", "low", action="no_action"),
+                    _web("clear_light", "none", action="no_action")):
+            r = self._report(web)
+            self.assertEqual(self._wtrace(r)["impact"], "none")
+            self.assertFalse(self._web_downgrades(r))
+
+    def test_web_unknown_and_none_are_neutral(self):
+        for web in (_web("unknown", "unknown", action="no_action", n_sources=0), None):
+            r = self._report(web)
+            self.assertEqual(self._wtrace(r)["status"], "unknown")
+            self.assertEqual(self._wtrace(r)["impact"], "none")
+            self.assertFalse(self._web_downgrades(r))
+
+    def test_web_tailwind_never_rescues_official_hard_veto(self):
+        from runners.a_short_phase5_engine import build_m67_report, validate_m67_consistency
+        n = _normalized()
+        n["semantic"] = _official("risk", "high", "立案调查")     # official high → 否决
+        n["semantic_web_llm"] = _web("tailwind", "low", action="no_action")
+        r = build_m67_report(n, AS_OF, self.GEN); validate_m67_consistency(r)
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")        # web tailwind cannot upgrade
+
+    def test_web_never_rescues_base_hard_veto(self):
+        from runners.a_short_phase5_engine import build_m67_report, validate_m67_consistency
+        n = _normalized(); n["derived"]["hard_veto"] = True
+        n["semantic_web_llm"] = _web("tailwind", "low", action="no_action")
+        r = build_m67_report(n, AS_OF, self.GEN); validate_m67_consistency(r)
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")
+
+    def test_invalid_web_neutralized_not_aborted(self):
+        # advisory non-blocking: contract-violating / malformed web is NEUTRALIZED (trace flag), NOT raised
+        # (unlike official's fail-closed abort). Each invalid shape → impact none + invalid_neutralized=True.
+        bad = [
+            _web("risk", "none"),                                              # risk ⇒ low/med/high
+            {"web_llm": {"status": "risk", "risk_level": "high", "action": "downgrade"}, "sources": []},  # assessed needs sources
+            _web("clear_light", "high", action="no_action"),                  # clear_light ⇒ none
+            {"web_llm": {"status": "risk"}, "sources": [{"title": "t", "url": "u"}]},  # missing keys
+            {"web_llm": "notdict", "sources": []},                            # web_llm non-dict
+            {"sources": [{"title": "t", "url": "u"}]},                         # missing web_llm
+        ]
+        for w in bad:
+            r = self._report(w)                                               # must NOT raise
+            tr = self._wtrace(r)
+            self.assertTrue(tr["invalid_neutralized"], f"not neutralized: {w}")
+            self.assertEqual(tr["impact"], "none")
+            self.assertEqual(tr["status"], "unknown")
+            self.assertFalse(self._web_downgrades(r))
+
+    def test_web_trace_populated_from_judgment(self):
+        r = self._report(_web("risk", "medium", action="observe", n_sources=2))
+        tr = self._wtrace(r)
+        self.assertEqual((tr["status"], tr["risk_level"], tr["action"]), ("risk", "medium", "observe"))
+        self.assertEqual(tr["sources_count"], 2)
+        self.assertFalse(tr["invalid_neutralized"])
+
+    def test_consumption_map_states_web_llm_rule(self):
+        cm = self._report(None)["machine"]["consumption"]["semantic"]
+        for kw in ("semantic_web_llm", "downgrade", "hard_veto"):
+            self.assertIn(kw, cm, f"consumption.semantic lost web_llm anchor: {kw}")
+
+    def test_web_provider_threads_through_normalize_and_build_weekly(self):
+        n = normalize_candidate(_egs_candidate(), _series(), _overlay_row(), 55.0,
+                                {"available_cash": 500000.0}, "震荡期",
+                                semantic_web_llm=_web("risk", "high"))
+        self.assertEqual(n["semantic_web_llm"]["web_llm"]["status"], "risk")
+        w = build_weekly_report([n], AS_OF, self.GEN)
+        wt = w["reports"][0]["machine"]["layer"]["semantic_risk"]["web_llm"]
+        self.assertEqual(wt["impact"], "downgrade")
+
+
+class DeepSeekWebProviderWiring(unittest.TestCase):
+    """Slice 2 pipeline glue: _build_deepseek_web_llm_provider (sina fetch + DeepSeek judge, non-blocking).
+    Injected fake sina_fetcher + fake ds_client → no network. Covers per-code judge, no-items→None,
+    no-key→whole-layer-None, fetch-failure→None (advisory non-blocking)."""
+    def _client(self, content):
+        from tests.test_a_short_deepseek_semantic_adapter import _FakeClient
+        return _FakeClient(content)
+
+    def test_provider_judges_per_code_and_unknown_is_none(self):
+        from runners.a_short_weekly_pipeline import _build_deepseek_web_llm_provider
+        raws = [{"ts_code": "600000.SH", "ok": True, "items": [{"title": "公司被立案调查", "url": "u"}]},
+                {"ts_code": "600001.SH", "ok": True, "items": []}]      # no items → judge unknown → None
+        prov = _build_deepseek_web_llm_provider(
+            ["600000.SH", "600001.SH"], {"600000.SH": "A", "600001.SH": "B"},
+            sina_fetcher=lambda codes: raws,
+            ds_client=self._client('{"status":"risk","risk_level":"high","action":"downgrade","summary":"立案"}'))
+        self.assertIsNotNone(prov)
+        self.assertEqual(prov("600000.SH")["web_llm"]["status"], "risk")
+        self.assertIsNone(prov("600001.SH"))                            # unknown → None (中性)
+
+    def test_provider_none_without_client(self):
+        import os
+        from unittest import mock
+        from runners.a_short_weekly_pipeline import _build_deepseek_web_llm_provider
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DEEPSEEK_API_KEY", None)                    # no key + no injected client
+            prov = _build_deepseek_web_llm_provider(["600000.SH"], {}, sina_fetcher=lambda codes: [])
+        self.assertIsNone(prov)                                         # whole web layer unknown (non-blocking)
+
+    def test_provider_none_on_fetch_failure(self):
+        from runners.a_short_weekly_pipeline import _build_deepseek_web_llm_provider
+        def boom(codes):
+            raise RuntimeError("sina down")
+        prov = _build_deepseek_web_llm_provider(["600000.SH"], {}, sina_fetcher=boom,
+                                                ds_client=self._client("{}"))
+        self.assertIsNone(prov)                                         # fetch fail → non-blocking None
+
+    def test_provider_filters_to_main_board_top15(self):
+        # R-ASHORT-M67-DEEPSEEK-WEBLLM-TOP15-SCOPE-BYPASS: provider must reuse the official main_board_top15
+        # gate BEFORE any Sina fetch / DeepSeek judge — only the deduped main-board Top15 is fetched, and a
+        # non-main-board (or beyond-cap) candidate gets neutral None even if the weekly report still lists it.
+        from runners.a_short_weekly_pipeline import _build_deepseek_web_llm_provider
+        from runners.a_short_semantic_risk_probe import main_board_top15
+        codes = [f"60{i:04d}.SH" for i in range(20)] + ["300750.SZ", "688111.SH"]  # 20 main + ChiNext + STAR
+        main_codes, _ = main_board_top15(codes)
+        self.assertLessEqual(len(main_codes), 15)
+        self.assertNotIn("300750.SZ", main_codes)
+        seen = {}
+        def fetcher(cs):
+            seen["codes"] = list(cs)
+            return [{"ts_code": c, "ok": True, "items": [{"title": "公司被立案", "url": "u"}]} for c in cs]
+        prov = _build_deepseek_web_llm_provider(
+            codes, {}, sina_fetcher=fetcher,
+            ds_client=self._client('{"status":"risk","risk_level":"high","action":"downgrade","summary":"x"}'))
+        self.assertEqual(seen["codes"], list(main_codes))    # fetcher 只收过滤后的主板 Top15(不含 300750/688/超界)
+        self.assertNotIn("300750.SZ", seen["codes"])
+        self.assertIsNone(prov("300750.SZ"))                 # 非主板候选 → 中性 None(不抓不判)
+        self.assertIsNotNone(prov(main_codes[0]))            # 主板 Top15 内 → 正常判
 
 
 if __name__ == "__main__":

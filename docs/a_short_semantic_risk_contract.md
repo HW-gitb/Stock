@@ -36,6 +36,11 @@
 - `risk_candidate` / `risk` / `headwind` 必须配 `risk_level = low|medium|high`。
 - `tailwind` 只能配 `risk_level = none|low`。
 - `action` 只允许 `no_action`, `observe`, `downgrade`, `manual_review_required`;不得表达买入或硬否决。
+- **M6.7 集成(Slice 2)**:web 经 DeepSeek **判官**(判已抓取文本,非搜索器)产出后,`risk_candidate`/`risk`/`headwind`
+  且有 `sources` 证据 → 在**非生产 M6.7** 经 `semantic_web_llm` 族产 advisory `downgrade`(**绝不 hard_veto、绝不救回**
+  过热/IV/流动性/停牌/退市/official 等硬风控);`tailwind`/`clear_light` 不降级、不作买入因子;`unknown`/无输入/
+  违反不变式 → 中性化(引擎记 `machine.layer.semantic_risk.web_llm.invalid_neutralized`,非静默)。DeepSeek 不可用
+  (缺 key/SDK/异常)绝不失败周报、绝不伪装 clear,该层 `unknown`。来源在 `machine.layer.semantic_risk` 可追溯。
 
 ## Patch Merge
 

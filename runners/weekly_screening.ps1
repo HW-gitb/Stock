@@ -6,7 +6,7 @@
 #   3) runners\forward_tracker.py              (Phase 3.5 实盘 forward 累计；不影响主流程)
 #   4) runners\a_short_semantic_risk_summary.py(语义风险 advisory Step1：cninfo 官方结构化层；
 #                                               watch pool = 当次 EGS analysis_input 候选；
-#                                               Step2 web_llm 仍需 2b-ii skill 在环,本脚本不做)
+#                                               Step2 web_llm:本脚本不做(Stage-4 过渡 sidecar);当前由周报 M6.7 内 DeepSeek adapter 自动判,Slice 2)
 #
 # 设计约束：
 # - canary / tracker / semantic 在 egs_main 失败时不跑（拿不到当次 candidates，意义为零）
@@ -188,10 +188,10 @@ if ($SkipTracker) {
     }
 }
 
-# --- Stage 4: semantic-risk advisory (Step1 headless cninfo official_structured) ---
+# --- Stage 4: semantic-risk advisory sidecar (过渡;Step1 headless cninfo official only;web 自动判走 M6.7 pipeline) ---
 # 旁路约束(同 canary/tracker):advisory-only,失败绝不阻断周报;落 research 非生产 lane(禁 result/a_short);
 # watch pool = 当次 EGS analysis_input 候选(runner 内部再过主板 Top15)。
-# Step2 web_llm 需 2b-ii skill(LLM 在环)另跑——本脚本只产官方结构化层(web_llm 全留 unknown)。
+# 本 Stage-4 = 过渡 standalone summary sidecar(只产官方结构化层、web 留 unknown)。当前 web 自动判结论路在周报 a_short_weekly_pipeline.py M6.7(DeepSeek adapter,Slice 2);Slice 3 把本入口串到 M6.7 pipeline。
 if ($SkipSemanticRisk) {
     Write-Host ""
     Write-Host "[4/4] -SkipSemanticRisk set, semantic-risk advisory not run" -ForegroundColor DarkGray
@@ -211,7 +211,7 @@ if ($SkipSemanticRisk) {
             # cninfo 取数失败/反爬/anti-scrape 不影响主流程退出码（旁路约束:advisory 绝不阻断选股）
             Write-Host "[WARN] semantic-risk exit $SemExitCode (advisory sidecar; cninfo fetch/anti-scrape failure does NOT block the weekly)" -ForegroundColor Yellow
         } else {
-            Write-Host "[ADVISORY] semantic-risk official_structured summary -> $SemOut. web_llm tier stays UNKNOWN until the 2b-ii skill (LLM in loop) fills it; advisory-only, not a veto/ship-gate." -ForegroundColor Yellow
+            Write-Host "[ADVISORY] semantic-risk official_structured summary -> $SemOut. This Stage-4 is a transitional standalone sidecar (web_llm UNKNOWN here); the current auto web path is the M6.7 weekly pipeline a_short_weekly_pipeline.py (DeepSeek adapter, Slice 2; Slice 3 chains this entry into it). advisory-only, not a veto/ship-gate." -ForegroundColor Yellow
         }
     }
 }

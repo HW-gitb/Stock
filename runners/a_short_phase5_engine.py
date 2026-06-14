@@ -57,7 +57,11 @@ GOVERNANCE = {
 }
 
 RISK_FAMILIES = ("overheat_crowding", "liquidity_execution", "negative_event",
-                 "market_regime", "portfolio_concentration", "semantic_official")
+                 "market_regime", "portfolio_concentration", "semantic_official",
+                 "semantic_web_llm")
+
+# 语义 web/LLM 层(Slice 2)只允许产生 downgrade 的已评估风险态(绝不 hard_veto;tailwind/clear_light/unknown 不降级)
+_WEB_DOWNGRADE_STATUSES = ("risk_candidate", "risk", "headwind")
 
 
 # ── 技术指标(纯函数;price_series oldest→newest,每项 high/low/close)──────────
@@ -295,6 +299,16 @@ def compute_star(inp: dict, fam: dict, eligible: bool) -> int:
 
 
 # ── 组装 M6.7 报告(唯一对外 m67 + 机器层 machine + 消费映射)──────────────────
+def _web_llm_error(web, sources):
+    """web_llm 跨字段不变式校验(单一来源 = a_short_semantic_risk_summary,lazy import 防循环依赖)。
+    返回错误字符串(或残缺结构的描述)/ None。结构残缺一律视为非法(fail-closed)。"""
+    from runners.a_short_semantic_risk_summary import _web_llm_consistency_error
+    try:
+        return _web_llm_consistency_error(web, sources)
+    except (KeyError, TypeError) as e:
+        return f"web_llm 结构残缺:{e}"
+
+
 def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     ind = compute_indicators(inp.get("price_series", []))
     fam = classify_risk_families(inp, ind)
@@ -321,6 +335,25 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             reasons=[f"语义官方:{e['risk_type']}(high)" for e in high_full])
     sem_has_high = bool(high_full)                                # 仅证据齐全 high 计 veto
     sem_pending = bool(sem_events) and not high_full             # risk 有事件但无证据齐全 high → 待核
+
+    # 语义 web/LLM 层(Slice 2,advisory,DeepSeek 判官)。输入 inp["semantic_web_llm"] =
+    # {"web_llm": {...}, "sources": [...]} 或 None。校验复用 _web_llm_consistency_error(单一来源)。
+    # 影响(§8.4):risk_candidate/risk/headwind 且有 sources → downgrade(**绝不 hard_veto**);
+    # tailwind/clear_light 不降级、不救回硬风控;unknown/无输入 → 中性。**非法 web 中性化 + trace 标记
+    # (advisory 非阻断,绝不 abort/raise,区别于 official 的 fail-closed abort)。**
+    sw = inp.get("semantic_web_llm")
+    web = sw.get("web_llm") if isinstance(sw, dict) else None
+    web_sources = (sw.get("sources") or []) if isinstance(sw, dict) else []
+    web_invalid = (sw is not None) and (not isinstance(web, dict)
+                                        or _web_llm_error(web, web_sources) is not None)
+    if web_invalid:
+        web, web_sources = None, []
+    web_status = web["status"] if web else "unknown"
+    web_downgrade = bool(web) and web_status in _WEB_DOWNGRADE_STATUSES
+    if web_downgrade:
+        fam["semantic_web_llm"].update(
+            hit=True, action="downgrade",
+            reasons=[f"语义web/LLM:{web_status}({web.get('risk_level')})"])
 
     hard = [r for f in RISK_FAMILIES if fam[f]["action"] == "hard_veto" for r in fam[f]["reasons"]]
     downgrades = [r for f in RISK_FAMILIES if fam[f]["action"] == "downgrade" for r in fam[f]["reasons"]]
@@ -378,8 +411,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
         "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
         "account/liquidity": "→ 仓位上限/冲击成本/100股",
-        "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核)"
-                    "/ medium·low→待核(不扣分,observe)/ trace machine.layer.semantic_risk;clear·unknown·无输入→中性",
+        "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;"
+                    "medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;"
+                    "tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk",
     }
 
     table = {
@@ -426,8 +460,12 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                           "events": (list(sem["events"]) if sem else []),
                           "impact": sem_impact,    # veto(证据齐全 high→否决) / pending(待核) / none
                           "evidence_incomplete_high": len(high_incomplete),  # high 但缺 URL/PDF → 仅待核
-                          "web_llm": {"status": "unknown",
-                                      "note": "Slice2(DeepSeek/web)未接,本片仅 cninfo 官方层"}}},
+                          "web_llm": {"status": web_status,
+                                      "risk_level": (web.get("risk_level") if web else "unknown"),
+                                      "action": (web.get("action") if web else "no_action"),
+                                      "sources_count": len(web_sources),
+                                      "impact": ("downgrade" if web_downgrade else "none"),
+                                      "invalid_neutralized": web_invalid}}},
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
                                      "star": star, "plan": plan, "reject_reason": reject},
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status},
