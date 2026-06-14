@@ -39,6 +39,9 @@ result/*/backtest/**/_intermediate/
 state/*/*.json
 state/*/*.csv
 
+# --- A-short M6.7 weekly validation 执行 byproducts (one-off, research lane, regenerable via 执行) ---
+research/results/a_short/m67_validation_*/
+
 # --- Large API caches (regenerable from Tushare) ---
 # Tushare daily/financial/concept caches (~860MB)
 A-EGS/Result/egs_cache/
