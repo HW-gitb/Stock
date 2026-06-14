@@ -73,7 +73,7 @@ overlay_score = esp_score×0.15 + l4_score×0.45 + theme_heat⊥×0.25 + industr
 **V14.2 四层归位(只有第 1 层能终止):**
 1. `hard_veto` — Rule 6 核心否决、ST/退市、监管、减持、闪崩、流动性底线、熔断、T+1/涨跌停不可执行、ship-gate/manual-only 边界。**保留严苛。**
 2. `downgrade_or_weight_adjustment` — 过热/追高/效率替代、行业逆风、盈亏比偏弱(非明显坏结构)、组合暴露过高。
-3. `observe_only` — 数据缺失、分析师目标价不可用、IV 未接入时的占位(可来数据就看)。**盘中/分钟类(Level-2 热插拔、盘口分钟、竞价校准、盘中入场窗口)不归这里,归 §9 `out_of_scope_by_weekly_cadence`**——周频系统本就不该依赖它们。
+3. `observe_only` — 数据缺失、分析师目标价不可用、IV 未接入时的占位(可来数据就看)。**盘中/分钟类(Level-2 热插拔、盘口分钟、竞价校准、盘中入场窗口)不归这里,归 §9 `out_of_scope_by_cadence`**——周频系统本就不该依赖它们。
 4. `llm_enrichment` — 行业景气、政策、媒体负面、隐蔽风险残差(分层见 §10 Tier C)。**只经 `schemas/deterministic_report_enrichment.schema.json` 写 `llm_notes`,不改 deterministic decision。**
 
 **风险族归并(核心去过严,全局跨 EGS 与 V14.2,每族最多一次 hard action):**
@@ -89,7 +89,7 @@ portfolio_concentration_family: SW L2 暴露 / 因子共振 / 单赛道拥挤
 
 **执行字段(只实现 Tushare 喂得动的连贯子集):**
 - 优先实现: 前复权价/MA/RSI/MACD/ATR/支撑压力/盈亏比;流动性(5d/20d 成交额、冲击成本、100 股手数);P0a capital context、bucket ceiling、单票上限、总仓位约束;已有 Rule 6 hard-veto 子集;T+1/涨跌停/停复牌/解禁/减持结构化输入;`entry_plan / exit_plan / position_size / star` + 赛道热度字段。
-- **暂不实现 / 标 `observe_only` / `requires_external`(真·数据缺失项,可来数据就看)**: 分析师一致预期/目标价;未稳定接入的大宗折价、北向逐股。**盘中/分钟类(Level-2 热插拔、盘口织布机/分钟挂单厚度)不在此列 → 归 §9 `out_of_scope_by_weekly_cadence`**(周频系统不依赖,非"缺数据";R-ASHORT-CADENCE-OBSERVE-DRIFT)。
+- **暂不实现 / 标 `observe_only` / `requires_external`(真·数据缺失项,可来数据就看)**: 分析师一致预期/目标价;未稳定接入的大宗折价、北向逐股。**盘中/分钟类(Level-2 热插拔、盘口织布机/分钟挂单厚度)不在此列 → 归 §9 `out_of_scope_by_cadence`**(周频系统不依赖,非"缺数据";R-ASHORT-CADENCE-OBSERVE-DRIFT)。
 - **IV(已确认补)**: 接入 50ETF 期权 IV feed,算 252 日分位,接进 `market_context`,使 Rule 3 / M0.5 / M1 真正生效。若某次运行 feed 缺失 → coverage 标 `iv_regime_status = observe_only_missing_feed`,**不得让报告假装执行了 IV 风控**。
 
 **阈值参数化**: 凡驱动"买/仓位"的阈值(ATR 系数、盈亏比门槛、跳空、过热线)做成可回测 config 参数,比照选股侧阈值治理。
@@ -149,21 +149,21 @@ portfolio_concentration_family: SW L2 暴露 / 因子共振 / 单赛道拥挤
 ## 8. 显式延后 / 开放项
 
 - v2 才考虑 overlay 改 L0–L5 准入(v1 仅重排 + 仪表化)。
-- Level-2 / 盘口分钟 / 竞价校准 / 盘中入场窗口 = `out_of_scope_by_weekly_cadence`(§9);分析师一致预期 / 未稳定接入的大宗 / 北向逐股 = observe_only 或待 probe(§10)。
+- Level-2 / 盘口分钟 / 竞价校准 / 盘中入场窗口 = `out_of_scope_by_cadence`(§9);分析师一致预期 / 未稳定接入的大宗 / 北向逐股 = observe_only 或待 probe(§10)。
 - 真钱 forward-live 是未来另行审查的决策,前提是两道门通过。
 
 ---
 
 ## 9. 周频 / EOD 系统边界(cadence scope)— Q1 固化
 
-**系统节奏 = 周末 + EOD,不是盘中。** 以下规则对周频系统标 **`out_of_scope_by_weekly_cadence`**(区别于 `observe_only`:不是"以后有数据就看",而是周频系统**本就不该依赖**):Rule 6.1 盘中热插拔(Level-2 特大单)、Rule 7A 织布机(盘口分钟挂单厚度)、M3.7 竞价校准、legacy 第四阶段盘中入场窗口 / 分时确认。
+**系统节奏 = 周末 + EOD,不是盘中。** 以下规则对周频系统正式标 **`out_of_scope_by_cadence`**(区别于 `observe_only`:不是"以后有数据就看",而是周频系统**本就不该依赖**):Rule 6.1 盘中热插拔(Level-2 特大单)、Rule 7A 织布机(盘口分钟挂单厚度)、M3.7 竞价校准、legacy 第四阶段盘中入场窗口 / 分时确认。
 
 - **系统不监控盘中风险。** 系统只在周末给:预设 entry 区间、止损价、止盈价、仓位上限、周一人工执行类型(低吸/突破)、禁入条件。
 - **盘中反应(闪崩/急跌/紧急减仓)= 人工执行 playbook,不是系统能力**;绝不写成系统在承担实时风控。
 - **M6.7 必带 caveat**:本报告不监控盘中 Level-2 / 分钟盘口;盘中异常由你按预设止损无条件执行。
 - **持仓人工紧急 override**:遇重大监管 / 跌停 / 黑天鹅,不等周末系统,按止损 / 减仓纪律即时处理。
 - **真洞补丁(对已持仓)**:EOD 闪崩否决 + 下周重筛只能事后发现;真正的盘中保护靠上面的预设止损价 + 人工 override,系统给级别、人执行。
-- v14.2_spec 冻结;这些规则在 Phase 5 引擎 / coverage 标 `out_of_scope_by_weekly_cadence`,并**清理 M6.7 / Rule 12 / OrderAudit 对这些盘中字段的交叉引用**(无悬挂引用,实现切片测试守)。
+- v14.2_spec 冻结;这些规则在 Phase 5 引擎 / coverage 标 `out_of_scope_by_cadence`,并**清理 M6.7 / Rule 12 / OrderAudit 对这些盘中字段的交叉引用**(无悬挂引用,实现切片测试守)。
 
 ---
 

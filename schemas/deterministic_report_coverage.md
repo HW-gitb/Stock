@@ -63,9 +63,9 @@ It must also declare:
 | Rule 1 股价零滞后 + 前复权 | `evidence.quote.close` / `unknowns` | EOD close 可记录；实时多源校验 requires_external |
 | Rule 3 波动率/情绪过滤 | `unknowns`, future `risk_flags` | **→ Phase5(M6.7 path)已建·非买入**:IV 闸(market_regime 族:IV分位>halve_pct→降级·减半;regime hard_veto)。情绪过滤仍未实现 |
 | Rule 6 负面优先 | `veto`, `risk_flags`, `analyzer_invocations`, `decision` | 已实现 4 条 Phase 3 hard veto |
-| Rule 6.1 盘中量化热插拔 | `risk_flags`, `unknowns` | `out_of_scope_by_weekly_cadence`(周频/EOD 系统本就不依赖盘中 Level-2/分钟,非"缺数据";见 Phase5 设计 §9) |
+| Rule 6.1 盘中量化热插拔 | `risk_flags`, `unknowns` | `out_of_scope_by_cadence`(周频/EOD 系统本就不依赖盘中 Level-2/分钟,非"缺数据";见 Phase5 设计 §9) |
 | Rule 7 ATR 验证 | `exit_plan`, `unknowns` | **→ Phase5(M6.7 path)已建·非买入**:ATR14 + 止损=支撑−ATR_MULT×atr(按 regime) |
-| Rule 7A 织布机/盘口分钟 | `risk_flags`, `unknowns` | `out_of_scope_by_weekly_cadence`(盘口分钟挂单厚度,周频系统不依赖;见 Phase5 设计 §9) |
+| Rule 7A 织布机/盘口分钟 | `risk_flags`, `unknowns` | `out_of_scope_by_cadence`(盘口分钟挂单厚度,周频系统不依赖;见 Phase5 设计 §9) |
 | Rule 8 流动性底线 | `evidence`, future `position_size` | 输入可读;**→ Phase5 已建·非买入**:liquidity_execution 族(hard_veto)+ 仓位含冲击成本 |
 | Rule 9 季报跳空处置 | `risk_flags`, `unknowns` | requires_external / future analyzer |
 | Rule 10 最低盈亏比 | `entry_plan`, `exit_plan`, `unknowns` | **→ Phase5(M6.7 path)已建·非买入**:RR floor 按 regime(rr<floor 直接拒) |
@@ -86,7 +86,7 @@ It must also declare:
 | M3.4 分析师目标价 | `llm_notes.sections` | requires_external / requires_llm |
 | M3.5 持仓成本 | `risk_flags`, `data_lineage.state_snapshot_ref` | state 可读；持仓详情报告未展开 |
 | M3.6 止盈止损 | `exit_plan`, `unknowns` | **→ Phase5(M6.7 path)已建·非买入**:exit_and_size(止损=支撑−ATR_MULT×atr、t1/t2) |
-| M3.7 现价锚定 | `evidence.quote.close`, `entry_plan` | EOD close 可记录；竞价校准 = `out_of_scope_by_weekly_cadence`(周频系统不做盘中竞价,见 Phase5 设计 §9) |
+| M3.7 现价锚定 | `evidence.quote.close`, `entry_plan` | EOD close 可记录；竞价校准 = `out_of_scope_by_cadence`(周频系统不做盘中竞价,见 Phase5 设计 §9) |
 | M4 强制否决检查 | `veto`, `decision`, `analyzer_invocations` | 已覆盖 Phase 3 hard-veto 子集 |
 | M5.1-M5.4 动态目标/星级 | `llm_notes.sections`, Markdown priority | **仅 M5.4 简化星级子集已建**(Phase5 `compute_star`:基线3 +overlay赛道红利 −行业逆风 −过热/组合集中,clamp 1-5,非买入)。**未实现**:M5.1 效率替代"放弃"、M5.2 催化剂持有窗口、完整 M5.3 总账户状态、完整 M5.4 防御/regime/类型联动星级公式、M2.1/M4 降级 override |
 | M5.5/M5.5B 组合风险 | `risk_flags`, `unknowns` | **→ Phase5 部分已建**:portfolio_concentration 族(降级);完整组合熔断仍未实现 |
@@ -107,7 +107,7 @@ It must also declare:
 
 > **`unknowns[].reason` enum 边界(与 `deterministic_report.schema.json` 契约一致)**:上表四个值 = `deterministic_report.schema.json` 允许的 `unknowns[].reason` 全集(`requires_llm` / `requires_external` / `data_missing` / `not_implemented_phase4`)。`run_analysis_report.py::_build_unknowns` 也只产出这四个。
 >
-> **`out_of_scope_by_weekly_cadence` 不是 `unknowns[].reason`**,而是「v14.2 映射」表「当前状态」列用的 **coverage-status 描述标签**(标周频/EOD 系统本就不依赖的盘中/分钟类规则:Rule 6.1 Level-2 热插拔、Rule 7A 织布机盘口分钟、M3.7 竞价校准、legacy 盘中入场窗口;区别于 `requires_external` 的"以后有数据就能补",见 Phase5 设计 §9)。**切勿把它写进 deterministic_report 的 `unknowns[].reason`**——会令报告 schema-invalid。若日后真要让它成为合法 reason,须正式扩 schema enum + runner/_build_unknowns + 测试 + Skill 文档(本 docs-only 切片不做)。
+> **`out_of_scope_by_cadence` 不是 `unknowns[].reason`**,而是「v14.2 映射」表「当前状态」列用的 **coverage-status 描述标签**(标周频/EOD 系统本就不依赖的盘中/分钟类规则:Rule 6.1 Level-2 热插拔、Rule 7A 织布机盘口分钟、M3.7 竞价校准、legacy 盘中入场窗口;区别于 `requires_external` 的"以后有数据就能补",见 Phase5 设计 §9)。**切勿把它写进 deterministic_report 的 `unknowns[].reason`**——会令报告 schema-invalid。若日后真要让它成为合法 reason,须正式扩 schema enum + runner/_build_unknowns + 测试 + Skill 文档(本 docs-only 切片不做)。
 
 ## 验收判定
 
