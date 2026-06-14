@@ -10,6 +10,35 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-14 — Codex `审查 PASS` (R-ASHORT-EM-PROBE-FETCHER-FILTER-AUDIT-GAP)
+- **Verdict/Action**: PASS. probe 默认路径已改用 `fetch_em_news_unfiltered`,可保留 future/stale/bad-date/bad-shape 原始行交给 `classify_em_code` 审计;生产 weekly 的过滤版 `fetch_em_news` 未改。详情见 register。
+- **Required**: `R-ASHORT-EM-PROBE-FETCHER-FILTER-AUDIT-GAP` addressed;提交时按 register 翻 `resolved`。
+- **Verify**: 139 OK;`py_compile` OK;schema JSON parse OK;`git diff --check` clean;未抓数据、未提交。
+- **Next**: Claude `提交`。
+
+## 2026-06-14 — Claude `修复` (R-ASHORT-EM-PROBE-FETCHER-FILTER-AUDIT-GAP)
+- **Verdict/Action**: option A(保留审计、不降级):新增 probe 专用 unfiltered fetcher `fetch_em_news_unfiltered`(同 em 端点不过滤、保留 future/stale/残缺/非dict 行),probe `main` 改用它,`classify_em_code` 真正审计 raw 质量;**生产 weekly 仍用过滤版 `fetch_em_news`(不动)**。加真实 fetcher→probe 集成回归;runner/schema/contract/README claims 同步为准确。详情见 register。
+- **Required**: `R-ASHORT-EM-PROBE-FETCHER-FILTER-AUDIT-GAP`;详情见 `docs/system_risk_register.md`。
+- **Verify**: `tests.test_a_short_em_news_probe` 41 OK;合跑守护 **139 OK**(契约 drift + run-path + doc governance + route-doc ledger + 既有 semantic probe 全过);schema Draft7 OK;`py_compile` OK;5 文件 no-BOM;`git diff --check` 干净(仅 LF/CRLF);`git status` 无 `_diag`/`_em_slice`/byproduct 误入。
+- **Next**: 审查。
+- **Pre-Codex self-review**: A(unfiltered 保留 future/stale/bad-date/bad-shape/非dict→classify 计数→future-leak 门→not feasible,真实 fetcher→probe 全覆盖);B(runner/schema/contract/README 旧 claim 改准确,grep 残留=0);C(clean-recent 仍 reachable、安静票不误判、未引入误报);F(签名改 `(codes,names)` 同步 `_fake`+main;diff-check 干净;无 BOM)。已对抗自跑真实 fetcher 路径。
+
+## 2026-06-14 — Codex `审查 FAIL` (R-ASHORT-EM-PROBE-FETCHER-FILTER-AUDIT-GAP)
+- **Verdict/Action**: FAIL. 新 EM tracked probe 方向正确,但 real fetch path 仍经 `fetch_em_news` 预过滤,导致 future/bad-shape 等质量缺陷可能在 probe 分类前被丢弃;详情见 register。
+- **Required**: `R-ASHORT-EM-PROBE-FETCHER-FILTER-AUDIT-GAP`;详情见 `docs/system_risk_register.md`。
+- **Verify**: targeted 80 OK;py_compile OK;schema parse OK;diff-check clean;code-path review found `fetch_em_news` recent-window filtering precedes probe classification。
+- **Next**: Claude `修复`。
+
+## 2026-06-14 — Claude `起草` (EM tracked probe:web_llm 源可行性 first-class probe)
+- 动因:闭合 Codex `R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT` 当初点的 EM audit gap——EM 主源可达性此前只靠已删的一次性 `_diag_web_sources.py` + FetchEmNews fixture(R2 downgrade),无可重现 tracked probe。这是用户排定「确认 EM 端到端」第 1 步(轻量、不碰 Tushare,只 eastmoney + 名字)。
+- 改动(纯新增,零回归):新 `runners/a_short_em_news_probe.py` + `schemas/a_short_em_news_probe_summary.schema.json` + `tests/test_a_short_em_news_probe.py`(36 tests)。镜像 cninfo/sina probe 的 classify→assess→build→validate→write→main,**复用** `fetch_em_news`/`main_board_top15`/`_load_watch_pool`/`_is_canonical_date`/`_guard_out_path`/`TOP15_CAP`(不重造、不改既有 probe)。probe 独立 double-check 每条 item(不信 fetcher 窗过滤):future/坏日期/残缺→该码 `unknown` 绝不伪 reachable;干净 ok+近期→`reachable_with_news`,干净 ok+无→`reachable_quiet`。门=≥8 ok/≥0.6 率/≥3 有近期新闻(防端点静默死却判 feasible)/零 future·坏日期·残缺。`backtest_evidence_capable` const-false + `advisory_only`(媒体源非官方披露 PIT)。write 拒 `result/a_short` + schema+consistency 先校后原子写;real fetch gated 于 `--confirm-fetch-authorized`(真取数=用户 执行);`--names` 供 ts_code→名(em 按名搜)。
+- 文档(B-ripple):契约 §web_llm 产出路径 的 EM tracked-owner bullet 升级指向新 probe,旧「fixture-only / 不建模 em」标 `SUPERSEDED interim`;README 加 owner 行(point-only 指契约)。SESSION_LOG/register 的 R2 旧措辞为 append-only 历史 / 已闭 finding,按约定不改。
+- 设计自查(交 Codex 注意):≥3-有近期新闻门会让「全主板池 30 天内真零新闻」也判 not-feasible——**有意**(否则无法区分端点静默死 vs 真安静),reason 如实记,主板 15 票 30 天≥3 有新闻近必然;probe 不判新闻语义(DeepSeek 的活)、只验取数可行性,故不枚举关键词。
+- 边界:probe-only / 非生产 / advisory_only;不 hard_veto、不改 EGS scoring / Phase5、不产历史回测证据、不碰 DeepSeek 语义 / 生产 stage3 / V14.2 / 下单。
+- Verify:`tests.test_a_short_em_news_probe` 36 OK;合跑既有守护 **134 OK**(em probe + 契约漂移 guard + doc governance guard + route-doc ledger guard + 既有 `test_a_short_semantic_risk_probe`——确认契约/README 编辑不触 EM-drift/run-path/governance guard 且既有 probe 未破);schema Draft7 OK;`py_compile` OK;5 文件全 no-BOM;`git diff --check` 干净;`git status`=2 改(README/契约)+3 新(runner/schema/test),无 `_diag`/`_em_slice`/byproduct 误入。
+- Pre-Codex self-review:A(缺陷类×出口矩阵一次全:per-code→assess 门→consistency→schema→write→CLI 各 exit 各测)/ B(连带:契约 EM-owner bullet 升级 + README owner 行;残留 grep `不建模 em`/`fixture-only` 在活跃 current-state 面=0,仅 SUPERSEDED 标注处 + SESSION_LOG/register 历史)/ C(反向:future/坏日期/残缺→unknown 不伪 reachable + 安静票→reachable_quiet 不误判缺陷 + ok 无缺陷不藏 unknown,皆有测)/ D(不枚举新闻关键词,语义交 DeepSeek)/ E(route-doc 单态:契约旧态压成 SUPERSEDED interim 一行、README point-only 无 transient gate)/ F(ok_ratio 唯一 float 有 guard 无 NaN/Inf;strict canonical 日期;exact partition+count 一致;list() 无 generator 双消费;doc↔behavior 同步;无 BOM/mojibake;diff --check 干净)。Tests passing ≠ design closure——已对抗自跑。
+- Next:审查。
+
 ## 2026-06-14 — Codex `审查 PASS` (R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT-R2)
 - **Verdict/Action**: PASS. R2 三个残留面已清:weekly wrapper 真取数清单改 em,probe CLI 标 legacy opt-in,README 设计行标历史并指向 EM contract;guard 覆盖 R1/R2 残留形态。
 - **Required**: `R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT-R2` addressed;`R-ASHORT-WEBLLM-EM-SOURCE-CONTRACT-DRIFT` 也随本切片闭合。提交时按 register 翻 resolved。

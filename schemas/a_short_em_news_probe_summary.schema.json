@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_em_news_probe_summary",
+  "description": "A-short EM (东方财富) news-feed feasibility-probe summary (web_llm advisory source). Characterizes whether the CURRENT weekly web_llm main source — em 资讯搜索 via fetch_em_news — can reliably supply PIT-clean recent news over the main-board Top15 watch pool: reachability, recent-news coverage, future-dated rejection, and shape/date quality. This is the tracked, reproducible EM source-feasibility path that replaces the retired one-off diagnostic (Sina roll endpoint is dead, code=11; legacy Sina probe stays in a_short_semantic_risk_probe.py opt-in). feasible (overall) == em.feasible. To audit that quality the probe does its OWN unfiltered fetch (fetch_em_news_unfiltered: same em endpoint/request as production fetch_em_news, but NO PIT/recency window filter, no sort/cap, malformed rows kept) and re-validates every returned item itself, so the classifier can count future/stale/bad-date/bad-shape rows; the probe must NOT reuse the FILTERED production fetch_em_news, which drops future/out-of-window/malformed rows before the probe sees them and would silently overclaim zero leak. Any future-dated / unparseable-date / bad-shape item makes that code 'unknown', NEVER 'reachable'. EM is advisory_only and backtest_evidence_capable=false (a media publish-time source, not an official disclosure-date PIT source): it can REJECT future-dated items (future_dated_rejection) but must never hard-veto, change EGS scoring, change Phase5 decision, produce historical-backtest evidence, or write a production path. Provider failure for a code => that code's status is 'unknown', never 'reachable_quiet' / 'reachable_with_news'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "as_of",
+               "universe", "thresholds", "em", "feasible", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_em_news_probe_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested", "main_board_top15", "dropped_non_main"],
+      "properties": {
+        "requested": {"type": "array", "items": {"type": "string"}},
+        "main_board_top15": {"type": "array", "items": {"type": "string"}, "maxItems": 15},
+        "dropped_non_main": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_em_ok_codes", "min_em_ok_ratio", "min_em_recent_news_codes", "lookback_days"],
+      "properties": {
+        "min_em_ok_codes": {"const": 8},
+        "min_em_ok_ratio": {"const": 0.6},
+        "min_em_recent_news_codes": {"const": 3},
+        "lookback_days": {"type": "integer", "minimum": 1}
+      }
+    },
+    "em": {"$ref": "#/definitions/em_assessment"},
+    "feasible": {"type": "boolean"},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "real_money", "hard_veto", "changes_egs_scoring",
+                   "changes_phase5_decision", "historical_backtest_evidence",
+                   "writes_production_path", "advisory_only"],
+      "properties": {
+        "production": {"const": false},
+        "real_money": {"const": false},
+        "hard_veto": {"const": false},
+        "changes_egs_scoring": {"const": false},
+        "changes_phase5_decision": {"const": false},
+        "historical_backtest_evidence": {"const": false},
+        "writes_production_path": {"const": false},
+        "advisory_only": {"const": true}
+      }
+    }
+  },
+  "definitions": {
+    "em_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of_is_valid_date", "future_dated_rejection", "backtest_evidence_capable",
+                   "lookback_days", "n_requested", "n_ok", "n_failed", "n_with_recent_news",
+                   "n_future_leak_codes", "n_bad_date_codes", "n_bad_shape_codes",
+                   "ok_ratio", "failure_categories", "per_code", "feasible", "reasons"],
+      "properties": {
+        "as_of_is_valid_date": {"type": "boolean"},
+        "future_dated_rejection": {"type": "boolean"},
+        "backtest_evidence_capable": {"const": false},
+        "lookback_days": {"type": "integer", "minimum": 1},
+        "n_requested": {"type": "integer", "minimum": 0},
+        "n_ok": {"type": "integer", "minimum": 0},
+        "n_failed": {"type": "integer", "minimum": 0},
+        "n_with_recent_news": {"type": "integer", "minimum": 0},
+        "n_future_leak_codes": {"type": "integer", "minimum": 0},
+        "n_bad_date_codes": {"type": "integer", "minimum": 0},
+        "n_bad_shape_codes": {"type": "integer", "minimum": 0},
+        "ok_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "failure_categories": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "per_code": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ts_code", "ok", "error_category", "n_items", "n_recent",
+                         "n_future", "n_stale", "n_bad_date", "n_bad_shape", "status"],
+            "properties": {
+              "ts_code": {"type": "string"},
+              "ok": {"type": "boolean"},
+              "error_category": {"type": ["string", "null"]},
+              "n_items": {"type": "integer", "minimum": 0},
+              "n_recent": {"type": "integer", "minimum": 0},
+              "n_future": {"type": "integer", "minimum": 0},
+              "n_stale": {"type": "integer", "minimum": 0},
+              "n_bad_date": {"type": "integer", "minimum": 0},
+              "n_bad_shape": {"type": "integer", "minimum": 0},
+              "status": {"enum": ["unknown", "reachable_quiet", "reachable_with_news"]}
+            }
+          }
+        },
+        "feasible": {"type": "boolean"},
+        "reasons": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"feasible": {"const": true}}},
+      "then": {"properties": {"em": {"properties": {"feasible": {"const": true}}}}}
+    },
+    {
+      "if": {"properties": {"feasible": {"const": false}}},
+      "then": {"properties": {"em": {"properties": {"feasible": {"const": false}}}}}
+    }
+  ]
+}

@@ -56,12 +56,15 @@
   默认 30)。**sina roll 端点已弃用**:`执行`(2026-06-14)实测其对任意关键词返回 `code=11 列表未注册`、`data` 恒空——
   非关键词/编码/反爬问题,是频道失效;`fetch_sina` 标 DEPRECATED,仅留 legacy probe `--include-sina`。**cls(财联社)个股
   资讯需签名(`errno 50101`),暂缓**(未来 best-effort 二源)。
-- **EM 源的 tracked owner / 可审路径(非 ad-hoc)**:em 源的可复现/可审 owner = `fetch_em_news`(probe 模块内的 live fetcher)
-  + `tests/test_a_short_semantic_risk_probe.py::FetchEmNews`(对**实测真 shape**钉 JSONP 解析 / PIT 近 N 天窗 / cap / fail-closed)
-  + 本契约本节。**`a_short_semantic_risk_probe.main()` / `build_probe_summary` / probe schema 是 Slice-1 cninfo(+ legacy Sina)
-  可行性工具,不建模 em**;em 的 live 可行性由 weekly `--confirm-fetch-authorized` `执行`(调 `fetch_em_news`)验证,真 shape 已固化
-  进 FetchEmNews fixture。一次性诊断脚本 `_diag_web_sources.py` 仅用于初次端点勘察,**不提交、不作为 ad-hoc root helper**
-  (其结论已落入 FetchEmNews fixture + 本节)。
+- **EM 源的 tracked owner / 可审路径(非 ad-hoc)**:em 源的可复现/可审 source-feasibility owner = **first-class tracked probe
+  `runners/a_short_em_news_probe.py`** + `schemas/a_short_em_news_probe_summary.schema.json` + `tests/test_a_short_em_news_probe.py`
+  ——走**专用 unfiltered 取数** `fetch_em_news_unfiltered`(同 em 端点 / 同请求,但**不**做 PIT/recency 窗过滤、不 sort/cap、保留残缺行,使 classify 能真正数缺陷)逐**主板 Top15** 探测**可达性 / 近期新闻覆盖 / 拒未来文(`future_dated_rejection`)/ shape-date 质量**,
+  schema+consistency 校验后落 research lane(probe-only、advisory_only、`backtest_evidence_capable=false`:媒体发布时间非官方披露 PIT、
+  绝不作回测/PIT 证据;任一 future / 坏日期 / 残缺条目 → 该码 `unknown`,绝不伪 reachable;门 = ≥8 ok / ≥0.6 率 / ≥3 有近期新闻 /
+  零 future·坏日期·残缺)。**weekly 生产**用过滤版 `fetch_em_news`,probe **绝不复用它**——否则 future/越窗/残缺行会在分类前被丢、probe 伪报零泄漏(`R-ASHORT-EM-PROBE-FETCHER-FILTER-AUDIT-GAP`);两者打同一 em 端点,真 shape 另钉 `tests/test_a_short_semantic_risk_probe.py::FetchEmNews` + 本 probe 的 `FetchEmNewsUnfiltered`。
+  **SUPERSEDED interim**:此 tracked probe 之前,em 可审性曾仅靠 `fetch_em_news` + FetchEmNews fixture(R2 downgrade);现已被本 probe
+  取代——勿再把「probe schema 不建模 em」当现状。`a_short_semantic_risk_probe`(cninfo(+ legacy Sina)可行性工具)与本 em probe 是
+  **两个独立工具**;一次性诊断脚本 `_diag_web_sources.py` 仅初次端点勘察、**不提交**(结论已入本 probe + FetchEmNews fixture)。
 - **过渡路已全退役(Slice 3b)**:独立 `a_short_semantic_risk_summary` summary CLI + `weekly_screening.ps1`
   Stage-4 sidecar + 独立面板均已退役;**周五入口 `weekly_screening.ps1` 现直接跑 M6.7 pipeline**(一键串联,语义 cninfo+DeepSeek 行内,3b-2);`a_short_semantic_risk_summary` 仅留被 M6.7 复用的 official_structured builders。**2b-ii skill-patch(`a_short_semantic_risk_web_llm_patch`)路径已在 Slice 3a 退役**(被 M6.7 内 DeepSeek adapter 取代)。
 - 不变式见上 §web_llm + §Scope(advisory-only、unknown-not-clear、never hard-veto)。
