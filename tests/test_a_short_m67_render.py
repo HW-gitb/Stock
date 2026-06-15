@@ -18,7 +18,7 @@ from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
 
 def _report(ts_code, action, **tbl):
     table = {"操作": action, "股数": None, "入": None, "盈一": None, "盈二": None, "损": None,
-             "类型": "N/A", "优先级": "—", "触发条件": "未到低吸/突破触发"}
+             "类型": "N/A", "EGS分": None, "优先级": "—", "触发条件": "未到低吸/突破触发"}
     table.update(tbl)
     advice = "观察,不建仓。"
     if action == "建仓":
@@ -60,12 +60,12 @@ class RenderTests(unittest.TestCase):
         self.assertIn("## 逐票", md)
 
     def test_holding_report_renders_position_management_path(self):
-        held = _report("600000.SH", "持有", 类型="已有持仓", 优先级="⭐×3",
+        held = _report("600000.SH", "持有", 类型="已有持仓", EGS分=72.0, 优先级="⭐×3",
                        触发条件="已有持仓:按持仓管理输出,不按新开仓处理;禁止自动加仓")
         held["m67"]["精简结论区"]["现价与成本"] = "2.90 | 持仓:1000股/均价2.7/建仓20260601/手动止损2.55"
         md = render_weekly_markdown(_weekly([held]))
         self.assertIn("建仓 0 / 持有 1 / 观察 0 / 否决 0", md)
-        self.assertIn("| 600000.SH | 测试 | 持有 | ⭐×3 | 已有持仓 |", md)
+        self.assertIn("| 600000.SH | 测试 | 持有 | 72.0 | ⭐×3 | 已有持仓 |", md)
         self.assertIn("持仓:1000股/均价2.7/建仓20260601/手动止损2.55", md)
         self.assertIn("禁止自动加仓", md)
         self.assertIn("已有持仓:按持仓管理输出", md)
@@ -137,6 +137,31 @@ class RunLineageBannerTests(unittest.TestCase):
         md = render_weekly_markdown(_weekly([_report("600000.SH", "观察")]))   # legacy dict, no run_lineage
         self.assertNotIn("无账户", md)
         self.assertNotIn("lineage", md)
+
+
+class EgsScoreAndRegimeBannerTests(unittest.TestCase):
+    """Slice A: 一览表并列「EGS分」(选股质量分) + 风控星级,让 82 分和 56 分不再都只显示 2 星;
+    regime unknown 做全局横幅(把"全员保守压星"说成市场状态,不是个股质量差)。纯渲染,不改打分逻辑。"""
+
+    def test_egs_score_column_rendered(self):
+        md = render_weekly_markdown(_weekly([
+            _report("600000.SH", "观察", EGS分=82.66, 优先级="⭐×2")]))
+        self.assertIn("| 票 | 名称 | 操作 | EGS分 | 优先级 |", md)        # 新列在 header
+        self.assertIn("| 600000.SH | 测试 | 观察 | 82.66 | ⭐×2 |", md)   # EGS 分并列星级
+
+    def test_regime_unknown_global_banner(self):
+        r = _report("600000.SH", "观察", EGS分=82.66, 优先级="⭐×2")
+        r["m67"]["精简结论区"]["当前环境"] = "震荡期(EGS regime unknown,保守fallback)"
+        md = render_weekly_markdown(_weekly([r]))
+        self.assertIn("市场 regime 未知", md)         # 全局横幅出现
+        self.assertIn("EGS分", md)                    # 横幅指向 EGS分 列
+
+    def test_no_regime_banner_when_known(self):
+        # 反向:regime 已知(非 unknown fallback)→ 无全局横幅(不误加)
+        r = _report("600000.SH", "观察", EGS分=82.66, 优先级="⭐×3")
+        r["m67"]["精简结论区"]["当前环境"] = "进攻期"
+        md = render_weekly_markdown(_weekly([r]))
+        self.assertNotIn("市场 regime 未知", md)
 
 
 if __name__ == "__main__":

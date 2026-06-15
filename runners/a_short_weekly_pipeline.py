@@ -194,6 +194,7 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         "close": (cand.get("quote") or {}).get("close"),
         "price_series": list(price_series or []),
         "esp_score": sc.get("esp_score"), "l4_score": sc.get("l4_score"),
+        "egs_score": sc.get("final_score"),   # EGS 质量总分(M6.7 渲染并列展示,与风控星级区分)
         "overlay": {"eligible": bool((overlay_row or {}).get("eligible")),
                     "crowding_hit": bool((overlay_row or {}).get("crowding_hit"))},
         "industry_trend": industry_trend,

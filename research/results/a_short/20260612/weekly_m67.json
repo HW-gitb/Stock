@@ -1,0 +1,2210 @@
+{
+  "schema_name": "a_short_weekly_report",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-15T10:27:34+08:00",
+  "as_of": "20260612",
+  "iv_feed_ref": "iv_feed.json",
+  "n_stocks": 15,
+  "reports": [
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "000776.SZ",
+      "name": "广发证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "20.08 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理|语义web/LLM:risk(medium)",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理/语义web/LLM:risk(medium)。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 82.66
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 19.122,
+          "ma10": 19.084,
+          "ma20": 19.113999999999997,
+          "rsi14": 65.16853932584266,
+          "atr14": 0.6957142857142858,
+          "support": 18.38,
+          "resistance": 20.3
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "语义web/LLM:risk(medium)"
+            ]
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理",
+            "语义web/LLM:risk(medium)"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "risk",
+              "risk_level": "medium",
+              "action": "observe",
+              "sources_count": 1,
+              "impact": "downgrade",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "000722.SZ",
+      "name": "湖南发展",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "15.07 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 81.77
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 14.674000000000001,
+          "ma10": 15.324000000000002,
+          "ma20": 14.716,
+          "rsi14": 56.70731707317072,
+          "atr14": 1.1149999999999998,
+          "support": 13.3,
+          "resistance": 17.81
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "003025.SZ",
+      "name": "思进智能",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "16.25 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 75.94
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 15.908000000000001,
+          "ma10": 15.117,
+          "ma20": 15.0975,
+          "rsi14": 64.2322097378277,
+          "atr14": 1.0114285714285713,
+          "support": 13.4,
+          "resistance": 17.04
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "603337.SH",
+      "name": "杰克科技",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "38.45 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:现价跌破 MA5/10/20,等收复。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "现价跌破 MA5/10/20,等收复",
+          "EGS分": 71.71
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 39.256,
+          "ma10": 39.152,
+          "ma20": 40.452999999999996,
+          "rsi14": 28.71870397643599,
+          "atr14": 2.2192857142857143,
+          "support": 37.66,
+          "resistance": 45.69
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "tailwind",
+              "risk_level": "low",
+              "action": "no_action",
+              "sources_count": 3,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "现价跌破 MA5/10/20,等收复"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "601377.SH",
+      "name": "兴业证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "6.0 | 试探仓",
+          "否决审查触发": "语义待核:官方 medium/low 命中(例行件),待复核(未扣分,待 web/LLM 实判)",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 69.06
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 5.851999999999999,
+          "ma10": 5.83,
+          "ma20": 5.83,
+          "rsi14": 62.49999999999998,
+          "atr14": 0.13857142857142854,
+          "support": 5.63,
+          "resistance": 6.08
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "semantic_pending_review=官方 medium/low 命中(例行件)(待核,未扣分)",
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "risk",
+            "severity_max": "medium",
+            "events": [
+              {
+                "source": "cninfo",
+                "title": "兴业证券2025年度非经营性资金占用及其他关联资金往来情况的专项说明",
+                "category": "资金占用",
+                "disclosure_date": "20260328",
+                "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-03-28/1225047878.PDF",
+                "risk_type": "fund_occupation",
+                "severity": "medium"
+              }
+            ],
+            "impact": "pending",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "002078.SZ",
+      "name": "太阳纸业",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "13.76 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 65.94
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 13.475999999999999,
+          "ma10": 13.479,
+          "ma20": 13.450999999999999,
+          "rsi14": 58.895705521472394,
+          "atr14": 0.5064285714285716,
+          "support": 12.73,
+          "resistance": 14.14
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "000926.SZ",
+      "name": "福星股份",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "2.17 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:现价跌破 MA5/10/20,等收复。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "现价跌破 MA5/10/20,等收复",
+          "EGS分": 65.62
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 2.176,
+          "ma10": 2.262,
+          "ma20": 2.2495000000000003,
+          "rsi14": 44.89795918367346,
+          "atr14": 0.15142857142857144,
+          "support": 1.95,
+          "resistance": 2.74
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "现价跌破 MA5/10/20,等收复"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "000686.SZ",
+      "name": "东北证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "7.83 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 64.66
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 7.529999999999999,
+          "ma10": 7.692,
+          "ma20": 7.828,
+          "rsi14": 45.806451612903224,
+          "atr14": 0.21857142857142856,
+          "support": 7.34,
+          "resistance": 8.28
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "601156.SH",
+      "name": "东航物流",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "16.68 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 63.46
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 16.330000000000002,
+          "ma10": 16.539,
+          "ma20": 16.332,
+          "rsi14": 55.185185185185205,
+          "atr14": 0.44714285714285723,
+          "support": 15.12,
+          "resistance": 17.21
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "002436.SZ",
+      "name": "兴森科技",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "37.8 | 试探仓",
+          "否决审查触发": "语义待核:官方 medium/low 命中(例行件),待复核(未扣分,待 web/LLM 实判)",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 62.48
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 37.396,
+          "ma10": 38.641,
+          "ma20": 37.1565,
+          "rsi14": 49.223352972683436,
+          "atr14": 3.0550000000000006,
+          "support": 30.97,
+          "resistance": 42.6
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "semantic_pending_review=官方 medium/low 命中(例行件)(待核,未扣分)",
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "risk",
+            "severity_max": "medium",
+            "events": [
+              {
+                "source": "cninfo",
+                "title": "2025年度非经营性资金占用及其他关联资金往来的专项说明",
+                "category": "资金占用",
+                "disclosure_date": "20260425",
+                "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-25/1225184934.PDF",
+                "risk_type": "fund_occupation",
+                "severity": "medium"
+              },
+              {
+                "source": "cninfo",
+                "title": "上市公司2025年度非经营性资金占用及其他关联资金往来情况汇总表",
+                "category": "资金占用",
+                "disclosure_date": "20260425",
+                "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-25/1225184933.PDF",
+                "risk_type": "fund_occupation",
+                "severity": "medium"
+              }
+            ],
+            "impact": "pending",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "tailwind",
+              "risk_level": "none",
+              "action": "no_action",
+              "sources_count": 1,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "600025.SH",
+      "name": "华能水电",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "9.86 | 试探仓",
+          "否决审查触发": "语义待核:官方 medium/low 命中(例行件),待复核(未扣分,待 web/LLM 实判)",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 58.9
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 9.697999999999999,
+          "ma10": 9.861,
+          "ma20": 9.7005,
+          "rsi14": 65.3409090909091,
+          "atr14": 0.2607142857142855,
+          "support": 9.2,
+          "resistance": 10.25
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "semantic_pending_review=官方 medium/low 命中(例行件)(待核,未扣分)",
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "risk",
+            "severity_max": "medium",
+            "events": [
+              {
+                "source": "cninfo",
+                "title": "致同会计师事务所关于公司2025年度非经营性资金占用及其他关联资金往来情况的专项审计报告",
+                "category": "资金占用",
+                "disclosure_date": "20260429",
+                "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-29/1225231686.PDF",
+                "risk_type": "fund_occupation",
+                "severity": "medium"
+              }
+            ],
+            "impact": "pending",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "002916.SZ",
+      "name": "深南电路",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "379.5 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 58.88
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 380.864,
+          "ma10": 383.15,
+          "ma20": 378.044,
+          "rsi14": 45.73409423194832,
+          "atr14": 30.51214285714285,
+          "support": 313.43,
+          "resistance": 430.38
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "001389.SZ",
+      "name": "广合科技",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "178.4 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:现价跌破 MA5/10/20,等收复。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "现价跌破 MA5/10/20,等收复",
+          "EGS分": 58.88
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 180.274,
+          "ma10": 179.89100000000002,
+          "ma20": 182.7775,
+          "rsi14": 43.01087197692478,
+          "atr14": 13.162857142857144,
+          "support": 164.0,
+          "resistance": 199.74
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "tailwind",
+              "risk_level": "none",
+              "action": "no_action",
+              "sources_count": 1,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "现价跌破 MA5/10/20,等收复"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "600030.SH",
+      "name": "中信证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "26.29 | 试探仓",
+          "否决审查触发": "无",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 58.34
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 25.518,
+          "ma10": 25.365000000000002,
+          "ma20": 25.482,
+          "rsi14": 56.598984771573605,
+          "atr14": 0.7128571428571429,
+          "support": 24.8,
+          "resistance": 26.65
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-06-15T10:27:34+08:00",
+      "as_of": "20260612",
+      "ts_code": "600522.SH",
+      "name": "中天科技",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈50.7937% | Rule3减半:否",
+          "现价与成本": "48.6 | 试探仓",
+          "否决审查触发": "语义待核:官方 medium/low 命中(例行件),待复核(未扣分,待 web/LLM 实判)",
+          "板块资金事件": "neutral",
+          "风控触发": "EGS market_regime unknown/missing→按震荡期保守处理",
+          "操作建议": "观察,不建仓。原因:未到低吸/突破触发。降级:EGS market_regime unknown/missing→按震荡期保守处理。"
+        },
+        "table": {
+          "操作": "观察",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "优先级": "⭐×2",
+          "触发条件": "未到低吸/突破触发",
+          "EGS分": 56.59
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 50.416000000000004,
+          "ma10": 47.147000000000006,
+          "ma20": 44.8115,
+          "rsi14": 59.28455284552846,
+          "atr14": 4.08642857142857,
+          "support": 37.75,
+          "resistance": 54.48
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "downgrade",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [],
+          "downgrade": [
+            "EGS market_regime unknown/missing→按震荡期保守处理"
+          ],
+          "observe_only": [
+            "semantic_pending_review=官方 medium/low 命中(例行件)(待核,未扣分)",
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "risk",
+            "severity_max": "medium",
+            "events": [
+              {
+                "source": "cninfo",
+                "title": "中兴华会计师事务所（特殊普通合伙）关于江苏中天科技股份有限公司2025年度非经营性资金占用及其他关联资金往来情况的专项说明",
+                "category": "资金占用",
+                "disclosure_date": "20260425",
+                "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-25/1225177480.PDF",
+                "risk_type": "fund_occupation",
+                "severity": "medium"
+              }
+            ],
+            "impact": "pending",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "观察",
+          "type": "观察",
+          "star": 2,
+          "plan": null,
+          "reject_reason": "未到低吸/突破触发"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 50.7937,
+          "halve": false,
+          "status": "ok"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        }
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      }
+    }
+  ],
+  "run_lineage": {
+    "analysis_input": "result/a_short/20260612/analysis_input.json",
+    "selection_bucket": "result/a_short/20260612",
+    "iv_feed": "research/results/a_short/iv_feed_20260612/iv_feed.json",
+    "account_ref": "",
+    "account_status": "absent",
+    "sizing_mode": "observation_only_no_account"
+  },
+  "boundary": {
+    "production": false,
+    "real_money": false,
+    "is_validated_alpha": false,
+    "satisfies_ship_gate": false
+  }
+}

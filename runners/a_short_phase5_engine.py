@@ -506,6 +506,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "盈二": (plan["t2"] if plan else None),
         "损": (plan["stop"] if plan else None),
         "类型": (etype if action in ("建仓", "持有") else "N/A"),
+        "EGS分": inp.get("egs_score"),        # EGS 质量总分(选股层);与下面的风控星级是两个维度
         "优先级": (f"⭐×{star}" if star else "—"),
         "触发条件": (f"现价≤{plan['entry']};持仓周期1-3周;{';'.join(plan['sizing_notes'])}"
                      if plan else (reject or "")),

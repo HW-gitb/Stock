@@ -55,6 +55,10 @@ def render_weekly_markdown(weekly: dict) -> str:
            f"**环境**:{env}　|　**波动率**:{vol}",
            f"**共 {n} 只** — 建仓 {acts.get('建仓',0)} / 持有 {acts.get('持有',0)} / "
            f"观察 {acts.get('观察',0)} / 否决 {acts.get('否决',0)}"]
+    # regime-unknown 全局横幅:把"全员保守压星"说成市场级状态,而非个股质量差(个股质量看下表「EGS分」)。
+    if ("regime unknown" in env) or ("保守fallback" in env) or ("保守 fallback" in env):
+        out.append("> ⚠️ **市场 regime 未知 → 全员按震荡期保守降级(统一 −1 星)**。星级反映的是**当前市场保守状态**,"
+                   "不是个股质量差;**个股质量看下表「EGS分」列**。(V14.3 regime 分类器接入 production 前,每次实盘都会如此。)")
     # Slice 3b-2: durable run_lineage banner — esp. the no-account no-sizing warning so a reader of THIS
     # artifact (not just the terminal) cannot mistake a sizing-artifact 观察 for a real avoid signal.
     rl = weekly.get("run_lineage") or {}
@@ -68,14 +72,14 @@ def render_weekly_markdown(weekly: dict) -> str:
                    " | account_ref=`" + str(rl.get("account_ref", "")) + "`" +
                    " | sizing=" + str(rl.get("sizing_mode", "?")))
     out += ["", "## 一览",
-            "| 票 | 名称 | 操作 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",
-            "|---|---|---|---|---|---|---|---|---|---|"]
+            "| 票 | 名称 | 操作 | EGS分 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",
+            "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in reports:
         t = r["m67"]["table"]
-        out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
-            _cell(r.get("ts_code")), _cell(r.get("name")), _cell(t["操作"]), _cell(t["优先级"]),
-            _cell(t["类型"]), _cell(t["入"]), _cell(t["损"]), _cell(t["盈一"]), _cell(t["盈二"]),
-            _cell(t["股数"])))
+        out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
+            _cell(r.get("ts_code")), _cell(r.get("name")), _cell(t["操作"]), _cell(t.get("EGS分")),
+            _cell(t["优先级"]), _cell(t["类型"]), _cell(t["入"]), _cell(t["损"]), _cell(t["盈一"]),
+            _cell(t["盈二"]), _cell(t["股数"])))
 
     out += ["", "## 逐票"]
     for r in reports:

@@ -36,7 +36,7 @@
         "table": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["操作", "股数", "入", "盈一", "盈二", "损", "类型", "优先级", "触发条件"],
+          "required": ["操作", "股数", "入", "盈一", "盈二", "损", "类型", "EGS分", "优先级", "触发条件"],
           "properties": {
             "操作": {"enum": ["建仓", "观察", "否决", "持有"]},
             "股数": {"type": ["integer", "null"]},
@@ -45,6 +45,7 @@
             "盈二": {"type": ["number", "null"]},
             "损": {"type": ["number", "null"]},
             "类型": {"type": "string"},
+            "EGS分": {"type": ["number", "null"]},
             "优先级": {"type": "string"},
             "触发条件": {"type": "string"}
           }

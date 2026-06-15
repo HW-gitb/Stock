@@ -10,6 +10,41 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Codex `审查 PASS` (M6.7 EGS分 render + official high Slice B)
+- **Verdict/Action**: PASS。`EGS分` 产物漂移已修,Slice B scope-leak 已拆成独立语义 slice;提交时按 register 分开取 scope,不要混入 unrelated EM smoke byproduct。
+- **Required**: `R-ASHORT-M67-EGSSCORE-ARTIFACT-DRIFT`, `R-ASHORT-SEMANTIC-HIGH-KEYWORD-SCOPE-LEAK` addressed in working tree;完整 closure/boundary 见 `docs/system_risk_register.md`。
+- **Verify**: artifact alignment OK(15/15 EGS分,0 mismatch,md 列+横幅);render/doc/route tests 42 OK;stubbed semantic branch probe OK;py_compile OK;diff-check clean(LF/CRLF only);jsonschema suites not rerun here due missing `jsonschema`。
+- **Next**: Claude `提交`。
+
+## 2026-06-15 — Claude `修复` (Slice A:R-ASHORT-M67-EGSSCORE-ARTIFACT-DRIFT + R-ASHORT-SEMANTIC-HIGH-KEYWORD-SCOPE-LEAK)
+- **Verdict/Action**: ① ARTIFACT-DRIFT:就地更新 20260612 `weekly_m67.json`(每 report table 加 EGS分 = `analysis_input.candidates[].scores.final_score`)+ 新 renderer 重渲染 `.md`;**未重跑 pipeline、未 refetch**(一次性脚本跑完即删、不提交)。② SCOPE-LEAK:选「显式 split Slice B」——Slice B 独立起草 entry(scope=`a_short_semantic_risk_summary.py`+其测试、tested 106 OK)已落;Slice A 提交时只 add render 侧文件、Slice B 单独审/提交。详情见 register。
+- **Required**: `R-ASHORT-M67-EGSSCORE-ARTIFACT-DRIFT` + `R-ASHORT-SEMANTIC-HIGH-KEYWORD-SCOPE-LEAK`;详情见 `docs/system_risk_register.md`。
+- **Verify**: artifact 15/15 reports 有 EGS分(non-null)、`.md` 含「EGS分」列 + regime 横幅、产物 schema valid(15 reports);Slice A 测试(phase5/render/pipeline)**148 OK** + py_compile OK;diff-check 干净;`_fix_egs_artifact.py` 已删、不在工作树。
+- **Next**: 审查。
+- **Pre-Codex self-review**: A(artifact 15/15 + md 列+横幅 + schema 各验);B(scope:Slice A entry=render、Slice B entry=semantic、SESSION_LOG scope 匹配实际文件;提交分离计划);C(EGS分 from 正确 final_score 非编造、产物 schema valid);F(未重跑/refetch、未改 compute_star/选股/否决/web_llm/V14.2、_fix 不提交)。
+
+## 2026-06-15 — Claude `起草` (M6.7 official 重大利空→high→否决 Slice B;独立 slice,非 Slice A 混入)
+- **Scope 澄清(回应 `R-ASHORT-SEMANTIC-HIGH-KEYWORD-SCOPE-LEAK`)**:Slice B 是用户继 Slice A 后明确要的**独立** slice(只改 `runners/a_short_semantic_risk_summary.py` + `tests/test_a_short_semantic_risk_summary.py`,与 Slice A 的 render/pipeline/engine/schema 文件**不重叠**)。我的失误 = 二者同工作树没隔离 → Codex 审 Slice A 时见 Slice B 文件判 scope-leak。两 slice 应**分别审/提交**(提交 Slice A 时只 add render 侧文件;Slice B 单独走审/提交)。
+- 动因(任务2,用户选官方公告层):让重大利空在 `official_structured` 判 high → 触发**已有**否决(`build_m67`:official high+非空URL→hard_veto);web_llm never-veto 不碰。
+- 设计(最窄安全侧——**high→否决,误报=误杀(有害)**,故宁漏勿误):`RISK_KEYWORD_MAP` 加 `终止上市`(delisting)/`强制措施`(coercive_measure)两高精度 high;加 `LIFTED_OR_IRRELEVANT`(撤销/解除/恢复上市/摘帽/脱星/免于/不予处罚/终止上市辅导)+ `_LIFTABLE_TYPES`(risk_warning/delisting/coercive_measure/penalty);`_match_risk`:high 命中后属可解除类型且含 lifted/无关 → 不报(防误杀),**立案永不被抑制**。**顺带修现有"撤销风险警示"被误判 high→误否决 bug**。
+- Verify:全套 **106 OK**(对抗测试 + 契约 drift guard + phase5 否决路径);py_compile/diff 干净。Pre-Codex:A(high×lifted×可解除类型×medium routine 各出口)/B(注释同步、消费者 build_official/build_m67 跑过)/C(摘帽/解除/无关/免罚不误杀 + 立案保护;自审改 LIFTED "免于处罚"→"免于" 修了不匹配真实"免于行政处罚"的真隐患)/F(py_compile/diff/doc↔behavior)。
+- Next:审查(Slice B 单独交 Codex)。Slice A 并行待 `修复`(见下条 Codex FAIL 的两 Required)。
+
+## 2026-06-15 — Codex `审查 FAIL` (M6.7 EGS分 render slice)
+- **Verdict/Action**: FAIL。EGS分/render 方向成立,但 20260612 `weekly_m67` 产物仍是旧格式;且工作树混入未声明的 official high 语义分类改动,越过 Slice A 边界。
+- **Required**: `R-ASHORT-M67-EGSSCORE-ARTIFACT-DRIFT`, `R-ASHORT-SEMANTIC-HIGH-KEYWORD-SCOPE-LEAK` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源,本处不复述)
+- **Verify**: scope/status reviewed; render+doc-guard tests 28 OK; `compileall` OK; `git diff --check` clean(LF/CRLF warnings only); artifact probe found missing `EGS分`; schema tests with bundled Python blocked by missing `jsonschema`.
+- **Next**: Claude `修复`。
+
+## 2026-06-15 — Claude `起草` (M6.7 渲染改进 Slice A:EGS分并列 + regime 全局横幅)
+- 动因:Codex+我分析的 M6.7「全员两星」区分度差(regime unknown 全员 -1 + 无 overlay → 3-1=2,EGS 82 分和 56 分都显 ⭐×2)。纯**渲染层**让区分可见,**不改 compute_star 保守逻辑 / 选股 / 否决 / web_llm 语义**。
+- 改动:`normalize_candidate` 传 `egs_score`(=scores.final_score)→ `build_m67_report` 写 `m67.table["EGS分"]` → m67 schema 加 EGS分(required + type[number,null])→ `m67_render` 一览表加「EGS分」列(并列优先级)+ regime unknown/保守fallback 时加**全局横幅**(说明星级=市场保守状态、个股质量看 EGS分)。
+- 测试:phase5(egs_score→table、缺→null);render(EGS分列渲染、regime 横幅、反向 regime known 无横幅);修 `test_holding` 列序断言 + `_report` fixture 加 EGS分默认。
+- Verify:全套 **178 OK**(phase5/render/pipeline/契约 drift guard/doc governance);m67 schema Draft7 OK;py_compile OK;diff-check 干净(仅 LF/CRLF)。
+- 边界:渲染+数据流 only;不碰 compute_star/选股/否决/web_llm/V14.2/下单。**Slice B(任务2:official 重大利空→high→否决)单独起草**(涉否决、需对抗式高精度 severity,不与渲染混)。
+- Next:审查。
+- Pre-Codex self-review:A(egs_score 出口 normalize→build_m67→schema→render 各测);B(schema required EGS分 B-ripple:全套 178 跑过、唯一破坏的 test_holding 列序断言已修、_report fixture 补默认、其他 build_m67 路径自动产 EGS分);C(反向:regime known 无横幅、egs_score 缺→null 不崩);F(schema valid/py_compile/diff-check/EGS分 type 容 None)。
+
 ## 2026-06-15 — Claude `执行` (Stage 4 重跑 20260612:IV build + M6.7 + EM→DeepSeek 端到端验通)
 - 修复 `da597fe0` 后重跑 weekly_screening Stage 4 两步(用已有 20260612 选股,不重抓全市场)。
 - **IV feed build 通**(修复实证):过 import + 真抓 510050 期权 basic/daily/underlier `11814/176634/332`、282 交易日、`latest_iv_pct=50.79`、`had_provider_error=False` → `research/results/a_short/iv_feed_20260612/iv_feed.json`。

@@ -408,5 +408,18 @@ class GovernanceAndSchemaTests(unittest.TestCase):
             self.assertTrue(out.exists())
 
 
+class EgsScoreInM67Tests(unittest.TestCase):
+    """Slice A: build_m67 把选股质量分 egs_score 放进 m67.table[\"EGS分\"](与风控星级两个维度,
+    渲染层并列展示;不改 compute_star 保守逻辑)。"""
+
+    def test_egs_score_passed_to_table(self):
+        inp = _good_input()
+        inp["egs_score"] = 82.66
+        self.assertEqual(build_m67_report(inp, AS_OF, "t")["m67"]["table"]["EGS分"], 82.66)
+
+    def test_missing_egs_score_is_none(self):
+        self.assertIsNone(build_m67_report(_good_input(), AS_OF, "t")["m67"]["table"]["EGS分"])
+
+
 if __name__ == "__main__":
     unittest.main()
