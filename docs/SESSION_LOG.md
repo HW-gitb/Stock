@@ -10,6 +10,17 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Claude session handoff(/clear 前:V14.3 regime compute 性能优化任务,诊断已完成、未实现)
+**给 /clear 后新会话**:用户下一步会发「优化 V14.3 regime 的 compute 性能」。本条 = 接上所需的全部上下文。
+- **任务**:优化 `engine/a_short_regime_features.py::compute_regime_daily_features` 性能,让 V14.3 regime **bootstrap(252天回填)从 ~90 分钟降到几分钟**(用户已选「优化」而非「硬跑一次」)。
+- **诊断(已真网 profile)**:fetch 不慢(105天全市场 87s)。**compute 慢:21.55s/天 → 252天≈90分钟**。根因:每个 as_of 都对全 daily panel(~138万行)反复 `daily["trade_date"].astype(str)==day` 全表 filter——① up_sets 循环(252天窗,~line 269-273)② history_incomplete(~line 280,252天各 _incomplete 2 次 filter)③ 反复 `.astype(str)` on 138万行 ④ `_pct_above_ma20`(~line 144,groupby + 逐 code 循环)。`runners/a_short_regime_comparison_runner.py::make_feature_provider` 每个 as_of 调一次 compute → bootstrap = 252×252 次全表扫。
+- **优化方案(已定,未实现)**:compute 内部按 trade_date **预分组成 dict 一次**(一次 groupby + str-cast 一次)→ 所有 `daily[==day]`/`sl[==day]` filter 改 `dd_by_date.get(day)` O(1);可选 `_pct_above_ma20` 向量化(pivot/groupby-mean 替逐 code 循环)。**不改 regime 语义/字段/返回值,只换实现**。预期 21.5s→<1s/天。
+- **硬约束**:优化前后**每天 regime row 必须逐字段 bit-identical**(否则 bootstrap 攒错数据,比慢更糟)。closure 必含:优化版 vs 原版对同一 panel、多个 as_of 跑出的 row **assert 完全相等** 的对比验证 + 现有 `tests/test_a_short_regime_features.py` 仍全过 + 加性能/一致测试 → 交 Codex `审查`。
+- **文件**:`engine/a_short_regime_features.py`、`runners/a_short_regime_comparison_runner.py`(make_feature_provider)、`tests/test_a_short_regime_features.py`。
+- **优化 PASS+提交后跑 bootstrap 建初始 ledger**(几分钟):`python -u runners/a_short_regime_comparison_runner.py --as-of 20260612 --bootstrap --confirm-fetch-authorized --iv-feed research/results/a_short/iv_feed_20260612/iv_feed.json`。**运维教训(已踩)**:① 别用 PowerShell 后台跑它(output 丢 + exit 0 假完成);用 Bash + `python -u`;② 重跑前先 `Get-Process python` 杀残留(双开会抢 token+CPU 互拖,曾两次失败)。
+- **再之后(用户需求,另起 slice)**:把 regime weekly step 接进 `weekly_screening.ps1`(旁路 stage:无 ledger→`--bootstrap`、有→increment ~5天)→ 周五实盘一键顺带每周更新 V14.3。cadence=**每周**跟周五实盘(非每天)。
+- **工作树**:M6.7 Slice A/B + 大白话输出纪律已提交(`872bb60`/`2e6b02b`/`b7e93b6`);仅 `research/results/a_short/em_probe_smoke_20260614/*` 故意 untracked、勿提交。
+
 ## 2026-06-15 — Codex `审查 PASS` (M6.7 EGS分 render + official high Slice B)
 - **Verdict/Action**: PASS。`EGS分` 产物漂移已修,Slice B scope-leak 已拆成独立语义 slice;提交时按 register 分开取 scope,不要混入 unrelated EM smoke byproduct。
 - **Required**: `R-ASHORT-M67-EGSSCORE-ARTIFACT-DRIFT`, `R-ASHORT-SEMANTIC-HIGH-KEYWORD-SCOPE-LEAK` addressed in working tree;完整 closure/boundary 见 `docs/system_risk_register.md`。
