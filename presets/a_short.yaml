@@ -29,3 +29,12 @@ screening_threshold_governance:
   source_code_ref: A-EGS/egs_main.py::CONF
   parity_test_ref: tests/schema/test_a_short_screening_threshold_governance_schema.py
   status: current_conf_mirrored_no_runtime_behavior_change
+
+# 4.3 手工持仓表格 → account_state 转换器的状态推进常量(单一来源)。
+# 唯一消费者 = runners/a_short_account_state_from_manual_tables.py(缺此块则用其 DEFAULT_CONFIG,值相同)。
+# 数值依据 v14.2 spec:Rule13 = 24h 冷静期(日历日 +1;到期转 pending_recheck 仍阻断,安全靠人工复核门
+# 非周期长度)、再入仓位≤原 50%;Rule12 = 48h 冷静期、恢复首笔仓位≤正常 50%。
+position_management:
+  rule13_cooldown_calendar_days: 1
+  rule13_default_max_reentry_position_pct: 0.5
+  rule12_default_recovery_position_multiplier: 0.5

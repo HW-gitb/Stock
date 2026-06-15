@@ -1,0 +1,42 @@
+{
+  "schema_name": "a_short_account_state_lineage",
+  "schema_version": "1.0.0",
+  "generated_at": null,
+  "decision_as_of": "20260615",
+  "facts_as_of": "20260615",
+  "facts_staleness": "current",
+  "config": {
+    "rule13_cooldown_calendar_days": 1,
+    "rule13_default_max_reentry_position_pct": 0.5,
+    "rule12_default_recovery_position_multiplier": 0.5
+  },
+  "source_tables": [
+    {"name": "account", "path": "state/a_short/account_state_csv/account.csv", "sha256": "1111111111111111111111111111111111111111111111111111111111111111", "row_count": 1},
+    {"name": "positions", "path": "state/a_short/account_state_csv/positions.csv", "sha256": "2222222222222222222222222222222222222222222222222222222222222222", "row_count": 1},
+    {"name": "trades", "path": "state/a_short/account_state_csv/trades.csv", "sha256": "3333333333333333333333333333333333333333333333333333333333333333", "row_count": 3},
+    {"name": "manual_controls", "path": "state/a_short/account_state_csv/manual_controls.csv", "sha256": "4444444444444444444444444444444444444444444444444444444444444444", "row_count": 1},
+    {"name": "portfolio_rule12", "path": "state/a_short/account_state_csv/portfolio_rule12.csv", "sha256": "5555555555555555555555555555555555555555555555555555555555555555", "row_count": 1}
+  ],
+  "rule12": {
+    "source": "excel_portfolio_rule12",
+    "progressed": null
+  },
+  "rule13_cooldowns": [
+    {
+      "ts_code": "600519.SH",
+      "source": "excel_trades",
+      "progressed": null,
+      "exit_date": "20260615",
+      "cooldown_until": "20260616",
+      "manual_block_applied": false
+    },
+    {
+      "ts_code": "601318.SH",
+      "source": "excel_trades_with_manual_controls",
+      "progressed": {"from_status": "active_cooldown", "to_status": "pending_recheck"},
+      "exit_date": "20260605",
+      "cooldown_until": "20260606",
+      "manual_block_applied": false
+    }
+  ]
+}

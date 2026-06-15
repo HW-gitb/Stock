@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_account_state_lineage",
+  "description": "Audit sidecar emitted by the A-short 4.3 manual-tables -> account_state converter (runners/a_short_account_state_from_manual_tables.py). It records WHERE each derived account state came from (which input table) and WHETHER the converter auto-progressed an expired Rule12/Rule13 cooldown. It is a human-readable audit/test artifact only: it is NOT consumed by weekly M6.7 or the Phase 5 engine, never connects to brokers, and never authorizes orders. Provenance lives here precisely so account_state.json can stay at the existing v1.0.0 contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "decision_as_of", "facts_as_of", "facts_staleness",
+               "config", "source_tables", "rule12", "rule13_cooldowns"],
+  "properties": {
+    "schema_name": {"const": "a_short_account_state_lineage"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": ["string", "null"],
+                     "description": "Wall-clock stamp added by main() after the deterministic build; null in pure-build/test paths so the build stays byte-deterministic."},
+    "decision_as_of": {"$ref": "#/$defs/date8", "description": "The run / M6.7 decision date (= converter --as-of = output account_state.as_of)."},
+    "facts_as_of": {"$ref": "#/$defs/date8", "description": "The as_of the user wrote in the account table (date the manual facts were last updated)."},
+    "facts_staleness": {"enum": ["current", "stale_warning"],
+                        "description": "current when facts_as_of == decision_as_of; stale_warning when facts_as_of < decision_as_of (e.g. Monday-intraday run on last-Friday facts)."},
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule13_cooldown_calendar_days", "rule13_default_max_reentry_position_pct",
+                   "rule12_default_recovery_position_multiplier"],
+      "properties": {
+        "rule13_cooldown_calendar_days": {"type": "integer", "minimum": 0},
+        "rule13_default_max_reentry_position_pct": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "rule12_default_recovery_position_multiplier": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+      }
+    },
+    "source_tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "path", "sha256", "row_count"],
+        "properties": {
+          "name": {"enum": ["account", "positions", "trades", "manual_controls", "portfolio_rule12"]},
+          "path": {"type": "string"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "row_count": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "rule12": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "progressed"],
+      "properties": {
+        "source": {"enum": ["excel_portfolio_rule12", "default_inactive"]},
+        "progressed": {"$ref": "#/$defs/progressionOrNull"}
+      }
+    },
+    "rule13_cooldowns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "source", "progressed", "exit_date", "cooldown_until", "manual_block_applied"],
+        "properties": {
+          "ts_code": {"type": "string", "pattern": "^[0-9]{6}\\.(SH|SZ)$"},
+          "source": {"enum": ["excel_trades", "excel_trades_with_manual_controls"]},
+          "progressed": {"$ref": "#/$defs/progressionOrNull"},
+          "exit_date": {"$ref": "#/$defs/date8"},
+          "cooldown_until": {"$ref": "#/$defs/date8"},
+          "manual_block_applied": {"type": "boolean"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "date8": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "progressionOrNull": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from_status", "to_status"],
+          "properties": {
+            "from_status": {"type": "string"},
+            "to_status": {"type": "string"}
+          }
+        }
+      ]
+    }
+  }
+}

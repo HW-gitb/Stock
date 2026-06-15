@@ -1,0 +1,4 @@
+trade_date,ts_code,name,side,shares,price,reason,order_manual,notes
+20260601,600000.SH,浦发银行,BUY,1000,9.80,entry,TRUE,建仓
+20260615,600519.SH,贵州茅台,SELL,100,1620.00,stop_loss,TRUE,跌破止损当日卖出
+20260605,601318.SH,中国平安,SELL,500,48.50,stop_loss,TRUE,跌破止损
