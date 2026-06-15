@@ -10,6 +10,46 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Codex `审查 PASS` (A-short 4.3-C render + SESSION_LOG template)
+- **Verdict/Action**: PASS。多标签渲染已按桌面 4.3 §16.2 修复,SESSION_LOG minimal-template drift 也已修复。
+- **Required**: `R-ASHORT-43C-HOLDING-STATE-MULTILABEL-DROP` and `R-ASHORT-43C-SESSIONLOG-MINIMAL-TEMPLATE-DRIFT` addressed in working tree;详情见 `docs/system_risk_register.md`。
+- **Verify**: render 21 OK;doc-governance+route-doc 30 OK;py_compile OK;custom overlap probe OK;no-BOM/FFFD OK;`git diff --check` clean(CRLF warning only)。
+- **Next**: Claude `提交`。
+
+## 2026-06-15 — Claude `修复` (R-ASHORT-43C-SESSIONLOG-MINIMAL-TEMPLATE-DRIFT)
+- **Verdict/Action**: 判定 finding **正确**(多标签渲染功能已对,但上条 `修复` 的 proof 行冒号写在加粗内+破折号、且超 500 字,minimal-template guard 不识别 → `free-form`+`missing-proof-of-use`)。已把该行改成模板形 `- **Pre-Codex self-review**: …` 并精简、Verify 行留余量;渲染代码/测试/design/README 未动(功能修复保持)。
+- **Required**: `R-ASHORT-43C-SESSIONLOG-MINIMAL-TEMPLATE-DRIFT`;详见 `docs/system_risk_register.md`。
+- **Verify**: doc-governance + route-doc guard **30 OK**(`test_review_cycle_minimal_template_enforced_above_marker` 转绿);仅改 SESSION_LOG 两条 review-cycle entry 文案;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查`)。
+- **Pre-Codex self-review**: A–F checked — B 仅 SESSION_LOG 文案、guard 转绿;C 本条目自身亦过 minimal-template;E review-cycle 模板单态(proof label 在加粗外、值精简、全文细节留 register);F doc↔guard 一致、no-BOM、diff 干净。
+
+## 2026-06-15 — Codex `审查 FAIL` (A-short 4.3-C re-review)
+- **Verdict/Action**: FAIL。多标签渲染本身看起来已修对,但最新 Claude `修复` entry 不符合 review-cycle minimal template,doc-governance guard 仍红。
+- **Required**: `R-ASHORT-43C-SESSIONLOG-MINIMAL-TEMPLATE-DRIFT`;详情见 `docs/system_risk_register.md`。
+- **Verify**: render 21 OK;py_compile OK;custom overlap probe OK;doc-governance+route-doc guard FAIL;weekly/phase5 blocked here because bundled Python lacks `jsonschema`;`git diff --check` clean(CRLF warning only)。
+- **Next**: Claude `修复`。
+
+## 2026-06-15 — Claude `修复` (R-ASHORT-43C-HOLDING-STATE-MULTILABEL-DROP)
+- **Verdict/Action**: 判定 finding **正确**(原 `_holding_state` 单 `if/elif` 给 Rule13 优先 → 同一空仓票同时命中组合级 Rule12 + per-stock Rule13 时只显 Rule13、隐藏组合级 Rule12 冷静/恢复)。改为**多标签**:空仓候选并列 Rule12(`Rule12冷静`/`Rule12恢复`)在前 + Rule13(`Rule13冷静`/`Rule13待复核`/`Rule13可再入`)在后、` + ` 连接(如 `Rule12冷静 + Rule13待复核`),都不命中→`空仓`;持仓按 register 允许保留单一 `已持仓`(Rule12 原因仍进逐票说明、不丢信息)。design §10 + README 4.3 行同步去「Rule13 优先」措辞、改述多标签。
+- **Required**: `R-ASHORT-43C-HOLDING-STATE-MULTILABEL-DROP`;详情/closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: render+weekly+phase5+route-doc+doc-governance **199 OK**(含 register 指定 regression `test_overlapping_rule12_rule13_shows_both_tags` + recovery/cleared 复合 + held 单标签;旧 precedence 测试已替换);py_compile/no-BOM/`git diff --check` 干净。边界仅 render/docs/tests,不改 schema/引擎/sizing/否决/EGS/券商;em_probe 仍排除。
+- **Next**: 审查(Codex re-`审查`)。
+- **Pre-Codex self-review**: A–F checked — A 多标签覆盖 Rule12{冷静,恢复}×Rule13{冷静,待复核,可再入,none}+held+无账户每出口各验;B grep 旧「Rule13 优先」已改 design§10+README、`_holding_state` 仅本模块;C held 仍单标签、`空仓` 仅全不命中、register regression 钉重叠不隐藏;E route-doc 单态;F doc↔behavior 标签·顺序·分隔符一致、no-BOM、diff 干净。
+
+## 2026-06-15 — Codex `审查 FAIL` (A-short 4.3-C 持仓/冷静渲染)
+- **Verdict/Action**: FAIL。render-only 方向正确,但 `持仓/冷静` 列没有执行桌面 4.3.md §16.2 的多标签要求:同一票同时命中 Rule12 和 Rule13 时只能显示一个 Rule13 标签,会隐藏组合级 Rule12 冷静/恢复状态。
+- **Required**: `R-ASHORT-43C-HOLDING-STATE-MULTILABEL-DROP`;详见 `docs/system_risk_register.md`。
+- **Verify**: code/doc/test review;desktop §16.2 checked;custom `_holding_state` probe confirms current label only returns Rule13;`tests.test_a_short_m67_render` 19 OK;py_compile OK;route-doc+doc-governance 30 OK;`git diff --check` clean(CRLF warning only)。
+- **Next**: Claude `修复`。
+
+## 2026-06-15 — Claude `起草` (A-short 4.3-C:M6.7 一览表「持仓/冷静」列 + 逐票说明;render-only)
+- **背景/scope**:接 4.3-A+B(已提交 `e3b54f1e`),按桌面 4.3.md §16.2 做 4.3-C。**先核查现有 render**:`machine.stateful_risk`(含 `position_state`/`rule12.status`/`rule13.status`/`reasons`)**已写进每票产物**(`a_short_phase5_engine.py:561`),一览表当时无「持仓/冷静」列、也无「状态来源」列。故 4.3-C 可**纯渲染层**做、**零引擎/schema 改动**(正合 §16.2「不大改引擎、从 machine.stateful_risk 派生」)。
+- **改动(render-only,仅 `runners/a_short_m67_render.py`)**:新 `_holding_state(report)` 从 `machine.stateful_risk` 派生标签(已持仓 / Rule13冷静·待复核·可再入 / Rule12冷静·恢复 / 空仓;无账户/老报告→`—`;per-stock Rule13 优先于组合级 Rule12)+ reasons;① 一览表加「持仓/冷静」列(操作 后);② 逐票区**仅在持仓/冷静态**加 `持仓/冷静:<态>（reasons）`(空仓/`—` 不加噪音)。**不渲染「状态来源」**(§16.2 Route A:来源在转换器 lineage、M6.7 推不出);**只解释、不改 action/star/hard_veto/sizing**。
+- **文档**:design doc §10 + README 4.3 行标 4.3-C 已实现(+渲染器/测试登记 owner);**4.3-D(trades↔positions 一致性)仍后续**。CURRENT 待提交后再更新(避免未提交先标 done)。
+- **Verify**:render 测试 **19 OK**(含 7 新 `HoldingStateTests`:每态→标签 + 无账户→— + 逐票行 + 反向「渲染不改 action」+ Rule13>Rule12 precedence + 空仓不加行);weekly+phase5+render 簇 **167 OK** 无回归;route-doc+doc-governance guard OK;py_compile / no-BOM / `git diff --check` 干净。边界:纯渲染,不改引擎/schema/account_state 契约/选股/否决/sizing。
+- **Next**:审查(Codex;新渲染逻辑)。
+- **Pre-Codex self-review: A–F checked** — A(每个 stateful 态×出口:held/Rule13×3/Rule12×2/空仓 各一断言 + 无账户→— + 逐票行有无,矩阵覆盖非单例)/ B(全仓 grep「状态来源」=0,确认无列可删=Route A;表头唯一消费者=本渲染器+其测试,`weekly_pipeline` 仅 import 无表头断言;新符号 `_holding_state` 仅本模块;design doc + README 同步标 4.3-C done)/ C(反向:`test_render_only_does_not_alter_action_cell`(否决态仍显否决)、`test_rule13_takes_precedence_over_rule12`、空仓/无账户不加逐票行=不造噪音)/ D(N/A 无歧义 NL 分类)/ E(route-doc 单态:design+README 标 settled「已实现」、CURRENT 待提交后更新,transient gate 仅本 SESSION_LOG)/ F(no-BOM、diff-check 干净、py_compile OK、doc↔behavior:design §10 与渲染字段/标签一致、老报告无 stateful 不崩=defensive `.get`)。
+
 ## 2026-06-15 — Codex `审查 PASS` (A-short 4.3 手工表格 → account_state 转换器 Slice 4.3-A+B)
 - **Verdict/Action**: PASS。新转换器边界正确:复用既有 `a_short_account_state` v1.0.0 + 既有 `validate_account_state`,不改 M6.7/EGS/V14.2;Rule12/Rule13 推进只走更严格/明确安全侧;`manual_allow` 被拒;provenance 留 lineage,不污染 account_state。
 - **Required**: none。

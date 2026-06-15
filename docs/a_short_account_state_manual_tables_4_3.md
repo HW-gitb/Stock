@@ -1,7 +1,7 @@
 # A-short 4.3：手工持仓表格 → account_state.json（模板 + 列映射 + 边界）
 
 **owner**：A-short 4.3 持仓后管理自动化切片的 in-repo 设计 + 列映射文档（Slice 4.3-A）。
-**scope**：本切片交付 4.3-A（模板/映射/样例/边界）+ 4.3-B（转换器 + lineage schema + 测试）；4.3-C（M6.7 渲染微调）/ 4.3-D（trades↔positions 一致性提示）为后续独立 slice。（实时 review/commit gate 见 `docs/SESSION_LOG.md` 顶部,不在本文件。）
+**scope**：4.3-A（模板/映射/样例/边界）+ 4.3-B（转换器 + lineage schema + 测试）+ 4.3-C（M6.7 渲染微调：一览表加「持仓/冷静」列 + 逐票说明,纯渲染派生自 `machine.stateful_risk`,见 §10）已交付；**4.3-D（trades↔positions 一致性提示）为后续独立 slice**。（实时 review/commit gate 见 `docs/SESSION_LOG.md` 顶部,不在本文件。）
 
 ## 1. 目的与边界
 
@@ -101,3 +101,12 @@ provenance（每条状态来自哪张表、是否被自动推进、facts/decisio
 ## 9. 验收（§10 of 设计）
 
 给定一份样例（一只持仓 + 一只刚止损 active + 一只 Rule13 pending + 一只 Rule12 recovery）→ 转换器产出过 schema + validator 的 `account_state.json`；周报读后：持仓显示持仓管理 / 硬风险仍否决 / 刚止损阻断再入 / 冷静过期未复核显待复核仍阻断 / Rule12 active 阻断空仓新开仓 / recovery_1 限仓。样例 CSV 即覆盖前四态。
+
+## 10. 4.3-C：M6.7 渲染微调（render-only）
+
+`runners/a_short_m67_render.py` 从 `machine.stateful_risk`（引擎已写入每票产物，无需改引擎/schema）派生展示：
+
+- **一览表新增「持仓/冷静」列**：持仓 → `已持仓`;无账户/老报告 → `—`;空仓候选**并列所有适用标签**——组合级 Rule12(`Rule12冷静`/`Rule12恢复`)在前 + per-stock Rule13(`Rule13冷静`/`Rule13待复核`/`Rule13可再入`)在后,如 `Rule12冷静 + Rule13待复核`;都不命中 → `空仓`。**重叠时两态都显示,不让 Rule13 盖掉组合级 Rule12**(R-ASHORT-43C-HOLDING-STATE-MULTILABEL-DROP;持仓态按设计保留单一 `已持仓`,组合级 Rule12 原因仍进逐票说明,不丢信息)。
+- **逐票区**：仅在持仓/冷静态(非空仓、非 `—`)加一行 `持仓/冷静:<态>（<reasons>）`,reasons 取自 `stateful_risk.reasons`（含 Rule12+Rule13 全部原因）。空仓/无账户不加,避免噪音。
+- **不渲染「状态来源」**（§7 Route A）：来源信息在转换器 lineage 旁产物里,不在被 M6.7 消费的 account_state 里,M6.7 推不出。
+- **只解释、不改结论**：该列/行**不反向改写** action / star / hard_veto / sizing（有反向测试钉死）。owner：`runners/a_short_m67_render.py`、`tests/test_a_short_m67_render.py::HoldingStateTests`。

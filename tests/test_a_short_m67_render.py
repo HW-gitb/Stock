@@ -63,9 +63,11 @@ class RenderTests(unittest.TestCase):
         held = _report("600000.SH", "持有", 类型="已有持仓", EGS分=72.0, 优先级="⭐×3",
                        触发条件="已有持仓:按持仓管理输出,不按新开仓处理;禁止自动加仓")
         held["m67"]["精简结论区"]["现价与成本"] = "2.90 | 持仓:1000股/均价2.7/建仓20260601/手动止损2.55"
+        held["machine"] = {"stateful_risk": {"position_state": "held", "rule12": {"status": "inactive"},
+                                             "rule13": {"status": "not_applicable_existing_position"}, "reasons": []}}
         md = render_weekly_markdown(_weekly([held]))
         self.assertIn("建仓 0 / 持有 1 / 观察 0 / 否决 0", md)
-        self.assertIn("| 600000.SH | 测试 | 持有 | 72.0 | ⭐×3 | 已有持仓 |", md)
+        self.assertIn("| 600000.SH | 测试 | 持有 | 已持仓 | 72.0 | ⭐×3 | 已有持仓 |", md)
         self.assertIn("持仓:1000股/均价2.7/建仓20260601/手动止损2.55", md)
         self.assertIn("禁止自动加仓", md)
         self.assertIn("已有持仓:按持仓管理输出", md)
@@ -146,8 +148,8 @@ class EgsScoreAndRegimeBannerTests(unittest.TestCase):
     def test_egs_score_column_rendered(self):
         md = render_weekly_markdown(_weekly([
             _report("600000.SH", "观察", EGS分=82.66, 优先级="⭐×2")]))
-        self.assertIn("| 票 | 名称 | 操作 | EGS分 | 优先级 |", md)        # 新列在 header
-        self.assertIn("| 600000.SH | 测试 | 观察 | 82.66 | ⭐×2 |", md)   # EGS 分并列星级
+        self.assertIn("| 票 | 名称 | 操作 | 持仓/冷静 | EGS分 | 优先级 |", md)   # EGS分 列(持仓/冷静在其左)
+        self.assertIn("| 600000.SH | 测试 | 观察 | — | 82.66 | ⭐×2 |", md)      # 无账户→持仓/冷静=—,EGS 分并列
 
     def test_regime_unknown_global_banner(self):
         r = _report("600000.SH", "观察", EGS分=82.66, 优先级="⭐×2")
@@ -162,6 +164,78 @@ class EgsScoreAndRegimeBannerTests(unittest.TestCase):
         r["m67"]["精简结论区"]["当前环境"] = "进攻期"
         md = render_weekly_markdown(_weekly([r]))
         self.assertNotIn("市场 regime 未知", md)
+
+
+def _report_stateful(ts_code, action, stateful, **tbl):
+    # a report carrying the engine's machine.stateful_risk ctx (4.3-C holding/cooldown render source)
+    r = _report(ts_code, action, **tbl)
+    r["machine"] = {"stateful_risk": stateful}
+    return r
+
+
+def _sr(position_state="flat", r12="inactive", r13="none", reasons=None):
+    return {"position_state": position_state, "rule12": {"status": r12},
+            "rule13": {"status": r13}, "reasons": reasons or []}
+
+
+class HoldingStateTests(unittest.TestCase):
+    """4.3-C: 一览表新增「持仓/冷静」列 + 逐票说明,纯渲染派生自 machine.stateful_risk;只解释、不改
+    action/star/sizing。无「状态来源」列(来源在转换器 lineage,不在被 M6.7 消费的 account_state)。"""
+
+    def _md(self, stateful, action="观察"):
+        return render_weekly_markdown(_weekly([_report_stateful("600000.SH", action, stateful)]))
+
+    def test_flat_empty_shows_kongcang_no_card_line(self):
+        md = self._md(_sr())
+        self.assertIn("| 票 | 名称 | 操作 | 持仓/冷静 | EGS分 |", md)
+        self.assertIn("| 600000.SH | 测试 | 观察 | 空仓 |", md)
+        self.assertNotIn("- 持仓/冷静:", md)            # 空仓不在逐票区加噪音
+
+    def test_held_label_and_card_line(self):
+        md = self._md(_sr(position_state="held", reasons=["已有持仓:仅管理/不加仓"]), action="持有")
+        self.assertIn("| 600000.SH | 测试 | 持有 | 已持仓 |", md)
+        self.assertIn("- 持仓/冷静:已持仓（已有持仓:仅管理/不加仓）", md)
+
+    def test_rule13_states(self):
+        self.assertIn("| 600000.SH | 测试 | 观察 | Rule13冷静 |", self._md(_sr(r13="active_cooldown")))
+        self.assertIn("| 600000.SH | 测试 | 观察 | Rule13待复核 |", self._md(_sr(r13="pending_recheck")))
+        self.assertIn("| 600000.SH | 测试 | 观察 | Rule13可再入 |", self._md(_sr(r13="cleared_for_reentry")))
+
+    def test_rule12_states(self):
+        self.assertIn("| 600000.SH | 测试 | 观察 | Rule12冷静 |", self._md(_sr(r12="active_cooldown")))
+        self.assertIn("| 600000.SH | 测试 | 观察 | Rule12恢复 |", self._md(_sr(r12="recovery_1")))
+
+    def test_overlapping_rule12_rule13_shows_both_tags(self):
+        # R-ASHORT-43C-HOLDING-STATE-MULTILABEL-DROP regression: a flat stock hitting BOTH a portfolio
+        # Rule12 state and a per-stock Rule13 state must show BOTH tags (Rule12 must NOT be hidden).
+        md = self._md(_sr(r12="active_cooldown", r13="pending_recheck",
+                          reasons=["Rule12 active_cooldown:block_new_entries", "Rule13 pending_recheck:block_reentry"]))
+        self.assertIn("| 600000.SH | 测试 | 观察 | Rule12冷静 + Rule13待复核 |", md)   # overview row shows both
+        self.assertIn("- 持仓/冷静:Rule12冷静 + Rule13待复核", md)                      # per-stock line shows both
+        self.assertIn("Rule12 active_cooldown:block_new_entries", md)                  # both reasons kept in card
+        self.assertIn("Rule13 pending_recheck:block_reentry", md)
+
+    def test_overlapping_recovery_and_cleared_shows_both_tags(self):
+        md = self._md(_sr(r12="recovery_1", r13="cleared_for_reentry"))
+        self.assertIn("| 600000.SH | 测试 | 观察 | Rule12恢复 + Rule13可再入 |", md)
+
+    def test_held_stays_single_label_but_rule12_reason_in_card(self):
+        # held may stay a single dominant 已持仓 label (register-permitted); the portfolio Rule12 reason
+        # is still surfaced in the per-stock card, so no information is lost.
+        md = self._md(_sr(position_state="held", r12="active_cooldown",
+                          reasons=["Rule12 active_cooldown:已有持仓仅管理/不加仓"]), action="持有")
+        self.assertIn("| 600000.SH | 测试 | 持有 | 已持仓 |", md)
+        self.assertIn("- 持仓/冷静:已持仓（Rule12 active_cooldown:已有持仓仅管理/不加仓）", md)
+
+    def test_no_account_shows_dash_no_card_line(self):
+        md = render_weekly_markdown(_weekly([_report("600000.SH", "观察")]))   # legacy/no machine.stateful_risk
+        self.assertIn("| 600000.SH | 测试 | 观察 | — |", md)
+        self.assertNotIn("- 持仓/冷静:", md)
+
+    def test_render_only_does_not_alter_action_cell(self):
+        # reverse: holding-state column is explanation-only; the 操作 cell still reflects the engine action
+        md = self._md(_sr(r13="active_cooldown"), action="否决")
+        self.assertIn("| 600000.SH | 测试 | 否决 | Rule13冷静 |", md)   # action unchanged by the new column
 
 
 if __name__ == "__main__":

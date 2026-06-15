@@ -40,6 +40,37 @@ def _semantic_line(report: dict) -> str:
     return f"- 语义风险(advisory·非确定·不进确定性字段):{off} / {web}"
 
 
+def _holding_state(report: dict):
+    """4.3-C:从 `machine.stateful_risk` 派生「持仓/冷静状态」标签 + 一句说明。**纯渲染、只解释**,
+    不改 action/star/hard_veto/sizing。来源信息(trades/manual_controls/转换器推进)在转换器 lineage
+    旁产物里,不在被引擎消费的 account_state 里,故此处不渲染「状态来源」(M6.7 推不出)。
+    无账户 / 老报告(无 stateful_risk)→ ("—", "");持仓 → "已持仓"。空仓候选**并列所有适用标签**
+    (组合级 Rule12 在前 + per-stock Rule13 在后,如 `Rule12冷静 + Rule13待复核`),重叠时不隐藏任一态
+    (R-ASHORT-43C-HOLDING-STATE-MULTILABEL-DROP)。返回 (label, reason)。"""
+    sr = (report.get("machine") or {}).get("stateful_risk") or {}
+    if not sr:
+        return "—", ""
+    reason = "；".join(str(x) for x in (sr.get("reasons") or []))
+    if sr.get("position_state") == "held":
+        return "已持仓", reason
+    # 空仓候选:组合并列所有适用态——组合级 Rule12 + per-stock Rule13 同时命中时两个都显示,
+    # 不让 Rule13 盖掉组合级 Rule12 冷静/恢复(否则读者会以为只有单票冷静、看不出全组合也在冷静)。
+    r12 = (sr.get("rule12") or {}).get("status")
+    r13 = (sr.get("rule13") or {}).get("status")
+    parts = []
+    if r12 == "active_cooldown":
+        parts.append("Rule12冷静")
+    elif r12 == "recovery_1":
+        parts.append("Rule12恢复")
+    if r13 == "active_cooldown":
+        parts.append("Rule13冷静")
+    elif r13 == "pending_recheck":
+        parts.append("Rule13待复核")
+    elif r13 == "cleared_for_reentry":
+        parts.append("Rule13可再入")
+    return (" + ".join(parts) if parts else "空仓"), reason
+
+
 def render_weekly_markdown(weekly: dict) -> str:
     reports = weekly.get("reports", [])
     as_of = weekly.get("as_of", "")
@@ -85,14 +116,14 @@ def render_weekly_markdown(weekly: dict) -> str:
                        ")已结算行情**(实盘盘中跑、as_of " + str(as_of) + " 当日 EOD 尚未发布);新闻/语义层窗口仍到 as_of。"
                        "**价格特征截至 " + str(pf.get("price_data_through")) + ",非 " + str(as_of) + "。**")
     out += ["", "## 一览",
-            "| 票 | 名称 | 操作 | EGS分 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",
-            "|---|---|---|---|---|---|---|---|---|---|---|"]
+            "| 票 | 名称 | 操作 | 持仓/冷静 | EGS分 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",
+            "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in reports:
         t = r["m67"]["table"]
-        out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
-            _cell(r.get("ts_code")), _cell(r.get("name")), _cell(t["操作"]), _cell(t.get("EGS分")),
-            _cell(t["优先级"]), _cell(t["类型"]), _cell(t["入"]), _cell(t["损"]), _cell(t["盈一"]),
-            _cell(t["盈二"]), _cell(t["股数"])))
+        out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
+            _cell(r.get("ts_code")), _cell(r.get("name")), _cell(t["操作"]), _cell(_holding_state(r)[0]),
+            _cell(t.get("EGS分")), _cell(t["优先级"]), _cell(t["类型"]), _cell(t["入"]), _cell(t["损"]),
+            _cell(t["盈一"]), _cell(t["盈二"]), _cell(t["股数"])))
 
     out += ["", "## 逐票"]
     for r in reports:
@@ -101,6 +132,9 @@ def render_weekly_markdown(weekly: dict) -> str:
         out.append(f"### {_cell(r.get('ts_code'))} {_cell(r.get('name'))} — {t['操作']}　{_cell(t['优先级'])}")
         for k in ("当前环境", "波动率状态", "现价与成本", "否决审查触发", "板块资金事件", "风控触发"):
             out.append(f"- {k}:{jq.get(k, '')}")
+        hs_label, hs_reason = _holding_state(r)      # 4.3-C:仅在持仓/冷静态显式标出(空仓/无账户不加噪音)
+        if hs_label not in ("空仓", "—"):
+            out.append(f"- 持仓/冷静:{hs_label}" + (f"（{hs_reason}）" if hs_reason else ""))
         sl = _semantic_line(r)
         if sl:
             out.append(sl)
