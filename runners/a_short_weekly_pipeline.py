@@ -238,7 +238,9 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     lineage = run_lineage if run_lineage is not None else {
         "analysis_input": "", "selection_bucket": "", "iv_feed": iv_feed_ref,
         "account_ref": "",
-        "account_status": "absent", "sizing_mode": "observation_only_no_account"}
+        "account_status": "absent", "sizing_mode": "observation_only_no_account",
+        "price_freshness": {"mode": "strict_as_of", "run_date": None,
+                            "accepted_prior_settled_date": None, "price_data_through": str(as_of)}}
     return {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
@@ -367,12 +369,22 @@ def resolve_market_regime(ai: dict) -> tuple[str, dict | None]:
     }
 
 
-def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str) -> list:
+def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str,
+                        accept_prior_settled_date: str | None = None) -> tuple:
     """前复权日线 → [{high,low,close}](oldest→newest)。A 股主板个股用 asset='E'。`end` == 周报 as_of。
     **provider 异常 → 中止(不 fail-open)**:provider 失败 ≠ 无交易,不能默默退化成观察。
     **PIT + 新鲜度门(R-ASHORT-WEEKLY-PRICE-SERIES-PIT-FRESHNESS-GAP)**:每个 `trade_date` 必须是
-    合法日历日;拒任何 `trade_date > end`(未来 bar);**最新 bar 必须 == `end`(==as_of)**,否则数据
-    陈旧 → 中止不写。返回空(provider 成功但无行)由 main 覆盖门统一拦截。"""
+    合法日历日;拒任何 `trade_date > end`(未来 bar);**最新 bar 默认必须 == `end`(==as_of)**,否则数据
+    陈旧 → 中止不写。返回空(provider 成功但无行)由 main 覆盖门统一拦截。
+
+    **实盘盘中 reviewed-tolerance**(register 原始 repair 已显式预留「or document and test an explicit
+    reviewed tolerance」):若给出 `accept_prior_settled_date`(= as_of 的前一交易日;仅由 main 在
+    `--run-date == --as-of`、即实盘当天 as_of 当日 EOD 尚未发布的盘中场景传入),则最新 bar 亦可 == 该
+    「最新已结算交易日」。仍拒**更早**(真陈旧)与**未来** bar;历史回放不传该参数 → 严格 == end。语义:在
+    决策时点(as_of=今天)最新已结算行情就是前一交易日,使用它非 look-ahead、亦非陈旧。
+
+    返回 `(series, latest_trade_date)`:series=[{high,low,close}](engine 形状,不含日期);latest_trade_date=
+    实际最新已结算 bar 日期(供 main 记 `price_data_through` lineage,诚实标注真实价格时钟);无行 → `([], None)`。"""
     from datetime import datetime
     try:
         df = ts_module.pro_bar(ts_code=ts_code, adj="qfq", asset="E",
@@ -381,7 +393,7 @@ def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str) -> l
         raise SystemExit(f"[FATAL] pro_bar {ts_code} provider 失败: {type(exc).__name__};"
                          "不写周报(provider 失败 ≠ 无交易,不可 fail-open 成观察)")
     if df is None or df.empty:
-        return []
+        return [], None
     df = df.sort_values("trade_date")
     rows = []
     for _, r in df.iterrows():
@@ -394,9 +406,41 @@ def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str) -> l
             raise SystemExit(f"[FATAL] pro_bar {ts_code} 返回未来 bar {td} > as_of {end}(PIT 违规);不写周报")
         rows.append({"trade_date": td, "high": float(r["high"]), "low": float(r["low"]), "close": float(r["close"])})
     if rows and rows[-1]["trade_date"] != str(end):
-        raise SystemExit(f"[FATAL] pro_bar {ts_code} 最新 bar {rows[-1]['trade_date']} != as_of {end}"
-                         "(数据陈旧,未含 as_of 当日);不写周报")
-    return [{"high": r["high"], "low": r["low"], "close": r["close"]} for r in rows]
+        latest = rows[-1]["trade_date"]
+        # 实盘盘中容忍:当日 EOD 未发布 → 最新已结算 == 前一交易日(accept_prior_settled_date)放行;凡比它更早
+        # (真陈旧)仍中止。未来 bar 已在上面逐行 `td > end` 拦截,不可能落到这里(故 tolerance 永不放未来)。
+        if not (accept_prior_settled_date is not None and latest == str(accept_prior_settled_date)):
+            raise SystemExit(f"[FATAL] pro_bar {ts_code} 最新 bar {latest} != as_of {end}"
+                             "(数据陈旧,未含 as_of 当日);不写周报")
+    series = [{"high": r["high"], "low": r["low"], "close": r["close"]} for r in rows]
+    return series, (rows[-1]["trade_date"] if rows else None)
+
+
+def _prev_trading_day(pro, as_of: str) -> str | None:
+    """最近一个**严格早于** `as_of` 的 SSE 交易日(经 `trade_cal`)。用于实盘盘中价格新鲜度门容忍:as_of
+    当日 EOD 未发布时,最新已结算交易日即此前一交易日。取不到/异常 → None(调用方退回严格门,fail-closed)。"""
+    from datetime import datetime, timedelta
+    start = (datetime.strptime(str(as_of), "%Y%m%d") - timedelta(days=30)).strftime("%Y%m%d")
+    try:
+        cal = pro.trade_cal(exchange="SSE", start_date=start, end_date=str(as_of),
+                            is_open="1", fields="cal_date")
+    except Exception:
+        return None
+    if cal is None or len(cal) == 0 or "cal_date" not in cal.columns:
+        return None
+    days = sorted(str(d) for d in cal["cal_date"] if str(d) < str(as_of))
+    return days[-1] if days else None
+
+
+def _price_provider_result(provider, code: str, as_of: str) -> tuple:
+    """Normalize a price_provider(code) call to ``(series, latest_trade_date)``. The real fetcher
+    (`_fetch_price_series`) returns that tuple; an injected list-only provider (tests) is treated as a
+    strict ``as_of`` clock (latest == as_of) so the run_lineage price clock is honest in both paths."""
+    res = provider(code)
+    if isinstance(res, tuple):
+        series, latest = res
+        return list(series), (str(latest) if latest is not None else None)
+    return list(res), str(as_of)
 
 
 def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None):
@@ -486,11 +530,23 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="语义官方层 cninfo 取数回溯天数(默认 90;真 run --confirm 时自动取数)")
     p.add_argument("--web-news-lookback-days", type=int, default=30,
                    help="web_llm em 资讯新鲜度窗(天,默认 30;只把近 N 天新闻喂判官)")
+    p.add_argument("--run-date", help="实际运行日 YYYYMMDD(记进 run_lineage;intraday_prior_settled 模式要求 ==--as-of)")
+    p.add_argument("--price-freshness-mode", choices=["strict_as_of", "intraday_prior_settled"],
+                   default="strict_as_of",
+                   help="价格新鲜度模式(显式,记进 run_lineage.price_freshness):strict_as_of(默认,最新 bar 必须 ==as_of);"
+                        "intraday_prior_settled(实盘盘中、as_of 当日 EOD 未发布 → 容忍最新 bar==前一交易日;仅 --run-date==--as-of 有效)")
     p.add_argument("--skip-semantic", action="store_true",
                    help="跳过语义官方层自动取数(advisory;不影响 M6.7 确定性 base)")
     args = p.parse_args(argv)
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
+    if args.run_date and not _is_valid_yyyymmdd(args.run_date):
+        raise SystemExit(f"[FATAL] --run-date {args.run_date} 不是合法日历日期")
+    # intraday tolerance is an EXPLICIT mode, not inferred; and only valid on the actual run day (when
+    # as_of's own EOD may not be published yet). Historical replay / missing run-date must stay strict.
+    if args.price_freshness_mode == "intraday_prior_settled" and str(args.run_date or "") != str(args.as_of):
+        raise SystemExit("[FATAL] --price-freshness-mode intraday_prior_settled 仅在 --run-date == --as-of"
+                         "(实盘当天、as_of 当日 EOD 未发布)有效;历史回放/缺 run-date 请用 strict_as_of")
 
     def _load(path):
         with open(path, encoding="utf-8") as f:
@@ -530,13 +586,20 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                "current_gross_exposure": acct.get("current_gross_exposure"),
                "positions_count": len(acct.get("positions") or [])}
     # 价格序列:注入(测试)或执行期抓取(需授权)
+    prior_settled = None     # 实际接受的前一交易日(仅 intraday_prior_settled 模式;记进 lineage)
     if price_provider is None:
         if not args.confirm_fetch_authorized:
             raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:周末 run 会抓前复权价")
         import tushare as ts
         pro = pro_factory() if pro_factory else init_tushare_pro(os.environ["TUSHARE_TOKEN"])
         start = (datetime.strptime(args.as_of, "%Y%m%d") - timedelta(days=120)).strftime("%Y%m%d")
-        price_provider = lambda code: _fetch_price_series(ts, pro, code, start, args.as_of)
+        # 显式 intraday_prior_settled 模式(已 guard --run-date==--as-of)→ 价格门容忍最新 bar==前一交易日
+        # (as_of 当日 EOD 未发布的实盘盘中);strict_as_of → prior_settled=None → 严格 == as_of。仅放前一交易日,
+        # 更早(真陈旧)仍拒、未来恒拒;实际接受的最新日期记进 run_lineage.price_freshness。
+        prior_settled = (_prev_trading_day(pro, args.as_of)
+                         if args.price_freshness_mode == "intraday_prior_settled" else None)
+        price_provider = lambda code: _fetch_price_series(ts, pro, code, start, args.as_of,
+                                                          accept_prior_settled_date=prior_settled)
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -550,19 +613,34 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             [c.get("ts_code") for c in _cands],
             {str(c.get("ts_code")): c.get("name", "") for c in _cands},
             args.as_of, args.web_news_lookback_days)
-    normalized = [normalize_candidate(c, price_provider(c["ts_code"]), overlay.get(c["ts_code"]),
+    cands = ai.get("candidates", [])
+    # capture (series, latest_trade_date) per candidate so the artifact can record the real price clock
+    price_results = {c["ts_code"]: _price_provider_result(price_provider, c["ts_code"], args.as_of) for c in cands}
+    normalized = [normalize_candidate(c, price_results[c["ts_code"]][0], overlay.get(c["ts_code"]),
                                       iv_pct, account, regime,
                                       regime_fallback=regime_fallback,
                                       stateful_risk=stateful_risk_for_candidate(acct, c["ts_code"], args.as_of),
                                       semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None),
                                       semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None))
-                  for c in ai.get("candidates", [])]
+                  for c in cands]
     # 价格覆盖门(#2):任一被纳入候选缺足够价格 → 中止不写(不可 fail-open 成观察)
     short = [(n["ts_code"], len(n["price_series"])) for n in normalized
              if len(n["price_series"]) < MIN_PRICE_OBS]
     if short:
         raise SystemExit(f"[FATAL] 以下候选价格序列不足(<{MIN_PRICE_OBS} 交易日):{short};"
                          "不写周报(价格抓取失败/停牌须排查,不可静默退化成观察)")
+    # 价格时钟 lineage(诚实标注 M6.7 技术指标实际用到的最新已结算 bar 日期):候选间日期不一致(端点不均/部分
+    # 陈旧)→ 中止,不静默混用;一致 → price_data_through = 该日(strict 恒 ==as_of;intraday ==as_of 或前一交易日)。
+    latest_dates = sorted({d for d in (price_results[c["ts_code"]][1] for c in cands) if d})
+    if len(latest_dates) > 1:
+        raise SystemExit(f"[FATAL] 候选价格最新 bar 日期不一致(混合时钟 {latest_dates});不写周报"
+                         "(端点不均/部分陈旧须排查,不可静默混用不同价格日)")
+    price_data_through = latest_dates[0] if latest_dates else str(args.as_of)
+    accepted_psd = str(prior_settled) if (prior_settled is not None and price_data_through == str(prior_settled)) else None
+    price_freshness = {"mode": args.price_freshness_mode,
+                       "run_date": (str(args.run_date) if args.run_date else None),
+                       "accepted_prior_settled_date": accepted_psd,
+                       "price_data_through": price_data_through}
     gen = datetime.now().astimezone().isoformat(timespec="seconds")
     def _rel(pth):
         try:
@@ -573,7 +651,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    "selection_bucket": _rel(os.path.dirname(args.analysis_input)),
                    "iv_feed": _rel(args.iv_feed),
                    "account_ref": (_rel(args.account) if args.account else ""),
-                   "account_status": account_status, "sizing_mode": sizing_mode}
+                   "account_status": account_status, "sizing_mode": sizing_mode,
+                   "price_freshness": price_freshness}
     weekly = build_weekly_report(normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage)
     from runners.a_short_m67_render import write_weekly_markdown

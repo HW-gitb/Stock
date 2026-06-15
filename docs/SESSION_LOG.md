@@ -10,6 +10,46 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Claude `审查 PASS` (M6.7 价格时钟 lineage slice;Claude 自审,非 Codex 独立审)
+- **Verdict/Action**: PASS,审**价格时钟 lineage 修复**这块代码(并行「周一新闻入窗」Codex FAIL 已被用户 dispose 成 `accepted_risk`、docs-only、不在本审范围)。对抗式自审(通读 pipeline/schema/render/ps1/tests/retrofit 非 delta,逐项试破空序列/混合/盘后EOD/render缺pf/历史run_date,均被覆盖门或 fail-closed 接住):显式模式+guard、4 字段 lineage(schema required+typed)、Markdown 价格时钟+横幅、混合时钟 FATAL、older/future 仍拒,完整闭合 `R-ASHORT-M67-INTRADAY-PRICE-FRESHNESS-LINEAGE-GAP`,无真 bug;唯一 cosmetic optional:`_cands`/`cands` 重复读可合一。
+- **Required**: `R-ASHORT-M67-INTRADAY-PRICE-FRESHNESS-LINEAGE-GAP` addressed in working tree;详见 `docs/system_risk_register.md`。
+- **Verify**: 全 cluster **211 OK**(weekly 104 + render/phase5/contract-docs/ps1-guard/doc-governance/route-doc);schema Draft7 / ps1 ParseFile / py_compile / no-BOM / diff-check 干净;no-network intraday fixture 证 json+`.md` 显式标 `price_data_through=前一交易日≠as_of`;stored 20260612 retrofit diff=仅 price-clock 一行。
+- **Next**: Claude `提交`(上条 accepted_risk 的 Next 已授权 review PASS→提交);如要独立 gate 可并行 Codex re-`审查`。
+
+## 2026-06-15 — User/Codex `accepted_risk` (R-ASHORT-M67-WEEKEND-NEWS-WINDOW-GAP)
+- **Verdict/Action**: 用户明确接受周一盘中新闻可进入 M6.7 语义窗口;当前行为变为 accepted boundary,不再要求修复为“只看周六/周日”。
+- **Required**: `R-ASHORT-M67-WEEKEND-NEWS-WINDOW-GAP` → `accepted_risk`;详情见 `docs/system_risk_register.md`。
+- **Verify**: docs-only disposition;no code/data/commit。
+- **Next**: Codex re-`审查` 价格时钟修复或 Claude `提交`(若后续 review PASS)。
+
+## 2026-06-15 — Codex `审查 FAIL` (M6.7 周一盘中新闻窗口)
+- **Verdict/Action**: FAIL。价格时钟显式化方向成立,但本轮修复仍把 semantic/cninfo/web_llm 的 `as_of` 设为周一,EM/cninfo 窗口会纳入周一新闻/公告,和用户目标“只要周六/周日新闻,周一新闻不需要”不一致。
+- **Required**: `R-ASHORT-M67-WEEKEND-NEWS-WINDOW-GAP`;详情见 `docs/system_risk_register.md`。
+- **Verify**: code/path review;AST no-network probe confirms EM window returns True for Sat/Sun/Mon when `as_of=20260615`;syntax compile OK(no pyc write);PSParser OK;route-doc guard 14 OK;doc-governance guard 16 OK;`git diff --check` clean(LF/CRLF warnings only);weekly unittest blocked because bundled Python lacks `jsonschema`;no data fetch。
+- **Next**: Claude `修复`。
+
+## 2026-06-15 — Claude `修复` (R-ASHORT-M67-INTRADAY-PRICE-FRESHNESS-LINEAGE-GAP)
+- **Verdict/Action**: 判定 finding **正确**(原稿松门却没把价格时钟做成显式+可审)。① 显式 `--price-freshness-mode {strict_as_of默认|intraday_prior_settled}`(intraday 仅 `--run-date==--as-of`、否则 FATAL;ps1 仅实盘当天传),不再隐式推断。② `_fetch_price_series` 返回实际最新 bar 日期 → main 记 schema-required `run_lineage.price_freshness`(mode/run_date/accepted_prior_settled_date/price_data_through)、`.md` 显示价格时钟、候选混合时钟→FATAL。详见 register。
+- **Required**: `R-ASHORT-M67-INTRADAY-PRICE-FRESHNESS-LINEAGE-GAP`;详情/closure 见 `docs/system_risk_register.md`(register 单一来源)。
+- **Verify**: weekly_pipeline **104 OK**(+6 新测:模式 gating / intraday-guard / strict+intraday lineage / 混合 FATAL / schema 拒缺失·坏enum / 门返回实际日期)+ 广 cluster **211 OK**;no-network intraday fixture 证 `.md`+json 显式标 `price_data_through=前一交易日≠as_of`;schema Draft7 / ps1 ParseFile / py_compile / no-BOM(6) / diff-check 干净。stored 20260612 artifact retrofit(strict、through 20260612)+ 重渲 `.md`(diff 仅 price-clock 一行)。
+- **Next**: 审查(Codex re-`审查`)。
+- **Pre-Codex self-review**: A(价格时钟诚实×全路径/模式:strict/intraday lineage+渲染、模式 gating+guard、混合 FATAL、schema 拒缺失/坏enum、门返回实际日期、default-lineage、retrofit)/ B(schema-required ripple 全办:design doc(doc↔schema guard 过)+default lineage+20260612 retrofit;`_fetch_price_series`→tuple 经 adapter 兼容 18 注入零改+2 测试 unpack;新符号无外部消费者)/ C(反向:strict 不误放、intraday 需显式+run-date==as-of、混合 fail-closed、记真实 price_data_through)/ E(design doc 权威;无堆叠)/ F(Draft7+pattern;ParseFile;无双消费;no-BOM;diff-check)。
+
+## 2026-06-15 — Codex `审查 FAIL` (M6.7 周报 intraday price tolerance)
+- **Verdict/Action**: FAIL。方向成立,但价格容忍的启用条件和产物 lineage 不够硬;完整 Required/边界见 register。
+- **Required**: `R-ASHORT-M67-INTRADAY-PRICE-FRESHNESS-LINEAGE-GAP` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: code/path review + no-network probes; `py_compile` OK; `weekly_screening.ps1` PSParser OK; route-doc guard 14 OK; `git diff --check` clean(LF/CRLF warning only); targeted weekly unittest blocked in this Codex env because bundled Python lacks `jsonschema`; no data fetch.
+- **Next**: Claude `修复`。
+
+## 2026-06-15 — Claude `起草` (M6.7 周报价格新鲜度门 reviewed intraday tolerance:周一盘中也能产周报+判周末新闻)
+- **动机(用户明确目标)**:周一盘中跑(选股=上周五池),要在**同一次**跑里拿到**周六/周日**新闻判官;周一新闻不需要。**实测确认现状做不到**:新闻要 as_of=周一(否则周末新闻日期>上周五被当 future 删),但 as_of=周一 时 M6.7 价格新鲜度门(`_fetch_price_series` 要求最新 bar==as_of)在盘中(周一 EOD 未发布、最新=周五)`SystemExit` 整段中止 → 新闻根本没抓。两条件互锁。
+- **诊断细化**:唯一阻断 = 价格门(IV build 无 must-==as_of 门;`analysis_input.trade_date` 因 egs `latest_td`=周一 已==as_of 通过)。register `R-ASHORT-WEEKLY-PRICE-SERIES-PIT-FRESHNESS-GAP` 原始 repair 已显式预留「require latest==as_of **或 document and test an explicit reviewed tolerance**」——本切片即落该 reviewed tolerance。
+- **改动(scoped,3 文件 + 测试)**:① `_fetch_price_series` 加可选 `accept_prior_settled_date`:给出时(=as_of 前一交易日)最新 bar 亦可==该「最新已结算日」;仍拒**更早**(真陈旧)+**未来**(未来 bar 前置逐行 `>end` 拦截,tolerance 永不放未来)。默认 None=严格==as_of(历史回放/旧行为零变)。② 新 `_prev_trading_day(pro, as_of)`(trade_cal 取严格<as_of 最近交易日;异常/空→None fail-closed)。③ `main` 加 `--run-date`:仅当 `--run-date==--as-of`(实盘当天、as_of EOD 未发布)算 prior_settled 传入;缺/≠as_of→None→严格。④ `weekly_screening.ps1`:M6.7 stage 传 `--run-date $RunDate`;cadence 头注明机理。
+- **效果/边界**:周一盘中一次跑 = 选股周五池 + M6.7 价格特征用周五 + 新闻 as_of=周一判到 Sat/Sun。PIT 不破(周五价格、周末新闻皆≤周一决策时点)。仅松价格门 live-intraday 一面;历史回放严格;不碰语义/选股/否决/schema/IV 数学/V14.2/下单;advisory 旁路不变。
+- **Verify**:weekly_pipeline 全量 **99 OK**(+7:tolerance 接受前一交易日/拒更早/拒未来/无tolerance严格 + `_prev_trading_day` 正常·空·异常 + main 注线 spy 证 run_date==as_of→传前一交易日、≠/缺→None);广 M6.7/语义/guard 簇 **254 OK**;ps1 ParseFile 0 errors;py_compile/no-BOM(3)/diff-check 干净。
+- **Next**:审查(Codex;改 register 有守护的 PIT 价格新鲜度门,敏感)。
+- **Pre-Codex self-review**:A(缺陷类=新鲜度门×freshness 全矩阵:==as_of / 未来×(有无tolerance)/ 更早×(有无tolerance)/ ==prior_settled / 非法日历 / provider异常 + prev_day 正常·空·异常 + 注线 run_date 3 分支,各一测)/ B(新符号 `_fetch_price_series` 新参 + `_prev_trading_day` + `--run-date`:全仓 `grep --include=*.py --include=*.ps1` 无其他消费者,`run_date` 命中皆 egs_main 自有无关概念;ps1 仍含 `a_short_weekly_pipeline.py`,两 ps1-content guard 21 OK)/ C(反向:tolerance 只放**恰好**前一交易日、不放更早→真陈旧仍拒;只 live 启用、历史严格;未来恒拒——皆有正/反测)/ E(ps1 头=权威 cadence 单一来源;无 CURRENT/register 堆叠;本 finding 走 SESSION_LOG)/ F(`--run-date` 走 `_is_valid_yyyymmdd`;trade_cal try/except fail-closed;tolerance 接受值恒≤as_of 不破 PIT;docstring/ps1 头同步、新符号 re-grep 0 残留;no-BOM;ParseFile/diff-check 干净)。已对抗自验:实测复现盘中 FATAL→改→单测覆盖正反两向。
+
 ## 2026-06-15 — Codex `审查 PASS` (R-V143-REGIME-PIT-FUTURE-DUP-STKLIMIT-REGRESSION)
 - **Verdict/Action**: PASS。PIT future-row 回归已修复;完整 closure/boundary 见 register。提交时包含 frozen reference,继续排除 EM smoke byproduct。
 - **Required**: `R-V143-REGIME-PIT-FUTURE-DUP-STKLIMIT-REGRESSION` addressed in working tree;详情见 `docs/system_risk_register.md`。

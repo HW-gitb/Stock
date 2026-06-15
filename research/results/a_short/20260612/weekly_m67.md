@@ -7,6 +7,7 @@
 > ⚠️ **市场 regime 未知 → 全员按震荡期保守降级(统一 −1 星)**。星级反映的是**当前市场保守状态**,不是个股质量差;**个股质量看下表「EGS分」列**。(V14.3 regime 分类器接入 production 前,每次实盘都会如此。)
 > ⚠️ **无账户(account_status=absent):仓位 sizing N/A —— 建仓候选会渲染为「观察」(可建股数/金额不足),这是 **sizing 假象、非真 avoid 信号**;传 `--account` / `-Account`(account-state JSON: cash/positions/Rule12/Rule13)以获真 sizing/持仓判断。**
 **lineage**:analysis_input=`result/a_short/20260612/analysis_input.json` | iv_feed=`research/results/a_short/iv_feed_20260612/iv_feed.json` | account=absent | account_ref=`` | sizing=observation_only_no_account
+**price clock**:mode=strict_as_of | 价格数据截至 `20260612`
 
 ## 一览
 | 票 | 名称 | 操作 | EGS分 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |

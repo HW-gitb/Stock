@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, main, SCHEMA_PATH,
-    _fetch_price_series, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
+    _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
     validate_account_state, stateful_risk_for_candidate,
 )
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
@@ -443,6 +443,114 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(loaded["iv_feed_ref"], "feed.json")
         self.assertEqual(loaded["reports"][0]["m67"]["table"]["操作"], "建仓")
 
+    def test_price_freshness_mode_controls_tolerance(self):
+        # the intraday tolerance is gated on the EXPLICIT --price-freshness-mode (NOT inferred from
+        # run-date==as-of). Spy on _fetch_price_series to capture what main passed as the accepted clock.
+        import runners.a_short_weekly_pipeline as wp
+        cap = {}
+
+        def _spy(ts, pro, code, start, end, accept_prior_settled_date=None):
+            cap["accept"] = accept_prior_settled_date
+            raise SystemExit("captured")                   # short-circuit once the wiring is observed
+
+        class _Pro:
+            def trade_cal(self, **kw):
+                return pd.DataFrame({"cal_date": ["20260605", "20260608", AS_OF]})
+
+        orig = wp._fetch_price_series
+        wp._fetch_price_series = _spy
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                self._write_inputs(td)
+                base = ["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                        "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                        "--out", str(Path(td) / "w.json"), "--confirm-fetch-authorized", "--skip-semantic"]
+                kw = dict(pro_factory=lambda: _Pro(), semantic_provider=lambda c: None,
+                          web_llm_provider=lambda c: None)
+                with self.assertRaises(SystemExit):        # explicit intraday mode + run-date==as-of
+                    main(base + ["--run-date", AS_OF, "--price-freshness-mode", "intraday_prior_settled"], **kw)
+                self.assertEqual(cap["accept"], "20260608")   # prior trading day passed
+                cap.clear()
+                with self.assertRaises(SystemExit):        # default strict — NO tolerance even if run-date==as-of
+                    main(base + ["--run-date", AS_OF], **kw)
+                self.assertIsNone(cap["accept"])
+        finally:
+            wp._fetch_price_series = orig
+
+    def test_intraday_mode_requires_run_date_equals_as_of(self):
+        # explicit intraday mode on a non-same-day run-date is rejected up front (guard), before fetch.
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--run-date", "20260605", "--price-freshness-mode",
+                      "intraday_prior_settled", "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(Path(td) / "w.json"), "--confirm-fetch-authorized", "--skip-semantic"],
+                     pro_factory=lambda: object(), semantic_provider=lambda c: None,
+                     web_llm_provider=lambda c: None)
+
+    def test_strict_mode_records_price_freshness_lineage(self):
+        # default strict run: the artifact records the price clock = as_of (injected list → strict clock).
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            pf = json.loads(out.read_text(encoding="utf-8"))["run_lineage"]["price_freshness"]
+        self.assertEqual(pf["mode"], "strict_as_of")
+        self.assertEqual(pf["price_data_through"], AS_OF)
+        self.assertIsNone(pf["accepted_prior_settled_date"])
+
+    def test_intraday_mode_records_prior_settled_and_renders_clock(self):
+        # full intraday path (real _fetch_price_series via fake tushare): bars end at the prior settled
+        # day; the artifact + Markdown must honestly state price_data_through == prior settled, != as_of.
+        dates = pd.date_range(end="20260608", periods=25, freq="D").strftime("%Y%m%d").tolist()
+        fake = _fake_ts(pd.DataFrame({"trade_date": dates, "high": [3.1] * 25,
+                                      "low": [2.8] * 25, "close": [2.9] * 25}))
+
+        class _Pro:
+            def trade_cal(self, **kw):
+                return pd.DataFrame({"cal_date": ["20260605", "20260608", AS_OF]})
+
+        old = sys.modules.get("tushare")
+        sys.modules["tushare"] = fake
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                self._write_inputs(td)
+                out = Path(td) / "weekly_m67.json"
+                main(["--as-of", AS_OF, "--run-date", AS_OF, "--price-freshness-mode", "intraday_prior_settled",
+                      "--analysis-input", str(Path(td) / "ai.json"), "--iv-feed", str(Path(td) / "feed.json"),
+                      "--account", str(Path(td) / "acct.json"), "--out", str(out), "--confirm-fetch-authorized",
+                      "--skip-semantic"], pro_factory=lambda: _Pro(),
+                     semantic_provider=lambda c: None, web_llm_provider=lambda c: None)
+                pf = json.loads(out.read_text(encoding="utf-8"))["run_lineage"]["price_freshness"]
+                md = (Path(td) / "weekly_m67.md").read_text(encoding="utf-8")
+        finally:
+            if old is not None:
+                sys.modules["tushare"] = old
+            else:
+                sys.modules.pop("tushare", None)
+        self.assertEqual(pf["mode"], "intraday_prior_settled")
+        self.assertEqual(pf["run_date"], AS_OF)
+        self.assertEqual(pf["accepted_prior_settled_date"], "20260608")
+        self.assertEqual(pf["price_data_through"], "20260608")     # honest: features through prior settled day
+        self.assertIn("价格时钟", md)                               # clock visible to the user in Markdown
+        self.assertIn("20260608", md)
+
+    def test_mixed_price_latest_dates_abort_no_file(self):
+        # candidates with differing latest price-bar dates (uneven endpoint) → fail-closed, no file.
+        def _prov(code):
+            return (_series(), "20260609" if code == "600000.SH" else "20260608")  # (series, latest) differs
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "w.json"
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out)], price_provider=_prov)
+            self.assertFalse(out.exists())
+
     def test_main_writes_markdown_sibling_with_banner(self):
         # pipeline main emits a readable weekly_m67.md sibling next to the json (honesty banner present).
         with tempfile.TemporaryDirectory() as td:
@@ -777,11 +885,12 @@ class PriceFetchTests(unittest.TestCase):
         # R-ASHORT-WEEKLY-PRICE-FETCH-FAIL-OPEN: A-share stocks need asset="E"; latest bar == end.
         ts = _fake_ts(pd.DataFrame({"trade_date": ["20260108", "20260109"], "high": [3.0, 3.1],
                                     "low": [2.9, 2.95], "close": [2.95, 3.0]}))
-        out = _fetch_price_series(ts, object(), "600000.SH", "20260101", "20260109")
+        series, latest = _fetch_price_series(ts, object(), "600000.SH", "20260101", "20260109")
         self.assertEqual(ts.calls.get("asset"), "E")
         self.assertEqual(ts.calls.get("adj"), "qfq")
-        self.assertEqual(len(out), 2)
-        self.assertNotIn("trade_date", out[0])      # engine input shape is {high,low,close}
+        self.assertEqual(len(series), 2)
+        self.assertNotIn("trade_date", series[0])   # engine input shape is {high,low,close}
+        self.assertEqual(latest, "20260109")        # actual latest bar date surfaced for lineage
 
     def test_provider_exception_aborts(self):
         ts = _fake_ts(None)
@@ -807,6 +916,56 @@ class PriceFetchTests(unittest.TestCase):
         ts = _fake_ts(pd.DataFrame({"trade_date": ["20260631"], "high": [3.0], "low": [2.9], "close": [2.95]}))
         with self.assertRaises(SystemExit):
             _fetch_price_series(ts, object(), "600000.SH", "20260101", "20260109")
+
+    # --- reviewed intraday tolerance (R-ASHORT-WEEKLY-PRICE-SERIES-PIT-FRESHNESS-GAP) ---
+    def test_intraday_prior_settled_bar_accepted(self):
+        # as_of=Monday(0615), today's EOD not published → latest bar == prior trading day(Friday 0612)
+        # is the latest SETTLED data and is accepted (not stale) when the tolerance is supplied.
+        ts = _fake_ts(pd.DataFrame({"trade_date": ["20260611", "20260612"], "high": [3.0, 3.1],
+                                    "low": [2.9, 2.95], "close": [2.95, 3.0]}))
+        series, latest = _fetch_price_series(ts, object(), "600000.SH", "20260201", "20260615",
+                                             accept_prior_settled_date="20260612")
+        self.assertEqual(len(series), 2)                   # accepted: Friday-latest for a Monday as_of
+        self.assertEqual(latest, "20260612")               # surfaces the prior-settled clock for lineage
+
+    def test_intraday_tolerance_rejects_older_than_prior_settled(self):
+        # the tolerance accepts ONLY the prior trading day; anything older is genuine staleness → abort.
+        ts = _fake_ts(pd.DataFrame({"trade_date": ["20260610", "20260611"], "high": [3.0, 3.1],
+                                    "low": [2.9, 2.95], "close": [2.95, 3.0]}))
+        with self.assertRaises(SystemExit):                # latest 0611 < prior_settled 0612 → stale
+            _fetch_price_series(ts, object(), "600000.SH", "20260201", "20260615",
+                                accept_prior_settled_date="20260612")
+
+    def test_intraday_tolerance_never_accepts_future_bar(self):
+        # even with the tolerance set, a bar after as_of is never accepted (future-row guard precedes it).
+        ts = _fake_ts(pd.DataFrame({"trade_date": ["20260612", "20260630"], "high": [3.0, 9.0],
+                                    "low": [2.9, 1.0], "close": [3.0, 5.0]}))
+        with self.assertRaises(SystemExit):
+            _fetch_price_series(ts, object(), "600000.SH", "20260201", "20260615",
+                                accept_prior_settled_date="20260612")
+
+    def test_no_tolerance_stays_strict(self):
+        # default (no tolerance, e.g. historical replay): latest != as_of still aborts (unchanged gate).
+        ts = _fake_ts(pd.DataFrame({"trade_date": ["20260611", "20260612"], "high": [3.0, 3.1],
+                                    "low": [2.9, 2.95], "close": [2.95, 3.0]}))
+        with self.assertRaises(SystemExit):
+            _fetch_price_series(ts, object(), "600000.SH", "20260201", "20260615")
+
+    def test_prev_trading_day_returns_latest_strictly_before_as_of(self):
+        class _Pro:
+            def trade_cal(self, **kw):
+                return pd.DataFrame({"cal_date": ["20260605", "20260608", "20260609"]})
+        self.assertEqual(_prev_trading_day(_Pro(), "20260609"), "20260608")   # excludes as_of itself
+
+    def test_prev_trading_day_none_when_empty_or_error(self):
+        class _Empty:
+            def trade_cal(self, **kw):
+                return pd.DataFrame({"cal_date": []})
+        self.assertIsNone(_prev_trading_day(_Empty(), "20260609"))
+        class _Boom:
+            def trade_cal(self, **kw):
+                raise RuntimeError("trade_cal api down")
+        self.assertIsNone(_prev_trading_day(_Boom(), "20260609"))            # fail-closed to strict
 
     def test_main_future_price_row_writes_no_file(self):
         # Codex repro: a fake tushare through main(--confirm-fetch-authorized) must NOT write.
@@ -871,6 +1030,22 @@ class SchemaTests(unittest.TestCase):
         with open(SCHEMA_PATH, encoding="utf-8") as f:
             schema = json.load(f)
         jsonschema.Draft7Validator.check_schema(schema)
+
+    def test_schema_requires_price_freshness_in_run_lineage(self):
+        # Codex R-ASHORT-M67-INTRADAY-PRICE-FRESHNESS-LINEAGE-GAP: the price clock must be machine-readable
+        # and the schema must reject a missing/invalid price_freshness block.
+        with open(SCHEMA_PATH, encoding="utf-8") as f:
+            schema = json.load(f)
+        self.assertIn("price_freshness", schema["properties"]["run_lineage"]["required"])
+        w = build_weekly_report([], AS_OF, GEN, iv_feed_ref="f")     # default lineage incl. price_freshness
+        jsonschema.validate(w, schema)                               # valid as built
+        del w["run_lineage"]["price_freshness"]
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(w, schema)                           # missing → rejected
+        w2 = build_weekly_report([], AS_OF, GEN, iv_feed_ref="f")
+        w2["run_lineage"]["price_freshness"]["mode"] = "bogus_mode"  # invalid enum
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(w2, schema)
 
     def test_weekly_design_doc_documents_schema_required_run_lineage(self):
         # R-ASHORT-WEEKLYSCREENING-M67-BUNDLE-CONTRACT-DRIFT R3: the active weekly pipeline DESIGN doc must

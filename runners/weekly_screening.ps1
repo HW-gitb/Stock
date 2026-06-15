@@ -32,6 +32,9 @@
 #   当日 EOD(daily / daily_basic / suspend)尚未生成 → egs_main「空就回退前一交易日」逻辑(get_daily_basic 等)
 #   自动落到上周五,所以**选股价格/估值/停牌依据上周五收盘**;而新闻 / 语义 web·LLM 层窗口到周一、抓得到
 #   周末突发利好利空。= 周五选股池 + 周末最新新闻。
+#   M6.7 周报(含 EM 新闻→DeepSeek 判官)也在这同一次盘中跑里产出:本脚本给 weekly_pipeline 传 `--run-date <运行日>`,
+#   当 run-date==as_of(实盘当天、as_of 当日 EOD 未发布)时**价格新鲜度门容忍最新已结算 bar=前一交易日(=上周五)**,
+#   故 M6.7 不再 FATAL;新闻窗 as_of=周一 → 判到周六/周日(及任何周一早间)。历史回放(as_of≠运行日)仍严格 == as_of。
 #   *必须收盘前跑*:周一**收盘后**再跑,egs_main 会用周一收盘(不再回退),选股池就变成周一而非周五。
 #   确认依据周五的标志:日志出现 `daily_basic <周一> 无数据，回退至 <周五>`。
 #   (非交易日 as_of 如周日不可用:egs_main 拒非交易日 → ValueError "not an A-share trading day"。)
@@ -224,7 +227,12 @@ if ($SkipSemanticRisk) {
         if ($IvExitCode -ne 0 -or -not (Test-Path $IvFeed)) {
             Write-Host "[WARN] M6.7 advisory skipped: IV feed build failed (exit $IvExitCode; advisory sidecar, weekly not blocked)" -ForegroundColor Yellow
         } else {
-            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
+            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
+            if (-not $IsHistoricalAsOf) {
+                # 实盘当天(as_of==运行日):as_of 当日 EOD 盘中尚未发布 → 显式启用价格门 intraday tolerance
+                # (容忍最新已结算 bar=前一交易日);历史回放保持默认 strict_as_of。实际价格时钟记进 weekly_m67 lineage。
+                $M67Args += @('--price-freshness-mode', 'intraday_prior_settled')
+            }
             if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
             $RunM67 = $true
             if ($Account) {

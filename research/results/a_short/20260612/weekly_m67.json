@@ -2199,7 +2199,13 @@
     "iv_feed": "research/results/a_short/iv_feed_20260612/iv_feed.json",
     "account_ref": "",
     "account_status": "absent",
-    "sizing_mode": "observation_only_no_account"
+    "sizing_mode": "observation_only_no_account",
+    "price_freshness": {
+      "mode": "strict_as_of",
+      "run_date": null,
+      "accepted_prior_settled_date": null,
+      "price_data_through": "20260612"
+    }
   },
   "boundary": {
     "production": false,

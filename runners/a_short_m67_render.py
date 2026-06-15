@@ -71,6 +71,19 @@ def render_weekly_markdown(weekly: dict) -> str:
                    str(rl.get("iv_feed", "?")) + "` | account=" + str(rl.get("account_status", "?")) +
                    " | account_ref=`" + str(rl.get("account_ref", "")) + "`" +
                    " | sizing=" + str(rl.get("sizing_mode", "?")))
+    # 价格时钟(诚实标注 M6.7 技术指标实际用到的价格日期;盘中容忍前一交易日时尤其要显眼,免得读者把
+    # as_of=周一 误读成价格也到周一)。
+    pf = rl.get("price_freshness") or {}
+    if pf:
+        out.append("**price clock**:mode=" + str(pf.get("mode", "?")) +
+                   " | 价格数据截至 `" + str(pf.get("price_data_through", "?")) + "`" +
+                   (" | run_date=`" + str(pf.get("run_date")) + "`" if pf.get("run_date") else "") +
+                   (" | 前一交易日 `" + str(pf.get("accepted_prior_settled_date")) + "`"
+                    if pf.get("accepted_prior_settled_date") else ""))
+        if pf.get("mode") == "intraday_prior_settled" and str(pf.get("price_data_through")) != str(as_of):
+            out.append("> ⚠️ **价格时钟**:本周报技术指标用的是**前一交易日(" + str(pf.get("price_data_through")) +
+                       ")已结算行情**(实盘盘中跑、as_of " + str(as_of) + " 当日 EOD 尚未发布);新闻/语义层窗口仍到 as_of。"
+                       "**价格特征截至 " + str(pf.get("price_data_through")) + ",非 " + str(as_of) + "。**")
     out += ["", "## 一览",
             "| 票 | 名称 | 操作 | EGS分 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",
             "|---|---|---|---|---|---|---|---|---|---|---|"]

@@ -28,14 +28,25 @@
     "run_lineage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["analysis_input", "selection_bucket", "iv_feed", "account_ref", "account_status", "sizing_mode"],
+      "required": ["analysis_input", "selection_bucket", "iv_feed", "account_ref", "account_status", "sizing_mode", "price_freshness"],
       "properties": {
         "analysis_input": {"type": "string"},
         "selection_bucket": {"type": "string"},
         "iv_feed": {"type": "string"},
         "account_ref": {"type": "string"},
         "account_status": {"enum": ["provided", "absent"]},
-        "sizing_mode": {"enum": ["sized", "observation_only_no_account"]}
+        "sizing_mode": {"enum": ["sized", "observation_only_no_account"]},
+        "price_freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "run_date", "accepted_prior_settled_date", "price_data_through"],
+          "properties": {
+            "mode": {"enum": ["strict_as_of", "intraday_prior_settled"]},
+            "run_date": {"type": ["string", "null"], "pattern": "^\\d{8}$"},
+            "accepted_prior_settled_date": {"type": ["string", "null"], "pattern": "^\\d{8}$"},
+            "price_data_through": {"type": "string", "pattern": "^\\d{8}$"}
+          }
+        }
       }
     },
     "boundary": {
