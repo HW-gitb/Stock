@@ -271,6 +271,14 @@ Stock/
 
 对 provider / 数据可用性 / 风险 / 设计漏洞 / 执行阻塞等判断，必须把专业内容翻译成用户能直接理解的话：先回答“能不能用”“意味着什么”“还缺什么”“下一步做什么”，再用简短边界说明证据范围。除非用户要求深入展开，默认保持短、直、明了。
 
+**含 Required / 修复 / 执行结果的输出加「大白话」层（2026-06-15 用户固化）**：凡 chat 输出里告诉用户有问题需要 `修复`（尤其 Codex `审查 FAIL` / PASS-with-Required），或 Claude `修复` 后说明修复结果，或任何 `执行` 后说明执行结果 / 风险 / 阻塞 / 下一步，除了极简结论，必须有一句**最直白的大白话**——用最简单清楚的人话说清「实际发生了什么 + 对你意味着什么 / 为什么要修或继续」，不要废话、越直白越好。**这层是给用户理解的，和写进 `SESSION_LOG` / `register` / execution summary 的技术细节不是同一个**（文档放 Required ID / 文件名 / 自审 / lineage；chat 的大白话只为让用户秒懂后果）。
+
+> R-ASHORT-M67-EGSSCORE-ARTIFACT-DRIFT
+> 代码已经加了 EGS分 和 regime 横幅，但当前 `research/results/a_short/20260612/weekly_m67.json/md` 还是旧产物：JSON 15/15 都没有 EGS分，Markdown 也没有 EGS分 列和横幅。
+> **大白话**：代码修了，但你正在看的报告文件没更新，所以你还是会看到「全是两星、看不出区别」。
+
+对 `审查 FAIL`，格式即「技术标识 + 一句技术现状 + 一句『大白话：…』直说为什么要修」。对 `修复`，格式即「技术标识 + 一句技术现状 + 一句『大白话：…』直说后果」。对 `执行`，格式即「执行了什么 + 结果是什么 + 一句『大白话：…』直说这次结果对用户意味着什么、还能不能用、下一步该干什么」。**有歧义 / 有坑 / 出现「代码改了但你看到的产物还没变」或「执行跑完但结果不能直接使用」这类落差时尤其要点破。**
+
 ## System risk register discipline
 
 `docs/system_risk_register.md` 是所有未修复系统风险的 durable queue。任何 LLM 发现影响 data integrity、PIT safety、schema contract、execution simulation、security、ship-gate evidence 或 cross-LLM continuity 的实质问题时，必须在同一轮内二选一：修复并验证，或写入该 register。不得只把发现留在 chat / SESSION_LOG / 临时审查文字里。
