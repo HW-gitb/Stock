@@ -17,6 +17,14 @@ Inputs (all PIT, restricted to dates ``<= as_of`` internally — never look-ahea
   can't encode "unknown"; prior-window gaps degrade via flags. See compute() for the full contract.
 - ``csi300`` / ``csi1000``: index ``trade_date, close`` (>= 20 days for csi1000 MA20).
 - ``iv_percentile_252d``: float or None, sourced from the batch-① IV feed (NOT recomputed here).
+
+Performance (slice-2b-perf, behavior-preserving): a 252-day bootstrap calls this 252 times over the
+SAME ~1.3M-row panel. The implementation is therefore VECTORIZED over the whole panel — limit
+up/down/touched/failed events (one inner merge), per-day price+limit usability (one left merge), and
+pct_above_ma20 (one groupby) are each computed in a single pass instead of the prior per-window-day
+``daily["trade_date"].astype(str) == day`` rescans / per-day merges / per-stock Python loops. Every
+emitted field is byte-identical to the original per-day implementation (pinned by the optimized-vs-
+frozen-reference equality test); only the execution strategy changed.
 """
 from __future__ import annotations
 
@@ -39,95 +47,138 @@ def _num(s) -> pd.Series:
     return pd.to_numeric(s, errors="coerce")
 
 
-def _trade_dates(daily: pd.DataFrame, as_of: str) -> list[str]:
-    """Ascending unique trade dates ``<= as_of`` present in ``daily`` (PIT cap)."""
-    if daily is None or daily.empty or "trade_date" not in daily.columns:
-        return []
-    ds = {str(d) for d in daily["trade_date"] if str(d) <= str(as_of)}
-    return sorted(ds)
+def _assert_canonical_panel_dates(df: pd.DataFrame, name: str, str_dates: pd.Series | None = None) -> None:
+    """Reject non-canonical YYYYMMDD ``trade_date`` so lexicographic PIT filters/sorts are sound.
 
-
-def _limit_sets(daily_day: pd.DataFrame, limit_day: pd.DataFrame) -> dict:
-    """Limit sets for one day. Returns dict of ts_code sets: up, down, touched_up, failed_up.
-
-    Empty/missing ``limit_day`` → all empty. (Coverage is enforced by the caller's usable-price+limit
-    gate: missing/unusable as_of data fails closed, prior-window gaps set
-    ``stk_limit_history_incomplete``.) Uses each stock's own up_limit/down_limit so ±10/±20/ST±5
-    calibers are respected automatically.
-    """
-    empty = {"up": set(), "down": set(), "touched_up": set(), "failed_up": set(), "have_limit": False}
-    if daily_day is None or daily_day.empty or limit_day is None or limit_day.empty:
-        return empty
-    m = daily_day.merge(limit_day[["ts_code", "up_limit", "down_limit"]], on="ts_code", how="inner")
-    if m.empty:
-        return empty
-    close = _num(m["close"]); high = _num(m["high"])
-    up_lim = _num(m["up_limit"]); down_lim = _num(m["down_limit"])
-    ok = close.notna() & up_lim.notna() & up_lim.gt(0)
-    up = m["ts_code"][ok & (close >= up_lim * LIMIT_TOL)]
-    touched = m["ts_code"][ok & high.notna() & (high >= up_lim * LIMIT_TOL)]
-    failed = m["ts_code"][ok & high.notna() & (high >= up_lim * LIMIT_TOL) & (close < up_lim * LIMIT_TOL)]
-    ok_d = close.notna() & down_lim.notna() & down_lim.gt(0)
-    down = m["ts_code"][ok_d & (close <= down_lim * (2 - LIMIT_TOL))]
-    return {"up": set(up), "down": set(down), "touched_up": set(touched),
-            "failed_up": set(failed), "have_limit": True}
-
-
-def _usable_limit_codes(limit_day: pd.DataFrame) -> set:
-    """ts_codes on a day with a USABLE limit row = finite positive up_limit AND down_limit.
-
-    Row presence is not enough: NaN / nonnumeric / zero / negative up/down are unusable (they
-    contribute nothing to detection and must not be counted as coverage)."""
-    if limit_day is None or limit_day.empty:
-        return set()
-    up = _num(limit_day["up_limit"]); down = _num(limit_day["down_limit"])
-    ok = np.isfinite(up) & (up > 0) & np.isfinite(down) & (down > 0)   # isfinite excludes NaN AND ±Inf
-    return set(limit_day["ts_code"][ok])
-
-
-def _usable_price_codes(daily_day: pd.DataFrame) -> set:
-    """ts_codes on a day with a USABLE daily price row = finite positive close AND high, high>=close.
-
-    A NaN/nonnumeric/zero/negative close or high, or an impossible high<close, is a broken price row
-    that must not be counted as a real limit-up/down/no-limit observation."""
-    if daily_day is None or daily_day.empty:
-        return set()
-    close = _num(daily_day["close"]); high = _num(daily_day["high"])
-    ok = np.isfinite(close) & (close > 0) & np.isfinite(high) & (high > 0) & (high >= close)
-    return set(daily_day["ts_code"][ok])
-
-
-def _assert_canonical_panel_dates(df: pd.DataFrame, name: str) -> None:
-    """Reject non-canonical YYYYMMDD ``trade_date`` so lexicographic PIT filters/sorts are sound."""
+    Only the DISTINCT date strings are strptime-round-tripped (a panel has ~hundreds of unique dates
+    over millions of rows); validating the unique set is equivalent to validating every row but avoids
+    millions of redundant per-row ``is_canonical_date`` calls. ``str_dates`` is the caller's reused
+    ``df["trade_date"].astype(str)`` when available."""
     if df is None or df.empty or "trade_date" not in df.columns:
         return
-    bad = sorted({str(d) for d in df["trade_date"] if not is_canonical_date(str(d))})
+    sd = str_dates if str_dates is not None else df["trade_date"].astype(str)
+    bad = sorted(d for d in sd.unique() if not is_canonical_date(str(d)))
     if bad:
         raise ValueError(f"{name}: non-canonical trade_date values {bad[:3]}")
 
 
-def _assert_unique(df: pd.DataFrame, keys: list, name: str, as_of: str) -> None:
-    """Reject duplicate ``keys`` among rows at/<= as_of (a dup can fabricate counts / index returns)."""
+def _assert_unique(df: pd.DataFrame, keys: list, name: str, as_of: str,
+                   str_dates: pd.Series | None = None) -> None:
+    """Reject duplicate ``keys`` among rows at/<= as_of (a dup can fabricate counts / index returns).
+
+    ``str_dates`` is the caller's reused ``df["trade_date"].astype(str)`` (avoids a second full
+    str-cast of the panel); behavior is identical to casting inline."""
     if df is None or df.empty:
         return
-    sub = df[df["trade_date"].astype(str) <= str(as_of)][keys].astype(str)
+    sd = str_dates if str_dates is not None else df["trade_date"].astype(str)
+    sub = df[sd <= str(as_of)][keys].astype(str)
     if sub.duplicated().any():
         ex = sub[sub.duplicated(keep=False)].drop_duplicates().head(3).to_dict("records")
         raise ValueError(f"{name}: duplicate rows for {keys} at/<= as_of, e.g. {ex}")
 
 
-def _max_limit_streak(up_sets: dict, dates: list[str]) -> int:
+def _incomplete_by_date(daily: pd.DataFrame, sl: pd.DataFrame, dstr: pd.Series | None,
+                        lstr: pd.Series | None, as_of: str) -> tuple:
+    """Vectorized usable-data coverage per trade date.
+
+    A daily ``(date, ts_code)`` row is FULLY USABLE iff it has a usable price (finite positive close &
+    high, ``high>=close`` — the old ``_usable_price_codes`` rule) AND a usable ``stk_limit`` row exists
+    for the same ``(date, ts_code)`` (finite positive up & down — the old ``_usable_limit_codes`` rule).
+    A date is INCOMPLETE iff any daily-traded stock that day is not fully usable, i.e. the count of
+    fully-usable rows is below the count of daily rows (``daily``/``stk_limit`` are unique per
+    ``(date, ts_code)``, enforced upstream, so a code-set difference and a row-count difference agree).
+
+    Returns ``(incomplete_by_date, asof_total, asof_usable)`` — a dict ``date -> bool`` plus the as_of
+    daily-row total and fully-usable count (for the fail-closed message). One left merge + one groupby
+    replaces the prior per-day ``_incomplete`` set-difference loop; the verdict is byte-identical."""
+    if daily is None or daily.empty:
+        return {}, 0, 0
+    close = _num(daily["close"]).to_numpy()
+    high = _num(daily["high"]).to_numpy()
+    price_ok = np.isfinite(close) & (close > 0) & np.isfinite(high) & (high > 0) & (high >= close)
+    dd = dstr.to_numpy()
+    if sl is None or sl.empty or lstr is None:
+        fully = np.zeros(len(dd), dtype=bool)             # no usable limit anywhere → nothing usable
+    else:
+        up = _num(sl["up_limit"]).to_numpy()
+        down = _num(sl["down_limit"]).to_numpy()
+        lok = np.isfinite(up) & (up > 0) & np.isfinite(down) & (down > 0)
+        left = pd.DataFrame({"_d": dd, "ts_code": daily["ts_code"].to_numpy(),
+                             "price_ok": price_ok, "_o": np.arange(len(dd))})
+        right = pd.DataFrame({"_d": lstr.to_numpy()[lok], "ts_code": sl["ts_code"].to_numpy()[lok],
+                              "_lim": True})
+        mer = left.merge(right, on=["_d", "ts_code"], how="left").sort_values("_o")
+        fully = mer["price_ok"].to_numpy() & mer["_lim"].notna().to_numpy()
+    agg = pd.DataFrame({"_d": dd, "ok": fully}).groupby("_d")["ok"].agg(["sum", "count"])
+    vals = agg.to_numpy()   # columns: [sum_usable, count_total]
+    incomplete = {d: int(vals[i, 0]) < int(vals[i, 1]) for i, d in enumerate(agg.index)}
+    a = str(as_of)
+    if a in agg.index:
+        asof_usable, asof_total = (int(agg.at[a, "sum"]), int(agg.at[a, "count"]))
+    else:
+        asof_usable = asof_total = 0
+    return incomplete, asof_total, asof_usable
+
+
+def _limit_events(daily: pd.DataFrame, sl: pd.DataFrame, dstr: pd.Series | None,
+                  lstr: pd.Series | None, as_of: str) -> tuple:
+    """Vectorized limit-up/down/touched/failed over the whole panel (one inner merge).
+
+    Reproduces the per-day ``_limit_sets`` inner merge of ``daily`` × ``stk_limit`` on ``(date, code)``
+    using each stock's own up/down limit (so ±10/±20/ST±5 calibers are respected), with the IDENTICAL
+    boolean conditions. Returns ``(up_by_date, asof)`` where ``up_by_date`` maps each date ``<= as_of``
+    with at least one limit-up to its set of limit-up ts_codes (streak/promotion inputs), and ``asof``
+    holds the as_of-day up-code set + up/down/touched/failed counts. Because every consumer takes
+    order-independent set cardinalities / memberships, the one-pass merge is byte-identical to the
+    272 per-day merges it replaces."""
+    empty = {"up": set(), "up_count": 0, "down_count": 0, "touched": 0, "failed": 0}
+    if daily is None or daily.empty or sl is None or sl.empty or lstr is None:
+        return {}, empty
+    left = pd.DataFrame({"_d": dstr.to_numpy(), "ts_code": daily["ts_code"].to_numpy(),
+                         "close": _num(daily["close"]).to_numpy(), "high": _num(daily["high"]).to_numpy()})
+    right = pd.DataFrame({"_d": lstr.to_numpy(), "ts_code": sl["ts_code"].to_numpy(),
+                          "up_limit": _num(sl["up_limit"]).to_numpy(),
+                          "down_limit": _num(sl["down_limit"]).to_numpy()})
+    m = left.merge(right, on=["_d", "ts_code"], how="inner")
+    if m.empty:
+        return {}, empty
+    close = m["close"]; high = m["high"]; up = m["up_limit"]; down = m["down_limit"]
+    ok = close.notna() & up.notna() & up.gt(0)
+    up_mask = (ok & (close >= up * LIMIT_TOL)).to_numpy()
+    touched_mask = (ok & high.notna() & (high >= up * LIMIT_TOL)).to_numpy()
+    failed_mask = (ok & high.notna() & (high >= up * LIMIT_TOL) & (close < up * LIMIT_TOL)).to_numpy()
+    ok_d = close.notna() & down.notna() & down.gt(0)
+    down_mask = (ok_d & (close <= down * (2 - LIMIT_TOL))).to_numpy()
+    md = m["_d"].to_numpy(); mc = m["ts_code"].to_numpy()
+    a = str(as_of)
+    asof = md == a
+    pit = md <= a
+    up_by_date: dict[str, set] = {}
+    for d, c in zip(md[up_mask & pit], mc[up_mask & pit]):
+        s = up_by_date.get(d)
+        if s is None:
+            up_by_date[d] = s = set()
+        s.add(c)
+    counts = {"up": set(mc[up_mask & asof]),
+              "up_count": int((up_mask & asof).sum()),
+              "down_count": int((down_mask & asof).sum()),
+              "touched": int((touched_mask & asof).sum()),
+              "failed": int((failed_mask & asof).sum())}
+    return up_by_date, counts
+
+
+def _max_limit_streak(up_by_date: dict, dates: list[str]) -> int:
     """Max over stocks of consecutive limit-up days ending at the last date."""
     if not dates:
         return 0
     streak_by_code: dict[str, int] = {}
     best = 0
     # walk dates backward from the end; a stock's streak is unbroken consecutive membership
-    alive = set(up_sets.get(dates[-1], set()))
+    alive = set(up_by_date.get(dates[-1], set()))
     for code in alive:
         streak_by_code[code] = 0
     for d in reversed(dates):
-        ups = up_sets.get(d, set())
+        ups = up_by_date.get(d, set())
         still = set()
         for code in alive:
             if code in ups:
@@ -141,28 +192,36 @@ def _max_limit_streak(up_sets: dict, dates: list[str]) -> int:
     return int(best)
 
 
-def _pct_above_ma20(daily: pd.DataFrame, dates: list[str]) -> tuple:
-    """(pct_above_ma20 or None, eligible_count). Eligible = stock with >= MA_WINDOW closes <= as_of."""
+def _pct_above_ma20(daily: pd.DataFrame, dstr: pd.Series, dates: list[str]) -> tuple:
+    """(pct_above_ma20 or None, eligible_count). Eligible = stock with >= MA_WINDOW closes <= as_of.
+
+    Vectorized: select the MA_WINDOW-day window with one positional mask (carrying each row's
+    precomputed date string), then per stock compute the distinct-window-day count and the window-mean
+    via groupby. Eligible = stocks with >= MA_WINDOW distinct window days AND a row at as_of; a stock
+    counts as above iff its as_of close exceeds its window mean. Row selection preserves the original
+    ``daily`` order, so each per-stock mean is over the identical values in the identical order — the
+    above-count is byte-identical to the prior per-stock Python loop."""
     if len(dates) < MA_WINDOW:
         return None, 0
-    window = dates[-MA_WINDOW:]
-    sub = daily[daily["trade_date"].astype(str).isin(window)][["ts_code", "trade_date", "close"]].copy()
-    sub["close"] = _num(sub["close"])
-    sub = sub.dropna(subset=["close"])
-    g = sub.groupby("ts_code")
-    above = 0; eligible = 0
+    window = set(dates[-MA_WINDOW:])
     as_of = dates[-1]
-    for code, grp in g:
-        if grp["trade_date"].astype(str).nunique() < MA_WINDOW:
-            continue
-        today = grp[grp["trade_date"].astype(str) == as_of]
-        if today.empty:
-            continue
-        eligible += 1
-        if float(today["close"].iloc[0]) > float(grp["close"].mean()):
-            above += 1
+    mask = dstr.isin(window).to_numpy()
+    if not mask.any():
+        return None, 0
+    sub = pd.DataFrame({"code": daily["ts_code"].to_numpy()[mask], "td": dstr.to_numpy()[mask],
+                        "close": _num(daily["close"]).to_numpy()[mask]})
+    sub = sub.dropna(subset=["close"])
+    if sub.empty:
+        return None, 0
+    g = sub.groupby("code", sort=False)
+    ndist = g["td"].nunique()
+    mean_close = g["close"].mean()
+    today = sub[sub["td"] == as_of].set_index("code")["close"]
+    elig = ndist.index[ndist.to_numpy() >= MA_WINDOW].intersection(today.index)
+    eligible = len(elig)
     if eligible == 0:
         return None, 0
+    above = int((today.loc[elig].to_numpy() > mean_close.loc[elig].to_numpy()).sum())
     return round(above / eligible * 100, 6), eligible
 
 
@@ -223,34 +282,44 @@ def compute_regime_daily_features(as_of: str, daily: pd.DataFrame, stk_limit: pd
 
     sl = stk_limit if stk_limit is not None else pd.DataFrame(columns=["ts_code", "trade_date", "up_limit", "down_limit"])
 
+    # PERF: cast each big panel's trade_date to str ONCE and reuse it for the canonical-date check, the
+    # uniqueness check, the PIT trade-day axis, and every vectorized whole-panel pass below.
+    dstr = daily["trade_date"].astype(str) \
+        if (daily is not None and not daily.empty and "trade_date" in daily.columns) else None
+    lstr = sl["trade_date"].astype(str) if (not sl.empty and "trade_date" in sl.columns) else None
+
     # source-panel integrity (before any lexicographic PIT filter / metric): canonical dates so
     # ordering is sound, and one row per (date,stock)/(date) so a dup can't fabricate counts/returns.
-    for df, nm in ((daily, "daily"), (sl, "stk_limit"), (csi300, "csi300"), (csi1000, "csi1000")):
-        _assert_canonical_panel_dates(df, nm)
-    _assert_unique(daily, ["trade_date", "ts_code"], "daily", as_of)
-    _assert_unique(sl, ["trade_date", "ts_code"], "stk_limit", as_of)
+    _assert_canonical_panel_dates(daily, "daily", dstr)
+    _assert_canonical_panel_dates(sl, "stk_limit", lstr)
+    _assert_canonical_panel_dates(csi300, "csi300")
+    _assert_canonical_panel_dates(csi1000, "csi1000")
+    _assert_unique(daily, ["trade_date", "ts_code"], "daily", as_of, dstr)
+    _assert_unique(sl, ["trade_date", "ts_code"], "stk_limit", as_of, lstr)
     _assert_unique(csi300, ["trade_date"], "csi300", as_of)
     _assert_unique(csi1000, ["trade_date"], "csi1000", as_of)
 
-    dates = _trade_dates(daily, as_of)
+    # PIT cap (defends the "rows > as_of ignored" contract): restrict the working daily/stk_limit
+    # frames + their reused date-string series to dates <= as_of BEFORE any vectorized merge/groupby.
+    # The original capped every per-day filter to <= as_of, so a future row must never alter or break
+    # the current row — in particular a future-dated DUPLICATE stk_limit row, which the uniqueness
+    # check (only at/<= as_of) cannot see, would otherwise inflate the left-merge cardinality and raise.
+    # Capping also shrinks early-as_of work during a 252-day bootstrap.
+    if dstr is not None:
+        dmask = dstr <= as_of
+        daily, dstr = daily[dmask], dstr[dmask]
+    if lstr is not None:
+        lmask = lstr <= as_of
+        sl, lstr = sl[lmask], lstr[lmask]
+
+    # ascending unique PIT trade dates (<= as_of) from the (now-capped) date column (no row scan)
+    dates = sorted(dstr.unique()) if dstr is not None else []
     if not dates or dates[-1] != as_of:
         raise ValueError(f"compute_regime_daily_features: daily has no rows for as_of {as_of}")
 
-    def _daily_codes(day: str) -> set:
-        return set(daily[daily["trade_date"].astype(str) == day]["ts_code"])
-
-    def _usable_codes(day: str) -> set:
-        """ts_codes on ``day`` with BOTH a usable daily price AND a usable limit row."""
-        dd = daily[daily["trade_date"].astype(str) == day]
-        ld = sl[sl["trade_date"].astype(str) == day]
-        return _usable_price_codes(dd) & _usable_limit_codes(ld)
-
-    def _incomplete(day: str) -> bool:
-        """True if some daily-traded stock on ``day`` lacks a usable price+limit observation."""
-        dcodes = _daily_codes(day)
-        if not dcodes:
-            return False
-        return bool(dcodes - _usable_codes(day))
+    # one vectorized coverage pass: which trade dates have a missing/unusable daily-price or stk_limit
+    # observation for some traded stock (fail-closed on as_of, degrade on prior window days).
+    incomplete_by_date, asof_total, asof_usable = _incomplete_by_date(daily, sl, dstr, lstr, as_of)
 
     # FAIL CLOSED on as_of: limit_up/down/net/streak/failed are non-null integer/ratio fields that
     # CANNOT honestly represent "unknown" — a fabricated 0 (from missing/unusable limit OR broken
@@ -258,55 +327,46 @@ def compute_regime_daily_features(as_of: str, daily: pd.DataFrame, stk_limit: pd
     # close=0 fabricating a limit-down). A real A-share trading day always has complete usable price +
     # stk_limit; an incomplete one is a fetch failure the runner must resolve, so refuse to emit a
     # fabricated row rather than poison the evidence ledger.
-    if _incomplete(as_of):
-        dcodes = _daily_codes(as_of)
+    if incomplete_by_date.get(as_of, False):
         raise ValueError(
             f"compute_regime_daily_features: as_of {as_of} has missing/unusable daily-price or "
-            f"stk_limit data for {len(dcodes - _usable_codes(as_of))}/{len(dcodes)} traded stocks; "
+            f"stk_limit data for {asof_total - asof_usable}/{asof_total} traded stocks; "
             f"cannot compute limit breadth (re-fetch) — refusing to fabricate zeros")
 
-    # per-day up-sets over the window (for streak + promotion); today's full sets for counts
-    up_sets: dict[str, set] = {}
-    for d in dates:
-        dd = daily[daily["trade_date"].astype(str) == d]
-        ld = sl[sl["trade_date"].astype(str) == d]
-        up_sets[d] = _limit_sets(dd, ld)["up"]
-
-    today_dd = daily[daily["trade_date"].astype(str) == as_of]
-    today_ld = sl[sl["trade_date"].astype(str) == as_of]
-    today = _limit_sets(today_dd, today_ld)   # as_of guaranteed fully usable by the fail-closed gate
-
     # prior window days (streak/promotion inputs) may still be incomplete — degrade, don't fail.
-    history_incomplete = any(_incomplete(d) for d in dates[:-1])
+    history_incomplete = any(incomplete_by_date.get(d, False) for d in dates[:-1])
     if history_incomplete:
         flags.append("stk_limit_history_incomplete")
 
-    limit_up_count = len(today["up"])
-    limit_down_count = len(today["down"])
+    # one vectorized limit-event pass: per-day limit-up sets (streak/promotion) + as_of breadth counts.
+    up_by_date, asof = _limit_events(daily, sl, dstr, lstr, as_of)
+
+    limit_up_count = asof["up_count"]
+    limit_down_count = asof["down_count"]
     net_limit = limit_up_count - limit_down_count
 
     # failed_limit_rate = failed_up / touched_up; denom 0 → None
-    touched = len(today["touched_up"])
-    failed_limit_rate = round(len(today["failed_up"]) / touched, 6) if touched else None
+    touched = asof["touched"]
+    failed_limit_rate = round(asof["failed"] / touched, 6) if touched else None
 
-    max_limit_streak = _max_limit_streak(up_sets, dates)
+    max_limit_streak = _max_limit_streak(up_by_date, dates)
 
     # promotion_rate = (prev-day limit-up that limit-up again today) / prev-day limit-up count
     if len(dates) >= 2:
-        prev_up = up_sets.get(dates[-2], set())
+        prev_up = up_by_date.get(dates[-2], set())
         denom = len(prev_up)
-        if _incomplete(dates[-2]):
+        if incomplete_by_date.get(dates[-2], False):
             promotion_rate = None          # prior-day denom from a subset → unreliable (history flag set)
         elif denom < MIN_PROMOTION_DENOM:
             promotion_rate = None
             flags.append("insufficient_sample")
         else:
-            promotion_rate = round(len(prev_up & today["up"]) / denom, 6)
+            promotion_rate = round(len(prev_up & asof["up"]) / denom, 6)
     else:
         promotion_rate = None
         flags.append("insufficient_sample")
 
-    pct_above_ma20, _elig = _pct_above_ma20(daily, dates)
+    pct_above_ma20, _elig = _pct_above_ma20(daily, dstr, dates)
     if pct_above_ma20 is None:
         flags.append("ma20_insufficient_window")
 

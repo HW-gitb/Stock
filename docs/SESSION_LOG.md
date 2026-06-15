@@ -10,6 +10,39 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Codex `审查 PASS` (R-V143-REGIME-PIT-FUTURE-DUP-STKLIMIT-REGRESSION)
+- **Verdict/Action**: PASS。PIT future-row 回归已修复;完整 closure/boundary 见 register。提交时包含 frozen reference,继续排除 EM smoke byproduct。
+- **Required**: `R-V143-REGIME-PIT-FUTURE-DUP-STKLIMIT-REGRESSION` addressed in working tree;详情见 `docs/system_risk_register.md`。
+- **Verify**: independent PIT probes OK(future duplicate `stk_limit`/`daily` ignored且等于 frozen reference,at-as_of duplicate still raises);`py_compile` OK;doc/route guard 30 OK;`git diff --check` clean(LF/CRLF warnings only);full 205 regime tests not rerun here due missing `jsonschema`,Claude recorded 205 OK。
+- **Next**: Claude `提交`。
+
+## 2026-06-15 — Claude `修复` (R-V143-REGIME-PIT-FUTURE-DUP-STKLIMIT-REGRESSION)
+- **Verdict/Action**: 先独立复现确认 Codex finding **正确**(`as_of=20240120`+未来日 20240121 重复 stk_limit:冻结原版 `limit_up_count=1`,优化版抛 `ValueError: All arrays must be of the same length`);根因=`_incomplete_by_date`/`_limit_events` 在 PIT cap 前对**全 panel** merge,`_assert_unique` 只查 `<=as_of` 漏未来重复→left-merge 膨胀。修复(整类非单实例):完整性检查后、所有向量化 merge/groupby 前,把 `daily/stk_limit`+复用 date-string cap 到 `<=as_of`(重绑局部名)→任何 `>as_of` 行结构性丢弃,兑现"rows>as_of ignored";canonical 仍验全 panel、`_assert_unique` 仍先跑→at/<=as_of 重复仍抛。
+- **Required**: `R-V143-REGIME-PIT-FUTURE-DUP-STKLIMIT-REGRESSION`;详情/closure 见 `docs/system_risk_register.md`(register 单一来源)。
+- **Verify**: 新 `test_future_dated_duplicate_stk_limit_is_ignored_pit`(未来重复被忽略、优化版==冻结原版、`limit_up_count==1`)+保留 ordinary future-row PIT 测试;regime 全量 **205 OK**(jsonschema 在);真网 1.36M 行 probe last as_of 2.10s + early as_of 0.60s **均 `rows_identical=True`**;`py_compile`/no-BOM/`git diff --check` 干净;边界未动(语义/字段/schema/provider/V14.2/EGS/M6.7/下单)。
+- **Next**: 审查(Codex re-`审查`)。
+- **Pre-Codex self-review**: A(整类:cap 治本,任何 `>as_of` 行不再进向量化,非只挡这条 duplicate;equality 覆盖 ordinary future+future-dup)/ B(纯内部 cap 后重绑 `daily/sl/dstr/lstr`,无签名/字段/契约改;canonical 仍验全 panel 留"非法未来日 raise")/ C(反向:合法 at/<=as_of 重复仍由先跑的 `_assert_unique` 抛,`test_duplicate_stk_limit/daily_rows_rejected` 仍过)/ F(空 daily/sl 分支保留;diff-check/BOM 干净)。已复现→修→复测 early+last 两面逐字段等。
+
+## 2026-06-15 — Codex `审查 FAIL` (V14.3 regime compute 性能优化)
+- **Verdict/Action**: FAIL。向量化方向成立,但 PIT future-row ignore 出现回归;完整 finding/repair/boundary 见 register。
+- **Required**: `R-V143-REGIME-PIT-FUTURE-DUP-STKLIMIT-REGRESSION`;详情见 `docs/system_risk_register.md`。
+- **Verify**: independent PIT probe reproduced frozen-reference OK vs optimized `ValueError: All arrays must be of the same length`; `py_compile` OK; doc/route guard 30 OK; broader regime tests blocked here by missing `jsonschema`; `git diff --check` clean (LF/CRLF warnings only)。
+- **Next**: Claude `修复`。
+
+## 2026-06-15 — Claude `起草` (V14.3 regime compute 性能优化:整 panel 向量化,bit-identical,54x/call)
+- **动机**:接上条 handoff(诊断:`compute_regime_daily_features` 慢→252 天 bootstrap ~90min)。优化 compute **内部实现**,不改 regime 语义/字段/返回 dict/`make_feature_provider` 契约。
+- **诊断细化(真网 profile,5000股×272日=1.36M行,单 call last as_of)**:原版 = **104s**;根因不只是 per-window-day 全表 `daily[trade_date.astype(str)==day]` 重扫,还有 ① `history_incomplete=any(_incomplete(d) for 271 prior days)` 每天重建 Python set ② `set(Series)` 逐元素迭代(4.1M 次)③ `_pct_above_ma20` 逐 code Python 循环 ④ 272 次 per-day `_limit_sets` merge。
+- **改动(纯实现替换,逐字段 bit-identical)**:
+  - **整 panel 向量化**:`_incomplete_by_date`(一次 left-merge 算每 (date,code) usable-price+usable-limit → groupby 得每日 incomplete bool + as_of 计数,替 271 次 per-day set-difference)；`_limit_events`(一次 inner-merge 算 up/down/touched/failed bool mask → 每日 limit-up set + as_of breadth 计数,替 272 次 per-day merge,条件与旧 `_limit_sets` 逐字节同)；`_pct_above_ma20` 向量化(一次 positional mask + groupby mean/nunique,替逐 code 循环;选行保持原 daily 顺序 → 每股均值同序同值 → above 计数 bit-identical)。
+  - canonical 检查 dedup 到 unique dates(~272 次 strptime 替 1.36M 次)；trade_date 一次 str-cast 复用；`dates` 从 date 列 `.unique()` 派生(无全 panel 行扫)。
+  - 删全内部 helper `_limit_sets`/`_usable_price_codes`/`_usable_limit_codes`/`_group_by_date`/`_trade_dates*`/嵌套 `_daily_codes`/`_usable_codes`/`_incomplete`(grep 0 外部引用)。保留公开签名/返回 dict/`MA_WINDOW`/`LIMIT_TOL`/`MIN_PROMOTION_DENOM`/`_assert_*`(加 `str_dates` 可选复用参)/`_max_limit_streak`/`_index_ret_and_below`/`_num`。
+- **结果(真网 profile)**:单 call 104s→**1.93s(54x)**,`rows identical: True`(逐字段)。主板(~3300股)≈1.2s/call → 252 天 bootstrap **~90min→~5min**(满足"几分钟")。
+- **Verify(closure)**:新 `tests/_regime_features_reference_frozen.py` = commit 5b20f09c 引擎**逐字节冻结副本**(SHA256 核验 + do-not-edit header)。`OptimizationEquivalenceTests`:① 优化版 vs 冻结原版对 branch-覆盖 panel **7 个 as_of 逐字段 `assertEqual`** + coverage 断言(防 vacuous:必现 streak>1/promotion 三态/ma20/failed/5 类 flag)；② deep panel(120日4 as_of)identity；③ runtime linear-in-depth(4x 深度 <8x 时间,防 per-day rescan 回归)。regime 全量 **153 OK**(features35+comparison_runner15+classifier+comparison+ledger+pipeline+governance14)。`py_compile`/no-BOM(3 文件)/`git diff --check` 干净(仅 LF/CRLF)。
+- **边界**:comparison-only 非生产;不碰 V14.2/选股/否决/下单/schema/字段/provider 契约。bootstrap RUN(用户 `执行`+TUSHARE_TOKEN)留 PASS 后;profile 脚本一次性已删、未提交。
+- **进一步(未做,留用户决定)**:bootstrap 252 call 仍各自重算全 panel merge(~1.2-1.9s/call)。跨 call 缓存 panel 级不变量(改 `make_feature_provider` 预算一次)可再 ~20x → bootstrap **秒级**;但越出 handoff "inside compute,只换实现" scope + 动 provider 契约,**未做**。
+- **Next**:审查(Codex;新引擎代码必审)。
+- **Pre-Codex self-review**:A(缺陷类=每 emit 字段×每 as_of branch;冻结原版 equality 覆盖矩阵 streak/promotion3态/failed/ma20空+算/index3态/iv3态/incomplete/ST/PIT/raise路径 over 7+4 as_of + 1.36M probe)/ B(行为·签名·字段·返回·provider 契约**零改**=纯实现;`grep -rn '_limit_sets|_usable_*_codes|_group_by_date|_trade_dates_from_groups|_daily_codes' --include=*.py`(排除 engine+frozen)= **0 外部引用**,命中皆无关 *trade_dates* 名;docstring 同步向量化、re-grep 删函数名 0 stale)/ C(反向 fail-closed 漏成 pass / complete 误 raise 由既有全部 raise-path 单测 missing/partial/unusable/Inf/NaN price&limit + 冻结原版 equality 双向钉,全过)/ D(N/A 无 NL 分类)/ E(无 CURRENT/README/register 改;transient gate 仅 SESSION_LOG)/ F(NaN/Inf `np.isfinite`+`.notna()` 保留+单测过;canonical dedup bit-identical;net_limit 不变式自检保留;merge 键 unique 由 `_assert_unique` 保;无 generator 双消费;no-BOM;diff --check 干净)。Tests passing≠design closure——已用冻结原版对 3 panel(rich/deep/1.36M真网)对抗自验逐字段相等。
+
 ## 2026-06-15 — Claude session handoff(/clear 前:V14.3 regime compute 性能优化任务,诊断已完成、未实现)
 **给 /clear 后新会话**:用户下一步会发「优化 V14.3 regime 的 compute 性能」。本条 = 接上所需的全部上下文。
 - **任务**:优化 `engine/a_short_regime_features.py::compute_regime_daily_features` 性能,让 V14.3 regime **bootstrap(252天回填)从 ~90 分钟降到几分钟**(用户已选「优化」而非「硬跑一次」)。

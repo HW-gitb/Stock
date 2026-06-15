@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import sys
 import json
+import time
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
@@ -44,6 +45,110 @@ def _idx(rows):     # rows: (trade_date, close)
 
 def _dates(n, start=date(2024, 1, 2)):
     return [(start + timedelta(days=i)).strftime("%Y%m%d") for i in range(n)]
+
+
+# --- frozen pre-optimization reference (byte-exact copy of the engine at commit 5b20f09c) ----------
+# The perf optimization (group-by-trade_date once instead of a per-window-day full-panel rescan) MUST
+# be output-preserving; we load the ORIGINAL implementation here and assert the optimized engine emits
+# byte-identical rows over the same panels across many as_of. Loaded by file path so it stays an
+# independent frozen artifact, never re-resolving to the (mutated) production module.
+import importlib.util  # noqa: E402
+
+_REF_PATH = ROOT / "tests" / "_regime_features_reference_frozen.py"
+_ref_spec = importlib.util.spec_from_file_location("_regime_features_reference_frozen", _REF_PATH)
+_ref_mod = importlib.util.module_from_spec(_ref_spec)
+_ref_spec.loader.exec_module(_ref_mod)
+reference_compute = _ref_mod.compute_regime_daily_features
+
+
+def _lim(p, caliber):
+    return round(p * (1 + caliber), 2), round(p * (1 - caliber), 2)
+
+
+def build_regime_equivalence_panel():
+    """A deterministic panel rich enough to traverse EVERY regime branch (limit up/down/net, multi-day
+    streak, promotion computed / thin-denom-null / prior-incomplete-null, failed-limit, ma20 null +
+    computed, index present / missing / short-window, IV valid / none / out-of-range, ST caliber,
+    stk_limit_history_incomplete, PIT) so the optimized==frozen equality below is not vacuous.
+
+    Invariant respected: every chosen as_of day is fully usable for all its traded stocks (else the
+    fail-closed gate would raise); the lone incomplete observation (``GHOST``: price, no usable limit)
+    sits on a PRIOR day so it degrades history without being an as_of."""
+    ds = _dates(36)
+    drows = []
+    lrows = []
+
+    def add(day, code, high, close, up=None, down=None, with_limit=True):
+        drows.append((day, code, high, close))
+        if with_limit:
+            lrows.append((day, code, up, down))
+
+    for i, day in enumerate(ds):
+        # 6 normal never-limit stocks (N0..N2 rising, N3..N5 falling) → MA20 eligibility + spread
+        for k in range(6):
+            base = max(10.0 + (i * 0.1 if k < 3 else -i * 0.05), 1.0)
+            up, down = _lim(base, 0.10)
+            add(day, f"N{k}", round(base * 1.02, 2), round(base, 2), up, down)
+        # 6 promo stocks: all limit-up on ds[34]; only 4 again on ds[35] → promotion 5/7 incl streak
+        for k in range(6):
+            up, down = _lim(12.0, 0.10)
+            if i == 34 or (i == 35 and k < 4):
+                add(day, f"PROMO{k}", up, up, up, down)               # limit-up
+            else:
+                add(day, f"PROMO{k}", round(12.0 * 1.01, 2), 12.0, up, down)
+        # STREAK: limit-up on the last 5 days → max_limit_streak 5
+        up, down = _lim(15.0, 0.10)
+        if i >= 31:
+            add(day, "STREAK", up, up, up, down)
+        else:
+            add(day, "STREAK", round(15.0 * 1.01, 2), 15.0, up, down)
+        # DOWN: limit-down only on the final day
+        up, down = _lim(20.0, 0.10)
+        if i == 35:
+            add(day, "DOWN", 20.0, down, up, down)
+        else:
+            add(day, "DOWN", round(20.0 * 1.01, 2), 20.0, up, down)
+        # FAILED: touched the up-limit but closed below it on the final day
+        up, down = _lim(25.0, 0.10)
+        if i == 35:
+            add(day, "FAILED", up, round(up * 0.98, 2), up, down)
+        else:
+            add(day, "FAILED", round(25.0 * 1.01, 2), 25.0, up, down)
+        # ST01: ±5% caliber (caliber smoke; stays mid)
+        up, down = _lim(8.0, 0.05)
+        add(day, "ST01", round(8.0 * 1.01, 2), 8.0, up, down)
+        # GHOST: a prior-day incomplete observation (price present, NO usable limit) → history flag
+        if i == 5:
+            up, down = _lim(30.0, 0.10)
+            add(day, "GHOST", 30.3, 30.0, up, down, with_limit=False)
+
+    daily = _daily(drows)
+    stk_limit = _limit(lrows)
+    csi300 = _idx([(ds[i], 1000.0 + i * (2.0 if i % 2 else -1.0)) for i in range(36)])
+    csi1000 = _idx([(ds[i], 2000.0 + i * 1.5) for i in range(36) if i != 30])   # missing at ds[30]
+    iv_map = {ds[35]: 62.5, ds[25]: 10.0, ds[22]: 250.0}    # valid / valid / out-of-range
+    as_ofs = [ds[3], ds[6], ds[10], ds[22], ds[25], ds[30], ds[35]]
+    return daily, stk_limit, csi300, csi1000, iv_map, as_ofs
+
+
+def build_regime_perf_panel(n_stocks=24, n_days=140, n_as_of=10):
+    """A uniform fully-usable panel with MANY trade days; as_of sits at the tail so each call's window
+    is deep. The frozen reference re-scans the full panel once per window-day (O(window) per call); the
+    optimized engine groups once (O(panel) per call), so it must be dramatically faster here."""
+    ds = _dates(n_days)
+    drows = []
+    lrows = []
+    for i, day in enumerate(ds):
+        for k in range(n_stocks):
+            base = 10.0 + (k % 7) + (i % 13) * 0.1
+            up, down = _lim(base, 0.10)
+            drows.append((day, f"S{k}", round(base * 1.02, 2), round(base, 2)))
+            lrows.append((day, f"S{k}", up, down))
+    daily = _daily(drows)
+    stk_limit = _limit(lrows)
+    csi300 = _idx([(ds[i], 1000.0 + i) for i in range(n_days)])
+    csi1000 = _idx([(ds[i], 2000.0 + i) for i in range(n_days)])
+    return daily, stk_limit, csi300, csi1000, {}, ds[-n_as_of:]
 
 
 class LimitCountTests(unittest.TestCase):
@@ -332,6 +437,83 @@ class IntegrationTests(unittest.TestCase):
     def test_net_limit_identity(self):
         row = self._full_day()
         self.assertEqual(row["net_limit"], row["limit_up_count"] - row["limit_down_count"])
+
+
+class OptimizationEquivalenceTests(unittest.TestCase):
+    """The perf rewrite (group panels by trade_date once vs per-window-day full scans) must be
+    output-preserving. Pin every emitted row byte-for-byte against the frozen pre-optimization
+    reference across a branch-covering panel + as_of sequence, and pin the speedup."""
+
+    def test_optimized_row_is_byte_identical_to_frozen_reference(self):
+        daily, stk_limit, csi300, csi1000, iv_map, as_ofs = build_regime_equivalence_panel()
+        seen_flags = set()
+        saw_streak = saw_promo = saw_pct = saw_failed = False
+        for a in as_ofs:
+            iv = iv_map.get(a)
+            opt = compute_regime_daily_features(a, daily, stk_limit, csi300, csi1000,
+                                                iv_percentile_252d=iv)
+            ref = reference_compute(a, daily, stk_limit, csi300, csi1000, iv_percentile_252d=iv)
+            self.assertEqual(opt, ref, f"optimized output diverged from frozen reference at as_of {a}")
+            seen_flags.update(opt["data_quality_flags"])
+            saw_streak = saw_streak or opt["max_limit_streak"] > 1
+            saw_promo = saw_promo or opt["promotion_rate"] is not None
+            saw_pct = saw_pct or opt["pct_above_ma20"] is not None
+            saw_failed = saw_failed or opt["failed_limit_rate"] is not None
+        # guard against a vacuous equality: the panel must actually exercise the interesting branches
+        for f in ("stk_limit_history_incomplete", "insufficient_sample", "ma20_insufficient_window",
+                  "csi1000_unavailable", "iv_unavailable"):
+            self.assertIn(f, seen_flags, f"equivalence panel never produced flag {f!r}")
+        self.assertTrue(saw_streak and saw_promo and saw_pct and saw_failed,
+                        "equivalence panel did not traverse streak/promotion/ma20/failed-limit metrics")
+
+    def test_future_dated_duplicate_stk_limit_is_ignored_pit(self):
+        # R-V143-REGIME-PIT-FUTURE-DUP-STKLIMIT-REGRESSION: a DUPLICATE stk_limit row at a date AFTER
+        # as_of is not seen by the (<= as_of) uniqueness check; under the "rows > as_of ignored"
+        # contract it must be dropped, exactly as the frozen reference does — never inflating merge
+        # cardinality into a raise, nor altering the current row. (Reverse guard: a duplicate AT/<= as_of
+        # must still raise — covered by SourcePanelIntegrityTests.test_duplicate_stk_limit_rows_rejected.)
+        as_of = "20240120"
+        daily = _daily([(as_of, "A", 11.0, 11.0), ("20240121", "A", 12.0, 12.0)])   # + a future row
+        stk = _limit([(as_of, "A", 11.0, 9.0),
+                      ("20240121", "A", 12.0, 10.0), ("20240121", "A", 12.0, 10.0)])  # future duplicate
+        empty = _idx([])
+        opt = compute_regime_daily_features(as_of, daily, stk, empty, empty)
+        ref = reference_compute(as_of, daily, stk, empty, empty)
+        self.assertEqual(opt, ref, "future-dated duplicate stk_limit must be ignored like the reference")
+        self.assertEqual(opt["limit_up_count"], 1)     # as_of row counted; future dup neither counts nor raises
+
+    def test_optimized_matches_reference_on_deep_panel(self):
+        # identity must also hold when there are MANY trade-day groups (group-once path), not just the
+        # 36-day equivalence panel — this is the 252-day-bootstrap recompute shape (same panel, tail as_of).
+        daily, stk_limit, csi300, csi1000, _iv, as_ofs = build_regime_perf_panel(
+            n_stocks=12, n_days=120, n_as_of=4)
+        for a in as_ofs:
+            self.assertEqual(compute_regime_daily_features(a, daily, stk_limit, csi300, csi1000),
+                             reference_compute(a, daily, stk_limit, csi300, csi1000),
+                             f"optimized != frozen reference on deep panel at as_of {a}")
+
+    def test_runtime_is_linear_in_trade_day_depth_not_quadratic(self):
+        # The win is asymptotic: per call the optimization replaces an O(window) per-window-day
+        # full-panel rescan with ONE group-by, so cost is ~linear in trade-day depth. Quadrupling the
+        # depth (same stocks / as_of count) must grow wall time far below the ~16x a reintroduced
+        # quadratic rescan would cost. We time only the (fast) optimized engine, best-of-2 to damp noise.
+        def timed(n_days):
+            daily, sl, c3, c1, _iv, as_ofs = build_regime_perf_panel(
+                n_stocks=16, n_days=n_days, n_as_of=3)
+            best = float("inf")
+            for _ in range(2):
+                compute_regime_daily_features(as_ofs[-1], daily, sl, c3, c1)   # warmup
+                t0 = time.perf_counter()
+                for a in as_ofs:
+                    compute_regime_daily_features(a, daily, sl, c3, c1)
+                best = min(best, time.perf_counter() - t0)
+            return best
+
+        base = max(timed(70), 1e-3)
+        deep = timed(280)        # 4x the trade-day depth
+        self.assertLess(deep, base * 8.0,
+                        f"runtime grew {deep / base:.1f}x for 4x trade-day depth (expected ~4x linear) "
+                        f"— near-quadratic; the per-window-day full-panel rescan may have regressed")
 
 
 if __name__ == "__main__":
