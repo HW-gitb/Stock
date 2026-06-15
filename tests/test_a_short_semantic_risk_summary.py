@@ -375,5 +375,43 @@ class SkillPatchPathRetired(unittest.TestCase):
         self.assertIsNone(_web_llm_consistency_error(
             {"status": "unknown", "risk_level": "unknown", "action": "no_action"}, []))
 
+class SliceBHighSeverityAndLiftedTests(unittest.TestCase):
+    """Slice B: 重大利空 → official high(→ M6.7 否决)。high→否决误报=误杀(web advisory 救不回、有害),
+    故走最窄安全侧:只把无歧义高精度官方公告判 high,并对可解除类型(风险警示/退市/强制措施/处罚)加摘帽/
+    解除/无关负向抑制(宁漏勿误杀)。`_match_risk(title)` → (category, risk_type, severity) | None。"""
+
+    def test_new_high_categories_hit(self):
+        self.assertEqual(_match_risk("关于公司股票被终止上市的公告")[2], "high")
+        self.assertEqual(_match_risk("关于实际控制人被采取强制措施的公告")[2], "high")
+        self.assertEqual(_match_risk("关于公司股票终止上市暨摘牌的公告")[1], "delisting")  # 摘牌=退市,非摘帽
+
+    def test_existing_high_unchanged(self):
+        for t in ("关于公司被中国证监会立案调查的公告",
+                  "关于收到行政处罚事先告知书的公告",
+                  "关于公司股票被实施退市风险警示的公告"):
+            self.assertEqual(_match_risk(t)[2], "high", t)
+
+    def test_lifted_risk_warning_not_high(self):
+        # 摘帽/撤销风险警示 = 利好,绝不能误判 high→误否决(修现有"撤销风险警示"含"风险警示"误命中)
+        for t in ("关于公司股票撤销退市风险警示的公告",
+                  "关于撤销其他风险警示暨股票摘帽的公告",
+                  "关于撤销风险警示的公告"):
+            self.assertIsNone(_match_risk(t), t)
+
+    def test_lifted_or_irrelevant_delisting_not_high(self):
+        for t in ("关于撤销终止上市决定的公告", "关于终止上市辅导的公告",
+                  "关于与保荐机构终止上市辅导协议的公告"):
+            self.assertIsNone(_match_risk(t), t)
+
+    def test_lifted_coercive_and_penalty_not_high(self):
+        for t in ("关于实际控制人解除强制措施的公告",
+                  "关于公司免于行政处罚的公告", "关于不予处罚决定的公告"):
+            self.assertIsNone(_match_risk(t), t)
+
+    def test_investigation_high_not_suppressed_by_lifted(self):
+        # 立案不在可解除类型:即使标题含"撤销",仍报 high(漏判立案比漏判摘帽严重)
+        self.assertEqual(_match_risk("关于撤销前期更正并被立案调查的公告")[2], "high")
+
+
 if __name__ == "__main__":
     unittest.main()

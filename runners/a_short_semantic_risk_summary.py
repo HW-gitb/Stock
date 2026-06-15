@@ -47,7 +47,7 @@ DEEP_RANK_MAX = 5
 CNINFO_STATIC_HOST = "http://static.cninfo.com.cn/"
 
 # 标题关键词 → (category, risk_type, severity)。首个命中的关键词决定分类(顺序=高 severity 在前=优先级)。
-# severity:high(立案/处罚/ST 严重事件)/ medium(监管函件·关注·资金占用·担保 真问题)/ low(诉讼仲裁,
+# severity:high(立案/处罚/ST·退市/终止上市·实控人强制措施 等严重事件;**high→否决,故可解除类型由 Slice-B lifted 抑制防误杀**)/ medium(监管函件·关注·资金占用·担保 真问题)/ low(诉讼仲裁,
 # 大公司常为例行)。Slice-2a 执行实测发现宽关键词假阳性(银行年报季"非经营性资金占用…专项说明"=例行合规件
 # 命中 资金占用),故 Slice-2b 加负向模式 + 分级粗筛;实质精判由 web_llm advisory 给出(产出路径见契约 §web_llm 产出路径)。
 RISK_KEYWORD_MAP = [
@@ -56,6 +56,8 @@ RISK_KEYWORD_MAP = [
     ("行政处罚", "处罚", "penalty", "high"),
     ("处罚", "处罚", "penalty", "high"),
     ("风险警示", "风险警示", "risk_warning", "high"),
+    ("终止上市", "终止上市", "delisting", "high"),          # 退市(最硬利空);摘帽/撤销/上市辅导 由 lifted 抑制
+    ("强制措施", "强制措施", "coercive_measure", "high"),   # 实控人/高管被采取强制措施;解除 由 lifted 抑制
     ("问询函", "监管函件", "regulatory_inquiry", "medium"),
     ("关注函", "监管函件", "regulatory_inquiry", "medium"),
     ("监管关注", "监管关注", "regulatory_attention", "medium"),
@@ -87,13 +89,33 @@ def _is_routine_occupation_report(title: str) -> bool:
     return any(neg in title for neg in NO_OCCUPATION_NEGATIONS)
 
 
+# 摘帽/解除/利好/无关式 → 抑制(防把"撤销风险警示 / 撤销终止上市 / 恢复上市 / 解除强制措施 / 免于处罚 /
+# 终止上市辅导"等利好或无关公告误判为重大利空 high → 误否决好票)。**high→否决,误报=误杀(web advisory
+# 救不回、有害)**,故对 high 也抑制——设计哲学与资金占用 routine 抑制相反:那是 medium 误报无害(走最宽报
+# risk 交 web 精判),这是 high 误杀有害(宁可漏报——漏判的真利空交人工 + web advisory 兜)。lifted 抑制**只**
+# 作用于可被解除/摘帽的风险类型(_LIFTABLE_TYPES),**不**作用于立案调查(很少"撤销立案"语境,且漏判立案比漏判摘帽严重)。
+LIFTED_OR_IRRELEVANT = ("撤销", "撤消", "解除", "恢复上市", "摘帽", "脱星",
+                        "免于", "免予", "不予处罚", "终止上市辅导", "上市辅导")
+_LIFTABLE_TYPES = ("risk_warning", "delisting", "coercive_measure", "penalty")
+
+
+def _is_lifted_or_irrelevant(title: str) -> bool:
+    """标题含摘帽/解除/利好/无关式 → True(用于抑制可解除类型的 high 误判)。"""
+    return any(w in title for w in LIFTED_OR_IRRELEVANT)
+
+
 def _match_risk(title: str):
     """标题 → (category, risk_type, severity);无风险 → None。
-    high severity 永不被抑制;medium/low 仅当命中**窄判**的例行年报资金占用专项说明时视为非风险。"""
+    high(→否决):命中后,若属可解除类型(_LIFTABLE_TYPES)且标题含摘帽/解除/无关式 → 不报(防误杀,宁漏勿误);
+    立案调查等不可解除类型的 high 永不被此抑制。medium/low:仅当命中窄判的例行年报资金占用专项说明时视为非风险。"""
     for kw, cat, rtype, severity in RISK_KEYWORD_MAP:
         if kw not in title:
             continue
-        if severity != "high" and _is_routine_occupation_report(title):
+        if severity == "high":
+            if rtype in _LIFTABLE_TYPES and _is_lifted_or_irrelevant(title):
+                return None                                 # 摘帽/解除/无关 → 不报 high(防误否决好票)
+            return cat, rtype, severity
+        if _is_routine_occupation_report(title):
             return None                                     # 例行年报专项说明,非真风险(窄判抑制)
         return cat, rtype, severity
     return None
