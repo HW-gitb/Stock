@@ -7,6 +7,10 @@
 #   4) M6.7 advisory 周报(a_short_iv_feed_build + a_short_weekly_pipeline:建市场 IV feed → 跑
 #                                               M6.7 pipeline,语义 cninfo+DeepSeek 行内;watch pool =
 #                                               当次 EGS analysis_input;run-path 见契约 §web_llm 产出路径)
+#   5) V14.3 regime 比较账本(a_short_regime_comparison_runner:旁路 sidecar,comparison-only 非生产、V14.2 冻结;
+#                                               **只在实盘当天跑**(历史回放跳过——账本是 forward 累积的已结算交易日证据);
+#                                               无 ledger→一次性 --bootstrap 252日回填(首跑数分钟)、有→increment ~5日;
+#                                               runner 把 as_of 收敛到最新已结算交易日(盘中周一→上周五),复用本次 IV feed)
 #
 # 设计约束：
 # - canary / tracker / semantic 在 egs_main 失败时不跑（拿不到当次 candidates，意义为零）
@@ -51,7 +55,8 @@ param(
     [switch]$AllowHistoricalOverwrite,
     [switch]$SkipCanary,
     [switch]$SkipTracker,
-    [switch]$SkipSemanticRisk
+    [switch]$SkipSemanticRisk,
+    [switch]$SkipRegime
 )
 
 # We rely on $LASTEXITCODE from native exes (python.exe), not PowerShell
@@ -259,6 +264,40 @@ if ($SkipSemanticRisk) {
                 }
             }
         }
+    }
+}
+
+# --- Stage 5: V14.3 regime comparison ledger (旁路 sidecar;comparison-only 非生产,V14.2 仍冻结;失败绝不阻断
+#     周报)。只在实盘当天(as_of==运行日)跑——regime ledger 是 forward 累积的已结算交易日证据,历史回放不该推进它。
+#     无 ledger→一次性 --bootstrap(252日回填,首跑数分钟)、有→increment(秒级)。runner 把 as_of 收敛到最新已结算
+#     交易日(盘中周一→上周五),复用本次已建的 IV feed(有则传)。egs 成功才会走到这(egs 失败已在上面 exit)。
+if ($SkipRegime) {
+    Write-Host ""
+    Write-Host "[regime] -SkipRegime set, V14.3 regime comparison not run" -ForegroundColor DarkGray
+} elseif ($IsHistoricalAsOf) {
+    Write-Host ""
+    Write-Host "[regime] historical -AsOf $AsOf -> skipping V14.3 regime ledger (only live runs advance the forward regime evidence)" -ForegroundColor DarkGray
+} else {
+    Write-Host ""
+    $RegimeLedger = Join-Path $ProjectRoot "research\results\a_short\regime_daily_ledger.json"
+    $RegimeIvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
+    $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf, '--confirm-fetch-authorized')
+    if (-not (Test-Path $RegimeLedger)) {
+        Write-Host "[regime] no existing ledger -> one-time --bootstrap (252-day backfill; may take several minutes)" -ForegroundColor Yellow
+        $RegimeArgs += '--bootstrap'
+    } else {
+        Write-Host "[regime] existing ledger found -> incremental append (settled trading days since last)" -ForegroundColor Yellow
+    }
+    if (Test-Path $RegimeIvFeed) { $RegimeArgs += @('--iv-feed', $RegimeIvFeed) }
+    Write-Host "[5/5] Running $PythonExe $($RegimeArgs -join ' ') ..." -ForegroundColor Yellow
+    & $PythonExe @RegimeArgs
+    $RegimeExitCode = $LASTEXITCODE
+    if ($null -eq $RegimeExitCode) { $RegimeExitCode = 1 }
+    if ($RegimeExitCode -ne 0) {
+        # 真取数失败(daily/stk_limit/指数/IV)不影响主流程退出码(旁路约束:comparison-only 绝不阻断选股)
+        Write-Host "[WARN] V14.3 regime comparison exit $RegimeExitCode (advisory sidecar; comparison-only, does NOT block the weekly)" -ForegroundColor Yellow
+    } else {
+        Write-Host "[ADVISORY] V14.3 regime comparison ledger updated (non-production; V14.2 frozen)." -ForegroundColor Yellow
     }
 }
 

@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_regime_comparison_runner import (  # noqa: E402
     iv_series_to_map, make_feature_provider, run_regime_step, save_panel, save_ledger,
     save_comparison_records, load_ledger, load_comparison_records, main, main_board_only,
+    _latest_settled_as_of,
 )
 from engine.a_short_regime_features import compute_regime_daily_features  # noqa: E402
 from engine.a_short_regime_ledger import build_ledger, BACKFILL_MIN_TRADING_DAYS  # noqa: E402
@@ -74,6 +75,20 @@ def _row(d):
 
 
 class PureHelperTests(unittest.TestCase):
+    def test_latest_settled_as_of_caps_to_available_settled_day(self):
+        # intraday: requested Monday(0615) but daily settled only through Friday(0612) → cap to Friday
+        d = pd.DataFrame({"trade_date": ["20260611", "20260612"], "ts_code": ["A", "A"],
+                          "high": [1.0, 1.0], "close": [1.0, 1.0]})
+        self.assertEqual(_latest_settled_as_of(d, "20260615"), "20260612")
+        # settled requested day present → no-op (max == requested)
+        self.assertEqual(_latest_settled_as_of(d, "20260612"), "20260612")
+        # rows after requested are ignored (only <= requested counts)
+        d2 = pd.DataFrame({"trade_date": ["20260612", "20260618"], "ts_code": ["A", "A"],
+                           "high": [1.0, 1.0], "close": [1.0, 1.0]})
+        self.assertEqual(_latest_settled_as_of(d2, "20260615"), "20260612")
+        # empty panel → requested (caller guards empty separately)
+        self.assertEqual(_latest_settled_as_of(pd.DataFrame(columns=["trade_date"]), "20260615"), "20260615")
+
     def test_iv_series_to_map_validates(self):
         cal = _dates(3)
         self.assertEqual(iv_series_to_map(None), {})

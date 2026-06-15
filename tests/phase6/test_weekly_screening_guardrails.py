@@ -116,6 +116,29 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("a_short_weekly_pipeline.py", text)                # the one-click stage IS the M6.7 pipeline
         self.assertNotIn("a_short_semantic_risk_summary.py", text)       # standalone summary CLI no longer invoked
 
+    def test_regime_stage_wired_live_only_nonblocking(self):
+        # V14.3 regime comparison sidecar wired into the one-click weekly: runs only on a live run
+        # (skipped for historical replay), non-blocking, bootstrap-or-increment by ledger existence.
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("a_short_regime_comparison_runner.py", text)        # the regime runner IS invoked
+        self.assertIn("[switch]$SkipRegime", text)                       # opt-out switch exists
+        self.assertIn("regime_daily_ledger.json", text)                  # ledger-existence check
+        self.assertIn("$RegimeArgs += '--bootstrap'", text)              # absent ledger -> one-time backfill
+        self.assertIn("only live runs advance the forward regime evidence", text)  # historical replay skipped
+        self.assertIn("does NOT block the weekly", text)                 # non-blocking comparison-only sidecar
+
+    def test_runner_readme_documents_regime_stage(self):
+        # route-doc/entrypoint sync (R-V143-WEEKLYSCREENING-ROUTEDOC-STAGE5-DRIFT): the one-click operator
+        # README must list the V14.3 regime sidecar while weekly_screening.ps1 invokes it + exposes -SkipRegime,
+        # so an operator/LLM reading the active runner README cannot miss that the weekly does real regime work.
+        ps1 = SCRIPT.read_text(encoding="utf-8")
+        if "a_short_regime_comparison_runner.py" in ps1 and "$SkipRegime" in ps1:
+            readme = (ROOT / "runners" / "README.md").read_text(encoding="utf-8")
+            for token in ("a_short_regime_comparison_runner.py", "-SkipRegime", "--bootstrap",
+                          "comparison-only", "非阻断"):
+                self.assertIn(token, readme,
+                              f"runners/README.md omits regime-stage token {token!r} while ps1 wires it (route-doc drift)")
+
 
 if __name__ == "__main__":
     unittest.main()

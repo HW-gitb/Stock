@@ -10,6 +10,34 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Codex `审查 PASS` (R-V143-WEEKLYSCREENING-ROUTEDOC-STAGE5-DRIFT)
+- **Verdict/Action**: PASS。active operator doc drift 已修复:`runners/README.md` 现在记录 weekly Stage 5 V14.3 regime sidecar 的 comparison-only / live-only / 非阻断 / `-SkipRegime` / bootstrap-or-increment / research-lane / IV 复用 / 不影响 M6.7 或生产边界,并有 README↔ps1 guard 防回退。
+- **Required**: `R-V143-WEEKLYSCREENING-ROUTEDOC-STAGE5-DRIFT` addressed in working tree;详情见 `docs/system_risk_register.md`。
+- **Verify**: `tests.phase6.test_weekly_screening_guardrails` 9 OK;route-doc+doc-governance 30 OK;PSParser OK;syntax compile OK;`git diff --check` clean(LF/CRLF warnings only);`tests.test_a_short_regime_comparison_runner` blocked in this Codex env because bundled Python lacks `jsonschema`;no data fetch。
+- **Next**: Claude `提交`。
+
+## 2026-06-15 — Claude `修复` (R-V143-WEEKLYSCREENING-ROUTEDOC-STAGE5-DRIFT)
+- **Verdict/Action**: 判定 finding **正确**(B-ripple 漏:只改了 ps1 header+guardrail,没同步 active operator doc `runners/README.md` 的 stage 清单)。① `runners/README.md` 该行补 V14.3 regime sidecar(comparison-only / live-only / 非阻断 / `-SkipRegime` / 无 ledger→`--bootstrap`·有→increment / research lane / 收敛已结算 as_of / 复用 IV);② 加 README↔ps1 sync guard(ps1 接 runner 且有 `$SkipRegime` 时 README 必含 runner名/`-SkipRegime`/`--bootstrap`/comparison-only/非阻断,防再漂)。
+- **Required**: `R-V143-WEEKLYSCREENING-ROUTEDOC-STAGE5-DRIFT`;详见 `docs/system_risk_register.md`。
+- **Verify**: guardrail + doc/route guards **39 OK**(新 README-sync guard 过);B-ripple 全仓 grep:唯一 active operator stage-list = `runners/README.md`(已补),其余命中皆 archived session_log / path-convention 文档(讲 lane 非 stage 枚举)/ resolved register 历史(append-only),按 doc-drift-retire-not-chase **不追**;no-BOM / `git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查`)。
+- **Pre-Codex self-review**: A(route-doc drift 整类:active operator README 补 + guard 钉防回退,非只改一句)/ B(全仓 grep 旧 stage-list:active 仅 `runners/README`;archived / CURRENT(只列命令非 stage)/ path-convention / resolved-register 皆非 active 枚举,doc-drift-retire 不追)/ C(反向:guard 用「ps1 接 regime」条件 gate,未接时不误红;token 是 README 真实必含串)/ F(docs+guard only,不碰 regime 语义/ledger/fetch/IV/V14.2/EGS/M6.7;ParseFile/BOM/diff 干净)。
+
+## 2026-06-15 — Codex `审查 FAIL` (V14.3 regime 接进 weekly_screening)
+- **Verdict/Action**: FAIL。Stage 5 代码接线方向成立,但活动 runner 文档仍把 `weekly_screening.ps1` 描述为只跑到 M6.7,没有记录 V14.3 regime sidecar / `-SkipRegime` / live-only / non-blocking / bootstrap-or-increment 边界。
+- **Required**: `R-V143-WEEKLYSCREENING-ROUTEDOC-STAGE5-DRIFT`;详情见 `docs/system_risk_register.md`。
+- **Verify**: code/path/doc review;`tests.test_route_doc_ledger_status_consistency` + `tests.test_doc_governance_guard` 30 OK;PSParser OK;syntax compile OK;`git diff --check` clean(LF/CRLF warnings only);targeted regime/weekly tests blocked in this Codex env because bundled Python lacks `jsonschema`;no data fetch。
+- **Next**: Claude `修复`。
+
+## 2026-06-15 — Claude `起草` (V14.3 regime 接进 weekly_screening:一键顺带每周更新)
+- **动机**:用户要把 V14.3 regime ledger 接进 `weekly_screening.ps1`,周五/周一实盘一键顺带每周更新,不再单独执行(handoff 排定的 slice;前置 M6.7 已提交)。
+- **设计(一次定死)**:① **runner**(`a_short_regime_comparison_runner.py`):加纯函数 `_latest_settled_as_of(daily, requested)`——main() 把 as_of **收敛到最新已结算交易日**(实盘盘中周一 as_of 当日 EOD 未结算 → 推进到上周五,不为未结算日 fail-close);settled as_of 时 **no-op**(手动 `--as-of 20260612 --bootstrap` 行为不变);空 daily → SystemExit。② **ps1**:新 Stage 5 regime 旁路 sidecar——**只实盘当天跑**(历史回放跳过,账本是 forward 累积的已结算证据)、**非阻断**(失败 WARN 不改 exit,同 canary/tracker/M6.7)、无 ledger→一次性 `--bootstrap`(252日回填首跑数分钟)/有→increment、**复用本次已建 IV feed**(有则 `--iv-feed` 传)、`-SkipRegime` opt-out;egs 成功才到(egs 失败已 exit)。
+- **IV 复用 PIT 安全(已核)**:weekly IV feed 以 `--as-of 周一` 建、series 止上周五;regime as_of=周五 查 `iv_series_to_map` 只映射 ≤周五 的日,`validate_iv_feed` 仅查 feed 自身无未来 bar(止周五 ≤ 周一 OK),无 cross-as_of 越界——周五 IV 喂周五 regime row,非 look-ahead。
+- **边界**:comparison-only 非生产、V14.2 仍冻结、不碰选股/否决/web_llm/下单;**首次 bootstrap RUN 是用户 `执行`**(~分钟,真网 252日全市场)、本 slice 不跑、留 PASS 后。
+- **Verify**:runner + guardrail **24 OK**(新 `_latest_settled_as_of` 4 case:盘中 cap / settled no-op / 未来行忽略 / 空→requested;guardrail 断言 ps1 wiring:regime runner + `-SkipRegime` + ledger 检测 + `--bootstrap` + live-only + non-blocking);广 regime cluster **114 OK**;py_compile / ps1 ParseFile 0 / no-BOM(4) / diff-check 干净。
+- **Next**:审查(Codex)。
+- **Pre-Codex self-review**:A(接入出口整类:intraday cap 4-case + ps1 gating live-only/skip/bootstrap-vs-increment/IV-reuse 各有 guardrail 断言)/ B(新符号 `_latest_settled_as_of` 仅 runner+test、`-SkipRegime` 仅 ps1;手动 bootstrap 命令 settled→cap no-op 不变,已验;guardrail 锁 ps1 wiring 防回退)/ C(反向:cap 只在未结算时触发、settled 日 no-op 不漏算,fail-closed 仍管已结算日数据质量;历史回放跳过是有意 forward-only 非漏)/ F(空 daily SystemExit;ps1 旁路非阻断同既有 sidecar;ParseFile/BOM/diff-check 干净;runner main 真网不可注入故 cap 逻辑抽成纯 `_latest_settled_as_of` 单测,main wiring 为简单 glue)。
+
 ## 2026-06-15 — Claude `审查 PASS` (M6.7 价格时钟 lineage slice;Claude 自审,非 Codex 独立审)
 - **Verdict/Action**: PASS,审**价格时钟 lineage 修复**这块代码(并行「周一新闻入窗」Codex FAIL 已被用户 dispose 成 `accepted_risk`、docs-only、不在本审范围)。对抗式自审(通读 pipeline/schema/render/ps1/tests/retrofit 非 delta,逐项试破空序列/混合/盘后EOD/render缺pf/历史run_date,均被覆盖门或 fail-closed 接住):显式模式+guard、4 字段 lineage(schema required+typed)、Markdown 价格时钟+横幅、混合时钟 FATAL、older/future 仍拒,完整闭合 `R-ASHORT-M67-INTRADAY-PRICE-FRESHNESS-LINEAGE-GAP`,无真 bug;唯一 cosmetic optional:`_cands`/`cands` 重复读可合一。
 - **Required**: `R-ASHORT-M67-INTRADAY-PRICE-FRESHNESS-LINEAGE-GAP` addressed in working tree;详见 `docs/system_risk_register.md`。

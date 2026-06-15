@@ -235,6 +235,19 @@ def _fetch_index(pro, ts_code: str, start: str, end: str) -> pd.DataFrame:
     return df if df is not None and len(df) else pd.DataFrame(columns=["trade_date", "close"])
 
 
+def _latest_settled_as_of(daily: pd.DataFrame, requested_as_of: str) -> str:
+    """The latest ``trade_date`` in the fetched ``daily`` panel that is ``<= requested_as_of``.
+
+    When the weekly runs intraday before ``requested_as_of``'s own EOD is published, that day's daily
+    bars don't exist yet, so the regime ledger must advance only through the latest SETTLED trade date
+    instead of fail-closing on a not-yet-settled day. For a settled ``requested_as_of`` this is a no-op
+    (panel max == requested). Empty panel → requested (caller guards empty separately)."""
+    if daily is None or daily.empty or "trade_date" not in daily.columns:
+        return str(requested_as_of)
+    dates = [str(d) for d in daily["trade_date"] if str(d) <= str(requested_as_of)]
+    return max(dates) if dates else str(requested_as_of)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="A-short V14.3 regime comparison runner (non-production)")
     ap.add_argument("--as-of", required=True, help="run date YYYYMMDD")
@@ -273,8 +286,14 @@ def main(argv=None) -> int:
     stk_limit = _fetch_stk_limit(pro, daily_dates)
     csi300 = _fetch_index(pro, "000300.SH", cal_start, as_of)
     csi1000 = _fetch_index(pro, "000852.SH", cal_start, as_of)
+    if daily.empty:
+        raise SystemExit(f"--as-of {as_of}: 抓不到任何 <= as_of 的 daily 行情(休市 / 当日 EOD 未结算?);无法推进 regime ledger")
+    # 把 as_of 收敛到最新已结算交易日:实盘盘中(周一 as_of 当日 EOD 未结算)→ 推进到上周五,不为未结算日伪造 row。
+    effective_as_of = _latest_settled_as_of(daily, as_of)
+    if effective_as_of != as_of:
+        print(f"[regime] as_of {as_of} 当日 EOD 尚未结算;regime ledger 推进到最新已结算交易日 {effective_as_of}")
     iv_feed = json.loads(Path(args.iv_feed).read_text(encoding="utf-8")) if args.iv_feed else None
-    out = run_regime_step(as_of=as_of, trade_calendar=cal, v14_2_regime=args.v14_2_regime,
+    out = run_regime_step(as_of=effective_as_of, trade_calendar=cal, v14_2_regime=args.v14_2_regime,
                           daily=daily, stk_limit=stk_limit, csi300=csi300, csi1000=csi1000,
                           iv_feed=iv_feed, ledger_path=paths["ledger"],
                           records_path=paths["records"], panel_path=paths["panel"],
