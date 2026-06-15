@@ -196,6 +196,7 @@ def build_account_state(tables: dict, decision_as_of: str, config: dict | None =
     rule12, rule12_lineage = _build_rule12(tables.get("portfolio_rule12") or [], decision_as_of, cfg)
     manual = _index_manual_controls(tables["manual_controls"])
     rule13, rule13_lineage = _build_rule13(tables["trades"], held, manual, decision_as_of, cfg)
+    consistency_warnings = reconcile_trades_positions(tables["trades"], positions)   # 4.3-D advisory
 
     account_state = {
         "schema_name": ACCOUNT_SCHEMA_NAME,
@@ -221,6 +222,7 @@ def build_account_state(tables: dict, decision_as_of: str, config: dict | None =
         "source_tables": [],   # filled by main() (needs file paths/hashes); pure build leaves empty
         "rule12": rule12_lineage,
         "rule13_cooldowns": rule13_lineage,
+        "consistency_warnings": consistency_warnings,
     }
     return account_state, lineage
 
@@ -462,6 +464,34 @@ def _build_rule13(trades: list, held: set, manual: dict, decision_as_of: str, cf
     return rule13, lineage
 
 
+# ── 4.3-D 可选一致性检查：trades 净额 vs positions(advisory·WARN-only·绝不覆盖 positions)──────
+def reconcile_trades_positions(trades: list, positions: list) -> list:
+    """对账提醒:把 trades 按 ts_code 净额(BUY +、SELL −)与 positions.shares 对一下,差异 → WARN。
+    **只提醒、不改任何东西**(positions 仍是权威,绝不用 trades 覆盖);best-effort——差异可能因历史成交
+    不全 / 分红拆股 / 费用,属人工核对提示、非必然错误。trades 已在 `_build_rule13` 校验过(此处仅净额)。
+    返回 [{ts_code, kind, message}, ...](无问题则空)。"""
+    pos_by = {p["ts_code"]: p for p in positions}
+    net = {}
+    for r in trades:
+        ts = _parse_ts_code(r.get("ts_code"), "trades.ts_code")
+        side = (_opt_str(r.get("side")) or "").upper()
+        shares = _parse_int_shares(r.get("shares"), "trades.shares")
+        net[ts] = net.get(ts, 0) + (shares if side == "BUY" else -shares)
+    warnings = []
+    for ts in sorted(net):
+        n = net[ts]
+        pos = pos_by.get(ts)
+        if pos is None:
+            if n > 0:   # 净买入却没登记持仓(净卖出/=0 不在持仓 = 正常出场/Rule13,不提醒)
+                warnings.append({"ts_code": ts, "kind": "net_buy_not_in_positions",
+                                 "message": f"trades 净买入 {n} 股,但 positions 未登记 {ts}(可能漏登持仓,请核对)"})
+        elif n != pos["shares"]:   # 仅对「有近期成交」的持仓做精确核对(无成交的旧持仓不在 net 里、不提醒)
+            warnings.append({"ts_code": ts, "kind": "shares_mismatch",
+                             "message": (f"{ts}:positions {pos['shares']} 股 vs trades 净额 {n} 股"
+                                         f"(差 {pos['shares'] - n};可能因历史成交不全/分红拆股/费用,请核对,非必然错误)")})
+    return warnings
+
+
 # ── 薄 main：读 CSV → build → 既有 validator 兜底 → 原子写 json + lineage ──────────────
 def _read_csv_table(path: Path, name: str) -> list:
     with open(path, encoding="utf-8-sig", newline="") as f:   # utf-8-sig：容忍用户用 Excel 存出的 BOM
@@ -579,6 +609,8 @@ def _print_plain_summary(account_state: dict, lineage: dict) -> None:
             note += "，并按你的 manual_block 强制保持阻断"
         print(f"  · {cd['ts_code']} 冷静期来自{src}：{cd['status']}（止损 {cd['exit_date']}，"
               f"冷静到 {cd['cooldown_until']}{note}）。")
+    for w in (lineage.get("consistency_warnings") or []):     # 4.3-D 对账提醒(advisory,不改任何结论)
+        print(f"[核对] {w['message']}")
 
 
 if __name__ == "__main__":

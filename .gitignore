@@ -38,6 +38,9 @@ result/*/backtest/**/_intermediate/
 # --- Local live state ---
 state/*/*.json
 state/*/*.csv
+# 4.3 manual position tables: the user's REAL holdings/trades — never commit (private financial data).
+# Committed reference templates live under schemas/examples/a_short_account_state_csv/.
+state/*/account_state_csv/
 
 # --- A-short M6.7 weekly validation 执行 byproducts (one-off, research lane, regenerable via 执行) ---
 research/results/a_short/m67_validation_*/

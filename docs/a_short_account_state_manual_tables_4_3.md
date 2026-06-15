@@ -1,7 +1,7 @@
 # A-short 4.3：手工持仓表格 → account_state.json（模板 + 列映射 + 边界）
 
 **owner**：A-short 4.3 持仓后管理自动化切片的 in-repo 设计 + 列映射文档（Slice 4.3-A）。
-**scope**：4.3-A（模板/映射/样例/边界）+ 4.3-B（转换器 + lineage schema + 测试）+ 4.3-C（M6.7 渲染微调：一览表加「持仓/冷静」列 + 逐票说明,纯渲染派生自 `machine.stateful_risk`,见 §10）已交付；**4.3-D（trades↔positions 一致性提示）为后续独立 slice**。（实时 review/commit gate 见 `docs/SESSION_LOG.md` 顶部,不在本文件。）
+**scope**：4.3-A（模板/映射/样例/边界）+ 4.3-B（转换器 + lineage schema + 测试）+ 4.3-C（M6.7 渲染微调：一览表加「持仓/冷静」列 + 逐票说明,纯渲染派生自 `machine.stateful_risk`,见 §10）+ 4.3-D（trades↔positions 一致性提示,advisory WARN-only,见 §11）已交付。（实时 review/commit gate 见 `docs/SESSION_LOG.md` 顶部,不在本文件。）
 
 ## 1. 目的与边界
 
@@ -110,3 +110,11 @@ provenance（每条状态来自哪张表、是否被自动推进、facts/decisio
 - **逐票区**：仅在持仓/冷静态(非空仓、非 `—`)加一行 `持仓/冷静:<态>（<reasons>）`,reasons 取自 `stateful_risk.reasons`（含 Rule12+Rule13 全部原因）。空仓/无账户不加,避免噪音。
 - **不渲染「状态来源」**（§7 Route A）：来源信息在转换器 lineage 旁产物里,不在被 M6.7 消费的 account_state 里,M6.7 推不出。
 - **只解释、不改结论**：该列/行**不反向改写** action / star / hard_veto / sizing（有反向测试钉死）。owner：`runners/a_short_m67_render.py`、`tests/test_a_short_m67_render.py::HoldingStateTests`。
+
+## 11. 4.3-D：trades↔positions 一致性提示（advisory,WARN-only）
+
+`runners/a_short_account_state_from_manual_tables.py::reconcile_trades_positions(trades, positions)`:把 trades 按 ts_code 净额(BUY +、SELL −)与 `positions.shares` 对账,差异 → 警告。**只提醒、绝不覆盖 positions**(positions 仍是权威);best-effort——差异可能因历史成交不全 / 分红拆股 / 费用,是人工核对提示、非必然错误(对齐 §3.3「positions 为持仓权威」)。
+
+- `net_buy_not_in_positions`:某票 trades 净买入 > 0 但 positions 未登记(可能漏登持仓)。
+- `shares_mismatch`:某**有近期成交**的持仓,trades 净额 ≠ `positions.shares`(带「可能历史不全/分红拆股/费用」caveat)。无近期成交的旧持仓不在净额里、不提醒;净卖出后空仓(正常出场 / Rule13)不提醒。
+- 警告落 **lineage `consistency_warnings`**(array of `{ts_code, kind, message}`)+ 转换器 stdout `[核对] …`(大白话);**不进 account_state、不改任何结论**。owner:`runners/a_short_account_state_from_manual_tables.py`、`tests/test_a_short_account_state_from_manual_tables.py::ConsistencyCheckTests`、lineage schema `consistency_warnings` 字段。

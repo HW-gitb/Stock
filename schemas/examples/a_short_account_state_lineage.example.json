@@ -38,5 +38,6 @@
       "cooldown_until": "20260606",
       "manual_block_applied": false
     }
-  ]
+  ],
+  "consistency_warnings": []
 }

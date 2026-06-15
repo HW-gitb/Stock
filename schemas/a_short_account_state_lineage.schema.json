@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "decision_as_of", "facts_as_of", "facts_staleness",
-               "config", "source_tables", "rule12", "rule13_cooldowns"],
+               "config", "source_tables", "rule12", "rule13_cooldowns", "consistency_warnings"],
   "properties": {
     "schema_name": {"const": "a_short_account_state_lineage"},
     "schema_version": {"const": "1.0.0"},
@@ -62,6 +62,20 @@
           "exit_date": {"$ref": "#/$defs/date8"},
           "cooldown_until": {"$ref": "#/$defs/date8"},
           "manual_block_applied": {"type": "boolean"}
+        }
+      }
+    },
+    "consistency_warnings": {
+      "type": "array",
+      "description": "4.3-D advisory: trades-net-vs-positions.shares mismatches (WARN-only; never changes account_state, positions stays authoritative).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "kind", "message"],
+        "properties": {
+          "ts_code": {"type": "string", "pattern": "^[0-9]{6}\\.(SH|SZ)$"},
+          "kind": {"enum": ["net_buy_not_in_positions", "shares_mismatch"]},
+          "message": {"type": "string"}
         }
       }
     }

@@ -10,6 +10,20 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Codex `审查 PASS` (A-short 4.3-D trades↔positions consistency)
+- **Verdict/Action**: PASS。4.3-D 对账提示保持 advisory/WARN-only,只写 lineage/stdout,不覆盖 positions,不进 account_state,不改 M6.7/引擎结论。
+- **Required**: none。
+- **Verify**: code/schema/doc review;custom converter probe OK;py_compile OK;schema/example JSON parse OK;doc-governance+route-doc 30 OK;gitignore/check-ignore OK;no-BOM/FFFD OK;`git diff --check` clean(CRLF warning only)。Gap:本 Codex Python 缺 `jsonschema`,无法独立跑 converter+lineage schema unittest。
+- **Next**: Claude `提交`。
+
+## 2026-06-15 — Claude `起草` (A-short 4.3-D:trades↔positions 一致性提示 + state CSV 空模板)
+- **背景/scope**:用户要执行 4.3-D(4.3 最后一片、可选 advisory)+ 搭好 `state/a_short/account_state_csv/` 空模板。4.3-D = trades 净额 vs positions 对账提醒,纯 advisory、WARN-only、**绝不覆盖 positions**(positions 仍权威,§3.3)。
+- **改动**:① 转换器新纯函数 `reconcile_trades_positions(trades, positions)`(BUY +/SELL − 净额;`net_buy_not_in_positions`=净买入但未登记持仓;`shares_mismatch`=有近期成交的持仓净额≠shares,带「历史不全/分红拆股/费用」caveat;无成交旧持仓 / 净卖出空仓不报),接进 `build_account_state` → lineage 新字段 `consistency_warnings`(+ stdout `[核对]` 大白话)。② lineage schema + example 加 `consistency_warnings`(array of `{ts_code,kind,message}`,required)。③ design doc §11 + scope + README 标 4.3-D done。④ **隐私**:`.gitignore` 加 `state/*/account_state_csv/`(真实持仓=私密财务数据,绝不入库;committed 参考模板在 `schemas/examples/`)。⑤ 建 `state/a_short/account_state_csv/` 5 个**仅表头**空模板(gitignored,供用户填)。
+- **边界**:advisory-only,不进 account_state、不改任何 action/否决/sizing/选股/account_state schema/引擎;不接券商/不抓行情。
+- **Verify**:转换器 + lineage schema **52 OK**(新 `ConsistencyCheckTests` 6:base 无警告 / net-buy-not-held / shares-mismatch + 断言 positions 不被覆盖 / 无成交持仓不报 / 止损空仓不报 / 纯函数直测);route-doc + doc-governance **30 OK**;example 端到端 `consistency_warnings=[]`、positions 不变;py_compile / no-BOM(7 文件) / `git diff --check` 干净;模板已 gitignore(`git check-ignore` 命中、`git status` 不列)。
+- **Next**:审查(Codex;新对账逻辑 + lineage schema 字段)。模板是 gitignored 用户输入、不入库;4.3-D 代码/docs/test/gitignore 是可提交切片。
+- **Pre-Codex self-review: A–F checked** — A(净额对账×出口:净买入未登记 / 有成交持仓不符 / 无成交旧持仓(不报)/ 净卖出空仓(不报)各一测 + 纯函数直测 + lineage 落字段)/ B(全仓:`reconcile_trades_positions`/`consistency_warnings` 新符号仅本模块+测试+lineage schema;design §11+scope+README+lineage example 同步;account_state 契约未动)/ C(反向:positions 权威——mismatch 下断言 `positions.shares` 不变;止损空仓/无成交不误报噪音)/ D(N/A)/ E(route-doc:design/README 标 settled done,transient gate 仅本条)/ F(隐私 gitignore 防真实持仓泄露 + `check-ignore` 验证;schema required 加字段→example 同步过校验;no-BOM;diff 干净;reconcile 复用已校验 trades 仅算净额、不二次改变行为)。
+
 ## 2026-06-15 — Codex `审查 PASS` (A-short 4.3-C render + SESSION_LOG template)
 - **Verdict/Action**: PASS。多标签渲染已按桌面 4.3 §16.2 修复,SESSION_LOG minimal-template drift 也已修复。
 - **Required**: `R-ASHORT-43C-HOLDING-STATE-MULTILABEL-DROP` and `R-ASHORT-43C-SESSIONLOG-MINIMAL-TEMPLATE-DRIFT` addressed in working tree;详情见 `docs/system_risk_register.md`。

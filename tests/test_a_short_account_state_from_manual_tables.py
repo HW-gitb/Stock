@@ -367,5 +367,54 @@ class FileLevelTests(unittest.TestCase):
             self.assertEqual(len(lineage["source_tables"][0]["sha256"]), 64)
 
 
+class ConsistencyCheckTests(unittest.TestCase):
+    """4.3-D: trades-net vs positions advisory (WARN-only; never overrides positions)."""
+
+    def _warns(self, tables):
+        return conv.build_account_state(tables, AS_OF)[1]["consistency_warnings"]
+
+    def test_base_example_has_no_warnings(self):
+        # 600000 BUY 1000 == positions 1000; 600519/601318 are stop-loss sells (not held) → no warn
+        self.assertEqual(self._warns(_tables()), [])
+
+    def test_net_buy_not_in_positions_warns(self):
+        t = _tables()
+        t["trades"].append({"trade_date": "20260610", "ts_code": "600036.SH", "name": "招商银行",
+                            "side": "BUY", "shares": "300", "price": "38.0", "reason": "entry",
+                            "order_manual": "TRUE", "notes": ""})
+        w = self._warns(t)
+        self.assertEqual([x["kind"] for x in w], ["net_buy_not_in_positions"])
+        self.assertEqual(w[0]["ts_code"], "600036.SH")
+
+    def test_shares_mismatch_warns_but_positions_authoritative(self):
+        t = _tables()
+        # extra partial SELL of the held 600000 → trades net 900 != positions 1000 (held → no Rule13 change)
+        t["trades"].append({"trade_date": "20260610", "ts_code": "600000.SH", "name": "浦发银行",
+                            "side": "SELL", "shares": "100", "price": "10.2", "reason": "take_profit",
+                            "order_manual": "TRUE", "notes": ""})
+        acc, ln = conv.build_account_state(t, AS_OF)
+        self.assertIn("shares_mismatch", [x["kind"] for x in ln["consistency_warnings"]])
+        # positions stays authoritative — reconcile NEVER overrides
+        self.assertEqual([p for p in acc["positions"] if p["ts_code"] == "600000.SH"][0]["shares"], 1000)
+
+    def test_position_without_trades_no_warning(self):
+        t = _tables()
+        t["positions"].append({"ts_code": "600036.SH", "name": "招商银行", "shares": "500", "avg_cost": "38.0",
+                               "entry_date": "20260601", "stop_loss": "35.0", "take_profit_1": "",
+                               "take_profit_2": "", "last_exit_date": "", "last_exit_reason": "", "manual_notes": ""})
+        # 600036 held but has NO trades → not netted → no mismatch warn for it
+        self.assertNotIn("600036.SH", [w["ts_code"] for w in self._warns(t)])
+
+    def test_stop_loss_soldout_not_held_no_warning(self):
+        # reverse: a SELL that left you flat (601318) is a normal exit, not a consistency warning
+        self.assertNotIn("601318.SH", [w["ts_code"] for w in self._warns(_tables())])
+
+    def test_pure_helper_direct_net_buy(self):
+        warns = conv.reconcile_trades_positions(
+            [{"trade_date": "20260610", "ts_code": "600036.SH", "name": "招商银行", "side": "BUY",
+              "shares": "300", "price": "38.0", "reason": "entry", "order_manual": "TRUE", "notes": ""}], [])
+        self.assertEqual(warns[0]["kind"], "net_buy_not_in_positions")
+
+
 if __name__ == "__main__":
     unittest.main()
