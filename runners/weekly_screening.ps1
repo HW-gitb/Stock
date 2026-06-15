@@ -25,6 +25,16 @@
 #   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # skip the M6.7 advisory (semantic)
 #   .\runners\weekly_screening.ps1 -Account path\to\account.json      # M6.7 account-state JSON (cash/positions/Rule12/Rule13); omit = no-sizing observation only
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard
+#
+# 运行 cadence(A-short 周五实盘;用户 2026-06-15 定):
+#   今后跑周五实盘用「决策日 as_of + 收盘前运行」—— 周一(决策日)**收盘前**跑 `-AsOf <周一日期>`
+#   (不传 -L3Mode;as_of==运行日 → 默认 l3-mode=today)。机理(已核 egs_main 代码):周一收盘前 Tushare
+#   当日 EOD(daily / daily_basic / suspend)尚未生成 → egs_main「空就回退前一交易日」逻辑(get_daily_basic 等)
+#   自动落到上周五,所以**选股价格/估值/停牌依据上周五收盘**;而新闻 / 语义 web·LLM 层窗口到周一、抓得到
+#   周末突发利好利空。= 周五选股池 + 周末最新新闻。
+#   *必须收盘前跑*:周一**收盘后**再跑,egs_main 会用周一收盘(不再回退),选股池就变成周一而非周五。
+#   确认依据周五的标志:日志出现 `daily_basic <周一> 无数据，回退至 <周五>`。
+#   (非交易日 as_of 如周日不可用:egs_main 拒非交易日 → ValueError "not an A-share trading day"。)
 
 param(
     [ValidatePattern('^\d{8}$')]

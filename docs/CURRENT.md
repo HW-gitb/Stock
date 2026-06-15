@@ -132,6 +132,11 @@ python A-EGS\egs_main.py --as-of <YYYYMMDD>
 # 周五一键
 .\runners\weekly_screening.ps1 -AsOf 20260530 -L3Mode neutralize
 .\runners\weekly_screening.ps1 -SkipCanary
+
+# 周五实盘 cadence(2026-06-15 定):周一(决策日)**收盘前**跑 -AsOf <周一> → 选股依据上周五收盘
+# (周一 EOD 未就绪→egs_main 自动回退前交易日) + 新闻/web·LLM 窗口到周一(含周末突发)。不传 -L3Mode
+# (as_of==运行日→today)。*必须收盘前*跑(收盘后→选股变周一)。机理/验证标志详见 weekly_screening.ps1 顶部「运行 cadence」。
+.\runners\weekly_screening.ps1 -AsOf 20260615
 ```
 
 ---

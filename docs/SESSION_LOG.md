@@ -10,6 +10,13 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Claude `执行` (Stage 4 重跑 20260612:IV build + M6.7 + EM→DeepSeek 端到端验通)
+- 修复 `da597fe0` 后重跑 weekly_screening Stage 4 两步(用已有 20260612 选股,不重抓全市场)。
+- **IV feed build 通**(修复实证):过 import + 真抓 510050 期权 basic/daily/underlier `11814/176634/332`、282 交易日、`latest_iv_pct=50.79`、`had_provider_error=False` → `research/results/a_short/iv_feed_20260612/iv_feed.json`。
+- **M6.7 pipeline 通**(exit 0):15 票全「观察」(observation-only 无账户 + 震荡期保守 fallback,L3 neutralize→regime unknown),产 `research/results/a_short/20260612/weekly_m67.{json,md}`。
+- **EM→DeepSeek 端到端验通**:广发证券票 EM 抓到 1 条近期新闻 → DeepSeek 判 `web_llm status=risk / risk_level=medium / sources_count=1 / impact=downgrade` → M6.7 `semantic_web_llm` downgrade(advisory,绝不 hard_veto);其余票 web_llm `unknown`/`sources_count=0`(本周无近期新闻,fail-closed 正常)。整条 EM 取数→DeepSeek 判官链真网跑通,补上 EM-smoke(取数层)之外的判官后半段。
+- Closure 满足(`R-ASHORT-IVBUILD-SYSPATH-MODULENOTFOUND` 已 resolved `da597fe0` + 本次重跑产 weekly_m67)。边界:non-production research lane;EGS 选股未重跑(production result 不动);未碰 V14.2/下单;weekly_m67/iv_feed 产物 untracked、未提交。
+
 ## 2026-06-15 — Codex `审查 PASS` (R-ASHORT-IVBUILD-SYSPATH-MODULENOTFOUND)
 - **Verdict/Action**: PASS. 两个直接运行 runner 的 import-path 修复成立;只加 ROOT/sys.path block,未改 IV 数学、M6.7 语义或生产 EGS。详情见 register。
 - **Required**: `R-ASHORT-IVBUILD-SYSPATH-MODULENOTFOUND` addressed;提交时按 register 翻 `resolved`。
