@@ -10,6 +10,32 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Codex `审查 PASS` (R-ASHORT-IVBUILD-SYSPATH-MODULENOTFOUND)
+- **Verdict/Action**: PASS. 两个直接运行 runner 的 import-path 修复成立;只加 ROOT/sys.path block,未改 IV 数学、M6.7 语义或生产 EGS。详情见 register。
+- **Required**: `R-ASHORT-IVBUILD-SYSPATH-MODULENOTFOUND` addressed;提交时按 register 翻 `resolved`。
+- **Verify**: `py_compile` OK x2;两个 `--help` 直接运行 OK;相关测试 150 OK;`git diff --check` clean;未抓数据、未提交。
+- **Next**: Claude `提交`。
+
+## 2026-06-15 — Claude `修复` (R-ASHORT-IVBUILD-SYSPATH-MODULENOTFOUND)
+- **Verdict/Action**: 顶部加标准 ROOT/sys.path block 到 `a_short_iv_feed_build.py` + (A 类连带)`a_short_weekly_pipeline.py`——后者 Stage 4 第二步同缺(顶无 path + main 内 argparse 前 `from runners.*`),否则重跑必再挂。adapter 仅被 import(非直接运行)靠调用者 path、不改。零业务/IV 数学/schema/签名改动。详情见 register。
+- **Required**: `R-ASHORT-IVBUILD-SYSPATH-MODULENOTFOUND`;详情见 `docs/system_risk_register.md`。
+- **Verify**: py_compile OK x2;`iv_feed_build --help` / `weekly_pipeline --help` 在直接运行(`sys.path[0]=runners/`)场景 exit 0(过了之前 ModuleNotFoundError 的 argparse 前 `from runners.*` import);`git diff --check` 干净(仅 LF/CRLF);no-BOM。完整 Stage 4 重跑(产 weekly_m67 + 验 EM→DeepSeek)= PASS 后执行。
+- **Next**: 审查。
+- **Pre-Codex self-review**: A(类=weekly_screening 直接运行+import proj+缺 path;grep 锁定 iv_build+weekly_pipeline 两实例一次修全,canary/tracker/egs_main 已 OK);B(adapter 顶部 import proj 但非直接运行、靠调用者 path、诚实留;两文件只加顶部 block 无逻辑/符号改);C(--help exit 0 证 ROOT block 直接运行场景生效 vs 实盘修前 traceback;insert 幂等不破被 import 场景);F(py_compile/diff-check/BOM 过、不碰 IV 数学/业务)。
+
+## 2026-06-15 — Claude `执行` (周五实盘 20260612 / historical L3 neutralize)
+- 前提核对全过:20260612=Friday、TUSHARE_TOKEN set、DEEPSEEK_API_KEY set、6-12 无既存官方输出。historical 故 `-L3Mode neutralize`(无 6-12 PIT snapshot);未传 -Account → M6.7 observation-only。
+- **EGS 选股成功(核心,production)**:全市场 5527→L0 1579→Tier1 准入 101→watch 15 / **final 5**;data_health errors=0/warnings=1。产物 `result/a_short/20260612/`(analysis_input/candidates/snapshot/data_health/egs_weight_comparison)+ `A-EGS/Result/egs_tier1_20260612.csv`。Tier1 头部:000776 广发证券 82.66 / 000722 湖南发展 81.77 / 003025 思进智能 75.94 / 603337 杰克科技 71.71 / 601377 兴业证券 69.06…(证券扎堆=industry_heat 抬证券)。停牌 15、减持 veto_10d 命中 19。L3 neutralize→cat_score=50 全候选、跳 L3 API。
+- canary status=ok(sina);forward_tracker +15 行(累计 90)。
+- **M6.7 advisory 失败(旁路未阻断,整体 exit 0)**:Stage 4 IV feed build 抛 `ModuleNotFoundError: No module named 'runners'`(`a_short_iv_feed_build.py` 缺顶部 ROOT sys.path)→ M6.7 整段 skip → **EM→DeepSeek 端到端本次未验**(尽管 key 在);无 `research/results/a_short/20260612/` 产物。finding 落 register `R-ASHORT-IVBUILD-SYSPATH-MODULENOTFOUND`(P2,open)。
+- 边界:非真钱 / EGS=production result lane、M6.7=research lane(本次无产物);未碰 V14.2/下单。
+
+## 2026-06-15 — Claude `执行` (EM tracked probe 真网取数 smoke)
+- 用户即时指令:用最近 production EGS Top15 真网验 EM probe 能否跑通 + 数据能否准确抓取。
+- 跑 `a_short_em_news_probe --confirm-fetch-authorized`:watch-pool = `result/a_short/20260605` EGS Top15(15 主板票),as_of=`20260615`(今天;EM 抓当前新闻、无历史 PIT,故用今天而非 EGS 过去日,否则当前文全判 future-leak)。
+- 结果 **feasible=True**:ok=15/15(全主板票 EM 真网抓取成功、无反爬/限速)、recent_news=8(≥3 门过)、future_leak=0 / bad_date=0 / bad_shape=0(PIT 拒未来文有效 + 抓取数据形状/日期干净)。recent_news=8 同时反证中文票名正确传给 EM(乱码会搜不到新闻)。产 tracked summary `research/results/a_short/em_probe_smoke_20260614/em_probe.json`(research lane,非生产)。
+- 意义:首次真网实证 EM 主源可达 + 数据准确(此前 probe 仅单元 mock + 已删的一次性诊断脚本)。仅验**取数层**(EM→classify);未到 DeepSeek 判官层(需 key)。non-production / advisory_only / 未碰生产 EGS / V14.2;smoke 产物 untracked,未提交。
+
 ## 2026-06-14 — Codex `审查 PASS` (R-ASHORT-EM-PROBE-FETCHER-FILTER-AUDIT-GAP)
 - **Verdict/Action**: PASS. probe 默认路径已改用 `fetch_em_news_unfiltered`,可保留 future/stale/bad-date/bad-shape 原始行交给 `classify_em_code` 审计;生产 weekly 的过滤版 `fetch_em_news` 未改。详情见 register。
 - **Required**: `R-ASHORT-EM-PROBE-FETCHER-FILTER-AUDIT-GAP` addressed;提交时按 register 翻 `resolved`。

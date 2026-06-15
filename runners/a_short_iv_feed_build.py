@@ -18,9 +18,17 @@ import argparse
 import json
 import math
 import os
+import sys
+from pathlib import Path
 
-import jsonschema
-import pandas as pd
+# Ensure the project root is importable when run directly as `python runners\<this>.py`
+# (sys.path[0] is then runners/, so `from runners.*` in main() would fail without this).
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import jsonschema  # noqa: E402
+import pandas as pd  # noqa: E402
 
 SCHEMA_NAME = "a_short_iv_feed"
 SCHEMA_VERSION = "1.0.0"
