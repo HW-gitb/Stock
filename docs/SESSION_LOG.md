@@ -10,6 +10,12 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-15 — Claude `执行` (V14.3 regime 初始 bootstrap;用户选 A:不重跑选股、只建账本)
+- **背景**:周一收盘后实测 20260615 已结算(此时跑 `-AsOf 20260615` 会落周一池、违 cadence「收盘前→周五池」),用户选 **A**:保留已有周五池(20260612),只单独建 regime 账本。
+- **跑**:`python -u a_short_regime_comparison_runner.py --as-of 20260612 --bootstrap --confirm-fetch-authorized --iv-feed research/results/a_short/iv_feed_20260612/iv_feed.json`(runner `_latest_settled_as_of` 把 as_of 收敛到周五;Friday IV feed 282 日覆盖)→ **exit 0**,**ledger 252 行**(coverage `20250530..20260612`)+ records + panel 落 `research/results/a_short/regime_daily_ledger.json`/`regime_comparison_records.json`/`regime_comparison_panel.md`。IV 非空 **223/252**(29 日 IV feed 本身无值 → `iv_unavailable`,benign)。V14.3 raw(20260612)= **contraction**(rule `earning_effect_gone`)。
+- **`v14_2=unknown` 说明(非 gap,设计如此)**:comparison record 的 `v14_2_regime=unknown` 是**预期正确状态**——生产 `market_context.market_regime.status` 当前恒 unknown(EGS 未真算 V14.2 M1),设计文档 `a_short_v14_3_regime_classifier_design_20260611.md` 第 51 行明确「v14_2 多为 unknown 是预期、对比仍有意义」(对比积累的是 V14.3 分类 + 前向 1/3/5/10 日表现,"vs unknown 的分歧"= V14.3 在生产盲区给信号,正是验证信号)。ps1 现按 runner 默认记 unknown、没接 analysis_input sourcing = **no-op**(取出来也 unknown),已 defer 进 memory `regime-v14_2-sourcing-deferred`,适时(~12 周升级审查 / 生产 regime 产非-unknown 时)再决定。(Claude 当初误 flag 成"对比废了"的 gap,实为读设计文档前下结论,已纠正。)初始账本目标达成:ledger = V14.3 252 日基线,独立于 V14.2。
+- **边界 / 提交**:comparison-only 非生产、V14.2 仍冻结、未碰选股/M6.7/下单;ledger 在 research lane。本次提交 = `执行` 产物(**无新代码**,已审 runner `9d170818`+`e478969` 的确定性输出)+ 本 SESSION_LOG 记录,排除 em_probe;**不需 Codex 审查**(无新逻辑)。
+
 ## 2026-06-15 — Codex `审查 PASS` (R-V143-WEEKLYSCREENING-ROUTEDOC-STAGE5-DRIFT)
 - **Verdict/Action**: PASS。active operator doc drift 已修复:`runners/README.md` 现在记录 weekly Stage 5 V14.3 regime sidecar 的 comparison-only / live-only / 非阻断 / `-SkipRegime` / bootstrap-or-increment / research-lane / IV 复用 / 不影响 M6.7 或生产边界,并有 README↔ps1 guard 防回退。
 - **Required**: `R-V143-WEEKLYSCREENING-ROUTEDOC-STAGE5-DRIFT` addressed in working tree;详情见 `docs/system_risk_register.md`。
