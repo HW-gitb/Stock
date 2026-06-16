@@ -42,7 +42,7 @@ EGS 实跑只落盘 top-N 到 `analysis_input.candidates`(15),但 **`A-EGS/Resul
 
 - **S1(本切片)**:持仓可见 + Tier 路由 + egs_full adapter + coverage/row_source(加性 schema)+ render 分区 + 价格门旁路 + 4.3-D warning 渲染。引擎/选股/语义/user-stop 不动。
 - **S2**:语义/新闻扩到持仓(持仓 symbol 入语义 watch 池;独立联网/DeepSeek 成本)。
-- **S3**:系统阈值(system_entry/add/stop/tp,ratchet 止损)+ 主动持仓动作 + schema/converter v1.1(user stop/tp 降为 `manual_*_ref`)+ 同步改 `validate_m67_consistency`(现要求非建仓行 `入/损/盈一/盈二` 为空,持仓显示系统阈值时必须放开)。
+- **S3**(设计稿见 `docs/a_short_holdings_s3_system_levels_design.md`,口径已与用户确认 2026-06-16):系统阈值 + ratchet 止损 + schema/converter v1.1(user stop/tp 降为 `manual_*_ref`)+ 放开 `validate_m67_consistency`(现要求非建仓行 `入/损/盈一/盈二` 为空,持仓显示系统位时放开)。**拆 S3a/S3b**:**S3a**=跟踪止损(ratchet)+ 止盈**被动显示**(动作恒「持有」、不动"禁止加仓")+ schema v1.1 + validator 持有放开 + render;**S3b**=主动动作(到价减仓/止损触发/移保本)+ 加仓 + 跨周持久化 ratchet。
 - **S4**:不得悬挂 guard(每个为持仓算出的因子在 M6.7 有落点或标缺失)+ 全测试矩阵。
 
 ## 7. owner 文件(S1)

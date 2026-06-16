@@ -10,6 +10,33 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (S3a 设计稿:SESSION_LOG 交接污染 + account_state v1.1 兼容路径)
+- **Verdict/Action**: PASS。两项 Required 已在设计/文档层修对,当前仍未写业务代码。
+- **Required**: `R-ASHORT-HOLDINGS-S3A-DESIGN-GATE-AND-COMPAT-GAP` addressed in working tree;详情见 `docs/system_risk_register.md`。
+- **Verify**: diff/design/schema-contract review;doc-governance+route-doc 30 OK;`git diff --check` clean(CRLF warning only);未抓数据、未改业务代码。
+- **Next**: Claude `提交`。提交时包含 S3a 设计/SESSION_LOG/register 相关文件,继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (S3a 设计稿:SESSION_LOG 交接污染 + schema v1.1 向后兼容路径)
+- **Verdict/Action**: 判定 Codex 两 Required **正确**(设计/文档,不写业务代码)。① SESSION_LOG:旧 Codex privacy-PASS 条目丢了 `##` 标题、bullets(含旧 `Next: 提交`)孤儿化贴到 S3a 起草条目 → 复原标题、两条目分开。② schema v1.1:确认"const 升 1.1.0 还兼容旧文件"自相矛盾(const + 单 `jsonschema.validate` + schema 真要求 stop)→ 改设计 §4 为 `schema_version enum [1.0.0,1.1.0]` + draft-07 `if 1.0.0 then stop_loss required`(旧严格不变、1.1.0 放开);converter 写 1.1.0、stop 移出必填。Optional(tick)→ §2 持仓价位取整 0.01。详见 register。
+- **Required**: `R-ASHORT-HOLDINGS-S3A-DESIGN-GATE-AND-COMPAT-GAP`;详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: doc-governance+route-doc **30 OK**;`git diff --check` 干净;设计层修复、无业务代码改(boundary:不实现 S3b、不抓数、不动券商边界)。
+- **Next**: 审查(Codex re-`审查` 设计稿)。**另**:用户另起 subagent 审桌面 `未price calc.md`(M6.7 价格计算优化提案),后台跑;若采纳其价格公式改动 = 本设计门修复之后的 follow-up。
+- **Pre-Codex self-review**: A–F(设计层)checked — A 两 Required 各直修 + Optional(tick)处理;B schema 兼容**先核实际校验路径**(const/单 schema/真 required)再定 enum+if/then、不再凭"加性"臆断(正中上轮 draft-validity 教训);C 反向 旧 1.0.0 严格保真(空 stop 仍拒)、新 1.1.0 才放开、互不污染;E route-doc 单态(register 详情 + 本指针 + 复原 privacy 标题消除双态污染);F doc-only、diff 干净、实现期再跑 schema 双版本测试。
+
+## 2026-06-16 — Codex `审查 FAIL` (持仓恒列入 S3a 设计稿:系统算止损/止盈 + account_state v1.1)
+- **Verdict/Action**: FAIL。设计方向可行,但当前交接记录和 account_state v1.1 向后兼容契约还不能直接进实现。
+- **Required**: `R-ASHORT-HOLDINGS-S3A-DESIGN-GATE-AND-COMPAT-GAP` remains open;详情见 `docs/system_risk_register.md`。
+- **Verify**: design/doc/code-contract review;`git status --short --untracked-files=all`;`python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` 30 OK;`git diff --check` clean(CRLF warning only)。未跑数据抓取,未改业务代码。
+- **Next**: Claude `修复`。只修文档/设计契约与交接记录;继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `起草` (持仓恒列入 S3a 设计稿:系统算止损/止盈被动显示 + account_state v1.1)
+- **背景/scope**:落实桌面 `持仓恒列入.md §14`"系统算决策、用户只填事实"的核心 —— 让系统自动算**持仓**的止损/止盈(用户不再手填 stop;4.3 转换器现**必填** stop_loss,用户实跑被卡)。**仅设计稿**,待 `起草` 实现。in-repo 设计 `docs/a_short_holdings_s3_system_levels_design.md`(S1 doc §6 已加指针)。
+- **用户已定口径(2026-06-16 Q&A)**:① 止损 = **跟踪止损 ratchet**(近 N=20 日最高 − ATR_MULT[regime]×ATR,随新高上移、无状态从 price_series 重算);② 主动程度 = **被动**(系统算+显示止损/盈一/盈二,**动作恒「持有」**,到价用户盘中手动;**不**自动减仓/加仓,**不动**"禁止自动加仓"硬线)。
+- **设计要点**:新纯函数 `holding_levels(inp,ind,regime)` 复用 `ATR_MULT/RR_FLOOR/exit_and_size` 口径(stop=recent_high−ATR×mult;risk=close−stop;t1=res 或 close+RR×risk;t2=max(t1+ATR×mult, close+2×risk);risk≤0→breached、t1/t2=None;不算股数);接进 `build_m67_report` has_position 分支 + `build_holding_report`(Tier-3 有价也能算);既有 建仓/观察/否决 零改。`validate_m67_consistency` 按 action 分:持有放开 损/盈一/盈二(与 machine plan 一致)、入/股数仍 null。account_state schema **1.0.0→1.1.0**(加性:stop/tp 降手填参考、非必填);转换器 stop 移出 REQUIRED、空白合法(解用户摩擦)。render 持有行显系统位 + breach 警告 + 未算出回退。
+- **边界**:不做主动减仓/加仓/移保本(S3b)、跨周持久化 ratchet(S3b);止损仍"无条件盘中手动";不改 egs_main/选股/EGS/建仓·观察·否决/IV/Rule12·Rule13/价格门/隐私护栏;非生产/不接券商/主板 only。
+- **Next**:审查(Codex **审设计稿**,实现前)。重点:① 止损/止盈口径是否正确复用引擎 + ratchet 无状态边界是否如实标注;② validator 持有放开是否安全(不误放建仓/观察/否决);③ schema v1.1 是否真向后兼容(1.0.0 旧数据仍 load)+ 转换器 stop 改可选无漏;④ 边界守住(动作恒持有/不动禁止加仓/不下单);⑤ §10 测试矩阵覆盖(breach/缺价不伪造/向后兼容/回归)。设计层审查,暂不写代码。
+- **Pre-Codex self-review**: A–F(设计层)checked — A 计算口径×出口(正常/ratchet 新高/breach/缺价 reject/res 缺失)+ validator 三 action 分支 + schema 向后兼容 + 转换器空 stop,均列入 §10;B 复用既有 `exit_and_size/ATR_MULT/RR_FLOOR` 不另造、建仓路径零改;C 反向 缺价不伪造止损、breach 不伪造 t1/t2、持有放开不误放观察/否决、schema 加性不破 1.0.0;E route-doc 单态(S3 设计独立 doc + S1 doc §6 指针 + 本条);F 待实现期 py_compile/测试/向后兼容跑。
+
 ## 2026-06-16 — Codex `审查 PASS` (账户周报隐私输出路由复审)
 - **Verdict/Action**: PASS。运行时护栏已用 `git check-ignore` 真值,上轮两处 doc/register 旧判据残留已清成当前态/历史态。
 - **Required**: `R-ASHORT-HOLDINGS-WEEKLY-ACCOUNT-OUTPUT-PRIVATE-ROUTING` addressed in working tree;详情见 `docs/system_risk_register.md`。
