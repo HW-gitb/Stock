@@ -35,6 +35,7 @@ GOV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 REGIMES = ("进攻期", "震荡期", "防御期", "收缩期")
 ATR_MULT = {"进攻期": 1.75, "震荡期": 1.25, "防御期": 1.0, "收缩期": 1.25}   # 主板中值
 RR_FLOOR = {"进攻期": 1.5, "震荡期": 1.5, "防御期": 2.0, "收缩期": 1.5}
+BREAKOUT_RR_BONUS = 0.5       # #6 V14.2 迁移(proposal §6 首项):突破型追高 entry_high 在现价上方、风险更大 → RR 门在 regime 基础上 +0.5(只建仓侧;持仓无 etype 不受影响)
 SINGLE_CAP_PCT = {"进攻期": 0.50, "震荡期": 0.40, "防御期": 0.25, "收缩期": 0.0}  # 收缩期禁新建仓
 IV_HALVE_PCT = 80.0            # Rule 3:IV>80 分位 → 新建仓减半
 IV_NOBUILD_PCT = 90.0          # Rule 3:IV>90 分位 → 不可建仓(硬)
@@ -56,7 +57,7 @@ GOVERNANCE = {
     "overheat_5d": OVERHEAT_5D, "overheat_20d": OVERHEAT_20D,
     "min_avg_amount_5d": MIN_AVG_AMOUNT_5D, "lowxi_band": LOWXI_BAND,
     "support_lookback": SUPPORT_LOOKBACK, "resistance_lookback": RESISTANCE_LOOKBACK,
-    "sr_spike_atr": SR_SPIKE_ATR,
+    "sr_spike_atr": SR_SPIKE_ATR, "breakout_rr_bonus": BREAKOUT_RR_BONUS,
     "min_shares": MIN_SHARES, "min_amount": MIN_AMOUNT, "impact_cost_frac": IMPACT_COST_FRAC,
 }
 
@@ -356,7 +357,7 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
     if stop >= close or close <= sup:
         return None, "现价≤支撑或止损≥现价(明显无效结构)"
     risk = close - stop
-    rr_floor = RR_FLOOR.get(regime, 1.5)
+    rr_floor = RR_FLOOR.get(regime, 1.5) + (BREAKOUT_RR_BONUS if etype == "突破" else 0.0)   # #6:突破型更高 RR 门
     t1 = res if (res and res > close) else close + rr_floor * risk
     t2 = max(t1 + ATR_MULT.get(regime, 1.25) * atr, close + 2.0 * risk)
     rr = (t1 - close) / risk if risk > 0 else 0.0
@@ -581,7 +582,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         rng = (f"**挂单区间 {plan['entry_low']}–{plan['entry_high']}**(参考价 {plan['entry']}、最不利价盈亏比 {plan['rr_at_entry_high']})"
                + (f";突破追价超过 {plan['chase_invalid_above']} 不追" if plan.get("chase_invalid_above") is not None else "")
                + (f";{plan['entry_invalid_reason']}" if plan.get("entry_invalid_reason") else ""))
-        advice = (f"低吸/突破建仓建议(类型:{etype})。⭐×{star}、盈亏比 {plan['rr']}。{rng}。"
+        # #6-i RR 门槛文案 type-aware:仅突破标「突破型更严」,低吸不带(否则低吸行误看成也被加严)。
+        floor_note = f"门槛 {plan['rr_floor']}" + ("(突破型更严)" if etype == "突破" else "")
+        advice = (f"低吸/突破建仓建议(类型:{etype})。⭐×{star}、盈亏比 {plan['rr']}({floor_note})。{rng}。"
                   f"**试探仓**(edge 未验证,A-short 仅 risk_filter_only)。"
                   f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**(基准:结构支撑 {plan['support']}、质量 {plan['support_quality']})。"
                   f"价格已按 A 股 0.01 规整。" + iv_caveat + regime_caveat)
@@ -843,6 +846,10 @@ def validate_m67_consistency(report: dict) -> None:
             raise ValueError(f"建仓 plan support_quality 非法 {sq!r}(须 ∈ {SR_QUALITY})")
         if f"结构支撑 {plan['support']}、质量 {sq}" not in adv:
             raise ValueError("建仓 advice 缺精确支撑短语「结构支撑 {support}、质量 {quality}」(no-dangling:须含支撑价位+质量)")
+        # #6-i RR 门槛(no-dangling §8 + R-ASHORT-M67-PRICE6-RR-FLOOR-NODANGLE):突破型抬升后的 rr_floor 是是否放行
+        # 的判据,必须以精确「门槛 {rr_floor}」落到用户可见 advice(否则 render/refactor 可隐藏实际门槛而 validator 仍判一致)。
+        if f"门槛 {plan['rr_floor']}" not in adv:
+            raise ValueError("建仓 advice 缺精确 RR 门槛短语「门槛 {rr_floor}」(no-dangling)")
     elif action == "持有":   # S3a:持仓系统位被动显示。入/股数 必 null;损/盈一/盈二 可非空但须与 machine plan 一致。
         if tbl["入"] is not None or tbl["股数"] is not None:
             raise ValueError("持有但 table 入/股数 非空(持仓不新开仓/不重算股数)")

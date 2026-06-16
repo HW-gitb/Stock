@@ -24,6 +24,7 @@ from runners.a_short_phase5_engine import (  # noqa: E402
     compute_indicators, entry_type, exit_and_size, classify_risk_families,
     build_m67_report, validate_m67_consistency, write_m67_report, GOVERNANCE,
     tick_ref, tick_up, tick_down, holding_levels, effective_support, SR_SPIKE_ATR,
+    BREAKOUT_RR_BONUS,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_m67_report.schema.json"
@@ -164,6 +165,56 @@ class EffectiveSupportTests(unittest.TestCase):
         sup = r["machine"]["entry_exit_size_star"]["plan"]["support"]
         r["m67"]["精简结论区"]["操作建议"] = r["m67"]["精简结论区"]["操作建议"].replace(f"结构支撑 {sup}、", "")
         self.assertIn("质量 strong", r["m67"]["精简结论区"]["操作建议"])   # 质量 token 仍在(隔离支撑价位缺失)
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+
+class BreakoutRRFloorTests(unittest.TestCase):
+    """#6 V14.2 迁移(proposal §6 首项):突破型 RR floor = RR_FLOOR[regime] + BREAKOUT_RR_BONUS;
+    追高 entry_high 在现价上方、风险更大 → 要求更高赔率;只建仓侧,持仓(无 etype)不受影响。"""
+    def _ind(self, res):
+        return {"support": 9.5, "resistance": res, "atr14": 0.4, "support_quality": "strong"}
+
+    def test_breakout_floor_stricter_than_lowxi(self):
+        # close=10、risk=1 → rr=(res−10)。res=11.7 → rr≈1.7:低吸(门 1.5)过、突破(门 2.0)拒。
+        ind = self._ind(11.7)
+        lo, rej_lo = exit_and_size(_good_input(close=10.0), ind, "震荡期", etype="低吸")
+        self.assertIsNone(rej_lo)
+        self.assertEqual(lo["rr_floor"], 1.5)
+        bo, rej_bo = exit_and_size(_good_input(close=10.0), ind, "震荡期", etype="突破")
+        self.assertIsNone(bo)                          # 突破被更高门拒
+        self.assertIn("盈亏比", rej_bo)
+
+    def test_breakout_passes_with_enough_rr_and_floor_reflects_bonus(self):
+        bo, rej = exit_and_size(_good_input(close=10.0), self._ind(13.0), "震荡期", etype="突破")
+        self.assertIsNone(rej)
+        self.assertEqual(bo["rr_floor"], 1.5 + BREAKOUT_RR_BONUS)   # plan 记录抬升后的门槛
+        self.assertEqual(bo["entry_type"], "突破")
+
+    def test_lowxi_advice_floor_landing_no_breakout_wording(self):
+        # #6-i 诚实显示:低吸 build advice 含「门槛 1.5」、**不含**「突破型更严」(低吸没被额外加严)。
+        lo = build_m67_report(_good_input(), AS_OF, "t")
+        self.assertEqual(lo["m67"]["table"]["操作"], "建仓")
+        adv = lo["m67"]["精简结论区"]["操作建议"]
+        self.assertIn("门槛 1.5", adv)
+        self.assertNotIn("突破型更严", adv)
+        validate_m67_consistency(lo)
+
+    def test_breakout_advice_shows_stricter_floor(self):
+        inp = _good_input()
+        inp["derived"] = {**inp["derived"], "breakout": True, "vol_confirm": True}
+        bo = build_m67_report(inp, AS_OF, "t")
+        self.assertEqual(bo["m67"]["table"]["操作"], "建仓")
+        adv = bo["m67"]["精简结论区"]["操作建议"]
+        self.assertIn("门槛 2.0", adv)             # 1.5 + 0.5
+        self.assertIn("突破型更严", adv)
+        validate_m67_consistency(bo)
+
+    def test_validator_rejects_dangling_rr_floor(self):
+        # R-ASHORT-M67-PRICE6-RR-FLOOR-NODANGLE:删掉 advice 的「门槛 {rr_floor}」→ 必拒。
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        floor = r["machine"]["entry_exit_size_star"]["plan"]["rr_floor"]
+        r["m67"]["精简结论区"]["操作建议"] = r["m67"]["精简结论区"]["操作建议"].replace(f"门槛 {floor}", "门槛")
         with self.assertRaises(ValueError):
             validate_m67_consistency(r)
 
@@ -361,8 +412,9 @@ class EntryRangeTests(unittest.TestCase):
         self.assertLessEqual(plan["rr_at_entry_high"], plan["rr"])   # 上沿 RR ≤ 参考价 RR
 
     def test_breakout_worst_case_rr_gate_rejects(self):
-        # 参考价 RR 够(≈1.52)但区间上沿 RR<floor(≈1.09)→ 拒(不输出按上沿成交其实不够 RR 的建仓)。
-        ind = {"support": 9.8, "resistance": 12.2, "atr14": 1.0}
+        # 参考价 RR 够(≈2.14 ≥ 突破门 2.0)但区间上沿 RR<门(≈1.68)→ 拒(不输出按上沿成交其实不够 RR 的建仓)。
+        # (#6 后突破门=2.0,故用更大 ATR 拉开 close↔entry_high 间距来隔离最不利价门,而非参考价门。)
+        ind = {"support": 9.0, "resistance": 17.5, "atr14": 2.0}
         plan, rej = exit_and_size(_good_input(close=10.00), ind, "震荡期", etype="突破")
         self.assertIsNone(plan)
         self.assertIn("最不利价", rej)

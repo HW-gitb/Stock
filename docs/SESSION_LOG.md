@@ -10,6 +10,32 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (M6.7 price #6-i: RR floor no-dangling)
+- **Verdict/Action**: PASS. `R-ASHORT-M67-PRICE6-RR-FLOOR-NODANGLE` 已按上一轮 Required 修好:建仓 advice 必须包含精确 `门槛 {plan['rr_floor']}`,删门槛会被 `validate_m67_consistency` 拒绝;低吸文案只显示 `门槛 1.5`,不再带 `突破型更严`;突破文案显示 `门槛 2.0(突破型更严)`。
+- **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。
+- **Verify**: targeted A-short M6.7/account/doc suite **323 OK**;py_compile OK;doc-governance+route-doc **30 OK**;`git diff --check` clean(CRLF warning only);Codex probe 删除 RR 门槛 = rejected;低吸误加 `突破型更严` 的人工变体仍会被当前 builder tests 防回归。未抓数据、未提交。
+- **Next**: Claude `提交` 本批 M6.7 price #6-i tracked files。
+
+## 2026-06-16 — Claude `修复` (M6.7 price #6-i:RR 门槛 no-dangling + 门槛文案 type-aware)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(两处都我的)。①validator 建仓分支加精确「门槛 {plan['rr_floor']}」落点校验(删门槛短语原会放过);②门槛文案 type-aware:`floor_note = 门槛 {rr_floor} + (突破型更严 仅当 etype==突破)`——低吸只显「门槛 1.5」不带「突破型更严」(防低吸行误看成被加严),突破显「门槛 2.0(突破型更严)」。
+- **Required**: `R-ASHORT-M67-PRICE6-RR-FLOOR-NODANGLE`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2047 OK**(BreakoutRRFloorTests 5:+低吸文案无突破措辞 +突破显抬升门 +删门槛 no-dangling 拒);Codex 两 probe(删门槛/低吸误写)复现并修正;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` #6-i)。
+- **Pre-Codex self-review**: A–F checked。A 门槛落点对低吸/突破两态 + 删门槛负向各覆盖;type-aware 措辞两态分别断言。B ripple:floor_note 仅 advice,validator 查「门槛 {rr_floor}」;不影响 #2/#5 既有精确短语(挂单区间/结构支撑,全量过)。C 反向:低吸/突破 build 均仍 validate;删门槛拒;无误拒。D N-A。E 单态(prepend 锚归档行、未碰下一条标题)。F 无 BOM;diff 干净。
+
+## 2026-06-16 — Codex `审查 FAIL` (M6.7 price #6-i: breakout RR floor)
+- **Verdict/Action**: FAIL. `BREAKOUT_RR_BONUS` 主计算方向成立:突破建仓的 `rr_floor` 已比同 regime 基础门槛高 0.5,并进入参考价 RR 门、最不利 `entry_high` RR 门和 t1 fallback。但 closeout 还缺 RR 门槛 no-dangling guard:我把 advice 里的 `(门槛 {rr_floor},突破型更严)` 删除后,`validate_m67_consistency` 仍 PASS。另一个同源显示问题:低吸 advice 也固定写“突破型更严”,容易让低吸行看起来也被额外加严。
+- **Required**: `R-ASHORT-M67-PRICE6-RR-FLOOR-NODANGLE`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: targeted A-short M6.7/account/doc suite **320 OK**;py_compile OK;`git diff --check` clean(CRLF warning only);Codex RR-floor dangling probe = `RR_FLOOR_DANGLING_PASS`;lowxi wording probe shows `entry_type=低吸` but advice still includes `突破型更严`。未抓数据、未提交。
+- **Next**: Claude 修复 `R-ASHORT-M67-PRICE6-RR-FLOOR-NODANGLE` 后再交 Codex re-`审查`。
+
+## 2026-06-16 — Claude `起草` (M6.7 price #6-i:突破型更高 RR floor)
+- **Verdict/Action**: 起草 #6 首项(proposal §6 多项,逐项做、不打包)。`BREAKOUT_RR_BONUS=0.5`:`exit_and_size` 的 `rr_floor = RR_FLOOR[regime] + (0.5 if etype==突破 else 0)`,抬升门同时作用于参考价 RR 门 + 最不利价(entry_high)RR 门 + t1 fallback。突破追高 entry_high 在现价上方、风险更大 → 要求更高赔率。**只建仓侧**(持仓无 etype、`holding_levels` 用基础 `RR_FLOOR`,零改);低吸不变。advice 显「门槛 {rr_floor}」。GOVERNANCE+preset 同步(strategy-grade 可调参,非 v14.2 逐字常量)。
+- **Required**: `R-ASHORT-M67-PRICE6-BREAKOUT-RR-FLOOR`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2044 OK**(BreakoutRRFloorTests 2:同数据低吸过/突破拒 + 突破足额过且 plan.rr_floor 含 bonus;#2 worst-case 测试因突破门升 2.0 已改用更大 ATR 隔离最不利价门);parity 绿;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex `审查` #6-i:engine + preset + 测试)。
+- **Pre-Codex self-review**: A–F checked。A 抬升门贯穿两 RR 门(参考价 + 最不利价)+ t1 fallback 各覆盖;低吸/突破同数据对比 + 突破足额。B ripple:`BREAKOUT_RR_BONUS` 仅 exit_and_size+GOVERNANCE+preset;holding 用基础 RR_FLOOR 零改;无其他测试断旧突破门(#2 测试已更新)。C 反向:低吸不受影响(bonus 仅突破);突破足额仍过;持仓零改。D N-A。E 单态。F GOVERNANCE↔preset parity 绿;无 BOM;diff 干净。
+
 ## 2026-06-16 — Codex `审查 PASS` (M6.7 price #5: effective support)
 - **Verdict/Action**: PASS. `R-ASHORT-M67-PRICE5-SUPPORT-VALUE-NODANGLE` 和 `R-ASHORT-M67-PRICE5-SESSIONLOG-MERGED-PREV-PASS` 均已修好:validator 强制 `结构支撑 {support}、质量 {quality}` 精确落到 advice;上一轮 Codex cash-audit PASS 已恢复为独立 entry。
 - **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。
