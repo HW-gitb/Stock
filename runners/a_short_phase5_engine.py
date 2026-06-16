@@ -575,6 +575,78 @@ def _is_valid_date(s) -> bool:
         return False
 
 
+def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
+    """持仓恒列入 S1: Tier-3(本周 EGS 粗筛未覆盖)持仓的 M6.7 报告。
+
+    **关键诚实点**:Tier-3 没有 EGS/流动性/事件数据。**绝不跑 `classify_risk_families`**——否则会在
+    缺失数据上**伪造**风险族结论(实测:无流动性 → 误判流动性硬否决 → 错误「否决」一只持仓;无事件 →
+    误判"无 ST")。本函数只做:持仓技术指标 + Rule12/Rule13(真实账户)+ 诚实标 EGS/语义/ST「未核查」。
+    action 恒「持有」(S1 被动;主动止损/止盈/加仓是 S3)。产出与 `build_m67_report` 同形、过
+    `validate_m67_consistency`。coverage_status / row_source 由 pipeline 在 build_weekly_report 后打。"""
+    ind = compute_indicators(inp.get("price_series", []))
+    stateful = inp.get("stateful_risk") or {}
+    position = stateful.get("position") or {}
+    regime = inp.get("market_regime", "震荡期")
+    iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
+    iv_known = iv_pct is not None
+    # EGS 派生风险族一律 not-evaluated(未核查,非 hit);stateful_risk 从真实 Rule12/Rule13。
+    fam = {k: {"hit": False, "action": "none", "reasons": []} for k in
+           ("market_regime", "overheat_crowding", "portfolio_concentration", "liquidity_impact",
+            "event_hard_veto", "semantic_official", "stateful_risk")}
+    sr_down = ["已有持仓:按持仓管理输出,不按新开仓处理"]
+    r12 = (stateful.get("rule12") or {})
+    if r12.get("status") == "active_cooldown":
+        sr_down.append("Rule12 active_cooldown:已有持仓仅管理/不加仓")
+    elif r12.get("status") == "recovery_1":
+        sr_down.append("Rule12 recovery_1:恢复期")
+    fam["stateful_risk"].update(hit=True, action="downgrade", reasons=sr_down)
+    close = inp.get("close")
+    price_cost = (f"{close} | 持仓:{position.get('shares')}股/均价{position.get('avg_cost')}/"
+                  f"建仓{position.get('entry_date')}/手动止损{position.get('stop_loss')}")
+    vol_state = (f"IV分位≈{iv_pct}%" if iv_known else "IV未知(feed 缺失)")
+    iv_status = "holding_uncovered" if iv_known else "observe_only_missing_feed"
+    observe = [] if iv_known else ["iv_regime_status:missing"]
+    advice = (f"已有持仓(本周 EGS 粗筛未覆盖,EGS/语义/ST 未自动核查)。本周不按新开仓处理、禁止自动加仓;"
+              f"手动止损 {position.get('stop_loss', '未填写')},触发后由你盘中无条件手动执行。"
+              "新闻 / ST / 监管 / 减持请人工核查。")
+    m67 = {
+        "精简结论区": {
+            "当前环境": regime,
+            "波动率状态": vol_state if iv_known else f"{vol_state}(未执行 IV 风控)",
+            "现价与成本": price_cost,
+            "否决审查触发": "未核查(本周 EGS 粗筛未覆盖)",
+            "板块资金事件": "未核查(本周 EGS 粗筛未覆盖)",
+            "风控触发": "|".join(sr_down),
+            "操作建议": advice,
+        },
+        "table": {"操作": "持有", "股数": None, "入": None, "盈一": None, "盈二": None, "损": None,
+                  "类型": "已有持仓", "EGS分": None, "优先级": "—",
+                  "触发条件": "持仓管理;本周 EGS 未覆盖(粗筛排除)"},
+    }
+    consumption = {"indicators": "→ 持仓技术参考(MA/RSI/ATR/支撑压力)",
+                   "risk_families": "→ stateful(Rule12/Rule13)+ EGS 派生族未核查",
+                   "iv.iv_percentile_252d": "→ 仅参考(未执行 IV 闸门)",
+                   "overlay.eligible": "→ 未覆盖",
+                   "stateful_risk": "→ 持仓管理 + Rule12/Rule13",
+                   "egs_coverage": "未覆盖(粗筛排除;EGS/语义/ST 未自动核查)"}
+    return {
+        "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
+        "generated_at": generated_at, "as_of": as_of,
+        "ts_code": str(inp.get("ts_code", "")), "name": str(inp.get("name", "")),
+        "m67": m67,
+        "machine": {
+            "indicators": ind, "risk_families": fam,
+            "layer": {"hard_veto": [], "downgrade": sr_down, "observe_only": observe, "llm_enrichment": []},
+            "entry_exit_size_star": {"action": "持有", "type": "已有持仓", "star": 0,
+                                     "plan": None, "reject_reason": None},
+            "iv_gate": {"iv_percentile_252d": iv_pct, "halve": False, "status": iv_status},
+            "stateful_risk": stateful, "consumption": consumption,
+        },
+        "boundary": {"production": False, "real_money": False,
+                     "is_validated_alpha": False, "satisfies_ship_gate": False},
+    }
+
+
 def validate_m67_consistency(report: dict) -> None:
     """§4 不变量 + R-ASHORT-M67-...-WRITE-CONTRACT:消费完整性 / 热度不覆盖硬风控 / 诚实护栏 /
     每族一次 / as_of 历法 / table↔machine 一致 / 建仓正数+plan匹配 / 非建仓 null / IV缺失显式。"""

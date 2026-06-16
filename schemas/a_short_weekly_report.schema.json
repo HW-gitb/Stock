@@ -25,6 +25,20 @@
         }
       }
     },
+    "holdings_manual_review": {
+      "type": "array",
+      "description": "持仓恒列入 S1: 账户持仓中无价/停牌/价格陈旧(最新 bar != 决策价格日)的票,旁路候选价格门、不进 reports[]、不伪造'持有',单列人工管理。可选(缺省=空)。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "name", "reason"],
+        "properties": {
+          "ts_code": {"type": "string"},
+          "name": {"type": "string"},
+          "reason": {"type": "string"}
+        }
+      }
+    },
     "run_lineage": {
       "type": "object",
       "additionalProperties": false,

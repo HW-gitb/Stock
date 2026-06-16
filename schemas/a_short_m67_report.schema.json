@@ -13,6 +13,13 @@
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
     "ts_code": {"type": "string"},
     "name": {"type": "string"},
+    "row_source": {"enum": ["egs_candidate", "egs_candidate_with_position",
+                            "account_position_egs_full", "account_position_only"],
+                   "description": "持仓恒列入 S1: 该行来源。egs_candidate=本周 top-N 候选; egs_candidate_with_position=top-N 候选且账户持有; account_position_egs_full=账户持仓(非 top-N,复用 egs_full 本轮评分,Tier-2); account_position_only=账户持仓(非 top-N 且非 egs_full,粗筛未覆盖,Tier-3)。可选(缺省视为 egs_candidate,向后兼容)。"},
+    "coverage_status": {"enum": ["full", "partial"],
+                        "description": "持仓恒列入 S1: 本周自动核查覆盖度。full=完整核查,**仅 top-N 候选行**(含已持仓的 top-N,走候选全链含语义)。partial=**每只非 top-N 注入持仓**——S1 对持仓**不跑语义/新闻** → 任何注入持仓都不标 full;Tier-2(row_source=account_position_egs_full,EGS 复用、语义未跑)与 Tier-3(account_position_only,EGS+语义均未跑)的区别在 `row_source`,不在 coverage;EGS『未核查』渲染覆盖只对 Tier-3。可选(缺省视为 full=候选)。"},
+    "consistency_warning": {"type": ["string", "null"],
+                            "description": "持仓恒列入 S1: 该持仓的 4.3-D trades↔positions 对账警告(取自转换器 lineage 旁产物),advisory,渲染到该持仓行。可选/缺省 null。"},
     "m67": {
       "type": "object",
       "additionalProperties": false,

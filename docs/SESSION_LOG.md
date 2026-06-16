@@ -10,6 +10,50 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (A-short 持仓恒列入 M6.7 S1)
+- **Verdict/Action**: PASS。Tier-2 价格钟、Tier-2 语义覆盖诚实、coverage 契约 doc/schema 漂移三项 Required 均已在工作树修对。
+- **Required**: `R-ASHORT-HOLDINGS-S1-TIER2-EGSFULL-CLOSE-PRICE-CLOCK-DRIFT`; `R-ASHORT-HOLDINGS-S1-TIER2-SEMANTIC-UNCHECKED-MISRENDERED-CLEAR`; `R-ASHORT-HOLDINGS-S1-COVERAGE-CONTRACT-DOC-DRIFT` addressed in working tree;详情见 `docs/system_risk_register.md`。
+- **Verify**: code/schema/doc review; targeted holdings test with local jsonschema stub 18 OK; render+doc-governance+route-doc 51 OK; schema JSON parse OK; py_compile OK; stale-contract grep OK; `git diff --check` clean(CRLF warning only)。Gap: bundled Python lacks real `jsonschema`, so full weekly/phase5 imports remain blocked here。
+- **Next**: Claude `提交`。提交时包含 S1 相关 tracked/untracked files + SESSION_LOG/register;排除 `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (持仓恒列入 S1:coverage 契约 doc/schema 漂移)
+- **Verdict/Action**: 判定 finding **正确**(**纯 doc/schema/注释对齐、无运行时改动**)。前两项 Tier-2 功能修复已确认正确,但契约文字残留旧模型(Tier-2 写 `coverage=full`、`partial` 写成仅 Tier-3),会误导后续把 Tier-2 注入持仓当"已完整核查"。已对齐四面:m67 schema `coverage_status` 描述(`full` 仅 top-N 候选 / `partial` 为**每只**非 top-N 注入持仓 / Tier-2 vs Tier-3 由 `row_source` 分 / EGS-未核查 override 仅 Tier-3)、`_build_holdings` docstring、design §3、README 行。详见 register。
+- **Required**: `R-ASHORT-HOLDINGS-S1-COVERAGE-CONTRACT-DOC-DRIFT`;详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: holdings + weekly + doc-governance + route-doc **152 OK**;schema JSON 可解析;py_compile / no-BOM / `git diff --check` 干净;B-ripple grep:旧 `top-N 或 egs_full` 与 Tier-2 `coverage=full` **0 残留**(剩余 `coverage_status=full` 命中是合法 Tier-1 候选,保留)。无运行时行为改动。
+- **Next**: 审查(Codex re-`审查`)。
+- **Pre-Codex self-review**: A–F checked — A 四契约面(schema/docstring/design §3/README)逐一对齐 + 旧措辞零残留证据;B grep `top-N 或 egs_full`/Tier-2 `coverage=full` = 0、运行时代码未动 → 功能回归绿(152 OK);C 反向:没把 Tier-1 候选合法的 `full` 误删、没把 Tier-2 真实 EGS 误标未核查;E route-doc 单态(register 详情 + SESSION_LOG/README 指针);F schema JSON 解析、no-BOM、`git diff --check` 干净、纯文档无逻辑改。
+
+## 2026-06-16 — Codex `审查 FAIL` (A-short 持仓恒列入 S1 repair)
+- **Verdict/Action**: FAIL。前两项 Tier-2 功能 Required 已核对为修对,但 schema/doc/代码注释仍残留旧契约,把 Tier-2/egs_full 写成 `coverage=full` 或把 `partial` 写成仅 Tier-3,会误导后续实现。
+- **Required**: `R-ASHORT-HOLDINGS-S1-COVERAGE-CONTRACT-DOC-DRIFT` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: code/schema/doc review; targeted holdings test with local jsonschema stub 18 OK; render+doc-governance+route-doc 51 OK; py_compile OK; `git diff --check` clean(CRLF warning only); bundled Python still lacks real `jsonschema`, so full weekly/phase5 imports remain blocked here。
+- **Next**: Claude `修复`。
+
+## 2026-06-16 — Claude `修复` (持仓恒列入 S1:Tier-2 价格钟漂移 + 语义覆盖不诚实)
+- **Verdict/Action**: 两 Required 均**判定正确**。① 价格钟:`_build_holdings` 现把**所有**注入持仓的 `cand.quote.close` 覆盖成 price provider 最新 bar(`series[-1].close`),egs_full 仅作 EGS 分/风险 lineage、不作现价权威 → 修 Tier-2 现价漂移。② 语义诚实:所有注入持仓 `coverage_status` 一律 partial(S1 持仓不跑语义,不再标 full);render 对每只持仓显式加「语义/新闻未核查(S1)」行;EGS「未核查」覆盖改只对 Tier-3(`row_source=account_position_only`)生效,Tier-2 真实 egs_full EGS 字段原样显示。详见 register。
+- **Required**: `R-ASHORT-HOLDINGS-S1-TIER2-EGSFULL-CLOSE-PRICE-CLOCK-DRIFT`; `R-ASHORT-HOLDINGS-S1-TIER2-SEMANTIC-UNCHECKED-MISRENDERED-CLEAR`;详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: holdings + render + weekly + phase5 + route-doc + doc-governance **217 OK**(新回归 `test_tier2_close_uses_price_clock_not_egsfull`:egs_full.close=999→现价取 series 10.25、EGS 分仍复用 71.5;`test_tier2_egs_shown_but_semantic_unchecked`:Tier-2 显真实「否决审查触发:无」+ 可见「语义/新闻未核查」+ 不显 EGS未覆盖);py_compile / no-BOM(7) / `git diff --check` 干净。边界:不改 egs_main/选股/语义 provider/候选行/user-stop/主动卖出。
+- **Next**: 审查(Codex re-`审查`)。
+- **Pre-Codex self-review**: A–F checked — A 两 Required 各配回归 + Tier-2/Tier-3 双路径(价格钟两 tier 覆盖、coverage 两 tier partial、render override 按 row_source 分档);B 旧 `coverage==partial` override 已改 `row_source`、design §2 + register 同步、`build_m67_report` 未改→候选回归绿;C 反向:Tier-2 EGS 字段不被误覆盖成未核查(真实显示)、Tier-3 仍未核查、语义未核查对所有持仓可见不漏;E route-doc 单态(register 详情 + SESSION_LOG 指针);F no-BOM/diff/py_compile、价格钟覆盖对 Tier-3 幂等、coverage_status 仍过 schema enum。
+
+## 2026-06-15 — Codex `审查 FAIL` (A-short 持仓恒列入 M6.7 S1)
+- **Verdict/Action**: FAIL。S1 方向正确,但 Tier-2 持仓行存在价格钟漂移和语义覆盖显示不诚实两项 Required。
+- **Required**: `R-ASHORT-HOLDINGS-S1-TIER2-EGSFULL-CLOSE-PRICE-CLOCK-DRIFT`; `R-ASHORT-HOLDINGS-S1-TIER2-SEMANTIC-UNCHECKED-MISRENDERED-CLEAR` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: code/schema/doc review; bundled-python `py_compile` OK; render+doc-governance+route-doc 51 OK; Tier-2 close mismatch probe reproduced `close=999.0` while price series latest `10.25`; gap: bundled Python lacks `jsonschema`, so holdings/weekly/phase5 imports could not be rerun here。
+- **Next**: Claude `修复`。
+
+## 2026-06-15 — Claude `起草` (持仓恒列入 M6.7 — S1:持仓可见 + Tier 路由;按桌面 持仓恒列入.md §19 定稿)
+- **背景/scope**:按用户桌面 `持仓恒列入.md` §19 最终定稿(+ 我 §11/§13/§15/§18 复核)起草 **S1**:让账户持仓**无论是否进本周 EGS top-N 都恒进周报 M6.7、诚实标覆盖度**。S1 只做"持仓可见 + Tier 路由 + 诚实覆盖",不做主动止盈止损/系统阈值/语义扩持仓/动 user-stop(S2/S3)。in-repo 设计 `docs/a_short_holdings_in_m67_design.md`。
+- **三档 Tier 路由**:① Tier-1(在 top-N)复用 candidate;② Tier-2(在 `A-EGS/Result/egs_full_<as_of>.csv`、非 top-N)→ 新 `engine/a_short_egs_full_adapter.py` 把扁平 CSV 行映射成引擎输入(**只读 egs_full、不改 egs_main**;只映射真实列、缺列标 unknown 不 default-False;表头校验防漂);③ Tier-3(连 egs_full 都不在=粗筛未覆盖,**真实持仓常态**,已核用户 601138/603667 都属此档)。
+- **实现中纠的真问题(§11.2 预警兑现)**:原打算"引擎不动、Tier-3 也走 build_m67_report",实测 **Tier-3 无流动性数据 → 引擎在缺失数据上伪造流动性硬否决 → 把一只持仓误判「否决」**。改:新增**加性** `a_short_phase5_engine.build_holding_report`——Tier-3 **不跑 `classify_risk_families`**,只做持仓技术指标 + Rule12/Rule13(真实账户)+ EGS/语义/ST 诚实标「未核查」,action 恒「持有」(S1 被动)。**既有 `build_m67_report` 零改 → 候选/Tier-1/Tier-2 行为不变**;`build_weekly_report` 按 `egs_coverage=="uncovered"` 标记 per-item 路由。
+- **价格门旁路(§11.3)**:无价/停牌/价格陈旧(最新 bar != 决策价格日)的持仓**旁路候选硬中止价格门**(`MIN_PRICE_OBS`/候选一致性),入 `holdings_manual_review`、不伪造"持有"、绝不中止整轮。
+- **诚实/展示**:`row_source`(egs_candidate / _with_position / account_position_egs_full / account_position_only)+ `coverage_status`(full/partial)= m67 schema **加性 optional**;`holdings_manual_review` = weekly schema 加性 optional;render **分区**(本周 EGS 候选 / 账户持仓两段)+ coverage=partial 行把 EGS 派生字段显示「未核查」(简化≠藏安全,§18.3)+ EGS未覆盖 caveat + 4.3-D `consistency_warnings` best-effort 读转换器 lineage 渲染到持仓行。
+- **S1 边界(不做)**:不改 egs_main/EGS 选股/top-N admission/`analysis_input.candidates` 契约;不扩语义到持仓(S2);不动 user `stop_loss` 决策含义、不动 account_state schema;不实现系统主动止盈止损/加仓价(S3)。非生产/不接券商/手动下单/主板 only。
+- **新增/改**:新 `engine/a_short_egs_full_adapter.py`、engine `build_holding_report`(加性)、`docs/a_short_holdings_in_m67_design.md`、`tests/test_a_short_holdings_in_m67.py`;改 `a_short_weekly_pipeline.py`(`_build_holdings`+注入+per-item 路由+4.3-D 读)、`a_short_m67_render.py`(分区+coverage-aware)、`a_short_m67_report.schema.json`(+row_source/coverage_status/consistency_warning)、`a_short_weekly_report.schema.json`(+holdings_manual_review)、`docs/README.md`(+路由行)。
+- **Verify**:S1 + render + weekly + phase5 + semantic + guards + lineage schema **270 OK**(新 `test_a_short_holdings_in_m67`:adapter 表头校验/ST·停牌派生、_build_holdings Tier1去重·Tier2复用·Tier3·无价/陈旧→manual_review、render 分区/partial未核查/full正常/manual_review/4.3-D/无持仓回归、main 集成 持仓恒列入+无账户回归);既有 `build_m67_report` 路径未改→候选行为不变(回归绿);py_compile / no-BOM(8) / `git diff --check` 干净。真实持仓 601138/603667 无对应 egs_full → Tier-3,接入后周报将显「持有 + EGS未覆盖(未核查)」。
+- **Next**:审查(Codex;新引擎函数 build_holding_report + adapter + schema + pipeline 注入 + render 分区,必审)。**注**:工作树里 `research/results/a_short/20260612/weekly_m67.*` 是早前我跑 demo 改的产物(research lane),提交时排除;`em_probe_smoke_20260614` 仍 untracked 排除。
+- **Pre-Codex self-review: A–F checked** — A(Tier×出口矩阵:Tier1去重/Tier2复用egs_full/Tier3 build_holding_report/无价·陈旧→manual_review,各一测 + adapter 表头校验·ST·停牌·减持派生 + render 分区/partial未核查/full不override/manual_review/4.3-D/无持仓回归 + main 集成 2)/ B(全仓:新符号 `build_holding_report`/`_build_holdings`/`egs_full_*`/`row_source`/`coverage_status`/`holdings_manual_review`/`consistency_warning` 仅本切片消费;既有 `build_m67_report` 未改、其测试全绿;两 schema 加性 optional 不破既有产物;README 登记)/ C(反向:Tier-3 不伪造 veto(build_holding_report 不跑 EGS 分类)也不伪造 clean(显未核查);无价持仓不伪造持有(manual_review);候选无持仓时无"账户持仓"段=不误显;full 覆盖不被改未核查)/ D(N/A)/ E(route-doc:新 design doc 登记 README、transient 仅本 SESSION_LOG、CURRENT 待提交后更新)/ F(no-BOM(8)/diff-check 干净/py_compile;价格门旁路防一只问题持仓炸轮;adapter 缺列显式 ValueError 不静默错位;build_holding_report 过 validate_m67_consistency)。
+
 ## 2026-06-15 — Codex `审查 PASS` (A-short 4.3-D trades↔positions consistency)
 - **Verdict/Action**: PASS。4.3-D 对账提示保持 advisory/WARN-only,只写 lineage/stdout,不覆盖 positions,不进 account_state,不改 M6.7/引擎结论。
 - **Required**: none。

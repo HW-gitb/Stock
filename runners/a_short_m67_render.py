@@ -71,8 +71,82 @@ def _holding_state(report: dict):
     return (" + ".join(parts) if parts else "空仓"), reason
 
 
+# 持仓恒列入 S1: 账户持仓(非本周候选)的行来源(渲染分区用);其余 row_source(egs_candidate /
+# egs_candidate_with_position / 缺省)归"本周 EGS 候选"段,保持既有渲染不变。
+_HOLDING_SOURCES = ("account_position_egs_full", "account_position_only")
+
+
+def _coverage_label(report: dict) -> str:
+    src = report.get("row_source")
+    # S1:所有注入持仓的语义/新闻层都未跑 → 标签必带"语义未核查";Tier-2 vs Tier-3 的区别在 EGS 维度。
+    if src == "account_position_egs_full":
+        return "复用egs_full·语义未核查"
+    if src == "account_position_only":
+        return "EGS未覆盖(粗筛)·语义未核查"
+    if src == "egs_candidate_with_position":
+        return "EGS候选·已持仓"
+    return report.get("coverage_status") or "本周EGS"
+
+
+def _card_field(report: dict, key: str) -> str:
+    """coverage-aware 取 精简结论区 字段:**只有 EGS 未覆盖的 Tier-3 持仓(row_source=account_position_only)**
+    才把 EGS 派生字段(否决审查触发/板块资金事件)显示为'未核查',**不让引擎 False-默认的'无'被误读成
+    '已核查、无风险'**(§18.3 简化≠藏安全)。Tier-2(account_position_egs_full)EGS 真实评分过 → 原样显示
+    (语义未核查另由专门一行标,见 _render_holdings_section);候选不受影响。"""
+    val = report["m67"]["精简结论区"].get(key, "")
+    if report.get("row_source") == "account_position_only" and key in ("否决审查触发", "板块资金事件"):
+        return "未核查(本周 EGS 粗筛未覆盖,请人工核查 ST/新闻/监管)"
+    return val
+
+
+def _render_holdings_section(holding_reports: list, manual_review: list) -> list:
+    """持仓恒列入 S1:渲染"账户持仓(非本周候选)"段 + "需人工管理(无价/停牌)"段。与"本周 EGS 候选"
+    分区显示,避免把账户持仓误读成本周选中;partial 覆盖行显式标 EGS 未覆盖、不伪造安全。"""
+    out = []
+    if holding_reports:
+        out += ["", "## 账户持仓(非本周 EGS 候选)",
+                "> 这些是你账户里、但**本周没进 EGS top-N** 的持仓。`复用egs_full`=本周已评分;"
+                "`EGS未覆盖(粗筛)`=本周 EGS 粗筛未覆盖,**仅价格/技术 + 账户状态;ST/新闻/监管未自动核查,请人工核查**。",
+                "| 票 | 名称 | 操作 | 持仓/冷静 | 覆盖 | EGS分 |",
+                "|---|---|---|---|---|---|"]
+        for r in holding_reports:
+            t = r["m67"]["table"]
+            out.append("| {} | {} | {} | {} | {} | {} |".format(
+                _cell(r.get("ts_code")), _cell(r.get("name")), _cell(t["操作"]),
+                _cell(_holding_state(r)[0]), _coverage_label(r), _cell(t.get("EGS分"))))
+        out += ["", "### 账户持仓逐票"]
+        for r in holding_reports:
+            t = r["m67"]["table"]
+            out.append(f"#### {_cell(r.get('ts_code'))} {_cell(r.get('name'))} — {t['操作']}（{_coverage_label(r)}）")
+            for k in ("当前环境", "波动率状态", "现价与成本", "否决审查触发", "板块资金事件", "风控触发"):
+                out.append(f"- {k}:{_card_field(r, k)}")
+            hs_label, hs_reason = _holding_state(r)
+            if hs_label not in ("空仓", "—"):
+                out.append(f"- 持仓/冷静:{hs_label}" + (f"（{hs_reason}）" if hs_reason else ""))
+            if r.get("row_source") == "account_position_only":   # Tier-3:EGS 维度也未覆盖
+                out.append("- ⚠️ **EGS 未覆盖**:本周该持仓未进 EGS 评分集(粗筛排除),EGS 量化分/赛道未自动核查。")
+            # S1 对**所有**注入持仓(含 Tier-2 复用 egs_full 的):语义/新闻/监管层**都未跑**(S2 接入)→ 必须
+            # 显式标,绝不让缺失语义被读成"无利空 / 已核查"(R-...-SEMANTIC-UNCHECKED-MISRENDERED-CLEAR)。
+            out.append("- ⚠️ **语义/新闻未核查(S1)**:本周未对该持仓自动核查 ST / 重大利空 / 监管 / 减持;请人工核查(S2 接入)。")
+            if r.get("consistency_warning"):
+                out.append(f"- ⚠️ 对账(4.3-D):{r['consistency_warning']}")
+            out.append(f"- **操作建议**:{r['m67']['精简结论区'].get('操作建议', '')}")
+            out.append(f"- 触发/说明:{_cell(t['触发条件'])}")
+            out.append("")
+    if manual_review:
+        out += ["", "## 账户持仓·需人工管理(无价/停牌/价格陈旧)",
+                "> 以下持仓本周**抓不到一致的最新价**(停牌/无价/价格陈旧),系统**不下任何持有/止损结论**,请人工管理。",
+                "| 票 | 名称 | 原因 |", "|---|---|---|"]
+        for h in manual_review:
+            out.append(f"| {_cell(h.get('ts_code'))} | {_cell(h.get('name'))} | {_cell(h.get('reason'))} |")
+    return out
+
+
 def render_weekly_markdown(weekly: dict) -> str:
     reports = weekly.get("reports", [])
+    # 持仓恒列入 S1: 分区——"本周 EGS 候选"(既有渲染,保持不变)与"账户持仓(非本周候选)"分开。
+    cand_reports = [r for r in reports if r.get("row_source") not in _HOLDING_SOURCES]
+    holding_reports = [r for r in reports if r.get("row_source") in _HOLDING_SOURCES]
     as_of = weekly.get("as_of", "")
     n = len(reports)
     acts = {"建仓": 0, "持有": 0, "观察": 0, "否决": 0}
@@ -118,7 +192,7 @@ def render_weekly_markdown(weekly: dict) -> str:
     out += ["", "## 一览",
             "| 票 | 名称 | 操作 | 持仓/冷静 | EGS分 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",
             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
-    for r in reports:
+    for r in cand_reports:
         t = r["m67"]["table"]
         out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
             _cell(r.get("ts_code")), _cell(r.get("name")), _cell(t["操作"]), _cell(_holding_state(r)[0]),
@@ -126,7 +200,7 @@ def render_weekly_markdown(weekly: dict) -> str:
             _cell(t["盈一"]), _cell(t["盈二"]), _cell(t["股数"])))
 
     out += ["", "## 逐票"]
-    for r in reports:
+    for r in cand_reports:
         jq = r["m67"]["精简结论区"]
         t = r["m67"]["table"]
         out.append(f"### {_cell(r.get('ts_code'))} {_cell(r.get('name'))} — {t['操作']}　{_cell(t['优先级'])}")
@@ -144,6 +218,8 @@ def render_weekly_markdown(weekly: dict) -> str:
                        f"/ 盈二 {_cell(t['盈二'])} / 股数 {_cell(t['股数'])}")
         out.append(f"- 触发/说明:{_cell(t['触发条件'])}")
         out.append("")
+    # 持仓恒列入 S1: 账户持仓(非本周候选)段 + 无价/停牌人工管理段(与候选分区显示)
+    out += _render_holdings_section(holding_reports, weekly.get("holdings_manual_review") or [])
     return "\n".join(out)
 
 

@@ -176,6 +176,81 @@ def stateful_risk_for_candidate(account: dict | None, ts_code: str, as_of: str) 
     return ctx
 
 
+def _load_account_consistency_warnings(account_path: str) -> dict:
+    """持仓恒列入 S1: best-effort 读 4.3 转换器的 lineage 旁产物(`<account 主名>_lineage.json`,与
+    account_state.json 同目录),取 4.3-D `consistency_warnings` → {ts_code: message}。旁产物缺失/坏
+    → {}(advisory,绝不阻断周报)。"""
+    if not account_path:
+        return {}
+    try:
+        p = Path(account_path)
+        lineage_path = p.with_name(p.stem + "_lineage.json")
+        if not lineage_path.is_file():
+            return {}
+        with open(lineage_path, encoding="utf-8") as f:
+            data = json.load(f)
+        out = {}
+        for w in (data.get("consistency_warnings") or []):
+            code = str(w.get("ts_code") or "")
+            if code:
+                out[code] = str(w.get("message") or "")
+        return out
+    except Exception:
+        return {}
+
+
+def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, regime,
+                    regime_fallback, price_data_through, egs_full=None):
+    """持仓恒列入 S1: 为"持仓 ∖ top-N"构造 M6.7 待分析行(Tier 路由)。**不改 egs_main / 选股 / 语义 /
+    user-stop**。返回 (holding_normalized, holding_meta, manual_review):
+    - Tier-2(在 `egs_full`): 复用 egs_full 的 EGS 分/风险;**现价取 price provider 最新 bar**(非 egs_full
+      快照,见 close 覆盖);`row_source=account_position_egs_full`。
+    - Tier-3(不在 `egs_full`,粗筛未覆盖): 仅价格/技术 + 账户,EGS 标未覆盖;`row_source=account_position_only`。
+    - **coverage_status 一律 partial**:S1 对注入持仓**不跑语义/新闻**,故没有 full 的注入持仓(full 仅
+      top-N 候选行)。Tier-2 vs Tier-3 的区别在 `row_source`,**不在** coverage;EGS『未核查』渲染覆盖只对 Tier-3。
+    - 无价/停牌/价格陈旧(最新 bar != price_data_through): **旁路候选价格门**(绝不中止整轮、不参与候选一致性
+      判定),入 manual_review,**不伪造"持有"**。
+    语义层 S1 **不扩到持仓**(semantic=None / semantic_web_llm=None)。"""
+    from engine.a_short_egs_full_adapter import load_egs_full, egs_full_row_to_candidate
+    positions = [p for p in (acct.get("positions") or []) if str(p.get("ts_code")) not in cand_codes]
+    if not positions:
+        return [], {}, []
+    if egs_full is None:                      # 测试可注入;生产从 A-EGS/Result/egs_full_<as_of>.csv 读
+        egs_full = load_egs_full(as_of)
+    holding_normalized, holding_meta, manual_review = [], {}, []
+    for p in positions:
+        code = str(p.get("ts_code"))
+        series, latest = _price_provider_result(price_provider, code, as_of)
+        if len(series) < MIN_PRICE_OBS or not latest or str(latest) != str(price_data_through):
+            reason = (f"无价/停牌(价格序列不足 < {MIN_PRICE_OBS} 交易日)"
+                      if (len(series) < MIN_PRICE_OBS or not latest)
+                      else f"价格最新 bar {latest} != 本周决策价格日 {price_data_through}(陈旧/停牌)")
+            manual_review.append({"ts_code": code, "name": str(p.get("name") or ""), "reason": reason})
+            continue
+        row = egs_full.get(code)
+        if row is not None:
+            cand = egs_full_row_to_candidate(row)                 # Tier-2: 复用本轮 EGS 评分/风险
+            rs = "account_position_egs_full"
+        else:
+            cand = {"ts_code": code, "name": str(p.get("name") or "")}  # Tier-3: 粗筛未覆盖,无 EGS 数据
+            rs = "account_position_only"
+        # 价格钟一致性(R-ASHORT-HOLDINGS-S1-TIER2-EGSFULL-CLOSE-PRICE-CLOCK-DRIFT):现价**一律取本次
+        # price provider 的最新已结算 bar**,绝不让 egs_full 快照 close 当现价权威(否则 Tier-2 现价与
+        # price_data_through 漂移)。egs_full 只作 EGS 分/风险 lineage,不作现价。
+        cand["quote"] = {"close": series[-1].get("close")}
+        n = normalize_candidate(cand, series, None, iv_pct, account, regime,
+                                regime_fallback=regime_fallback,
+                                stateful_risk=stateful_risk_for_candidate(acct, code, as_of),
+                                semantic=None, semantic_web_llm=None)
+        if rs == "account_position_only":     # Tier-3: 走 build_holding_report(不跑 EGS 风险分类、不伪造 veto)
+            n["egs_coverage"] = "uncovered"
+        holding_normalized.append(n)
+        # S1 对**所有**注入持仓:semantic/news 层未跑 → coverage 一律 partial(绝不伪装 full/已核查);
+        # Tier-2 与 Tier-3 的区别在 row_source(EGS 复用 vs 粗筛未覆盖),不在 coverage。
+        holding_meta[code] = {"row_source": rs, "coverage_status": "partial"}
+    return holding_normalized, holding_meta, manual_review
+
+
 def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pct,
                         account: dict, regime: str, industry_trend: str = "neutral",
                         llm_enrichment=None, observe_only=None, semantic=None,
@@ -230,8 +305,12 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
 
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         iv_feed_ref: str = "", run_lineage: dict = None) -> dict:
-    from runners.a_short_phase5_engine import build_m67_report
-    reports = [build_m67_report(n, as_of, generated_at) for n in normalized_list]
+    from runners.a_short_phase5_engine import build_m67_report, build_holding_report
+    # 持仓恒列入 S1: 标了 egs_coverage="uncovered" 的(Tier-3 粗筛未覆盖持仓)走 build_holding_report
+    # (不跑 EGS 风险分类,避免在缺失数据上伪造 veto);其余(候选 / Tier-1 / Tier-2)走 build_m67_report。
+    reports = [(build_holding_report(n, as_of, generated_at)
+                if n.get("egs_coverage") == "uncovered" else build_m67_report(n, as_of, generated_at))
+               for n in normalized_list]
     # run_lineage ties the consumed selection + IV feed + account/sizing status to this M6.7 artifact
     # (Slice 3b-2: selection 在 result/a_short、M6.7 在 research lane,靠此机器可读 lineage 绑定);
     # default = no-account observation-only,使直接 builder/测试仍 schema-valid。
@@ -653,8 +732,31 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    "account_ref": (_rel(args.account) if args.account else ""),
                    "account_status": account_status, "sizing_mode": sizing_mode,
                    "price_freshness": price_freshness}
-    weekly = build_weekly_report(normalized, args.as_of, gen,
+    # 持仓恒列入 S1: 注入"持仓 ∖ top-N"(Tier 路由 / 价格门旁路 / 不扩语义);选股、引擎决策、user-stop 不变。
+    holding_normalized, holding_meta, holdings_manual_review = ([], {}, [])
+    if args.account:
+        cand_codes = {str(c.get("ts_code")) for c in cands}
+        holding_normalized, holding_meta, holdings_manual_review = _build_holdings(
+            acct, cand_codes, args.as_of, price_provider, iv_pct, account, regime,
+            regime_fallback, price_data_through)
+    weekly = build_weekly_report(normalized + holding_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage)
+    # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
+    held_codes_all = {str(p.get("ts_code")) for p in (acct.get("positions") or [])}
+    cons_by = _load_account_consistency_warnings(args.account) if args.account else {}
+    for rep in weekly["reports"]:
+        code = rep["ts_code"]
+        if code in holding_meta:
+            rep["row_source"] = holding_meta[code]["row_source"]
+            rep["coverage_status"] = holding_meta[code]["coverage_status"]
+        elif code in held_codes_all:
+            rep["row_source"], rep["coverage_status"] = "egs_candidate_with_position", "full"
+        else:
+            rep["row_source"], rep["coverage_status"] = "egs_candidate", "full"
+        if cons_by.get(code):
+            rep["consistency_warning"] = cons_by[code]
+    if holdings_manual_review:
+        weekly["holdings_manual_review"] = holdings_manual_review
     from runners.a_short_m67_render import write_weekly_markdown
     md_path = os.path.splitext(args.out)[0] + ".md"
     write_weekly_report(weekly, feed, args.out)
