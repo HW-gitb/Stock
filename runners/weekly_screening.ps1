@@ -28,6 +28,7 @@
 #   .\runners\weekly_screening.ps1 -SkipTracker                       # 不跑 forward tracker capture
 #   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # skip the M6.7 advisory (semantic)
 #   .\runners\weekly_screening.ps1 -Account path\to\account.json      # M6.7 account-state JSON (cash/positions/Rule12/Rule13); omit = no-sizing observation only
+#                                                                     # 带 -Account 报告含真实持仓 → 自动落 gitignored 私密目录 state\a_short\weekly_private\<as_of>\(防提交泄漏);无 -Account 走标准 research lane
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard
 #
 # 运行 cadence(A-short 周五实盘;用户 2026-06-15 定):
@@ -221,7 +222,15 @@ if ($SkipSemanticRisk) {
     if (-not (Test-Path $SemAnalysisInput)) {
         Write-Host "[WARN] M6.7 advisory skipped: analysis_input not found at $SemAnalysisInput (advisory sidecar, weekly not blocked)" -ForegroundColor Yellow
     } else {
-        $M67Dir = Join-Path $ProjectRoot "research\results\a_short\$AsOf"
+        # 持仓恒列入隐私护栏(固化):带 -Account 的周报含真实持仓(代码/成本/止损)→ 落 gitignored 私密目录
+        # state\a_short\weekly_private\<as_of>\(.gitignore: state/*/weekly_private/),绝不入 git 追踪的 research lane。
+        # 无 -Account(observation-only、无持仓)→ 仍落标准 research\results\a_short\<as_of>\(可留作证据)。
+        # pipeline 侧另有同口径硬护栏,直接调用绕过本脚本也拦得住。
+        if ($Account) {
+            $M67Dir = Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf"
+        } else {
+            $M67Dir = Join-Path $ProjectRoot "research\results\a_short\$AsOf"
+        }
         $IvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
         $M67Out = Join-Path $M67Dir "weekly_m67.json"
         $OverlayPath = Join-Path $ProjectRoot "result\a_short\$AsOf\overlay.json"

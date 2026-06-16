@@ -10,6 +10,48 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (账户周报隐私输出路由复审)
+- **Verdict/Action**: PASS。运行时护栏已用 `git check-ignore` 真值,上轮两处 doc/register 旧判据残留已清成当前态/历史态。
+- **Required**: `R-ASHORT-HOLDINGS-WEEKLY-ACCOUNT-OUTPUT-PRIVATE-ROUTING` addressed in working tree;详情见 `docs/system_risk_register.md`。
+- **Verify**: code/path/doc review;probe=真私密 allowed、fake research rejected、fake nested rejected、case private allowed、case nonprivate rejected;holdings 27 OK;render+phase5 65 OK;weekly guard 9 OK;doc-governance+route-doc 30 OK;py_compile/PSParser OK;`git diff --check` clean(CRLF only);weekly pipeline 103 OK + 1 environment gap(`tushare` missing)。
+- **Next**: Claude `提交`。提交时继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (隐私护栏 re-修复:清 doc 残留旧判据)
+- **Verdict/Action**: 判定 Codex re-FAIL **正确**(纯文本残留,运行时护栏已是 git 真值、不动)。① `tests/...PrivacyGuardTests` docstring 旧子串判据 → 改"仓库内 且 git 未忽略 → 拒";② register 独立首次 FAIL 段(说"current fix incomplete"、把 substring 描述成 current)→ 标 SUPERSEDED/历史。仓库级 re-grep 旧判据 = 0 live 残留(第三处 = SESSION_LOG `起草` 条目"不是路径必须叫 weekly_private…仓库内且非私密→拒",git 真值下 spirit-accurate + append-only,保留)。详见 register。
+- **Required**: `R-ASHORT-HOLDINGS-WEEKLY-ACCOUNT-OUTPUT-PRIVATE-ROUTING`;详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: holdings+weekly+render+phase5+doc-governance+route-doc **226 OK**;py_compile OK;`git diff --check` 干净;仓库级 `rg` 旧 substring 判据 = 0 live 残留。
+- **Next**: 审查(Codex re-`审查`)。
+- **Pre-Codex self-review**: A–F checked — A 两残留各直修 + 仓库级 re-grep 兜第三处(SESSION_LOG 起草判定 spirit-accurate 历史保留,非漏);B 纯文本无代码改 → 运行时 226 仍绿、guard 签名/逻辑未动;C 反向 标 superseded 非删(留审计史)、未把仍准确的历史判据误改;E route-doc 单态(register 详情 + 本指针,起草条目 append-only 不改);F no-BOM、diff 干净、纯 doc 无逻辑改。
+
+## 2026-06-16 — Codex `审查 FAIL` (账户周报隐私输出路由 re-修复)
+- **Verdict/Action**: FAIL。运行时护栏已改用 git 真值并修掉前次两个绕过,但活跃测试 docstring 与 register 历史段仍残留旧/当前态冲突表述。
+- **Required**: `R-ASHORT-HOLDINGS-WEEKLY-ACCOUNT-OUTPUT-PRIVATE-ROUTING` remains open;详情见 `docs/system_risk_register.md`。
+- **Verify**: code/path review;上次绕过 probe=真私密 allowed、fake research rejected、fake nested rejected、tracked case-variant rejected;PrivacyGuard 9 OK;holdings S1 27 OK;weekly guard 9 OK;doc-governance+route-doc 30 OK;py_compile/PSParser OK;`git diff --check` clean(CRLF only);weekly pipeline 103 OK + 1 environment gap(`tushare` missing)。
+- **Proof-of-use**: `rg` 仍命中测试 docstring 旧判据与 register 旧 "current fix is incomplete" 段;详见 register。
+- **Next**: Claude `修复`。提交时继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (账户周报隐私输出路由固化:护栏改 git 真值)
+- **Verdict/Action**: 判定 Codex finding **正确**。原护栏用"路径含 `weekly_private`"子串启发式 ≠ gitignore 真值,被仓库内假 weekly_private(`research/.../weekly_private/`、嵌套 `state/<x>/sub/weekly_private/`)+ 大小写变体绕过。改:新增 `_is_account_output_git_ignored` 调 `git check-ignore -q`,护栏改判"仓库内 且 git 未忽略 → 拒"(git 不可用→fail-closed);仓库外仍早返回放行。详见 register。
+- **Required**: `R-ASHORT-HOLDINGS-WEEKLY-ACCOUNT-OUTPUT-PRIVATE-ROUTING`;详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: PrivacyGuard 9 OK(新回归:假 research/weekly_private 拒、嵌套假拒、大小写变体与 git 一致);holdings+weekly+render+phase5+doc-governance+route-doc **226 OK**;py_compile OK;`git diff --check` 干净(CRLF);design §8 判据更新为 git check-ignore 真值。
+- **Next**: 审查(Codex re-`审查`)。
+- **Pre-Codex self-review**: A–F checked — A 三绕过各配回归(假 research/嵌套/大小写)+ 真私密/仓库外/无account/override/main 早炸保留;B 新符号 `_is_account_output_git_ignored` 仅本切片+测试消费、guard 签名不变→既有调用与 ~25 tmp 测试不受影响(tmp 仓库外早返回);C 反向 git 真值=不误拒真私密、不漏放假私密、fail-closed 宁拒勿漏;E route-doc 单态(register 详情+design §8+本指针);F py_compile/diff、护栏早于一切 IO、git 子进程异常吞掉 fail-closed。
+
+## 2026-06-16 — Codex `审查 FAIL` (账户周报隐私输出路由固化)
+- **Verdict/Action**: FAIL。ps1 路由方向正确,但 pipeline 护栏仍可被仓库内未 gitignore 的假 `weekly_private` 路径或大小写变体绕过。
+- **Required**: `R-ASHORT-HOLDINGS-WEEKLY-ACCOUNT-OUTPUT-PRIVATE-ROUTING` remains open;详情见 `docs/system_risk_register.md`。
+- **Verify**: code/path review;`git check-ignore` 证 `state/a_short/weekly_private/...` 被忽略但 `research/results/a_short/weekly_private/...` 不被忽略;probe 证假 `weekly_private` 路径 + 大小写变体 repo 路径均被当前 guard 放行;PrivacyGuard 6 OK;holdings S1 24 OK;weekly guard 9 OK;doc-governance+route-doc 30 OK;py_compile/PSParser OK;`git diff --check` clean;weekly pipeline 103 OK + 1 个环境 gap(`tushare` 缺失)。
+- **Next**: Claude `修复`。提交时继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `起草` (持仓恒列入 跟进:账户周报隐私输出路由固化)
+- **背景/scope**:S1 验证跑(用户真实账户)时我手动把 `--out` 落到非标准目录,牵出真问题:`weekly_screening.ps1` 把 M6.7 写死在 **git 追踪** 的 `research/results/a_short/<as_of>/`,带 `-Account` 时报告含真实持仓(代码/成本/股数/止损)→ 每次账户周报都把私密持仓落进可提交文件,一次 `git add` 即泄漏;直接调 pipeline 同样无护栏。用户要求**固化**:每周最终结果按系统类型 + 实盘日期落 `state/<系统>/weekly_private/<日期>/`。
+- **改动**:① `.gitignore` 加 `state/*/weekly_private/`(scheme 覆盖 a_short/a_long/us_short/us_long,全部不入库);② `weekly_screening.ps1` 带 `-Account` → 输出落 `state\a_short\weekly_private\<as_of>\`,observation-only(无持仓)仍走标准 research lane(可留证据);③ pipeline 硬护栏 `_reject_nonprivate_account_output_path`(照 `_reject_production_output_path` 同款路径规范化)——带 `--account` 且 `--out` **仓库内且非 weekly_private** → fail-fast `SystemExit`(早于取数/落盘);仓库外路径(临时目录/外部盘)放行(git 提交不到);`--allow-nonprivate-account-out` 显式放行;④ 测试 `PrivacyGuardTests`(6)+ design doc §8。
+- **判据(关键)**:不是"路径必须叫 weekly_private",而是"**仓库内 且 非私密 → 拒**"——故既有 ~25 处 `--account`+`TemporaryDirectory`-`--out` 测试(tmp 在 C 盘、仓库 D 盘=仓库外)不受影响、全绿。
+- **边界**:不改 egs_main/选股/EGS 分/引擎 action/语义/observation-only 路由/既有 production-root 护栏;非生产/不接券商/主板 only。
+- **Verify**:holdings + weekly pipeline **128 OK**(新 `PrivacyGuardTests`:仓库内非私密+account→`SystemExit` / 私密→过 / 仓库外→过 / 无account→过 / override→过 / main fail-fast);既有 account+tmp-out 测试全绿(tmp 仓库外);py_compile / `git diff --check` 待跑。
+- **Next**:审查(Codex;新 pipeline 护栏 + ps1 路由 + gitignore + 测试,必审)。Required ID `R-ASHORT-HOLDINGS-WEEKLY-ACCOUNT-OUTPUT-PRIVATE-ROUTING`(详见 register 单一来源)。提交时排除 `research/results/a_short/em_probe_smoke_20260614/*` 与早前 demo 改动 `20260612/weekly_m67.*`(拟还原)。
+- **Pre-Codex self-review**: A–F checked — A 护栏×出口矩阵(仓库内非私密拒/私密过/仓库外过/无account过/override过/main早炸 各一测);B 连带(新符号 `_reject_nonprivate_account_output_path`/`--allow-nonprivate-account-out`/`weekly_private` 仅本切片+ps1+gitignore+测试消费;~25 既有 account+out 测试 grep 过、tmp 仓库外不触发→128 OK;ps1 仅 $M67Dir 路由改、$M67Out/IvFeed/输入路径不变);C 反向(没把 observation-only/仓库外正常 run 误拦、护栏不漏放仓库内非私密);E route-doc 单态(register 详情 + design §8 + SESSION_LOG 指针,CURRENT 待提交后);F `os.makedirs(exist_ok)` 已建私密目录、`__file__` 推 repo_root 正确、护栏早于一切 IO fail-fast。
+
 ## 2026-06-16 — Codex `审查 PASS` (A-short 持仓恒列入 M6.7 S1)
 - **Verdict/Action**: PASS。Tier-2 价格钟、Tier-2 语义覆盖诚实、coverage 契约 doc/schema 漂移三项 Required 均已在工作树修对。
 - **Required**: `R-ASHORT-HOLDINGS-S1-TIER2-EGSFULL-CLOSE-PRICE-CLOCK-DRIFT`; `R-ASHORT-HOLDINGS-S1-TIER2-SEMANTIC-UNCHECKED-MISRENDERED-CLEAR`; `R-ASHORT-HOLDINGS-S1-COVERAGE-CONTRACT-DOC-DRIFT` addressed in working tree;详情见 `docs/system_risk_register.md`。

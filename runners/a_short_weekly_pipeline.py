@@ -379,6 +379,44 @@ def _reject_production_output_path(out_path: str) -> None:
                          "周报输出由调用方指定(约定 research/results/),但绝不落 production 根")
 
 
+def _is_account_output_git_ignored(abs_path: str, repo_root: str) -> bool:
+    """问 git:该路径是否被 .gitignore 忽略(= commit 不到)。**用 git 真值而非路径名启发式**,故仓库内
+    假 `weekly_private`、未被 `state/*/weekly_private/` 覆盖的嵌套层级、大小写变体都按 git 实际是否忽略判定。
+    git 不可用/出错 → False(fail-closed:无法证明安全就当未忽略,宁拒勿漏)。"""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", repo_root, "check-ignore", "-q", "--", abs_path],
+                           capture_output=True)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _reject_nonprivate_account_output_path(out_path: str, has_account: bool,
+                                           allow_override: bool = False) -> None:
+    """持仓恒列入隐私护栏(固化):带 --account 的周报含**真实持仓**(代码/成本/股数/止损)。判据 =
+    输出落在**本仓库内、且 git 未忽略它**(`git check-ignore` 未命中)→ 一次 `git add` 即提交泄漏 → 拒。
+    **以 git 真实忽略判定为准**(非路径名启发式):仓库内假 `weekly_private`、未被 `state/*/weekly_private/`
+    覆盖的嵌套层级、大小写变体都按 git 实际行为正确处理(此即 Codex 审查指出的两个绕过的根治)。
+    仓库外路径(临时目录/外部盘)git 提交不到 → 放行;无 --account(无持仓)/ `--allow-nonprivate-account-out`
+    → 放行。约定私密目录 = gitignored `state/<系统类型>/weekly_private/<as_of>/`。"""
+    if not has_account or allow_override:
+        return
+    out_abs = os.path.abspath(out_path)
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out_l = os.path.normpath(out_abs).replace("\\", "/").lower()
+    root_l = os.path.normpath(os.path.abspath(repo_root)).replace("\\", "/").lower()
+    inside_repo = out_l == root_l or out_l.startswith(root_l + "/")
+    if not inside_repo:
+        return                                       # 仓库外:git 提交不到
+    if _is_account_output_git_ignored(out_abs, repo_root):
+        return                                       # 仓库内但确被 gitignore:安全
+    raise SystemExit(
+        f"[FATAL] --account 提供(周报含真实持仓),但 --out {out_path} 落在仓库内、且 git 未忽略它"
+        "(`git check-ignore` 未命中)→ 会被 git 提交泄漏持仓;请输出到 gitignored 的"
+        " state/<系统类型>/weekly_private/<as_of>/。确需写仓库内他处请显式传 --allow-nonprivate-account-out。")
+
+
 def write_weekly_report(weekly: dict, iv_feed_summary: dict, out_path: str) -> None:
     _reject_production_output_path(out_path)
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
@@ -616,6 +654,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                         "intraday_prior_settled(实盘盘中、as_of 当日 EOD 未发布 → 容忍最新 bar==前一交易日;仅 --run-date==--as-of 有效)")
     p.add_argument("--skip-semantic", action="store_true",
                    help="跳过语义官方层自动取数(advisory;不影响 M6.7 确定性 base)")
+    p.add_argument("--allow-nonprivate-account-out", action="store_true",
+                   help="显式放行:带 --account 时允许输出落仓库内非私密目录(默认拒,防真实持仓被 git 提交泄漏)")
     args = p.parse_args(argv)
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
@@ -626,6 +666,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if args.price_freshness_mode == "intraday_prior_settled" and str(args.run_date or "") != str(args.as_of):
         raise SystemExit("[FATAL] --price-freshness-mode intraday_prior_settled 仅在 --run-date == --as-of"
                          "(实盘当天、as_of 当日 EOD 未发布)有效;历史回放/缺 run-date 请用 strict_as_of")
+    # 持仓恒列入隐私护栏(固化):带 --account 的周报含真实持仓 → 拒绝落仓库内非私密目录(防 git 提交泄漏)。
+    # 早于任何取数/落盘,fail-fast。
+    _reject_nonprivate_account_output_path(args.out, bool(args.account), args.allow_nonprivate_account_out)
 
     def _load(path):
         with open(path, encoding="utf-8") as f:

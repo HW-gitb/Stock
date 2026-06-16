@@ -19,7 +19,10 @@ if str(ROOT) not in sys.path:
 
 from engine.a_short_egs_full_adapter import (load_egs_full, egs_full_row_to_candidate,  # noqa: E402
                                              EGS_FULL_REQUIRED_COLUMNS)
-from runners.a_short_weekly_pipeline import _build_holdings, main  # noqa: E402
+from runners.a_short_weekly_pipeline import (_build_holdings, main,  # noqa: E402
+                                             _reject_nonprivate_account_output_path,
+                                             _is_account_output_git_ignored)
+import os  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
 from tests.test_a_short_weekly_pipeline import (AS_OF, _analysis_input, _ai_candidate,  # noqa: E402
                                                 _account, _feed, _series)
@@ -254,6 +257,66 @@ class MainIntegrationTests(unittest.TestCase):
         self.assertEqual(w["n_stocks"], 2)
         self.assertTrue(all(r["row_source"] == "egs_candidate" for r in w["reports"]))
         self.assertNotIn("holdings_manual_review", w)
+
+
+class PrivacyGuardTests(unittest.TestCase):
+    """持仓恒列入隐私护栏(固化):带 --account 的报告含真实持仓 → 绝不能落仓库内非私密目录。
+    判据 = 仓库内 且 git 未忽略(`git check-ignore` 未命中)→ 拒;git 真忽略 / 仓库外(临时目录)/ 无 account / 显式放行 → 放行。"""
+    INSIDE_NONPRIVATE = str(ROOT / "research" / "results" / "a_short" / "20260612" / "weekly_m67.json")
+    INSIDE_PRIVATE = str(ROOT / "state" / "a_short" / "weekly_private" / "20260612" / "weekly_m67.json")
+    OUTSIDE = str(Path(tempfile.gettempdir()) / "weekly_m67_guardtest.json")
+
+    def test_account_inside_repo_nonprivate_refused(self):
+        with self.assertRaises(SystemExit):
+            _reject_nonprivate_account_output_path(self.INSIDE_NONPRIVATE, has_account=True)
+
+    def test_account_inside_repo_private_ok(self):
+        _reject_nonprivate_account_output_path(self.INSIDE_PRIVATE, has_account=True)        # 私密目录,不抛
+
+    def test_account_outside_repo_ok(self):
+        _reject_nonprivate_account_output_path(self.OUTSIDE, has_account=True)               # 仓库外,提交不到
+
+    def test_no_account_nonprivate_ok(self):
+        _reject_nonprivate_account_output_path(self.INSIDE_NONPRIVATE, has_account=False)    # observation-only 无持仓
+
+    def test_override_allows_nonprivate(self):
+        _reject_nonprivate_account_output_path(self.INSIDE_NONPRIVATE, has_account=True,
+                                               allow_override=True)                          # 显式放行
+
+    def test_main_account_nonprivate_out_refused_before_fetch(self):
+        # 集成:main() 带 --account + 仓库内非私密 --out → 取数/读文件前就 fail-fast(故 ai/feed 不存在也无妨)
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"),
+                      "--account", str(Path(td) / "acct.json"),
+                      "--out", self.INSIDE_NONPRIVATE], price_provider=lambda code: _series())
+
+    # ---- Codex 审查 FAIL 回归:护栏不能被仓库内"假 weekly_private"骗过(判据 = git check-ignore 真值) ----
+    FAKE_RESEARCH = str(ROOT / "research" / "results" / "a_short" / "weekly_private" / "20260612" / "weekly_m67.json")
+    FAKE_NESTED = str(ROOT / "state" / "a_short" / "sub" / "weekly_private" / "20260612" / "weekly_m67.json")
+    CASE_VARIANT = str(ROOT / "state" / "a_short" / "WEEKLY_PRIVATE" / "20260612" / "weekly_m67.json")
+
+    def test_fake_weekly_private_under_research_refused(self):
+        # 洞①:research/.../weekly_private/ 含 "weekly_private" 但 .gitignore 只盖 state/*/weekly_private/ → git 不忽略 → 必拒
+        self.assertFalse(_is_account_output_git_ignored(os.path.abspath(self.FAKE_RESEARCH), str(ROOT)))
+        with self.assertRaises(SystemExit):
+            _reject_nonprivate_account_output_path(self.FAKE_RESEARCH, has_account=True)
+
+    def test_nested_fake_weekly_private_under_state_refused(self):
+        # 嵌套:state/a_short/sub/weekly_private/ 未被 state/*/weekly_private/(单层)覆盖 → git 不忽略 → 必拒
+        self.assertFalse(_is_account_output_git_ignored(os.path.abspath(self.FAKE_NESTED), str(ROOT)))
+        with self.assertRaises(SystemExit):
+            _reject_nonprivate_account_output_path(self.FAKE_NESTED, has_account=True)
+
+    def test_case_variant_guard_matches_git(self):
+        # 洞②:大小写变体 — 护栏判定必须与 git 实际 check-ignore 一致(跨平台正确:Win 忽略→放行,Linux 不忽略→拒)
+        ignored = _is_account_output_git_ignored(os.path.abspath(self.CASE_VARIANT), str(ROOT))
+        if ignored:
+            _reject_nonprivate_account_output_path(self.CASE_VARIANT, has_account=True)   # git 忽略它 → 不抛
+        else:
+            with self.assertRaises(SystemExit):
+                _reject_nonprivate_account_output_path(self.CASE_VARIANT, has_account=True)
 
 
 if __name__ == "__main__":

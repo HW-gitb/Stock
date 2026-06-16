@@ -51,4 +51,14 @@ EGS 实跑只落盘 top-N 到 `analysis_input.candidates`(15),但 **`A-EGS/Resul
 - `engine/a_short_egs_full_adapter.py`(新;读 egs_full + Tier-2 列映射 adapter + 表头校验 + 不 default-False)。
 - `runners/a_short_m67_render.py`(分区 + coverage-aware "未核查" 展示 + row_source/coverage 列 + 持仓行 4.3-D warning)。
 - `schemas/a_short_m67_report.schema.json`(加性 optional `row_source`/`coverage_status`)。
-- `tests/test_a_short_holdings_in_m67.py`(矩阵:无 account 不变 / 持仓不在 top-N 也进 / Tier1/2/3 / 去重 / 无价停牌→人工管理不炸轮 / Tier-3 不伪造 EGS 分(render 显未核查)/ 语义未扩 / 4.3-D warning 渲染)。
+- `tests/test_a_short_holdings_in_m67.py`(矩阵:无 account 不变 / 持仓不在 top-N 也进 / Tier1/2/3 / 去重 / 无价停牌→人工管理不炸轮 / Tier-3 不伪造 EGS 分(render 显未核查)/ 语义未扩 / 4.3-D warning 渲染 / **隐私护栏**见 §8)。
+
+## 8. 账户周报隐私输出路由(固化,2026-06-16)
+
+带 `--account` 的周报含**真实持仓**(代码/成本/止损)。本节起因:S1 验证跑时手动把 `--out` 落到非标准目录,暴露出"带账户的周报输出可能进 **git 追踪** 的 research lane → 一次 `git add` 就泄漏持仓"的面。固化方案:
+
+- **路由**:带 `--account` → 输出落 gitignored `state/<系统类型>/weekly_private/<as_of>/`(scheme 覆盖 a_short / a_long / us_short / us_long);observation-only(无 `--account`、无持仓)→ 仍落标准 `research/results/a_short/<as_of>/`(可留作证据)。`weekly_screening.ps1` 按 `-Account` 选目录。
+- **gitignore**:`state/*/weekly_private/`(所有系统类型的私密周报目录全部不入库)。
+- **pipeline 硬护栏**:`_reject_nonprivate_account_output_path(out, has_account, allow_override)` —— 带 `--account` 且 `--out` 落**仓库内、且 git 未忽略它** → fail-fast `SystemExit`(早于任何取数/落盘)。**直接调用 pipeline 绕过 ps1 也拦得住**。
+- **判据 = `git check-ignore` 真值,不是路径名启发式**(Codex 审查 FAIL 的根治):护栏问 `git check-ignore -q -- <out>`——git 确实忽略 → 放行,git 不忽略 → 拒。故仓库内**假** `weekly_private`(如 `research/.../weekly_private/`,只有 `state/*/weekly_private/` 被忽略)、未被单层 `state/*/weekly_private/` 覆盖的**嵌套**层级、**大小写变体**都按 git 实际行为正确处理(早期"路径含 weekly_private 即放行"的子串启发式会被这三类绕过)。仓库外路径(临时目录/外部盘)git 提交不到 → 放行(故单测 `TemporaryDirectory` 不受影响);git 不可用/出错 → 当未忽略(fail-closed,宁拒勿漏);`--allow-nonprivate-account-out` 显式放行(慎用)。
+- **不动**:observation-only 路径与既有 production-root 护栏(`_reject_production_output_path`)不变。
