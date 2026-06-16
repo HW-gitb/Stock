@@ -10,6 +10,32 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (#1 除权:PIT 证据 + validator guard)
+- **Verdict/Action**: PASS. 上轮两个 Required 已修好:缺/空/非法 `ann_date` 不再生成提示,`_fetch_dividends` 缺必要列 fail-closed,周报 validator 已拒外来票和超过 14 天窗口的除权提示。
+- **Required**: `R-ASHORT-M67-EXDIV-NOTICE-PIT-EVIDENCE-GAP`; `R-ASHORT-M67-EXDIV-NOTICE-VALIDATOR-GUARD-GAP` addressed in working tree; closure note 见 `docs/system_risk_register.md`。
+- **Verify**: `ExDivNoticeTests` 15 passed; weekly 全模块 128 passed(本地 `tushare` import stub); render/holdings 48 passed; doc-governance/route-doc 30 passed; schema JSON valid; py_compile passed; `git diff --check` clean; Codex probes all rejected。
+- **Next**: Claude `提交` #1 除权提示 tracked files;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-16 — Claude `修复` (#1 除权:PIT 证据 + validator guard 补全)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(我起草漏了三处)。①`_ex_div_notices`:`ann_date` 改为**必需**(None/空白/非法 → 跳过,无公告日无法证 PIT、否则 look-ahead);原仅 `if ann is not None` 才查。②`_fetch_dividends` **fail-closed**:provider 缺 `div_proc`/`ann_date`/`ex_date` 任一列 → `[]`(原缺 div_proc 列就不过滤、全收非-实施);空白/nan→None。③`validate_weekly_report` 独立强制:notice `ts_code ∈ 周报候选∪持仓manual-review`(拒外来票)+ `days_to_ex≤EX_DIV_WINDOW_DAYS(14)`(拒超窗),叠加原有历法/≥as_of/一致性。
+- **Required**: `R-ASHORT-M67-EXDIV-NOTICE-PIT-EVIDENCE-GAP`、`R-ASHORT-M67-EXDIV-NOTICE-VALIDATOR-GUARD-GAP`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2067 OK**(ExDivNoticeTests 15);Codex 5 probe(missing-ann/blank-ann/missing-div_proc列/foreign-ts/far-window)复现并全被拒;新增回归 7 条(含 `_fetch_dividends` 缺列/实施过滤 + 持仓 manual-review 正向);py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` #1)。
+- **Pre-Codex self-review**: A 类×出口:PIT 证据(ann 必需:None/空白/非法 + provider 缺列 fail-closed)+ validator(外来 ts/超窗/历法/一致性)各配测;读全 register finding(比 SESSION_LOG 摘要多的 `_fetch_dividends` 子点)一并修。B ripple:`_ex_div_notices`/`_fetch_dividends`/validator 改动仅本切片用,EX_DIV_WINDOW_DAYS 模块常量 validator 可达;不碰 engine/决策。C 反向:合法 notice(ann 在/窗内/票在 universe)仍过(test_in_window + manual-review 正向);实施过滤不误杀 实施 行。D N-A。E register/SESSION_LOG 单态(prepend 锚归档行)。F strptime 全 try/except、fetch try/except 旁路、无 BOM、diff 干净。
+
+## 2026-06-16 — Codex `审查 FAIL` (#1 除权除息提示 advisory)
+- **Verdict/Action**: FAIL. 方向正确且不改决策,但除权提示的 PIT 证据和周报校验还没闭环:缺 `ann_date` 仍会生成提示,且 validator 允许非候选/非持仓票与超过 14 天窗口的提示混入周报。
+- **Required**: `R-ASHORT-M67-EXDIV-NOTICE-PIT-EVIDENCE-GAP`; `R-ASHORT-M67-EXDIV-NOTICE-VALIDATOR-GUARD-GAP`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: `ExDivNoticeTests` 8 passed; weekly 全模块 121 passed(本地 `tushare` import stub); render/holdings 48 passed; doc-governance/route-doc 30 passed; schema JSON valid; py_compile passed; `git diff --check` clean; Codex probes: missing-ann PASS bad, foreign-ts PASS bad, far-window PASS bad。
+- **Next**: Claude 修复上述两个 Required 后再交 Codex re-`审查`;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-16 — Claude `起草` (#1 除权除息提示 advisory)
+- **Verdict/Action**: 起草完成(两刀之一;#1 #2 分别做分别审,此为 #1,#2 overlay 接线在 #1 审过提交后做)。**advisory 除权除息提示,不改任何决策**(价已前复权,仅提醒未复权市价/持仓成本会在除权日跳变)。`_ex_div_notices`:PIT(`ann≤as_of`)+ 窗口(`as_of≤ex≤as_of+14`)+ 每票最近;非法/缺日期跳过不伪造;None→[]。真 provider `_fetch_dividends`=tushare `pro.dividend` 取 `div_proc=='实施'`,main 在 `--confirm-fetch-authorized` 下接线(可注入)。覆盖候选+持仓。落点:weekly 可选字段 `ex_div_notices` + schema + render section + `validate_weekly_report` 一致性校验(ex_date 合法日历日、≥as_of、days_to_ex 一致)。
+- **Required**: `R-ASHORT-M67-EXDIV-NOTICE`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2060 OK**(ExDivNoticeTests 8:窗内-PIT / 窗外 / look-ahead公告剔除 / 坏日期跳过 / 无provider / 同票取最近 / weekly attach 过 schema+validator+render / validator 拒 days 不一致);py_compile OK;schema JSON 合法;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex `审查` #1:weekly pipeline + schema + render + 测试)。
+- **Pre-Codex self-review**: A 类×出口:notice 三态(窗内/窗外/look-ahead)+ 坏日期 + 无provider + 同票最近;落点 weekly字段→schema→render→validator 一致性,各覆盖。B ripple:新符号 `_ex_div_notices`/`_fetch_dividends`/`EX_DIV_WINDOW_DAYS`/`dividend_provider` 仅本切片用;不碰 engine/决策/EGS/选股(advisory);mirror holdings_manual_review 的可选-attach 模式。C 反向:无 provider→无提示(不误报)、look-ahead 公告剔除(PIT)、坏日期跳过(不伪造)、days_to_ex 跨字段一致性钉死。D N-A。E register/SESSION_LOG 单态(prepend 锚归档行)。F 非有限值/日期 strptime 全 try/except、真 fetch try/except 旁路不阻断、无 BOM、diff 干净。
+
 ## 2026-06-16 — Codex `审查 PASS` (#6-ii: EGS breakout spec + M6.7 downstream)
 - **Verdict/Action**: PASS. `R-ASHORT-EGS-BREAKOUT-SPEC-M67-VOLCONFIRM-DRIFT` 已按上一轮 Required 修好:EGS `is_breakout` 采用 v14.2 spec(站稳 MA10 + 当日量>5日均量×1.2),M6.7 `entry_type` 不再叠加旧 `vol_confirm` 门;`vol_confirm` 只保留为 EGS `l4_score` 评分输入。schema/comment/design 当前指导面已同步。
 - **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。

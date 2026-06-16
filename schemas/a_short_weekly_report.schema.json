@@ -39,6 +39,21 @@
         }
       }
     },
+    "ex_div_notices": {
+      "type": "array",
+      "description": "#1 除权除息提示(advisory,不改决策;价已前复权):近端(as_of..as_of+窗口)已公告将除权的候选/持仓,提醒未复权市价/成本会在除权日跳变。可选(无则缺省)。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "name", "ex_date", "days_to_ex"],
+        "properties": {
+          "ts_code": {"type": "string"},
+          "name": {"type": "string"},
+          "ex_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "days_to_ex": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
     "cash_allocation": {
       "type": ["object", "null"],
       "description": "#3 全局现金分配摘要(带 --account 才有;价格提案 §4/§11.3):多只建仓按区间上沿 entry_high 统一消耗 available_cash,不足一手→转观察。可选/缺省 null(observation-only 无)。",

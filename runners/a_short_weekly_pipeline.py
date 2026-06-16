@@ -471,6 +471,27 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
             raise ValueError("cash_allocation.remaining_cash != available_cash_start - allocated_cash_total")
         if rem < -0.011:
             raise ValueError("cash_allocation.remaining_cash 为负(超额分配)")
+    # #1 除权除息提示一致性(schema 管类型/pattern;此处管历法 + 跨字段 + 范围:ex_date 合法日历日、
+    # ex_date>=as_of、days_to_ex==ex_date−as_of、**days_to_ex<=EX_DIV_WINDOW_DAYS**、**ts_code 必属本周候选/持仓**。
+    # advisory 但仍校验,防伪造/错算/越界/张冠李戴的提示混入周报。)
+    from datetime import datetime as _dt
+    _asd = _dt.strptime(weekly["as_of"], "%Y%m%d")
+    _valid_codes = ({r["ts_code"] for r in weekly["reports"]}
+                    | {h["ts_code"] for h in (weekly.get("holdings_manual_review") or [])})
+    for n in (weekly.get("ex_div_notices") or []):
+        if n["ts_code"] not in _valid_codes:
+            raise ValueError(f"ex_div_notices ts_code {n['ts_code']} 不在本周候选/持仓集(张冠李戴)")
+        try:
+            _exd = _dt.strptime(n["ex_date"], "%Y%m%d")
+        except ValueError:
+            raise ValueError(f"ex_div_notices ex_date {n['ex_date']} 非合法日历日({n['ts_code']})")
+        _days = (_exd - _asd).days
+        if _days < 0:
+            raise ValueError(f"ex_div_notices ex_date 早于 as_of({n['ts_code']})")
+        if _days != n["days_to_ex"]:
+            raise ValueError(f"ex_div_notices days_to_ex 与 ex_date−as_of 不一致({n['ts_code']})")
+        if _days > EX_DIV_WINDOW_DAYS:
+            raise ValueError(f"ex_div_notices 超出 {EX_DIV_WINDOW_DAYS} 日窗口(days_to_ex={_days};{n['ts_code']})")
 
 
 def _reject_production_output_path(out_path: str) -> None:
@@ -566,6 +587,45 @@ def latest_iv_percentile(iv_feed_summary: dict):
 
 
 MIN_PRICE_OBS = 20               # 指标(支撑/压力 20d、ATR 14d)所需最少 PIT 交易日
+EX_DIV_WINDOW_DAYS = 14          # #1 除权除息提示:as_of 起 N 个日历日内将除权 → advisory 提示(不改决策)
+
+
+def _ex_div_notices(code_names, as_of, dividend_provider, window_days=EX_DIV_WINDOW_DAYS):
+    """#1 除权除息提示(advisory,**不改任何决策**:价格已前复权,此为提醒用户**未复权市价/持仓成本**会在
+    除权日跳变)。PIT 安全:只提示 `ann_date<=as_of`(已公告,非 look-ahead)且 `as_of<=ex_date<=as_of+window`
+    (近端将除权)的事件;每票取最近一次。`dividend_provider(ts_code)` → list[{"ann_date","ex_date"}]
+    (YYYYMMDD|None);None provider 或非法日期 → 跳过(绝不伪造)。返回 [{ts_code,name,ex_date,days_to_ex}] 排序。"""
+    from datetime import datetime
+    if dividend_provider is None:
+        return []
+    try:
+        as_of_d = datetime.strptime(str(as_of), "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"ex_div as_of {as_of!r} 非合法日历日")
+    best = {}
+    for ts_code, name in code_names:
+        for rec in (dividend_provider(ts_code) or []):
+            ex = (rec or {}).get("ex_date")
+            if not ex:
+                continue
+            try:
+                ex_d = datetime.strptime(str(ex), "%Y%m%d")
+            except ValueError:
+                continue                                  # 非法 ex_date → 跳过,不伪造
+            ann = (rec or {}).get("ann_date")
+            if ann is None:
+                continue                                  # PIT:无公告日 → 无法证明 as_of 时已公告 → 跳过(不伪造非 PIT 提示)
+            try:
+                if datetime.strptime(str(ann), "%Y%m%d") > as_of_d:
+                    continue                              # 公告晚于 as_of → look-ahead,跳过
+            except ValueError:
+                continue                                  # ann 非法 → 无法证 PIT,跳过
+            days = (ex_d - as_of_d).days
+            if 0 <= days <= window_days:                  # 近端将除权(含当日)
+                if ts_code not in best or days < best[ts_code]["days_to_ex"]:
+                    best[ts_code] = {"ts_code": ts_code, "name": name or "",
+                                     "ex_date": str(ex), "days_to_ex": days}
+    return sorted(best.values(), key=lambda n: (n["days_to_ex"], n["ts_code"]))
 # analysis_input.market_context.market_regime.status(EGS 英文枚举)→ 引擎中文 regime
 REGIME_MAP = {"attack": "进攻期", "shock": "震荡期", "defense": "防御期", "contraction": "收缩期"}
 
@@ -587,6 +647,25 @@ def resolve_market_regime(ai: dict) -> tuple[str, dict | None]:
         "reason": "EGS market_regime unknown/missing→按震荡期保守处理",
         "action": "downgrade_and_halve",
     }
+
+
+def _fetch_dividends(pro, ts_code: str):
+    """#1 真除权数据 provider:tushare `pro.dividend`(只取 `div_proc=='实施'` —— 预案/通过的 ex_date 未定,
+    不据此提示)→ [{"ann_date","ex_date"}](YYYYMMDD|None;空白→None)。**fail-closed**:缺证明 实施/公告日/
+    除权日 所需列(div_proc/ann_date/ex_date)→ 返回 [](无法据不全数据提示,绝不伪造)。异常/空 → [](旁路不阻断)。"""
+    try:
+        df = pro.dividend(ts_code=ts_code, fields="ts_code,ann_date,div_proc,ex_date")
+    except Exception:
+        return []
+    if df is None or getattr(df, "empty", True):
+        return []
+    if not {"div_proc", "ann_date", "ex_date"}.issubset(set(getattr(df, "columns", []))):
+        return []                                  # fail-closed:缺必要列,无法证 实施/PIT → 不提示
+    df = df[df["div_proc"] == "实施"]
+    def _clean(v):
+        return str(v) if (v is not None and str(v).strip() not in ("", "nan", "None", "NaT")) else None
+    return [{"ann_date": _clean(r.get("ann_date")), "ex_date": _clean(r.get("ex_date"))}
+            for _, r in df.iterrows()]
 
 
 def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str,
@@ -734,7 +813,7 @@ def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=
 
 
 def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None,
-         web_llm_provider=None):
+         web_llm_provider=None, dividend_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -825,6 +904,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                          if args.price_freshness_mode == "intraday_prior_settled" else None)
         price_provider = lambda code: _fetch_price_series(ts, pro, code, start, args.as_of,
                                                           accept_prior_settled_date=prior_settled)
+        # #1 除权除息提示真 provider(advisory 旁路;注入优先用于测试):同一已授权 fetch 上下文。
+        if dividend_provider is None:
+            dividend_provider = lambda code: _fetch_dividends(pro, code)
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -904,6 +986,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             rep["consistency_warning"] = cons_by[code]
     if holdings_manual_review:
         weekly["holdings_manual_review"] = holdings_manual_review
+    # #1 除权除息提示(advisory):候选 + 账户持仓近端将除权 → 提示(PIT;不改任何决策)。
+    _exdiv_codes = [(str(c.get("ts_code")), c.get("name", "")) for c in cands]
+    _exdiv_codes += [(str(p.get("ts_code")), p.get("name", "")) for p in (acct.get("positions") or [])]
+    _notices = _ex_div_notices(_exdiv_codes, args.as_of, dividend_provider)
+    if _notices:
+        weekly["ex_div_notices"] = _notices
     from runners.a_short_m67_render import write_weekly_markdown
     md_path = os.path.splitext(args.out)[0] + ".md"
     write_weekly_report(weekly, feed, args.out)

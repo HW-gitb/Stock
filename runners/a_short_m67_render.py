@@ -223,6 +223,12 @@ def render_weekly_markdown(weekly: dict) -> str:
         out.append("")
     # 持仓恒列入 S1: 账户持仓(非本周候选)段 + 无价/停牌人工管理段(与候选分区显示)
     out += _render_holdings_section(holding_reports, weekly.get("holdings_manual_review") or [])
+    # #1 除权除息提示(advisory,非决策):近端将除权的候选/持仓 —— 价已前复权,提醒未复权市价/成本将在除权日跳变。
+    _notices = weekly.get("ex_div_notices") or []
+    if _notices:
+        out += ["", "## ⚠️ 除权除息提示(advisory · 非决策:价已前复权,提醒未复权市价/成本将在除权日跳变)",
+                "| 票 | 名称 | 除权日 | 距今(日) |", "|---|---|---|---|"]
+        out += [f"| {n['ts_code']} | {n['name']} | {n['ex_date']} | {n['days_to_ex']} |" for n in _notices]
     return "\n".join(out)
 
 

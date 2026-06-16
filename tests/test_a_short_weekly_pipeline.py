@@ -25,7 +25,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, main, SCHEMA_PATH,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
-    validate_account_state, stateful_risk_for_candidate,
+    validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
 )
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
@@ -1472,6 +1472,107 @@ class CashAllocationTests(unittest.TestCase):
         w["cash_allocation"]["remaining_cash"] = 999999.0
         with self.assertRaises(ValueError):
             validate_weekly_report(w, _feed())
+
+
+class _StubDividendPro:
+    """测试用 tushare pro 桩:dividend() 返回注入的 DataFrame(测 _fetch_dividends 的列/过滤逻辑,不抓网络)。"""
+    def __init__(self, df):
+        self._df = df
+
+    def dividend(self, **kwargs):
+        return self._df
+
+
+class ExDivNoticeTests(unittest.TestCase):
+    """#1 除权除息提示(advisory,不改决策):PIT(ann≤as_of)+ 窗口(as_of..as_of+14)+ 每票最近;过 schema/validator/render。"""
+    def _prov(self, mapping):
+        return lambda code: mapping.get(code, [])
+
+    def test_in_window_pit_announced(self):
+        prov = self._prov({"600000.SH": [{"ann_date": "20260601", "ex_date": "20260615"}]})
+        n = _ex_div_notices([("600000.SH", "甲")], AS_OF, prov)     # AS_OF=20260609 → 6 天
+        self.assertEqual(len(n), 1)
+        self.assertEqual((n[0]["ex_date"], n[0]["days_to_ex"]), ("20260615", 6))
+
+    def test_outside_window_excluded(self):
+        prov = self._prov({"600000.SH": [{"ann_date": "20260601", "ex_date": "20260710"}]})   # >14 天
+        self.assertEqual(_ex_div_notices([("600000.SH", "甲")], AS_OF, prov), [])
+
+    def test_lookahead_announcement_excluded(self):
+        # ann_date 晚于 as_of → 该除权在 as_of 时尚未公告,提示即 look-ahead → 剔除
+        prov = self._prov({"600000.SH": [{"ann_date": "20260612", "ex_date": "20260615"}]})
+        self.assertEqual(_ex_div_notices([("600000.SH", "甲")], AS_OF, prov), [])
+
+    def test_bad_ex_date_skipped_no_fabrication(self):
+        prov = self._prov({"600000.SH": [{"ann_date": "20260601", "ex_date": "2026XX15"}]})
+        self.assertEqual(_ex_div_notices([("600000.SH", "甲")], AS_OF, prov), [])
+
+    def test_no_provider_empty(self):
+        self.assertEqual(_ex_div_notices([("600000.SH", "甲")], AS_OF, None), [])
+
+    def test_nearest_per_code(self):
+        prov = self._prov({"600000.SH": [{"ann_date": "20260601", "ex_date": "20260620"},
+                                          {"ann_date": "20260601", "ex_date": "20260611"}]})
+        n = _ex_div_notices([("600000.SH", "甲")], AS_OF, prov)
+        self.assertEqual([x["ex_date"] for x in n], ["20260611"])     # 同票取最近一次
+
+    def test_weekly_attach_schema_validator_render(self):
+        w = build_weekly_report([_normalized()], AS_OF, GEN)
+        w["ex_div_notices"] = [{"ts_code": "600000.SH", "name": "甲", "ex_date": "20260615", "days_to_ex": 6}]
+        with tempfile.TemporaryDirectory() as td:    # write = jsonschema + validate_weekly_report
+            write_weekly_report(w, _feed(), str(Path(td) / "w.json"))
+        md = render_weekly_markdown(w)
+        self.assertIn("除权除息提示", md)
+        self.assertIn("20260615", md)
+
+    def test_validator_rejects_inconsistent_days(self):
+        w = build_weekly_report([_normalized()], AS_OF, GEN)
+        w["ex_div_notices"] = [{"ts_code": "600000.SH", "name": "甲", "ex_date": "20260615", "days_to_ex": 99}]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_missing_ann_date_no_notice(self):
+        # PIT-EVIDENCE-GAP 修复:无 ann_date → 无法证 as_of 时已公告 → 不提示(防 look-ahead)
+        prov = self._prov({"600000.SH": [{"ex_date": "20260615"}]})   # 缺 ann_date
+        self.assertEqual(_ex_div_notices([("600000.SH", "甲")], AS_OF, prov), [])
+
+    def test_validator_rejects_foreign_ts(self):
+        # VALIDATOR-GUARD-GAP 修复:提示 ts_code 不在本周候选/持仓 → 必拒(张冠李戴)
+        w = build_weekly_report([_normalized()], AS_OF, GEN)           # report ts=600000.SH
+        w["ex_div_notices"] = [{"ts_code": "999999.SH", "name": "无关", "ex_date": "20260615", "days_to_ex": 6}]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_rejects_far_window(self):
+        # VALIDATOR-GUARD-GAP 修复:超 14 日窗口的提示 → 必拒(20260609→20260709=30 天)
+        w = build_weekly_report([_normalized()], AS_OF, GEN)
+        w["ex_div_notices"] = [{"ts_code": "600000.SH", "name": "甲", "ex_date": "20260709", "days_to_ex": 30}]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_blank_or_invalid_ann_date_no_notice(self):
+        # PIT 证据:空白/非法 ann_date 同样无法证 PIT → 不提示
+        for bad in ("", "   ", "2026XX01"):
+            prov = self._prov({"600000.SH": [{"ann_date": bad, "ex_date": "20260615"}]})
+            self.assertEqual(_ex_div_notices([("600000.SH", "甲")], AS_OF, prov), [], f"ann={bad!r}")
+
+    def test_fetch_dividends_fail_closed_missing_div_proc_column(self):
+        # _fetch_dividends fail-closed:provider 响应缺 div_proc 列 → 无法证 实施 → []
+        df = pd.DataFrame([{"ts_code": "600000.SH", "ann_date": "20260601", "ex_date": "20260615"}])
+        self.assertEqual(_fetch_dividends(_StubDividendPro(df), "600000.SH"), [])
+
+    def test_fetch_dividends_filters_to_shishi(self):
+        df = pd.DataFrame([{"ts_code": "600000.SH", "ann_date": "20260601", "div_proc": "预案", "ex_date": "20260615"},
+                           {"ts_code": "600000.SH", "ann_date": "20260602", "div_proc": "实施", "ex_date": "20260616"}])
+        self.assertEqual(_fetch_dividends(_StubDividendPro(df), "600000.SH"),
+                         [{"ann_date": "20260602", "ex_date": "20260616"}])   # 仅 实施
+
+    def test_validator_accepts_manual_review_holding_notice(self):
+        # 正向:提示 ts_code 属 holdings_manual_review(无价持仓)→ validator 接受(在周报 universe 内)
+        w = build_weekly_report([_normalized()], AS_OF, GEN)
+        w["holdings_manual_review"] = [{"ts_code": "600519.SH", "name": "乙", "reason": "停牌"}]
+        w["ex_div_notices"] = [{"ts_code": "600519.SH", "name": "乙", "ex_date": "20260615", "days_to_ex": 6}]
+        validate_weekly_report(w, _feed())     # 不 raise
 
 
 if __name__ == "__main__":
