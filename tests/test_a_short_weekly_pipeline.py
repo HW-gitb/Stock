@@ -167,6 +167,14 @@ def _weekly(normalized_list=None, iv_feed_ref="iv_feed.json"):
     return build_weekly_report(nl, AS_OF, GEN, iv_feed_ref=iv_feed_ref)
 
 
+def _sized_lineage():
+    # (provided, sized) run_lineage —— 带账户定量的合法 lineage(配 available_cash>0 用,过 #3 双向不变式)。
+    return {"analysis_input": "ai.json", "selection_bucket": "bucket", "iv_feed": "iv_feed.json",
+            "account_ref": "acct.json", "account_status": "provided", "sizing_mode": "sized",
+            "price_freshness": {"mode": "strict_as_of", "run_date": None,
+                                "accepted_prior_settled_date": None, "price_data_through": AS_OF}}
+
+
 class NormalizeTests(unittest.TestCase):
     def test_maps_egs_fields(self):
         n = _normalized()
@@ -1375,6 +1383,95 @@ class DeepSeekWebProviderWiring(unittest.TestCase):
         self.assertNotIn("300750.SZ", seen["codes"])
         self.assertIsNone(prov("300750.SZ"))                 # 非主板候选 → 中性 None(不抓不判)
         self.assertIsNotNone(prov(main_codes[0]))            # 主板 Top15 内 → 正常判
+
+
+class CashAllocationTests(unittest.TestCase):
+    """#3 全局现金分配:多只建仓按区间上沿统一消耗 available_cash,确定性排序,归零转观察,过 schema+validator。"""
+    def _builds(self):
+        return [_normalized("600000.SH"), _normalized("600519.SH"), _normalized("601318.SH")]
+
+    def test_no_account_no_cash_allocation(self):
+        w = build_weekly_report([_normalized()], AS_OF, GEN)        # 默认 absent lineage + available_cash None
+        self.assertIsNone(w["cash_allocation"])
+        validate_weekly_report(w, _feed())                          # observation-only 一致(absent⟺cash_allocation None)
+
+    def test_global_cash_allocation_demotes_under_budget_and_validates(self):
+        # 全局现金不足 3 只满额 → 排序 rank1 满、靠后不足 → 转观察;sized lineage + 整份过 schema/validator。
+        w = build_weekly_report(self._builds(), AS_OF, GEN, iv_feed_ref="iv_feed.json",
+                                run_lineage=_sized_lineage(), available_cash=150000.0)
+        ops = [r["m67"]["table"]["操作"] for r in w["reports"]]
+        self.assertTrue(all(o in ("建仓", "观察") for o in ops))
+        self.assertEqual(w["reports"][0]["m67"]["table"]["操作"], "建仓")   # rank1(index 0)满足
+        self.assertIn("观察", ops)                                          # 现金不足 → 至少一只转观察(非伪建仓)
+        cs = w["cash_allocation"]
+        self.assertEqual(cs["available_cash_start"], 150000.0)
+        self.assertLessEqual(cs["allocated_cash_total"], 150000.0 + 1e-6)
+        self.assertGreaterEqual(cs["remaining_cash"], -1e-6)
+        for r in w["reports"]:
+            if r["m67"]["table"]["操作"] == "建仓":                          # 存活建仓:股数正 + 审计字段齐
+                self.assertGreaterEqual(r["m67"]["table"]["股数"], 100)
+                pl = r["machine"]["entry_exit_size_star"]["plan"]
+                for fld in ("cash_allocation_rank", "cash_budget_used", "raw_shares", "allocated_shares"):
+                    self.assertIsNotNone(pl.get(fld))
+        with tempfile.TemporaryDirectory() as td:    # write_weekly_report = jsonschema + validate_weekly_report
+            write_weekly_report(w, _feed(), str(Path(td) / "w.json"))
+
+    def test_cash_allocation_deterministic(self):
+        a = build_weekly_report(self._builds(), AS_OF, GEN, run_lineage=_sized_lineage(), available_cash=150000.0)
+        b = build_weekly_report(self._builds(), AS_OF, GEN, run_lineage=_sized_lineage(), available_cash=150000.0)
+        self.assertEqual([r["m67"]["table"]["股数"] for r in a["reports"]],
+                         [r["m67"]["table"]["股数"] for r in b["reports"]])
+        self.assertEqual(a["cash_allocation"], b["cash_allocation"])
+
+    def test_ample_cash_demotes_nothing(self):
+        # C 反向失败:现金充裕时不得过度降级——全部保持建仓,剩余现金>0(防把够钱的建仓错降为观察)。
+        w = build_weekly_report(self._builds(), AS_OF, GEN, run_lineage=_sized_lineage(), available_cash=10_000_000.0)
+        ops = [r["m67"]["table"]["操作"] for r in w["reports"]]
+        self.assertTrue(all(o == "建仓" for o in ops))
+        self.assertGreater(w["cash_allocation"]["remaining_cash"], 0)
+        validate_weekly_report(w, _feed())
+
+    def test_sized_lineage_without_cash_allocation_rejected(self):
+        # 对抗矛盾①:声称账户定量(sized)却无 cash_allocation → 必拒(防静默跳过全局分配,重开过度分配 bug)。
+        w = build_weekly_report(self._builds(), AS_OF, GEN, run_lineage=_sized_lineage(), available_cash=None)
+        self.assertIsNone(w["cash_allocation"])
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_observation_lineage_with_cash_allocation_rejected(self):
+        # 对抗矛盾②:声称无账户(observation-only,默认 lineage)却带 cash_allocation 对象 → 必拒。
+        w = build_weekly_report(self._builds(), AS_OF, GEN, available_cash=150000.0)   # 默认 absent lineage
+        self.assertIsNotNone(w["cash_allocation"])
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def _sized_weekly(self):
+        return build_weekly_report(self._builds(), AS_OF, GEN, run_lineage=_sized_lineage(), available_cash=150000.0)
+
+    def _first_build(self, w):
+        return next(r for r in w["reports"] if r["m67"]["table"]["操作"] == "建仓")
+
+    def test_forged_allocated_shares_rejected(self):
+        # audit-math:伪造 allocated_shares(≠ shares/table 股数)→ 必拒(防伪造分配冒充已做全局现金分配)。
+        w = self._sized_weekly()
+        self._first_build(w)["machine"]["entry_exit_size_star"]["plan"]["allocated_shares"] = 999999
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_forged_cash_budget_used_rejected(self):
+        # audit-math:伪造 cash_budget_used(≠ round(shares×entry_high,2))→ 必拒。
+        w = self._sized_weekly()
+        self._first_build(w)["machine"]["entry_exit_size_star"]["plan"]["cash_budget_used"] = 0.01
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_forged_weekly_cash_summary_rejected(self):
+        # audit-math:伪造 cash_allocation 摘要(allocated_cash_total/remaining_cash 与 Σ 不符)→ 必拒。
+        w = self._sized_weekly()
+        w["cash_allocation"]["allocated_cash_total"] = 1.0
+        w["cash_allocation"]["remaining_cash"] = 999999.0
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
 
 
 if __name__ == "__main__":

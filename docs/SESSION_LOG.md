@@ -10,6 +10,45 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (M6.7 price: cash allocation audit math)
+- **Verdict/Action**: PASS. `R-ASHORT-M67-PRICE-CASH-ALLOCATION-AUDIT-MATH-GUARD` 已按上一轮 Required 修好: sized 模式逐票分配字段与 `shares`/table/`entry_high` 数学对账,周报 `cash_allocation` summary 与逐票预算对账。
+- **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。
+- **Verify**: targeted suite **310 OK**;py_compile OK;doc-governance+route-doc included **30 OK**;`git diff --check` clean(CRLF warning only);Codex probes for forged `allocated_shares` / `cash_budget_used` / weekly summary all rejected。未抓数据、未提交。
+- **Next**: Claude `提交` 本批 M6.7 price tracked files;继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (M6.7 price:现金分配审计字段数值自洽 guard)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(上轮只查审计字段"存在"、没查"数值真")。`validate_weekly_report` sized 模式改为**数值自洽**校验:每张存活建仓 `allocated_shares==shares==table股数`、`cash_budget_used==round(shares×entry_high,2)`、`raw_shares>=allocated_shares>=MIN_SHARES`、`rank` 正整数且唯一;摘要 `allocated_cash_total==Σcash_budget_used`、`remaining_cash==start−total>=0`(均 ±0.011)。`_allocate_cash` 改累计 2dp 化 cost,使摘要与逐行 budget 精确对账。
+- **Required**: `R-ASHORT-M67-PRICE-CASH-ALLOCATION-AUDIT-MATH-GUARD`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2034 OK**;Codex 两 forgery probe 复现并被拒(伪造 allocated_shares/cash_budget_used、伪造摘要);新增 3 forged 拒绝测试;正向 sized + observation 路径保留;py_compile OK;无 BOM;`git diff --check` 干净(仅 CRLF)。
+- **Next**: 审查(Codex re-`审查` 本批次)。
+- **Pre-Codex self-review**: A–F checked。A 类×出口:伪造面全覆盖(allocated_shares/cash_budget_used/raw 序/rank 类型·唯一/摘要 total·remaining·负值)逐条配测;forged 逐行 + forged 摘要都测。B ripple:`_allocate_cash` cost 改 2dp,唯一下游=摘要 + advice 文案(都同步);MIN_SHARES 已 import。C 反向:±0.011 容差吸收浮点漂移不误拒,正向/充裕/观察全量过,真实 main 自洽。D N-A。E register/SESSION_LOG 单态(finding→repair)。F 非有限值 n-a、无 BOM、diff 干净。
+
+## 2026-06-16 — Codex `审查 FAIL` (M6.7 price #2/#3/#4: allocation audit math)
+- **Verdict/Action**: FAIL. 上轮两个 Required 的主路径已修好: `sized+cash None`、`absent+cash object`、no-dangling 子串碰撞均已拒;但同类现金分配审计字段仍只查“存在”,不查数值一致。
+- **Required**: `R-ASHORT-M67-PRICE-CASH-ALLOCATION-AUDIT-MATH-GUARD`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: targeted suite **307 OK**;py_compile OK;`git diff --check` clean(CRLF warning only);Codex probes 1-3 rejected,positive sized path PASS;new probes show `allocated_shares/cash_budget_used` 可伪造且 `cash_allocation` summary 可伪造仍通过。未抓数据、未提交。
+- **Next**: Claude 补 `validate_weekly_report` 的现金分配数学一致性 guard 后再交 Codex re-`审查`;继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (M6.7 price #2/#3/#4:lineage⟺cash 双向不变式 + no-dangling 精确短语)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(起草两处实测盲区)。**①lineage⟺cash**:`validate_weekly_report` 把 `run_lineage` 绑死 `cash_allocation` —— sized⟹cash_allocation 非null + 每张存活建仓带审计字段(rank/budget/raw/allocated_shares);observation⟹cash_allocation None + 建仓不带 rank;`_allocate_cash` 补显式 `allocated_shares`。**②no-dangling**:建仓分支松散 `str(x) in adv`(子串碰撞 10.0⊂110.0)换成精确短语「挂单区间 {low}–{high}」+ 突破「突破追价超过 {chase}」(按 generator 口径)。
+- **Required**: `R-ASHORT-M67-PRICE-CASH-ALLOCATION-LINEAGE-GUARD`、`R-ASHORT-M67-PRICE-NODANGLE-SUBSTRING-FALSE-NEGATIVE`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2031 OK**;Codex 三 probe 复现并全被拒(sized+cashNone / absent+cashObj / 子串碰撞);CashAllocationTests 改走 `_sized_lineage()` + 2 矛盾对抗测试;EntryRangeTests +子串碰撞 +突破端到端正向(证 generator↔validator 短语逐字节一致);py_compile OK;无 BOM;`git diff --check` 干净(仅 CRLF)。
+- **Next**: 审查(Codex re-`审查` 本批次:engine + weekly pipeline + weekly schema + 2 测试)。
+- **Pre-Codex self-review**: A–F checked。A 类×出口:lineage⟺cash 全矩阵(sized±cash、absent±cash、sized缺审计字段、absent带rank)各配测;no-dangling 两字段(low/high+chase)同改精确短语,grep 无其他松散 `str(x) in adv`。B ripple:`allocated_shares` 仅 set+check 两处无悬空;`cash_allocation` 无外部消费者;`build_weekly_report` 调用点全核。C 反向:account+0现金经 main 入口拒(754-756)→不误拒;精确短语不误拒合法建仓(低吸/突破正向+全量过);ample-cash 不降级。D N-A。E register/SESSION_LOG 单态。F 非有限值 n-a、无 BOM、diff 干净。
+
+## 2026-06-16 — Codex `审查 FAIL` (M6.7 price #2/#3/#4: cash lineage + no-dangling)
+- **Verdict/Action**: FAIL. #2 entry-range / `entry_high` sizing direction is mostly correct, but #3/#4 validator guards are still bypassable.
+- **Required**: `R-ASHORT-M67-PRICE-CASH-ALLOCATION-LINEAGE-GUARD`; `R-ASHORT-M67-PRICE-NODANGLE-SUBSTRING-FALSE-NEGATIVE` (details in `docs/system_risk_register.md`).
+- **Verify**: targeted suite **303 OK**; py_compile OK; `git diff --check` clean (CRLF warning only); Codex probes show `provided/sized + cash_allocation=None + 建仓` passes, `absent + cash_allocation object` passes, and no-dangling numeric-substring bypass passes. Full discovery: **2006 run / 21 env errors** from missing `requests` / real `tushare.pro`, not used as this slice verdict.
+- **Next**: Claude fixes the cash-allocation/run-lineage bidirectional invariant and replaces loose substring no-dangling checks with exact user-visible field checks, then resubmits for Codex re-`审查`; continue excluding untracked `research/results/a_short/em_probe_smoke_20260614/*`.
+
+## 2026-06-16 — Claude `起草` (M6.7 价格 #2+#3+#4:入场区间 + 全局现金分配 + no-dangling 护栏)
+- **Verdict/Action**: 起草完成(在已提交 S3a/Slice0 之上,工作树仅本批 5 文件)。#2 `exit_and_size` 出入场区间(低吸 entry_high=tick_down(close)、entry_low=tick_up(max(sup,close−0.5ATR));突破 entry_high=tick_down(close+0.3ATR)、chase=close+0.5ATR)+ 最不利价(区间上沿 entry_high)RR 门(不够即拒)+ 按 entry_high 定量;#3 带账户时 `build_weekly_report`→`_allocate_cash` 全局按 entry_high 消耗现金、确定性排序、不足一手 `_demote_build_to_observe` 转观察、出 `cash_allocation` 摘要(无账户=名义定量 + null);#4 `validate_m67_consistency` 建仓分支拒「advice 缺入场区间/追价线」+ 负向测试。
+- **Required**: `R-ASHORT-M67-PRICE-ENTRY-CASH-NODANGLE`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2027 OK**(EntryRangeTests 4 含 no-dangling 负向 / CashAllocationTests 4 含充裕现金不降级反向);schema 允许新 plan 诊断字段(`machine`/`entry_exit_size_star` 无 `additionalProperties:false`,write_weekly_report jsonschema 过);py_compile OK;`git diff --check` 干净(仅 CRLF)。
+- **Next**: 审查(Codex `审查` #2+#3+#4 批次:engine + weekly pipeline + weekly schema + 2 测试)。
+- **Pre-Codex self-review**: A–F checked。A 缺陷类×出口:入场区间落点 machine.plan→advice(no-dangling validator 钉)→render(advice 透传)→下游 `_allocate_cash` 用 entry_high,各覆盖;现金降级落点 table.操作/股数→machine→cash_allocation 摘要,demote 后过 validator(观察态,write_weekly_report 实证)。B ripple grep:`exit_and_size`/`holding_levels`/`_allocate_cash`/`_demote_build_to_observe` 调用点全在 engine+weekly+tests(无外部旧签名);旧 sizing-on-close 措辞跨 `*.py`+`*.md` **0 残留**。C 反向:充裕现金不降级测试 + 上沿 RR 门两向(参考价够但上沿不够→拒)+ 无账户路径名义定量仍过 validator。D N-A(无歧义自然语言判定)。E route-doc 单态(register + 本指针,无流水账)。F 非有限值 tick→None、post-tick 跨字段重校验、无 BOM、`git diff --check` 干净。
+
 ## 2026-06-16 — Codex `审查 PASS` (S3a state-bound validator + account_state v1.1)
 - **Verdict/Action**: PASS。`R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE` 已按 machine 状态补齐 validator guard；`R-ASHORT-S3A-ACCOUNT-STATE-V11-ROUTE-DOC-DRIFT` 仍判定已按当前契约修正。提交后才算闭环。
 - **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。

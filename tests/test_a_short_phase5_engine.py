@@ -188,18 +188,18 @@ class TickPriceTests(unittest.TestCase):
         self.assertIsNone(plan)
         self.assertIn("取整后", rej)
 
-    def test_exit_size_sizing_uses_ticked_entry_not_raw_close(self):
-        # R-ASHORT-M67-SLICE0-TICKED-ENTRY-SIZING-GAP(Codex Required):cap 介于 100×close 与 100×entry_t 之间 →
-        # raw close 本可买 100 股,但按可执行 tick 价 entry_t 买不起 → 必须转观察(plan None),不输出买不起的建仓。
-        # close=100.005 → entry_t=100.01;cap = avail*0.40[震荡]*0.5 = 10000.6(avail=50003、amt5 大不绑定);
-        # raw: 10000.6//100.005→100 股(cost 10000.5≤cap);ticked: 10000.6//100.01→0 股 → 拒。
-        ind = {"support": 99.0, "resistance": 105.0, "atr14": 0.5}
-        inp = _good_input(close=100.005)
-        inp["account"] = {"available_cash": 50003.0}
+    def test_exit_size_sizing_uses_worst_case_entry_high_not_close(self):
+        # #2/§11.3:股数/金额按**区间上沿(最不利价 entry_high)**计、不按 close。突破 entry_high=close+0.3×ATR>close →
+        # cap 介于 100×close 与 100×entry_high 之间时:close 本可买 100 股、按 entry_high 买不起 → 转观察(不输出按上沿成交其实买不起的建仓)。
+        # close=100.00,atr=1 → entry_high=tick_down(100.3)=100.3;cap=avail*0.40*0.5=10020(avail=50100、amt5 不绑定);
+        # close: 10020//100=100 股;entry_high: 10020//100.3→0 股 → 拒。
+        ind = {"support": 98.0, "resistance": 120.0, "atr14": 1.0}
+        inp = _good_input(close=100.00)
+        inp["account"] = {"available_cash": 50100.0}
         inp["liquidity"] = {"avg_amount_5d": 1e9}
-        plan, rej = exit_and_size(inp, ind, "震荡期")
-        self.assertIsNone(plan)                 # 按 entry_t=100.01 买不起 100 股 → 拒(非 post-tick 结构/RR 失效)
-        self.assertIn("股数", rej)
+        plan, rej = exit_and_size(inp, ind, "震荡期", etype="突破")
+        self.assertIsNone(plan)                 # 按最不利价 entry_high=100.3 买不起 100 股 → 拒
+        self.assertIn("entry_high", rej)
 
 
 class HoldingLevelsTests(unittest.TestCase):
@@ -276,6 +276,76 @@ class HoldingLevelsTests(unittest.TestCase):
         r["m67"]["精简结论区"]["操作建议"] = "已有持仓。请按手填参考止损盘中无条件手动执行。"
         with self.assertRaises(ValueError):
             validate_m67_consistency(r)
+
+
+class EntryRangeTests(unittest.TestCase):
+    """#2:入场区间(低吸/突破)+ 最不利价(区间上沿)RR 门(价格提案 §3 + §11.2)。"""
+    def test_lowxi_range_high_is_close(self):
+        ind = {"support": 9.5, "resistance": 12.0, "atr14": 0.4}
+        plan, rej = exit_and_size(_good_input(close=10.00), ind, "震荡期", etype="低吸")
+        self.assertIsNone(rej)
+        self.assertEqual(plan["entry"], 10.00)             # 参考价=close
+        self.assertEqual(plan["entry_high"], 10.00)        # 低吸上沿=close(向下取)
+        self.assertEqual(plan["entry_low"], 9.80)          # tick_up(max(9.5, 10−0.5×0.4=9.8))
+        self.assertEqual(plan["entry_type"], "低吸")
+        self.assertIsNone(plan["chase_invalid_above"])
+        self.assertEqual(plan["entry_for_risk"], plan["entry_high"])
+
+    def test_breakout_range_and_chase(self):
+        ind = {"support": 9.5, "resistance": 15.0, "atr14": 1.0}
+        plan, rej = exit_and_size(_good_input(close=10.00), ind, "震荡期", etype="突破")
+        self.assertIsNone(rej)
+        self.assertEqual(plan["entry_high"], 10.30)        # tick_down(10+0.3×1)
+        self.assertEqual(plan["chase_invalid_above"], 10.50)   # close+0.5×ATR
+        self.assertEqual(plan["entry_for_risk"], 10.30)    # RR 用区间上沿
+        self.assertLessEqual(plan["rr_at_entry_high"], plan["rr"])   # 上沿 RR ≤ 参考价 RR
+
+    def test_breakout_worst_case_rr_gate_rejects(self):
+        # 参考价 RR 够(≈1.52)但区间上沿 RR<floor(≈1.09)→ 拒(不输出按上沿成交其实不够 RR 的建仓)。
+        ind = {"support": 9.8, "resistance": 12.2, "atr14": 1.0}
+        plan, rej = exit_and_size(_good_input(close=10.00), ind, "震荡期", etype="突破")
+        self.assertIsNone(plan)
+        self.assertIn("最不利价", rej)
+
+    def test_no_dangling_entry_range_must_surface_in_advice(self):
+        # #4 no-dangling(价格提案 §8):建仓 plan 有 entry_low/high,但 advice 不含数值 → validator 拒,
+        # 防机器算了入场区间用户看不到/无法复核(护栏被静默改坏时此负向测试会红)。
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        self.assertIsNotNone(r["machine"]["entry_exit_size_star"]["plan"]["entry_low"])
+        validate_m67_consistency(r)                              # 原样:advice 含区间 → 过
+        # 保留诚实护栏词(试探仓/止损/未验证),仅抹掉入场区间数值 → 触发 no-dangling
+        r["m67"]["精简结论区"]["操作建议"] = "试探仓建仓,止损纪律,edge未验证"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_no_dangling_rejects_substring_collision(self):
+        # R-ASHORT-M67-PRICE-NODANGLE-SUBSTRING-FALSE-NEGATIVE:entry_low 仅作为 entry_high 的子串出现
+        # (10.0 ⊂ 110.0),advice 不含精确「挂单区间 10.0–110.0」短语 → 旧松散 `str(x) in adv` 会放过,
+        # 精确带标签短语检查必拒(证明每个机器价位有真正可见落点,而非子串巧合)。
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        plan["entry_low"], plan["entry_high"] = 10.0, 110.0     # entry/t1/t2/stop 不动 → table↔plan 一致性仍过
+        # advice 仅含 entry_high(110.0),其中含 '10.0' 子串;保留诚实护栏词
+        r["m67"]["精简结论区"]["操作建议"] = "试探仓建仓,止损纪律,edge未验证;参考价位 110.0"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_breakout_build_report_chase_phrase_validates(self):
+        # 突破建仓端到端正向:build_m67_report 生成的 advice 含精确「突破追价超过 {chase}」短语,validate 必过
+        # (证 generator↔validator 的 chase 短语逐字节一致 + chase 字段有可见落点,非悬空)。
+        inp = _good_input()
+        inp["derived"] = {**inp["derived"], "breakout": True, "vol_confirm": True}
+        r = build_m67_report(inp, AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        self.assertEqual(plan["entry_type"], "突破")
+        self.assertIsNotNone(plan["chase_invalid_above"])
+        adv = r["m67"]["精简结论区"]["操作建议"]
+        self.assertIn(f"挂单区间 {plan['entry_low']}–{plan['entry_high']}", adv)
+        self.assertIn(f"突破追价超过 {plan['chase_invalid_above']}", adv)
+        validate_m67_consistency(r)                                        # 含 chase no-dangling 的正向必过
 
 
 class RiskFamilyTests(unittest.TestCase):

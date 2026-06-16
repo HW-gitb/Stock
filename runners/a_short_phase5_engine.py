@@ -319,10 +319,10 @@ def entry_type(inp: dict, ind: dict):
     return "观察", "未到低吸/突破触发"
 
 
-def exit_and_size(inp: dict, ind: dict, regime: str, extra_halve: bool = False, halve_reason: str = "",
-                  size_multiplier: float = 1.0, size_multiplier_reason: str = ""):
-    """返回 (entry, stop, t1, t2, rr, rr_floor, shares, sizing_notes) 或拒绝原因。
-    extra_halve:IV>80(Rule3)或 IV feed 缺失(保守)时在试探仓基础上再减半。"""
+def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extra_halve: bool = False,
+                  halve_reason: str = "", size_multiplier: float = 1.0, size_multiplier_reason: str = ""):
+    """返回 (plan, None) | (None, reject)。plan 含入场区间 entry_low/high(#2)、最不利价 RR、按区间上沿的股数。
+    etype:低吸/突破(决定区间口径)。extra_halve:IV>80(Rule3)或 IV feed 缺失(保守)时在试探仓基础上再减半。"""
     close, sup, res, atr = inp.get("close"), ind.get("support"), ind.get("resistance"), ind.get("atr14")
     notes = []
     if close is None or sup is None or atr is None or atr <= 0:
@@ -338,18 +338,31 @@ def exit_and_size(inp: dict, ind: dict, regime: str, extra_halve: bool = False, 
     rr = (t1 - close) / risk if risk > 0 else 0.0
     if rr < rr_floor:
         return None, f"盈亏比 {rr:.2f} < {rr_floor}"
-    # Slice 0(价格提案 §2.1):side-aware tick = 最终执行价;入=参考价 half-up、损向上、盈向下取 0.01。
-    # 取整可能收窄风险结构 → **用取整后价重校验**,任一破即拒(转观察),绝不输出取整后其实不合格的建仓。
+    # Slice 0(§2.1):side-aware tick = 最终执行价(入参考 half-up、损向上、盈向下),取整后结构重校验。
     entry_t, stop_t, t1_t, t2_t = tick_ref(close), tick_up(stop), tick_down(t1), tick_down(t2)
     if None in (entry_t, stop_t, t1_t, t2_t):
         return None, "价格非有限,取整失败"
-    risk_t = entry_t - stop_t
-    if not (risk_t > 0 and stop_t < entry_t and t1_t > entry_t and t2_t >= t1_t):
+    if not (stop_t < entry_t and t1_t > entry_t and t2_t >= t1_t):
         return None, "取整后结构失效(止损≥入/止盈≤入/盈二<盈一)"
-    rr = (t1_t - entry_t) / risk_t
-    if rr < rr_floor:
-        return None, f"取整后盈亏比 {rr:.2f} < {rr_floor}"
-    # 仓位:单只上限 + 冲击成本 + 100股 + 试探仓(诚实护栏)+ IV 减半
+    # #2 入场区间(价格提案 §3 + §11.2):低吸 [max(sup,close−0.5ATR), close];突破 [close, close+0.3ATR] + 追价失效线。
+    # side-aware:buy_limit_low 向上取、buy_limit_high 向下取;退化(low>high 或非有限)→ 回退单点参考价。
+    if etype == "突破":
+        lo_raw, hi_raw, chase = close, close + 0.3 * atr, tick_down(close + 0.5 * atr)
+    else:                                   # 低吸(默认)
+        lo_raw, hi_raw, chase = max(sup, close - 0.5 * atr), close, None
+    entry_low, entry_high, entry_invalid_reason = tick_up(lo_raw), tick_down(hi_raw), None
+    if entry_low is None or entry_high is None or entry_low > entry_high:
+        entry_low = entry_high = entry_t
+        entry_invalid_reason = "区间退化(low>high 或非有限)→ 回退单点参考价"
+    # #2 最不利价 RR 门(§11.2):用区间上沿 entry_high 复算 RR,不够即拒(不输出"按上沿成交其实不够 RR"的建仓)。
+    risk_eh = entry_high - stop_t
+    if risk_eh <= 0:
+        return None, "区间上沿 ≤ 止损(最不利价无效)"
+    rr_eh = (t1_t - entry_high) / risk_eh
+    if rr_eh < rr_floor:
+        return None, f"最不利价(区间上沿)盈亏比 {rr_eh:.2f} < {rr_floor}"
+    rr_ref = (t1_t - entry_t) / (entry_t - stop_t)        # 参考价 RR(展示用)
+    # 仓位:单只上限 + 冲击成本 + 100股 + 试探仓 + IV 减半;股数/最小金额/现金上限按**最不利买入价 entry_high** 计(§11.3)。
     cap_pct = SINGLE_CAP_PCT.get(regime, 0.40)
     if cap_pct <= 0:
         return None, "本环境禁新建仓"
@@ -364,14 +377,14 @@ def exit_and_size(inp: dict, ind: dict, regime: str, extra_halve: bool = False, 
     if size_multiplier < 1.0:
         cap *= size_multiplier
         notes.append(size_multiplier_reason or f"状态风控仓位上限×{size_multiplier}")
-    # Slice 0(R-ASHORT-M67-SLICE0-TICKED-ENTRY-SIZING-GAP):股数/最小金额/现金上限按**最终可执行 tick 买入价**
-    # entry_t 计(非 raw close),否则会输出"按真实 tick 价买不起"的建仓。(多票全局现金分配是后续 slice,届时用 entry_high。)
-    shares = int(cap // entry_t // 100) * 100 if entry_t > 0 else 0
-    if shares < MIN_SHARES or shares * entry_t < MIN_AMOUNT:
-        return None, "可建股数/金额不足(按可执行 tick 价 entry_t 计;放弃)"
-    return {"entry": entry_t, "stop": stop_t, "t1": t1_t,
-            "t2": t2_t, "rr": round(rr, 3), "rr_floor": rr_floor,
-            "shares": shares, "sizing_notes": notes}, None
+    shares = int(cap // entry_high // 100) * 100 if entry_high > 0 else 0
+    if shares < MIN_SHARES or shares * entry_high < MIN_AMOUNT:
+        return None, "可建股数/金额不足(按最不利价 entry_high 计;放弃)"
+    return {"entry": entry_t, "entry_low": entry_low, "entry_high": entry_high,
+            "entry_type": etype, "entry_for_risk": entry_high, "chase_invalid_above": chase,
+            "entry_invalid_reason": entry_invalid_reason, "stop": stop_t, "t1": t1_t, "t2": t2_t,
+            "rr": round(rr_ref, 3), "rr_at_entry_high": round(rr_eh, 3), "rr_floor": rr_floor,
+            "shares": shares, "avg_amount_5d": amt5, "sizing_notes": notes}, None
 
 
 def holding_levels(inp: dict, ind: dict, regime: str):
@@ -529,7 +542,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         if etype == "观察":
             action, plan, reject = "观察", None, etype_reason
         else:
-            plan, reject = exit_and_size(inp, ind, regime, extra_halve, halve_reason,
+            plan, reject = exit_and_size(inp, ind, regime, etype, extra_halve, halve_reason,
                                          size_multiplier=state_size_multiplier,
                                          size_multiplier_reason=state_size_reason)
             action = "建仓" if plan else "观察"
@@ -540,7 +553,10 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         iv_caveat = "" if iv_known else " **IV feed 缺失,未执行 IV 风控,仓位已保守再减半**。"
         regime_caveat = (" **EGS regime unknown,按震荡期保守降级并减半**。"
                          if regime_unknown_fallback else "")
-        advice = (f"低吸/突破建仓建议(类型:{etype})。⭐×{star}、盈亏比 {plan['rr']}。"
+        rng = (f"**挂单区间 {plan['entry_low']}–{plan['entry_high']}**(参考价 {plan['entry']}、最不利价盈亏比 {plan['rr_at_entry_high']})"
+               + (f";突破追价超过 {plan['chase_invalid_above']} 不追" if plan.get("chase_invalid_above") is not None else "")
+               + (f";{plan['entry_invalid_reason']}" if plan.get("entry_invalid_reason") else ""))
+        advice = (f"低吸/突破建仓建议(类型:{etype})。⭐×{star}、盈亏比 {plan['rr']}。{rng}。"
                   f"**试探仓**(edge 未验证,A-short 仅 risk_filter_only)。"
                   f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**。价格已按 A 股 0.01 规整。" + iv_caveat + regime_caveat)
     elif action == "观察":
@@ -592,7 +608,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "类型": (etype if action in ("建仓", "持有") else "N/A"),
         "EGS分": inp.get("egs_score"),        # EGS 质量总分(选股层);与下面的风控星级是两个维度
         "优先级": (f"⭐×{star}" if star else "—"),
-        "触发条件": (f"现价≤{plan['entry']};持仓周期1-3周;{';'.join(plan['sizing_notes'])}"
+        "触发条件": (f"挂单区间 {plan['entry_low']}–{plan['entry_high']};持仓周期1-3周;{';'.join(plan['sizing_notes'])}"
                      if (plan and action == "建仓")
                      else ("持仓管理(系统位被动显示,到价由你盘中手动);周期1-3周" if action == "持有"
                            else (reject or ""))),
@@ -784,6 +800,15 @@ def validate_m67_consistency(report: dict) -> None:
                 or abs(tbl["盈二"] - plan.get("t2", -1)) > 1e-9
                 or abs(tbl["损"] - plan.get("stop", -1)) > 1e-9):
             raise ValueError("M6.7 table 数值与 machine plan 不一致(股数/入/盈一/盈二/损)")
+        # #4 no-dangling(价格提案 §8 + R-ASHORT-M67-PRICE-NODANGLE-SUBSTRING-FALSE-NEGATIVE):机器算的入场区间
+        # 必须以**精确带标签短语**出现在 advice。松散 `str(x) in adv` 会被子串碰撞放过(如 entry_low=10.0 是
+        # entry_high=110.0 的子串),无法证明 low 真被展示。故按 build_m67_report 生成口径精确匹配
+        # 「挂单区间 {low}–{high}」(en-dash U+2013)与突破的「突破追价超过 {chase}」。
+        if plan.get("entry_low") is not None and plan.get("entry_high") is not None:
+            if f"挂单区间 {plan['entry_low']}–{plan['entry_high']}" not in adv:
+                raise ValueError("建仓 advice 缺精确入场区间短语「挂单区间 entry_low–entry_high」(no-dangling)")
+            if plan.get("chase_invalid_above") is not None and f"突破追价超过 {plan['chase_invalid_above']}" not in adv:
+                raise ValueError("突破建仓 advice 缺精确追价短语「突破追价超过 chase_invalid_above」(no-dangling)")
     elif action == "持有":   # S3a:持仓系统位被动显示。入/股数 必 null;损/盈一/盈二 可非空但须与 machine plan 一致。
         if tbl["入"] is not None or tbl["股数"] is not None:
             raise ValueError("持有但 table 入/股数 非空(持仓不新开仓/不重算股数)")

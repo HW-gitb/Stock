@@ -303,14 +303,67 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
     }
 
 
+def _demote_build_to_observe(report: dict, rank: int) -> None:
+    """#3:某建仓票全局现金分配后不足一手/最小金额 → 转「观察」。table/machine action 同步、交易字段全 null、
+    原拟 plan 留 machine.diagnostic_raw_plan(诊断)、advice 说明。须过 validate_m67_consistency 的观察分支(交易字段全 null)。"""
+    tbl = report["m67"]["table"]
+    es = report["machine"]["entry_exit_size_star"]
+    es["diagnostic_raw_plan"] = es.get("plan")     # 原拟建仓 plan 留诊断(machine 为 loose object,允许)
+    es["plan"], es["action"] = None, "观察"
+    es["reject_reason"] = "组合现金分配后不足一手/最小金额"
+    tbl["操作"] = "观察"
+    for k in ("股数", "入", "盈一", "盈二", "损"):
+        tbl[k] = None
+    tbl["触发条件"] = "组合现金分配后不足一手/最小金额(原拟建仓价位见 machine.diagnostic_raw_plan)"
+    report["m67"]["精简结论区"]["操作建议"] = (
+        f"组合现金分配后不足一手/最小金额 → 转观察(分配排序第 {rank};原拟建仓价位见 machine.diagnostic_raw_plan)。本周不建仓。")
+
+
+def _allocate_cash(reports: list, available_cash) -> dict:
+    """#3 全局现金分配(价格提案 §4 + §11.3/11.4):多只建仓按**区间上沿 entry_high**(最不利价)统一消耗
+    available_cash,确定性排序;不足一手/最小金额 → 转观察。**原地改 reports(只动建仓票)**;返回 weekly 现金摘要 | None。
+    只 re-rank 建仓,不 rescue hard veto、不把观察/否决变建仓、不碰持仓/Rule12·13。"""
+    from runners.a_short_phase5_engine import MIN_SHARES, MIN_AMOUNT
+    if available_cash is None or available_cash <= 0:
+        return None
+    builds = [(i, r) for i, r in enumerate(reports) if r["m67"]["table"]["操作"] == "建仓"]
+
+    def _key(ir):
+        i, r = ir
+        es = r["machine"]["entry_exit_size_star"]; plan = es.get("plan") or {}
+        return (-(es.get("star") or 0), -(r["m67"]["table"].get("EGS分") or 0),
+                -(plan.get("rr_at_entry_high") or 0.0), -(plan.get("avg_amount_5d") or 0.0),
+                i, str(r.get("ts_code", "")))     # original_topN_rank=i;ts_code 末位 tie-break 保确定性
+
+    remaining, allocated_total = float(available_cash), 0.0
+    for rank, (i, r) in enumerate(sorted(builds, key=_key), start=1):
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        eh, raw = plan["entry_high"], plan["shares"]
+        affordable = int(remaining // eh // 100) * 100 if eh > 0 else 0
+        allocated = min(raw, affordable)
+        if allocated < MIN_SHARES or allocated * eh < MIN_AMOUNT:
+            _demote_build_to_observe(r, rank)        # 不足 → 转观察(不输出按上沿买不起的建仓)
+            continue
+        cost = round(allocated * eh, 2)              # 2dp:与展示/审计的 cash_budget_used 同口径,摘要可精确对账
+        remaining -= cost; allocated_total += cost
+        plan["raw_shares"], plan["shares"], plan["allocated_shares"] = raw, allocated, allocated
+        plan["cash_budget_used"], plan["cash_allocation_rank"] = cost, rank
+        r["m67"]["table"]["股数"] = allocated         # table 同步 plan(过 validator 建仓一致性)
+        if allocated < raw:
+            r["m67"]["精简结论区"]["操作建议"] += f"(组合现金分配:股数由 {raw} 降至 {allocated},占用现金 {cost})"
+    return {"available_cash_start": round(float(available_cash), 2),
+            "allocated_cash_total": round(allocated_total, 2), "remaining_cash": round(remaining, 2)}
+
+
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
-                        iv_feed_ref: str = "", run_lineage: dict = None) -> dict:
+                        iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     # 持仓恒列入 S1: 标了 egs_coverage="uncovered" 的(Tier-3 粗筛未覆盖持仓)走 build_holding_report
     # (不跑 EGS 风险分类,避免在缺失数据上伪造 veto);其余(候选 / Tier-1 / Tier-2)走 build_m67_report。
     reports = [(build_holding_report(n, as_of, generated_at)
                 if n.get("egs_coverage") == "uncovered" else build_m67_report(n, as_of, generated_at))
                for n in normalized_list]
+    cash_summary = _allocate_cash(reports, available_cash)   # #3 全局现金分配(原地改建仓票:股数/分配字段;归零转观察)
     # run_lineage ties the consumed selection + IV feed + account/sizing status to this M6.7 artifact
     # (Slice 3b-2: selection 在 result/a_short、M6.7 在 research lane,靠此机器可读 lineage 绑定);
     # default = no-account observation-only,使直接 builder/测试仍 schema-valid。
@@ -324,6 +377,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
         "iv_feed_ref": iv_feed_ref, "n_stocks": len(reports), "reports": reports,
+        "cash_allocation": cash_summary,
         "run_lineage": lineage,
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
@@ -360,7 +414,18 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         raise ValueError(
             f"run_lineage 配对非法 (account_status={rl.get('account_status')!r}, "
             f"sizing_mode={rl.get('sizing_mode')!r});须 (provided,sized) 或 (absent,observation_only_no_account)")
-    seen = set()
+    # #3 lineage⟺cash_allocation 双向不变式(R-ASHORT-M67-PRICE-CASH-ALLOCATION-LINEAGE-GUARD):仅校验
+    # (account_status,sizing_mode) 配对不够——还须把它绑死 cash_allocation,否则手构/refactor 的报告可声称
+    # 账户定量(sized)却静默跳过全局现金分配(重开多股过度分配 bug),或声称无账户却带分配。main 永远一致;此处兜底。
+    sized = (rl.get("account_status"), rl.get("sizing_mode")) == ("provided", "sized")
+    ca = weekly.get("cash_allocation")
+    if sized and not isinstance(ca, dict):
+        raise ValueError("run_lineage=(provided,sized) 但 cash_allocation 非对象(sized 必有全局现金分配摘要)")
+    if not sized and ca is not None:
+        raise ValueError("run_lineage=(absent,observation_only_no_account) 但 cash_allocation 非 null(observation-only 不得有现金分配)")
+    if sized:
+        from runners.a_short_phase5_engine import MIN_SHARES
+    seen, alloc_ranks, budget_sum = set(), [], 0.0       # audit-math:跨建仓累计,循环后对账 cash_allocation 摘要
     for rep in weekly["reports"]:
         if rep["as_of"] != weekly["as_of"]:
             raise ValueError("report.as_of 与周报 as_of 不一致")
@@ -368,6 +433,43 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
             raise ValueError(f"周报含重复 ts_code {rep['ts_code']}")
         seen.add(rep["ts_code"])
         validate_m67_consistency(rep)                        # 逐票 §4 不变量
+        if rep["m67"]["table"]["操作"] != "建仓":
+            continue
+        pl = (rep["machine"]["entry_exit_size_star"].get("plan") or {})
+        ts = rep["ts_code"]
+        if not sized:
+            if pl.get("cash_allocation_rank") is not None:   # observation-only 反向:建仓不应带分配字段
+                raise ValueError(f"observation-only 模式建仓 plan 不应带现金分配字段 cash_allocation_rank(ts={ts})")
+            continue
+        # #3 audit-math(R-ASHORT-M67-PRICE-CASH-ALLOCATION-AUDIT-MATH-GUARD):审计字段不仅须存在,还须**数值自洽**
+        # ——否则伪造 allocated_shares/cash_budget_used/摘要仍能冒充"已做全局现金分配"。
+        for fld in ("cash_allocation_rank", "cash_budget_used", "raw_shares", "allocated_shares", "shares", "entry_high"):
+            if pl.get(fld) is None:
+                raise ValueError(f"sized 模式建仓 plan 缺审计/定量字段 {fld}(ts={ts})")
+        shares, eh = pl["shares"], pl["entry_high"]
+        if not (pl["allocated_shares"] == shares == rep["m67"]["table"]["股数"]):
+            raise ValueError(f"sized 建仓 allocated_shares/shares/table 股数 不一致(ts={ts})")
+        if abs(pl["cash_budget_used"] - round(shares * eh, 2)) > 0.011:
+            raise ValueError(f"sized 建仓 cash_budget_used != round(shares×entry_high,2)(ts={ts})")
+        if not (pl["raw_shares"] >= pl["allocated_shares"] >= MIN_SHARES):
+            raise ValueError(f"sized 建仓须 raw_shares>=allocated_shares>=MIN_SHARES(ts={ts})")
+        rank = pl["cash_allocation_rank"]
+        if isinstance(rank, bool) or not isinstance(rank, int) or rank < 1:
+            raise ValueError(f"sized 建仓 cash_allocation_rank 须正整数(ts={ts})")
+        alloc_ranks.append(rank)
+        budget_sum += pl["cash_budget_used"]
+    if sized:
+        if len(alloc_ranks) != len(set(alloc_ranks)):
+            raise ValueError("sized 建仓 cash_allocation_rank 重复(须唯一)")
+        start, total, rem = ca.get("available_cash_start"), ca.get("allocated_cash_total"), ca.get("remaining_cash")
+        if None in (start, total, rem):
+            raise ValueError("cash_allocation 摘要字段缺失")
+        if abs(total - round(budget_sum, 2)) > 0.011:
+            raise ValueError("cash_allocation.allocated_cash_total != Σcash_budget_used")
+        if abs(rem - (start - total)) > 0.011:
+            raise ValueError("cash_allocation.remaining_cash != available_cash_start - allocated_cash_total")
+        if rem < -0.011:
+            raise ValueError("cash_allocation.remaining_cash 为负(超额分配)")
 
 
 def _reject_production_output_path(out_path: str) -> None:
@@ -783,7 +885,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             acct, cand_codes, args.as_of, price_provider, iv_pct, account, regime,
             regime_fallback, price_data_through)
     weekly = build_weekly_report(normalized + holding_normalized, args.as_of, gen,
-                                 iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage)
+                                 iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
+                                 available_cash=(available_cash if args.account else None))   # #3 全局现金分配仅 sized 模式
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
     held_codes_all = {str(p.get("ts_code")) for p in (acct.get("positions") or [])}
     cons_by = _load_account_consistency_warnings(args.account) if args.account else {}

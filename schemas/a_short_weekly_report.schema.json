@@ -39,6 +39,17 @@
         }
       }
     },
+    "cash_allocation": {
+      "type": ["object", "null"],
+      "description": "#3 全局现金分配摘要(带 --account 才有;价格提案 §4/§11.3):多只建仓按区间上沿 entry_high 统一消耗 available_cash,不足一手→转观察。可选/缺省 null(observation-only 无)。",
+      "additionalProperties": false,
+      "required": ["available_cash_start", "allocated_cash_total", "remaining_cash"],
+      "properties": {
+        "available_cash_start": {"type": "number"},
+        "allocated_cash_total": {"type": "number"},
+        "remaining_cash": {"type": "number"}
+      }
+    },
     "run_lineage": {
       "type": "object",
       "additionalProperties": false,
