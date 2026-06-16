@@ -31,7 +31,7 @@ EGS 实跑只落盘 top-N 到 `analysis_input.candidates`(15),但 **`A-EGS/Resul
 - 不改 `egs_main` / EGS top-N 选股 / `analysis_input.candidates` 契约(Tier-2 只**读** egs_full)。
 - 不扩语义/DeepSeek 到持仓(注入的持仓**显式排除**出语义层;持仓语义标 unknown)——是 S2。
 - 不实现系统主动止盈/止损/加仓价/主动卖出动作——是 S3。
-- 不改 user `stop_loss` 的过渡期决策含义、不改 account_state schema(v1.0 持仓 `stop_loss` 必填保留作过渡期安全字段)——S3 同刀做 v1.1。
+- 不改 user `stop_loss` 的过渡期决策含义、不改 account_state schema(v1.0 持仓 `stop_loss` 必填作过渡期安全字段)——**S3a 已做 v1.1(stop 降可选,见 `docs/a_short_holdings_s3_system_levels_design.md`)**。
 - 非生产、不接券商、手动下单、主板 only。
 
 ## 5. 价格门(沿用 §11.3 旁路,务必)

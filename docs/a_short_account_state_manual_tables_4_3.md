@@ -5,9 +5,9 @@
 
 ## 1. 目的与边界
 
-用户手工维护本地 CSV 表格记录真实持仓事实，转换器把它转成**既有** `schemas/a_short_account_state.schema.json` **v1.0.0** 的 `account_state.json`，供周报 M6.7 经现有 `--account` 路径消费。
+用户手工维护本地 CSV 表格记录真实持仓事实，转换器把它转成 `schemas/a_short_account_state.schema.json` **v1.1.0**(S3a 升级:`stop_loss` 降为可选手填参考、系统算跟踪止损;`enum`+`if/then` 向后兼容旧 v1.0.0)的 `account_state.json`，供周报 M6.7 经现有 `--account` 路径消费。
 
-- **不新建第二份 account_state 契约**：转换器只产出既有 v1.0.0 schema，落盘前必过既有 `runners.a_short_weekly_pipeline.validate_account_state`（单一校验真相源）。
+- **不新建第二份 account_state 契约**：转换器产出同一份 schema 的 v1.1.0(向后兼容 v1.0.0)，落盘前必过既有 `runners.a_short_weekly_pipeline.validate_account_state`（单一校验真相源）。
 - 不接券商、不抓行情、不自动下单、不改 M6.7 行为、不改 egs/V14.2/打分。用户仍手动下单。
 - **CSV 为 canonical 输入**（非 `.xlsx`）：可 diff、可测、无 `openpyxl` 依赖，且不被 Excel 静默把 `20260601` / `000001` / `TRUE` 改型。Excel 作为可选用户界面是未来增项（届时把 `.xlsx` 读成同样的 parsed-rows 抽象，复用同一 `build_account_state`）。
 - A-short 设计上**只操作主板**：positions / trades 的 `ts_code` 经 `engine.data.a_share_board_scope.is_a_share_main_board` 校验，非主板/B 股 → FATAL（在本工具外管理）。
@@ -44,7 +44,7 @@ state/a_short/account_state_csv/
 
 ### 3.2 `positions.csv` → `positions[]`（按 ts_code 排序，去重）
 
-`ts_code`(主板)/`name`/`shares`(正整数)/`avg_cost`(>0)/`entry_date`(≤决策日)/`stop_loss`(>0) 必填；`take_profit_1/2`(>0或空)/`last_exit_date`(≤决策日或空)/`last_exit_reason`/`manual_notes` 可选。重复 ts_code → FATAL。
+`ts_code`(主板)/`name`/`shares`(正整数)/`avg_cost`(>0)/`entry_date`(≤决策日)/`stop_loss`(>0,**或留空**=系统算跟踪止损 S3a;v1.1.0 可选、旧 v1.0.0 仍必填)；`take_profit_1/2`(>0或空)/`last_exit_date`(≤决策日或空)/`last_exit_reason`/`manual_notes` 可选。重复 ts_code → FATAL。
 
 ### 3.3 `trades.csv` → 推导 `rule13_cooldowns[]`（见 §4）
 
@@ -68,7 +68,7 @@ state/a_short/account_state_csv/
 - `> cooldown_until` 且未（`new_catalyst_confirmed && m4_recheck_passed`）→ `pending_recheck`（**仍阻断**）；
 - `> cooldown_until` 且两者皆真 → `cleared_for_reentry`（按 `max_reentry_position_pct` 限仓）。
 - `requires_new_catalyst` / `requires_m4_recheck` 恒 true；两个 confirmed 标志只来自 manual_controls，系统不猜。
-- `override_status=manual_block`：只许更严格——若推到 `cleared_for_reentry` 则降回 `pending_recheck`，**永不放行**。manual_block 挂在没有冷静期、也未持有的票上 → FATAL（通用阻断在 v1.0.0 无字段可表达，属未来 v1.1.0）。
+- `override_status=manual_block`：只许更严格——若推到 `cleared_for_reentry` 则降回 `pending_recheck`，**永不放行**。manual_block 挂在没有冷静期、也未持有的票上 → FATAL（通用阻断在 account_state schema 无字段可表达，属未来加性升级）。
 
 **Rule12（来自 portfolio_rule12）**：触发判断（回撤/连续止损/IV）**不自动算**，由用户填状态。仅自动推进：`active_cooldown` 且 `cooldown_until < 决策日` → 自动推进 `recovery_1`（更严格侧，带 `recovery_position_multiplier` 默认 0.5），**绝不**自动到 `inactive`（解除组合冷静须用户显式填 inactive）。`active_cooldown` 缺 `cooldown_until` → FATAL。
 
@@ -82,17 +82,17 @@ state/a_short/account_state_csv/
 ## 6. 三个 MINOR 决定（已定死）
 
 1. **Rule13 冷静周期 N + 日历口径**：N = 24h → `+1 日历日`，配置在 `presets/a_short.yaml::position_management`（单一来源）。用**日历日**故转换器**离线**、无需 trade calendar。安全不依赖周期长度（到期转 pending_recheck 仍阻断）。
-2. **`available_cash > 0`**：保留既有 schema 约束（改下限=契约变更、出本切片）。满仓 0 现金的纯持仓管理态 → 转换器明确 FATAL（不静默），并标注：需要该态请单独走 schema **v1.1.0 加性升级**（下调下限 + 调整 `weekly_pipeline` available_cash 门）。
+2. **`available_cash > 0`**：保留既有 schema 约束（改下限=契约变更、出本切片）。满仓 0 现金的纯持仓管理态 → 转换器明确 FATAL（不静默），并标注：需要该态请单独走 schema **加性升级**（下调下限 + 调整 `weekly_pipeline` available_cash 门）。
 3. **lineage schema**：建 `schemas/a_short_account_state_lineage.schema.json`。用 **sha256 + row_count**（内容指纹，确定性）记录每张输入表，替代 mtime（mtime 破坏输出确定性）。
 
 ## 7. provenance / lineage（不进 M6.7）
 
-provenance（每条状态来自哪张表、是否被自动推进、facts/decision 日期、manual_block 是否生效）落 **lineage 旁产物**，是人读审计 + 测试用，**不被 M6.7/引擎消费、不进 account_state.json**（故 account_state 保持 v1.0.0）。转换器 stdout 用大白话解释「哪些事实导致了什么状态」。若日后要在 M6.7 表里直接看到来源，另走显式 schema v1.1.0 加性升级（独立 slice）。
+provenance（每条状态来自哪张表、是否被自动推进、facts/decision 日期、manual_block 是否生效）落 **lineage 旁产物**，是人读审计 + 测试用，**不被 M6.7/引擎消费、不进 account_state.json**（account_state 现为 v1.1.0:S3a 把 stop_loss 降可选;provenance 仍落 lineage 不进契约）。转换器 stdout 用大白话解释「哪些事实导致了什么状态」。若日后要在 M6.7 表里直接看到来源，另走显式 schema 加性升级（独立 slice）。
 
 ## 8. owner 文件
 
 - 转换器：`runners/a_short_account_state_from_manual_tables.py`（核心纯函数 `build_account_state`）。
-- account_state 契约：`schemas/a_short_account_state.schema.json` v1.0.0（既有，不改）+ `runners/a_short_weekly_pipeline.py::validate_account_state`（校验真相源）。
+- account_state 契约：`schemas/a_short_account_state.schema.json` **v1.1.0**(S3a:stop_loss 可选 + enum/if-then 向后兼容 v1.0.0)+ `runners/a_short_weekly_pipeline.py::validate_account_state`（校验真相源）。
 - lineage 契约：`schemas/a_short_account_state_lineage.schema.json` + `schemas/examples/a_short_account_state_lineage.example.json`。
 - 模板样例：`schemas/examples/a_short_account_state_csv/*.csv`。
 - 配置：`presets/a_short.yaml::position_management`。

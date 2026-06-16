@@ -107,13 +107,14 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
         out += ["", "## 账户持仓(非本周 EGS 候选)",
                 "> 这些是你账户里、但**本周没进 EGS top-N** 的持仓。`复用egs_full`=本周已评分;"
                 "`EGS未覆盖(粗筛)`=本周 EGS 粗筛未覆盖,**仅价格/技术 + 账户状态;ST/新闻/监管未自动核查,请人工核查**。",
-                "| 票 | 名称 | 操作 | 持仓/冷静 | 覆盖 | EGS分 |",
-                "|---|---|---|---|---|---|"]
+                "| 票 | 名称 | 操作 | 持仓/冷静 | 覆盖 | 损(系统跟踪) | 盈一 | 盈二 | EGS分 |",
+                "|---|---|---|---|---|---|---|---|---|"]
         for r in holding_reports:
             t = r["m67"]["table"]
-            out.append("| {} | {} | {} | {} | {} | {} |".format(
+            out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
                 _cell(r.get("ts_code")), _cell(r.get("name")), _cell(t["操作"]),
-                _cell(_holding_state(r)[0]), _coverage_label(r), _cell(t.get("EGS分"))))
+                _cell(_holding_state(r)[0]), _coverage_label(r),
+                _cell(t.get("损")), _cell(t.get("盈一")), _cell(t.get("盈二")), _cell(t.get("EGS分"))))
         out += ["", "### 账户持仓逐票"]
         for r in holding_reports:
             t = r["m67"]["table"]
@@ -130,6 +131,8 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
             out.append("- ⚠️ **语义/新闻未核查(S1)**:本周未对该持仓自动核查 ST / 重大利空 / 监管 / 减持;请人工核查(S2 接入)。")
             if r.get("consistency_warning"):
                 out.append(f"- ⚠️ 对账(4.3-D):{r['consistency_warning']}")
+            out.append(f"- 执行清单(系统位):损 {_cell(t['损'])} / 盈一 {_cell(t['盈一'])} / 盈二 {_cell(t['盈二'])}"
+                       "(止损无条件、盘中由你手动;系统跟踪止损=近20日高−ATR×倍数)")
             out.append(f"- **操作建议**:{r['m67']['精简结论区'].get('操作建议', '')}")
             out.append(f"- 触发/说明:{_cell(t['触发条件'])}")
             out.append("")

@@ -38,10 +38,18 @@ class AShortAccountStateSchemaTests(unittest.TestCase):
             jsonschema.validate(bad, self.schema)
 
     def test_position_requires_manual_stop_loss(self):
+        # 向后兼容:1.0.0(example 即 1.0.0)仍**严格要求** stop_loss(draft-07 if/then)。
         bad = copy.deepcopy(self.example)
         del bad["positions"][0]["stop_loss"]
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(bad, self.schema)
+
+    def test_v110_position_stop_loss_optional(self):
+        # S3a:schema_version 1.1.0 → positions.stop_loss 可缺(系统算止损,手填降参考);1.0.0 仍严格(上一测)。
+        good = copy.deepcopy(self.example)
+        good["schema_version"] = "1.1.0"
+        del good["positions"][0]["stop_loss"]
+        jsonschema.validate(good, self.schema)      # 不抛 = 1.1.0 放开
 
     def test_unknown_top_level_field_rejected(self):
         bad = copy.deepcopy(self.example)

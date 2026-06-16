@@ -23,7 +23,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_phase5_engine import (  # noqa: E402
     compute_indicators, entry_type, exit_and_size, classify_risk_families,
     build_m67_report, validate_m67_consistency, write_m67_report, GOVERNANCE,
-    tick_ref, tick_up, tick_down,
+    tick_ref, tick_up, tick_down, holding_levels,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_m67_report.schema.json"
@@ -202,6 +202,82 @@ class TickPriceTests(unittest.TestCase):
         self.assertIn("股数", rej)
 
 
+class HoldingLevelsTests(unittest.TestCase):
+    """S3a: 持仓系统跟踪止损/止盈(被动)= recent_high(20日高=resistance)−ATR×倍数;side-aware tick;
+    破位/缺数据不伪造;不算入场价/股数。"""
+    def test_normal_levels_ticked_no_entry_no_shares(self):
+        plan, rej = holding_levels({"close": 70.1}, {"resistance": 72.0, "atr14": 2.1}, "震荡期")
+        self.assertIsNone(rej)
+        self.assertFalse(plan["breached"])
+        self.assertEqual(plan["stop"], 69.38)      # tick_up(72−1.25×2.1=69.375) 止损向上
+        self.assertEqual(plan["t1"], 72.0)         # res>close → 近20日高
+        self.assertEqual(plan["t2"], 74.62)        # tick_down(max(72+2.625, 70.1+2×0.72)) 止盈向下
+        self.assertIsNone(plan["entry"])           # 持仓不算入场价
+        self.assertIsNone(plan["shares"])          # 持仓不算股数
+
+    def test_ratchet_higher_recent_high_raises_stop(self):
+        low, _ = holding_levels({"close": 70.0}, {"resistance": 72.0, "atr14": 2.0}, "震荡期")
+        high, _ = holding_levels({"close": 70.0}, {"resistance": 75.0, "atr14": 2.0}, "震荡期")
+        self.assertGreater(high["stop"], low["stop"])   # 近高更高 → 跟踪止损上移(ratchet)
+
+    def test_breached_when_price_below_trailing_stop(self):
+        plan, rej = holding_levels({"close": 68.0}, {"resistance": 72.0, "atr14": 2.1}, "震荡期")
+        self.assertIsNone(rej)
+        self.assertTrue(plan["breached"])          # 现价 < 跟踪止损 69.38 → 破位
+        self.assertEqual(plan["stop"], 69.38)
+        self.assertIsNone(plan["t1"])              # 破位不伪造止盈
+        self.assertIsNone(plan["t2"])
+
+    def test_missing_data_rejects_not_fabricated(self):
+        self.assertIsNone(holding_levels({"close": 70.0}, {"resistance": None, "atr14": 2.0}, "震荡期")[0])
+        self.assertIsNone(holding_levels({"close": 70.0}, {"resistance": 72.0, "atr14": None}, "震荡期")[0])
+        self.assertIsNone(holding_levels({"close": None}, {"resistance": 72.0, "atr14": 2.0}, "震荡期")[0])
+
+    def test_validator_hold_rejects_entry_or_shares_nonnull(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        r["m67"]["table"]["入"] = 10.0             # 持仓不应有入场价 → validator 必拒
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_hold_no_system_level_no_manual_ref_no_contradiction(self):
+        # R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE:系统位算不出(缺价数据)+ 无手填止损(v1.1 允许)
+        # → advice **不得**说"按手填参考止损执行"(根本没有),须诚实标"无可执行止损位"。
+        held_no_stop = {"position_state": "held",
+                        "position": {"ts_code": "600000.SH", "shares": 1000, "avg_cost": 2.70,
+                                     "entry_date": "20260601", "stop_loss": None},
+                        "rule12": {"status": "inactive"}, "rule13": {"status": "none"},
+                        "size_multiplier": 1.0, "reasons": []}
+        r = build_m67_report(_good_input(price_series=_series()[:3], stateful_risk=held_no_stop), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertIsNone(r["machine"]["entry_exit_size_star"]["plan"])   # 系统位未算出(缺 ATR)
+        adv = r["m67"]["精简结论区"]["操作建议"]
+        self.assertIn("无可执行止损位", adv)            # 诚实标
+        self.assertNotIn("请按手填参考止损", adv)        # 不伪造"执行不存在的参考止损"
+        validate_m67_consistency(r)                      # 持有 plan None → 损/盈一/盈二 null,仍过
+
+    def test_validator_hold_present_plan_requires_execution_discipline(self):
+        # Codex probe②:系统位已算出但 advice 缺「无条件/盘中手动」执行纪律 → validator 必拒(state-bound)。
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertIsNotNone(r["machine"]["entry_exit_size_star"]["plan"])    # 系统位已算出
+        r["m67"]["精简结论区"]["操作建议"] = "已有持仓。系统跟踪止损 3.05。"     # 去掉 无条件/盘中
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_hold_noref_planNone_rejects_execute_manual_ref(self):
+        # Codex probe①:系统位未算出 + 无手填参考,advice 却说「请按手填参考止损…」(伪造不存在的止损)→ 必拒(state-bound)。
+        held_no_stop = {"position_state": "held",
+                        "position": {"ts_code": "600000.SH", "shares": 1000, "avg_cost": 2.70,
+                                     "entry_date": "20260601", "stop_loss": None},
+                        "rule12": {"status": "inactive"}, "rule13": {"status": "none"},
+                        "size_multiplier": 1.0, "reasons": []}
+        r = build_m67_report(_good_input(price_series=_series()[:3], stateful_risk=held_no_stop), AS_OF, "t")
+        self.assertIsNone(r["machine"]["entry_exit_size_star"]["plan"])        # 系统位未算出
+        r["m67"]["精简结论区"]["操作建议"] = "已有持仓。请按手填参考止损盘中无条件手动执行。"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+
 class RiskFamilyTests(unittest.TestCase):
     def setUp(self):
         self.ind = compute_indicators(_series())
@@ -263,7 +339,9 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(r["machine"]["entry_exit_size_star"]["type"], "已有持仓")
         self.assertIsNone(r["m67"]["table"]["股数"])
         self.assertIn("已有持仓", r["m67"]["精简结论区"]["操作建议"])
-        self.assertIn("手动止损", r["m67"]["精简结论区"]["操作建议"])
+        self.assertIn("系统跟踪止损", r["m67"]["精简结论区"]["操作建议"])   # S3a:系统位(非手填)
+        self.assertIn("手填参考止损", r["m67"]["精简结论区"]["操作建议"])   # 旧 user-stop 降为参考
+        self.assertIsNotNone(r["m67"]["table"]["损"])                      # S3a:系统跟踪止损落表
         validate_m67_consistency(r)
         jsonschema.validate(r, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
 

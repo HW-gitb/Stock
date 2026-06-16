@@ -374,6 +374,33 @@ def exit_and_size(inp: dict, ind: dict, regime: str, extra_halve: bool = False, 
             "shares": shares, "sizing_notes": notes}, None
 
 
+def holding_levels(inp: dict, ind: dict, regime: str):
+    """持仓恒列入 S3a:持仓**系统**止损/止盈(被动显示,动作恒「持有」、不算股数)。跟踪止损(ratchet)=
+    `recent_high(近20日最高 = ind['resistance']) − ATR_MULT[regime]×ATR`;side-aware tick(止损向上、止盈向下,
+    = 最终可执行价)+ post-tick 重校验。缺价/ATR/最高价 → reject(render 显"未算出",**绝不伪造**);
+    现价 ≤ 取整后跟踪止损,或取整后止盈结构失效 → `breached`(t1/t2=None,标已破位、不伪造止盈)。
+    返回 (plan, None) | (None, reject_reason)。"""
+    close, recent_high, atr = inp.get("close"), ind.get("resistance"), ind.get("atr14")
+    res = ind.get("resistance")
+    if close is None or recent_high is None or atr is None or atr <= 0:
+        return None, "缺价/ATR/近20日最高,无法精算跟踪止损"
+    stop = tick_up(recent_high - ATR_MULT.get(regime, 1.25) * atr)     # 止损向上取(不低于风险线)
+    if stop is None:
+        return None, "止损非有限,取整失败"
+    base = {"entry": None, "shares": None, "stop": stop, "basis": "trailing_ratchet",
+            "recent_high": recent_high, "atr": atr}
+    risk = close - stop
+    if risk <= 0:                          # 现价 ≤ 取整后跟踪止损 → 已破位(被动诚实,不伪造止盈)
+        return {**base, "t1": None, "t2": None, "breached": True}, None
+    rr_floor = RR_FLOOR.get(regime, 1.5)
+    raw_t1 = res if (res and res > close) else close + rr_floor * risk
+    t1 = tick_down(raw_t1)                 # 止盈向下取(不高估可实现目标)
+    t2 = tick_down(max(raw_t1 + ATR_MULT.get(regime, 1.25) * atr, close + 2.0 * risk))
+    if t1 is None or t2 is None or not (t1 > close and t2 >= t1):      # post-tick 结构失效 → 退破位
+        return {**base, "t1": None, "t2": None, "breached": True}, None
+    return {**base, "t1": t1, "t2": t2, "breached": False}, None
+
+
 def compute_star(inp: dict, fam: dict, eligible: bool) -> int:
     star = 3
     if eligible:
@@ -494,7 +521,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     if hard:
         action, etype, plan, reject = "否决", "N/A", None, "|".join(hard)
     elif has_position:
-        action, etype, plan = "持有", "已有持仓", None
+        action, etype = "持有", "已有持仓"
+        plan, hl_reject = holding_levels(inp, ind, regime)   # S3a:系统跟踪止损/止盈(被动显示)
         reject = "已有持仓:按持仓管理输出,不按新开仓处理;禁止自动加仓"
     else:
         etype, etype_reason = entry_type(inp, ind)
@@ -518,11 +546,21 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     elif action == "观察":
         advice = f"观察,不建仓。原因:{reject}。" + (f"降级:{'/'.join(downgrades)}。" if downgrades else "")
     elif action == "持有":
-        stop_hint = position.get("stop_loss", "未填写")
         cost_hint = position.get("avg_cost", "未知")
         shares_hint = position.get("shares", "未知")
-        advice = (f"已有持仓,本周不按新开仓处理,禁止自动加仓。持仓 {shares_hint} 股/均价 {cost_hint};"
-                  f"手动止损 {stop_hint},触发后由你盘中无条件手动执行。"
+        manual_ref = position.get("stop_loss")
+        manual_txt = (f"你的手填参考止损={manual_ref}(仅参考)" if manual_ref is not None else "无手填参考止损")
+        if plan is None:                                     # S3a:系统止损未算出 → 有手填参考才回退执行;无参考则诚实标"无可执行止损位",不伪造执行不存在的止损
+            sys_txt = (f"系统止损未算出({hl_reject});请按手填参考止损 {manual_ref} 盘中无条件手动执行"
+                       if manual_ref is not None
+                       else f"系统止损未算出({hl_reject})、且无手填参考止损 → 本周无可执行止损位,请人工核查并补一个保护止损")
+        elif plan.get("breached"):                           # 现价已跌破系统跟踪止损
+            sys_txt = f"⚠️ 现价已跌破系统跟踪止损 {plan['stop']} —— 触发后由你盘中无条件手动执行"
+        else:
+            sys_txt = (f"系统跟踪止损 {plan['stop']}(无条件、盘中由你手动执行);"
+                       f"止盈 盈一 {plan['t1']} / 盈二 {plan['t2']}")
+        advice = (f"已有持仓,本周不按新开仓处理,禁止自动加仓。持仓 {shares_hint} 股/均价 {cost_hint}。"
+                  f"{sys_txt}。{manual_txt}。价格已按 A 股 0.01 规整。"
                   + (f"降级:{'/'.join(downgrades)}。" if downgrades else ""))
     else:
         held_suffix = ("已有持仓也不得加仓;如硬风控触发止损/清仓条件,由你手动执行。" if has_position else "")
@@ -555,13 +593,15 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "EGS分": inp.get("egs_score"),        # EGS 质量总分(选股层);与下面的风控星级是两个维度
         "优先级": (f"⭐×{star}" if star else "—"),
         "触发条件": (f"现价≤{plan['entry']};持仓周期1-3周;{';'.join(plan['sizing_notes'])}"
-                     if plan else (reject or "")),
+                     if (plan and action == "建仓")
+                     else ("持仓管理(系统位被动显示,到价由你盘中手动);周期1-3周" if action == "持有"
+                           else (reject or ""))),
     }
     price_cost = f"{inp.get('close')} | 试探仓"
     if has_position:
         price_cost = (f"{inp.get('close')} | 持仓:{position.get('shares')}股/"
                       f"均价{position.get('avg_cost')}/建仓{position.get('entry_date')}/"
-                      f"手动止损{position.get('stop_loss')}")
+                      f"手填参考止损{position.get('stop_loss') if position.get('stop_loss') is not None else '无'}")
     m67 = {
         "精简结论区": {
             "当前环境": (regime if not regime_unknown_fallback
@@ -647,14 +687,23 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
         sr_down.append("Rule12 recovery_1:恢复期")
     fam["stateful_risk"].update(hit=True, action="downgrade", reasons=sr_down)
     close = inp.get("close")
+    plan, hl_reject = holding_levels(inp, ind, regime)   # S3a:系统跟踪止损/止盈(被动;Tier-3 有价亦可算)
     price_cost = (f"{close} | 持仓:{position.get('shares')}股/均价{position.get('avg_cost')}/"
-                  f"建仓{position.get('entry_date')}/手动止损{position.get('stop_loss')}")
+                  f"建仓{position.get('entry_date')}/手填参考止损{position.get('stop_loss')}")
     vol_state = (f"IV分位≈{iv_pct}%" if iv_known else "IV未知(feed 缺失)")
     iv_status = "holding_uncovered" if iv_known else "observe_only_missing_feed"
     observe = [] if iv_known else ["iv_regime_status:missing"]
-    advice = (f"已有持仓(本周 EGS 粗筛未覆盖,EGS/语义/ST 未自动核查)。本周不按新开仓处理、禁止自动加仓;"
-              f"手动止损 {position.get('stop_loss', '未填写')},触发后由你盘中无条件手动执行。"
-              "新闻 / ST / 监管 / 减持请人工核查。")
+    manual_ref = position.get("stop_loss")
+    if plan is None:                                     # 系统止损未算出 → 有手填参考才回退执行;无参考则诚实标"无可执行止损位"
+        sys_txt = (f"系统止损未算出({hl_reject});请按手填参考止损 {manual_ref} 盘中无条件手动执行"
+                   if manual_ref is not None
+                   else f"系统止损未算出({hl_reject})、且无手填参考止损 → 本周无可执行止损位,请人工核查并补一个保护止损")
+    elif plan.get("breached"):
+        sys_txt = f"⚠️ 现价已跌破系统跟踪止损 {plan['stop']} —— 触发后由你盘中无条件手动执行"
+    else:
+        sys_txt = f"系统跟踪止损 {plan['stop']}(无条件、盘中由你手动执行);止盈 盈一 {plan['t1']} / 盈二 {plan['t2']}"
+    advice = (f"已有持仓(本周 EGS 粗筛未覆盖,EGS/语义/ST 未自动核查)。本周不按新开仓处理、禁止自动加仓。"
+              f"{sys_txt}。价格已按 A 股 0.01 规整。新闻 / ST / 监管 / 减持请人工核查。")
     m67 = {
         "精简结论区": {
             "当前环境": regime,
@@ -665,9 +714,11 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "风控触发": "|".join(sr_down),
             "操作建议": advice,
         },
-        "table": {"操作": "持有", "股数": None, "入": None, "盈一": None, "盈二": None, "损": None,
+        "table": {"操作": "持有", "股数": None, "入": None,
+                  "盈一": (plan["t1"] if plan else None), "盈二": (plan["t2"] if plan else None),
+                  "损": (plan["stop"] if plan else None),
                   "类型": "已有持仓", "EGS分": None, "优先级": "—",
-                  "触发条件": "持仓管理;本周 EGS 未覆盖(粗筛排除)"},
+                  "触发条件": "持仓管理(系统位被动显示,到价由你盘中手动);本周 EGS 未覆盖(粗筛排除)"},
     }
     consumption = {"indicators": "→ 持仓技术参考(MA/RSI/ATR/支撑压力)",
                    "risk_families": "→ stateful(Rule12/Rule13)+ EGS 派生族未核查",
@@ -684,7 +735,7 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "indicators": ind, "risk_families": fam,
             "layer": {"hard_veto": [], "downgrade": sr_down, "observe_only": observe, "llm_enrichment": []},
             "entry_exit_size_star": {"action": "持有", "type": "已有持仓", "star": 0,
-                                     "plan": None, "reject_reason": None},
+                                     "plan": plan, "reject_reason": hl_reject},
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": False, "status": iv_status},
             "stateful_risk": stateful, "consumption": consumption,
         },
@@ -733,6 +784,42 @@ def validate_m67_consistency(report: dict) -> None:
                 or abs(tbl["盈二"] - plan.get("t2", -1)) > 1e-9
                 or abs(tbl["损"] - plan.get("stop", -1)) > 1e-9):
             raise ValueError("M6.7 table 数值与 machine plan 不一致(股数/入/盈一/盈二/损)")
+    elif action == "持有":   # S3a:持仓系统位被动显示。入/股数 必 null;损/盈一/盈二 可非空但须与 machine plan 一致。
+        if tbl["入"] is not None or tbl["股数"] is not None:
+            raise ValueError("持有但 table 入/股数 非空(持仓不新开仓/不重算股数)")
+        if plan is not None:
+            for k, pk in (("损", "stop"), ("盈一", "t1"), ("盈二", "t2")):
+                pv = plan.get(pk)
+                if pv is None:
+                    if tbl[k] is not None:
+                        raise ValueError(f"持有 table {k} 与 machine plan({pk}=None)不一致")
+                elif tbl[k] is None or abs(tbl[k] - pv) > 1e-9:
+                    raise ValueError(f"持有 table {k} 与 machine plan {pk} 不一致")
+        else:                # 系统位未算出 → 交易字段全 null(不伪造)
+            for k in ("损", "盈一", "盈二"):
+                if tbl[k] is not None:
+                    raise ValueError(f"持有但 machine plan 为空时 table {k} 应为 null")
+        adv = m67["精简结论区"]["操作建议"]
+        if "止损" not in adv:
+            raise ValueError("持有建议缺 止损(诚实护栏)")
+        # S3a 诚实护栏(R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE):**按 machine 状态(plan + 手填参考)绑死**
+        # advice,不靠固定短语。manual_ref = machine.stateful_risk.position.stop_loss(report 内可得)。
+        manual_ref = ((mc.get("stateful_risk") or {}).get("position") or {}).get("stop_loss")
+        instructs_ref = "请按手填参考止损" in adv
+        if plan is not None:
+            # 系统位已算出 → advice 必含执行纪律(无条件/盘中手动),不得只剩裸"止损"
+            if not ("无条件" in adv or "盘中" in adv):
+                raise ValueError("持有(系统位已算出)advice 缺 无条件/盘中手动 执行纪律")
+        elif manual_ref is None:
+            # 系统位未算出 + 无手填参考 → 绝不指示执行不存在的参考止损;须诚实标"无可执行止损位"
+            if instructs_ref:
+                raise ValueError("持有 系统位未算出且无手填参考止损,advice 却指示按手填参考止损执行(伪造不存在的止损)")
+            if "无可执行止损位" not in adv:
+                raise ValueError("持有 系统位未算出且无手填参考止损,advice 须诚实标 无可执行止损位")
+        else:
+            # 系统位未算出 + 有手填参考 → 须指示按手填参考止损执行
+            if not instructs_ref:
+                raise ValueError("持有 系统位未算出但有手填参考止损,advice 须指示按手填参考止损执行")
     else:  # 观察 / 否决:交易字段必须全 null
         for k in ("股数", "入", "盈一", "盈二", "损"):
             if tbl[k] is not None:

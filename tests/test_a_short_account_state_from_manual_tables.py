@@ -82,6 +82,21 @@ class HappyPathTests(unittest.TestCase):
         acc, _ = conv.build_account_state(_tables(), AS_OF)
         self.assertEqual(validate_account_state(acc, AS_OF), acc)
 
+    def test_blank_stop_loss_optional_v110(self):
+        # S3a:stop_loss 降可选(系统算止损)→ 空白合法、不再 FATAL;输出 schema_version 1.1.0、stop_loss None、过 validator。
+        tables = _tables()
+        tables["positions"][0]["stop_loss"] = ""
+        acc, _ = conv.build_account_state(tables, AS_OF)
+        self.assertEqual(acc["schema_version"], "1.1.0")
+        self.assertIsNone(acc["positions"][0]["stop_loss"])
+        self.assertEqual(validate_account_state(acc, AS_OF), acc)
+
+    def test_filled_stop_loss_kept_as_manual_ref_v110(self):
+        # 填了 stop 仍保留(降为手填参考),不报错;输出 1.1.0。
+        acc, _ = conv.build_account_state(_tables(), AS_OF)
+        self.assertEqual(acc["schema_version"], "1.1.0")
+        self.assertEqual(acc["positions"][0]["stop_loss"], 9.20)
+
     def test_no_active_cooldown_is_left_expired(self):
         # defense-in-depth invariant: converter never emits an expired active_cooldown
         acc, _ = conv.build_account_state(_tables(), AS_OF)

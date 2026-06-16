@@ -8,7 +8,7 @@
                "manual_order_only", "broker_connection_allowed"],
   "properties": {
     "schema_name": {"const": "a_short_account_state"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"enum": ["1.0.0", "1.1.0"]},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
     "available_cash": {"type": "number", "exclusiveMinimum": 0},
     "total_equity": {"type": ["number", "null"], "exclusiveMinimum": 0},
@@ -25,6 +25,8 @@
     "manual_order_only": {"const": true},
     "broker_connection_allowed": {"const": false}
   },
+  "if": {"properties": {"schema_version": {"const": "1.0.0"}}},
+  "then": {"properties": {"positions": {"items": {"required": ["ts_code", "name", "shares", "avg_cost", "entry_date", "stop_loss"]}}}},
   "$defs": {
     "positiveNumber": {"type": "number", "exclusiveMinimum": 0},
     "dateOrNull": {
@@ -34,14 +36,14 @@
     "position": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ts_code", "name", "shares", "avg_cost", "entry_date", "stop_loss"],
+      "required": ["ts_code", "name", "shares", "avg_cost", "entry_date"],
       "properties": {
         "ts_code": {"type": "string", "pattern": "^[0-9]{6}\\.(SH|SZ)$"},
         "name": {"type": "string"},
         "shares": {"type": "integer", "exclusiveMinimum": 0},
         "avg_cost": {"$ref": "#/$defs/positiveNumber"},
         "entry_date": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "stop_loss": {"$ref": "#/$defs/positiveNumber"},
+        "stop_loss": {"type": ["number", "null"], "exclusiveMinimum": 0},
         "take_profit_1": {"type": ["number", "null"], "exclusiveMinimum": 0},
         "take_profit_2": {"type": ["number", "null"], "exclusiveMinimum": 0},
         "last_exit_date": {"$ref": "#/$defs/dateOrNull"},

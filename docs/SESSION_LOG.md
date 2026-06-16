@@ -10,6 +10,60 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (S3a state-bound validator + account_state v1.1)
+- **Verdict/Action**: PASS。`R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE` 已按 machine 状态补齐 validator guard；`R-ASHORT-S3A-ACCOUNT-STATE-V11-ROUTE-DOC-DRIFT` 仍判定已按当前契约修正。提交后才算闭环。
+- **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。
+- **Verify**: targeted S3a/doc suite **295 OK**;two Codex adversarial probes now rejected;manual fallback valid probe PASS;py_compile OK;`git diff --check` clean(CRLF warning only);未抓数据、未改业务代码、未提交。
+- **Next**: Claude `提交` S3a 相关 tracked 文件;继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (S3a re²-修复:validator 持有护栏改 state-bound)
+- **Verdict/Action**: 判定 Codex re-FAIL **正确**(上轮只挡一个固定矛盾短语,两绕过仍过:无参考却说「请按手填参考止损」省略矛盾词、plan 在却缺执行纪律)。改:validator 持有护栏**按 machine 状态绑死** —— `manual_ref` 取自 `machine.stateful_risk.position.stop_loss`(report 内可得);**plan 在→必含「无条件/盘中」;plan 缺+无参考→禁「请按手填参考止损」且须标「无可执行止损位」;plan 缺+有参考→须指示按参考执行**。不靠固定短语。
+- **Required**: `R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE`(validator state-bound 补齐);详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: phase5+holdings+render+weekly+converter+schema+doc-guard **295 OK**(2 新对抗:plan-present 缺纪律→拒 / no-ref-planNone 伪造执行参考→拒;正常 plan-present、plan-None-noref 两态仍过);py_compile OK;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` S3a)。
+- **Pre-Codex self-review**: A–F checked — A 状态×出口矩阵(plan在缺纪律 / plan缺无参考伪造执行 / plan缺有参考缺指示)各配测 + 正常 3 态回归;B validator 一处改 state-bound、读 `machine.stateful_risk.position`(report 内已有,build_m67_report/build_holding_report 都填)、生成口径未动、295 绿;C 反向 正确文案三态都不误拒、两 probe 真拒;E route-doc 单态(register + 本指针);F machine.stateful_risk 永在、py_compile/no-BOM/diff 干净。
+
+## 2026-06-16 — Codex `审查 FAIL` (S3a validator guard re-review)
+- **Verdict/Action**: FAIL。`R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE` 仍未关闭:本轮只挡住了一个固定矛盾短语,没有按 machine 状态执行完整持有 advice 护栏。
+- **Required**: `R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE` remains open;详情见 `docs/system_risk_register.md`。
+- **Verify**: targeted S3a/doc suite **294 OK**;py_compile OK;`git diff --check` clean(CRLF warning only);two adversarial probes still pass bad advice: no-manual-ref plan=None can still say `请按手填参考止损...` if it omits `无手填参考止损`, and plan-present advice can omit `无条件`/`盘中` execution token;未抓数据、未改业务代码、未提交。
+- **Next**: Claude 把 validator guard 绑定到 plan/manual-ref 状态并补这两条对抗测试后再交 Codex re-`审查`;继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (S3a re-修复:validator 持有护栏抓坏文案)
+- **Verdict/Action**: 判定 Codex re-FAIL **正确**(advice 文案上轮已修,但 validator 仍放过被改回旧矛盾的坏文案 —— 防御不足)。`validate_m67_consistency` 持有分支加文本不变式:advice **既含「无手填参考止损」又含「请按手填参考止损」→ raise**(防生成口径回退到"称无参考却指示执行不存在止损"的自相矛盾)。route-doc finding 上轮 Codex 已认可。
+- **Required**: `R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE`(validator 层补齐);详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: phase5+holdings+render+weekly+converter+schema+doc-guard **294 OK**(新对抗 `test_validator_hold_rejects_contradictory_manual_ref_advice`:advice 改回旧矛盾 → validator 必 raise);py_compile OK;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` S3a)。
+- **Pre-Codex self-review**: A–F checked — A 对抗(坏文案→拒)配回归 + 正常两态(有/无参考)仍过(294 绿);B 仅加 validator 一处文本不变式、生成口径未动、既有持有/建仓/观察/否决回归绿;C 反向 正确文案不误拒(无参考态只含「无手填参考止损」不含「请按」、有参考态只含「请按手填参考止损」不含「无手填参考止损」→ 两态都不触发)、坏文案真拒;E route-doc 单态(register + 本指针);F 文本不变式无副作用、py_compile/no-BOM/diff 干净。
+
+## 2026-06-16 — Codex `审查 FAIL` (S3a repair re-review:持有 advice validator guard)
+- **Verdict/Action**: FAIL。`R-ASHORT-S3A-ACCOUNT-STATE-V11-ROUTE-DOC-DRIFT` 看起来已按当前契约改好；但 `R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE` 未完全关闭:生成文案已修,validator 仍会放过同类坏文案。
+- **Required**: `R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE` remains open;详情见 `docs/system_risk_register.md`。
+- **Verify**: targeted S3a/doc suite **293 OK**;py_compile OK;`git diff --check` clean(CRLF warning only);adversarial probe mutated hold advice back to old contradiction and returned `validator_passed_bad_hold_advice`;未抓数据、未改业务代码、未提交。
+- **Next**: Claude 强化 `validate_m67_consistency` 持有 advice 护栏并加对抗回归后再交 Codex re-`审查`;继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (S3a:advice 矛盾 + account_state v1.1 route-doc drift)
+- **Verdict/Action**: 判定 Codex 两 Required **正确**。① **advice 矛盾**:plan=None(系统位算不出)且无手填 stop(v1.1 允许)时,旧 advice 既说「按手填参考止损执行」又说「无手填参考止损」→ 改为按是否有手填参考分流(有才执行;无则诚实标「无可执行止损位、请补保护止损」、不伪造执行不存在的参考),`build_m67_report` + `build_holding_report` 两路径同改 + price_cost 改「手填参考止损/无」。② **route-doc drift**:4.3 design(8)+ README(3)+ CURRENT(2)+ S1 design(1)旧「v1.0.0 / stop 必填 / 保持 v1.0.0」契约全改为 settled(转换器写 v1.1.0、stop 可选系统算、旧 1.0.0 严格且可加载)。详见 register。
+- **Required**: `R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE`; `R-ASHORT-S3A-ACCOUNT-STATE-V11-ROUTE-DOC-DRIFT`;详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: phase5+holdings+render+weekly+converter+schema+doc-guard **293 OK**(新 `test_hold_no_system_level_no_manual_ref_no_contradiction`:系统位未算出+无手填→advice 含「无可执行止损位」、不含「请按手填参考止损」、过 validator);py_compile OK;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` S3a)。
+- **Pre-Codex self-review**: A–F checked — A advice plan-None×(有/无手填参考)两出口 + 两报告路径同改 各配测;route-doc B-ripple grep 旧契约残留(4.3/README/CURRENT/S1-doc)逐文件清、lineage 版本不动、examples 留 1.0.0 供 schema 1.0.0-严格测;C 反向 无手填不伪造执行、有手填仍执行、1.0.0 仍严格;E route-doc 单态(register 详情 + 本指针 + 4.3 doc 权威契约已更新);F py_compile/no-BOM/diff、293 回归绿。
+
+## 2026-06-16 — Codex `审查 FAIL` (持仓恒列入 S3a 实现:系统位 + account_state v1.1)
+- **Verdict/Action**: FAIL。实现方向基本正确，`holding_levels`、account_state 双版本、converter 可选 stop、render 展示系统位都已接上；但提交前还有两个 Required。
+- **Required**: `R-ASHORT-S3A-HOLDING-LEVELS-MISSING-MANUAL-STOP-ADVICE`；`R-ASHORT-S3A-ACCOUNT-STATE-V11-ROUTE-DOC-DRIFT`。详情见 `docs/system_risk_register.md`。
+- **Verify**: 复核 `runners/a_short_phase5_engine.py` / account_state schema / converter / render / tests；targeted S3a suite 262 OK；doc-governance+route-doc 30 OK；schema 1.0/1.1 four-state probe OK；py_compile OK；`git diff --check` clean(CRLF warning only)；未抓数据、未改业务代码、未提交。
+- **Next**: Claude 修复两项后再交 Codex re-`审查`；继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `起草` (持仓恒列入 S3a 实现:系统算持仓止损/止盈 + account_state v1.1)
+- **背景/scope**:按 `docs/a_short_holdings_s3_system_levels_design.md` 实现 S3a —— 系统自动算**持仓**跟踪止损/止盈、**被动显示**(动作恒「持有」),account_state 升 v1.1(stop 降可选参考、留空也能跑),= 用户 §14 核心(不再手填止损)。复用 Slice 0 的 side-aware tick。系统级永久。
+- **改动(6 文件)**:① 引擎新 `holding_levels`(跟踪止损=`ind['resistance']`〔=近20日高,复用不另算〕−ATR_MULT×atr;side-aware tick〔止损向上、止盈向下〕;risk≤0 或 post-tick 结构破→breached〔t1/t2=None〕;缺价/ATR/高→reject 不伪造;不算 entry/shares);② `build_m67_report` has_position 分支接 `holding_levels`(action 仍持有、table 损/盈一/盈二 取系统值、入/股数 None、advice=系统位+手填参考+breach/未算出);③ `build_holding_report`(Tier-3)同接;④ `validate_m67_consistency` 加「持有」分支(入/股数必 null;损/盈一/盈二 与 machine plan 一致;诚实护栏含止损);⑤ `a_short_account_state.schema.json` `const 1.0.0`→`enum[1.0.0,1.1.0]` + draft-07 `if 1.0.0 then stop_loss required`(旧严格、1.1.0 放开,stop type 加 null);⑥ 转换器 `ACCOUNT_SCHEMA_VERSION=1.1.0`、positions REQUIRED 去 stop、parse 改可选(空白合法);⑦ render 持仓概览加 损/盈一/盈二 列 + 逐票系统位执行清单行。
+- **实现选择(deviation 透明)**:recent_high 复用 `ind['resistance']`(=RESISTANCE_LOOKBACK 20 日高,非另算);`manual_stop_ref` = account_state 的可选 `stop_loss` 字段本身(引擎读它显示"手填参考止损"),**未另加 lineage 字段**(值已在 account_state、引擎可见,另加冗余)。
+- **边界**:不做主动减仓/加仓/移保本(S3b);不动"禁止自动加仓";不改 egs_main/选股/建仓·观察·否决/IV/Rule12·13/价格门/Slice0 建仓 tick;非生产/主板。既有 build_m67_report 建仓/观察/否决路径零改。
+- **Verify**:phase5+holdings+render+weekly+converter+schema+doc-guard **292 OK**(新 `HoldingLevelsTests` 5:正常取整无entry/shares · ratchet上移 · 破位不伪造 · 缺数据reject · validator 持有拒entry;converter 空stop合法v1.1.0 · 填stop保留;schema 1.1.0放开/1.0.0严格);schema 双版本 probe(1.0.0±stop / 1.1.0±stop)四态正确;py_compile OK。
+- **Next**:审查(Codex;新 `holding_levels` + 4 处接入 + schema if/then + converter + render,money-sensitive 必审)。tracking 见 register。
+- **Pre-Codex self-review**: A–F checked — A `holding_levels`×出口(正常/ratchet/破位/缺数据/缺res)+ validator 持有(入·股数拒、损与plan一致)+ converter 空/填stop + schema 双版本 各配测;B 唯一新符号 `holding_levels`、4 处消费,建仓/观察/否决路径零改(回归绿 292),版本引用 B-ripple grep 已清(converter 注释 1.0.0→版本无关、lineage 版本不动、examples 留 1.0.0 供 schema 1.0.0-严格测);C 反向 破位/缺数据不伪造止盈、持有不留 entry/shares、1.0.0 仍严格(向后兼容)、1.1.0 才放开;E route-doc 单态(design doc + register + 本指针,deviation 已记本条);F Decimal tick 复用 Slice0、有限值守、py_compile/no-BOM、schema draft-07 if/then 四态 probe。
+
 ## 2026-06-16 — Codex `审查 PASS` (M6.7 Slice 0:ticked-entry sizing gap re-review)
 - **Verdict/Action**: PASS。`R-ASHORT-M67-SLICE0-TICKED-ENTRY-SIZING-GAP` 已修复:单票 `shares` / 最小金额门现在按最终可执行 tick 买入价 `entry_t` 计算,不再按 raw `close` 误放行。
 - **Required**: addressed in working tree;register 已补 Codex re-`审查 PASS` 记录。仍需提交后才算闭环。

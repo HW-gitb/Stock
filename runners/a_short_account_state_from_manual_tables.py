@@ -3,7 +3,7 @@
 """A-short 4.3：手工持仓表格 → account_state.json 转换器（Slice 4.3-B）.
 
 把用户手工维护的本地 CSV 表格（account / positions / trades / manual_controls / portfolio_rule12）
-转换成 **既有** `schemas/a_short_account_state.schema.json` v1.0.0 的 `account_state.json`，供周报
+转换成 **既有** `schemas/a_short_account_state.schema.json` v1.1.0(向后兼容 1.0.0)的 `account_state.json`，供周报
 M6.7 经现有 `--account` 路径消费。本切片：
 
 - 只产出既有 schema 契约（**不新建第二份 account_state 契约**），落盘前必过既有
@@ -45,7 +45,7 @@ if str(ROOT) not in sys.path:
 from engine.data.a_share_board_scope import is_a_share_main_board  # noqa: E402
 
 ACCOUNT_SCHEMA_NAME = "a_short_account_state"
-ACCOUNT_SCHEMA_VERSION = "1.0.0"
+ACCOUNT_SCHEMA_VERSION = "1.1.0"
 LINEAGE_SCHEMA_NAME = "a_short_account_state_lineage"
 LINEAGE_SCHEMA_VERSION = "1.0.0"
 
@@ -67,7 +67,7 @@ EXPECTED_COLUMNS = {
 }
 REQUIRED_COLUMNS = {
     "account": ("as_of", "available_cash", "manual_order_only", "broker_connection_allowed"),
-    "positions": ("ts_code", "name", "shares", "avg_cost", "entry_date", "stop_loss"),
+    "positions": ("ts_code", "name", "shares", "avg_cost", "entry_date"),
     "trades": ("trade_date", "ts_code", "name", "side", "shares", "price", "reason", "order_manual"),
     "manual_controls": ("ts_code",),
     "portfolio_rule12": ("status",),
@@ -251,8 +251,8 @@ def _build_account_fields(rows: list, decision_as_of: str) -> tuple:
     available_cash = _parse_float(a.get("available_cash"), "account.available_cash")
     if available_cash <= 0:
         raise ConvertError(
-            "account.available_cash 必须 > 0（既有 account_state schema v1.0.0 约束）。满仓 0 现金的纯持仓"
-            "管理态当前不支持；如需该态请单独走 schema v1.1.0 加性升级（下调下限 + 调整 weekly_pipeline"
+            "account.available_cash 必须 > 0（account_state schema 约束)。满仓 0 现金的纯持仓"
+            "管理态当前不支持；如需该态请单独走 schema 加性升级（下调下限 + 调整 weekly_pipeline"
             " available_cash 门），不在本切片内")
     return facts_as_of, {
         "available_cash": available_cash,
@@ -285,7 +285,7 @@ def _build_positions(rows: list, decision_as_of: str) -> tuple:
             "shares": _parse_int_shares(r.get("shares"), f"positions[{i}].shares"),
             "avg_cost": _parse_float(r.get("avg_cost"), f"positions[{i}].avg_cost", positive=True),
             "entry_date": entry_date,
-            "stop_loss": _parse_float(r.get("stop_loss"), f"positions[{i}].stop_loss", positive=True),
+            "stop_loss": _parse_optional_float(r.get("stop_loss"), f"positions[{i}].stop_loss", positive=True),
             "take_profit_1": _parse_optional_float(r.get("take_profit_1"), f"positions[{i}].take_profit_1", positive=True),
             "take_profit_2": _parse_optional_float(r.get("take_profit_2"), f"positions[{i}].take_profit_2", positive=True),
             "last_exit_date": last_exit,
@@ -450,7 +450,7 @@ def _build_rule13(trades: list, held: set, manual: dict, decision_as_of: str, cf
             "manual_block_applied": manual_block,
         })
 
-    # manual_block 只能挂在「有止损冷静期、当前空仓」的票上（更严格方向）；其余位置 v1.0.0 无法表达 → FATAL
+    # manual_block 只能挂在「有止损冷静期、当前空仓」的票上（更严格方向）；其余位置 account_state schema 无字段可表达 → FATAL
     cooldown_codes = {r["ts_code"] for r in rule13}
     for ts, mc in manual.items():
         if mc.get("manual_block") and ts not in cooldown_codes:
@@ -460,7 +460,7 @@ def _build_rule13(trades: list, held: set, manual: dict, decision_as_of: str, cf
                     "空仓再入，不适用于持仓（持仓由 positions 走持仓管理）")
             raise ConvertError(
                 f"manual_controls {ts} 标了 manual_block，但该票没有止损冷静期、也未持有；通用「阻断任意"
-                "空仓股」在 account_state v1.0.0 无字段可表达，属未来 v1.1.0 加性能力，本切片不支持")
+                "空仓股」在 account_state schema 无字段可表达（S3a v1.1.0 仅放开 stop 可选，不含此），本切片不支持")
     return rule13, lineage
 
 
