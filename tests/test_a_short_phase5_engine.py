@@ -23,6 +23,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_phase5_engine import (  # noqa: E402
     compute_indicators, entry_type, exit_and_size, classify_risk_families,
     build_m67_report, validate_m67_consistency, write_m67_report, GOVERNANCE,
+    tick_ref, tick_up, tick_down,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_m67_report.schema.json"
@@ -149,6 +150,56 @@ class EntryExitTests(unittest.TestCase):
     def test_exit_size_shrink_regime_blocked(self):
         plan, rej = exit_and_size(_good_input(), self.ind, "收缩期", extra_halve=False)
         self.assertIsNone(plan)
+
+
+class TickPriceTests(unittest.TestCase):
+    """Slice 0: side-aware A股 0.01 tick + exit_and_size post-tick 重校验(价格提案 §2/§2.1)。"""
+    def test_tick_ref_half_up_not_bankers(self):
+        self.assertEqual(tick_ref(2.675), 2.68)          # half-up,非 banker's(round(2.675,2)=2.67)
+        self.assertEqual(tick_ref(2.674), 2.67)
+        self.assertEqual(tick_ref(10.0), 10.0)
+
+    def test_tick_up_ceils_to_001(self):
+        self.assertEqual(tick_up(9.341), 9.35)           # 止损向上(不低于风险线)
+        self.assertEqual(tick_up(9.34), 9.34)
+        self.assertEqual(tick_up(9.996), 10.0)
+
+    def test_tick_down_floors_to_001(self):
+        self.assertEqual(tick_down(10.999), 10.99)       # 止盈向下(不高估)
+        self.assertEqual(tick_down(10.99), 10.99)
+
+    def test_tick_none_naninf_returns_none(self):        # 绝不伪造价
+        for fn in (tick_ref, tick_up, tick_down):
+            self.assertIsNone(fn(None))
+            self.assertIsNone(fn(float("nan")))
+            self.assertIsNone(fn(float("inf")))
+
+    def test_exit_size_levels_are_001_ticked(self):
+        plan, rej = exit_and_size(_good_input(), compute_indicators(_series()), "震荡期")
+        self.assertIsNone(rej)
+        for k in ("entry", "stop", "t1", "t2"):          # 每个执行价都是 0.01 整数倍
+            self.assertAlmostEqual(plan[k] * 100, round(plan[k] * 100), places=6)
+
+    def test_exit_size_rejects_when_tick_breaks_structure(self):
+        # 对抗(Codex Required):raw 合格(stop=9.996<close=10、rr 巨大),但止损向上取→10.00==入 →
+        # 取整后结构失效 → 必须拒(转观察),不输出取整后其实不合格的建仓。
+        ind = {"support": 9.999, "resistance": 10.80, "atr14": 0.0024}
+        plan, rej = exit_and_size(_good_input(close=10.00), ind, "震荡期")
+        self.assertIsNone(plan)
+        self.assertIn("取整后", rej)
+
+    def test_exit_size_sizing_uses_ticked_entry_not_raw_close(self):
+        # R-ASHORT-M67-SLICE0-TICKED-ENTRY-SIZING-GAP(Codex Required):cap 介于 100×close 与 100×entry_t 之间 →
+        # raw close 本可买 100 股,但按可执行 tick 价 entry_t 买不起 → 必须转观察(plan None),不输出买不起的建仓。
+        # close=100.005 → entry_t=100.01;cap = avail*0.40[震荡]*0.5 = 10000.6(avail=50003、amt5 大不绑定);
+        # raw: 10000.6//100.005→100 股(cost 10000.5≤cap);ticked: 10000.6//100.01→0 股 → 拒。
+        ind = {"support": 99.0, "resistance": 105.0, "atr14": 0.5}
+        inp = _good_input(close=100.005)
+        inp["account"] = {"available_cash": 50003.0}
+        inp["liquidity"] = {"avg_amount_5d": 1e9}
+        plan, rej = exit_and_size(inp, ind, "震荡期")
+        self.assertIsNone(plan)                 # 按 entry_t=100.01 买不起 100 股 → 拒(非 post-tick 结构/RR 失效)
+        self.assertIn("股数", rej)
 
 
 class RiskFamilyTests(unittest.TestCase):

@@ -22,6 +22,7 @@ import math
 import os
 
 import jsonschema
+from decimal import Decimal, ROUND_HALF_UP, ROUND_UP, ROUND_DOWN
 
 SCHEMA_NAME = "a_short_m67_report"
 SCHEMA_VERSION = "1.0.0"
@@ -62,6 +63,38 @@ RISK_FAMILIES = ("overheat_crowding", "liquidity_execution", "negative_event",
 
 # 语义 web/LLM 层(Slice 2)只允许产生 downgrade 的已评估风险态(绝不 hard_veto;tailwind/clear_light/unknown 不降级)
 _WEB_DOWNGRADE_STATUSES = ("risk_candidate", "risk", "headwind")
+
+
+# ── A股 tick 取整(Slice 0:M6.7 价格计算优化;side-aware,= 价格提案 §2)────────
+_TICK = Decimal("0.01")
+
+
+def _tick(x, rounding):
+    """A股主板最小变动 0.01 的方向敏感取整;None/非有限值 → None(绝不伪造价)。"""
+    if x is None:
+        return None
+    try:
+        xf = float(x)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(xf):
+        return None
+    return float(Decimal(str(xf)).quantize(_TICK, rounding=rounding))
+
+
+def tick_ref(x):
+    """展示/参考价:half-up 到 0.01(不用 banker's round / float 偏置)。"""
+    return _tick(x, ROUND_HALF_UP)
+
+
+def tick_up(x):
+    """止损:向上取 tick(实际止损价不低于系统风险线)。"""
+    return _tick(x, ROUND_UP)
+
+
+def tick_down(x):
+    """止盈 / 买入上沿:向下取 tick(不高估可实现目标 / 不超计算上沿)。"""
+    return _tick(x, ROUND_DOWN)
 
 
 # ── 技术指标(纯函数;price_series oldest→newest,每项 high/low/close)──────────
@@ -305,6 +338,17 @@ def exit_and_size(inp: dict, ind: dict, regime: str, extra_halve: bool = False, 
     rr = (t1 - close) / risk if risk > 0 else 0.0
     if rr < rr_floor:
         return None, f"盈亏比 {rr:.2f} < {rr_floor}"
+    # Slice 0(价格提案 §2.1):side-aware tick = 最终执行价;入=参考价 half-up、损向上、盈向下取 0.01。
+    # 取整可能收窄风险结构 → **用取整后价重校验**,任一破即拒(转观察),绝不输出取整后其实不合格的建仓。
+    entry_t, stop_t, t1_t, t2_t = tick_ref(close), tick_up(stop), tick_down(t1), tick_down(t2)
+    if None in (entry_t, stop_t, t1_t, t2_t):
+        return None, "价格非有限,取整失败"
+    risk_t = entry_t - stop_t
+    if not (risk_t > 0 and stop_t < entry_t and t1_t > entry_t and t2_t >= t1_t):
+        return None, "取整后结构失效(止损≥入/止盈≤入/盈二<盈一)"
+    rr = (t1_t - entry_t) / risk_t
+    if rr < rr_floor:
+        return None, f"取整后盈亏比 {rr:.2f} < {rr_floor}"
     # 仓位:单只上限 + 冲击成本 + 100股 + 试探仓(诚实护栏)+ IV 减半
     cap_pct = SINGLE_CAP_PCT.get(regime, 0.40)
     if cap_pct <= 0:
@@ -320,11 +364,13 @@ def exit_and_size(inp: dict, ind: dict, regime: str, extra_halve: bool = False, 
     if size_multiplier < 1.0:
         cap *= size_multiplier
         notes.append(size_multiplier_reason or f"状态风控仓位上限×{size_multiplier}")
-    shares = int(cap // close // 100) * 100 if close > 0 else 0
-    if shares < MIN_SHARES or shares * close < MIN_AMOUNT:
-        return None, "可建股数/金额不足(放弃)"
-    return {"entry": round(close, 3), "stop": round(stop, 3), "t1": round(t1, 3),
-            "t2": round(t2, 3), "rr": round(rr, 3), "rr_floor": rr_floor,
+    # Slice 0(R-ASHORT-M67-SLICE0-TICKED-ENTRY-SIZING-GAP):股数/最小金额/现金上限按**最终可执行 tick 买入价**
+    # entry_t 计(非 raw close),否则会输出"按真实 tick 价买不起"的建仓。(多票全局现金分配是后续 slice,届时用 entry_high。)
+    shares = int(cap // entry_t // 100) * 100 if entry_t > 0 else 0
+    if shares < MIN_SHARES or shares * entry_t < MIN_AMOUNT:
+        return None, "可建股数/金额不足(按可执行 tick 价 entry_t 计;放弃)"
+    return {"entry": entry_t, "stop": stop_t, "t1": t1_t,
+            "t2": t2_t, "rr": round(rr, 3), "rr_floor": rr_floor,
             "shares": shares, "sizing_notes": notes}, None
 
 
@@ -468,7 +514,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                          if regime_unknown_fallback else "")
         advice = (f"低吸/突破建仓建议(类型:{etype})。⭐×{star}、盈亏比 {plan['rr']}。"
                   f"**试探仓**(edge 未验证,A-short 仅 risk_filter_only)。"
-                  f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**。" + iv_caveat + regime_caveat)
+                  f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**。价格已按 A 股 0.01 规整。" + iv_caveat + regime_caveat)
     elif action == "观察":
         advice = f"观察,不建仓。原因:{reject}。" + (f"降级:{'/'.join(downgrades)}。" if downgrades else "")
     elif action == "持有":

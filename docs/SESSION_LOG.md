@@ -10,6 +10,33 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (M6.7 Slice 0:ticked-entry sizing gap re-review)
+- **Verdict/Action**: PASS。`R-ASHORT-M67-SLICE0-TICKED-ENTRY-SIZING-GAP` 已修复:单票 `shares` / 最小金额门现在按最终可执行 tick 买入价 `entry_t` 计算,不再按 raw `close` 误放行。
+- **Required**: addressed in working tree;register 已补 Codex re-`审查 PASS` 记录。仍需提交后才算闭环。
+- **Verify**: phase5+holdings+weekly+render **203 OK**(`.tools/python_libs` + dummy `tushare`);doc-governance+route-doc **30 OK**;py_compile OK;`git diff --check` clean(CRLF warning only)。
+- **Next**: Claude 提交本 Slice 0 相关 tracked 文件;继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (M6.7 Slice 0:ticked-entry sizing gap)
+- **Verdict/Action**: 判定 Codex Required **正确**。Slice 0 tick 了 entry,但 `exit_and_size` 的 shares/最小金额/现金上限仍按 raw `close` 算 → 会输出"按真实 tick 价买不起"的建仓。改:单票 sizing 全部按可执行价 `entry_t` 计(`shares=int(cap//entry_t//100)*100`、`shares*entry_t<MIN_AMOUNT` 门)。多票全局现金分配仍是后续 slice(届时 entry_high)。
+- **Required**: `R-ASHORT-M67-SLICE0-TICKED-ENTRY-SIZING-GAP`;详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: phase5+holdings+weekly+render **203 OK**(新对抗 `test_exit_size_sizing_uses_ticked_entry_not_raw_close`:close=100.005→entry_t=100.01、cap=10000.6→raw 100 股 cost 10000.5≤cap 但 ticked 10001.0>cap→shares 归 0→转观察);py_compile OK;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` Slice 0)。
+- **Pre-Codex self-review**: A–F checked — A 复现 Codex 临界值配回归 + 既有 _good_input(close tick-clean)sizing 不变→既有 exit_and_size 测试不破;B 唯一改 sizing 一行(close→entry_t)、post-tick/tick helpers 未动、203 回归绿;C 反向 不误拒正常(_good_input 仍建仓)、买不起的真拒(转观察非伪建仓);F `entry_t` 已在 sizing 前定义(post-tick 块)、py_compile/no-BOM/diff 干净。
+
+## 2026-06-16 — Codex `审查 FAIL` (M6.7 价格 Slice 0:side-aware tick + post-tick 重校验)
+- **Verdict/Action**: FAIL。tick/post-tick RR 方向正确,但 `exit_and_size` 输出 tick 后 `entry` 的同时,股数和金额门仍按 raw `close` 计算,会输出“真实 tick 买入价买不起”的建仓计划。
+- **Required**: `R-ASHORT-M67-SLICE0-TICKED-ENTRY-SIZING-GAP` opened in `docs/system_risk_register.md`。修复口径:本 slice 的单票 `shares` / 最小金额 / 现金上限必须用最终可执行买入价(`entry_t`;后续 entry range slice 再升级为 `entry_high`)计算,不能继续用 raw `close`;补边界测试:raw close 可买、tick entry 后超现金上限时必须转观察/拒绝。
+- **Verify**: code review `runners/a_short_phase5_engine.py:343-372`;proposal §2.1 明写 tick=最终执行价、所有建仓决策用取整后价。复现 `close=100.005`→`entry_t=100.01`、cap=`10000.6`:旧输出 `shares=100`(raw cost 10000.5)但 ticked cost 10001.0>cap。Targeted suite(`.tools/python_libs`+dummy `tushare`)202 OK;py_compile OK;`git diff --check` clean(CRLF only);RR-only reject probe `NO_HIT`。边界:不改代码/不抓数据/不提交、`em_probe_smoke_20260614` 排除。
+- **Next**:Claude 修复该 Required,再交 Codex 复审。
+
+## 2026-06-16 — Claude `起草` (M6.7 价格 Slice 0:side-aware tick + post-tick 重校验)
+- **背景/scope**:价格 roadmap 第一刀(提案 §2/§2.1)。新增 side-aware A股 0.01 tick(`Decimal`+有限值防护:`tick_ref` half-up / `tick_up` 止损向上 / `tick_down` 止盈·买入上沿向下),应用到 `exit_and_size`(建仓 plan)+ post-tick **用取整后价重校验**(结构 + RR,破则转观察)。helpers 同时供 S3a `holding_levels` 复用(S3a 未建,本刀只覆盖建仓)。系统级永久。
+- **改动**:`a_short_phase5_engine.py`:+ `Decimal` import + `_tick/tick_ref/tick_up/tick_down`;`exit_and_size` 返回取整后 entry/stop/t1/t2 + post-tick 结构/RR 重校验(`risk>0/stop<入/t1>入/t2>=t1/rr>=floor`,破→reject);建仓 advice 加"价格已按 0.01 规整"。`build_m67_report`(plan 消费不变)/`validate_m67_consistency`(table==plan 1e-9,两边同取整→仍过)零改。
+- **边界**:不改选股/EGS/IV/Rule12·13/sizing 算法(现金分配=后续 slice)/render 独立取整(table 取 plan 已取整值);不实现入场区间/holding_levels(后续);非生产。
+- **Verify**:phase5+holdings+weekly+render **202 OK**(新 `TickPriceTests` 6:half-up 非 banker's / 止损 ceil / 止盈 floor / None·NaN·Inf→None / 输出 0.01 tick / **对抗:raw 合格但取整后止损越入→拒**);py_compile OK;既有 exit_and_size 测试(结构性 rr/shares)不破。
+- **Next**:审查(Codex;`exit_and_size` 是建仓决策核,新 tick + post-tick gate 必审)。tracking 见 register。
+- **Pre-Codex self-review**: A–F checked — A tick 三方向 + None/NaN/Inf + 输出取整 + 对抗(raw-valid→tick-invalid 结构破)各一测;post-tick **rr-only** reject 为防御层(side-aware 下 stop-up 通常抬 rr、结构 check 先 binding,纯 rr 跨界几不可达,已注明非漏测);B 唯一改 `exit_and_size`,`build_m67_report`/validator/render 消费 plan 未改、table==plan 两边同取整→1e-9 仍过、202 回归绿;C 反向 不误拒正常(202 绿)、不伪造价(None 守)、取整后失效不放过;F `Decimal(str())` 避 float 偏置、有限值守、py_compile/no-BOM。
+
 ## 2026-06-16 — Codex `审查 PASS` (M6.7 价格计算优化提案设计层 re-review)
 - **Verdict/Action**: PASS。3 个执行契约缺口已在提案设计层补齐;仍未写业务代码。
 - **Required**: `R-ASHORT-M67-PRICE-ROADMAP-DESIGN-EXECUTABLE-CONTRACT-GAPS` addressed in working tree;详情见 `docs/system_risk_register.md`。
