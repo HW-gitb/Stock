@@ -10,6 +10,12 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Claude `起草` (价格 roadmap 收敛:同步 master 更新 + 拍板 D1/D2/D3 + side-aware tick)
+- **背景/scope**:用户更新桌面 master `price calc.md`(现含 Codex §11:side-aware tick / 最不利价 RR / 确定性排序)+ 3 directives(① 价格 2 位小数 ② master 已更新 ③ **系统级永久变更**:改引擎计算逻辑、所有未来运行生效、非给当前持仓/本周topN 打补丁)。同步 in-repo 提案到 master + 决策;修 S3a §2.22 与 D1 的矛盾。纯文档、未实现代码。
+- **决策(已拍 2026-06-16)**:**D1**=是(所有价格 0.01、覆盖建仓+持仓 plan,推翻 S3a §2.22)/ **D2**=是(入场区间 RR 门 + 现金预算按最不利价 `entry_high`)/ **D3**=是(S3a+提案+引擎并一条价格 roadmap)/ **tick=side-aware**(止损向上取、止盈/buy_high 向下取,`Decimal`+有限值防护)。
+- **改动**:`docs/a_short_m67_price_calc_optimization_proposal.md` 重写对齐 master(Slice 0 side-aware tick / 入场区间+最不利 RR 门 / 现金分配按 entry_high + `original_topN_rank`+`ts_code` tie-break / 有效支撑后置 / V14.2 逐项)+ §10 合并实施序;`docs/a_short_holdings_s3_system_levels_design.md` §2.22 overturned(建仓也取整、side-aware)。
+- **Next**:逐 slice `起草→审查→修复→提交`,从 **Slice 0(side-aware tick,覆盖建仓+持仓)** 起,再 S3a 持仓实现 → 入场区间 → 现金分配 → guard → 有效支撑 → V14.2。提案可另交 Codex 设计层 `审查`(可选)。
+
 ## 2026-06-16 — Claude `起草` (M6.7 价格计算优化提案 doc;源自桌面草案 + subagent 审查)
 - **背景/scope**:用户要求把价格计算优化提案写入 in-repo 文档。源 = 桌面 `未price calc.md`(用户草案)+ subagent 对抗审查(verdict = adopt-with-changes)。产 `docs/a_short_m67_price_calc_optimization_proposal.md`(**仅提案、未实现任何 slice**)。
 - **内容**:3 个已对代码验证的真问题(① render `_cell` 显未取整价 `69.412` 不可执行;② pipeline 多票共用 account dict、无全局现金预算 → 超配;③ 突破型 RR floor 未区分)+ 5 刀(Slice 0 tick 横切 / A 组合现金分配 / B 入场区间-deferred / C 支撑升级 / D V14.2 迁移),含审查 F1-F9 修法(`Decimal` 取整 + 有限值防护、machine plan 必同取整防 `1e-9` 写盘崩、入场区间 RR 门用最不利价、现金分配 `ts_code` tie-breaker)+ 与 S3a 衔接 C1-C4 + No-Dangling(删悬挂 `gap_invalid_*` 字段)。

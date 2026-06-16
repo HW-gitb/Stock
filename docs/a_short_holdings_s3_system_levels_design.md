@@ -19,7 +19,7 @@ S1 让持仓恒进 M6.7,但持仓行 `plan=None`、只回显用户手填的 `sto
   - `risk > 0`(现价在止损上方,正常):`t1 = res if (res and res > close) else close + RR_FLOOR[regime]*risk`;`t2 = max(t1 + ATR_MULT[regime]*atr, close + 2.0*risk)`;`basis="trailing"`,`breached=False`。
   - `risk <= 0`(现价 ≤ 跟踪止损,**已破位**):`t1=t2=None`,`basis="trailing"`,`breached=True`(动作仍「持有」,advice 标"现价已跌破系统跟踪止损 X")。
 - **不算股数**(已持仓、非新开仓):`shares=None`、`entry=None`。
-- **数值取整(回应 Codex Optional)**:用户面持仓价位 `损/盈一/盈二` round 到 **A股主板最小变动价 0.01**(可执行价、对齐 tick;避免 69.412 这种不可下单价);既有建仓 plan 的 3 位小数**不动**(S3a 边界外、避免改既有可执行价语义,可 S4 统一)。返回 `{"entry":None,"stop":…,"t1":…|None,"t2":…|None,"shares":None,"basis":…,"breached":…,"recent_high":…,"atr":…}`。
+- **数值取整(回应 Codex Optional)**:用户面持仓价位 `损/盈一/盈二` round 到 **A股主板最小变动价 0.01**(可执行价、对齐 tick;避免 69.412 这种不可下单价);**建仓 plan 也统一取整到 0.01**(D1 2026-06-16 推翻原"建仓不动";由价格提案横切 **Slice 0** 一并做,见 `docs/a_short_m67_price_calc_optimization_proposal.md`);**side-aware**:止损 `stop` 向上取 tick、止盈 `t1/t2` 向下取。返回 `{"entry":None,"stop":…,"t1":…|None,"t2":…|None,"shares":None,"basis":…,"breached":…,"recent_high":…,"atr":…}`。
 - **ratchet 边界(S3a 限制,文档明示)**:用"近 20 日高"的**无状态**实现 → 在 20 日 swing 窗内单调不降、随新高上移;**跨 20 日窗后严格"永不下移"需持久化上轮 stop**,留 **S3b**。S3a 不持久化。
 
 ## 3. 接入(引擎;既有建仓/观察/否决分支零改)
