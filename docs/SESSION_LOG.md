@@ -10,6 +10,32 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (M6.7 price #5: effective support)
+- **Verdict/Action**: PASS. `R-ASHORT-M67-PRICE5-SUPPORT-VALUE-NODANGLE` 和 `R-ASHORT-M67-PRICE5-SESSIONLOG-MERGED-PREV-PASS` 均已修好:validator 强制 `结构支撑 {support}、质量 {quality}` 精确落到 advice;上一轮 Codex cash-audit PASS 已恢复为独立 entry。
+- **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。
+- **Verify**: targeted A-short M6.7/account/doc suite **318 OK**;py_compile OK;doc-governance+route-doc included **30 OK**;`git diff --check` clean(CRLF warning only);Codex probes 删除支撑价位/删除质量均 rejected。未抓数据、未提交。
+- **Next**: Claude `提交` 本批 M6.7 price #5 tracked files。
+
+## 2026-06-16 — Claude `修复` (M6.7 price #5:支撑价位 no-dangling + SESSION_LOG 拆并合 PASS)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(两处都我的)。①validator 建仓分支把「质量 {q}」收紧为精确「结构支撑 {support}、质量 {quality}」——删支撑价位仅留质量原会放过(支撑是 stop/低吸带/RR 的结构价格,必须可见);②SESSION_LOG 起草 #5 时又吃掉上一轮 Codex cash-audit PASS 标题行→已恢复其独立 header,每条 entry 只含一个 review 态。
+- **Required**: `R-ASHORT-M67-PRICE5-SUPPORT-VALUE-NODANGLE`、`R-ASHORT-M67-PRICE5-SESSIONLOG-MERGED-PREV-PASS`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2042 OK**;Codex 删支撑价位 probe 复现并被拒(`test_validator_rejects_dangling_support_value`,保留删质量负向);doc 守护 30 OK;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` #5)。
+- **Pre-Codex self-review**: A–F checked。A 支撑落点收紧为「支撑价位+质量」精确短语,配删价位 + 删质量两条负向;B validator 一处改,与 advice 生成口径「结构支撑 {support}、质量 {q}」逐字一致;C 正向 build 仍过(值不变);D N-A;E SESSION_LOG 每条单 review 态(本次根因=prepend 吃下一条标题,已恢复 + register 记根因);F 无 BOM、diff 干净。
+
+## 2026-06-16 — Codex `审查 FAIL` (M6.7 price #5: effective support)
+- **Verdict/Action**: FAIL. `effective_support` 主方向可行,但 closeout 有两个 Required:支撑价位 no-dangling guard 不完整;`SESSION_LOG` 顶部把上一轮 Codex PASS bullets 并入了本轮 Claude 起草 entry。
+- **Required**: `R-ASHORT-M67-PRICE5-SUPPORT-VALUE-NODANGLE`;`R-ASHORT-M67-PRICE5-SESSIONLOG-MERGED-PREV-PASS`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: phase5+doc-governance+route-doc **102 OK**;py_compile OK;`git diff --check` clean(CRLF warning only);Codex probe 删除 advice 中 `结构支撑 {support}` 但保留 `质量 {q}` 时 `validate_m67_consistency` 仍 PASS。未抓数据、未提交。
+- **Next**: Claude 修复上述两个 Required 后再交 Codex re-`审查`。
+
+## 2026-06-16 — Claude `起草` (M6.7 price #5:有效支撑 抗单日极值 + 质量标记)
+- **Verdict/Action**: 起草完成(在 #2+#3+#4 之上)。`effective_support`:最低 low 比次低还低 `> SR_SPIKE_ATR(1.0)×ATR` → 判单日插针取次低(`weak`);否则极值被背书 = raw_low(`strong`);无 ATR/不足两根 → raw_low(`fallback_extreme`,不伪造)。`compute_indicators` 加 `support_quality`+`recent_low_20`、`support`=有效值;**`resistance` 不动**→ 持仓跟踪止损零改,**只影响建仓侧**(stop/低吸带/RR)。plan 携 support+quality;advice 显「结构支撑 X、质量 Q」;validator 校验枚举 + 精确「质量 Q」落点。GOVERNANCE 加 `sr_spike_atr`(preset 同步)。
+- **Required**: `R-ASHORT-M67-PRICE-EFFECTIVE-SUPPORT`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2041 OK**(EffectiveSupportTests 7:strong/weak/fallback/边界/exit携带/build落文案+validate/validator拒非法·拒dangling;IndicatorTests 更新;clean fixture support 仍 2.87 标 strong→无数值回归);持仓代码零改;parity test 绿;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex `审查` #5:engine + governance preset + 测试)。
+- **Pre-Codex self-review**: A–F checked。A 类×出口:质量三态 + 边界(差恰=1ATR→strong)各配测;support_quality 三面齐(machine.plan→advice→validator 枚举+精确「质量 Q」)。B ripple:`effective_support` 仅 compute_indicators 用;`support_resistance` 仍供 res(raw,holding 不变);新 ind 键 machine 松约束放行;GOVERNANCE↔preset 同步(parity 绿)。C 反向:holding/resistance 零改;clean fixture support 不变;support=次低致 stop≥close 时既有结构门正常拒(非误拒)。D N-A。E 单态。F `recent_low_20` 属指标层(同 atr/resistance 无需单独落点);无 BOM;diff 干净。
+
 ## 2026-06-16 — Codex `审查 PASS` (M6.7 price: cash allocation audit math)
 - **Verdict/Action**: PASS. `R-ASHORT-M67-PRICE-CASH-ALLOCATION-AUDIT-MATH-GUARD` 已按上一轮 Required 修好: sized 模式逐票分配字段与 `shares`/table/`entry_high` 数学对账,周报 `cash_allocation` summary 与逐票预算对账。
 - **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。

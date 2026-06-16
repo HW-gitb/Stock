@@ -23,7 +23,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_phase5_engine import (  # noqa: E402
     compute_indicators, entry_type, exit_and_size, classify_risk_families,
     build_m67_report, validate_m67_consistency, write_m67_report, GOVERNANCE,
-    tick_ref, tick_up, tick_down, holding_levels,
+    tick_ref, tick_up, tick_down, holding_levels, effective_support, SR_SPIKE_ATR,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_m67_report.schema.json"
@@ -103,9 +103,69 @@ class IndicatorTests(unittest.TestCase):
     def test_indicators(self):
         ind = compute_indicators(_series())
         self.assertAlmostEqual(ind["ma5"], 2.90)
-        self.assertAlmostEqual(ind["support"], 2.87)
-        self.assertAlmostEqual(ind["resistance"], 3.10)
+        self.assertAlmostEqual(ind["support"], 2.87)        # 极值 2.87 被次低 2.88 背书(差 0.01 < 1×ATR 0.04)→ strong, 不变
+        self.assertEqual(ind["support_quality"], "strong")
+        self.assertAlmostEqual(ind["recent_low_20"], 2.87)  # 原始近20日最低保留
+        self.assertAlmostEqual(ind["resistance"], 3.10)     # #5 不动 resistance(holding 跟踪止损依赖)
         self.assertAlmostEqual(ind["atr14"], 0.04, places=3)
+
+
+class EffectiveSupportTests(unittest.TestCase):
+    """#5 有效支撑:抗单日极值结构位 + 质量标记(strong/weak/fallback_extreme);只动建仓侧 support,不动 resistance。"""
+    def _s(self, lows):                                      # 构造 series(close 固定高于所有 low,确保不破结构)
+        return [{"high": x + 0.5, "low": x, "close": max(lows) + 0.5} for x in lows]
+
+    def test_strong_when_extreme_corroborated(self):
+        sup, q, raw = effective_support(self._s([10.0, 10.02, 10.5, 10.6, 10.7]), atr=0.5)
+        self.assertEqual((sup, q, raw), (10.0, "strong", 10.0))   # 次低 10.02 仅高 0.02 < 1×0.5 → 极值可信
+
+    def test_weak_drops_single_day_spike(self):
+        sup, q, raw = effective_support(self._s([9.0, 10.0, 10.1, 10.2, 10.3]), atr=0.5)
+        self.assertEqual((sup, q, raw), (10.0, "weak", 9.0))      # 9.0 比次低 10.0 低 1.0 > 1×0.5 → 插针,取次低
+
+    def test_fallback_extreme_when_no_atr(self):
+        sup, q, raw = effective_support(self._s([9.0, 10.0, 10.1]), atr=None)
+        self.assertEqual((sup, q, raw), (9.0, "fallback_extreme", 9.0))   # 无 ATR 无法评估 → 退原始极值
+
+    def test_spike_threshold_boundary(self):
+        # 差恰 = 1×ATR(不严格 >)→ 视为背书 strong(用 raw_low),非插针
+        sup, q, _ = effective_support(self._s([9.5, 10.0, 10.1, 10.2]), atr=0.5)
+        self.assertEqual((sup, q), (9.5, "strong"))
+
+    def test_exit_and_size_carries_support_and_quality(self):
+        # 建仓 plan 携带结构支撑 + 质量;stop 以有效 support 为基准(本切片改建仓 stop)。
+        ind = {"support": 10.0, "support_quality": "weak", "resistance": 12.0, "atr14": 0.5}
+        plan, rej = exit_and_size(_good_input(close=10.30), ind, "震荡期", etype="低吸")
+        self.assertIsNone(rej)
+        self.assertEqual(plan["support"], 10.0)
+        self.assertEqual(plan["support_quality"], "weak")
+
+    def test_build_report_surfaces_and_validates_support_quality(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")            # _series → support 2.87 strong
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        self.assertEqual(plan["support_quality"], "strong")
+        self.assertIn("质量 strong", r["m67"]["精简结论区"]["操作建议"])   # 文案落点
+        validate_m67_consistency(r)                                # 正向必过
+
+    def test_validator_rejects_bad_or_dangling_support_quality(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        r["machine"]["entry_exit_size_star"]["plan"]["support_quality"] = "bogus"   # 非枚举
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+        r2 = build_m67_report(_good_input(), AS_OF, "t")           # 删质量 token → no-dangling
+        r2["m67"]["精简结论区"]["操作建议"] = r2["m67"]["精简结论区"]["操作建议"].replace("质量 strong", "质量")
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r2)
+
+    def test_validator_rejects_dangling_support_value(self):
+        # R-ASHORT-M67-PRICE5-SUPPORT-VALUE-NODANGLE:删掉支撑价位、仅留「质量 Q」→ 必拒(只查质量会放过)。
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        sup = r["machine"]["entry_exit_size_star"]["plan"]["support"]
+        r["m67"]["精简结论区"]["操作建议"] = r["m67"]["精简结论区"]["操作建议"].replace(f"结构支撑 {sup}、", "")
+        self.assertIn("质量 strong", r["m67"]["精简结论区"]["操作建议"])   # 质量 token 仍在(隔离支撑价位缺失)
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
 
 
 class EntryExitTests(unittest.TestCase):

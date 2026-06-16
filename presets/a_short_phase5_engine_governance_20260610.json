@@ -27,6 +27,7 @@
     "lowxi_band": 0.015,
     "support_lookback": 20,
     "resistance_lookback": 20,
+    "sr_spike_atr": 1.0,
     "min_shares": 100,
     "min_amount": 10000.0,
     "impact_cost_frac": 0.005

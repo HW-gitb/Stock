@@ -44,6 +44,8 @@ MIN_AVG_AMOUNT_5D = 5e7        # 5日均成交额下限(流动性底线)
 LOWXI_BAND = 0.015            # 低吸:现价在支撑 ±1.5%
 SUPPORT_LOOKBACK = 20
 RESISTANCE_LOOKBACK = 20
+SR_SPIKE_ATR = 1.0            # #5 有效支撑:最低 low 比次低 low 还低 > 1×ATR → 判单日插针,支撑取次低(抗单日极值)
+SR_QUALITY = ("strong", "weak", "fallback_extreme")   # 有效支撑质量标记(strong=极值被次低背书 / weak=插针被剔→取次低 / fallback_extreme=无法评估退原始极值)
 MIN_SHARES = 100
 MIN_AMOUNT = 1e4
 IMPACT_COST_FRAC = 0.005     # 单只建仓 ≤ 5日均成交额 × 0.5%(冲击成本)
@@ -54,6 +56,7 @@ GOVERNANCE = {
     "overheat_5d": OVERHEAT_5D, "overheat_20d": OVERHEAT_20D,
     "min_avg_amount_5d": MIN_AVG_AMOUNT_5D, "lowxi_band": LOWXI_BAND,
     "support_lookback": SUPPORT_LOOKBACK, "resistance_lookback": RESISTANCE_LOOKBACK,
+    "sr_spike_atr": SR_SPIKE_ATR,
     "min_shares": MIN_SHARES, "min_amount": MIN_AMOUNT, "impact_cost_frac": IMPACT_COST_FRAC,
 }
 
@@ -134,11 +137,32 @@ def support_resistance(series: list):
     return (min(lows) if lows else None, max(highs) if highs else None)
 
 
+def effective_support(series: list, atr):
+    """#5 有效支撑(策略口径,仅建仓侧):抗单日极值结构位 + 质量标记。
+    `raw_low = min(近20日 low)`。若**最低 low 比次低 low 还低 > SR_SPIKE_ATR×ATR** → 判单日插针,支撑取**次低**
+    (quality=`weak`);否则极值被次低背书,支撑=`raw_low`(quality=`strong`)。ATR 缺失/窗口不足两根 → 退 `raw_low`
+    (quality=`fallback_extreme`,绝不伪造结构)。返回 `(support, quality, recent_low_20)`。**只影响建仓 stop/低吸带/RR
+    (谁能建仓);不碰持仓**——holding 跟踪止损用 `resistance`(近20日高 raw),本切片不动 resistance(交叉引用 §5 C2/F8)。"""
+    lows = [x["low"] for x in series[-SUPPORT_LOOKBACK:]]
+    if not lows:
+        return None, None, None
+    raw_low = min(lows)
+    if atr is None or atr <= 0 or len(lows) < 2:
+        return raw_low, "fallback_extreme", raw_low
+    second_low = sorted(lows)[1]
+    if second_low - raw_low > SR_SPIKE_ATR * atr:        # 最低是孤立插针(> 1 ATR 低于次低)→ 取次低为结构支撑
+        return second_low, "weak", raw_low
+    return raw_low, "strong", raw_low                    # 极值被次低背书 → 用 raw_low
+
+
 def compute_indicators(series: list) -> dict:
     closes = [x["close"] for x in series]
-    sup, res = support_resistance(series)
+    _, res = support_resistance(series)                  # resistance = 近20日 high raw(holding 跟踪止损依赖,本切片不动)
+    atr = atr14(series)
+    sup, sup_q, recent_low_20 = effective_support(series, atr)
     return {"ma5": ma(closes, 5), "ma10": ma(closes, 10), "ma20": ma(closes, 20),
-            "rsi14": rsi14(closes), "atr14": atr14(series), "support": sup, "resistance": res}
+            "rsi14": rsi14(closes), "atr14": atr, "support": sup, "support_quality": sup_q,
+            "recent_low_20": recent_low_20, "resistance": res}
 
 
 # ── 语义官方层消费方校验(fail-closed,单一来源)────────────────────────────────
@@ -384,6 +408,7 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
             "entry_type": etype, "entry_for_risk": entry_high, "chase_invalid_above": chase,
             "entry_invalid_reason": entry_invalid_reason, "stop": stop_t, "t1": t1_t, "t2": t2_t,
             "rr": round(rr_ref, 3), "rr_at_entry_high": round(rr_eh, 3), "rr_floor": rr_floor,
+            "support": sup, "support_quality": ind.get("support_quality"),   # #5 stop 的结构支撑基准 + 质量
             "shares": shares, "avg_amount_5d": amt5, "sizing_notes": notes}, None
 
 
@@ -558,7 +583,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                + (f";{plan['entry_invalid_reason']}" if plan.get("entry_invalid_reason") else ""))
         advice = (f"低吸/突破建仓建议(类型:{etype})。⭐×{star}、盈亏比 {plan['rr']}。{rng}。"
                   f"**试探仓**(edge 未验证,A-short 仅 risk_filter_only)。"
-                  f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**。价格已按 A 股 0.01 规整。" + iv_caveat + regime_caveat)
+                  f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**(基准:结构支撑 {plan['support']}、质量 {plan['support_quality']})。"
+                  f"价格已按 A 股 0.01 规整。" + iv_caveat + regime_caveat)
     elif action == "观察":
         advice = f"观察,不建仓。原因:{reject}。" + (f"降级:{'/'.join(downgrades)}。" if downgrades else "")
     elif action == "持有":
@@ -809,6 +835,14 @@ def validate_m67_consistency(report: dict) -> None:
                 raise ValueError("建仓 advice 缺精确入场区间短语「挂单区间 entry_low–entry_high」(no-dangling)")
             if plan.get("chase_invalid_above") is not None and f"突破追价超过 {plan['chase_invalid_above']}" not in adv:
                 raise ValueError("突破建仓 advice 缺精确追价短语「突破追价超过 chase_invalid_above」(no-dangling)")
+        # #5 有效支撑(no-dangling §8 + R-ASHORT-M67-PRICE5-SUPPORT-VALUE-NODANGLE):support_quality 须 ∈ 枚举,
+        # 且**支撑价位 + 质量**须以精确带标签短语在 advice 可见——只查「质量 {q}」会放过删掉支撑价位的 advice
+        # (支撑是 stop/低吸带/RR 的结构价格输入,必须可见可复核)。短语须与 build_m67_report 生成口径一致。
+        sq = plan.get("support_quality")
+        if sq not in SR_QUALITY:
+            raise ValueError(f"建仓 plan support_quality 非法 {sq!r}(须 ∈ {SR_QUALITY})")
+        if f"结构支撑 {plan['support']}、质量 {sq}" not in adv:
+            raise ValueError("建仓 advice 缺精确支撑短语「结构支撑 {support}、质量 {quality}」(no-dangling:须含支撑价位+质量)")
     elif action == "持有":   # S3a:持仓系统位被动显示。入/股数 必 null;损/盈一/盈二 可非空但须与 machine plan 一致。
         if tbl["入"] is not None or tbl["股数"] is not None:
             raise ValueError("持有但 table 入/股数 非空(持仓不新开仓/不重算股数)")
