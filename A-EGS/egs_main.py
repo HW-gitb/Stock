@@ -2010,6 +2010,7 @@ def _neutral_stats_df(codes):
     basic["limit_10d"]      = 0
     basic["is_lock"]        = False
     basic["is_breakout"]    = False
+    basic["limit_breakout_legacy"] = False
     basic["has_crash_veto"] = False
     return basic
 
@@ -2062,7 +2063,16 @@ def precompute_stock_stats(codes, all_daily):
         is_lock     = len(grp) >= 2 and bool(grp.loc[0,"is_limit"]) and bool(grp.loc[1,"is_limit"])
         limit_20d   = int(grp.head(20)["is_limit"].sum())
         limit_10d   = int(grp.head(10)["is_limit"].sum())
-        is_breakout = (limit_20d >= 3) and (limit_10d >= 1)
+        # 旧口径(近20日涨停≥3 且 近10日涨停≥1)保留为审计字段,便于看新旧 is_breakout 差异;不进 analysis_input、不进评分。
+        limit_breakout_legacy = (limit_20d >= 3) and (limit_10d >= 1)
+        # is_breakout 改用 v14.2 spec §M3.2 突破型口径:现价站稳 MA10 上方 且 当日量 > 5日均量×1.2(成交额代理)。
+        ma10 = float(closes.head(10).mean()) if len(closes) >= 10 else np.nan
+        amt0 = float(grp.iloc[0]["amount"]) if ("amount" in grp.columns and pd.notna(grp.iloc[0]["amount"])) else np.nan
+        amt5 = float(grp.head(5)["amount"].mean()) if "amount" in grp.columns else np.nan
+        is_breakout = bool(
+            len(closes) >= 10 and not pd.isna(ma10) and float(closes.iloc[0]) >= ma10
+            and not pd.isna(amt0) and not pd.isna(amt5) and amt5 > 0 and amt0 > amt5 * 1.2
+        )
 
         has_crash_veto = False
         for i in range(1, min(5, len(grp))):
@@ -2097,6 +2107,7 @@ def precompute_stock_stats(codes, all_daily):
             "limit_10d":      limit_10d,
             "is_lock":        is_lock,
             "is_breakout":    is_breakout,
+            "limit_breakout_legacy": limit_breakout_legacy,   # 审计:旧涨停口径(诊断,不进 analysis_input)
             "high_20d":       high_20d,
             "low_20d":        low_20d,
             "drawdown_20d":   drawdown_20d,
@@ -2164,12 +2175,12 @@ def build_master(df_l0, stats_df, df_db, df_fin, sw_map, red_dict):
 
     if not stats_df.empty:
         st_cols = [c for c in ["ts_code","avg_amount_5d","vol_confirm","limit_20d","limit_10d",
-                                "is_lock","is_breakout","high_20d","low_20d","pct_5d","pct_60d",
+                                "is_lock","is_breakout","limit_breakout_legacy","high_20d","low_20d","pct_5d","pct_60d",
                                 "drawdown_20d","has_crash_veto"]
                    if c in stats_df.columns]
         df = df.merge(stats_df[st_cols], on="ts_code", how="left")
 
-    for bool_col in ["is_lock","is_breakout","has_crash_veto"]:
+    for bool_col in ["is_lock","is_breakout","limit_breakout_legacy","has_crash_veto"]:
         if bool_col in df.columns:
             df[bool_col] = df[bool_col].fillna(False)
 

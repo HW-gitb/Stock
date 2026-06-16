@@ -231,14 +231,15 @@ class EntryExitTests(unittest.TestCase):
         etype, _ = entry_type(_good_input(close=2.80), self.ind)
         self.assertEqual(etype, "观察")
 
-    def test_breakout_entry_gated_by_vol_confirm(self):
-        # R-ASHORT-FIRSTGAP-BREAKOUT-E2E: is_breakout alone stays non-breakout; vol_confirm un-dormants it.
+    def test_breakout_not_gated_by_vol_confirm(self):
+        # #6-ii(R-ASHORT-EGS-BREAKOUT-SPEC-M67-VOLCONFIRM-DRIFT):is_breakout=v14.2 spec(EGS 算 MA10+放量)即触发
+        # 突破;旧非-spec vol_confirm 不再叠加门。is_breakout=True + vol_confirm=False → 仍突破(去掉旧额外门)。
         d = _good_input()["derived"]; d["breakout"] = True; d["vol_confirm"] = False
         et, _ = entry_type(_good_input(derived=d), self.ind)
-        self.assertNotEqual(et, "突破")
-        d2 = _good_input()["derived"]; d2["breakout"] = True; d2["vol_confirm"] = True
+        self.assertEqual(et, "突破")
+        d2 = _good_input()["derived"]; d2["breakout"] = False; d2["vol_confirm"] = True
         et2, _ = entry_type(_good_input(derived=d2), self.ind)
-        self.assertEqual(et2, "突破")
+        self.assertNotEqual(et2, "突破")     # 无 is_breakout → 非突破(vol_confirm 不能单独触发)
 
     def test_exit_size_buildable(self):
         plan, rej = exit_and_size(_good_input(), self.ind, "震荡期", extra_halve=False)
@@ -575,9 +576,10 @@ class BuildReportTests(unittest.TestCase):
         self.assertLess(r["m67"]["table"]["股数"], base["m67"]["table"]["股数"])
         self.assertIn("Rule12 recovery", r["m67"]["table"]["触发条件"])
 
-    def test_breakout_m67_path_active_with_vol_confirm(self):
-        # M6.7 breakout branch is no longer dormant: is_breakout+vol_confirm reaches type=突破.
-        d = _good_input()["derived"]; d["breakout"] = True; d["vol_confirm"] = True
+    def test_breakout_m67_path_active_without_vol_confirm(self):
+        # #6-ii 对抗:EGS 新 spec 真突破(is_breakout=True)但旧 vol_confirm=False → M6.7 仍到 type=突破
+        # (证 downstream drift 已修:不再被非-spec vol_confirm 门挡回观察)。
+        d = _good_input()["derived"]; d["breakout"] = True; d["vol_confirm"] = False
         r = build_m67_report(_good_input(derived=d), AS_OF, "t")
         self.assertEqual(r["machine"]["entry_exit_size_star"]["type"], "突破")
         adv = r["m67"]["精简结论区"]["操作建议"]

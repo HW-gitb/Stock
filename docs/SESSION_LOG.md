@@ -10,6 +10,32 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (#6-ii: EGS breakout spec + M6.7 downstream)
+- **Verdict/Action**: PASS. `R-ASHORT-EGS-BREAKOUT-SPEC-M67-VOLCONFIRM-DRIFT` 已按上一轮 Required 修好:EGS `is_breakout` 采用 v14.2 spec(站稳 MA10 + 当日量>5日均量×1.2),M6.7 `entry_type` 不再叠加旧 `vol_confirm` 门;`vol_confirm` 只保留为 EGS `l4_score` 评分输入。schema/comment/design 当前指导面已同步。
+- **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。
+- **Verify**: targeted EGS+M6.7+weekly+doc/schema suite **274 OK**(`tests.phase6.test_egs_main_breakout_spec` 5, phase6/doc guards 44, weekly 113 with tushare import stub, phase5/render/holdings 126, analysis_input contract 8);syntax compile OK(no-pyc);schema JSON parse OK;`git diff --check` clean(CRLF warning only);Codex probe `is_breakout=True,vol_confirm=False -> entry_type=突破` and `is_breakout=False,vol_confirm=True -> 观察`。未抓数据、未提交。
+- **Next**: Claude `提交` 本批 #6-ii tracked files;不要提交 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-16 — Claude `修复` (#6-ii downstream:去 M6.7 突破的 vol_confirm 门)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(我 #6-ii 漏改下游,且起草 entry 误称「entry_type 零改、vol_confirm 保留 per user」——与用户「按 spec 改」矛盾)。egs `is_breakout` 已是 spec,但 `entry_type` 仍要旧非-spec `vol_confirm` 门 → spec 真突破被挡回观察。改:`entry_type` 突破 = `breakout AND ma10 AND close≥ma10`(去 `vol_confirm`);`is_breakout`(=spec)为突破信号,引擎留 close≥ma10 本地复查;`vol_confirm` 仅留 EGS `l4_score` 评分。同步 normalize 注释 / schema 描述 / 设计文档 §2§5 / 2 个既有门控测试。
+- **Required**: `R-ASHORT-EGS-BREAKOUT-SPEC-M67-VOLCONFIRM-DRIFT`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2052 OK**;Codex probe(spec-true/vol_confirm-false → entry_type 突破)复现并通过;改写 2 测试(vol_confirm=False 仍突破 / is_breakout=False+vol_confirm=True 非突破 / M6.7 vol_confirm=False 到 type=突破);当前-指导残留 grep=0;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` #6-ii)。
+- **Pre-Codex self-review**: A 去门改了 entry_type + 2 测试 + normalize 注释 + schema 描述 + 设计§2§5(整类当前-指导面一次覆盖);B ripple grep 残留仅字段映射行(正确);C 反向 is_breakout=False+vol_confirm=True 非突破、低吸不变、既有 vol_confirm=True 突破测试仍过;D N-A;E 单态(prepend 锚归档行未碰下一条标题);F 无 BOM、diff 干净、egs_main l4_score 未动(vol_confirm 仍评分);历史 2026-06-11 resolved/archive 旧契约条目留存(非当前指导)。
+
+## 2026-06-16 — Codex `审查 FAIL` (#6-ii: EGS is_breakout spec migration)
+- **Verdict/Action**: FAIL. `A-EGS/egs_main.py` 把 `is_breakout` 改成 v14.2 spec 方向是对的,旧涨停口径也已保留为 `limit_breakout_legacy` 审计字段。但本轮没有把 downstream M6.7 入口口径同步: `runners/a_short_phase5_engine.py::entry_type` 仍要求 `is_breakout AND close>=MA10 AND vol_confirm`。我构造了一个 EGS 新 spec 真突破样本(`close=10.8 >= MA10=10.18`, `amt0=1000 > amt5=280*1.2`),`precompute_stock_stats` 输出 `is_breakout=True` 但 `vol_confirm=False`;同样状态进入 `entry_type` 后仍返回 `观察/未到低吸/突破触发`。这和用户“按原来 v14.2 spec 改”的目标不一致,仍保留了旧额外量能门。
+- **Required**: `R-ASHORT-EGS-BREAKOUT-SPEC-M67-VOLCONFIRM-DRIFT`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: `tests.phase6.test_egs_main_breakout_spec` **5 OK**;syntax compile OK(`py_compile` 正常写 `A-EGS/__pycache__` 被 Windows 拒绝访问,改用 no-pyc `compile()` 做语法校验);`git diff --check` clean(CRLF warning only);Codex probe: EGS spec-true/vol_confirm-false 样本存在,且 M6.7 `entry_type` 对该状态返回 `观察`。未抓数据、未提交。
+- **Next**: Claude 修复 `R-ASHORT-EGS-BREAKOUT-SPEC-M67-VOLCONFIRM-DRIFT` 后再交 Codex re-`审查`。
+
+## 2026-06-16 — Claude `起草` (#6-ii:egs is_breakout 口径迁移到 v14.2 spec)
+- **Verdict/Action**: 起草完成(用户决定按 spec 改突破)。`A-EGS/egs_main.py::precompute_stock_stats` 的 `is_breakout` 从旧「近20日涨停≥3 且 近10日涨停≥1」改为 v14.2 spec §M3.2:`现价站稳 MA10 且 当日量>5日均量×1.2`(成交额代理)。旧口径保留为审计字段 `limit_breakout_legacy`(egs 内部:输出 dict + 诊断 CSV st_cols + neutral fallback),**不进 analysis_input.derived_flags**(契约不变)。M6.7 引擎 entry_type **零改**(突破仍 `is_breakout AND close≥ma10 AND vol_confirm`,保留 vol_confirm 作额外量能层,比裸 spec 严)。
+- **Required**: `R-ASHORT-EGS-BREAKOUT-SPEC-MIGRATION`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2052 OK**(BreakoutSpecTests 5:spec-true+legacy-false / below-MA10 拒 / 无放量拒 / legacy-true-but-spec-false 证口径已换 / is_breakout 不进 l4_score 守护);phase6 62 OK 含 analysis_input 契约;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex `审查` #6-ii:egs_main + 测试)。
+- **Pre-Codex self-review**: A–F checked。A is_breakout 新口径三态(MA10/放量两门)+ legacy 保留且与新口径差异 + neutral fallback;出口:derived_flags(is_breakout 现 spec 值,legacy 不入契约)/direction_lock/标签。B ripple:is_breakout 消费点不变(读值);limit_breakout_legacy 仅 egs 内部三处;契约测试过(derived_flags 未加字段)。C 反向:**不动选股/TopN**——is_breakout 不进 l4_score(守护测试钉死),只 vol_confirm 进评分;选股排序不受口径变更影响。D N-A。E register/SESSION_LOG 单态(prepend 锚归档行未碰下一条标题)。F 无 BOM;diff 干净;activation 取决于候选在 MA10 上方+放量(随周变)。
+
 ## 2026-06-16 — Codex `审查 PASS` (M6.7 price #6-i: RR floor no-dangling)
 - **Verdict/Action**: PASS. `R-ASHORT-M67-PRICE6-RR-FLOOR-NODANGLE` 已按上一轮 Required 修好:建仓 advice 必须包含精确 `门槛 {plan['rr_floor']}`,删门槛会被 `validate_m67_consistency` 拒绝;低吸文案只显示 `门槛 1.5`,不再带 `突破型更严`;突破文案显示 `门槛 2.0(突破型更严)`。
 - **Required**: addressed in working tree;closure note 见 `docs/system_risk_register.md`。

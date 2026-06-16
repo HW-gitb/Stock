@@ -275,7 +275,8 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         "industry_trend": industry_trend,
         # 真实 EGS analysis_input 契约:derived_flags.{is_lock,is_breakout,has_crash_veto,
         # overheat_flag,chasing_high,vol_confirm,hard_veto};suspension 在 event_risk.suspension.is_suspended。
-        # vol_confirm 可选:缺失/false → 走保守非突破路径(低吸/观察);true → 启用 Phase 5 突破分支。
+        # vol_confirm 可选:EGS 量能旁证(近5日上涨日额>下跌日额),仅进 EGS l4_score 评分;**不再门控 M6.7 突破**
+        # (#6-ii:突破改由 is_breakout=v14.2 spec[站稳MA10 + 当日量>5日均量×1.2]触发,见 a_short_phase5_engine.entry_type)。
         "derived": {"overheat": bool(d.get("overheat_flag")), "chasing_high": bool(d.get("chasing_high")),
                     "breakout": bool(d.get("is_breakout")), "vol_confirm": bool(d.get("vol_confirm")),
                     "crash_veto": bool(d.get("has_crash_veto")), "limit_locked": bool(d.get("is_lock")),

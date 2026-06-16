@@ -337,7 +337,10 @@ def entry_type(inp: dict, ind: dict):
         return "观察", "现价缺失"
     if ma5 and ma10 and ma20 and close < ma5 and close < ma10 and close < ma20:
         return "观察", "现价跌破 MA5/10/20,等收复"
-    if inp.get("derived", {}).get("breakout") and ma10 and close >= ma10 and inp.get("derived", {}).get("vol_confirm"):
+    # #6-ii:is_breakout 现为 v14.2 spec 突破信号(站稳MA10 + 当日量>5日均量×1.2,EGS 算)。引擎本地复查
+    # close>=ma10 作安全门;**不再叠加旧 vol_confirm(近5日上涨日额>下跌日额)门**——那是非-spec 额外量能,
+    # 会把合法的 spec 突破误判成观察(vol_confirm 仅留作 EGS l4_score 评分输入,不门控突破)。
+    if inp.get("derived", {}).get("breakout") and ma10 and close >= ma10:
         return "突破", "站稳 MA10 + 放量"
     if sup and abs(close - sup) / sup <= LOWXI_BAND:
         return "低吸", "现价近关键支撑"
