@@ -28,10 +28,11 @@
   - `buy_limit_low`(entry_low):向上/half-up,但须保证区间仍合法(`low<=high`)。
 - **覆盖建仓 plan(`exit_and_size`)+ 持仓 plan(S3a `holding_levels`)**;**machine plan 与 table 存同一组 tick 后值**(防 `validate_m67_consistency` 的 `1e-9` 比对写盘前 `ValueError` 炸整轮);raw 计算值如保留只作 debug、非用户执行价。
 - 操作建议须写"价格已按 A 股 0.01 tick 规整"。
+- **§2.1 post-tick 不变式(Codex Required,关键)**:tick 是**最终执行价**——所有建仓决策 / RR 校验 / 持仓位用**取整后**价,不用 raw。side-aware 取整可能收窄风险结构,故取整后**必须重校验**,任一破即转观察 / 走 breached:`risk = entry_for_risk − stop` 有限且 > 0;`stop < entry_for_risk`;`t1 > entry_for_risk`;`t2 >= t1`;`rr_at_entry_high = (t1 − entry_high)/(entry_high − stop) >= rr_floor`(**用取整后价复算**)。建仓任一不满足 → 转「观察」(reject 写"取整后 RR/结构失效")。**S3a 持仓**:取整后 `stop >= close`(跟踪止损越过现价)→ 走 §7 / S3a 的 **breached** 路径(t1/t2=None、标已破位),不当正常止盈。对抗测试:raw 合格、仅取整后失效 → 正确转观察 / breached。
 
 ## 3. Slice — 入场区间 + 最不利价 RR 门(= master §4 + §11.2)
 - `entry_ref=tick(close)` / `entry_low` / `entry_high` / `entry_type`(低吸·突破)/ `entry_invalid_reason`;区间无效(`low>high`)退回单点不伪造。
-- 低吸:`entry_low=max(support, close−0.5ATR)`、`entry_high` 取上沿(用 **max** 口径修退化,master §4 + 审查 F4)。突破:`entry_high=close+0.3ATR`、`chase_invalid_above=close+0.5ATR`。
+- **低吸(精确公式,Codex Required)**:`entry_ref=close`;`entry_low=max(support, close−0.5×ATR)`(floor:不追到支撑下方);**`entry_high=close`**(cap:低吸不追到现价上方,等回落到 `entry_low–close` 区间吸)→ 区间 `[entry_low, close]` 非退化(只要 `support<=close` 即低吸正常触发态)。**raw 兜底**:`entry_low>entry_high`(即 `support>close`,现价已破支撑)→ 退单点 `entry_ref` + `entry_invalid_reason`。**post-tick 兜底**:取整后(entry_low 向上取、entry_high 向下取)若 `entry_low>entry_high` → 同退单点。突破:`entry_high=close+0.3×ATR`、`chase_invalid_above=close+0.5×ATR`。
 - **RR 用 entry_high 重算**:`risk_at_entry_high=entry_high−stop`、`rr_at_entry_high=(t1−entry_high)/risk_at_entry_high`;**`rr_at_entry_high>=rr_floor` 才输出建仓**,否则收窄区间或转观察(master §11.2)。machine plan 存 `entry_for_risk/risk_at_entry_high/rr_at_entry_high`。
 - 落点:`table.入=entry_ref`;操作建议写 `entry_low–entry_high`+`rr_at_entry_high`+突破"超过 chase_invalid_above 不追"+区间失效条件;第一版不扩 schema(render 测试强制文案含 entry_low/high/chase),或可选 `m67.execution_guidance.entry_range`。
 
@@ -39,7 +40,7 @@
 - 出全部 action 后、只对 `建仓` 票:逐票出 raw plan → 排序 → 逐票消耗 `remaining_cash`(初值 `available_cash`)。
 - **按 entry_high(最不利价)计提现金**:`cash_required=allocated_shares×entry_high`(无区间则 `=entry_ref`)。
 - 排序键(确定性):`action_buildable↓ > star↓ > egs_score↓ > rr_at_entry_high↓ > avg_amount_5d↓ > original_topN_rank↑ > ts_code↑`。**只 re-rank 建仓票,不 rescue hard veto、不把观察/否决变建仓、不碰 Rule12/13/L2 暴露**(审查 F7)。
-- 字段:`raw_shares/allocated_shares/cash_budget_used/cash_allocation_rank`(+ weekly `available_cash_start/allocated_cash_total/remaining_cash`)。`allocated_shares==0`→ table 转`观察`、触发条件写"组合现金分配后不足一手/最小金额";`allocated<raw` 时操作建议写明降档原因(审查 F6,no-dangling)。
+- 字段:`raw_shares/allocated_shares/cash_budget_used/cash_allocation_rank`(+ weekly `available_cash_start/allocated_cash_total/remaining_cash`)。**`allocated_shares==0`(分配后不足一手/最小金额)→ 完整状态转换(Codex Required,防 validator 崩)**:**同时**置 `machine.entry_exit_size_star.action="观察"` 与 `m67.table.操作="观察"`;按 validator 观察规则**清空 `入/损/盈一/盈二/股数`=null**;raw plan(entry/stop/t1/t2/raw_shares)仅留 `machine` 诊断字段(如 `plan.diagnostic_raw`)、**不**作用户执行价;advice 写"组合现金分配后不足一手→转观察(原拟建仓价位见诊断)"。**绝不**出现 `建仓` 行 股数 null/0。测试:归零后 `validate_m67_consistency` 通过、无 `建仓` 行 股数 null/0、action↔table 一致。`allocated<raw`(非 0)时操作建议写明降档原因(审查 F6,no-dangling)。
 
 ## 5. Slice — 有效支撑/压力(策略口径,单独切片单独审查,后置)
 `min/max(20日)` → 抗单日极值结构位 + 质量标记(strong/weak/fallback_extreme)。**改 support→改建仓 stop/RR 门/谁能建仓**;只影响**建仓侧**——S3a 持仓止损用 `recent_high` 不是 support,故本 slice 不改善持仓止损(交叉引用,审查 F8 / C2)。

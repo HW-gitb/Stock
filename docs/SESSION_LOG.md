@@ -10,6 +10,25 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Codex `审查 PASS` (M6.7 价格计算优化提案设计层 re-review)
+- **Verdict/Action**: PASS。3 个执行契约缺口已在提案设计层补齐;仍未写业务代码。
+- **Required**: `R-ASHORT-M67-PRICE-ROADMAP-DESIGN-EXECUTABLE-CONTRACT-GAPS` addressed in working tree;详情见 `docs/system_risk_register.md`。
+- **Verify**: proposal/design/code-contract review;doc-governance+route-doc 30 OK;`git diff --check` clean(CRLF warning only);未抓数据、未改业务代码。
+- **Next**: Claude `提交`。提交时包含 price proposal / SESSION_LOG / register,继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
+## 2026-06-16 — Claude `修复` (价格 roadmap 提案设计层:3 执行契约缺口)
+- **Verdict/Action**: 判定 Codex 3 Required **正确**(纯设计文档,不写业务代码)。① post-tick 不变式:§2.1 加——tick=最终执行价,建仓决策/RR 用取整后价,side-aware 取整后**重校验** `risk>0/stop<entry/t1>entry/t2>=t1/rr_at_entry_high>=rr_floor`,破则转观察;S3a 持仓取整后 `stop>=close`→breached。② 低吸 entry_high 精确公式:`entry_ref=close`、`entry_low=max(support,close−0.5×ATR)`、`entry_high=close` + raw/post-tick 双兜底退单点。③ 现金归零→观察完整转换:同步置 `machine.action`+`table.操作`=观察、清空价格字段、raw 仅留诊断、绝无 建仓 空股数。详见 register。
+- **Required**: `R-ASHORT-M67-PRICE-ROADMAP-DESIGN-EXECUTABLE-CONTRACT-GAPS`;详见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: doc-governance+route-doc **30 OK**;`git diff --check` 干净;纯设计文档、无业务代码改。
+- **Next**: 审查(Codex re-`审查` 提案设计层)。
+- **Pre-Codex self-review**: A–F(设计层)checked — A 三缺口各给确定性公式/状态机 + 对抗测试要求(raw-valid·tick-invalid / 低吸退化 / 归零转观察过 validator);B 不变式同时约束建仓与 S3a 持仓(breached 复用)、§7/§10 交叉引用;C 反向 取整后失效不放过(转观察非伪建仓)、低吸不退化也不反转、归零不留 建仓空股数;E route-doc 单态(register 详情 + 本指针);F 纯 doc、diff 干净、实现期补对抗测试。
+
+## 2026-06-16 — Codex `审查 FAIL` (M6.7 价格计算优化提案设计层)
+- **Verdict/Action**: FAIL。提案方向正确,但实现前还缺三处执行契约:tick 后再校验、低吸 entry_high 公式、现金分配归零后的 machine/table 状态一致。
+- **Required**: `R-ASHORT-M67-PRICE-ROADMAP-DESIGN-EXECUTABLE-CONTRACT-GAPS` remains open;详情见 `docs/system_risk_register.md`。
+- **Verify**: proposal/design/code-contract review;`git status --short --untracked-files=all`;未抓数据、未改业务代码。
+- **Next**: Claude `修复` 该提案设计文档后再交 Codex re-`审查`;继续排除 untracked `research/results/a_short/em_probe_smoke_20260614/*`。
+
 ## 2026-06-16 — Claude `起草` (价格 roadmap 收敛:同步 master 更新 + 拍板 D1/D2/D3 + side-aware tick)
 - **背景/scope**:用户更新桌面 master `price calc.md`(现含 Codex §11:side-aware tick / 最不利价 RR / 确定性排序)+ 3 directives(① 价格 2 位小数 ② master 已更新 ③ **系统级永久变更**:改引擎计算逻辑、所有未来运行生效、非给当前持仓/本周topN 打补丁)。同步 in-repo 提案到 master + 决策;修 S3a §2.22 与 D1 的矛盾。纯文档、未实现代码。
 - **决策(已拍 2026-06-16)**:**D1**=是(所有价格 0.01、覆盖建仓+持仓 plan,推翻 S3a §2.22)/ **D2**=是(入场区间 RR 门 + 现金预算按最不利价 `entry_high`)/ **D3**=是(S3a+提案+引擎并一条价格 roadmap)/ **tick=side-aware**(止损向上取、止盈/buy_high 向下取,`Decimal`+有限值防护)。
