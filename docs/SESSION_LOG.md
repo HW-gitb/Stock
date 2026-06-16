@@ -10,6 +10,11 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-16 — Claude `起草` (M6.7 价格计算优化提案 doc;源自桌面草案 + subagent 审查)
+- **背景/scope**:用户要求把价格计算优化提案写入 in-repo 文档。源 = 桌面 `未price calc.md`(用户草案)+ subagent 对抗审查(verdict = adopt-with-changes)。产 `docs/a_short_m67_price_calc_optimization_proposal.md`(**仅提案、未实现任何 slice**)。
+- **内容**:3 个已对代码验证的真问题(① render `_cell` 显未取整价 `69.412` 不可执行;② pipeline 多票共用 account dict、无全局现金预算 → 超配;③ 突破型 RR floor 未区分)+ 5 刀(Slice 0 tick 横切 / A 组合现金分配 / B 入场区间-deferred / C 支撑升级 / D V14.2 迁移),含审查 F1-F9 修法(`Decimal` 取整 + 有限值防护、machine plan 必同取整防 `1e-9` 写盘崩、入场区间 RR 门用最不利价、现金分配 `ts_code` tie-breaker)+ 与 S3a 衔接 C1-C4 + No-Dangling(删悬挂 `gap_invalid_*` 字段)。
+- **Next**:用户拍 §8 的 **D1**(tick 是否统一覆盖建仓 plan、推翻 S3a §2.22)/ **D2**(入场区间 RR 门基准)/ **D3**(三者合并一条价格 roadmap)后,逐 slice `起草→审查→修复→提交`(建议序 Slice 0→A→D→B→C);提案 doc 可另交 Codex 设计层 `审查`(可选)。**未实现任何业务代码**。
+
 ## 2026-06-16 — Codex `审查 PASS` (S3a 设计稿:SESSION_LOG 交接污染 + account_state v1.1 兼容路径)
 - **Verdict/Action**: PASS。两项 Required 已在设计/文档层修对,当前仍未写业务代码。
 - **Required**: `R-ASHORT-HOLDINGS-S3A-DESIGN-GATE-AND-COMPAT-GAP` addressed in working tree;详情见 `docs/system_risk_register.md`。
