@@ -103,7 +103,9 @@
 4. **A-short 分析层语义项自动化评估** — 监管48h / 行业景气 / 媒体负面 / 隐蔽风险 当前是 `deterministic_report_coverage.md` 里**有意标 `requires_llm` / `pending_llm` 的可选 LLM-enrich 项,不是硬规则,也不是 production blocker**(enrich 层翻不动 `veto`/`decision`,确定性内核不依赖它们;短线"赛道热度"维度已被 EGS `industry_heat` 部分覆盖)。是否升级成自动硬规则属**独立可选增强**,真正前置 = 可靠的 PIT 新闻/公告/监管数据源(与 `SR-PROVIDER-001` 同类数据源难题),须先单独评估数据源可行性再决定;无可靠 PIT 源前维持 LLM-enrich 边界,**不得**硬编"负面媒体→硬否决"(误否决 + look-ahead 风险)。此项 `执行` 顺序在 A-long 遗留之前。
 5. ⏳ **Comparison-only / forward 轨的常驻提醒(已固化进 `docs/system_risk_register.md`「comparison-only tracks — standing promote/retire reminder index」;register 在 `执行` 时强制读 → 任何 LLM 到点都会看到、再提醒用户决定升级/放弃)**:
    - **① V14.3 regime** — 时钟在走(每周 increment);≥12 周复审:达标→提示进生产切换审查 / 无改善→提示退役;+ V14.2-sourcing 微接线触发。
-   - **② overlay(Slice A 赛道热度对照)— 已接线(2026-06-16 更正:之前误记"待接线")**:`A-EGS/egs_main.py`(score_l5 后,~L3316-3338)已用内存 top50+all_daily+PIT概念+sw_map 装配并写 `result/a_short/<as_of>/overlay.json`,但**仅 `--l3-mode pit` 产出**(`overlay_emit_allowed` 门;live `today` 为 PIT 诚实故意跳过)。所以 **live weekly 不产出 → 对照只在 pit/回放 run 累积,非 live forward**。**真正待决(非接线):** promote 要 ≥12 forward obs,但产物 pit-gated(历史)——需定 (a) 每周用 pit 模式跑攒、(b) 放开 live `today` 产出但标 `concept_membership='forward'`(reviewed 改门/标签)、或 (c) overlay 当回放验证用。详见 register 索引 track②。
+   - **② overlay(Slice A 赛道热度对照)— 已接线 + (b) 已做(2026-06-16)**:`A-EGS/egs_main.py`(score_l5 后)用内存 top50+all_daily+L3概念+sw_map 装配写 `result/a_short/<as_of>/overlay.json`。**(b) 改:`overlay_emit_allowed` 放开 `pit`+`today` 双模式**——pit→concept 标 'pit'(回放);**live `today`→标 'forward'(决策当日 live 成员,无 look-ahead)→ overlay 现在在 live weekly 自然 forward 累积**(≥12 周升级时钟开始走);neutralize/无概念仍跳过。下一步=实盘攒 ~12 周后按 register 索引 track② 复审升级/退役。
+
+> ⏳ **overlay 待决已闭(选 (b))**:此前列的"先接线/pit-gated 待决"已解决——(b) 让 live 实盘自然累积 forward 证据。无新建造待办,只待实盘攒够周数复审。
    - **③ egs_weight(legacy/balanced/aggressive/双提)** — 时钟在走(每次 EGS run 产 `egs_weight_comparison.json`);双提升级/退役条件见 register 的 egs weight forward-item。
    - **④ A-long 2 clue(`cash_flow_to_circ_mv`/`sales_to_circ_mv`)forward-live** — 研究级 OOS harness **未搭**;下一步动作 = 写新 reviewed prereg 定窗口/指标再跑,跑完评 OOS,不确认则记 falsified。
    - 全部**只对照、绝不自动切生产**;切生产永远另走 reviewed governance + 用户确认。
