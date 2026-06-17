@@ -358,6 +358,52 @@ def _allocate_cash(reports: list, available_cash) -> dict:
             "allocated_cash_total": round(allocated_total, 2), "remaining_cash": round(remaining, 2)}
 
 
+# 4.2 Round2: analysis_input.universe_summary.excluded_counts 键 → exclusion_summary by_reason 元信息
+# (全部 L0 上游过滤 = production_hard_veto;counts-only → public_tracked,不暴露个股/持仓)。
+_EXCL_REASON_META = {
+    "holder_reduction_veto_10d": ("holder_reduction_veto_10d", "l0_filter", "disclosure_date", "10日减持"),
+    "unlock": ("share_float_unlock", "l0_filter", "disclosure_date", "大额解禁"),
+    "suspended": ("suspended", "l0_filter", "trade_date_window", "停牌"),
+    "relisted": ("relisted", "l0_filter", "trade_date_window", "次新/relisted"),
+}
+
+# exclusion_summary.evidence_ref 的唯一受审 lineage key:builder 发射 + validator 精确校验共用单一来源,
+# 防"乱写 value 仍过"。本轮 evidence 只支持 lineage_key(指向已消费的 analysis_input 派生 key);
+# artifact_path 在真实产出可解析 artifact 前不开放(4.2.md §6.2/§10.2)。
+_EXCL_EVIDENCE_LINEAGE_KEY = "analysis_input.universe_summary.excluded_counts"
+
+
+def _build_exclusion_summary(excluded_counts: dict, as_of: str):
+    """4.2 Round2: 把 analysis_input.universe_summary.excluded_counts(egs_main filter_l0 已记)转成周报
+    批次级 exclusion_summary(counts-only, public_tracked;不暴露个股代码/持仓)。total==0 → None(无可报)。
+    不改 egs_main、不抓数、不虚构个股行。**完整性 fail-closed**(R-ASHORT-GAP42-ROUND2):excluded_counts 是开放契约
+    (analysis_input schema additionalProperties),任何 count>0 的未映射键 → raise(绝不静默丢一个上游过滤原因);
+    新原因须先在 _EXCL_REASON_META 映射 stage/veto_class/pit_basis 后才能进摘要。"""
+    excluded_counts = excluded_counts or {}
+    _unknown = sorted(k for k, v in excluded_counts.items()
+                      if int(v or 0) > 0 and k not in _EXCL_REASON_META)
+    if _unknown:
+        raise ValueError(f"exclusion_summary 完整性: 未映射的上游过滤原因(count>0) {_unknown} —— "
+                         "须先在 _EXCL_REASON_META 映射 stage/veto_class/pit_basis(no-dangling fail-closed)")
+    by_reason, parts, total = [], [], 0
+    for key, (sf, stage, pit, label) in _EXCL_REASON_META.items():
+        n = int(excluded_counts.get(key) or 0)
+        if n <= 0:
+            continue
+        by_reason.append({"source_field": sf, "stage": stage, "veto_class": "production_hard_veto",
+                          "count": n, "pit_basis": pit, "production_effect_enabled": True,
+                          "privacy_class": "public_tracked"})
+        parts.append(f"{label} {n} 只")
+        total += n
+    if total == 0:
+        return None
+    return {"as_of": str(as_of), "total_excluded": total, "by_reason": by_reason,
+            "m67_text": "本轮上游过滤(无 M6.7 个股行,批次级): " + "、".join(parts) + "。",
+            "evidence_ref": {"kind": "lineage_key",
+                             "value": _EXCL_EVIDENCE_LINEAGE_KEY,
+                             "as_of": str(as_of)}}
+
+
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
@@ -426,6 +472,31 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         raise ValueError("run_lineage=(provided,sized) 但 cash_allocation 非对象(sized 必有全局现金分配摘要)")
     if not sized and ca is not None:
         raise ValueError("run_lineage=(absent,observation_only_no_account) 但 cash_allocation 非 null(observation-only 不得有现金分配)")
+    # 4.2 Round2: exclusion_summary 一致性(counts-only 批次级,可选;无则跳过)
+    es = weekly.get("exclusion_summary")
+    if es is not None:
+        if es.get("as_of") != weekly["as_of"]:
+            raise ValueError(f"exclusion_summary.as_of {es.get('as_of')} != 周报 as_of {weekly['as_of']}")
+        br = es.get("by_reason") or []
+        if any(int(r.get("count") or 0) <= 0 for r in br):
+            raise ValueError("exclusion_summary.by_reason 含非正 count(零计数不入摘要)")
+        ssum = sum(int(r.get("count") or 0) for r in br)
+        if ssum != es.get("total_excluded"):
+            raise ValueError(f"exclusion_summary total_excluded {es.get('total_excluded')} != Σby_reason {ssum}")
+        if not es.get("m67_text"):
+            raise ValueError("exclusion_summary 缺 m67_text(用户可见摘要)")
+        ev = es.get("evidence_ref")
+        # evidence_ref 必须真正绑到受审 lineage:本轮仅 lineage_key + 唯一受审 dotted path(_EXCL_EVIDENCE_LINEAGE_KEY),
+        # 且 as_of==报告日期、run_lineage.analysis_input 非空。乱写 value 或 artifact_path 伪路径均拒(R-ASHORT-GAP42-ROUND2)。
+        if not isinstance(ev, dict) or ev.get("kind") != "lineage_key":
+            raise ValueError("exclusion_summary.evidence_ref 缺失/坏 kind(本轮仅 lineage_key;artifact_path 未实现,不开放)")
+        if ev.get("value") != _EXCL_EVIDENCE_LINEAGE_KEY:
+            raise ValueError(f"exclusion_summary.evidence_ref.value {ev.get('value')!r} != 受审 lineage key "
+                             f"{_EXCL_EVIDENCE_LINEAGE_KEY!r}(不可解析/伪造)")
+        if ev.get("as_of") != weekly["as_of"]:
+            raise ValueError(f"exclusion_summary.evidence_ref.as_of {ev.get('as_of')} != 周报 as_of {weekly['as_of']}(证据陈旧)")
+        if not ((weekly.get("run_lineage") or {}).get("analysis_input")):
+            raise ValueError("exclusion_summary 存在但 run_lineage.analysis_input 为空(无源 artifact lineage,无法溯源)")
     if sized:
         from runners.a_short_phase5_engine import MIN_SHARES
     seen, alloc_ranks, budget_sum = set(), [], 0.0       # audit-math:跨建仓累计,循环后对账 cash_allocation 摘要
@@ -1005,6 +1076,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     _notices = _ex_div_notices(_exdiv_codes, args.as_of, dividend_provider)
     if _notices:
         weekly["ex_div_notices"] = _notices
+    # 4.2 Round2: 上游过滤批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts
+    # (egs_main filter_l0 已记 unlock/suspended/relisted/holder_reduction_veto_10d), 不改 egs_main、不抓数。
+    _excl = _build_exclusion_summary((ai.get("universe_summary") or {}).get("excluded_counts") or {}, args.as_of)
+    if _excl:
+        weekly["exclusion_summary"] = _excl
     from runners.a_short_m67_render import write_weekly_markdown
     md_path = os.path.splitext(args.out)[0] + ".md"
     write_weekly_report(weekly, feed, args.out)

@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-17 — Codex re-`审查 PASS` (R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP)
+- **Verdict/Action**: PASS. Round2 `exclusion_summary` contract gap is closed in the current working tree: unknown nonzero reasons fail closed, and `evidence_ref` is bound to the reviewed lineage key.
+- **Required**: `R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: ExclusionSummary 16 OK; weekly 147 OK(with local `tushare` stub); doc-governance+route-doc 30 OK; py_compile/schema/BOM/diff-check OK; Codex probes rejected unknown key/bad lineage/artifact_path/missing evidence。Full unittest discover: 2169 ran but blocked by missing local deps `tushare.pro`/`requests`, not used as PASS evidence。
+- **Next**: Claude `提交` reviewed Round2 files; continue excluding `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (4.2 第2轮 exclusion_summary evidence_ref 绑定 — residual)
+- **Verdict/Action**: 判定残留 FAIL 对(乱写 value / `artifact_path` 伪路径仍过)。按 register closure 收口,evidence 只走受审 lineage_key:schema `kind` enum 收单值 `lineage_key`(删 artifact_path)+ 新常量 `_EXCL_EVIDENCE_LINEAGE_KEY`(builder/validator 单一来源)+ `validate_weekly_report` 拒非 lineage_key kind / 拒 value≠受审 dotted path。详见 register(单一来源)。
+- **Required**: `R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP` — residual closure / 完整修复见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: ExclusionSummary 16 OK(13+3);weekly 套件 **147 OK**(144+3);全量 **2195 OK**(零回归);doc-governance+route-doc 30 OK;py_compile OK;schema JSON 合法;无 BOM;`git diff --check` 干净(仅 CRLF)。
+- **Next**: 审查(Codex re-`审查` 4.2 第2轮,据当前 working tree);保持 `research/results/a_short/iv_feed_20260605/iv_feed.json` 排除。
+- **Pre-Codex self-review**: A schema(kind 收单值)+ validator(value 绑受审 dotted path)两面焊;乱写 value、artifact_path kind 各配对抗测试(复现 Codex 两 probe)+ 留 valid builder 用例。B `_build_exclusion_summary` 是唯一发射者(enum 收窄不破合法发射);m67 evidence_ref(另一文件)不受影响;builder/validator 共用常量防漂移。C 正常发射仍过(`test_schema_and_validator_accept`,2195 全绿),未误拒合法态。D N-A。E register 记 closure,transient 只进 SESSION_LOG。F 合 4.2.md §6.2/§10.2;无 BOM;diff 干净。
+
+## 2026-06-17 — Codex re-`审查 FAIL` (R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP)
+- **Verdict/Action**: FAIL. 完整性 fail-closed 已修好,但 `evidence_ref` 仍未真正绑到可解析 lineage/path:乱写 lineage key 或不存在 artifact path 仍会过。
+- **Required**: `R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: weekly suite 144 OK; doc-governance+route-doc 30 OK; py_compile OK; probes confirmed bad lineage value + bad artifact path still accepted; `git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `修复` residual evidence_ref binding; keep `research/results/a_short/iv_feed_20260605/iv_feed.json` excluded。
+
+## 2026-06-17 — Claude `修复` (4.2 第2轮 exclusion_summary contract gap)
+- **Verdict/Action**: 判定 Codex FAIL 两面对,逐修:(1) 完整性 fail-closed——`_build_exclusion_summary` 对 `excluded_counts` 任何 count>0 未映射键 raise(不再静默丢);(2) evidence/lineage——weekly schema `exclusion_summary.evidence_ref` required+定形状(去 source),builder 产 lineage_key,`validate_weekly_report` 拒缺/坏 evidence_ref·as_of 漂移·`run_lineage.analysis_input` 空。详见 register(单一来源)。
+- **Required**: `R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP` — 完整修复/closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: weekly 套件 **144 OK**(+5:fail-closed 未知非零键 / schema+validator 缺 evidence_ref / evidence as_of 漂移 / 缺 lineage);全量 **2192 OK**(零回归);doc-governance+route-doc 30 OK;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` 4.2 第2轮,据当前 working tree 实际代码)。
+- **Pre-Codex self-review**: A 契约三面焊(schema evidence_ref required + builder fail-closed + validator evidence/as_of/lineage),完整性按未映射非零键 fail-closed 封类、evidence 缺/坏/陈旧/无源各配测试。B 仅动 exclusion_summary;去掉的 source 无其它消费者;excluded_counts 开放契约已确认。C 反向:正常 4 键+有源 lineage 仍过、count0 不 raise(未误拒合法态)。D N-A。E register 记 closure、transient 只进 SESSION_LOG。F 严格日期·无 BOM·diff 干净。
+
+## 2026-06-17 — Codex re-`审查 FAIL` (R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP)
+- **Verdict/Action**: FAIL remains. 未发现 Claude 新修复;当前代码仍放过缺证据的 `exclusion_summary`,也仍会静默丢掉未映射的上游过滤原因。
+- **Required**: `R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: probes reproduced missing-evidence accepted + unknown count dropped; doc-governance+route-doc 30 OK; `git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `修复` this Required; keep `research/results/a_short/iv_feed_20260605/iv_feed.json` excluded。
+
+## 2026-06-17 — Codex `审查 FAIL` (R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP)
+- **Verdict/Action**: FAIL. 4.2 第2轮的 `exclusion_summary` 现在会放过缺证据引用的摘要,也会静默丢掉未映射的上游过滤原因。
+- **Required**: `R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: weekly suite 139 OK; doc-governance+route-doc 30 OK; probes confirmed missing evidence accepted and unknown count dropped; `git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `修复` this Required; keep `research/results/a_short/iv_feed_20260605/iv_feed.json` excluded。
+
+## 2026-06-17 — Claude `起草` (4.2 第2轮: 上游过滤批次级 exclusion_summary)
+- **Verdict/Action**: 起草 4.2 第2轮(决策3:上游过滤、无 M6.7 个股行的风险落**周报全局字段**,不落逐票精简结论区)。**无需改 egs_main、零新取数**——复用 `analysis_input.universe_summary.excluded_counts`(egs_main `filter_l0` 已记 unlock/suspended/relisted/holder_reduction_veto_10d 计数)。新增:① `a_short_weekly_report.schema.json` 加性可选 `exclusion_summary`(as_of/total_excluded/by_reason[source_field·stage·veto_class·count·pit_basis·production_effect_enabled·privacy_class]/m67_text;照 `ex_div_notices` 模式);② `_build_exclusion_summary(excluded_counts, as_of)` 纯函数(4 键→by_reason,**counts-only → public_tracked**,total==0→None,零计数[如 relisted 0]丢弃),main() 注入 `weekly["exclusion_summary"]`;③ `write_weekly_markdown` 加「本轮上游过滤摘要」区(计数表 + m67_text);④ `validate_weekly_report` guard(as_of==报告 as_of / total==Σby_reason / 零计数不入 / m67_text 非空)。**隐私**:仅计数、不含个股代码/持仓 → 不暴露"你哪只持仓被剔",public_tracked;运行级私密路由仍按 `--account` 整体生效。按持仓核对(需 filtered 代码,excluded_counts 只有计数)留后续。
+- **Required**: none(干净起草,无 finding;Round3 semantic / S3b / Slice D 为 roadmap)。
+- **Verify**: weekly 套件 **139 OK**(+8:counts→summary 丢零 / total==0→None / schema+validator 接受 / 缺省向后兼容 / validator 拒 total 不符·as_of 漂移·零计数 / render 含计数);**全量 2187 OK**(2179+8,零回归);py_compile OK;doc-governance+route-doc 30 OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex 独立审 4.2 第2轮)。
+- **Pre-Codex self-review**: A 类×出口:exclusion_summary 在 schema(加性+字段约束)+ validator(跨字段 as_of/total/零计数/m67_text)双面;builder 丢零计数 + total==0→None 各配测试。B ripple:复用既有 `excluded_counts` 契约(analysis_input schema 已定 4 键)+ `ex_div_notices` 注入/渲染模式;不改 egs_main / build_weekly_report 签名(main 注入,与 holdings_manual_review/ex_div_notices 一致)。C 反向:无 exclusion 时字段缺省、weekly 仍 schema-valid + validator 过(test_absent_is_valid);零计数不伪造行。D N-A(无关键词歧义)。E route-doc 单态:transient next 只进 SESSION_LOG;README owner 行 closeout 时更新。F 计数非负由 schema+`int()` 保证;as_of 严格绑报告日期;无 generator footgun;UTF-8 无 BOM;diff 干净。**注**:excluded_counts 未来若加第 5 键需 Round2 follow-up(当前映射 analysis_input 契约的 4 键,未知键被忽略——已标注)。
+
 ## 2026-06-17 — Codex re-`审查 PASS` (4.2 第1轮 evidence_ref as_of PIT binding)
 - **Verdict/Action**: PASS. 残留 `evidence_ref.as_of` 漏洞已闭合: schema 必填 `as_of`,guard 拒旧日期/缺日期/坏格式/不等于报告日期。
 - **Required**: `R-ASHORT-GAP42-ROUND1-EVIDENCE-REF-GUARD-GAP` — addressed in working tree；完整 closure evidence 见 `docs/system_risk_register.md`(单一来源)。

@@ -54,6 +54,44 @@
         }
       }
     },
+    "exclusion_summary": {
+      "type": ["object", "null"],
+      "description": "4.2 Round2: 上游(L0/L2/Stage3)过滤、无 M6.7 个股行的批次级风险摘要(counts-only, 源 analysis_input.universe_summary.excluded_counts, 不改 egs_main)。public: 仅计数, 不含个股代码/持仓, 故不暴露隐私(运行级私密路由仍按 --account 整体生效)。可选/缺省 null(本轮无上游过滤)。",
+      "additionalProperties": false,
+      "required": ["as_of", "total_excluded", "by_reason", "m67_text", "evidence_ref"],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "total_excluded": {"type": "integer", "minimum": 0},
+        "by_reason": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source_field", "stage", "veto_class", "count", "pit_basis", "production_effect_enabled", "privacy_class"],
+            "properties": {
+              "source_field": {"type": "string", "minLength": 1},
+              "stage": {"enum": ["l0_filter", "l2_filter", "stage3_filter"]},
+              "veto_class": {"enum": ["production_hard_veto", "m67_advisory_veto"]},
+              "count": {"type": "integer", "minimum": 0},
+              "pit_basis": {"enum": ["disclosure_date", "trade_date_window", "observed_date"]},
+              "production_effect_enabled": {"type": "boolean"},
+              "privacy_class": {"enum": ["public_tracked", "private_account"]}
+            }
+          }
+        },
+        "m67_text": {"type": "string", "minLength": 1},
+        "evidence_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value", "as_of"],
+          "properties": {
+            "kind": {"enum": ["lineage_key"]},
+            "value": {"type": "string", "minLength": 1},
+            "as_of": {"type": "string", "pattern": "^[0-9]{8}$"}
+          }
+        }
+      }
+    },
     "cash_allocation": {
       "type": ["object", "null"],
       "description": "#3 全局现金分配摘要(带 --account 才有;价格提案 §4/§11.3):多只建仓按区间上沿 entry_high 统一消耗 available_cash,不足一手→转观察。可选/缺省 null(observation-only 无)。",

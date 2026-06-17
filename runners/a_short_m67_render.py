@@ -229,6 +229,14 @@ def render_weekly_markdown(weekly: dict) -> str:
         out += ["", "## ⚠️ 除权除息提示(advisory · 非决策:价已前复权,提醒未复权市价/成本将在除权日跳变)",
                 "| 票 | 名称 | 除权日 | 距今(日) |", "|---|---|---|---|"]
         out += [f"| {n['ts_code']} | {n['name']} | {n['ex_date']} | {n['days_to_ex']} |" for n in _notices]
+    # 4.2 Round2 上游过滤批次级摘要(无 M6.7 个股行,仅计数,不含个股/持仓 → public)
+    _excl = weekly.get("exclusion_summary")
+    if _excl:
+        out += ["", f"## 本轮上游过滤摘要(批次级 · 无 M6.7 个股行 · 仅计数不含个股/持仓 · 共 {_excl['total_excluded']} 只)",
+                _excl.get("m67_text", ""),
+                "| 原因 | stage | 类型 | 只数 |", "|---|---|---|---|"]
+        out += [f"| {r['source_field']} | {r['stage']} | {r['veto_class']} | {r['count']} |"
+                for r in (_excl.get("by_reason") or [])]
     return "\n".join(out)
 
 

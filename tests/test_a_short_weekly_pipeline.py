@@ -26,6 +26,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     write_weekly_report, latest_iv_percentile, latest_iv_hv, main, SCHEMA_PATH,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
+    _build_exclusion_summary,
 )
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
@@ -1601,6 +1602,125 @@ class ExDivNoticeTests(unittest.TestCase):
         w["holdings_manual_review"] = [{"ts_code": "600519.SH", "name": "乙", "reason": "停牌"}]
         w["ex_div_notices"] = [{"ts_code": "600519.SH", "name": "乙", "ex_date": "20260615", "days_to_ex": 6}]
         validate_weekly_report(w, _feed())     # 不 raise
+
+
+class ExclusionSummaryTests(unittest.TestCase):
+    """4.2 Round2: 上游过滤批次级 exclusion_summary(counts-only, public_tracked, evidence-tied, fail-closed)。"""
+
+    _AI_REF = "research/results/a_short/20260609/analysis_input.json"
+
+    def _weekly_excl(self, counts):
+        w = _weekly()
+        w["run_lineage"]["analysis_input"] = self._AI_REF    # exclusion_summary 须有源 lineage
+        es = _build_exclusion_summary(counts, AS_OF)
+        if es is not None:
+            w["exclusion_summary"] = es
+        return w
+
+    def test_build_from_counts_drops_zero(self):
+        es = _build_exclusion_summary(
+            {"holder_reduction_veto_10d": 12, "unlock": 5, "suspended": 3, "relisted": 0}, AS_OF)
+        self.assertEqual(es["total_excluded"], 20)
+        self.assertEqual(len(es["by_reason"]), 3)            # relisted 0 dropped
+        self.assertIn("10日减持 12 只", es["m67_text"])
+        self.assertEqual(es["evidence_ref"]["kind"], "lineage_key")
+        self.assertEqual(es["evidence_ref"]["as_of"], AS_OF)
+        self.assertTrue(all(r["privacy_class"] == "public_tracked" for r in es["by_reason"]))
+
+    def test_build_zero_returns_none(self):
+        self.assertIsNone(_build_exclusion_summary({}, AS_OF))
+        self.assertIsNone(_build_exclusion_summary({"unlock": 0, "suspended": 0}, AS_OF))
+
+    def test_build_fails_closed_on_unknown_nonzero_key(self):
+        # 完整性: 未映射的上游过滤原因(count>0)绝不静默丢 → raise
+        with self.assertRaises(ValueError):
+            _build_exclusion_summary({"unlock": 1, "stage3_policy_veto": 4}, AS_OF)
+        es = _build_exclusion_summary({"unlock": 1, "stage3_policy_veto": 0}, AS_OF)  # 0 无害
+        self.assertEqual(es["total_excluded"], 1)
+
+    def test_schema_and_validator_accept(self):
+        w = self._weekly_excl({"unlock": 2, "suspended": 1})
+        jsonschema.validate(w, json.load(open(SCHEMA_PATH, encoding="utf-8")))
+        validate_weekly_report(w, _feed())                   # no raise
+
+    def test_absent_is_valid(self):
+        w = _weekly()                                        # 无 exclusion_summary → 向后兼容
+        jsonschema.validate(w, json.load(open(SCHEMA_PATH, encoding="utf-8")))
+        validate_weekly_report(w, _feed())
+
+    def test_schema_requires_evidence_ref(self):
+        w = self._weekly_excl({"unlock": 2})
+        del w["exclusion_summary"]["evidence_ref"]
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(w, json.load(open(SCHEMA_PATH, encoding="utf-8")))
+
+    def test_validator_rejects_missing_evidence_ref(self):
+        w = self._weekly_excl({"unlock": 2})
+        del w["exclusion_summary"]["evidence_ref"]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_rejects_evidence_as_of_drift(self):
+        w = self._weekly_excl({"unlock": 2})
+        w["exclusion_summary"]["evidence_ref"]["as_of"] = "20250101"
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_rejects_missing_lineage(self):
+        w = self._weekly_excl({"unlock": 2})
+        w["run_lineage"]["analysis_input"] = ""              # 无源 lineage → 无法溯源
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_schema_rejects_artifact_path_kind(self):
+        # 本轮 evidence 仅 lineage_key:artifact_path kind 在 schema 即被拒(可解析 artifact 实现前不开放)
+        w = self._weekly_excl({"unlock": 2})
+        w["exclusion_summary"]["evidence_ref"] = {
+            "kind": "artifact_path", "value": "does/not/exist.json", "as_of": AS_OF}
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(w, json.load(open(SCHEMA_PATH, encoding="utf-8")))
+
+    def test_validator_rejects_artifact_path_kind(self):
+        # validator 独立把关(不止 schema):非 lineage_key kind 直接拒
+        w = self._weekly_excl({"unlock": 2})
+        w["exclusion_summary"]["evidence_ref"]["kind"] = "artifact_path"
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_rejects_wrong_lineage_key(self):
+        # 乱写 value(非受审 dotted path)即使非空也拒 — 堵"evidence 可伪造"残留
+        w = self._weekly_excl({"unlock": 2})
+        w["exclusion_summary"]["evidence_ref"]["value"] = "nonsense.not.parseable"
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_rejects_total_mismatch(self):
+        w = self._weekly_excl({"unlock": 2})
+        w["exclusion_summary"]["total_excluded"] = 99
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_rejects_as_of_drift(self):
+        w = self._weekly_excl({"unlock": 2})
+        w["exclusion_summary"]["as_of"] = "20250101"
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_rejects_zero_count_entry(self):
+        w = self._weekly_excl({"unlock": 2})
+        w["exclusion_summary"]["by_reason"].append(
+            {"source_field": "x", "stage": "l0_filter", "veto_class": "production_hard_veto",
+             "count": 0, "pit_basis": "disclosure_date", "production_effect_enabled": True,
+             "privacy_class": "public_tracked"})
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_render_contains_counts(self):
+        w = self._weekly_excl({"holder_reduction_veto_10d": 7})
+        md = render_weekly_markdown(w)
+        self.assertIn("本轮上游过滤摘要", md)
+        self.assertIn("10日减持 7 只", md)
+        self.assertIn("holder_reduction_veto_10d", md)
 
 
 if __name__ == "__main__":
