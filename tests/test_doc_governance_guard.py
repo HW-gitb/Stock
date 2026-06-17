@@ -38,7 +38,7 @@ CURRENT_FACT_REGISTRY = (
                 "--overlay",
             )),
             (ROOT / "A-EGS" / "egs_main.py", (
-                "build_overlay_summary_from_panels",
+                "emit_overlay",
             )),
             (ROOT / "runners" / "weekly_screening.ps1", (
                 "--overlay",

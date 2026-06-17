@@ -24,7 +24,7 @@ from runners.a_short_theme_overlay_comparison import (  # noqa: E402
     OVERLAY_WEIGHTS, EMITTED_THRESHOLDS, FIT_FLOOR,
     concept_intensity, orthogonalize_industry_on_theme, assemble_overlay,
     build_summary, validate_overlay_summary_consistency,
-    build_overlay_summary_from_panels, write_overlay_summary,
+    build_overlay_summary_from_panels, write_overlay_summary, overlay_emit_allowed,
 )
 
 GOV_PATH = ROOT / "presets" / "a_short_theme_overlay_governance_20260610.json"
@@ -180,6 +180,62 @@ class SummaryConsistencyTests(unittest.TestCase):
             validate_overlay_summary_consistency(s)
 
 
+class EmitGateAndForwardLabelTests(unittest.TestCase):
+    """(b) overlay 在 live(today)也产出、概念标 forward,使其在 live weekly 自然 forward 累积。
+    (emit-gate 的 pit+today/not-neutralize 断言见 GovernanceParityTests.test_overlay_emit_pit_and_today_not_neutralize。)"""
+    def test_forward_concept_membership_summary_valid(self):
+        # today 模式概念标 'forward' 的 summary 须过 schema + consistency(forward 是合法、诚实标签)
+        summary = build_summary(
+            _assemble(), as_of="20260612",
+            pit_source={"concept_membership": "forward", "sw_mapping": "forward"},
+            dropped_at_l0_l5=[], generated_at="2026-06-10T00:00:00+08:00")
+        self.assertEqual(summary["pit_source"]["concept_membership"], "forward")
+        validate_overlay_summary_consistency(summary)
+        with tempfile.TemporaryDirectory() as td:           # write = schema + consistency
+            write_overlay_summary(summary, os.path.join(td, "overlay.json"))
+
+
+class EmitOverlayEgsBlockTests(unittest.TestCase):
+    """#2(b) R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-EGS-GUARD:守护从 egs_main 提取的 emit_overlay(真实落点)——
+    门控 + 按模式标 concept + 写盘。此前 emit 块无测试、又在 swallow-all except 内,断线/错标会静默过。"""
+    def _args(self):
+        all_daily, sc, cm, sw = _panels()
+        l3 = (None, sc, cm, "20260612")     # 仿 _load_l3_snapshot:(concepts_df, stock_concepts, concept_members, snap_date)
+        return _pool(), all_daily, l3, sw
+
+    def _emit(self, mode, l3, td):
+        from runners.a_short_theme_overlay_comparison import emit_overlay
+        pool, ad, _l3, sw = self._args()
+        p = os.path.join(td, "overlay.json")
+        out = emit_overlay(mode, pool, ad, (l3 if l3 != "use" else _l3), sw,
+                           "20260612", "2026-06-12T00:00:00+08:00", p)
+        return out, p
+
+    def test_today_emits_forward_label(self):
+        with tempfile.TemporaryDirectory() as td:
+            out, p = self._emit("today", "use", td)
+            self.assertEqual(out, p)
+            self.assertEqual(json.loads(Path(p).read_text(encoding="utf-8"))["pit_source"]["concept_membership"], "forward")
+
+    def test_pit_emits_pit_label(self):
+        with tempfile.TemporaryDirectory() as td:
+            out, p = self._emit("pit", "use", td)
+            self.assertEqual(out, p)
+            self.assertEqual(json.loads(Path(p).read_text(encoding="utf-8"))["pit_source"]["concept_membership"], "pit")
+
+    def test_neutralize_skips_no_write(self):
+        with tempfile.TemporaryDirectory() as td:
+            out, p = self._emit("neutralize", "use", td)
+            self.assertIsNone(out)
+            self.assertFalse(os.path.exists(p))
+
+    def test_no_snapshot_skips_no_write(self):
+        with tempfile.TemporaryDirectory() as td:
+            out, p = self._emit("today", None, td)
+            self.assertIsNone(out)
+            self.assertFalse(os.path.exists(p))
+
+
 class GovernanceParityTests(unittest.TestCase):
     def test_weights_and_thresholds_match_governance(self):
         gov = json.loads(GOV_PATH.read_text(encoding="utf-8"))
@@ -200,11 +256,14 @@ class GovernanceParityTests(unittest.TestCase):
         self.assertFalse(gov["scope"]["egs_main_production_behavior_changed"])  # scoring untouched
         self.assertFalse(gov["scope"]["production_ranking_changed_by_this_artifact"])
 
-    def test_overlay_emit_gated_to_pit_mode(self):
-        # R-ASHORT-OVERLAY-L3-MODE-BOUNDARY-DRIFT: only pit-mode emits overlay (honest pit_source).
+    def test_overlay_emit_pit_and_today_not_neutralize(self):
+        # R-ASHORT-OVERLAY-L3-MODE-BOUNDARY-DRIFT (updated by (b) 2026-06-16): pit + today emit
+        # (pit→concept 'pit';today→concept 'forward',honest live 决策当日成员 → live forward 累积);
+        # neutralize/None/"" 不产出。原为 pit-only;(b) 加 today 让 overlay 在 live weekly 自然累积。
         from runners.a_short_theme_overlay_comparison import overlay_emit_allowed
         self.assertTrue(overlay_emit_allowed("pit"))
-        for m in ("today", "neutralize", None, ""):
+        self.assertTrue(overlay_emit_allowed("today"))
+        for m in ("neutralize", None, ""):
             self.assertFalse(overlay_emit_allowed(m), m)
 
 

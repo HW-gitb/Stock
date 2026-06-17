@@ -7,9 +7,10 @@
 定位:**非 production、comparison-track**。对**现有候选池重排序**,产出一份与 baseline 并行的 overlay
 artifact。**数据装载已接进 EGS run(A 方案,2026-06-11)**:`build_overlay_summary_from_panels` 用
 egs_main 内存里的全量日线 + 同一份 PIT 概念快照 + sw_map 装配(不新抓数据)。
-边界:本切片**确实给 `A-EGS/egs_main.py` 加了一个非生产 side-output**(仅 --l3-mode pit 写 overlay.json
-进 run 桶),但**不改 production `final_score`/`tier`/准入**(生产打分路径一行不动);
-缺数据的输入按设计 forward-only(记 `pit_source` / unavailable,绝不编造)。
+边界:本切片**确实给 `A-EGS/egs_main.py` 加了一个非生产 side-output**(`pit` 与 live `today` 模式**均**写 overlay.json
+进 run 桶 —— (b) 2026-06-16:pit→概念标 'pit'[回放快照]、live today→'forward'[决策当日 live 成员,无 look-ahead],
+使 overlay 在 live weekly 自然 forward 累积;`neutralize`/无概念跳过),但**不改 production `final_score`/`tier`/准入**
+(生产打分路径一行不动);缺数据的输入按设计 forward-only(记 `pit_source` / unavailable,绝不编造)。
 
 纯计算函数对 plain dict/DataFrame 操作(可用合成 fixture 单测);I/O 在 `main` 薄层。
 冻结阈值镜像在 `presets/a_short_theme_overlay_governance_20260610.json`(parity 测试守)。
@@ -410,9 +411,12 @@ def build_overlay_summary_from_panels(pool_df: pd.DataFrame, all_daily: pd.DataF
 
 
 def overlay_emit_allowed(l3_mode) -> bool:
-    """overlay 仅在 `--l3-mode pit` 下产出:其 `pit_source.concept_membership='pit'` 标签只有 pit 模式
-    才诚实。today(可能写当日快照)/ neutralize / 缺省 → 不产出(否则会标 pit 却用 today 概念)。"""
-    return l3_mode == "pit"
+    """overlay 产出门(comparison-track,非生产)。**pit + today 均产出**:
+    - `pit`(回放):概念=PIT 快照 → `pit_source.concept_membership='pit'`;
+    - `today`(live 实盘):概念=决策当日 live 成员 → 标 `'forward'`(决策时点只知今日概念,无 look-ahead),
+      使 overlay 在 live weekly 自然 **forward 累积**(攒 ≥12 周升级证据,见设计 §6;此前仅 pit 产出 → live 永不累积)。
+    `neutralize`(无概念)/ 缺省 → 不产出(绝不编造概念)。标签口径由 egs_main 产出处按模式给(pit→'pit',today→'forward')。"""
+    return l3_mode in ("pit", "today")
 
 
 def write_overlay_summary(summary: dict, out_path: str) -> None:
@@ -428,6 +432,23 @@ def write_overlay_summary(summary: dict, out_path: str) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
     os.replace(tmp, out_path)
+
+
+def emit_overlay(l3_mode, pool_df, all_daily, l3_snapshot, sw_map, as_of, generated_at, out_path):
+    """#2(b) EGS-run overlay emit(comparison-track 非生产)——**从 `A-EGS/egs_main.py` 提取的真实落点**,
+    便于单测守护(此前只测了 `overlay_emit_allowed`/summary 合法性,emit 块本身无测试、又在 swallow-all
+    except 内 → 断线/错标会静默过)。门控 + 按模式标 `concept_membership` + 装配 + 写盘。
+    `l3_snapshot` = `_load_l3_snapshot` 返回的 `(concepts_df, stock_concepts, concept_members, snap_date)`。
+    门未过(neutralize/None/"")或无快照 → 返回 None(不产出、不编造、不写盘);pit→'pit'、否则(today)→'forward'。
+    成功 → write_overlay_summary(schema+consistency)后返回 out_path。"""
+    if not overlay_emit_allowed(l3_mode) or l3_snapshot is None:
+        return None
+    concept_src = "pit" if l3_mode == "pit" else "forward"
+    summary = build_overlay_summary_from_panels(
+        pool_df, all_daily, l3_snapshot[1], l3_snapshot[2], sw_map, as_of, generated_at,
+        pit_source={"concept_membership": concept_src, "sw_mapping": "forward"})
+    write_overlay_summary(summary, out_path)
+    return out_path
 
 
 # ── main(薄 I/O,只读消费 EGS 产出/缓存/快照;不新抓、不改 production)────────────

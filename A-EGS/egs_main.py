@@ -3314,26 +3314,24 @@ def run_egs(backtest_mode=False, output_root=None):
         log.warning(f"egs 权重 variant 对比 diff 跳过：{type(_wc_exc).__name__}")
 
     # 赛道热度 overlay(Slice A,comparison-track 非生产):A 方案——在 EGS run 内用内存里的全量日线
-    # + 同一份 PIT 概念快照(score_l3 pit 用的那份)+ sw_map 装配,落到同一 run 桶。失败绝不影响生产 run。
-    # **仅 --l3-mode pit 产出**(overlay 标签 pit_source=pit 只有 pit 模式诚实;today 可能写当日快照、
-    # neutralize 无概念 → 跳过,不产出标 pit 却用 today 概念的 artifact)。
+    # + L3 概念快照 + sw_map 装配,落到同一 run 桶。失败绝不影响生产 run。
+    # **pit + today 均产出**:pit→概念标 'pit'(回放快照);today(live)→概念标 'forward'(决策当日 live 成员,
+    # 无 look-ahead)→ overlay 在 live weekly 自然 forward 累积(攒 ≥12 周升级证据)。neutralize 无概念 → 跳过(不编造)。
     try:
-        from runners.a_short_theme_overlay_comparison import (
-            build_overlay_summary_from_panels, write_overlay_summary, overlay_emit_allowed)
+        from runners.a_short_theme_overlay_comparison import emit_overlay, overlay_emit_allowed
         from engine.a_short_run_paths import overlay_path
+        # 概念成员口径(由 emit_overlay 按模式标):pit=PIT 快照(回放)→ 'pit';today=决策当日 live 成员
+        # (forward,无 look-ahead)→ 'forward'。门控 + 标签 + 装配 + 写盘的真实落点已提取到 emit_overlay(可单测)。
         _l3 = _load_l3_snapshot(TODAY) if overlay_emit_allowed(CONF.get("l3_mode")) else None
         if _l3 is not None:
             _ov_pool = top50[["ts_code", "esp_score", "l4_score", "overheat_flag", "chasing_high"]].copy()
             _ov_pool["baseline_rank"] = range(1, len(_ov_pool) + 1)
             _ov_gen = datetime.now().astimezone().isoformat(timespec="seconds")
-            _ov = build_overlay_summary_from_panels(
-                _ov_pool, all_daily, _l3[1], _l3[2], sw_map, TODAY, _ov_gen,
-                pit_source={"concept_membership": "pit", "sw_mapping": "forward"})
-            _ov_path = overlay_path(TODAY, output_root=output_root)
-            write_overlay_summary(_ov, _ov_path)
-            log.info(f"赛道热度 overlay 已写(非生产,comparison-track）：{_ov_path}")
+            _ov_written = emit_overlay(CONF.get("l3_mode"), _ov_pool, all_daily, _l3, sw_map,
+                                       TODAY, _ov_gen, overlay_path(TODAY, output_root=output_root))
+            log.info(f"赛道热度 overlay 已写(非生产,comparison-track）：{_ov_written}")
         else:
-            log.info("赛道热度 overlay 跳过:无 L3 快照(l3_mode≠pit 或无快照),不编造概念")
+            log.info("赛道热度 overlay 跳过:无 L3 快照(l3_mode=neutralize 或无快照),不编造概念")
     except Exception as _ov_exc:  # noqa: BLE001 (non-production side output must never break the run)
         log.warning(f"赛道热度 overlay 跳过：{type(_ov_exc).__name__}")
 

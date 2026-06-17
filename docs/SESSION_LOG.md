@@ -10,6 +10,45 @@
 
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
 
+## 2026-06-17 — Codex `审查 PASS` (#2(b) overlay live-forward emit / egs-guard + docstring)
+- **Verdict/Action**: PASS. `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-EGS-GUARD` 与 `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-DOCSTRING-DRIFT` 已按要求闭合:live `today` 写 `overlay.json` 并标 `concept_membership='forward'`;`pit` 写并标 `'pit'`;`neutralize`/无快照不写;`egs_main` 真实 emit 落点已提成 `emit_overlay` 并有四态测试守护;owner docstring / README / CURRENT / register 当前指导面已同步。未见 production scoring / selection / TopN / fetch / schema 改动。
+- **Required**: addressed in working tree; closure note 见 `docs/system_risk_register.md`。
+- **Verify**: overlay/doc/l3 targeted **71 OK**;full suite **2072 OK** with in-process `requests`/`tushare` import stubs;compile **4 OK**;AST probe `emit_overlay_calls=1`;stale-current grep 仅命中 SESSION_LOG/register 历史或 finding 文本及 CURRENT 的正确 `today→forward + neutralize skip` 同行描述,未见当前假述;`git diff --check` clean。
+- **Next**: Claude `提交` #2(b) overlay tracked files;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (#2(b) overlay docstring / current-surface drift)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(代码/测试上轮已修,但 overlay 模块顶层 docstring 仍写"仅 --l3-mode pit 写 overlay.json",#2(b) 后已假——live `today` 已允许并标 `forward`)。修:重写模块顶 docstring 为 `pit`+live `today` 双模式均写(pit→'pit' 回放 / today→'forward' 决策当日 live·无 look-ahead;neutralize/无概念/无快照 跳过不编造),保留 no-production/no-TopN/no-fetch 边界。另清本 register 两处现已假声明(comparison-index track ② + #2(b) 草案条都写"emit 块无守护测试/guard 仍 advisable")→改记守护测试已存在(`emit_overlay` + `EmitOverlayEgsBlockTests`)。
+- **Required**: `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-DOCSTRING-DRIFT`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: stale-current grep 六面(`仅 --l3-mode pit` / `l3_mode≠pit` / `today.*跳过` / `无守护测试` / `guard advisable` / `no test exercises the egs_main overlay`)仅命中 open finding 本体(=修复 spec),无现面假述;doc-governance+route-doc **30 OK**;全量绿;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` #2(b))。
+- **Pre-Codex self-review**: A docstring 四态(pit/today/neutralize/无快照)表述与代码行为逐条一致。B ripple:六面 grep + register 现面 0 残留 stale;两处 register"guard advisable"现已假→已改记守护已存在。C 反向:未把现存守护误述为缺失;改动仅文字/注释/register 措辞。D N-A。E register/SESSION_LOG 单态。F 无 schema/validator/代码逻辑改、无 fetch、无 BOM、diff 干净。
+
+## 2026-06-17 — Codex `审查 FAIL` (#2(b) overlay emit egs-guard re-review)
+- **Verdict/Action**: FAIL. `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-EGS-GUARD` 的代码/测试方向已修好,但当前源码 docstring 仍写 overlay side-output **仅 `--l3-mode pit` 写 `overlay.json`**,和本轮 `pit`+live `today` 双模式事实冲突。
+- **Required**: `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-DOCSTRING-DRIFT`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: overlay/doc/l3 targeted 71 OK;全量 2072 OK(本机缺 `requests`/`tushare`,以进程内 import stub 补齐后跑通);compile 4 OK;AST probe 确认 `egs_main` 有 1 个 `emit_overlay` call;`git diff --check` clean;stale-current grep 命中 `runners/a_short_theme_overlay_comparison.py` 顶层 docstring。
+- **Next**: Claude `修复` 该 docstring/current-surface drift 后再交 Codex re-`审查`;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (#2(b) overlay emit egs-guard)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(切片真实落点=egs_main emit 块,我只测了 overlay_emit_allowed/summary,没守护 emit 块本身——它在 swallow-all except 内,断线/错标会静默过;我 register 记了这 gap 却没修)。按 Codex option (a):**emit 核心提成纯可测函数 `emit_overlay(...)`**(门控+None快照→None不写、按模式标 concept[pit→'pit'/else→'forward']、build+write);egs_main 改调它(行为不变)。新增 `EmitOverlayEgsBlockTests` 4(today→forward / pit→pit / neutralize→None / 无快照→None);doc-governance egs_main 锚点改 `emit_overlay`。
+- **Required**: `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-EGS-GUARD`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2072 OK**(EmitOverlayEgsBlockTests 4 + 既有 emit-gate/forward-label);doc 守护绿;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` #2(b))。
+- **Pre-Codex self-review**: A 真实落点提成 emit_overlay 并测四态(today/pit/neutralize/无快照);egs_main 改调用(无行为变)。B ripple:egs_main 不再直引 build_overlay_summary_from_panels → 更新 doc-governance registry egs_main 锚点为 emit_overlay(grep 确认 README/CURRENT 仍一致;overlay 模块仍含 build_…)。C 反向:neutralize/None/无快照不写不编造;today≠pit 标签由测试钉死;生产评分零改、无 fetch。D N-A。E register/SESSION_LOG 单态。F 无 schema/validator 改;无 BOM、diff 干净。
+
+## 2026-06-16 — Codex `审查 FAIL` (#2(b) overlay live-forward emit)
+- **Verdict/Action**: FAIL. 方向正确,且未见生产评分/选股/TopN 被改;但本切片的真实落点是 `A-EGS/egs_main.py` 的 overlay emit 块,当前测试只覆盖 `overlay_emit_allowed` 和 forward summary 合法性,没有守护实际 EGS emit 块。该块外层吞异常,未来断线/错标也可能静默通过测试。
+- **Required**: `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-EGS-GUARD`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: overlay/doc/l3 targeted 67 OK;全量 2068 OK(本机缺 `requests`/`tushare`,以进程内 import stub 补齐后跑通;无 stub 时仅因缺包失败);compile 3 OK;`git diff --check` clean;grep 确认无测试直接覆盖 `egs_main` emit 块。
+- **Next**: Claude `修复` 该 Required 后再交 Codex re-`审查`;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-16 — Claude `起草` (#2(b) overlay live-forward emit)
+- **Verdict/Action**: 起草完成(两刀之二;分别审)。**先纠正本会话第二次误判**:overlay 并非"没接线"——它早就接在 `egs_main`(A 方案,score_l5 后),只是 `overlay_emit_allowed` 仅 `pit` → live weekly(today)永不产出、forward 永不累积。用户选 (b):`overlay_emit_allowed` 放开 `pit`+`today`;egs emit 块按模式标 `concept_membership`(pit→'pit' 回放;live today→'forward' 决策当日 live 成员、无 look-ahead)。`forward` 本就是合法 schema 枚举、过 validator(无需改 schema/validator)。neutralize/无概念仍跳过。→ overlay 现在 live weekly 自然 forward 累积,≥12 周升级时钟开始走。**不动生产评分/选股/TopN**(overlay 非生产旁路)。
+- **Required**: `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2068 OK**(EmitGateAndForwardLabelTests:pit+today 产/neutralize·None·"" 跳过/forward 标签 summary 过 schema+consistency;旧 `test_overlay_emit_gated_to_pit_mode` 改写为 pit+today 契约);doc 守护 30 OK;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex `审查` #2(b):egs_main emit 块 + overlay_emit_allowed + 测试 + README/register/CURRENT 同步)。
+- **Pre-Codex self-review**: A emit_allowed 三态(pit/today 产、neutralize/None/"" 跳)+ forward 标签过校验配测;egs 标 concept 逻辑 trivial。B ripple(**本会话重点**,overlay 模式边界 Codex 抓过 2 次):grep 全仓"仅 pit"当前-指导面 → README、register 索引②、resolved L3-BOUNDARY 历史条目(标 SUPERSEDED)、CURRENT item5② 全同步;旧 gate 测试改写。C 反向:neutralize/None/"" 仍不产;live today 概念=决策当日 live 无 look-ahead、'forward' 诚实;生产评分零改。D N-A。E 单态。F 无 schema/validator 改(forward 本合法);hardening gap(egs emit 块无守护测试)已记留后续;无 BOM、diff 干净。
+
 ## 2026-06-16 — Codex `审查 PASS` (#1 除权:PIT 证据 + validator guard)
 - **Verdict/Action**: PASS. 上轮两个 Required 已修好:缺/空/非法 `ann_date` 不再生成提示,`_fetch_dividends` 缺必要列 fail-closed,周报 validator 已拒外来票和超过 14 天窗口的除权提示。
 - **Required**: `R-ASHORT-M67-EXDIV-NOTICE-PIT-EVIDENCE-GAP`; `R-ASHORT-M67-EXDIV-NOTICE-VALIDATOR-GUARD-GAP` addressed in working tree; closure note 见 `docs/system_risk_register.md`。
