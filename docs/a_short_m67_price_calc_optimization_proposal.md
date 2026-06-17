@@ -43,7 +43,9 @@
 - 字段:`raw_shares/allocated_shares/cash_budget_used/cash_allocation_rank`(+ weekly `available_cash_start/allocated_cash_total/remaining_cash`)。**`allocated_shares==0`(分配后不足一手/最小金额)→ 完整状态转换(Codex Required,防 validator 崩)**:**同时**置 `machine.entry_exit_size_star.action="观察"` 与 `m67.table.操作="观察"`;按 validator 观察规则**清空 `入/损/盈一/盈二/股数`=null**;raw plan(entry/stop/t1/t2/raw_shares)仅留 `machine` 诊断字段(如 `plan.diagnostic_raw`)、**不**作用户执行价;advice 写"组合现金分配后不足一手→转观察(原拟建仓价位见诊断)"。**绝不**出现 `建仓` 行 股数 null/0。测试:归零后 `validate_m67_consistency` 通过、无 `建仓` 行 股数 null/0、action↔table 一致。`allocated<raw`(非 0)时操作建议写明降档原因(审查 F6,no-dangling)。
 
 ## 5. Slice — 有效支撑/压力(策略口径,单独切片单独审查,后置)
-`min/max(20日)` → 抗单日极值结构位 + 质量标记(strong/weak/fallback_extreme)。**改 support→改建仓 stop/RR 门/谁能建仓**;只影响**建仓侧**——S3a 持仓止损用 `recent_high` 不是 support,故本 slice 不改善持仓止损(交叉引用,审查 F8 / C2)。
+`min/max(20日)` → 抗单日极值结构位 + 质量标记(strong/weak/fallback_extreme)。
+- **#5 support(已做):** `effective_support` 改建仓 stop / RR 门**分母**(risk)/ 谁能建仓,**只动建仓侧**(S3a 持仓止损当时用 raw `recent_high` 不是 support)。
+- **#6 resistance/压力 有效化(已做 2026-06-17):** `effective_resistance` 同样去插针(最高 high 比次高 high 高 >1×ATR 判插针取次高),改建仓 `t1`/RR 门**分子**(补全 #5 只护分母的抗插针对称——上插针顶高会让 RR 虚高、marginal 建仓假性过门)**且改持仓跟踪止损口径**(`recent_high` 现为去插针的有效压力,**区别于 #5**;用户已确认接受该持仓行为变更)。交叉引用审查 F8 / C2。
 
 ## 6. Slice — V14.2 可结构化细节迁移
 突破型更高 RR floor、除权提示、IV/HV 标签、更细结构止损。逐项带"输入字段 + deterministic 函数 + M6.7 落点 + validator + 回归测试",不做一次性大包。
@@ -51,7 +53,7 @@
 ## 7. 与 S3a 的衔接(审查 C1-C4)
 - **C1 已解决**:D1 拍板"建仓也取整" → 推翻 S3a §2.22(已同步改 S3a 设计);Slice 0 同时覆盖建仓 + 持仓。
 - **S3a 持仓 stop/tp 也用 side-aware tick**:持仓止损 `stop_trigger` 向上取、止盈向下取(与建仓共用 round + 落点规则)。
-- C2:止损基准两条线不同且都已确认(建仓=支撑−ATR;持仓=近20日高−ATR ratchet),非冲突;Slice 5 改 support 只影响建仓侧。
+- C2:止损基准两条线不同且都已确认(建仓=支撑−ATR;持仓=近20日高−ATR ratchet),非冲突;#5 改 support 只影响建仓侧,#6 改 resistance(有效压力)同时影响建仓 `t1`/RR 与**持仓跟踪止损**(两条线都用去插针后的结构位)。
 - C3:止盈基准一致(同源 `exit_and_size` 口径)。
 - C4:Slice 0 与 S3a 都改 `validate_m67_consistency`——S3a 改"持有"分支放开 损/盈一/盈二、Slice 0 不改逻辑只要求 round 后两边同值;同 PR 视角审、排顺序避免 clobber。
 

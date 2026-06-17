@@ -23,7 +23,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_phase5_engine import (  # noqa: E402
     compute_indicators, entry_type, exit_and_size, classify_risk_families,
     build_m67_report, build_holding_report, validate_m67_consistency, write_m67_report, GOVERNANCE,
-    tick_ref, tick_up, tick_down, holding_levels, effective_support, SR_SPIKE_ATR,
+    tick_ref, tick_up, tick_down, holding_levels, effective_support, effective_resistance, SR_SPIKE_ATR,
     BREAKOUT_RR_BONUS,
     iv_hv_tag, iv_hv_vol_note, IV_HV_RATIO_HI, IV_HV_RATIO_LO, IV_HV_REGIMES,
 )
@@ -34,12 +34,15 @@ AS_OF = "20260609"
 
 
 def _series():
-    # 30d; day12 carries support 2.87 + resistance 3.10 (inside 20d lookback, outside 14d ATR);
-    # all closes 2.90 so MAs ~2.90 (current 2.90 not below all MAs).
+    # 30d; day12 carries support 2.87 (corroborated by 2.88 → strong) + resistance 3.10; day13 ALSO highs 3.10
+    # so resistance is corroborated (#6 effective_resistance → strong, not a single-day spike). Both day12/13 are
+    # inside the 20d lookback but outside the 14d ATR window, so ATR stays ~0.04. closes 2.90 so MAs ~2.90.
     s = []
     for i in range(30):
         if i == 12:
             s.append({"high": 3.10, "low": 2.87, "close": 2.90})
+        elif i == 13:
+            s.append({"high": 3.10, "low": 2.88, "close": 2.90})   # #6:次日背书近20日高 → resistance strong(否则单日 3.10 被判插针)
         else:
             s.append({"high": 2.92, "low": 2.88, "close": 2.90})
     return s
@@ -108,7 +111,9 @@ class IndicatorTests(unittest.TestCase):
         self.assertAlmostEqual(ind["support"], 2.87)        # 极值 2.87 被次低 2.88 背书(差 0.01 < 1×ATR 0.04)→ strong, 不变
         self.assertEqual(ind["support_quality"], "strong")
         self.assertAlmostEqual(ind["recent_low_20"], 2.87)  # 原始近20日最低保留
-        self.assertAlmostEqual(ind["resistance"], 3.10)     # #5 不动 resistance(holding 跟踪止损依赖)
+        self.assertAlmostEqual(ind["resistance"], 3.10)     # #6 有效压力:3.10 被次高 3.10(day13)背书 → strong, 不变
+        self.assertEqual(ind["resistance_quality"], "strong")
+        self.assertAlmostEqual(ind["recent_high_20"], 3.10)  # 原始近20日最高保留
         self.assertAlmostEqual(ind["atr14"], 0.04, places=3)
 
 
@@ -166,6 +171,141 @@ class EffectiveSupportTests(unittest.TestCase):
         sup = r["machine"]["entry_exit_size_star"]["plan"]["support"]
         r["m67"]["精简结论区"]["操作建议"] = r["m67"]["精简结论区"]["操作建议"].replace(f"结构支撑 {sup}、", "")
         self.assertIn("质量 strong", r["m67"]["精简结论区"]["操作建议"])   # 质量 token 仍在(隔离支撑价位缺失)
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+
+class EffectiveResistanceTests(unittest.TestCase):
+    """#6 有效压力(resistance 有效化,对称 #5):抗单日极值结构位 + 质量(strong/weak/fallback_extreme)。
+    双侧消费:建仓 t1/RR 门**分子** + 持仓跟踪止损基准——上插针顶高会让 RR 虚高(假性过门)或持仓止损过紧。"""
+    def _s(self, highs):                                     # close 固定低于所有 high,确保结构正常
+        return [{"high": x, "low": x - 0.5, "close": min(highs) - 0.5} for x in highs]
+
+    def test_strong_when_extreme_corroborated(self):
+        res, q, raw = effective_resistance(self._s([10.7, 10.68, 10.2, 10.1, 10.0]), atr=0.5)
+        self.assertEqual((res, q, raw), (10.7, "strong", 10.7))   # 次高 10.68 仅低 0.02 < 1×0.5 → 极值可信
+
+    def test_weak_drops_single_day_spike(self):
+        res, q, raw = effective_resistance(self._s([11.0, 10.0, 9.9, 9.8, 9.7]), atr=0.5)
+        self.assertEqual((res, q, raw), (10.0, "weak", 11.0))     # 11.0 比次高 10.0 高 1.0 > 1×0.5 → 插针,取次高
+
+    def test_fallback_extreme_when_no_atr(self):
+        res, q, raw = effective_resistance(self._s([11.0, 10.0, 9.9]), atr=None)
+        self.assertEqual((res, q, raw), (11.0, "fallback_extreme", 11.0))   # 无 ATR 无法评估 → 退原始极值
+
+    def test_spike_threshold_boundary(self):
+        # 差恰 = 1×ATR(不严格 >)→ 视为背书 strong(用 raw_high),非插针
+        res, q, _ = effective_resistance(self._s([10.5, 10.0, 9.9, 9.8]), atr=0.5)
+        self.assertEqual((res, q), (10.5, "strong"))
+
+    def test_compute_indicators_despikes_resistance(self):
+        s = [{"high": 10.0, "low": 9.5, "close": 9.8} for _ in range(20)]
+        s[5] = {"high": 13.0, "low": 9.5, "close": 9.8}      # 单日上插针(在 ATR 窗外)
+        ind = compute_indicators(s)
+        self.assertEqual(ind["resistance_quality"], "weak")
+        self.assertAlmostEqual(ind["recent_high_20"], 13.0)  # 原始近20日最高保留
+        self.assertAlmostEqual(ind["resistance"], 10.0)      # 有效压力取次高(去插针)
+
+    def test_build_surfaces_and_validates_resistance_quality(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")       # _series → resistance 3.10 strong(day12+13 背书)
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        self.assertEqual(plan["resistance_quality"], "strong")
+        self.assertAlmostEqual(plan["resistance"], 3.10)
+        self.assertIn(f"结构阻力 {plan['resistance']}、质量 strong", r["m67"]["精简结论区"]["操作建议"])
+        validate_m67_consistency(r)                           # 正向必过
+
+    def test_validator_rejects_bad_or_dangling_resistance_quality(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        r["machine"]["entry_exit_size_star"]["plan"]["resistance_quality"] = "bogus"   # 非枚举
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+        r2 = build_m67_report(_good_input(), AS_OF, "t")
+        res2 = r2["machine"]["entry_exit_size_star"]["plan"]["resistance"]
+        r2["m67"]["精简结论区"]["操作建议"] = r2["m67"]["精简结论区"]["操作建议"].replace(f"结构阻力 {res2}、", "")   # 删压力价位
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r2)
+
+    def test_despiked_resistance_rejects_spike_inflated_build(self):
+        # 核心价值:上插针顶高的 resistance 会把 t1/RR 顶过门;去插针(次高)后 RR 真实不足 → 正确拒。
+        close = 10.0
+        base = {"support": 9.5, "support_quality": "strong", "atr14": 0.4}
+        despiked = {**base, "resistance": 10.1, "resistance_quality": "weak"}   # 去插针后的次高
+        plan, rej = exit_and_size(_good_input(close=close), despiked, "震荡期", etype="低吸")
+        self.assertIsNone(plan)                              # t1=10.1 → RR=(10.1-10)/1.0=0.1 < 1.5 → 拒
+        self.assertIn("盈亏比", rej)
+        raw_spike = {**base, "resistance": 12.0, "resistance_quality": "strong"}  # 未去插针(bug)→ RR 虚高过门
+        plan2, _ = exit_and_size(_good_input(close=close), raw_spike, "震荡期", etype="低吸")
+        self.assertIsNotNone(plan2)                          # 对照:插针未去时会假性建仓(正是本切片要堵的)
+
+    def test_holding_stop_consumes_resistance(self):
+        ind = {"resistance": 10.0, "resistance_quality": "weak", "atr14": 0.4}   # 去插针后的次高
+        plan, rej = holding_levels(_good_input(close=9.8), ind, "震荡期")
+        self.assertIsNone(rej)
+        self.assertAlmostEqual(plan["recent_high"], 10.0)
+        self.assertAlmostEqual(plan["stop"], 9.5)            # tick_up(10.0 − 1.25×0.4) = 9.5(基准用去插针的压力)
+
+    # ── #6 t1 目标基准真实性(R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-DANGLING)─────────────
+    def test_t1_basis_structural_when_resistance_above_close(self):
+        ind = {"support": 9.5, "support_quality": "strong", "atr14": 0.4,
+               "resistance": 12.0, "resistance_quality": "strong"}
+        plan, rej = exit_and_size(_good_input(close=10.0), ind, "震荡期", etype="低吸")
+        self.assertIsNone(rej)
+        self.assertEqual(plan["t1_basis"], "structural_resistance")
+        self.assertAlmostEqual(plan["t1"], 12.0)             # t1 = tick_down(resistance)
+
+    def test_t1_basis_fallback_when_resistance_not_above_close(self):
+        # resistance <= close(== 与 <)→ t1 走 RR 门兜底,t1_basis=rr_floor_fallback,t1 ≠ resistance
+        for res in (10.0, 9.5):
+            ind = {"support": 9.5, "support_quality": "strong", "atr14": 0.4,
+                   "resistance": res, "resistance_quality": "strong"}
+            plan, rej = exit_and_size(_good_input(close=10.0), ind, "震荡期", etype="低吸")
+            self.assertIsNone(rej, f"res={res}")
+            self.assertEqual(plan["t1_basis"], "rr_floor_fallback", f"res={res}")
+            self.assertNotAlmostEqual(plan["t1"], res)       # t1 不是结构阻力
+
+    def _fallback_series(self):
+        # Codex probe:紧致区间 high==close==近20日最高 → 有效压力 == 现价 → t1 走 RR 兜底,但仍是合法低吸建仓
+        return [{"high": 10.0, "low": 9.86, "close": 10.0} for _ in range(30)]
+
+    def test_build_fallback_advice_basis_truthful_and_validates(self):
+        r = build_m67_report(_good_input(close=10.0, price_series=self._fallback_series()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        self.assertEqual(plan["t1_basis"], "rr_floor_fallback")
+        adv = r["m67"]["精简结论区"]["操作建议"]
+        self.assertIn("由 RR 门槛兜底推算", adv)
+        self.assertNotIn("目标基准:结构阻力", adv)         # 不得虚标结构阻力为目标依据(Codex dangling)
+        validate_m67_consistency(r)                           # 正向必过
+
+    def test_validator_rejects_fallback_with_structural_basis_phrase(self):
+        # Codex 原始 dangling:fallback 报告塞入结构阻力目标基准短语 → 必拒
+        r = build_m67_report(_good_input(close=10.0, price_series=self._fallback_series()), AS_OF, "t")
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        r["m67"]["精简结论区"]["操作建议"] += (f"盈一 {plan['t1']} 目标基准:结构阻力 {plan['resistance']}、"
+                                                f"质量 {plan['resistance_quality']}")
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_forged_t1_basis_on_structural(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")       # _series → structural
+        r["machine"]["entry_exit_size_star"]["plan"]["t1_basis"] = "rr_floor_fallback"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_structural_relabeled_as_fallback(self):
+        # Codex branch-guard probe:structural plan(t1==tick_down(resistance))整体改标 fallback + 换上 branch-一致的
+        # fallback 文案 → validator 必须靠 plan 数学(t1==tick_down(res) 不得 fallback)抓出,不能只信声明分支+文案。
+        r = build_m67_report(_good_input(), AS_OF, "t")       # structural, t1==tick_down(resistance)==3.1
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        struct = (f"**盈一 {plan['t1']} 目标基准:结构阻力 {plan['resistance']}、质量 {plan['resistance_quality']}**"
+                  f"(上插针顶高时取次高,RR 不虚高)。")
+        fb = (f"**盈一 {plan['t1']} 由 RR 门槛兜底推算**(结构阻力 {plan['resistance']}/质量 "
+              f"{plan['resistance_quality']} 未用作目标:不高于现价)。")
+        adv = r["m67"]["精简结论区"]["操作建议"]
+        self.assertIn(struct, adv)                            # sanity:结构句确在
+        r["m67"]["精简结论区"]["操作建议"] = adv.replace(struct, fb)   # branch-一致伪造
+        r["machine"]["entry_exit_size_star"]["plan"]["t1_basis"] = "rr_floor_fallback"
         with self.assertRaises(ValueError):
             validate_m67_consistency(r)
 

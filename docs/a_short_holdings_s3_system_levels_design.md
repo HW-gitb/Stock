@@ -4,7 +4,7 @@
 **状态**:设计稿(2026-06-16,口径已与用户确认);待 `起草` 实现。S1 见 `docs/a_short_holdings_in_m67_design.md`。
 
 ## 0. 用户已定口径(2026-06-16 Q&A,不可猜)
-- **止损 = 跟踪止损(ratchet)**:`近 N 日最高 − ATR_MULT[regime] × ATR`;随新高上移,无状态(从 price_series 重算)。
+- **止损 = 跟踪止损(ratchet)**:`近 N 日最高 − ATR_MULT[regime] × ATR`;随新高上移,无状态(从 price_series 重算)。**#6 更新(2026-06-17,用户已确认):** `近 N 日最高` 改用去单日插针的**有效压力** `ind['resistance']`(effective_resistance),避免上插针把跟踪止损顶得过紧而提前出局。
 - **主动程度 = 被动**:系统算并显示 止损 / 盈一 / 盈二,**动作恒「持有」**;到价由用户盘中手动;**不**自动减仓 / 加仓,**不动**"禁止自动加仓"硬线。
 
 ## 1. 背景(为什么)
@@ -13,7 +13,7 @@ S1 让持仓恒进 M6.7,但持仓行 `plan=None`、只回显用户手填的 `sto
 ## 2. 计算规则(精确;复用引擎常量,不另造口径)
 新增**纯函数** `holding_levels(inp, ind, regime) -> (plan_dict, None) | (None, reject_reason)`:
 - 复用 `ATR_MULT[regime]`(止损/盈二倍数)、`RR_FLOOR[regime]`(盈亏比下限);`atr = ind["atr14"]`、`res = ind["resistance"]`。
-- **跟踪止损**:`recent_high = max(price_series 最近 N=20 根已结算 bar 的 high)`(不足 20 根用全部)。`stop = recent_high − ATR_MULT[regime] × atr`。
+- **跟踪止损**:`recent_high = ind['resistance']`(**#6 起为去单日插针的有效压力** `effective_resistance`,非原始 `max(20根 high)`;原始极值仍可由 `ind['recent_high_20']` 取)。`stop = recent_high − ATR_MULT[regime] × atr`。
   - 缺价 / 缺 ATR / atr≤0 / 无 recent_high → `return None, "缺价/ATR/最高价,无法精算跟踪止损"`(退回显示"未算出",**绝不伪造**)。
 - **risk = close − stop**:
   - `risk > 0`(现价在止损上方,正常):`t1 = res if (res and res > close) else close + RR_FLOOR[regime]*risk`;`t2 = max(t1 + ATR_MULT[regime]*atr, close + 2.0*risk)`;`basis="trailing"`,`breached=False`。

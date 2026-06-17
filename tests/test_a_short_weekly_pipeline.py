@@ -52,11 +52,16 @@ def _analysis_input(trade_date=AS_OF, candidates=None):
 
 
 def _series():
-    # mirrors the engine test fixture: day12 carries support 2.87 + resistance 3.10.
+    # mirrors the engine test fixture: day12 carries support 2.87 + resistance 3.10; day13 ALSO highs 3.10 so
+    # #6 effective_resistance corroborates it (strong, not a single-day spike) → t1=3.10 → build RR still passes.
     s = []
     for i in range(30):
-        s.append({"high": 3.10, "low": 2.87, "close": 2.90} if i == 12
-                 else {"high": 2.92, "low": 2.88, "close": 2.90})
+        if i == 12:
+            s.append({"high": 3.10, "low": 2.87, "close": 2.90})
+        elif i == 13:
+            s.append({"high": 3.10, "low": 2.88, "close": 2.90})   # #6:次日背书近20日高 → resistance strong(否则 3.10 被判单日插针)
+        else:
+            s.append({"high": 2.92, "low": 2.88, "close": 2.90})
     return s
 
 

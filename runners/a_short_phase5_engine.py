@@ -169,18 +169,33 @@ def atr14(series: list, n: int = 14):
     return sum(trs) / n
 
 
-def support_resistance(series: list):
-    lows = [x["low"] for x in series[-SUPPORT_LOOKBACK:]]
+def effective_resistance(series: list, atr):
+    """#6 有效压力(resistance 有效化,对称 #5 effective_support):抗单日极值结构位 + 质量标记。
+    `raw_high = max(近20日 high)`。若**最高 high 比次高 high 还高 > SR_SPIKE_ATR×ATR** → 判单日插针,压力取**次高**
+    (quality=`weak`);否则极值被次高背书,压力=`raw_high`(quality=`strong`)。ATR 缺失/窗口不足两根 → 退 `raw_high`
+    (quality=`fallback_extreme`,绝不伪造结构)。返回 `(resistance, quality, recent_high_20)`。**双侧消费**:建仓 `t1`
+    (= resistance 当 resistance>close)→ RR 门**分子**——上插针顶高会让 t1/RR 虚高、marginal 建仓假性过门;+ 持仓跟踪
+    止损基准(`recent_high − ATR×mult`)——上插针会让止损过紧、提前出局。故与 support 一样去插针:本切片补全 RR 门的
+    抗插针**对称**(#5 只护了分母 support;此处护分子 resistance),并**改持仓跟踪止损口径**(用户已确认接受)。"""
     highs = [x["high"] for x in series[-RESISTANCE_LOOKBACK:]]
-    return (min(lows) if lows else None, max(highs) if highs else None)
+    if not highs:
+        return None, None, None
+    raw_high = max(highs)
+    if atr is None or atr <= 0 or len(highs) < 2:
+        return raw_high, "fallback_extreme", raw_high
+    second_high = sorted(highs)[-2]
+    if raw_high - second_high > SR_SPIKE_ATR * atr:      # 最高是孤立插针(> 1 ATR 高于次高)→ 取次高为结构压力
+        return second_high, "weak", raw_high
+    return raw_high, "strong", raw_high                   # 极值被次高背书 → 用 raw_high
 
 
 def effective_support(series: list, atr):
     """#5 有效支撑(策略口径,仅建仓侧):抗单日极值结构位 + 质量标记。
     `raw_low = min(近20日 low)`。若**最低 low 比次低 low 还低 > SR_SPIKE_ATR×ATR** → 判单日插针,支撑取**次低**
     (quality=`weak`);否则极值被次低背书,支撑=`raw_low`(quality=`strong`)。ATR 缺失/窗口不足两根 → 退 `raw_low`
-    (quality=`fallback_extreme`,绝不伪造结构)。返回 `(support, quality, recent_low_20)`。**只影响建仓 stop/低吸带/RR
-    (谁能建仓);不碰持仓**——holding 跟踪止损用 `resistance`(近20日高 raw),本切片不动 resistance(交叉引用 §5 C2/F8)。"""
+    (quality=`fallback_extreme`,绝不伪造结构)。返回 `(support, quality, recent_low_20)`。**影响建仓 stop/低吸带/RR
+    的分母(risk)**;RR 分子侧的 resistance 由 `effective_resistance` 同样去插针(#6 resistance 有效化,2026-06-17;
+    该切片同时改持仓跟踪止损口径)。"""
     lows = [x["low"] for x in series[-SUPPORT_LOOKBACK:]]
     if not lows:
         return None, None, None
@@ -195,12 +210,13 @@ def effective_support(series: list, atr):
 
 def compute_indicators(series: list) -> dict:
     closes = [x["close"] for x in series]
-    _, res = support_resistance(series)                  # resistance = 近20日 high raw(holding 跟踪止损依赖,本切片不动)
     atr = atr14(series)
     sup, sup_q, recent_low_20 = effective_support(series, atr)
+    res, res_q, recent_high_20 = effective_resistance(series, atr)   # #6:resistance 同样去插针(建仓 t1/RR 分子 + 持仓止损基准)
     return {"ma5": ma(closes, 5), "ma10": ma(closes, 10), "ma20": ma(closes, 20),
             "rsi14": rsi14(closes), "atr14": atr, "support": sup, "support_quality": sup_q,
-            "recent_low_20": recent_low_20, "resistance": res}
+            "recent_low_20": recent_low_20, "resistance": res, "resistance_quality": res_q,
+            "recent_high_20": recent_high_20}
 
 
 # ── 语义官方层消费方校验(fail-closed,单一来源)────────────────────────────────
@@ -398,7 +414,9 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
         return None, "现价≤支撑或止损≥现价(明显无效结构)"
     risk = close - stop
     rr_floor = RR_FLOOR.get(regime, 1.5) + (BREAKOUT_RR_BONUS if etype == "突破" else 0.0)   # #6:突破型更高 RR 门
-    t1 = res if (res and res > close) else close + rr_floor * risk
+    use_structural_res = bool(res is not None and res > close)   # #6:结构阻力仅在高于现价时用作 t1,否则走 RR 门兜底
+    t1 = res if use_structural_res else close + rr_floor * risk
+    t1_basis = "structural_resistance" if use_structural_res else "rr_floor_fallback"   # 决定 advice 目标基准文案真实性
     t2 = max(t1 + ATR_MULT.get(regime, 1.25) * atr, close + 2.0 * risk)
     rr = (t1 - close) / risk if risk > 0 else 0.0
     if rr < rr_floor:
@@ -450,12 +468,14 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
             "entry_invalid_reason": entry_invalid_reason, "stop": stop_t, "t1": t1_t, "t2": t2_t,
             "rr": round(rr_ref, 3), "rr_at_entry_high": round(rr_eh, 3), "rr_floor": rr_floor,
             "support": sup, "support_quality": ind.get("support_quality"),   # #5 stop 的结构支撑基准 + 质量
+            "resistance": res, "resistance_quality": ind.get("resistance_quality"),   # #6 t1/RR 的结构阻力基准 + 质量
+            "t1_basis": t1_basis,   # #6:t1 来源(structural_resistance / rr_floor_fallback)——决定 advice 目标基准文案是否标结构阻力
             "shares": shares, "avg_amount_5d": amt5, "sizing_notes": notes}, None
 
 
 def holding_levels(inp: dict, ind: dict, regime: str):
     """持仓恒列入 S3a:持仓**系统**止损/止盈(被动显示,动作恒「持有」、不算股数)。跟踪止损(ratchet)=
-    `recent_high(近20日最高 = ind['resistance']) − ATR_MULT[regime]×ATR`;side-aware tick(止损向上、止盈向下,
+    `recent_high(= ind['resistance'];#6 起为**有效压力**=去单日插针后的近20日最高) − ATR_MULT[regime]×ATR`;side-aware tick(止损向上、止盈向下,
     = 最终可执行价)+ post-tick 重校验。缺价/ATR/最高价 → reject(render 显"未算出",**绝不伪造**);
     现价 ≤ 取整后跟踪止损,或取整后止盈结构失效 → `breached`(t1/t2=None,标已破位、不伪造止盈)。
     返回 (plan, None) | (None, reject_reason)。"""
@@ -626,9 +646,18 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                + (f";{plan['entry_invalid_reason']}" if plan.get("entry_invalid_reason") else ""))
         # #6-i RR 门槛文案 type-aware:仅突破标「突破型更严」,低吸不带(否则低吸行误看成也被加严)。
         floor_note = f"门槛 {plan['rr_floor']}" + ("(突破型更严)" if etype == "突破" else "")
+        # #6 t1 目标基准文案按真实来源分支(R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-DANGLING):结构阻力仅在确为 t1
+        # (resistance>现价)时标为「目标基准」;否则 t1 走 RR 门兜底,明确标兜底、并把结构阻力/质量降为旁注 context,绝不虚标为目标依据。
+        if plan["t1_basis"] == "structural_resistance":
+            t1_note = (f"**盈一 {plan['t1']} 目标基准:结构阻力 {plan['resistance']}、质量 {plan['resistance_quality']}**"
+                       f"(上插针顶高时取次高,RR 不虚高)。")
+        else:
+            t1_note = (f"**盈一 {plan['t1']} 由 RR 门槛兜底推算**(结构阻力 {plan['resistance']}/质量 "
+                       f"{plan['resistance_quality']} 未用作目标:不高于现价)。")
         advice = (f"低吸/突破建仓建议(类型:{etype})。⭐×{star}、盈亏比 {plan['rr']}({floor_note})。{rng}。"
                   f"**试探仓**(edge 未验证,A-short 仅 risk_filter_only)。"
                   f"**止损 {plan['stop']} 无条件执行(盘中由你手动)**(基准:结构支撑 {plan['support']}、质量 {plan['support_quality']})。"
+                  + t1_note +
                   f"价格已按 A 股 0.01 规整。" + iv_caveat + regime_caveat)
     elif action == "观察":
         advice = f"观察,不建仓。原因:{reject}。" + (f"降级:{'/'.join(downgrades)}。" if downgrades else "")
@@ -897,6 +926,31 @@ def validate_m67_consistency(report: dict) -> None:
             raise ValueError(f"建仓 plan support_quality 非法 {sq!r}(须 ∈ {SR_QUALITY})")
         if f"结构支撑 {plan['support']}、质量 {sq}" not in adv:
             raise ValueError("建仓 advice 缺精确支撑短语「结构支撑 {support}、质量 {quality}」(no-dangling:须含支撑价位+质量)")
+        # #6 有效压力 + t1 目标基准真实性(no-dangling §8;R-ASHORT-M67-PRICE-RESISTANCE-EFFECTIVE +
+        # R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-DANGLING):resistance_quality ∈ 枚举;t1_basis ∈ 枚举且与 t1 值 + advice
+        # 文案绑定——structural 才标「目标基准:结构阻力」(且 t1 == tick_down(resistance)),fallback 标「RR 门槛兜底推算」
+        # 且 advice **不得**出现「目标基准:结构阻力」(防把未用作 t1 的结构阻力虚标为目标依据,= Codex 抓到的 dangling)。
+        rq = plan.get("resistance_quality")
+        if rq not in SR_QUALITY:
+            raise ValueError(f"建仓 plan resistance_quality 非法 {rq!r}(须 ∈ {SR_QUALITY})")
+        t1_basis = plan.get("t1_basis")
+        if t1_basis not in ("structural_resistance", "rr_floor_fallback"):
+            raise ValueError(f"建仓 plan t1_basis 非法 {t1_basis!r}")
+        if t1_basis == "structural_resistance":
+            if plan.get("resistance") is None or tick_down(plan["resistance"]) != plan["t1"]:
+                raise ValueError("t1_basis=structural_resistance 但 t1 ≠ tick_down(resistance)(目标基准与值不符)")
+            if f"盈一 {plan['t1']} 目标基准:结构阻力 {plan['resistance']}、质量 {rq}" not in adv:
+                raise ValueError("建仓 advice 缺精确结构阻力目标基准短语「盈一 {t1} 目标基准:结构阻力 {res}、质量 {q}」(no-dangling)")
+        else:                                   # rr_floor_fallback:结构阻力未用作 t1 → 须标兜底、且不得虚标结构阻力为目标基准
+            # 分支真实性(R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-BRANCH-GUARD-GAP):**不只信声明分支 + 文案**——由 plan
+            # 数学反算:`t1 == tick_down(resistance)` 说明 t1 其实就是结构阻力,绝不能标 fallback(否则可把 structural plan
+            # 整体改标 fallback + 换 fallback 文案蒙混)。与上面 structural⇒t1==tick_down(res) 构成双向绑定(== ⟺ structural)。
+            if plan.get("resistance") is not None and tick_down(plan["resistance"]) == plan["t1"]:
+                raise ValueError("t1_basis=rr_floor_fallback 但 t1 == tick_down(resistance)(t1 实为结构阻力,分支标错/伪造)")
+            if f"盈一 {plan['t1']} 由 RR 门槛兜底推算" not in adv:
+                raise ValueError("RR 兜底建仓 advice 缺「盈一 {t1} 由 RR 门槛兜底推算」短语(no-dangling)")
+            if "目标基准:结构阻力" in adv:
+                raise ValueError("t1_basis=rr_floor_fallback 但 advice 仍标「目标基准:结构阻力」(虚假目标基准)")
         # #6-i RR 门槛(no-dangling §8 + R-ASHORT-M67-PRICE6-RR-FLOOR-NODANGLE):突破型抬升后的 rr_floor 是是否放行
         # 的判据,必须以精确「门槛 {rr_floor}」落到用户可见 advice(否则 render/refactor 可隐藏实际门槛而 validator 仍判一致)。
         if f"门槛 {plan['rr_floor']}" not in adv:

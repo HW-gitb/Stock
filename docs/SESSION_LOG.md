@@ -8,6 +8,45 @@
 
 ---
 
+## 2026-06-17 — Codex re-`审查 PASS` (#6 resistance t1-basis branch guard)
+- **Verdict/Action**: PASS. `R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-BRANCH-GUARD-GAP` 已在 working tree 闭合: fallback 分支现在拒 `t1 == tick_down(resistance)`,structural→fallback 整体改标不再能过 validator。
+- **Required**: addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md` 单一来源。
+- **Verify**: old mutation probe now raises;legal fallback positive passes;affected suites 241 OK with `tushare` stub;full discover 2120 OK with package-level `tushare`/`requests` stubs(no network);doc-governance+route-doc 30 OK;compile 3 OK;`git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `提交` #6 resistance tracked files;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (#6 resistance t1-basis branch-guard gap)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(上轮只把 structural 分支绑 plan 数学 `tick_down(res)==t1`,fallback 分支只查文案 → structural plan 整体改标 fallback + 换 fallback 文案可蒙混)。修:给 fallback 分支补**对称数学绑定**——`plan['resistance']` 非空 且 `tick_down(resistance)==t1` → 拒 fallback(t1 实为结构阻力)。两分支现双向绑死:`t1==tick_down(res) ⟺ structural`(任一方向伪造都 raise;合法 fallback 恒 `t1=close+rr_floor*risk>resistance` → t1≠tick_down(res))。
+- **Required**: `R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-BRANCH-GUARD-GAP`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2120 OK**;engine+weekly 241 OK;新 `test_validator_rejects_structural_relabeled_as_fallback`(structural→fallback 标签 + 一致文案 ⇒ raise);保留 fallback ==/<close 正向测;py_compile OK;无 governance/preset/schema 改;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` #6 resistance)。
+- **Pre-Codex self-review**: A 这次想全**双向**:structural⇒==、fallback⇒≠,`==⟺structural` 完全由 plan 数学决定、两向伪造都堵;反思连吃 3 轮(t1 漏 fallback 分支 → 单向绑定漏反向)根因都是"只修被点名版、没补对称面",这次一次性把不变量两端都钉死。B ripple:仅 validator 加一条;holding 无结构阻力基准声明不受影响;合法 fallback(res≤close→t1>res)不误伤。C 反向:未误伤合法 fallback(2120 全绿含 res==close 正向)。D N-A。E register repair note + SESSION_LOG 单态。F m67 schema 不改;仅 validator/测试,无阈值/EGS/Rule3/fetch 改。
+
+## 2026-06-17 — Codex re-`审查 FAIL` (#6 resistance t1-basis branch guard)
+- **Verdict/Action**: FAIL. `t1_basis` 的生成和正常 advice 分支已改善,但 validator 仍信任声明分支;真实 structural plan 可被整体改标成 RR fallback + fallback advice 后通过。
+- **Required**: `R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-BRANCH-GUARD-GAP`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: Codex mutation probe:`_good_input()` structural `t1=resistance=3.1` → 改 `rr_floor_fallback` + fallback advice 后 validator PASS;full discover 2119 OK(package-level tushare/requests stubs,no network);doc-governance+route-doc 30 OK;compile 3 OK;`git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `修复` branch guard;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (#6 resistance t1-basis dangling)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(加 resistance 基准 advice 时漏了 t1 的 fallback 分支:`t1=res if res>close else RR兜底`,但 advice 无条件写「目标基准:结构阻力」+ validator 只查该短语 → resistance≤close 走兜底时虚标结构阻力为目标且放过)。修:`exit_and_size` 加 `plan['t1_basis']`(structural_resistance / rr_floor_fallback);`build_m67_report` advice 分支(structural 标「目标基准:结构阻力」/ fallback 标「由 RR 门槛兜底推算」+结构阻力降旁注「未用作目标」);`validate_m67_consistency` 按 t1_basis 绑 t1 值(structural⇒tick_down(res)==t1)+ 文案,fallback 禁出现「目标基准:结构阻力」。
+- **Required**: `R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-DANGLING`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2119 OK**;engine+weekly 240 OK;新 5 测(structural-above-close / fallback==close / fallback<close 且 t1≠res / build fallback 文案真实+validates / validator 拒 fallback-塞结构短语 + 拒伪造 t1_basis);py_compile OK;无 governance/preset/schema 改;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` #6 resistance)。
+- **Pre-Codex self-review**: A 缺陷×出口:t1 两分支(structural/fallback)× advice × validator 全配对;Codex probe series(high=close=10.0)纳入正向 fallback 测。B ripple:holding 也有同 t1 fallback 但其 advice 从不声称结构阻力目标基准 → 无需改(已核);无其它 advice 声称 resistance 基准。C 反向:structural 正向仍过(_series res>close)、未误判合法 structural;fallback 把 resistance 降旁注非删(仍 surface context)。D N-A。E register repair note + SESSION_LOG 单态。F m67 schema 不改(plan 开放);仅 report 文案/validator/测试,无阈值/EGS/Rule3/fetch 改。
+
+## 2026-06-17 — Codex `审查 FAIL` (#6 resistance/压力 有效化)
+- **Verdict/Action**: FAIL. 核心 de-spike 方向正确,但建仓 advice 在 `resistance <= close` 且 `t1` 走 RR-floor fallback 时仍写「盈一目标基准:结构阻力」,用户可见目标依据会失真。
+- **Required**: `R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-DANGLING`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: Codex probe 复现 `resistance=10.0` / `t1=10.47` / advice 仍标结构阻力且 validator pass;`tests.test_a_short_phase5_engine` 104 OK;`tests.test_a_short_weekly_pipeline` 131 OK with in-process `tushare` stub(unstubbed run only `ModuleNotFoundError: tushare`);doc-governance+route-doc 30 OK;py_compile OK;`git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `修复` 该 Required 后再交 Codex re-`审查`;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `起草` (#6 resistance/压力 有效化)
+- **Verdict/Action**: 起草价格 roadmap #6 resistance 有效化(用户已确认接受改持仓止损口径)——把 #5 抗单日插针逻辑对称用到近20日最高:新纯函数 `effective_resistance`(最高 high 比次高高 >1×ATR 判插针取次高 weak / 否则 strong / 无ATR fallback_extreme;复用 SR_SPIKE_ATR+SR_QUALITY→**无 governance/preset 改**);`compute_indicators` 出 resistance(effective)/quality/recent_high_20,**退役死函数 `support_resistance`**。**核过代码**:resistance 喂 `exit_and_size` t1(=res 当 res>close)→RR 门**分子** + `holding_levels` 跟踪止损——上插针顶高会让 RR 虚高(marginal 假性过门)/止损过紧;#5 只护分母,本切片补分子对称 + 改持仓止损。build 镜像 #5:plan 带 resistance/quality、advice「结构阻力 X、质量 Y」no-dangling、validator 守护;holding 自动用 effective(value 修复)。
+- **Required**: `R-ASHORT-M67-PRICE-RESISTANCE-EFFECTIVE`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 全量 **2114 OK**;5 a_short 套件绿;新 `EffectiveResistanceTests`(strong/weak/fallback + compute de-spike + build surfaces+validates + validator 拒坏/dangling + **去插针拒插针虚高建仓** value 测 + holding 消费);py_compile OK;无 governance/preset/schema 改;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex `审查` #6 resistance)。
+- **Pre-Codex self-review**: A defect×出口:effective_resistance 全分支 + 双消费方(建仓 t1/RR + 持仓 stop)+ validator forge/dangling 全测。B ripple:grep 全 resistance 消费方;退役 support_resistance(确认唯一调用、全量绿);**engine+weekly `_series` fixture 的单日 3.10 本身是插针→补次日背书保 strong**(否则建仓翻观察,2114 验证无漏);docs 5 面(effective_support docstring / compute 注释 / holding docstring / proposal §5·C2 / holdings S3a §0·§2)。C 反向:strong/fallback 保 raw、未把真值误拒(value 测对照:raw-spike 过门 vs de-spike 拒)。D N-A。E register/SESSION_LOG 单态;**顺手清掉上轮漏折叠的 stale #6 IV-HV in_progress Codex note**(已被 RESOLVED@39c53e00 覆盖)。F m67 schema 不改(machine.indicators/plan 开放 object);无 BOM、diff 干净。
+
 ## 2026-06-17 - Codex `审查 PASS` (#6 IV-HV advisory tag / machine-ratio guard)
 - **Verdict/Action**: PASS. `R-ASHORT-M67-IV-HV-MACHINE-RATIO-GUARD-GAP` 已闭合在当前 working tree: `validate_m67_consistency` 现在强制 `machine.iv_gate` 的 `iv_value`/`hv_value`/`iv_hv_ratio`/`iv_hv_regime` 四键必存,并用 raw IV/HV 通过 `iv_hv_tag` 重算 regime+ratio,再绑定 M6.7 文案 `IV/HV` / `IV-HV未知`;未改 Rule3/action/EGS/TopN/fetch/schema/broker。
 - **Required**: addressed in working tree; reviewed-commit 后把 `docs/system_risk_register.md` 对应 #6 IV-HV 条目标为 resolved。
