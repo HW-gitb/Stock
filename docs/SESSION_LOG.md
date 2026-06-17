@@ -8,6 +8,32 @@
 
 ---
 
+## 2026-06-17 — Codex re-`审查 PASS` (overlay readiness harness — 4 findings)
+- **Verdict/Action**: PASS. Claude 修复已闭合 4 个 Required: GBK-safe due banner、bucket/as_of lineage guard、`result/a_short` eval-summary 写入拦截、governance note 从 stale `pit only` 更新为 pit+live-today forward 契约；未发现新的 material finding。
+- **Required**: `R-ASHORT-OVERLAY-EVAL-BANNER-ENCODING`; `R-ASHORT-OVERLAY-EVAL-ARTIFACT-LINEAGE-GUARD`; `R-ASHORT-OVERLAY-EVAL-PRODUCTION-OUT-GUARD`; `R-ASHORT-OVERLAY-EVAL-GOVERNANCE-MODE-DRIFT` — addressed in working tree；完整 closure evidence 见 `docs/system_risk_register.md` 单一来源。
+- **Verify**: `tests.test_a_short_overlay_eval` 29 OK; overlay-comparison/schema/doc-governance/route-doc 67 OK; Codex probes confirmed due banner `.encode("gbk")`, bucket/as_of mismatch skipped, production `result/a_short` out rejected before write; PowerShell ParseFile OK; AST parse OK; `git diff --check` clean (LF/CRLF warnings only)。
+- **Next**: Claude `提交` overlay readiness tracked files;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (overlay readiness harness — 4 findings)
+- **Verdict/Action**: 判定 Codex 4 FAIL **全对**,逐修:(1) BANNER-ENCODING:横幅 `⚠️` 在 Windows gbk stdout 到点时崩 → 重写 GBK-safe(emoji/≥/∧/→/§/② 全换 ASCII+中文);(2) ARTIFACT-LINEAGE-GUARD:discover 加桶目录名==artifact as_of(不等 fail-closed 跳)防错位 artifact 推进时钟;(3) PRODUCTION-OUT-GUARD:`assert_non_production_out`(路径含连续 result/a_short 段即拒)write 前挡——生产桶拒、research 放行;(4) GOVERNANCE-MODE-DRIFT:preset note "--l3-mode pit only" 改 pit+today 契约(保 runtime_changed=true/prod_behavior=false)+ GovernanceNoteTests 守护。
+- **Required**: `R-ASHORT-OVERLAY-EVAL-{BANNER-ENCODING, ARTIFACT-LINEAGE-GUARD, PRODUCTION-OUT-GUARD, GOVERNANCE-MODE-DRIFT}`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: `test_a_short_overlay_eval` **29 OK**(+8:banner gbk 三态 / 桶名 mismatch + 11+1 阈值不推进 / 生产桶拒写 helper+write+main 无文件 + research 放行 / governance note 守护);overlay-comparison+doc 守护 55 OK;全量 **2149 OK**;preset JSON 合法;无 BOM;diff clean。
+- **Next**: 审查(Codex re-`审查` overlay readiness harness)。
+- **Pre-Codex self-review**: A 四 Required 各配正+反测(到点崩→gbk 编码测;错位→mismatch+11+1 阈值测;生产桶→3 入口拒写+无文件、research 放行;stale note→守护)。B ripple:复 grep "pit only" 全 presets/docs/overlay 码=仅 README 正确历史注 + finding 文本(无当前虚假);overlay parity 测不受 note 改影响(镜像数值非 note,55 OK)。C 反向:guard 不误伤 sanctioned research lane;banner 仍含关键 token(升级复审到期/stable_win_margin/follow-up id)。D N-A。E register/SESSION_LOG 单态。F 不算 §6 指标/不冻 margin/不升级/不碰生产评分·fetch。
+
+## 2026-06-17 — Codex 审查 FAIL (overlay readiness harness)
+- **Verdict/Action**: FAIL. Readiness harness direction is right, but due banner crashes on Windows GBK stdout, misplaced overlay buckets can advance the forward clock, eval summary can be written into `result/a_short`, and overlay governance still says pit-only.
+- **Required**: `R-ASHORT-OVERLAY-EVAL-BANNER-ENCODING`; `R-ASHORT-OVERLAY-EVAL-ARTIFACT-LINEAGE-GUARD`; `R-ASHORT-OVERLAY-EVAL-PRODUCTION-OUT-GUARD`; `R-ASHORT-OVERLAY-EVAL-GOVERNANCE-MODE-DRIFT` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: overlay eval 21 OK; overlay/schema 37 OK; doc-governance+route-doc 30 OK; schema checks OK; ParseFile/py_compile/diff-check/BOM OK; Codex probes reproduced the 4 gaps.
+- **Next**: Claude `修复` these Required findings; keep excluding `research/results/a_short/iv_feed_20260605/iv_feed.json`.
+
+## 2026-06-17 — Claude `起草` (overlay §6 readiness + 跨LLM 升级提醒 harness)
+- **Verdict/Action**: 用户要 overlay 到点(≥12 forward 周)**跨LLM、不管哪个 AI 跑都自动提醒**。做成数据驱动+运行时横幅:新 `a_short_overlay_eval.py` 扫 forward overlay.json(只收 'forward'、坏的 fail-closed)数 obs,≥min(12)置 `promotion_review_due`+`decision_status`、写 schema 化 summary、打横幅;`weekly_screening.ps1` 加 Stage 6(live-only、旁路、仿 regime)每周自动跑。**只 readiness+提醒,不算 §6 指标、不自动升级**(margin/K/窗未冻、无 12 周数据)→ 指标 defer 成 `R-ASHORT-OVERLAY-EVAL-METRICS-FOLLOWUP`;harness 标 `review_due_margin_pending` 提示先冻 margin。
+- **Required**: `R-ASHORT-OVERLAY-EVAL-READINESS-REMINDER`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: `tests.test_a_short_overlay_eval` **21 OK**(discover forward-only + fail-closed + readiness 12 翻转 + margin-pending + consistency + schema + banner + main 写/不写);py_compile OK;schema 合法;非生产(boundary 全 false、零取数、不碰评分)。register track ② + CURRENT ② 更新成 active 机制。
+- **Next**: 审查(Codex `审查` overlay readiness harness)。
+- **Pre-Codex self-review**: A 出口:discover(forward/pit/unavailable/malformed/非日期/空根)、readiness 三态、validator 各反例、main 两模式全测。B ripple:复用 `overlay_path` 桶约定 + overlay schema/validate(单一来源);ps1 仿 regime(live-only+旁路);register track②/CURRENT②/banner 三处一致("metrics defer + margin 未冻")。C 反向:坏/非 forward fail-closed 不计(不虚报到点);"到点"不误报成"可升级"(margin 未冻→margin_pending 非 ready)。D N-A。E register/SESSION_LOG 单态。F 非生产 boundary 全 false、零 fetch、不改 egs/选股/旧 schema。
+
 ## 2026-06-17 — Codex re-`审查 PASS` (#6 resistance t1-basis branch guard)
 - **Verdict/Action**: PASS. `R-ASHORT-M67-PRICE-RESISTANCE-T1-BASIS-BRANCH-GUARD-GAP` 已在 working tree 闭合: fallback 分支现在拒 `t1 == tick_down(resistance)`,structural→fallback 整体改标不再能过 validator。
 - **Required**: addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md` 单一来源。
