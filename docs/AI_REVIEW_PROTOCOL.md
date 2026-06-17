@@ -35,7 +35,7 @@ Every reviewer or implementer still follows the startup routing in `AGENTS.md`:
 
 Codex review verdicts must be prepended to `docs/SESSION_LOG.md` before replying to the user, using the minimal review-cycle template (see Single-source recording below).
 
-Review depth is governed by `AGENTS.md §Codex adversarial review standard`, especially the one-pass defect-class matrix rule. A Codex review must not stop at the first obvious issue when same-class variants remain unreviewed.
+Review depth is governed by `AGENTS.md §Codex adversarial review standard`, especially the first-review slice-complete rule and the one-pass defect-class matrix rule. A Codex review must not be delta-only on the first pass, and must not stop at the first obvious issue when same-class variants remain unreviewed.
 
 A review must CAPTURE the following — but split by destination, never duplicated:
 
