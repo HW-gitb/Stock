@@ -21,7 +21,7 @@ EGS top-N(analysis_input.json)
 ```
 
 ## 2. 关键设计决定
-- **IV 是市场级,不是个股级。** 50ETF IV 252d 分位是 V14.2 Rule3/M0.5/M1 的**市场波动率闸门**,对当周所有候选取**同一个值**(feed 最新一天的 `iv_percentile_252d`)。feed 缺/最新分位为 None → 引擎按 `observe_only_missing_feed` 保守处理(不 fail-open)。`latest_iv_percentile()` 取 `series[-1]`。
+- **IV 是市场级,不是个股级。** 50ETF IV 252d 分位是 V14.2 Rule3/M0.5/M1 的**市场波动率闸门**,对当周所有候选取**同一个值**(feed 最新一天的 `iv_percentile_252d`)。feed 缺/最新分位为 None → 引擎按 `observe_only_missing_feed` 保守处理(不 fail-open)。`latest_iv_percentile()` 取 `series[-1]`。**#6 IV-HV(2026-06-17):** `latest_iv_hv()` 另取 `series[-1]` 的 `iv_value`/`hv_value` 注入 `normalize_candidate`/`_build_holdings` → 引擎产**市场级 IV-HV advisory 标签**(`iv_rich`/`iv_inline`/`iv_cheap`/`unknown`)落 M6.7 波动率状态 + `machine.iv_gate`;纯信息,**不改任何 action**,Rule3 分位闸门照旧。
 - **normalize 是唯一映射点,且必须用 EGS *真实* 契约键。** `normalize_candidate(...)` 把 EGS analysis_input 候选翻成引擎归一化输入。**硬风险字段按真实契约**(对齐 `A-EGS/egs_main.py` 产出):`derived_flags.is_lock`→引擎 `limit_locked`、`event_risk.suspension.is_suspended`→`suspended`、`derived_flags.hard_veto`→引擎独立硬否决输入(即使分解原因未单独命中也硬杀)、`derived_flags.{overheat_flag,chasing_high,is_breakout,has_crash_veto}` / `event_risk.{holder_reduction.active_plan, delisting.st_flag/delisting_warning}` 照映。字段缺失 → 引擎保守/observe,不抛。**突破入场(#6-ii,v14.2 spec)**:`derived_flags.is_breakout` 现为 EGS 按 v14.2 spec §M3.2 算的突破信号(站稳 MA10 + 当日量>5日均量×1.2);引擎突破入场 = `is_breakout ∧ 引擎本地复查 close≥MA10`。**`derived_flags.vol_confirm` 不再门控突破**(它是 EGS 旧量能旁证 up>dn,仅进 EGS l4_score 评分);旧「is_breakout∧站稳MA10∧vol_confirm」门已废。
 - **四道消费方/边界护栏(写入校验,不只声明):**
   - *IV feed PIT 跨-as_of*:`validate_weekly_report` 先 `validate_feed_summary_consistency(iv_feed)`(历法/PIT/升序/iv>0),**再拒 `feed.as_of > weekly.as_of` 与最新 `trade_date > weekly.as_of`**(防用未来波动率)。

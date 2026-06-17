@@ -23,7 +23,7 @@ if str(ROOT) not in sys.path:
 
 from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report, validate_weekly_report,
-    write_weekly_report, latest_iv_percentile, main, SCHEMA_PATH,
+    write_weekly_report, latest_iv_percentile, latest_iv_hv, main, SCHEMA_PATH,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
 )
@@ -127,7 +127,8 @@ def _account():
 
 def _feed(last_pct=55.0):
     series = [{"trade_date": d, "iv_value": 0.15 + 0.001 * i,
-               "iv_percentile_252d": (last_pct if i == 4 else 40.0)}
+               "iv_percentile_252d": (last_pct if i == 4 else 40.0),
+               "hv_value": 0.14 + 0.001 * i}
               for i, d in enumerate(["20260601", "20260602", "20260603", "20260604", "20260605"])]
     return {"as_of": AS_OF, "n_days": len(series), "series": series}
 
@@ -423,6 +424,28 @@ class IVMissingTests(unittest.TestCase):
     def test_latest_iv_percentile(self):
         self.assertEqual(latest_iv_percentile(_feed(last_pct=67.0)), 67.0)
         self.assertIsNone(latest_iv_percentile({"series": []}))
+
+    def test_latest_iv_hv(self):
+        iv_v, hv_v = latest_iv_hv(_feed())
+        self.assertAlmostEqual(iv_v, 0.154, places=6)      # i=4: 0.15+0.004
+        self.assertAlmostEqual(hv_v, 0.144, places=6)      # i=4: 0.14+0.004
+        self.assertEqual(latest_iv_hv({"series": []}), (None, None))
+        self.assertEqual(latest_iv_hv({}), (None, None))
+
+    def test_normalize_threads_iv_value_hv_value(self):
+        n = normalize_candidate(_egs_candidate(), _series(), None, 55.0, {}, "震荡期",
+                                iv_value=0.30, hv_value=0.20)
+        self.assertEqual(n["iv"]["iv_value"], 0.30)
+        self.assertEqual(n["iv"]["hv_value"], 0.20)
+        self.assertEqual(n["iv"]["iv_percentile_252d"], 55.0)
+
+    def test_iv_hv_surfaces_in_weekly_m67(self):
+        # 端到端:feed 的 iv_value/hv_value → normalize → 引擎 M6.7 波动率状态含 IV/HV 标签
+        n = normalize_candidate(_egs_candidate(), _series(), None, 55.0, {}, "震荡期",
+                                iv_value=0.30, hv_value=0.20)
+        rep = _weekly([n])["reports"][0]
+        self.assertIn("IV/HV", rep["m67"]["精简结论区"]["波动率状态"])
+        self.assertEqual(rep["machine"]["iv_gate"]["iv_hv_regime"], "iv_rich")
 
     def test_iv_missing_propagates_observe_only(self):
         n = _normalized(iv_pct=None)

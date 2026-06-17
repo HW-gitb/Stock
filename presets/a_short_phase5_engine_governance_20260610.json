@@ -21,6 +21,8 @@
     "single_cap_pct": {"进攻期": 0.5, "震荡期": 0.4, "防御期": 0.25, "收缩期": 0.0},
     "iv_halve_pct": 80.0,
     "iv_nobuild_pct": 90.0,
+    "iv_hv_ratio_hi": 1.2,
+    "iv_hv_ratio_lo": 0.9,
     "overheat_5d": 8.0,
     "overheat_20d": 22.0,
     "min_avg_amount_5d": 50000000.0,

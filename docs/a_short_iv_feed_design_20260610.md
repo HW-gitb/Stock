@@ -35,6 +35,7 @@ V14.2 的 Rule 3(IV>80%分位削半/>90%禁建仓)、M0.5(波动率觉醒)、M1(
 
 - 计算:近月 + 次近月 ATM 期权 BS 反解 → 线性插值到恒定到期(如 30d)→ IV 指数 → 252日滚动分位。
 - 产出:独立 IV feed artifact(date、iv_value、iv_percentile_252d、awakening 判定输入),由 **Slice B 的 `market_context.volatility` 消费**。
+  - **#6 扩展(2026-06-17,schema 1.1.0):** series 增 `hv_value`(50ETF 末 `hv_window`=21 交易日对数收益年化的已实现波动,与恒定到期 30d IV 同源可比),params 增 `hv_window`;供 Phase 5 引擎产**市场级 IV-HV advisory 标签**(`iv_rich`/`iv_inline`/`iv_cheap`,纯信息、绝不翻动 decision)。Rule3 的 IV 分位闸门不变。
 - 缺失回退:feed 缺 → Slice B coverage 标 `iv_regime_status = observe_only_missing_feed`(父设计 §4),**不得假装执行了 IV 风控**。
 - **状态(2026-06-10)**:probe(`84044dd`)+ 完整 feed 构建(批① part 1:`a_short_iv_feed_build.py` 的 BS 反解 / ATM / 30d 恒定到期 / 252d 分位 / write_feed)均**已实现**(下方 §5 区分已实现 vs 仍未来)。
 

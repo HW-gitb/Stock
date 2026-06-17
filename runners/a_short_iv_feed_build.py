@@ -5,10 +5,11 @@
 探测(`a_short_iv_feed_probe`,commit `84044dd`)已证 2000 积分可拿 510050 期权 + 标的、且可反解。
 本 runner 把它落成 IV feed:逐 PIT 日(trade_date ≤ as_of)对 510050 **欧式**期权用 Black-Scholes
 **反解隐含波动率**(近月平值 call/put 取平均)→ 近月 + 次月 **总方差线性插值到恒定到期(30d)**
-→ 得每日 IV → **252日滚动百分位** → feed artifact(date / iv_value / iv_percentile_252d)。
+→ 得每日 IV → **252日滚动百分位**;另逐日算 50ETF **已实现波动 HV**(末 HV_WINDOW 交易日对数收益年化)
+→ feed artifact(date / iv_value / iv_percentile_252d / hv_value)。#6 IV-HV 标签由引擎按 iv_value/hv_value 比值产出(advisory)。
 
 50ETF 期权为欧式,BS 直接适用。无风险利率 r / 红利率 q 为可配近似(feasibility 级,非定价级)。
-纯函数(bs_price / implied_vol / atm_iv_for_maturity / constant_maturity_iv / build_daily_iv /
+纯函数(bs_price / implied_vol / atm_iv_for_maturity / constant_maturity_iv / realized_vol / build_daily_iv /
 rolling_percentile_252)可用合成 fixture 单测;真实 Tushare 调用复用探测的 fetch,执行期授权。
 不动 production / egs_main / V14.2,不真钱、不 ship-gate。
 """
@@ -31,7 +32,7 @@ import jsonschema  # noqa: E402
 import pandas as pd  # noqa: E402
 
 SCHEMA_NAME = "a_short_iv_feed"
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"          # 1.1.0:#6 IV-HV——series 增 hv_value(50ETF 已实现波动),params 增 hv_window
 UNDERLYING = "510050.SH"
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "schemas", "a_short_iv_feed.schema.json")
@@ -42,6 +43,8 @@ CONST_MATURITY_DAYS = 30        # 恒定到期目标(天)
 MIN_T_DAYS = 5                  # 太近月(剩余 < 5 日)不稳,跳过
 ROLL_WINDOW = 252              # 252 日滚动百分位
 MIN_ROLL_OBS = 60             # 滚动百分位最少观测(< 此则 percentile=None)
+HV_WINDOW = 21               # #6 IV-HV:已实现波动回看窗(交易日;≈ 30 日历日恒定到期 IV 的可比口径)
+HV_ANNUALIZE = 252           # 已实现波动年化因子(× √252)
 
 
 # ── Black-Scholes(欧式)+ 隐含波动率反解 ────────────────────────────────────
@@ -130,6 +133,29 @@ def _days_between(d0: str, d1: str) -> int:
     return int((b - a).days)
 
 
+def realized_vol(closes, window: int = HV_WINDOW, annualize: int = HV_ANNUALIZE):
+    """50ETF 末 window 根 close 的对数收益**年化已实现波动(HV)**。需 ≥ window+1 根有效正收盘价
+    (= window 个收益);不足/全非正/非有限 → None(绝不伪造)。样本std(n-1)× √annualize。"""
+    vals = []
+    for c in closes:
+        try:
+            cf = float(c)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(cf) and cf > 0:
+            vals.append(cf)
+    vals = vals[-(window + 1):]
+    if len(vals) < window + 1:
+        return None
+    rets = [math.log(vals[i] / vals[i - 1]) for i in range(1, len(vals))]
+    n = len(rets)
+    mean = sum(rets) / n
+    var = sum((x - mean) ** 2 for x in rets) / (n - 1)
+    if not math.isfinite(var) or var < 0:
+        return None
+    return round(math.sqrt(var) * math.sqrt(annualize), 6)
+
+
 def build_daily_iv(opt_basic: pd.DataFrame, opt_daily: pd.DataFrame, underlier: pd.DataFrame,
                    as_of: str, r: float = RISK_FREE, q: float = DIV_YIELD) -> pd.DataFrame:
     """逐 PIT 日(≤ as_of)算恒定到期 IV。返回 DataFrame[trade_date, iv_value]。
@@ -156,8 +182,11 @@ def build_daily_iv(opt_basic: pd.DataFrame, opt_daily: pd.DataFrame, underlier: 
     spot_by_date = und[und["close"].fillna(0) > 0].set_index("_td")["close"].to_dict()
 
     target_T = CONST_MATURITY_DAYS / 365.0
+    sorted_dates = sorted(spot_by_date.keys())
+    closes_in_order = [float(spot_by_date[dt]) for dt in sorted_dates]   # 50ETF 收盘序列(供 HV 回看)
+    date_pos = {dt: i for i, dt in enumerate(sorted_dates)}
     rows = []
-    for d in sorted(spot_by_date.keys()):
+    for d in sorted_dates:
         spot = float(spot_by_date[d])
         day = od[(od["_td"] == d) & (od["price"].fillna(0) > 0)].copy()
         if day.empty:
@@ -177,8 +206,9 @@ def build_daily_iv(opt_basic: pd.DataFrame, opt_daily: pd.DataFrame, underlier: 
         next_iv = atm_iv_for_maturity(spot, fut[fut["_Tdays"] == next_days], next_days / 365.0, r, q)
         cm = constant_maturity_iv(near_iv, near_days / 365.0, next_iv, next_days / 365.0, target_T)
         if cm is not None:
-            rows.append({"trade_date": d, "iv_value": round(cm, 6)})
-    return pd.DataFrame(rows, columns=["trade_date", "iv_value"])
+            hv = realized_vol(closes_in_order[: date_pos[d] + 1])      # PIT:仅用 ≤ d 的 50ETF 收盘
+            rows.append({"trade_date": d, "iv_value": round(cm, 6), "hv_value": hv})
+    return pd.DataFrame(rows, columns=["trade_date", "iv_value", "hv_value"])
 
 
 def rolling_percentile_252(iv_df: pd.DataFrame) -> pd.DataFrame:
@@ -200,7 +230,8 @@ def rolling_percentile_252(iv_df: pd.DataFrame) -> pd.DataFrame:
 def build_feed_summary(iv_df: pd.DataFrame, as_of: str, generated_at: str) -> dict:
     df = rolling_percentile_252(iv_df) if not iv_df.empty else iv_df.assign(iv_percentile_252d=[])
     series = [{"trade_date": str(r["trade_date"]), "iv_value": float(r["iv_value"]),
-               "iv_percentile_252d": (None if pd.isna(r["iv_percentile_252d"]) else float(r["iv_percentile_252d"]))}
+               "iv_percentile_252d": (None if pd.isna(r["iv_percentile_252d"]) else float(r["iv_percentile_252d"])),
+               "hv_value": (None if pd.isna(r.get("hv_value")) else float(r["hv_value"]))}
               for _, r in df.iterrows()]
     return {
         "schema_name": SCHEMA_NAME,
@@ -210,7 +241,7 @@ def build_feed_summary(iv_df: pd.DataFrame, as_of: str, generated_at: str) -> di
         "underlying": UNDERLYING,
         "params": {"risk_free": RISK_FREE, "div_yield": DIV_YIELD,
                    "const_maturity_days": CONST_MATURITY_DAYS, "min_t_days": MIN_T_DAYS,
-                   "roll_window": ROLL_WINDOW, "min_roll_obs": MIN_ROLL_OBS},
+                   "roll_window": ROLL_WINDOW, "min_roll_obs": MIN_ROLL_OBS, "hv_window": HV_WINDOW},
         "n_days": len(series),
         "series": series,
         "boundary": {"production": False, "real_money": False, "satisfies_ship_gate": False,
@@ -235,6 +266,9 @@ def validate_feed_summary_consistency(summary: dict) -> None:
         p = pt["iv_percentile_252d"]
         if p is not None and not (0.0 <= p <= 100.0):
             raise ValueError("iv_percentile_252d 不在 0-100")
+        hv = pt.get("hv_value")
+        if hv is not None and (not math.isfinite(float(hv)) or float(hv) < 0):
+            raise ValueError("hv_value 必须 >= 0 或 null")
 
 
 def write_feed(summary: dict, out_path: str) -> None:

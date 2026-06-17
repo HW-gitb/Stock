@@ -22,9 +22,10 @@ if str(ROOT) not in sys.path:
 
 from runners.a_short_phase5_engine import (  # noqa: E402
     compute_indicators, entry_type, exit_and_size, classify_risk_families,
-    build_m67_report, validate_m67_consistency, write_m67_report, GOVERNANCE,
+    build_m67_report, build_holding_report, validate_m67_consistency, write_m67_report, GOVERNANCE,
     tick_ref, tick_up, tick_down, holding_levels, effective_support, SR_SPIKE_ATR,
     BREAKOUT_RR_BONUS,
+    iv_hv_tag, iv_hv_vol_note, IV_HV_RATIO_HI, IV_HV_RATIO_LO, IV_HV_REGIMES,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_m67_report.schema.json"
@@ -732,6 +733,140 @@ class EgsScoreInM67Tests(unittest.TestCase):
 
     def test_missing_egs_score_is_none(self):
         self.assertIsNone(build_m67_report(_good_input(), AS_OF, "t")["m67"]["table"]["EGS分"])
+
+
+class IvHvTagTests(unittest.TestCase):
+    """#6 IV-HV advisory 纯函数:IV/HV 比值分档 + 缺数据/退化 → unknown(绝不伪造比值)。"""
+
+    def test_pure_tag_buckets(self):
+        self.assertEqual(iv_hv_tag(0.30, 0.20)[0], "iv_rich")     # 1.5 ≥ 1.2
+        self.assertEqual(iv_hv_tag(0.20, 0.20)[0], "iv_inline")   # 1.0
+        self.assertEqual(iv_hv_tag(0.18, 0.20)[0], "iv_cheap")    # 0.9 ≤ 0.9
+        self.assertAlmostEqual(iv_hv_tag(0.30, 0.20)[1], 1.5, places=4)
+
+    def test_threshold_boundaries_inclusive(self):
+        self.assertEqual(iv_hv_tag(IV_HV_RATIO_HI, 1.0)[0], "iv_rich")    # ratio == hi → rich
+        self.assertEqual(iv_hv_tag(IV_HV_RATIO_LO, 1.0)[0], "iv_cheap")   # ratio == lo → cheap
+
+    def test_unknown_on_missing_or_degenerate(self):
+        for bad in (None, 0.0, -1.0, float("nan"), float("inf"), "x"):
+            self.assertEqual(iv_hv_tag(bad, 0.2), ("unknown", None))
+            self.assertEqual(iv_hv_tag(0.2, bad), ("unknown", None))
+
+    def test_vol_note(self):
+        note, reg, ratio = iv_hv_vol_note(0.30, 0.20)
+        self.assertIn("IV/HV", note)
+        self.assertIn("advisory", note)
+        self.assertEqual(reg, "iv_rich")
+        self.assertAlmostEqual(ratio, 1.5, places=4)
+        n2, r2, x2 = iv_hv_vol_note(None, 0.2)
+        self.assertIn("IV-HV未知", n2)
+        self.assertEqual((r2, x2), ("unknown", None))
+
+
+class IvHvReportIntegrationTests(unittest.TestCase):
+    """IV-HV 标签落到 M6.7(波动率状态 文案 + machine.iv_gate);两条报告路径(候选 + 持仓)都surfacing。"""
+
+    def _iv(self, iv_value, hv_value):
+        return {"iv_percentile_252d": 55.0, "iv_value": iv_value, "hv_value": hv_value}
+
+    def test_candidate_report_surfaces_when_present(self):
+        r = build_m67_report(_good_input(iv=self._iv(0.30, 0.20)), AS_OF, "t")
+        vs = r["m67"]["精简结论区"]["波动率状态"]
+        self.assertIn("IV/HV", vs)
+        ig = r["machine"]["iv_gate"]
+        self.assertEqual(ig["iv_hv_regime"], "iv_rich")
+        self.assertAlmostEqual(ig["iv_hv_ratio"], 1.5, places=4)
+        self.assertEqual((ig["iv_value"], ig["hv_value"]), (0.30, 0.20))
+        validate_m67_consistency(r)
+
+    def test_candidate_report_unknown_when_absent(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")     # 默认 iv 无 iv_value/hv_value
+        self.assertIn("IV-HV未知", r["m67"]["精简结论区"]["波动率状态"])
+        self.assertEqual(r["machine"]["iv_gate"]["iv_hv_regime"], "unknown")
+        self.assertIsNone(r["machine"]["iv_gate"]["iv_hv_ratio"])
+        validate_m67_consistency(r)
+
+    def test_held_path_surfaces(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state(), iv=self._iv(0.18, 0.20)), AS_OF, "t")
+        self.assertIn("IV/HV", r["m67"]["精简结论区"]["波动率状态"])
+        self.assertEqual(r["machine"]["iv_gate"]["iv_hv_regime"], "iv_cheap")   # 0.9
+        validate_m67_consistency(r)
+
+    def test_uncovered_holding_report_surfaces(self):
+        r = build_holding_report(_good_input(stateful_risk=_held_state(), iv=self._iv(0.30, 0.20)), AS_OF, "t")
+        self.assertIn("IV/HV", r["m67"]["精简结论区"]["波动率状态"])
+        self.assertEqual(r["machine"]["iv_gate"]["iv_hv_regime"], "iv_rich")
+        validate_m67_consistency(r)
+
+    def test_advisory_does_not_change_action(self):
+        # IV-HV 任一档都不得翻动 action(纯 advisory):iv_rich/iv_cheap/unknown 下候选 action 不变。
+        base = build_m67_report(_good_input(), AS_OF, "t")["machine"]["entry_exit_size_star"]["action"]
+        for iv in (self._iv(0.30, 0.20), self._iv(0.18, 0.20), self._iv(0.20, 0.20)):
+            r = build_m67_report(_good_input(iv=iv), AS_OF, "t")
+            self.assertEqual(r["machine"]["entry_exit_size_star"]["action"], base)
+
+
+class IvHvConsistencyTests(unittest.TestCase):
+    """validate_m67_consistency 守护 machine↔文案 一致(对抗式伪造 regime/ratio 须被抓)。"""
+
+    def _good(self):
+        return build_m67_report(_good_input(iv={"iv_percentile_252d": 55.0, "iv_value": 0.30, "hv_value": 0.20}),
+                                AS_OF, "t")
+
+    def test_forged_regime_ratio_mismatch_rejected(self):
+        r = self._good()
+        validate_m67_consistency(r)                                  # baseline OK (iv_rich, 1.5)
+        r["machine"]["iv_gate"]["iv_hv_regime"] = "iv_cheap"         # ratio 1.5 却标 cheap → 矛盾
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_inline_with_extreme_ratio_rejected(self):
+        r = self._good()
+        r["machine"]["iv_gate"]["iv_hv_regime"] = "iv_inline"        # 1.5 不在 (lo,hi) 区间
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_unknown_with_ratio_rejected(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")              # unknown, ratio None
+        r["machine"]["iv_gate"]["iv_hv_ratio"] = 1.3                 # unknown 不该有比值
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_illegal_regime_rejected(self):
+        r = self._good()
+        r["machine"]["iv_gate"]["iv_hv_regime"] = "bogus"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_missing_any_iv_hv_key_rejected(self):
+        for k in ("iv_value", "hv_value", "iv_hv_ratio", "iv_hv_regime"):
+            r = self._good()
+            del r["machine"]["iv_gate"][k]
+            with self.assertRaises(ValueError):
+                validate_m67_consistency(r)
+
+    def test_stale_ratio_rejected(self):
+        # raw 0.30/0.20 → 真 ratio 1.5;篡改成 1.3(仍 ≥ hi=1.2,旧阈值检查会放过)→ 须被 raw 重算抓到
+        r = self._good()
+        r["machine"]["iv_gate"]["iv_hv_ratio"] = 1.3
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_stale_raw_values_rejected(self):
+        # 改 raw 使其与保留的 ratio/regime 矛盾(0.25/0.20=1.25 仍 rich,但 ratio 仍写 1.5)→ ratio≠重算 → reject
+        r = self._good()
+        r["machine"]["iv_gate"]["iv_value"] = 0.25
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_unknown_with_valid_raw_rejected(self):
+        # regime 标 unknown 但 raw 有效正值(0.30/0.20 应是 iv_rich)→ 重算 ≠ unknown → reject
+        r = self._good()
+        r["machine"]["iv_gate"]["iv_hv_regime"] = "unknown"
+        r["machine"]["iv_gate"]["iv_hv_ratio"] = None
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
 
 
 if __name__ == "__main__":

@@ -51,12 +51,12 @@ def _idx(cal):
 
 def _feed(cal):
     return {
-        "schema_name": "a_short_iv_feed", "schema_version": "1.0.0", "generated_at": "x",
+        "schema_name": "a_short_iv_feed", "schema_version": "1.1.0", "generated_at": "x",
         "as_of": cal[-1], "underlying": "510050.SH",
         "params": {"risk_free": 0.02, "div_yield": 0.0, "const_maturity_days": 30, "min_t_days": 5,
-                   "roll_window": 252, "min_roll_obs": 60},
+                   "roll_window": 252, "min_roll_obs": 60, "hv_window": 21},
         "n_days": len(cal),
-        "series": [{"trade_date": d, "iv_value": 0.2, "iv_percentile_252d": 50.0} for d in cal],
+        "series": [{"trade_date": d, "iv_value": 0.2, "iv_percentile_252d": 50.0, "hv_value": 0.18} for d in cal],
         "boundary": {"production": False, "real_money": False, "satisfies_ship_gate": False,
                      "iv_method": "bs_atm_constant_maturity_feasibility_grade"},
     }

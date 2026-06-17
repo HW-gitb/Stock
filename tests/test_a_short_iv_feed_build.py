@@ -25,6 +25,7 @@ from runners.a_short_iv_feed_build import (  # noqa: E402
     bs_price, implied_vol, atm_iv_for_maturity, constant_maturity_iv,
     build_daily_iv, rolling_percentile_252, build_feed_summary,
     validate_feed_summary_consistency, write_feed, MIN_ROLL_OBS,
+    realized_vol, HV_WINDOW, HV_ANNUALIZE,
 )
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_iv_feed.schema.json"
@@ -147,7 +148,7 @@ class ConsistencyAndWriteTests(unittest.TestCase):
 
     def test_future_date_in_series_rejected_no_file(self):
         s = self._good_summary()
-        s["series"].append({"trade_date": "29991231", "iv_value": 0.2, "iv_percentile_252d": None})
+        s["series"].append({"trade_date": "29991231", "iv_value": 0.2, "iv_percentile_252d": None, "hv_value": None})
         s["n_days"] = len(s["series"])
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "iv_feed.json"
@@ -271,6 +272,111 @@ class FeedSchemaTests(unittest.TestCase):
         s = copy.deepcopy(self.summary)
         s["unexpected"] = 1
         self._reject(s)
+
+    def test_schema_version_is_1_1_0(self):
+        self.assertEqual(self.summary["schema_version"], "1.1.0")
+
+    def test_hv_value_null_and_nonneg_ok(self):
+        jsonschema.validate(self.summary, self.schema)         # 5-date fixture → hv_value 全 None,仍合法
+        s = copy.deepcopy(self.summary)
+        if s["series"]:
+            s["series"][0]["hv_value"] = 0.25
+            jsonschema.validate(s, self.schema)
+            s["series"][0]["hv_value"] = 0.0                   # 0 已实现波动(退化但合法)
+            jsonschema.validate(s, self.schema)
+
+    def test_negative_hv_rejected(self):
+        s = copy.deepcopy(self.summary)
+        if s["series"]:
+            s["series"][0]["hv_value"] = -0.1
+            self._reject(s)
+
+    def test_missing_hv_value_rejected(self):
+        s = copy.deepcopy(self.summary)
+        if s["series"]:
+            del s["series"][0]["hv_value"]
+            self._reject(s)
+
+    def test_missing_hv_window_param_rejected(self):
+        s = copy.deepcopy(self.summary)
+        del s["params"]["hv_window"]
+        self._reject(s)
+
+
+def _varying_market(n=25, near_mat="20260730", next_mat="20260828"):
+    """变动 spot 的合成市场(→ 正 HV);≥22 日使末期 HV 窗满。"""
+    dates = [(pd.Timestamp("2026-04-01") + pd.tseries.offsets.BDay(i)).strftime("%Y%m%d") for i in range(n)]
+    basic, daily, und = [], [], []
+    for m in (near_mat, next_mat):
+        for K in (2.7, 2.8, 2.9, 3.0, 3.1):
+            for cp in ("C", "P"):
+                basic.append({"ts_code": f"{m}{int(K*1000)}{cp}.SH", "call_put": cp,
+                              "exercise_price": K, "maturity_date": m})
+    for i, d in enumerate(dates):
+        spot = 2.9 + 0.03 * math.sin(i)        # 变动 spot → 非零已实现波动
+        und.append({"ts_code": "510050.SH", "trade_date": d, "close": spot})
+        for m in (near_mat, next_mat):
+            T = (pd.to_datetime(m, format="%Y%m%d") - pd.to_datetime(d, format="%Y%m%d")).days / 365.0
+            if T <= 0:
+                continue
+            for K in (2.7, 2.8, 2.9, 3.0, 3.1):
+                for cp in ("C", "P"):
+                    px = bs_price(spot, K, T, R, Q, 0.2, cp)
+                    daily.append({"ts_code": f"{m}{int(K*1000)}{cp}.SH", "trade_date": d, "settle": px, "close": px})
+    return pd.DataFrame(basic), pd.DataFrame(daily), pd.DataFrame(und), dates[-1]
+
+
+class RealizedVolTests(unittest.TestCase):
+    def _expected(self, closes, window=HV_WINDOW, annualize=HV_ANNUALIZE):
+        import statistics
+        vals = [c for c in closes if c is not None][-(window + 1):]
+        rets = [math.log(vals[i] / vals[i - 1]) for i in range(1, len(vals))]
+        return round(statistics.stdev(rets) * math.sqrt(annualize), 6)
+
+    def test_matches_sample_std_annualized(self):
+        closes = [2.0 + 0.05 * math.sin(i) + 0.002 * i for i in range(30)]
+        self.assertAlmostEqual(realized_vol(closes), self._expected(closes), places=9)
+
+    def test_flat_series_zero_vol(self):
+        self.assertEqual(realized_vol([2.5] * (HV_WINDOW + 1)), 0.0)
+
+    def test_insufficient_window_none(self):
+        self.assertIsNone(realized_vol([2.0 + 0.01 * i for i in range(HV_WINDOW)]))   # 仅 window 根 < window+1
+
+    def test_nonpositive_or_nonfinite_dropped_then_none(self):
+        self.assertIsNone(realized_vol([2.0] * HV_WINDOW + [-1.0]))   # 去掉非正后 < window+1
+        self.assertIsNone(realized_vol([float("nan")] * (HV_WINDOW + 2)))
+        self.assertIsNone(realized_vol([None] * (HV_WINDOW + 2)))
+
+    def test_more_volatile_has_higher_hv(self):
+        calm = [2.0 + 0.005 * math.sin(i) for i in range(30)]
+        wild = [2.0 + 0.05 * math.sin(i) for i in range(30)]
+        self.assertGreater(realized_vol(wild), realized_vol(calm))
+
+
+class FeedHvIntegrationTests(unittest.TestCase):
+    def test_build_daily_iv_has_hv_column_pit(self):
+        basic, daily, und, last = _varying_market(25)
+        out = build_daily_iv(basic, daily, und, last)
+        self.assertIn("hv_value", out.columns)
+        self.assertTrue(pd.isna(out["hv_value"].iloc[0]))      # 早期窗口不足 → None
+        self.assertFalse(pd.isna(out["hv_value"].iloc[-1]))    # 末期窗口足 → 正值
+        self.assertGreater(float(out["hv_value"].iloc[-1]), 0.0)
+
+    def test_summary_has_hv_and_param_and_validates(self):
+        basic, daily, und, last = _varying_market(25)
+        s = build_feed_summary(build_daily_iv(basic, daily, und, last), last, "t")
+        self.assertEqual(s["params"]["hv_window"], HV_WINDOW)
+        self.assertIn("hv_value", s["series"][-1])
+        self.assertGreater(s["series"][-1]["hv_value"], 0.0)
+        validate_feed_summary_consistency(s)
+
+    def test_validate_rejects_negative_hv(self):
+        basic, daily, und, last = _varying_market(25)
+        s = build_feed_summary(build_daily_iv(basic, daily, und, last), last, "t")
+        s["series"][-1]["hv_value"] = -0.01
+        with self.assertRaises(ValueError):
+            validate_feed_summary_consistency(s)
 
 
 if __name__ == "__main__":

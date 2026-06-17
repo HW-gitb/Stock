@@ -8,7 +8,34 @@
 
 ---
 
+## 2026-06-17 - Codex `审查 PASS` (#6 IV-HV advisory tag / machine-ratio guard)
+- **Verdict/Action**: PASS. `R-ASHORT-M67-IV-HV-MACHINE-RATIO-GUARD-GAP` 已闭合在当前 working tree: `validate_m67_consistency` 现在强制 `machine.iv_gate` 的 `iv_value`/`hv_value`/`iv_hv_ratio`/`iv_hv_regime` 四键必存,并用 raw IV/HV 通过 `iv_hv_tag` 重算 regime+ratio,再绑定 M6.7 文案 `IV/HV` / `IV-HV未知`;未改 Rule3/action/EGS/TopN/fetch/schema/broker。
+- **Required**: addressed in working tree; reviewed-commit 后把 `docs/system_risk_register.md` 对应 #6 IV-HV 条目标为 resolved。
+- **Verify**: Codex 复核源码与新增对抗测试覆盖 missing-key / stale-ratio / stale-raw / unknown-with-valid-raw;A-short targeted suites 276 OK with in-process `tushare` stub and local `.tools/python_libs` jsonschema;doc-governance+route-doc 30 OK;py_compile 7 OK;`git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `提交` #6 IV-HV tracked files;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
 > 📦 **历史归档**:2026-05-25 … 2026-06-12 的 861 条更早 entry 已逐字移至 `docs/archive/session_log/session_log_archive_2026-05-25_to_2026-06-12.md`(完整历史,不丢)。本次归档时保留了归档前最新 30 条;之后新增 entry 继续累积到本文件,过大时再按 `AGENTS.md §Session log discipline → 归档` 归档。追溯更早请开归档文件。
+
+## 2026-06-17 — Claude `修复` (#6 IV-HV machine-ratio guard gap)
+- **Verdict/Action**: 判定 Codex FAIL **正确**(validator 只在 `iv_hv_regime` 存在时进检查、且仅按阈值核 ratio→四个 iv_gate 字段可各自漂移:删键过、raw 与 ratio/regime 矛盾过、ratio 1.5→1.3 仍标 rich 过)。修:把机器轨绑成不可伪造整体——①四键(iv_value/hv_value/iv_hv_ratio/iv_hv_regime)**必存**;②**由 raw 经单一来源 `iv_hv_tag` 重算 (regime,ratio)**,断言 stored regime==重算(抓 raw 陈旧/伪造 regime/unknown 配有效 raw);③非 unknown 断言 ratio==round(iv_value/hv_value,4)±1e-9(抓 1.3-vs-1.5)+文案含「IV/HV」;④unknown 断言 ratio is None+文案含「IV-HV未知」。
+- **Required**: `R-ASHORT-M67-IV-HV-MACHINE-RATIO-GUARD-GAP`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 5 a_short 套件 **327 OK**(323 + 4 新对抗:missing-key / stale-ratio / stale-raw / unknown-with-valid-raw,各 assertRaises);py_compile OK;`git diff --check` clean。
+- **Next**: 审查(Codex re-`审查` #6 IV-HV)。
+- **Pre-Codex self-review**: A 把 Codex 三条探针 + missing-key + unknown-配有效raw 一次全覆盖(非只补被点名一条);重算法把 raw→ratio→regime 一招绑死。B ripple:改动仅 validator + 其测试类,无符号/接口变,无下游;`iv_hv_tag` 已是单一来源、复用不新增逻辑。C 反向:合法报告(默认 unknown 全 None / 有效各档)仍 pass(327 含既有集成),未把真值误拒。D N-A。E register/SESSION_LOG 单态。F 边界仅 validator/tests——无 Rule3/action/EGS/TopN/fetch/broker/feed-schema 改;无 BOM。
+
+## 2026-06-17 — Codex `审查 FAIL` (#6 IV-HV advisory tag)
+- **Verdict/Action**: FAIL. #6 方向正确(IV-HV 是 market-level advisory,不改 action;feed/weekly/engine 主路径有测试),但 `validate_m67_consistency` 还没有把 `machine.iv_gate` 的 IV/HV 原始值、比值、regime 绑成一个不可伪造的整体。
+- **Required**: `R-ASHORT-M67-IV-HV-MACHINE-RATIO-GUARD-GAP`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 5 个 a_short targeted suite 在 `requests`/`tushare` import stub 下 **323 OK**;无 stub 时 1 个环境性 `ModuleNotFoundError: tushare`;py_compile **7 OK**;`git diff --check` clean。Codex 对抗探针确认 validator 漏网:删除 `iv_hv_regime` / `iv_value` / `hv_value` 仍 pass;把 raw `iv_value/hv_value` 改成与 ratio/regime 矛盾仍 pass;把 ratio 从真实 1.5 改成 1.3 且仍标 `iv_rich` 也 pass。
+- **Next**: Claude `修复` 该 Required 后再交 Codex re-`审查`;继续排除 untracked `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `起草` (#6 IV-HV advisory tag)
+
+- **Verdict/Action**: 起草 M6.7 价格 roadmap #6 IV-HV 标签——**市场级 IV(50ETF 隐含)vs HV(50ETF 已实现)regime advisory,纯信息、绝不翻 decision**(Rule3 分位闸门不变)。HV 在 feed 内算(已有 510050 underlier 序列,无新 fetch):`realized_vol(window=21)`=末窗对数收益年化样本std,PIT 仅用 ≤d 收盘、不足/非正/非有限→None。feed series 增 `hv_value`+params `hv_window`,schema 1.0.0→1.1.0;weekly `latest_iv_hv()` 注入 `inp["iv"]`;引擎 `iv_hv_tag`(IV/HV≥1.2 rich/≤0.9 cheap/中间 inline/缺数据 unknown)落两条报告路径波动率状态+machine.iv_gate,validate 守护 机器↔文案 一致。
+- **Required**: `R-ASHORT-M67-IV-HV-ADVISORY-TAG`(详见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: 5 a_short 套件 **323 OK**(engine/iv_feed/weekly/regime-comparison/regime-classifier;新 IvHvTag/Report/Consistency + RealizedVol/FeedHvIntegration + latest_iv_hv/normalize-threading;并测「advisory 不改 action」);governance parity 绿;py_compile OK。
+- **Next**: 审查(Codex `审查` #6 IV-HV)。
+- **Pre-Codex self-review**: A 缺陷×出口矩阵:`iv_hv_tag` 全退化输入(None/0/负/NaN/Inf/非数)→unknown 无伪造比值;`realized_vol` 窗口不足/含非正→None;两条报告路径(候选+持仓)都 surfacing 并测。B ripple:grep 全仓 iv_feed fixture→regime-comparison runner **用 jsonschema 校验 feed(第二消费者)**,其 `_feed` fixture 已补 1.1.0+hv_value+hv_window(否则 2 ERROR);README/iv_feed-design/weekly-design 字段描述补 hv_value;无其它 `inp["iv"]` 生产构造点。C 反向:未把真值误判 unknown;advisory 不改 action(已断言)。D N-A。E register/SESSION_LOG 单态(CURRENT/README 路由属 feature-doc,提交切片时随)。F 无 m67 schema 改(iv_gate 开放 object);GOVERNANCE↔preset parity 同步;无 BOM。
 
 ## 2026-06-17 — Codex `审查 PASS` (#2(b) overlay live-forward emit / egs-guard + docstring)
 - **Verdict/Action**: PASS. `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-EGS-GUARD` 与 `R-ASHORT-OVERLAY-LIVE-FORWARD-EMIT-DOCSTRING-DRIFT` 已按要求闭合:live `today` 写 `overlay.json` 并标 `concept_membership='forward'`;`pit` 写并标 `'pit'`;`neutralize`/无快照不写;`egs_main` 真实 emit 落点已提成 `emit_overlay` 并有四态测试守护;owner docstring / README / CURRENT / register 当前指导面已同步。未见 production scoring / selection / TopN / fetch / schema 改动。

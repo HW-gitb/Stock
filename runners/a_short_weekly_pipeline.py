@@ -200,7 +200,7 @@ def _load_account_consistency_warnings(account_path: str) -> dict:
 
 
 def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, regime,
-                    regime_fallback, price_data_through, egs_full=None):
+                    regime_fallback, price_data_through, egs_full=None, iv_value=None, hv_value=None):
     """持仓恒列入 S1: 为"持仓 ∖ top-N"构造 M6.7 待分析行(Tier 路由)。**不改 egs_main / 选股 / 语义 /
     user-stop**。返回 (holding_normalized, holding_meta, manual_review):
     - Tier-2(在 `egs_full`): 复用 egs_full 的 EGS 分/风险;**现价取 price provider 最新 bar**(非 egs_full
@@ -241,7 +241,8 @@ def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, re
         n = normalize_candidate(cand, series, None, iv_pct, account, regime,
                                 regime_fallback=regime_fallback,
                                 stateful_risk=stateful_risk_for_candidate(acct, code, as_of),
-                                semantic=None, semantic_web_llm=None)
+                                semantic=None, semantic_web_llm=None,
+                                iv_value=iv_value, hv_value=hv_value)
         if rs == "account_position_only":     # Tier-3: 走 build_holding_report(不跑 EGS 风险分类、不伪造 veto)
             n["egs_coverage"] = "uncovered"
         holding_normalized.append(n)
@@ -254,7 +255,8 @@ def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, re
 def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pct,
                         account: dict, regime: str, industry_trend: str = "neutral",
                         llm_enrichment=None, observe_only=None, semantic=None,
-                        semantic_web_llm=None, regime_fallback=None, stateful_risk=None) -> dict:
+                        semantic_web_llm=None, regime_fallback=None, stateful_risk=None,
+                        iv_value=None, hv_value=None) -> dict:
     """把一个 EGS analysis_input 候选 + 价格序列 + overlay 行 + 市场级 IV 分位 + 账户/环境
     归一化成 Phase 5 引擎输入。字段缺失 → 引擎按保守/observe 处理。"""
     d = cand.get("derived_flags", {}) or {}
@@ -287,7 +289,7 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
                   "st_or_delisting": bool(delist.get("st_flag") or delist.get("delisting_warning")),
                   "regulatory_legacy_vetoed": False},
         "liquidity": {"avg_amount_5d": liq.get("avg_amount_5d"), "avg_amount_20d": liq.get("avg_amount_20d")},
-        "iv": {"iv_percentile_252d": iv_pct},
+        "iv": {"iv_percentile_252d": iv_pct, "iv_value": iv_value, "hv_value": hv_value},
         "market_regime": regime,
         "regime_fallback": dict(regime_fallback or {}),
         "account": account or {},
@@ -586,6 +588,15 @@ def latest_iv_percentile(iv_feed_summary: dict):
     return series[-1]["iv_percentile_252d"] if series else None
 
 
+def latest_iv_hv(iv_feed_summary: dict):
+    """取 feed 最新一天的 (iv_value, hv_value)(市场级 #6 IV-HV advisory 输入);无则 (None, None)。"""
+    series = iv_feed_summary.get("series") or []
+    if not series:
+        return None, None
+    last = series[-1]
+    return last.get("iv_value"), last.get("hv_value")
+
+
 MIN_PRICE_OBS = 20               # 指标(支撑/压力 20d、ATR 14d)所需最少 PIT 交易日
 EX_DIV_WINDOW_DAYS = 14          # #1 除权除息提示:as_of 起 N 个日历日内将除权 → advisory 提示(不改决策)
 
@@ -864,6 +875,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                          "(批次错配/未来/陈旧,拒跑周报)")
     feed = _load(args.iv_feed)
     iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位(None → 引擎按 missing 处理)
+    iv_value, hv_value = latest_iv_hv(feed)    # #6 IV-HV advisory:市场级 IV/HV 原始值(引擎算标签)
     overlay = _load_validated_overlay(args.overlay, args.as_of) if args.overlay else {}
     weekly_candidates = [c.get("ts_code") for c in ai.get("candidates", [])]
     # overlay 血缘门(#R-ASHORT-WEEKLY-AUX-ARTIFACT-CANDIDATE-SET-MISMATCH):overlay 必须**恰好覆盖**
@@ -928,7 +940,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                       regime_fallback=regime_fallback,
                                       stateful_risk=stateful_risk_for_candidate(acct, c["ts_code"], args.as_of),
                                       semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None),
-                                      semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None))
+                                      semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None),
+                                      iv_value=iv_value, hv_value=hv_value)
                   for c in cands]
     # 价格覆盖门(#2):任一被纳入候选缺足够价格 → 中止不写(不可 fail-open 成观察)
     short = [(n["ts_code"], len(n["price_series"])) for n in normalized
@@ -966,7 +979,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         cand_codes = {str(c.get("ts_code")) for c in cands}
         holding_normalized, holding_meta, holdings_manual_review = _build_holdings(
             acct, cand_codes, args.as_of, price_provider, iv_pct, account, regime,
-            regime_fallback, price_data_through)
+            regime_fallback, price_data_through, iv_value=iv_value, hv_value=hv_value)
     weekly = build_weekly_report(normalized + holding_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None))   # #3 全局现金分配仅 sized 模式

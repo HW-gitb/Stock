@@ -39,6 +39,8 @@ BREAKOUT_RR_BONUS = 0.5       # #6 V14.2 迁移(proposal §6 首项):突破型�
 SINGLE_CAP_PCT = {"进攻期": 0.50, "震荡期": 0.40, "防御期": 0.25, "收缩期": 0.0}  # 收缩期禁新建仓
 IV_HALVE_PCT = 80.0            # Rule 3:IV>80 分位 → 新建仓减半
 IV_NOBUILD_PCT = 90.0          # Rule 3:IV>90 分位 → 不可建仓(硬)
+IV_HV_RATIO_HI = 1.2          # #6 IV-HV advisory:IV/HV ≥ 此 → 隐含显著高于已实现(期权偏贵/避险情绪);纯信息,不改 decision
+IV_HV_RATIO_LO = 0.9          # #6 IV-HV advisory:IV/HV ≤ 此 → 隐含低于已实现(情绪偏松/或低估波动);纯信息,不改 decision
 OVERHEAT_5D = 8.0
 OVERHEAT_20D = 22.0
 MIN_AVG_AMOUNT_5D = 5e7        # 5日均成交额下限(流动性底线)
@@ -54,6 +56,7 @@ IMPACT_COST_FRAC = 0.005     # 单只建仓 ≤ 5日均成交额 × 0.5%(冲击�
 GOVERNANCE = {
     "atr_mult": ATR_MULT, "rr_floor": RR_FLOOR, "single_cap_pct": SINGLE_CAP_PCT,
     "iv_halve_pct": IV_HALVE_PCT, "iv_nobuild_pct": IV_NOBUILD_PCT,
+    "iv_hv_ratio_hi": IV_HV_RATIO_HI, "iv_hv_ratio_lo": IV_HV_RATIO_LO,
     "overheat_5d": OVERHEAT_5D, "overheat_20d": OVERHEAT_20D,
     "min_avg_amount_5d": MIN_AVG_AMOUNT_5D, "lowxi_band": LOWXI_BAND,
     "support_lookback": SUPPORT_LOOKBACK, "resistance_lookback": RESISTANCE_LOOKBACK,
@@ -67,6 +70,40 @@ RISK_FAMILIES = ("overheat_crowding", "liquidity_execution", "negative_event",
 
 # 语义 web/LLM 层(Slice 2)只允许产生 downgrade 的已评估风险态(绝不 hard_veto;tailwind/clear_light/unknown 不降级)
 _WEB_DOWNGRADE_STATUSES = ("risk_candidate", "risk", "headwind")
+
+# ── #6 IV-HV advisory(市场级 50ETF 隐含 vs 已实现;纯信息,绝不改 decision)──────────
+IV_HV_REGIMES = ("iv_rich", "iv_inline", "iv_cheap", "unknown")
+_IV_HV_TEXT = {"iv_rich": "IV>HV 隐含溢价(期权偏贵/避险情绪)",
+               "iv_cheap": "IV<HV 隐含偏低(情绪偏松/或低估波动)",
+               "iv_inline": "IV≈HV", "unknown": "IV-HV未知"}
+
+
+def iv_hv_tag(iv_value, hv_value, hi: float = IV_HV_RATIO_HI, lo: float = IV_HV_RATIO_LO):
+    """市场级 IV(50ETF 隐含)vs HV(50ETF 已实现)的 regime 标注。**纯 advisory**——建仓/减半
+    仍只由 Rule3 IV 分位闸门(IV_HALVE_PCT/IV_NOBUILD_PCT),此标签不翻动任何 action。返回
+    (regime, ratio_or_None):iv_rich=IV/HV≥hi、iv_cheap=IV/HV≤lo、iv_inline=之间;任一缺失/非有限/
+    ≤0 → ('unknown', None)(绝不伪造比值)。"""
+    for v in (iv_value, hv_value):
+        try:
+            vf = float(v)
+        except (TypeError, ValueError):
+            return "unknown", None
+        if not math.isfinite(vf) or vf <= 0:
+            return "unknown", None
+    ratio = round(float(iv_value) / float(hv_value), 4)
+    if ratio >= hi:
+        return "iv_rich", ratio
+    if ratio <= lo:
+        return "iv_cheap", ratio
+    return "iv_inline", ratio
+
+
+def iv_hv_vol_note(iv_value, hv_value):
+    """波动率状态 文案 + machine 标签:返回 (note_text, regime, ratio)。"""
+    regime, ratio = iv_hv_tag(iv_value, hv_value)
+    txt = _IV_HV_TEXT[regime]
+    note = (f"IV/HV {ratio} {txt}(advisory)" if ratio is not None else f"{txt}(advisory)")
+    return note, regime, ratio
 
 
 # ── A股 tick 取整(Slice 0:M6.7 价格计算优化;side-aware,= 价格提案 §2)────────
@@ -477,6 +514,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     regime_unknown_fallback = bool(regime_fallback.get("active"))
     regime_fallback_reason = regime_fallback.get("reason") or "EGS market_regime unknown/missing→按震荡期保守处理"
     iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
+    iv_hv_note, iv_hv_regime, iv_hv_ratio = iv_hv_vol_note(
+        (inp.get("iv") or {}).get("iv_value"), (inp.get("iv") or {}).get("hv_value"))
     eligible = bool((inp.get("overlay") or {}).get("eligible"))
     stateful = inp.get("stateful_risk") or {}
     has_position = stateful.get("position_state") == "held"
@@ -654,8 +693,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "精简结论区": {
             "当前环境": (regime if not regime_unknown_fallback
                          else f"{regime}(EGS regime unknown,保守fallback)"),
-            "波动率状态": (f"IV分位≈{iv_pct}% | Rule3减半:{'是' if iv_halve else '否'}"
-                          if iv_known else "IV未知(feed 缺失,未执行 IV 风控,保守减半)"),
+            "波动率状态": ((f"IV分位≈{iv_pct}% | Rule3减半:{'是' if iv_halve else '否'}"
+                           if iv_known else "IV未知(feed 缺失,未执行 IV 风控,保守减半)")
+                          + f" | {iv_hv_note}"),
             "现价与成本": price_cost,
             "否决审查触发": (("|".join(hard) + (" | " + sem_note if sem_note else "")) if hard
                               else (sem_note if sem_note else "无")),
@@ -691,7 +731,10 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                                       "invalid_neutralized": web_invalid}}},
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
                                      "star": star, "plan": plan, "reject_reason": reject},
-            "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status},
+            "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status,
+                        "iv_value": (inp.get("iv") or {}).get("iv_value"),
+                        "hv_value": (inp.get("iv") or {}).get("hv_value"),
+                        "iv_hv_ratio": iv_hv_ratio, "iv_hv_regime": iv_hv_regime},
             "stateful_risk": stateful,
             "consumption": consumption,
         },
@@ -723,6 +766,8 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     regime = inp.get("market_regime", "震荡期")
     iv_pct = (inp.get("iv") or {}).get("iv_percentile_252d")
     iv_known = iv_pct is not None
+    iv_hv_note, iv_hv_regime, iv_hv_ratio = iv_hv_vol_note(
+        (inp.get("iv") or {}).get("iv_value"), (inp.get("iv") or {}).get("hv_value"))
     # EGS 派生风险族一律 not-evaluated(未核查,非 hit);stateful_risk 从真实 Rule12/Rule13。
     fam = {k: {"hit": False, "action": "none", "reasons": []} for k in
            ("market_regime", "overheat_crowding", "portfolio_concentration", "liquidity_impact",
@@ -755,7 +800,7 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     m67 = {
         "精简结论区": {
             "当前环境": regime,
-            "波动率状态": vol_state if iv_known else f"{vol_state}(未执行 IV 风控)",
+            "波动率状态": (vol_state if iv_known else f"{vol_state}(未执行 IV 风控)") + f" | {iv_hv_note}",
             "现价与成本": price_cost,
             "否决审查触发": "未核查(本周 EGS 粗筛未覆盖)",
             "板块资金事件": "未核查(本周 EGS 粗筛未覆盖)",
@@ -784,7 +829,10 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "layer": {"hard_veto": [], "downgrade": sr_down, "observe_only": observe, "llm_enrichment": []},
             "entry_exit_size_star": {"action": "持有", "type": "已有持仓", "star": 0,
                                      "plan": plan, "reject_reason": hl_reject},
-            "iv_gate": {"iv_percentile_252d": iv_pct, "halve": False, "status": iv_status},
+            "iv_gate": {"iv_percentile_252d": iv_pct, "halve": False, "status": iv_status,
+                        "iv_value": (inp.get("iv") or {}).get("iv_value"),
+                        "hv_value": (inp.get("iv") or {}).get("hv_value"),
+                        "iv_hv_ratio": iv_hv_ratio, "iv_hv_regime": iv_hv_regime},
             "stateful_risk": stateful, "consumption": consumption,
         },
         "boundary": {"production": False, "real_money": False,
@@ -899,6 +947,31 @@ def validate_m67_consistency(report: dict) -> None:
             raise ValueError("IV feed 缺失但 observe_only 未标 iv_regime_status")
         if "IV未知" not in m67["精简结论区"]["波动率状态"]:
             raise ValueError("IV 缺失但波动率状态未标 IV未知")
+    # #6 IV-HV advisory(机器↔文案↔原始值 = 不可伪造整体;纯信息,不翻 decision):iv_gate 四键(iv_value /
+    # hv_value / iv_hv_ratio / iv_hv_regime)**必存**;regime + ratio **必由 raw iv_value/hv_value 经 iv_hv_tag
+    # (单一来源)重算一致**——防 raw/ratio/regime 各自漂移、防 ratio 陈旧(1.5→1.3 仍标 rich)、防 unknown 配有效 raw;
+    # 文案与档位绑定(非 unknown 含「IV/HV」、unknown 含「IV-HV未知」)。
+    ig = mc["iv_gate"]
+    for k in ("iv_value", "hv_value", "iv_hv_ratio", "iv_hv_regime"):
+        if k not in ig:
+            raise ValueError(f"machine.iv_gate 缺 IV-HV 键 {k}(机器轨不完整)")
+    reg, ratio = ig["iv_hv_regime"], ig["iv_hv_ratio"]
+    vs = m67["精简结论区"]["波动率状态"]
+    if reg not in IV_HV_REGIMES:
+        raise ValueError(f"iv_hv_regime 非法 {reg!r}(须 ∈ {IV_HV_REGIMES})")
+    exp_reg, exp_ratio = iv_hv_tag(ig["iv_value"], ig["hv_value"])   # 由 raw 重算的权威档位/比值(单一来源)
+    if reg != exp_reg:
+        raise ValueError(f"iv_hv_regime={reg} 与 raw iv_value/hv_value 重算({exp_reg})不一致")
+    if reg == "unknown":
+        if ratio is not None:
+            raise ValueError("iv_hv_regime=unknown 但 iv_hv_ratio 非空(缺数据不得伪造比值)")
+        if "IV-HV未知" not in vs:
+            raise ValueError("iv_hv_regime=unknown 但波动率状态未标 IV-HV未知")
+    else:
+        if ratio is None or exp_ratio is None or abs(ratio - exp_ratio) > 1e-9:
+            raise ValueError("iv_hv_ratio 与 round(iv_value/hv_value,4) 不一致(机器比值被篡改/漂移)")
+        if "IV/HV" not in vs:
+            raise ValueError(f"iv_hv_regime={reg} 但波动率状态缺 IV/HV 文案")
     # 消费完整性
     for key in ("indicators", "risk_families", "iv.iv_percentile_252d", "overlay.eligible"):
         if key not in mc["consumption"]:
