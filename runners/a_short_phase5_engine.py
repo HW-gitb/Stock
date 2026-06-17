@@ -593,6 +593,60 @@ def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
     return impacts
 
 
+def _consume_semantic(inp: dict, as_of: str) -> dict:
+    """4.2 第3轮/S2: semantic 消费的单一来源(build_m67 候选行 + build_holding 持仓行共用,防两份校验/派生漂移)。
+    official 走 _validate_semantic_official(fail-closed),web 走 _web_llm_error 中性化非法(advisory 非阻断)。
+    只产派生信号 + machine trace,**不决定 action**(候选的 hard_veto→否决 与持仓的 advisory 处置由各自 build 决定)。"""
+    sem = _validate_semantic_official(inp.get("semantic"), as_of)
+    sem_status = sem.get("status") if sem else "unknown"
+    sem_events = sem["events"] if (sem and sem_status == "risk") else []
+    sem_sevs = [e["severity"] for e in sem_events]
+    # 只有证据齐全(非空 url_or_pdf)的 high 才计 veto/清仓复核;缺 URL 的 high → 待核(pending)。
+    high_full = [e for e in sem_events if e["severity"] == "high" and e["url_or_pdf"].strip()]
+    high_incomplete = [e for e in sem_events if e["severity"] == "high" and not e["url_or_pdf"].strip()]
+    sem_pending = bool(sem_events) and not high_full
+    sem_impact = "veto" if high_full else ("pending" if sem_pending else "none")
+    sw = inp.get("semantic_web_llm")
+    web = sw.get("web_llm") if isinstance(sw, dict) else None
+    web_sources = (sw.get("sources") or []) if isinstance(sw, dict) else []
+    web_invalid = (sw is not None) and (not isinstance(web, dict)
+                                        or _web_llm_error(web, web_sources) is not None)
+    if web_invalid:
+        web, web_sources = None, []
+    web_status = web["status"] if web else "unknown"
+    web_downgrade = bool(web) and web_status in _WEB_DOWNGRADE_STATUSES
+    trace = {"official_status": sem_status,
+             "severity_max": ("high" if "high" in sem_sevs else
+                              ("medium" if "medium" in sem_sevs else
+                               ("low" if "low" in sem_sevs else None))),
+             "events": (list(sem["events"]) if sem else []),
+             "impact": sem_impact,
+             "evidence_incomplete_high": len(high_incomplete),
+             "web_llm": {"status": web_status,
+                         "risk_level": (web.get("risk_level") if web else "unknown"),
+                         "action": (web.get("action") if web else "no_action"),
+                         "sources_count": len(web_sources),
+                         "impact": ("downgrade" if web_downgrade else "none"),
+                         "invalid_neutralized": web_invalid}}
+    return {"sem": sem, "sem_status": sem_status, "sem_events": sem_events, "sem_sevs": sem_sevs,
+            "high_full": high_full, "high_incomplete": high_incomplete, "sem_pending": sem_pending,
+            "sem_impact": sem_impact, "web": web, "web_sources": web_sources, "web_status": web_status,
+            "web_downgrade": web_downgrade, "trace": trace}
+
+
+def _semantic_holding_lines(sc: dict) -> list:
+    """4.2 S2: 持仓 semantic 的用户可见文本行(build_m67 持仓分支 + build_holding_report 共用,防漂移)。
+    official 证据齐全 high → 清仓复核(标非生产 advisory);web → 持仓警戒;pending → 待核。持仓恒持有、不自动卖出、减仓价待 S3b。"""
+    lines = []
+    if sc["high_full"]:
+        lines.append(f"官方结构化 high({ADVISORY_VETO_TAG}):建议清仓复核(人工,不自动卖出,减仓价待 S3b)")
+    if sc["web_downgrade"]:
+        lines.append(f"web/LLM {sc['web_status']}({sc['web'].get('risk_level')}):持仓警戒(advisory)")
+    if sc["sem_pending"]:
+        lines.append("官方语义待核(证据不全/medium·low,未扣分)")
+    return lines
+
+
 def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     ind = compute_indicators(inp.get("price_series", []))
     fam = classify_risk_families(inp, ind)
@@ -620,36 +674,21 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     # 经校验后:有 events ⟺ status==risk,severity 合法。**证据齐全(非空 url_or_pdf)的 high** → semantic_official
     # hard_veto(进下方 hard→否决,绝不救回);**缺 URL 的 high → 待核(不否决)**;medium/low → 仅"待核"
     # (不扣分/不清/不降星);clear/unknown/无输入 → 中性。(下方 high_full/high_incomplete 实现此分流)
-    sem = _validate_semantic_official(inp.get("semantic"), as_of)
-    sem_status = sem.get("status") if sem else "unknown"          # None → unknown(中性)
-    sem_events = sem["events"] if (sem and sem_status == "risk") else []
-    sem_sevs = [e["severity"] for e in sem_events]
-    # 方案 A(Slice 1b):只有**证据齐全(含非空 url_or_pdf)**的 high 事件才驱动 M6.7 否决;
-    # high 但缺 URL/PDF(cninfo 偶缺 adjunctUrl)→ 证据不全,降为"待核"(不否决、不崩);medium/low 同样仅待核。
-    high_full = [e for e in sem_events if e["severity"] == "high" and e["url_or_pdf"].strip()]
-    high_incomplete = [e for e in sem_events if e["severity"] == "high" and not e["url_or_pdf"].strip()]
-    if high_full:
+    # 语义消费单一来源(_consume_semantic: build_m67 候选行 + build_holding 持仓行共用,防两份校验/派生漂移)。
+    sc = _consume_semantic(inp, as_of)
+    high_full, high_incomplete = sc["high_full"], sc["high_incomplete"]
+    web, web_status, web_downgrade = sc["web"], sc["web_status"], sc["web_downgrade"]
+    sem_pending = sc["sem_pending"]
+    # 候选行决策路径(持仓走 build_holding_report 的 advisory 路径,不在此):证据齐全 high → fam hard_veto(进否决,
+    # reason 标非生产 advisory);web risk/headwind+sources → fam downgrade(绝不 hard_veto);tailwind/clear/unknown → 中性。
+    # S2: semantic 的 hard_veto/downgrade 路径**只对候选行**(not has_position)。持仓(任何 Tier,无论走 build_m67
+    # 还是 build_holding)的 semantic 永远 advisory:official high → 持有 + 清仓复核(下方 op_impacts existing_holding),
+    # 绝不进候选 hard_veto→否决(R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT);web → 持仓警戒,不进候选 downgrade。
+    if high_full and not has_position:
         fam["semantic_official"].update(
             hit=True, action="hard_veto",
             reasons=[f"语义官方:{e['risk_type']}(high,{ADVISORY_VETO_TAG})" for e in high_full])
-    sem_has_high = bool(high_full)                                # 仅证据齐全 high 计 veto
-    sem_pending = bool(sem_events) and not high_full             # risk 有事件但无证据齐全 high → 待核
-
-    # 语义 web/LLM 层(Slice 2,advisory,DeepSeek 判官)。输入 inp["semantic_web_llm"] =
-    # {"web_llm": {...}, "sources": [...]} 或 None。校验复用 _web_llm_consistency_error(单一来源)。
-    # 影响(§8.4):risk_candidate/risk/headwind 且有 sources → downgrade(**绝不 hard_veto**);
-    # tailwind/clear_light 不降级、不救回硬风控;unknown/无输入 → 中性。**非法 web 中性化 + trace 标记
-    # (advisory 非阻断,绝不 abort/raise,区别于 official 的 fail-closed abort)。**
-    sw = inp.get("semantic_web_llm")
-    web = sw.get("web_llm") if isinstance(sw, dict) else None
-    web_sources = (sw.get("sources") or []) if isinstance(sw, dict) else []
-    web_invalid = (sw is not None) and (not isinstance(web, dict)
-                                        or _web_llm_error(web, web_sources) is not None)
-    if web_invalid:
-        web, web_sources = None, []
-    web_status = web["status"] if web else "unknown"
-    web_downgrade = bool(web) and web_status in _WEB_DOWNGRADE_STATUSES
-    if web_downgrade:
+    if web_downgrade and not has_position:
         fam["semantic_web_llm"].update(
             hit=True, action="downgrade",
             reasons=[f"语义web/LLM:{web_status}({web.get('risk_level')})"])
@@ -664,7 +703,6 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         observe.append(f"semantic_pending_review={sem_reason}(待核,未扣分)")
     else:
         sem_reason = ""
-    sem_impact = "veto" if sem_has_high else ("pending" if sem_pending else "none")
     sem_note = (f"语义待核:{sem_reason},待复核(未扣分,待 web/LLM 实判)" if sem_pending else "")
 
     # IV 状态(R-ASHORT-PHASE5-IV-MISSING-FAIL-OPEN):feed 缺失不假装执行 IV 风控
@@ -742,9 +780,11 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         else:
             sys_txt = (f"系统跟踪止损 {plan['stop']}(无条件、盘中由你手动执行);"
                        f"止盈 盈一 {plan['t1']} / 盈二 {plan['t2']}")
+        _sem_h = _semantic_holding_lines(sc)        # S2: 持仓(在 TopN/Tier-1·2 走 build_m67)的 semantic advisory 文本
         advice = (f"已有持仓,本周不按新开仓处理,禁止自动加仓。持仓 {shares_hint} 股/均价 {cost_hint}。"
                   f"{sys_txt}。{manual_txt}。价格已按 A 股 0.01 规整。"
-                  + (f"降级:{'/'.join(downgrades)}。" if downgrades else ""))
+                  + (f"降级:{'/'.join(downgrades)}。" if downgrades else "")
+                  + (" 语义:" + "；".join(_sem_h) + "。" if _sem_h else ""))
     else:
         held_suffix = ("已有持仓也不得加仓;如硬风控触发止损/清仓条件,由你手动执行。" if has_position else "")
         advice = f"否决,禁止建仓。硬否决:{reject}。{held_suffix}"
@@ -832,11 +872,12 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "pending_successor_slice": None,
             "privacy_class": "public_tracked",
         })
-    # 4.2 第3轮:候选行 semantic advisory operation_impact(复用已校验信号:official 证据齐全 high →
-    # m67_advisory_veto 否决;web downgrade → priority_down)。仅非持仓候选行(持仓 semantic 数据接入 = S2,
-    # 见 build_holding_report 注);semantic 永 advisory(production_effect_enabled=False、web_llm 绝不 hard_veto)。
-    if not has_position:
-        op_impacts.extend(_semantic_operation_impacts(high_full, web, web_downgrade, str(as_of), "new_entry"))
+    # 4.2 第3轮+S2: semantic advisory operation_impact。scope 依 has_position(不依哪个 builder 收到行):
+    # 候选行 → new_entry(official 证据齐全 high → m67_advisory_veto 否决 / web downgrade → priority_down);
+    # 持仓行(含在 TopN 走 build_m67 的 Tier-1·2 持仓)→ existing_holding(official → clear_review / web → hold_watch、
+    # blocked_add、持有不否决)。semantic 永 advisory(production_effect_enabled=False、web_llm 绝不 hard_veto)。
+    op_impacts.extend(_semantic_operation_impacts(
+        high_full, web, web_downgrade, str(as_of), "existing_holding" if has_position else "new_entry"))
     result = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
@@ -846,20 +887,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "indicators": ind, "risk_families": fam,
             "layer": {"hard_veto": hard, "downgrade": downgrades,
                       "observe_only": observe, "llm_enrichment": llm_notes,
-                      "semantic_risk": {
-                          "official_status": sem_status,
-                          "severity_max": ("high" if "high" in sem_sevs else  # 全事件(含缺证据 high)
-                                           ("medium" if "medium" in sem_sevs else
-                                            ("low" if "low" in sem_sevs else None))),
-                          "events": (list(sem["events"]) if sem else []),
-                          "impact": sem_impact,    # veto(证据齐全 high→否决) / pending(待核) / none
-                          "evidence_incomplete_high": len(high_incomplete),  # high 但缺 URL/PDF → 仅待核
-                          "web_llm": {"status": web_status,
-                                      "risk_level": (web.get("risk_level") if web else "unknown"),
-                                      "action": (web.get("action") if web else "no_action"),
-                                      "sources_count": len(web_sources),
-                                      "impact": ("downgrade" if web_downgrade else "none"),
-                                      "invalid_neutralized": web_invalid}}},
+                      "semantic_risk": sc["trace"]},
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
                                      "star": star, "plan": plan, "reject_reason": reject},
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status,
@@ -891,7 +919,8 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
 
     **关键诚实点**:Tier-3 没有 EGS/流动性/事件数据。**绝不跑 `classify_risk_families`**——否则会在
     缺失数据上**伪造**风险族结论(实测:无流动性 → 误判流动性硬否决 → 错误「否决」一只持仓;无事件 →
-    误判"无 ST")。本函数只做:持仓技术指标 + Rule12/Rule13(真实账户)+ 诚实标 EGS/语义/ST「未核查」。
+    误判"无 ST")。本函数只做:持仓技术指标 + Rule12/Rule13(真实账户)+ 诚实标 EGS/ST「未核查」;语义(4.2 S2)经
+    semantic provider 注入则核查并发 holding_row_impact advisory(clear_review/hold_watch,不否决)、无 provider 则「未核查」(S1)。
     action 恒「持有」(S1 被动;主动止损/止盈/加仓是 S3)。产出与 `build_m67_report` 同形、过
     `validate_m67_consistency`。coverage_status / row_source 由 pipeline 在 build_weekly_report 后打。"""
     ind = compute_indicators(inp.get("price_series", []))
@@ -906,9 +935,19 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     fam = {k: {"hit": False, "action": "none", "reasons": []} for k in
            ("market_regime", "overheat_crowding", "portfolio_concentration", "liquidity_impact",
             "event_hard_veto", "semantic_official", "stateful_risk")}
-    # 4.2 第3轮范围:持仓 semantic 的数据接入(让持仓真抓 cninfo/web)+ holding_row_impact emit = S2(独立轮,
-    # 涉真实持仓→私密路由,单独审)。本轮持仓侧只把 guard(validate_operation_impact_no_dangling 的 holding_row_impact/
-    # blocked_add/private_account 形态)+ schema 就位并用构造输入测试;build_holding_report 暂不发 semantic operation_impact。
+    # 4.2 S2: 持仓 semantic 数据接入(让持仓也抓 cninfo/web 语义)。复用 _consume_semantic(候选/持仓单一来源)+
+    # _semantic_operation_impacts(scope=existing_holding → holding_row_impact: clear_review/hold_watch + blocked_add
+    # + pending S3b)。持仓 action 恒「持有」(不否决/不自动卖出,减仓价待 S3b);official 证据齐全 high → 清仓复核 advisory
+    # (标非生产)、web → 持仓警戒;web/LLM 永久 advisory-only、绝不 hard_veto。**无 semantic 输入(provider None)→ 全 unknown、
+    # 零 op_impact、文本保持「未核查」(S1 向后兼容)**。涉真实持仓 → 私密路由(weekly_private,带 --account 自动私密)。
+    has_semantic_input = inp.get("semantic") is not None or inp.get("semantic_web_llm") is not None
+    sc = _consume_semantic(inp, as_of)
+    # Finding 2 fix: 「已核查」文本判据用**真核查**(official_status 或 web_status 任一非 unknown,= render `_has_semantic` 同一判据),
+    # 不用 has_semantic_input —— 有输入但 trace 全 unknown(取数失败/无结果)时,has_semantic_input 会误写「语义已核查」,
+    # 与 render `_has_semantic`(精确判未核查)同一份 Markdown 自相矛盾(违反 no-false-clear)。
+    sem_checked = sc["sem_status"] != "unknown" or sc["web_status"] != "unknown"
+    sem_op_impacts = _semantic_operation_impacts(sc["high_full"], sc["web"], sc["web_downgrade"], as_of, "existing_holding")
+    sem_lines = _semantic_holding_lines(sc)          # S2: 与 build_m67 持仓分支共用单一来源
     sr_down = ["已有持仓:按持仓管理输出,不按新开仓处理"]
     r12 = (stateful.get("rule12") or {})
     if r12.get("status") == "active_cooldown":
@@ -932,14 +971,18 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
         sys_txt = f"⚠️ 现价已跌破系统跟踪止损 {plan['stop']} —— 触发后由你盘中无条件手动执行"
     else:
         sys_txt = f"系统跟踪止损 {plan['stop']}(无条件、盘中由你手动执行);止盈 盈一 {plan['t1']} / 盈二 {plan['t2']}"
-    advice = (f"已有持仓(本周 EGS 粗筛未覆盖,EGS/语义/ST 未自动核查)。本周不按新开仓处理、禁止自动加仓。"
-              f"{sys_txt}。价格已按 A 股 0.01 规整。新闻 / ST / 监管 / 减持请人工核查。")
+    _uncovered = "EGS/ST 未自动核查(语义已核查)" if sem_checked else "EGS/语义/ST 未自动核查"
+    advice = (f"已有持仓(本周 EGS 粗筛未覆盖,{_uncovered})。本周不按新开仓处理、禁止自动加仓。"
+              f"{sys_txt}。价格已按 A 股 0.01 规整。新闻 / ST / 监管 / 减持请人工核查。"
+              + (" 语义:" + "；".join(sem_lines) + "。" if sem_lines else ""))
     m67 = {
         "精简结论区": {
             "当前环境": regime,
             "波动率状态": (vol_state if iv_known else f"{vol_state}(未执行 IV 风控)") + f" | {iv_hv_note}",
             "现价与成本": price_cost,
-            "否决审查触发": "未核查(本周 EGS 粗筛未覆盖)",
+            "否决审查触发": ("；".join(sem_lines) + "(EGS 粗筛未覆盖)" if sem_lines
+                              else ("语义已核查无官方高风险(EGS 粗筛未覆盖)" if sem_checked
+                                    else "未核查(本周 EGS 粗筛未覆盖)")),
             "板块资金事件": "未核查(本周 EGS 粗筛未覆盖)",
             "风控触发": "|".join(sr_down),
             "操作建议": advice,
@@ -963,7 +1006,8 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "m67": m67,
         "machine": {
             "indicators": ind, "risk_families": fam,
-            "layer": {"hard_veto": [], "downgrade": sr_down, "observe_only": observe, "llm_enrichment": []},
+            "layer": {"hard_veto": [], "downgrade": sr_down, "observe_only": observe, "llm_enrichment": [],
+                      **({"semantic_risk": sc["trace"]} if has_semantic_input else {})},
             "entry_exit_size_star": {"action": "持有", "type": "已有持仓", "star": 0,
                                      "plan": plan, "reject_reason": hl_reject},
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": False, "status": iv_status,
@@ -971,6 +1015,7 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
                         "hv_value": (inp.get("iv") or {}).get("hv_value"),
                         "iv_hv_ratio": iv_hv_ratio, "iv_hv_regime": iv_hv_regime},
             "stateful_risk": stateful, "consumption": consumption,
+            **({"operation_impact": sem_op_impacts} if sem_op_impacts else {}),
         },
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},

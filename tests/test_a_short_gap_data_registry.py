@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners.a_short_phase5_engine import (  # noqa: E402
-    ADVISORY_VETO_TAG, build_m67_report, validate_m67_consistency,
+    ADVISORY_VETO_TAG, build_m67_report, build_holding_report, validate_m67_consistency,
     validate_operation_impact_no_dangling, _semantic_operation_impacts,
 )
 from tests.test_a_short_phase5_engine import _good_input, _held_state  # noqa: E402
@@ -316,10 +316,24 @@ class SemanticAdvisoryImpactTests(unittest.TestCase):
         jsonschema.validate(r, _load(M67_SCHEMA))
         self.assertEqual(len(_sem_impacts(r)), 2)                         # official + web 各一条
 
-    def test_held_position_no_candidate_semantic_impact(self):
-        # 候选 semantic impact 仅 not has_position 发;持仓 semantic 数据接入/emit = S2
+    def test_held_topn_official_high_holding_advisory_not_veto(self):
+        # S2 fix(R-...-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT): 持仓在 TopN(走 build_m67)+ official high →
+        # 持有(不否决) + holding_row_impact clear_review(按 has_position scope,不依 builder),绝不进候选 hard veto。
         r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH, stateful_risk=_held_state()), AS_OF, "t")
-        self.assertEqual(_sem_impacts(r), [])
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertEqual(r["machine"]["layer"]["hard_veto"], [])
+        imp = [i for i in _sem_impacts(r) if i["source_field"] == "semantic_official_high"][0]
+        self.assertEqual(imp["visibility_shape"], "holding_row_impact")
+        self.assertEqual(imp["holding_effect"], "clear_review")
+        self.assertTrue(imp["blocked_add_required"])
+        validate_m67_consistency(r)
+
+    def test_held_topn_web_holding_hold_watch(self):
+        r = build_m67_report(_good_input(semantic_web_llm=_WEB_RISK, stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        imp = [i for i in _sem_impacts(r) if i["source_field"] == "semantic_web_llm"][0]
+        self.assertEqual(imp["holding_effect"], "hold_watch")
+        validate_m67_consistency(r)
 
     def test_anti_rescue_semantic_tailwind_does_not_rescue(self):
         # production hard veto(reduce_deduct) + semantic 正面(tailwind) → 仍否决, 不救回
@@ -411,6 +425,72 @@ class SemanticGuardTests(unittest.TestCase):
         r["machine"]["operation_impact"] = [_holding_official_impact()]
         r["m67"]["精简结论区"]["操作建议"] = f"已有持仓,禁止加仓。清仓复核建议({ADVISORY_VETO_TAG})。"
         validate_operation_impact_no_dangling(r)                          # holding_row_impact 合法形态 → 不 raise
+
+
+class HoldingSemanticS2Tests(unittest.TestCase):
+    """4.2 S2: build_holding_report 接 semantic → holding_row_impact(advisory) + 文本; action 恒「持有」(不否决/不自动卖出)。
+    无 semantic 输入 → S1 向后兼容(零 impact / 否决审查触发未核查 / 无 semantic_risk trace)。"""
+
+    def _held_inp(self, **over):
+        inp = {"ts_code": "600000.SH", "name": "x", "close": 2.90,
+               "price_series": [{"high": 2.92, "low": 2.88, "close": 2.90}] * 30,
+               "market_regime": "震荡期", "iv": {"iv_percentile_252d": 55.0},
+               "stateful_risk": _held_state()}
+        inp.update(over)
+        return inp
+
+    def test_official_high_holding_clear_review(self):
+        r = build_holding_report(self._held_inp(semantic=_OFFICIAL_HIGH), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")          # 持仓 semantic 绝不翻否决
+        imp = [i for i in r["machine"]["operation_impact"] if i["source_field"] == "semantic_official_high"][0]
+        self.assertEqual(imp["visibility_shape"], "holding_row_impact")
+        self.assertEqual(imp["holding_effect"], "clear_review")
+        self.assertEqual(imp["new_entry_effect"], "none")
+        self.assertTrue(imp["blocked_add_required"])
+        self.assertEqual(imp["veto_class"], "m67_advisory_veto")
+        self.assertFalse(imp["production_effect_enabled"])
+        self.assertEqual(imp["pending_successor_slice"], "S3b")        # 减仓价待 S3b
+        self.assertEqual(imp["privacy_class"], "private_account")      # 涉真实持仓 → 私密
+        self.assertIn(ADVISORY_VETO_TAG, r["m67"]["精简结论区"]["操作建议"])   # guard ⑨
+        validate_m67_consistency(r)
+
+    def test_web_downgrade_holding_hold_watch(self):
+        r = build_holding_report(self._held_inp(semantic_web_llm=_WEB_RISK), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        imp = [i for i in r["machine"]["operation_impact"] if i["source_field"] == "semantic_web_llm"][0]
+        self.assertEqual(imp["holding_effect"], "hold_watch")
+        self.assertEqual(imp["veto_class"], "none")                   # web/LLM 绝不 veto
+        self.assertTrue(imp["blocked_add_required"])
+        validate_m67_consistency(r)
+
+    def test_no_semantic_holding_s1_unchanged(self):
+        r = build_holding_report(self._held_inp(), AS_OF, "t")        # provider None → S1 不变
+        self.assertNotIn("operation_impact", r["machine"])
+        self.assertEqual(r["m67"]["精简结论区"]["否决审查触发"], "未核查(本周 EGS 粗筛未覆盖)")
+        self.assertNotIn("semantic_risk", r["machine"]["layer"])
+        validate_m67_consistency(r)
+
+    def test_official_high_no_url_holding_pending(self):
+        r = build_holding_report(self._held_inp(semantic=_OFFICIAL_HIGH_NOURL), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertEqual([i for i in (r["machine"].get("operation_impact") or [])
+                          if i["source_field"] == "semantic_official_high"], [])   # 缺 URL → 待核, 不发 advisory veto
+        validate_m67_consistency(r)
+
+    def test_holding_semantic_does_not_hard_veto(self):
+        r = build_holding_report(self._held_inp(semantic=_OFFICIAL_HIGH), AS_OF, "t")
+        self.assertEqual(r["machine"]["layer"]["hard_veto"], [])      # 持仓 semantic 不进 hard_veto(S1 被动持有)
+
+    def test_official_unknown_holding_text_not_checked(self):
+        # Finding 2 fix: official unknown(有输入但 trace 全 unknown)→ engine text 不写「语义已核查」(与 render _has_semantic
+        # 同一判据,no-false-clear);unknown 仍显未核查。
+        unknown_sem = {"status": "unknown", "had_pit_announcements": False, "events": []}
+        r = build_holding_report(self._held_inp(semantic=unknown_sem), AS_OF, "t")
+        veto = r["m67"]["精简结论区"]["否决审查触发"]
+        self.assertNotIn("语义已核查", veto)
+        self.assertNotIn("语义已核查", r["m67"]["精简结论区"]["操作建议"])
+        self.assertIn("未核查", veto)
+        validate_m67_consistency(r)
 
 
 if __name__ == "__main__":

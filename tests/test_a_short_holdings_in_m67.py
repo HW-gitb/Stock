@@ -141,10 +141,39 @@ class BuildHoldingsTests(unittest.TestCase):
         self.assertEqual(hn, [])
         self.assertIn("陈旧", mr[0]["reason"])              # 最新 bar != 决策价格日 → 旁路、人工管理
 
+    def test_s2_semantic_provider_threads_to_holding(self):
+        # 4.2 S2: semantic_provider 结果接进持仓 normalize → 端到端经 build_holding_report 发 holding_row_impact
+        from runners.a_short_phase5_engine import build_holding_report, validate_m67_consistency
+        acct = _held_acct([("600519.SH", 100)])
+        sem = {"600519.SH": {"status": "risk", "had_pit_announcements": True, "events": [
+            {"source": "cninfo", "title": "立案", "category": "监管", "disclosure_date": "20260601",
+             "risk_type": "litigation", "severity": "high", "url_or_pdf": "http://x.pdf"}]}}
+        hn, meta, mr = _build_holdings(acct, {"600000.SH"}, AS_OF, lambda c: (_series_bars(), PDT), 55.0,
+                                       {"available_cash": 5e5}, "震荡期", {}, PDT, egs_full={},
+                                       semantic_provider=lambda c: sem.get(str(c)))
+        r = build_holding_report(hn[0], AS_OF, "t")          # Tier-3 → build_holding 路径
+        imp = [i for i in (r["machine"].get("operation_impact") or []) if i["source_field"] == "semantic_official_high"]
+        self.assertTrue(imp and imp[0]["holding_effect"] == "clear_review")   # provider→normalize→build_holding emit
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")   # 持仓 semantic 不否决
+        validate_m67_consistency(r)
+
+    def test_s2_holding_provider_cap_covers_beyond_top15(self):
+        # 4.2 S2 + Finding 1 fix: 持仓 provider output 覆盖 >15(不止 fetcher 看到 20,而是 provider(code) 非 None);
+        # build_summary_from_fetches 内部二次 Top15 由分批绕过。候选默认仍 Top15(provider(第20只)=None,行为不变)。
+        from runners.a_short_weekly_pipeline import _build_cninfo_semantic_provider
+        codes = [f"60{i:04d}.SH" for i in range(20)]         # 20 主板码
+        def stub(main_codes, as_of, lookback):               # 每码 ok+空公告 → official_structured 非 None
+            return [{"ts_code": c, "ok": True, "error_category": None, "announcements": []} for c in main_codes]
+        prov = _build_cninfo_semantic_provider(codes, AS_OF, 90, fetcher=stub, cap=len(codes))
+        self.assertIsNotNone(prov(codes[15]))                # 第 16 只(>Top15)output 覆盖
+        self.assertIsNotNone(prov(codes[-1]))                # 第 20 只 output 覆盖
+        prov15 = _build_cninfo_semantic_provider(codes, AS_OF, 90, fetcher=stub)   # 候选默认 Top15
+        self.assertIsNone(prov15(codes[-1]))                 # 第 20 只不在候选 Top15 → None(候选行为不变)
+
 
 # ── render: 分区 / partial 未核查 / manual_review / 4.3-D / 无持仓回归 ──────────
 def _min_report(ts_code, action="持有", coverage=None, row_source=None, veto="无", egs=None,
-                position_state="held", cons=None):
+                position_state="held", cons=None, semantic_risk=None):
     rep = {
         "schema_name": "a_short_m67_report", "as_of": AS_OF, "ts_code": ts_code, "name": "测试",
         "m67": {"精简结论区": {"当前环境": "震荡期", "波动率状态": "IV分位≈55%", "现价与成本": "10 | 持仓",
@@ -153,7 +182,8 @@ def _min_report(ts_code, action="持有", coverage=None, row_source=None, veto="
                 "table": {"操作": action, "股数": None, "入": None, "盈一": None, "盈二": None, "损": None,
                           "类型": "已有持仓", "EGS分": egs, "优先级": "⭐×2", "触发条件": "x"}},
         "machine": {"stateful_risk": {"position_state": position_state, "rule12": {"status": "inactive"},
-                                      "rule13": {"status": "none"}, "reasons": []}},
+                                      "rule13": {"status": "none"}, "reasons": []},
+                    **({"layer": {"semantic_risk": semantic_risk}} if semantic_risk else {})},
         "boundary": {"production": False, "real_money": False, "is_validated_alpha": False,
                      "satisfies_ship_gate": False},
     }
@@ -196,6 +226,46 @@ class RenderHoldingsSectionTests(unittest.TestCase):
         md = render_weekly_markdown(_weekly_dict([hold]))
         self.assertIn("否决审查触发:无", md)                 # Tier-2 EGS 覆盖了 → 不被改成未核查(仍显示)
         self.assertNotIn("⚠️ **EGS 未覆盖**", md)             # Tier-2 EGS 维度覆盖 → 不显 EGS未覆盖
+
+    # ── 4.2 S2 render(R-...-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT Finding 2): 已跑语义 → 显 S2 状态,不显 S1 未核查 ──
+    _SR = {"official_status": "risk", "severity_max": "high", "events": [{}], "impact": "veto",
+           "evidence_incomplete_high": 0,
+           "web_llm": {"status": "unknown", "risk_level": "unknown", "action": "no_action",
+                       "sources_count": 0, "impact": "none", "invalid_neutralized": False}}
+
+    def test_s2_semantic_checked_holding_shows_state_not_s1(self):
+        hold = _min_report("603667.SH", coverage="partial", row_source="account_position_egs_full",
+                           veto="语义官方 high(非生产 advisory)", egs=71.5, semantic_risk=self._SR)
+        md = render_weekly_markdown(_weekly_dict([hold]))
+        self.assertIn("语义已核查", md)                       # coverage label 翻成已核查
+        self.assertIn("语义风险(advisory", md)                # _semantic_line 渲染 S2 状态
+        self.assertNotIn("语义/新闻未核查(S1)", md)           # 不再误标未核查
+
+    def test_s2_tier3_semantic_not_masked(self):
+        hold = _min_report("603667.SH", coverage="partial", row_source="account_position_only",
+                           veto="官方结构化 high(非生产 advisory):建议清仓复核", semantic_risk=self._SR)
+        md = render_weekly_markdown(_weekly_dict([hold]))
+        self.assertIn("建议清仓复核", md)                     # Tier-3 已跑语义 → 否决审查触发不被 EGS-未覆盖文案 mask
+        self.assertNotIn("语义/新闻未核查(S1)", md)
+
+    def test_s2_no_semantic_holding_still_unchecked(self):
+        hold = _min_report("603667.SH", coverage="partial", row_source="account_position_only")  # 无 semantic_risk
+        md = render_weekly_markdown(_weekly_dict([hold]))
+        self.assertIn("语义/新闻未核查(S1)", md)              # 向后兼容:无语义仍显未核查
+        self.assertIn("语义未核查", md)
+
+    def test_s2_tier2_unknown_trace_still_unchecked(self):
+        # 残留 fix(R-...-S2-...-RENDER-DRIFT): build_m67(Tier-2)恒写 semantic_risk;无 semantic 输入时 trace 全 unknown
+        # → 不算已核查(否则误标已核查、违反 no-semantic-must-show-unchecked)。仍显未核查。
+        sr_unknown = {"official_status": "unknown", "severity_max": None, "events": [], "impact": "none",
+                      "evidence_incomplete_high": 0,
+                      "web_llm": {"status": "unknown", "risk_level": "unknown", "action": "no_action",
+                                  "sources_count": 0, "impact": "none", "invalid_neutralized": False}}
+        hold = _min_report("603667.SH", coverage="partial", row_source="account_position_egs_full",
+                           egs=71.5, semantic_risk=sr_unknown)
+        md = render_weekly_markdown(_weekly_dict([hold]))
+        self.assertIn("语义未核查", md)                       # unknown trace → 未核查(不误标已核查)
+        self.assertIn("语义/新闻未核查(S1)", md)
         self.assertIn("语义/新闻未核查(S1)", md)             # 但语义未跑 → 必须显式标(不伪装已核查)
 
     def test_consistency_warning_rendered(self):

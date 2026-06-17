@@ -200,7 +200,8 @@ def _load_account_consistency_warnings(account_path: str) -> dict:
 
 
 def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, regime,
-                    regime_fallback, price_data_through, egs_full=None, iv_value=None, hv_value=None):
+                    regime_fallback, price_data_through, egs_full=None, iv_value=None, hv_value=None,
+                    semantic_provider=None, web_llm_provider=None):
     """持仓恒列入 S1: 为"持仓 ∖ top-N"构造 M6.7 待分析行(Tier 路由)。**不改 egs_main / 选股 / 语义 /
     user-stop**。返回 (holding_normalized, holding_meta, manual_review):
     - Tier-2(在 `egs_full`): 复用 egs_full 的 EGS 分/风险;**现价取 price provider 最新 bar**(非 egs_full
@@ -210,7 +211,8 @@ def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, re
       top-N 候选行)。Tier-2 vs Tier-3 的区别在 `row_source`,**不在** coverage;EGS『未核查』渲染覆盖只对 Tier-3。
     - 无价/停牌/价格陈旧(最新 bar != price_data_through): **旁路候选价格门**(绝不中止整轮、不参与候选一致性
       判定),入 manual_review,**不伪造"持有"**。
-    语义层 S1 **不扩到持仓**(semantic=None / semantic_web_llm=None)。"""
+    4.2 S2: 持仓 semantic 经 semantic_provider/web_llm_provider 注入(全持仓覆盖、绕 Top15 cap);
+    provider 为 None → semantic=None(S1 向后兼容,build_holding_report 保持「未核查」)。"""
     from engine.a_short_egs_full_adapter import load_egs_full, egs_full_row_to_candidate
     positions = [p for p in (acct.get("positions") or []) if str(p.get("ts_code")) not in cand_codes]
     if not positions:
@@ -241,7 +243,8 @@ def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, re
         n = normalize_candidate(cand, series, None, iv_pct, account, regime,
                                 regime_fallback=regime_fallback,
                                 stateful_risk=stateful_risk_for_candidate(acct, code, as_of),
-                                semantic=None, semantic_web_llm=None,
+                                semantic=(semantic_provider(code) if semantic_provider else None),
+                                semantic_web_llm=(web_llm_provider(code) if web_llm_provider else None),
                                 iv_value=iv_value, hv_value=hv_value)
         if rs == "account_position_only":     # Tier-3: 走 build_holding_report(不跑 EGS 风险分类、不伪造 veto)
             n["egs_coverage"] = "uncovered"
@@ -835,7 +838,7 @@ def _price_provider_result(provider, code: str, as_of: str) -> tuple:
     return list(res), str(as_of)
 
 
-def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None):
+def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None, cap=None):
     """非阻断 cninfo official provider(advisory 旁路),**复用 summary 已审门**——不另写薄版:
     `build_summary_from_fetches` 内含 `main_board_top15`(只取/喂主板 Top15)+ 缺码→unknown + 批量空响应门
     (大面积 ok-empty → 降 unknown 不报 clear)。返回 ts_code→official_structured;**任何失败 / 非法 lookback
@@ -846,7 +849,8 @@ def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None):
             return None                                  # 非法窗口 → 不取数(绝不因坏窗口产 false-clear)
         from runners.a_short_semantic_risk_summary import build_summary_from_fetches
         from runners.a_short_semantic_risk_probe import fetch_cninfo as _fetch, main_board_top15
-        main_codes, _dropped = main_board_top15(codes)   # 已审有界 universe;非主板/超 Top15 不取不喂
+        # 候选默认 Top15;持仓传 cap=持仓数全覆盖(绕 Top15——持仓不能因 >15 被截), 仍主板过滤 + 去重。
+        main_codes, _dropped = (main_board_top15(codes, cap) if cap is not None else main_board_top15(codes))
         if not main_codes:
             return None
         raws = (fetcher or _fetch)(main_codes, as_of, lookback_days)
@@ -854,9 +858,16 @@ def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None):
         # (绝不建 "None" 键、绝不把残缺/缺响应当 clear)。
         cninfo_results = {str(r["ts_code"]): r for r in raws
                           if isinstance(r, dict) and r.get("ts_code")}
-        summary = build_summary_from_fetches(main_codes, as_of, cninfo_results, None,
-                                             "weekly-semantic-provider")  # generated_at 仅占位,不被消费
-        by = {c["ts_code"]: c["official_structured"] for c in summary["candidates"]}
+        # Finding 1 fix: build_summary_from_fetches 内部再过 main_board_top15(默认 Top15)+ validate ≤15(候选 watch-pool
+        # 契约),会把持仓 provider 二次截到 15(第 16+ 持仓 provider(code)=None)。持仓全覆盖(cap>15)→ 按 Top15 一批分批调用
+        # 并合并 by map(每批仍走同一已审门 + batch-anomaly 降级);候选(cap=None,main_codes≤15)= 单批,行为不变。
+        from runners.a_short_semantic_risk_probe import TOP15_CAP
+        by = {}
+        for i in range(0, len(main_codes), TOP15_CAP):
+            batch = main_codes[i:i + TOP15_CAP]
+            summary = build_summary_from_fetches(batch, as_of, cninfo_results, None,
+                                                 "weekly-semantic-provider")  # generated_at 仅占位,不被消费
+            by.update({c["ts_code"]: c["official_structured"] for c in summary["candidates"]})
         return lambda ts: by.get(str(ts))
     except Exception as exc:
         print(f"[weekly] 语义 cninfo 取数失败({type(exc).__name__});语义层全 unknown(advisory,不阻断周报)")
@@ -864,7 +875,7 @@ def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None):
 
 
 def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=None,
-                                     news_fetcher=None, ds_client=None):
+                                     news_fetcher=None, ds_client=None, cap=None):
     """非阻断 DeepSeek web/LLM 判官 provider(advisory 旁路)。**em 资讯为主源**(取代失效的 sina roll):一次性批量
     抓 em 逐股近期新闻(PIT 近 N 天),逐票经 DeepSeek 判 → `{web_llm, sources}`(非 unknown)或 None(unknown/
     中性)。**缺 key/SDK → None(整层 unknown)**;抓取失败 → None;单票判定异常 → 该票 None。任何失败都不阻断周报、
@@ -878,7 +889,7 @@ def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=
         from runners.a_short_semantic_risk_summary import _em_sources
         # 复用 cninfo provider 同一已审门:主板 Top15(去重 + 有界 cap15 + 非主板剔除)。**抓 em/判 DeepSeek 前先过滤**,
         # 否则非标/扩大 analysis_input(如含创业板 300/科创 688)会触发超界的 em/DeepSeek 成本与覆盖。
-        main_codes, _dropped = main_board_top15(codes)
+        main_codes, _dropped = (main_board_top15(codes, cap) if cap is not None else main_board_top15(codes))
         if not main_codes:
             return None
         allowed = {str(c) for c in main_codes}
@@ -906,7 +917,8 @@ def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=
 
 
 def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None,
-         web_llm_provider=None, dividend_provider=None):
+         web_llm_provider=None, dividend_provider=None,
+         holding_semantic_provider=None, holding_web_llm_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -1055,13 +1067,24 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    "account_ref": (_rel(args.account) if args.account else ""),
                    "account_status": account_status, "sizing_mode": sizing_mode,
                    "price_freshness": price_freshness}
-    # 持仓恒列入 S1: 注入"持仓 ∖ top-N"(Tier 路由 / 价格门旁路 / 不扩语义);选股、引擎决策、user-stop 不变。
+    # 持仓恒列入 S1 + 语义(4.2 S2): 注入"持仓 ∖ top-N"(Tier 路由 / 价格门旁路 / 语义经持仓 provider 注入 advisory);选股、引擎决策、user-stop 不变。
     holding_normalized, holding_meta, holdings_manual_review = ([], {}, [])
     if args.account:
         cand_codes = {str(c.get("ts_code")) for c in cands}
+        # 4.2 S2: 持仓 semantic provider(全持仓覆盖,cap=持仓数 绕 Top15;real fetch 同候选 gated on --confirm + 未 --skip-semantic;
+        # 注入优先用于测试)。持仓涉真实持仓 → 结果走 weekly_private 私密路由(带 --account 自动私密,见 _reject_nonprivate_account_output_path)。
+        h_codes = sorted({str(p.get("ts_code")) for p in (acct.get("positions") or [])} - cand_codes)
+        if holding_semantic_provider is None and h_codes and args.confirm_fetch_authorized and not args.skip_semantic:
+            holding_semantic_provider = _build_cninfo_semantic_provider(
+                h_codes, args.as_of, args.cninfo_lookback_days, cap=len(h_codes))
+        if holding_web_llm_provider is None and h_codes and args.confirm_fetch_authorized and not args.skip_semantic:
+            h_names = {str(p.get("ts_code")): str(p.get("name") or "") for p in (acct.get("positions") or [])}
+            holding_web_llm_provider = _build_deepseek_web_llm_provider(
+                h_codes, h_names, args.as_of, args.web_news_lookback_days, cap=len(h_codes))
         holding_normalized, holding_meta, holdings_manual_review = _build_holdings(
             acct, cand_codes, args.as_of, price_provider, iv_pct, account, regime,
-            regime_fallback, price_data_through, iv_value=iv_value, hv_value=hv_value)
+            regime_fallback, price_data_through, iv_value=iv_value, hv_value=hv_value,
+            semantic_provider=holding_semantic_provider, web_llm_provider=holding_web_llm_provider)
     weekly = build_weekly_report(normalized + holding_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None))   # #3 全局现金分配仅 sized 模式

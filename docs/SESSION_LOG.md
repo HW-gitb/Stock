@@ -8,6 +8,52 @@
 
 ---
 
+## 2026-06-17 — Codex re-`审查 PASS` (R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT)
+- **Verdict/Action**: PASS. S2 持仓语义这次闭合了:TopN 持仓不再被语义直接否决;>15 持仓官方语义 provider 不再二次截断;official unknown / invalid web 不再写成「语义已核查」。大白话:该提示的提示,该说没查清的说没查清。
+- **Required**: `R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源),风险项仍等用户 `提交` 后才算闭环。
+- **Verify**: Codex probes confirmed provider cap output covers code[15]/code[-1], candidate default still Top15, held TopN official/web stay `持有`, new-entry official still `否决`, official unknown + invalid web render unchecked. Related 366 OK; doc+route 30 OK; full unittest 2226 OK with local no-network `tushare`/`requests` stubs; py_compile OK; no BOM/FFFD; `git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `提交` reviewed S2 tracked files;继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT — residual 2)
+- **Verdict/Action**: Codex re-审查又 FAIL 对(上轮 residual 又漏两连带)。F1(provider cap): cap 传到 fetch,但 build_summary_from_fetches 内部又 main_board_top15 默认 15(Top15-bound 契约)→ 持仓 >15 第 16+ provider=None;上轮测试只验 fetcher 看到 20、没验 output。修: 持仓按 Top15 分批调 build_summary_from_fetches 合并(候选单批不变)。F2(判据不一致): render `_has_semantic` 精确化了,engine build_holding 文本仍用 has_semantic_input → official unknown 时 engine「已核查」render「未核查」矛盾。修: engine 文本改 `sem_checked`(=render 同一判据)。详见 register。
+- **Required**: `R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT` — residual2 closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: cap 测试改为验 provider output 覆盖 codes[15]/codes[-1] 非 None(候选默认 codes[-1]=None);加 official unknown engine 文本无「语义已核查」测试;全量 **2226 OK**(零回归);holdings+gap 87 OK;doc+route 30 OK;py_compile OK;无 BOM;diff 干净。
+- **Next**: 审查(Codex re-审查 S2,据 working tree)。
+- **Pre-Codex self-review**: A provider output 覆盖(非 fetcher)+ 候选 Top15 不变 + official unknown engine 文本各配测。B 分批复用 build_summary_from_fetches(每批 batch-anomaly,不碰 Top15 契约);sem_checked == render _has_semantic 同一判据;trace gated has_semantic_input 不变(render 精确判);web provider 无二次截断。C clear/risk 仍已核查、unknown 显未核查、候选 cap 行为不变。D N-A。E register/SESSION_LOG 单态。F engine+render 判据统一。
+
+## 2026-06-17 — Codex re-`审查 FAIL` (R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT)
+- **Verdict/Action**: FAIL. 前一轮修复补了“TopN 持仓不被语义直接否决”，但又漏了两个边界:官方语义持仓数 >15 时会二次截断,第 16 只以后拿不到语义;official unknown 时会同时写“语义已核查”和“未核查”。大白话:有些持仓还是会漏查,有些未知结果会被说成查过了。
+- **Required**: `R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT` — 继续 open;完整 finding / 修复要求见 `docs/system_risk_register.md`。
+- **Verify**: Codex probes confirmed cninfo holding provider fetches 20 but returns only 15; official `unknown` holding report contains both `语义已核查` and S1 unchecked text. Positive probes confirmed held TopN official/web now stay `持有` with holding impact. Related 365 OK; doc+route 30 OK; py_compile OK; no BOM/FFFD; `git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `修复` this Required;继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT — residual)
+- **Verdict/Action**: Codex re-审查 FAIL 对(上轮修复引入反向残留):`build_m67_report` 对所有行恒写 semantic_risk,持仓无 semantic 输入时 trace 全 unknown;上轮 `_has_semantic` 只判 trace 存在 → Tier-2 持仓无语义误标「已核查」不显 S1(违反 no-semantic-must-show-unchecked);且 `_render_holdings_section` 用 `_semantic_line` 非空(非 `_has_semantic`)→ unknown trace 仍显 semantic 行。修: `_has_semantic` 精确化(official_status 或 web_llm.status 任一非 unknown 才算已核查)+ holdings section 统一用 `_has_semantic`(与 coverage label 口径一致)。详见 register。
+- **Required**: `R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT` — residual closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 新增 Tier-2 unknown-trace 测试(unknown→未核查+S1);全量 **2225 OK**(零回归);holdings 33 OK;doc+route-doc 30 OK;py_compile OK;无 BOM;diff 干净。
+- **Next**: 审查(Codex re-审查 S2,据 working tree)。
+- **Pre-Codex self-review**: A unknown-trace/真语义/无 trace 各配测;coverage label + holdings section + _card_field 口径统一(都 _has_semantic)。B `_has_semantic` = render semantic-checked 单一判据;build_m67 候选 trace 不变(候选不在 holdings section)。C 真跑语义(official/web 非 unknown)仍显已核查、unknown/无 trace 显未核查。D N-A。E register/SESSION_LOG 单态。F unknown 不当已核查。
+
+## 2026-06-17 — Claude `修复` (R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT)
+- **Verdict/Action**: 判定 Codex 两 finding 全对。F1(scope): S2 漏了持仓在 TopN(走 build_m67)——official high 在 has_position 分支前进 fam hard veto → 持仓被否决。修: semantic hard_veto/downgrade 只对候选(`and not has_position`)、op_impacts scope 依 has_position(持仓→existing_holding 不依 builder)+ 持仓 advice 抽 `_semantic_holding_lines` 共用。F2(render): 已跑语义持仓仍标「未核查(S1)」。修: `_has_semantic`→「语义已核查」+ Tier-3 不 mask + holdings 显 `_semantic_line`。production hard 持仓仍否决(只动 semantic scope)。详见 register。
+- **Required**: `R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 复现 Codex 两 probe:held TopN official→持有/clear_review(不否决)、held TopN web→hold_watch(gap_registry 改 held 测试 + 2);render 3 测(Tier-2/Tier-3 semantic-checked 显状态不显 S1 / 无语义仍 S1);全量 **2224 OK**(零回归);doc+route-doc 30 OK;py_compile OK;无 BOM;diff 干净。
+- **Next**: 审查(Codex re-审查 S2,据 working tree)。
+- **Pre-Codex self-review**: A held×official/web + 候选不变 + render Tier-2/3/无语义各配测。B `_semantic_holding_lines` 共用;holder_reduction 持仓仍 not-emit(held+reduce 仍否决,2224 证);`_semantic_line` 复用。C 候选仍否决、production hard 持仓仍否决、无语义 S1 兼容。D N-A。E register/SESSION_LOG 单态。F scope 依 has_position 不依 builder。
+
+## 2026-06-17 — Codex `审查 FAIL` (R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT)
+- **Verdict/Action**: FAIL. 4.2 S2 只覆盖了“非 TopN 注入持仓”路径;已有持仓如果本周也在 TopN,仍走候选路径,official high 会把 `操作` 变成 `否决`。同时 render 仍把已跑语义的持仓标成“语义未核查(S1)”。大白话:有些持仓明明应该是“持有+清仓复核建议”,现在会显示成“否决”,或者一边说已核查一边又说未核查。
+- **Required**: `R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT` — 完整风险、边界、修复要求见 `docs/system_risk_register.md`。
+- **Verify**: Codex probe confirmed held TopN + official high -> `操作=否决`, `hard_veto` 非空, `operation_impact=null`, validator still PASS; held TopN + web risk -> `operation_impact=null`; semantic-checked injected holding coverage label still says `语义未核查`。相关四套 339 OK; doc-governance+route-doc 30 OK; py_compile OK。
+- **Next**: Claude `修复` this Required;继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `起草` (4.2 S2: 持仓 semantic 数据接入 + holding_row_impact emit)
+- **Verdict/Action**: 起草 4.2 S2(用户认可:让持仓真抓 cninfo/web 语义,零新取数/真 fetch gated --confirm)。① 抽 `_consume_semantic`(official fail-closed + web 中性化派生信号 + trace 单一来源),build_m67 改用它(候选零漂移,全量等价)——消除候选/持仓两份 semantic 校验漂移。② `build_holding_report` 接 semantic→`_semantic_operation_impacts(existing_holding)` 发 holding_row_impact(official high→clear_review/web→hold_watch、blocked_add、pending S3b、private_account)+文本(tag+禁止加仓+清仓复核)+trace;**action 恒持有(不否决/不自动卖出,减仓价 S3b)**;无 semantic→S1 兼容(零 impact/未核查/无 trace)。③ provider 工厂加 cap,持仓 cap=持仓数全覆盖(绕候选 Top15);`_build_holdings`/main 接持仓 provider。④ 私密复用第2轮(private_account+weekly_private)。web/LLM 永 advisory-only 绝不 hard_veto。
+- **Required**: none(干净起草;S3b 减仓价/主动管理为后续,需用户批准)。
+- **Verify**: HoldingSemanticS2Tests 5(official/web/none/pending/no-hard-veto)+ BuildHoldingsTests +2(provider→normalize 端到端 / cap 全覆盖 vs 默认 Top15);全量 **2220 OK**(2213+7,零回归;build_m67 重构等价);doc-governance+route-doc 30 OK;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex 独立审 4.2 S2,据 working tree)。
+- **Pre-Codex self-review**: A 出口:候选/持仓×official/web/none/pending + provider cap + 端到端各配测试。B ripple:`_consume_semantic` 抽取后 build_m67 重构(全量 2220 证零 stale 引用/零漂移);candidate provider 不传 cap 仍 Top15(测);build_holding/_build_holdings docstring + main 「不扩语义」注释已同步。C 反向:合法持仓 semantic 仍过、S1 无-semantic 零变、持仓 semantic 不误翻否决。D N-A。E 起草 transient 只进 SESSION_LOG。F PIT(disclosure_date≤as_of)、provider cap>0、web advisory-only、私密 private_account。
+
 ## 2026-06-17 — Codex re-`审查 PASS` (R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP)
 - **Verdict/Action**: PASS. Claude 接管后的 semantic advisory guard 已把上轮 3 个洞补上:语义来源现在一律不能生产生效,official high 必须保持 `m67_advisory_veto`,web/LLM 仍只能 advisory、不能 hard_veto。大白话:这次“语义只参考”已经被护栏拦住了,再改成生产硬否决会报错。
 - **Required**: `R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源),风险项仍等用户 `提交` 后才算闭环。

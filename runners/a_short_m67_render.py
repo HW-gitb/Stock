@@ -76,13 +76,26 @@ def _holding_state(report: dict):
 _HOLDING_SOURCES = ("account_position_egs_full", "account_position_only")
 
 
+def _has_semantic(report: dict) -> bool:
+    """4.2 S2: 该持仓本周是否**真跑过语义**(非中性 trace)。`build_m67_report` 对所有行恒写 semantic_risk
+    (候选行有意义),持仓无 semantic 输入时 trace 全 unknown → **不算已核查**(否则把"没核查"误标"已核查",
+    违反 no-semantic-must-show-unchecked,R-...-S2-...-RENDER-DRIFT 残留);已核查 = official_status 或
+    web_llm.status 任一非 unknown(核查了,无论 clear/risk)。已跑 → 显 S2 状态、不标 S1;未跑(无 trace / 全 unknown)→ 仍标未核查。"""
+    sr = ((report.get("machine") or {}).get("layer") or {}).get("semantic_risk") or {}
+    if not sr:
+        return False
+    return (sr.get("official_status", "unknown") != "unknown"
+            or (sr.get("web_llm") or {}).get("status", "unknown") != "unknown")
+
+
 def _coverage_label(report: dict) -> str:
     src = report.get("row_source")
+    _sem = "语义已核查" if _has_semantic(report) else "语义未核查"
     # S1:所有注入持仓的语义/新闻层都未跑 → 标签必带"语义未核查";Tier-2 vs Tier-3 的区别在 EGS 维度。
     if src == "account_position_egs_full":
-        return "复用egs_full·语义未核查"
+        return f"复用egs_full·{_sem}"
     if src == "account_position_only":
-        return "EGS未覆盖(粗筛)·语义未核查"
+        return f"EGS未覆盖(粗筛)·{_sem}"
     if src == "egs_candidate_with_position":
         return "EGS候选·已持仓"
     return report.get("coverage_status") or "本周EGS"
@@ -95,6 +108,9 @@ def _card_field(report: dict, key: str) -> str:
     (语义未核查另由专门一行标,见 _render_holdings_section);候选不受影响。"""
     val = report["m67"]["精简结论区"].get(key, "")
     if report.get("row_source") == "account_position_only" and key in ("否决审查触发", "板块资金事件"):
+        # S2: 已跑语义的持仓,否决审查触发 含真实语义警告 → 不 mask(否则藏住 S2 警告);板块资金事件仍是 EGS 维度,保持未核查。
+        if key == "否决审查触发" and _has_semantic(report):
+            return val
         return "未核查(本周 EGS 粗筛未覆盖,请人工核查 ST/新闻/监管)"
     return val
 
@@ -126,9 +142,13 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
                 out.append(f"- 持仓/冷静:{hs_label}" + (f"（{hs_reason}）" if hs_reason else ""))
             if r.get("row_source") == "account_position_only":   # Tier-3:EGS 维度也未覆盖
                 out.append("- ⚠️ **EGS 未覆盖**:本周该持仓未进 EGS 评分集(粗筛排除),EGS 量化分/赛道未自动核查。")
-            # S1 对**所有**注入持仓(含 Tier-2 复用 egs_full 的):语义/新闻/监管层**都未跑**(S2 接入)→ 必须
-            # 显式标,绝不让缺失语义被读成"无利空 / 已核查"(R-...-SEMANTIC-UNCHECKED-MISRENDERED-CLEAR)。
-            out.append("- ⚠️ **语义/新闻未核查(S1)**:本周未对该持仓自动核查 ST / 重大利空 / 监管 / 减持;请人工核查(S2 接入)。")
+            # S2: **真跑过语义**(_has_semantic: trace 非全 unknown)→ 显 S2 语义状态行(从 trace 渲染);未跑(无 trace / 全
+            # unknown)→ 仍显式标未核查,绝不让缺失语义被读成"无利空 / 已核查"。用 _has_semantic(非 _semantic_line 非空)与
+            # coverage label 口径一致:build_m67 对持仓恒写 unknown trace,_semantic_line 对它非空,会误显已核查(R-...-S2-RENDER-DRIFT)。
+            if _has_semantic(r):
+                out.append(_semantic_line(r))
+            else:
+                out.append("- ⚠️ **语义/新闻未核查(S1)**:本周未对该持仓自动核查 ST / 重大利空 / 监管 / 减持;请人工核查(S2 接入)。")
             if r.get("consistency_warning"):
                 out.append(f"- ⚠️ 对账(4.3-D):{r['consistency_warning']}")
             out.append(f"- 执行清单(系统位):损 {_cell(t['损'])} / 盈一 {_cell(t['盈一'])} / 盈二 {_cell(t['盈二'])}"
