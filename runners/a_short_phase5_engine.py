@@ -1037,6 +1037,11 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
     报告级(存在该类 impact 时):
     ⑨【第3轮】任一 m67_advisory_veto ⟹ 否决审查触发/操作建议 含 ADVISORY_VETO_TAG(advisory 否决须显式标非生产,与生产硬否决物理区分);
     ⑩【第3轮】任一 blocked_add_required==True ⟹ 操作建议/风控触发 含「禁止加仓」(独立旗标必用户可见,不被其它处置吞掉)。
+    ⑪【4.2 forward_events】source_field=='forward_event_limit_unlock' ⟹ 永久 analysis-only:field_class=='structured'、
+      production_effect_enabled is False、veto_class=='none'、new_entry_effect!='hard_veto'、holding_effect∈{none,hold_watch}
+      (source-class 级绑定,防篡改 veto_class/effect 伪装生产硬否决;呼应 semantic-isolation ⑧)。
+    ⑫【4.2 forward_events ADVICE-LANDING】任一 forward_event_limit_unlock impact ⟹ 操作建议含未来事件提示「未来已知事件」
+      (候选/持仓不得仍像干净建仓——未来事件须落用户主看的操作建议,不只风控触发;字面同步 pipeline _FORWARD_EVENT_MARKER)。
     operation_impact 可选(缺省=无 impact)→ no-op,向后兼容。"""
     mc = report.get("machine") or {}
     impacts = mc.get("operation_impact")
@@ -1091,12 +1096,31 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
             if imp.get("source_field") == "semantic_web_llm" and (
                     imp.get("veto_class") != "none" or imp.get("new_entry_effect") == "hard_veto"):
                 raise ValueError(f"operation_impact {sf} semantic_web_llm 必须 veto_class=none 且非 hard_veto(web/LLM 永久 advisory-only)")
+        # ⑪ forward_event 来源(source_field=='forward_event_limit_unlock')= 永久 analysis-only(4.2 forward_events 第1刀:
+        #   不改决策、绝不 hard_veto/rescue)。source-class 级绑定(不按 veto_class 分支,防"篡改 veto_class/effect 伪装生产硬否决"):
+        #   field_class 必 structured、production_effect_enabled 必 False、veto_class 必 none、new_entry_effect 非 hard_veto、
+        #   holding_effect ∈ {none, hold_watch}。单一 block = 未来 forward_event 不变式只在此处。
+        if str(imp.get("source_field", "")) == "forward_event_limit_unlock":
+            if imp.get("field_class") != "structured":
+                raise ValueError(f"operation_impact {sf} forward_event 必须 field_class=structured")
+            if imp.get("production_effect_enabled") is not False:
+                raise ValueError(f"operation_impact {sf} forward_event 必须 production_effect_enabled=false(永久 analysis-only)")
+            if imp.get("veto_class") != "none":
+                raise ValueError(f"operation_impact {sf} forward_event 必须 veto_class=none(绝不否决/救回)")
+            if imp.get("new_entry_effect") == "hard_veto":
+                raise ValueError(f"operation_impact {sf} forward_event 不得 new_entry_effect=hard_veto")
+            if imp.get("holding_effect") not in ("none", "hold_watch"):
+                raise ValueError(f"operation_impact {sf} forward_event holding_effect={imp.get('holding_effect')!r} 越界(只允许 none/hold_watch)")
     if any(imp.get("veto_class") == "m67_advisory_veto" for imp in impacts) and (
             ADVISORY_VETO_TAG not in veto_text and ADVISORY_VETO_TAG not in advice_text):
         raise ValueError(f"存在 m67_advisory_veto 但 否决审查触发/操作建议 未标「{ADVISORY_VETO_TAG}」(advisory 否决须显式标非生产)")
     if any(imp.get("blocked_add_required") for imp in impacts) and (
             "禁止加仓" not in (advice_text + risk_text) and "禁止自动加仓" not in (advice_text + risk_text)):
         raise ValueError("存在 blocked_add_required=true 但 操作建议/风控触发 未显示禁止加仓(独立旗标必用户可见)")
+    # ⑫ ADVICE-LANDING(R-...-ADVICE-LANDING-GAP):任一 forward_event 落地 ⟹ 操作建议含未来事件提示(候选/持仓不得仍像干净建仓;
+    #   未来事件须落用户主看的操作建议,不只风控触发)。字面「未来已知事件」同步 pipeline _FORWARD_EVENT_MARKER。
+    if any(imp.get("source_field") == "forward_event_limit_unlock" for imp in impacts) and "未来已知事件" not in advice_text:
+        raise ValueError("存在 forward_event_limit_unlock 但 操作建议未含未来事件提示「未来已知事件」(候选/持仓不得仍像干净建仓)")
 
 
 def validate_m67_consistency(report: dict) -> None:

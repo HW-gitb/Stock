@@ -249,6 +249,25 @@ def render_weekly_markdown(weekly: dict) -> str:
         out += ["", "## ⚠️ 除权除息提示(advisory · 非决策:价已前复权,提醒未复权市价/成本将在除权日跳变)",
                 "| 票 | 名称 | 除权日 | 距今(日) |", "|---|---|---|---|"]
         out += [f"| {n['ts_code']} | {n['name']} | {n['ex_date']} | {n['days_to_ex']} |" for n in _notices]
+    # 4.2 forward_events 第1刀: 未来已知事件日历(advisory · analysis-only · 不改决策)。unknown-not-clear: status=unknown → 显未核查/不可得,不当无事件。
+    _ue = weekly.get("upcoming_events")
+    if _ue:
+        if _ue.get("status") == "checked":
+            _uevs = _ue.get("events") or []
+            out += ["", "## 📅 未来已知事件日历(advisory · analysis-only · 不改决策)"]
+            if _uevs:
+                out += ["| 票 | 名称 | 事件 | 事件日 | 距今(日) | 公告日(PIT) | 建议 | 来源 |", "|---|---|---|---|---|---|---|---|"]
+                out += [f"| {e['ts_code']} | {e['name']} | {e['event_type']} | {e['event_date']} | {e['days_to_event']} | {e['observed_at']} | {e['expected_effect']} | {e['source_id']} |"
+                        for e in _uevs]
+            else:
+                out.append("> 本周已查:候选/持仓近端无已公告的未来事件。")
+            _unck = _ue.get("unchecked_codes") or []
+            if _unck:                                  # per-code unknown-not-clear:部分票取数失败,显式标未核查(绝不当无事件)
+                out.append(f"> ⚠️ 另有 {len(_unck)} 只未能核查未来事件(数据缺失/取数失败),**不代表无未来事件**,请人工核查:"
+                           + "、".join(f"{u['ts_code']}{u['name']}" for u in _unck))
+        else:
+            out += ["", "## 📅 未来已知事件日历",
+                    "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到未来事件日历(provider 未授权/不可用);**不代表无未来事件**,请人工核查解禁/财报等。"]
     # 4.2 Round2 上游过滤批次级摘要(无 M6.7 个股行,仅计数,不含个股/持仓 → public)
     _excl = weekly.get("exclusion_summary")
     if _excl:

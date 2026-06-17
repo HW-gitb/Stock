@@ -8,6 +8,64 @@
 
 ---
 
+## 2026-06-17 — Codex re-`审查 PASS` (R-ASHORT-GAP42-FORWARD-EVENTS-ADVICE-LANDING-GAP)
+- **Verdict/Action**: PASS. `ADVICE-LANDING` 已闭合:候选/持仓有 forward event 时,`操作建议` 会显示「未来已知事件」和人工复核/观察提示;删掉该提示会被 guard 拒;`table.操作` 和 EGS 不变。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-ADVICE-LANDING-GAP` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源),风险项仍等用户 `提交` 后才算闭环。
+- **Verify**: Codex probes confirmed candidate advice has marker+人工复核,旧建议保留,Markdown 可见,write passes;removed-marker write/direct guard both reject;held advice keeps marker+禁止自动加仓。UpcomingEvents+ForwardEventRowLanding 37 OK;weekly pipeline 185 OK with local `tushare` stub;doc+route 30 OK;full unittest 2263 OK with in-memory no-network `requests`/`tushare` stubs;py_compile OK;no BOM/FFFD;`git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `提交` reviewed forward_events tracked files;继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (R-ASHORT-GAP42-FORWARD-EVENTS-ADVICE-LANDING-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 对(事件落了风控触发+机器 operation_impact,但用户主看的 操作建议 仍像干净建仓——漏第三落地面)。_attach 候选+持仓都 append 操作建议 advisory(含「未来已知事件」marker);engine 加报告级 ⑫ guard(forward_event impact ⟹ 操作建议含 marker);table 操作不变;render 自动显示(不改)。详见 register。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-ADVICE-LANDING-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 新 4 测(候选 advice 落地+操作不变+原建议保留·持仓 advice·⑫ guard 拒抹除·render Markdown 可见)+ 既有 forward 全过(91 targeted);全量 **2263 OK**(零回归);doc+route 30 OK;py_compile OK;diff clean。
+- **Next**: 审查(Codex re-审查 advice landing)。
+- **Pre-Codex self-review**: A 候选/持仓 advice 落地+操作不变+原建议保留(append 非覆盖,建仓护栏/价格区间不破)+guard 拒抹除+render 可见 各配测。B grep forward_event_limit_unlock 测试面无手动构造(都经 _attach 写 marker)→⑫ 不破坏现有;_FORWARD_EVENT_MARKER 单一来源、engine 字面同步。C 操作/EGS 不变·marker 不伪造。D N-A。E 单态。F engine ⑫ 呼应 ⑨⑩·held S3b 不冲突(advice 非减仓价)。
+
+## 2026-06-17 — Codex re-`审查 FAIL` (forward_events 操作建议落地)
+- **Verdict/Action**: FAIL. 上轮 3 个旧洞已补住:逐票落地会拒悬空、部分失败会列 `unchecked_codes`、forward_event 篡改成生产硬否决会被拒。但新发现 1 个漏口:候选股有近端解禁时,机器里是 `manual_review`,用户看到的 **操作建议** 仍是原来的建仓建议,只在 **风控触发** 提到事件。4.2 明确要求未来事件落到 `upcoming_events`、`风控触发`、`操作建议`。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-ADVICE-LANDING-GAP` — detail 见 `docs/system_risk_register.md`。
+- **Verify**: Desktop 4.2 lines 258-281/741/770 reviewed; Codex probe confirmed candidate row: `operation_impact.new_entry_effect=manual_review`, `风控触发` 有 `limit_unlock`,但 Markdown 标题/主表仍 `建仓` 且 `操作建议` 无未来事件/人工复核字样;旧 3 项 probes confirmed fixed; UpcomingEvents+ForwardEventRowLanding 33 OK; doc+route 30 OK; full unittest 2259 OK with in-memory no-network `requests`/`tushare` stubs; py_compile OK; `git diff --check` clean(CRLF warnings only); no BOM/FFFD。
+- **Next**: Claude `修复` Required;继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (forward_events 3 Required: ROW-LANDING 扩展 + PARTIAL-UNKNOWN + SOURCE-GUARD)
+- **Verdict/Action**: 判定 Codex full FAIL 3 项全对,一次修齐:①ROW-LANDING 扩展(manual_review append reason + validator 写时强制每 checked event 必落逐票,不靠 main 顺序)②PARTIAL-UNKNOWN(部分票失败→unchecked_codes,不当无事件)③SOURCE-GUARD(engine forward_event isolation ⑪)。详见 register。
+- **Required**: 3 个(ROW-LANDING / PARTIAL-UNKNOWN / SOURCE-GUARD)— closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 新 6 测(builder partial 有/空 event 各标 unchecked·schema+validator 接受 unchecked/拒外码·validator 拒未落地候选/持仓·source-guard 5 项篡改逐拒)+ 既有 forward 测全过(87 targeted);全量 **2259 OK**(零回归);doc+route 30 OK;py_compile OK;diff --check clean。
+- **Next**: 审查(Codex re-审查 3 项)。
+- **Pre-Codex self-review**: A 三缺陷×出口(落地强制 reports+manual_review·partial 有/空/全失败/外码·source-guard 5 项)各配测。B 落地强制=新契约→grep 全测面:仅正向 schema_accept 补 _attach,负向测循环内先 raise,main 无 provider→unknown 不触发;_FORWARD_EVENT_MARKER 单一来源。C 操作/EGS 不变·篡改全拒。D N-A。E 单态。F engine ⑪ 呼应 semantic ⑧·unchecked 可选向后兼容。
+
+## 2026-06-17 — Codex full `审查 FAIL` (4.2 forward_events complete review)
+- **Verdict/Action**: FAIL. 设计方向合理(analysis-only、不改 EGS/TopN),但实现仍有 3 个漏洞:人工复核持仓漏落地、部分取数失败会误写已查无事件、forward_event 可被篡改成生产硬否决仍过校验。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-ROW-LANDING-GUARD-GAP`; `R-ASHORT-GAP42-FORWARD-EVENTS-PARTIAL-UNKNOWN-GAP`; `R-ASHORT-GAP42-FORWARD-EVENTS-SOURCE-GUARD-GAP` — detail 见 `docs/system_risk_register.md`。
+- **Verify**: Desktop 4.2 forward_events refs reviewed; probes reproduced 3 gaps; UpcomingEvents+ForwardEventRowLanding 26 OK; doc+route 30 OK; full unittest 2253 OK with no-network stubs; py_compile OK; `git diff --check` clean(CRLF only)。
+- **Next**: Claude `修复` Required;继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Codex re-`审查 FAIL` (R-ASHORT-GAP42-FORWARD-EVENTS-ROW-LANDING-GUARD-GAP)
+- **Verdict/Action**: FAIL. 修复补了正式 `reports[]` 行落地,但漏了 `holdings_manual_review` 里的持仓:事件被 validator 接受,却不写入该持仓自己的提示,仍只剩全局表。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-ROW-LANDING-GUARD-GAP` — residual detail 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: UpcomingEvents+ForwardEventRowLanding 26 OK; manual-review-only holding probe reproduced gap; doc+route 30 OK; full unittest 2252 OK with no-network stubs; py_compile OK; `git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `修复` Required;继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (R-ASHORT-GAP42-FORWARD-EVENTS-ROW-LANDING-GUARD-GAP + 自检#1)
+- **Verdict/Action**: 判定 Codex FAIL 对(forward_events 只 weekly-global、漏 per-stock M6.7 行——起草范围误判)。修 row landing: 新 `_attach_forward_event_impacts`(main upcoming build 后)按 ts_code 落对应 report operation_impact(候选→manual_review/持仓→hold_watch+blocked_add)+ 风控触发文本;analysis-only(veto none/非生产/不改 操作·EGS·选股/不 rescue);status!=checked 不落。另带自检#1:`_fetch_unlocks` 失败→None 区别真无 []、全没查成→unknown。详见 register。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-ROW-LANDING-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: ForwardEventRowLandingTests 5(候选落地+no-EGS-change / 持仓 holding+blocked_add / no-hard-veto-rescue / unknown 不落 / 外码不落)+ UpcomingEvents 21(含自检#1);全量 **2252 OK**(零回归);doc+route 30 OK;py_compile OK;无 BOM;diff 干净。
+- **Next**: 审查(Codex re-审查 forward_events row landing + #1)。
+- **Pre-Codex self-review**: A 候选/持仓落地+no-EGS-change+no-rescue+unknown/外码不落+row no-dangling+自检#1 各配测。B `_attach` 后处理不重构 build;forward_event 过 validate_operation_impact_no_dangling;非 semantic_→isolation 不触发;不碰 egs。C 操作/EGS 不变、unknown 不伪造、合法过。D N-A。E 单态。F PIT、analysis-only、§4.4 effect。
+
+## 2026-06-17 — Codex `审查 FAIL` (4.2 forward_events 第1刀: upcoming_events + unlocks)
+- **Verdict/Action**: FAIL. 解禁日历能进周报全局区,但没有落到对应股票的 M6.7 风险/操作建议里;4.2.md 要求的 row no-dangling / no-EGS-TopN-change / no-hard-veto-rescue 守护也没补齐。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-ROW-LANDING-GUARD-GAP` — full detail in `docs/system_risk_register.md`.
+- **Verify**: Codex probe:合法 `limit_unlock` 事件通过 validator,但 600000.SH 行 `operation_impact=[]`、无解禁/upcoming 文本、`风控触发=无`、`操作=建仓`; UpcomingEvents 19 OK; weekly suite 167 OK with local `tushare` stub; doc+route 30 OK; full unittest 2245 OK with local no-network `tushare`/`requests` stubs; py_compile OK; `git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `修复` Required;继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `起草` (4.2 forward_events 第1刀: upcoming_events 框架 + 限售解禁)
+- **Verdict/Action**: 起草 forward_events 第1刀(§4.4,「框架+解禁」先行,财报预约留第2刀)。analysis-only weekly-global advisory(照 ex_div_notices 模板,不进 operation_impact / 不改 EGS·TopN·动作 / production_effect_enabled=false)。① weekly schema 加性可选 `upcoming_events`(as_of/status/events[ts_code·name·event_type·event_date·observed_at·source_id·expected_effect·confidence·days_to_event]);② `_upcoming_events` builder(PIT:observed_at≤as_of、as_of≤event_date≤as_of+21、每票取最近、非法/缺日期跳过;**unknown-not-clear**:provider None→status=unknown_or_unavailable 绝不当无事件;查了无近端→checked+空)+ `_fetch_unlocks`(pro.share_float 带 ann_date 做 PIT,fail-closed 缺列→[]);③ render「未来事件日历」区(checked 列事件/unknown 显未核查);④ validator(张冠李戴/event_date≥as_of/observed_at≤as_of PIT/days 一致/window);⑤ main 接 unlock_provider(--confirm injection)恒 set。window=21 常量(§4.4 prior,未来 governance)。除权除息保留现状、指数纳入 defer、股东大会 drop。
+- **Required**: none(干净起草;财报预约披露=第2刀[需 --confirm 验 pro.disclosure_date];指数纳入/股东大会 defer/drop)。
+- **Verify**: UpcomingEventsTests **19 OK**(builder PIT 6 态/unknown / schema+validator 6 拒 / render checked·unknown·空 / fetcher fail-closed);全量 **2245 OK**(零回归);doc+route 30 OK;py_compile OK;无 BOM;diff 干净。
+- **Next**: 审查(Codex 独立审 forward_events 第1刀)。
+- **Pre-Codex self-review**: A builder×(None/event/look-ahead/超窗/过去/缺ann/最近)+ validator×(unknown带events/张冠李戴/observed>as_of/event<as_of/days/窗)+ render×(checked/unknown/空)+ fetcher fail-closed 各配测。B 照 ex_div_notices 模板同模式;`_fetch_unlocks` 独立 egs_main get_unlock_future(自取 ann_date);main 恒 set upcoming_events 不破现有(2245 证);不碰 egs_main/选股。C unknown vs checked+空 区分(没查≠查了无事件)、合法事件过、缺省兼容。D N-A。E 起草 transient 只进 SESSION_LOG。F PIT 双层(builder+validator)、fail-closed、window 常量标 prior、analysis-only(production_effect_enabled=false)、主板。
+
 ## 2026-06-17 — Codex re-`审查 PASS` (R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT)
 - **Verdict/Action**: PASS. S2 持仓语义这次闭合了:TopN 持仓不再被语义直接否决;>15 持仓官方语义 provider 不再二次截断;official unknown / invalid web 不再写成「语义已核查」。大白话:该提示的提示,该说没查清的说没查清。
 - **Required**: `R-ASHORT-GAP42-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源),风险项仍等用户 `提交` 后才算闭环。

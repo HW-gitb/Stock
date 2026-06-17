@@ -579,6 +579,50 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
             raise ValueError(f"ex_div_notices days_to_ex 与 ex_date−as_of 不一致({n['ts_code']})")
         if _days > EX_DIV_WINDOW_DAYS:
             raise ValueError(f"ex_div_notices 超出 {EX_DIV_WINDOW_DAYS} 日窗口(days_to_ex={_days};{n['ts_code']})")
+    # 4.2 forward_events upcoming_events 一致性(advisory analysis-only;schema 管类型/pattern/enum,此处管历法+跨字段+PIT+范围+张冠李戴):
+    # unknown_or_unavailable 必空 events;checked 每 event: ts_code∈候选/持仓、event_date 合法且 >=as_of、observed_at<=as_of(PIT)、
+    # days_to_event==event_date−as_of、days_to_event<=window。复用上面的 _asd/_valid_codes/_dt。
+    _ue = weekly.get("upcoming_events")
+    if _ue is not None:
+        if _ue.get("as_of") != weekly["as_of"]:
+            raise ValueError(f"upcoming_events.as_of {_ue.get('as_of')} != 周报 as_of {weekly['as_of']}")
+        _uevs = _ue.get("events") or []
+        if _ue.get("status") == "unknown_or_unavailable" and _uevs:
+            raise ValueError("upcoming_events status=unknown_or_unavailable 却带 events(unknown 不得带事件)")
+        for _e in _uevs:
+            if _e["ts_code"] not in _valid_codes:
+                raise ValueError(f"upcoming_events ts_code {_e['ts_code']} 不在本周候选/持仓集(张冠李戴)")
+            try:
+                _evd = _dt.strptime(_e["event_date"], "%Y%m%d")
+                _obs = _dt.strptime(_e["observed_at"], "%Y%m%d")
+            except ValueError:
+                raise ValueError(f"upcoming_events event_date/observed_at 非合法日历日({_e['ts_code']})")
+            if _obs > _asd:
+                raise ValueError(f"upcoming_events observed_at 晚于 as_of(非 PIT/look-ahead;{_e['ts_code']})")
+            _ed = (_evd - _asd).days
+            if _ed < 0:
+                raise ValueError(f"upcoming_events event_date 早于 as_of({_e['ts_code']})")
+            if _ed != _e["days_to_event"]:
+                raise ValueError(f"upcoming_events days_to_event 与 event_date−as_of 不一致({_e['ts_code']})")
+            if _ed > FORWARD_EVENT_WINDOW_DAYS:
+                raise ValueError(f"upcoming_events 超出 {FORWARD_EVENT_WINDOW_DAYS} 日窗口(days_to_event={_ed};{_e['ts_code']})")
+        # row no-dangling(R-...-ROW-LANDING-GUARD-GAP):每个 checked event 必须真落到对应逐票面(消费者 validator 强制,不靠
+        # main() 调用顺序)——reports[] 行须有 forward_event_limit_unlock operation_impact;只在 manual_review 的票须 reason 含落地标记。
+        if _ue.get("status") == "checked":
+            _rep_by = {r["ts_code"]: r for r in weekly["reports"]}
+            _mr_by = {h["ts_code"]: h for h in (weekly.get("holdings_manual_review") or [])}
+            for _e in _uevs:
+                _rep = _rep_by.get(_e["ts_code"])
+                if _rep is not None:
+                    if not any(i.get("source_field") == "forward_event_limit_unlock"
+                               for i in ((_rep.get("machine") or {}).get("operation_impact") or [])):
+                        raise ValueError(f"upcoming_events event {_e['ts_code']} 未落到该 report 逐票 operation_impact(forward_event 悬空)")
+                elif _FORWARD_EVENT_MARKER not in str((_mr_by.get(_e["ts_code"]) or {}).get("reason", "")):
+                    raise ValueError(f"upcoming_events event {_e['ts_code']} 未落到 holdings_manual_review reason(forward_event 悬空)")
+        # per-code coverage(PARTIAL-UNKNOWN): unchecked_codes 的 ts_code 也须 ∈ 候选/持仓集(不张冠李戴)
+        for _uc in (_ue.get("unchecked_codes") or []):
+            if _uc["ts_code"] not in _valid_codes:
+                raise ValueError(f"upcoming_events unchecked_codes ts_code {_uc['ts_code']} 不在本周候选/持仓集")
 
 
 def _reject_production_output_path(out_path: str) -> None:
@@ -722,6 +766,148 @@ def _ex_div_notices(code_names, as_of, dividend_provider, window_days=EX_DIV_WIN
                     best[ts_code] = {"ts_code": ts_code, "name": name or "",
                                      "ex_date": str(ex), "days_to_ex": days}
     return sorted(best.values(), key=lambda n: (n["days_to_ex"], n["ts_code"]))
+
+
+FORWARD_EVENT_WINDOW_DAYS = 21   # 4.2 forward_events: as_of 起 N 个日历日内的已公告未来事件 → advisory 日历(§4.4 prior,未来进 governance)
+_FORWARD_EVENT_MARKER = "未来已知事件"   # holdings_manual_review reason 落地标记:_attach 写入 + validator 据此判 row no-dangling(单一来源,防文案漂移)
+
+
+def _upcoming_events(code_names, as_of, unlock_provider, window_days=FORWARD_EVENT_WINDOW_DAYS):
+    """4.2 forward_events 第1刀: 未来已知事件日历(analysis-only,**不改任何决策**;只进 M6.7 提示)。第1刀只做限售解禁。
+    PIT 安全: 只收 `observed_at`(ann_date)<=as_of(已公告,非 look-ahead) 且 `as_of<=event_date`(float_date)<=as_of+window
+    的事件;每票取最近一次。`unlock_provider(ts_code)` → list[{"ann_date","float_date"}](YYYYMMDD|None)。
+    **unknown-not-clear**: unlock_provider 为 None(没授权取数/不可用)→ status=`unknown_or_unavailable`(绝不当「无未来事件」);
+    全票取数失败(无一查成)→ 同 unknown;**部分票失败**→ status `checked` 但失败票进 `unchecked_codes`(per-code 粒度,绝不把没
+    查成的票当「无事件」);跑成但某票真无近端解禁 → 不计该票。非法/缺日期跳过(不伪造)。返回 {as_of,status,events[],unchecked_codes?}。"""
+    from datetime import datetime
+    if unlock_provider is None:
+        return {"as_of": str(as_of), "status": "unknown_or_unavailable", "events": []}
+    try:
+        as_of_d = datetime.strptime(str(as_of), "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"upcoming_events as_of {as_of!r} 非合法日历日")
+    best, any_ok, unchecked = {}, False, []
+    for ts_code, name in code_names:
+        try:
+            recs = unlock_provider(ts_code)
+        except Exception:
+            recs = None                               # 单票查询失败 → 未查成
+        if recs is None:
+            unchecked.append({"ts_code": ts_code, "name": name or ""})   # 未查成 → per-code unknown(不当无事件)
+            continue                                  # 不计 any_ok(区别于真无解禁的 [])
+        any_ok = True                                 # 该票查成(含真无解禁返回的空 list)
+        for rec in recs:
+            fd = (rec or {}).get("float_date")
+            ann = (rec or {}).get("ann_date")
+            if not fd or ann is None:
+                continue                              # 无解禁日/无公告日 → 无法 PIT 证明,跳过(不伪造)
+            try:
+                fd_d = datetime.strptime(str(fd), "%Y%m%d")
+                ann_d = datetime.strptime(str(ann), "%Y%m%d")
+            except ValueError:
+                continue                              # 非法日期 → 跳过
+            if ann_d > as_of_d:
+                continue                              # 公告晚于 as_of → look-ahead,跳过
+            days = (fd_d - as_of_d).days
+            if 0 <= days <= window_days:              # 近端将解禁(含当日)
+                if ts_code not in best or days < best[ts_code]["days_to_event"]:
+                    best[ts_code] = {"ts_code": ts_code, "name": name or "",
+                                     "event_type": "limit_unlock", "event_date": str(fd),
+                                     "observed_at": str(ann), "source_id": "tushare.share_float",
+                                     "expected_effect": "manual_review", "confidence": "high",
+                                     "days_to_event": days}
+    # unknown-not-clear(§4.4): provider 非 None 但**所有票都没查成**(取数全失败)→ unknown_or_unavailable,
+    # 绝不把「没查成」当「查了无未来事件」(只有真查成 — 含真无解禁的空 — 才 checked)。
+    if code_names and not any_ok:
+        return {"as_of": str(as_of), "status": "unknown_or_unavailable", "events": []}
+    events = sorted(best.values(), key=lambda e: (e["days_to_event"], e["ts_code"]))
+    out = {"as_of": str(as_of), "status": "checked", "events": events}
+    if unchecked:                                     # 部分票未查成(全失败已上面 return unknown)→ per-code coverage,绝不静默当无事件
+        out["unchecked_codes"] = unchecked
+    return out
+
+
+def _fetch_unlocks(pro, ts_code: str):
+    """4.2 forward_events 真解禁 provider: tushare `pro.share_float`(逐票未来解禁,**带公告日 ann_date 做 PIT** —— egs_main
+    的 get_unlock_future 只取 float_date 做二元过滤,不带 ann_date,故 forward 日历自取)→ [{"ann_date","float_date"}]
+    (YYYYMMDD|None)。**fail-closed**: 缺 ann_date/float_date 列 → [](无法 PIT,不伪造);异常/空 → [](旁路不阻断)。"""
+    try:
+        df = pro.share_float(ts_code=ts_code, fields="ts_code,ann_date,float_date,float_share,float_ratio")
+    except Exception:
+        return None                                   # 取数失败 → 未查成(区别于真无解禁的 [];builder 据此标 unknown)
+    if df is None:
+        return None                                   # provider 没返回 → 未查成
+    if not {"ann_date", "float_date"}.issubset(set(getattr(df, "columns", []))):
+        return None                                   # 缺 PIT 列(数据形态异常)→ 未查成(不静默当真无)
+    if getattr(df, "empty", True):
+        return []                                     # 成功返回空 → 该票真无未来解禁记录(查成了)
+    def _clean(v):
+        return str(v) if (v is not None and str(v).strip() not in ("", "nan", "None", "NaT")) else None
+    return [{"ann_date": _clean(r.get("ann_date")), "float_date": _clean(r.get("float_date"))}
+            for _, r in df.iterrows()]
+
+
+def _attach_forward_event_impacts(weekly, as_of):
+    """4.2 forward_events row landing(R-ASHORT-GAP42-FORWARD-EVENTS-ROW-LANDING-GUARD-GAP): 把 weekly-global
+    upcoming_events 的每个事件按 ts_code 落到对应 report 的**逐票** M6.7 —— `machine.operation_impact`(候选→
+    candidate_row_impact / 持仓→holding_row_impact)+ 精简结论区.风控触发 文本。**analysis-only**:veto_class=none、
+    production_effect_enabled=False、new_entry_effect 非 hard_veto(绝不 hard_veto / 绝不 rescue 已有 hard veto /
+    不改 操作·EGS·选股·TopN —— 只追加 advisory impact+文本)。status!=checked(unknown/无)→ 不落(不伪造逐票影响)。
+    §4.4 影响:候选→manual_review、持仓→hold_watch + blocked_add(临近解禁谨慎加仓);减仓/清仓价待 S3b。"""
+    ue = weekly.get("upcoming_events") or {}
+    if ue.get("status") != "checked":
+        return
+    by_code = {}
+    for e in (ue.get("events") or []):
+        by_code.setdefault(e["ts_code"], []).append(e)
+    def _evtxt(evs):
+        return "；".join(f"未来事件 {e['event_type']}@{e['event_date']}(公告{e['observed_at']}/{e['expected_effect']})"
+                         for e in evs)
+    for rep in weekly["reports"]:
+        evs = by_code.get(rep["ts_code"])
+        if not evs:
+            continue
+        held = ((rep.get("machine") or {}).get("stateful_risk") or {}).get("position_state") == "held"
+        txt = _evtxt(evs)
+        cut = rep["m67"]["精简结论区"]
+        prev = cut.get("风控触发") or "无"
+        cut["风控触发"] = txt if prev in ("无", "") else f"{prev}|{txt}"
+        # ADVICE-LANDING(R-...-ADVICE-LANDING-GAP):未来事件也落用户主看的 操作建议(不只风控触发),否则候选仍像干净建仓。
+        # advisory 文本(不改 table 操作/EGS/TopN);候选→人工复核/谨慎建仓、持仓→持有观察/谨慎加仓;含 _FORWARD_EVENT_MARKER 供 guard 判落地。
+        _adv = (f"⚠️ {_FORWARD_EVENT_MARKER}(限售解禁{len(evs)}项近端将至):"
+                + ("持有观察、谨慎加仓" if held else "先人工复核/转观察/谨慎建仓")
+                + ",不改 EGS/TopN/生产决策(advisory)")
+        _ap = cut.get("操作建议") or ""
+        cut["操作建议"] = f"{_ap}｜{_adv}" if _ap else _adv
+        rep["machine"].setdefault("operation_impact", []).append({
+            "source_field": "forward_event_limit_unlock",
+            "field_class": "structured",
+            "visibility_shape": "holding_row_impact" if held else "candidate_row_impact",
+            "impact_scope": "existing_holding" if held else "new_entry",
+            "new_entry_effect": "none" if held else "manual_review",
+            "holding_effect": "hold_watch" if held else "none",
+            "blocked_add_required": bool(held),
+            "veto_class": "none",
+            "reason": f"未来已知事件(限售解禁){len(evs)}项近端将至 → advisory 提示(不改决策/EGS/选股/TopN)",
+            "evidence_ref": {"kind": "lineage_key", "value": "upcoming_events.events[limit_unlock]", "as_of": str(as_of)},
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": False,
+            "implementation_status": "future_s3b_schema_render_required" if held else "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(未来事件)",
+            "terminal_surface_target": "s3b_持仓处置_列+减仓价" if held else "already_structured",
+            "pending_successor_slice": "S3b" if held else None,
+            "privacy_class": "private_account" if held else "public_tracked",
+        })
+    # 4.2 forward_events: holdings_manual_review(无价/停牌/价格陈旧旁路持仓,无 machine 结构、只 ts_code/name/reason、不进
+    # reports[])的票若有 checked 事件 → validator 接受(universe = reports ∪ holdings_manual_review)却无逐票行,故 append
+    # 到该持仓 reason(render 直接渲染);advisory/人工管理本不下系统决策——不改 EGS/TopN/动作、不 veto/rescue、不 S3b 减仓。
+    for h in (weekly.get("holdings_manual_review") or []):
+        evs = by_code.get(h["ts_code"])
+        if not evs:
+            continue
+        note = f"{_FORWARD_EVENT_MARKER}(限售解禁){len(evs)}项近端将至 → {_evtxt(evs)}(advisory,人工核查;不改决策)"
+        h["reason"] = f"{h['reason']}｜{note}" if h.get("reason") else note
 # analysis_input.market_context.market_regime.status(EGS 英文枚举)→ 引擎中文 regime
 REGIME_MAP = {"attack": "进攻期", "shock": "震荡期", "defense": "防御期", "contraction": "收缩期"}
 
@@ -918,7 +1104,7 @@ def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=
 
 def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None,
          web_llm_provider=None, dividend_provider=None,
-         holding_semantic_provider=None, holding_web_llm_provider=None):
+         holding_semantic_provider=None, holding_web_llm_provider=None, unlock_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -1013,6 +1199,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # #1 除权除息提示真 provider(advisory 旁路;注入优先用于测试):同一已授权 fetch 上下文。
         if dividend_provider is None:
             dividend_provider = lambda code: _fetch_dividends(pro, code)
+        # 4.2 forward_events 真解禁 provider(analysis-only advisory 旁路;注入优先;同一已授权 fetch 上下文)。
+        if unlock_provider is None:
+            unlock_provider = lambda code: _fetch_unlocks(pro, code)
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -1110,6 +1299,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     _notices = _ex_div_notices(_exdiv_codes, args.as_of, dividend_provider)
     if _notices:
         weekly["ex_div_notices"] = _notices
+    # 4.2 forward_events 第1刀: 未来已知事件日历(analysis-only advisory;候选+持仓近端限售解禁)。恒 set(checked/unknown)——
+    # unknown-not-clear: unlock_provider 不可用(无 --confirm/未授权)→ status=unknown_or_unavailable(绝不当「无未来事件」)。
+    weekly["upcoming_events"] = _upcoming_events(_exdiv_codes, args.as_of, unlock_provider)
+    # 4.2 forward_events row landing: upcoming events 按 ts_code 落到对应 report 逐票 operation_impact + 风控触发文本(advisory,不改决策)。
+    _attach_forward_event_impacts(weekly, args.as_of)
     # 4.2 Round2: 上游过滤批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts
     # (egs_main filter_l0 已记 unlock/suspended/relisted/holder_reduction_veto_10d), 不改 egs_main、不抓数。
     _excl = _build_exclusion_summary((ai.get("universe_summary") or {}).get("excluded_counts") or {}, args.as_of)
