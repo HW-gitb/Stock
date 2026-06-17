@@ -735,7 +735,37 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         },
         "table": table,
     }
-    return {
+    # 4.2 第1轮: reduce_deduct(= event_risk.holder_reduction.active_plan = bool(reduce_deduct), egs_main:672)
+    # → EGS 聚合 hard_veto → 操作=否决。发一条 production_hard_veto operation_impact,只补 field-level traceability,
+    # 不改既有动作派生(action 仍由 hard_veto/anti-rescue:888 决定)。落点/最终落点非空由 m67 schema 焊死,
+    # 跨字段不变式(production_hard_veto⟹否决 / advisory 不冒充生产 / 文本须挂后继 slice)由 validate_operation_impact_no_dangling 守。
+    # Round 1 scope = 非持仓候选行 only(R-ASHORT-GAP42-ROUND1-HOLDING-SCOPE-DRIFT):持仓的减仓/清仓结构化处置属
+    # S3b,不能在 Round 1 把持仓 impact 误标 already_structured;持仓+减持仍走既有 hard_veto→否决,只是不加这条 traceability。
+    op_impacts = []
+    if (inp.get("event") or {}).get("holder_reduction_active") and not has_position:
+        op_impacts.append({
+            "source_field": "holder_reduction_deduct_30d",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "hard_veto",
+            "holding_effect": "none",
+            "blocked_add_required": False,
+            "veto_class": "production_hard_veto",
+            "reason": "30日减持(event_risk.holder_reduction.active_plan)→ EGS 聚合 hard_veto → 操作=否决",
+            "evidence_ref": {"kind": "lineage_key",
+                             "value": "event_risk.holder_reduction.active_plan / derived_flags.hard_veto",
+                             "as_of": str(as_of)},
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": True,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "table.操作=否决 + 精简结论区.否决审查触发",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": None,
+            "privacy_class": "public_tracked",
+        })
+    result = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
         "ts_code": str(inp.get("ts_code", "")), "name": str(inp.get("name", "")),
@@ -770,6 +800,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
     }
+    if op_impacts:                       # 仅命中时加 key,正常报告零改动(向后兼容)
+        result["machine"]["operation_impact"] = op_impacts
+    return result
 
 
 def _is_valid_date(s) -> bool:
@@ -869,6 +902,52 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     }
 
 
+def validate_operation_impact_no_dangling(report: dict) -> None:
+    """4.2 第1轮 no-dangling + advisory-isolation guard。逐条 machine.operation_impact:
+    ① m67_landing_surface 非空(有可见落点)+ terminal_surface_target 非空(有最终结构化落点)——m67 schema 已焊,此处兜底;
+    ② visibility_shape ∈ {candidate_row_impact, holding_row_impact}(逐票形态;batch_exclusion/summary_only/out_of_scope
+       走周报 exclusion_summary,不得塞进 row-level operation_impact —— R-ASHORT-GAP42-ROUND1-VISIBILITY-SHAPE-GUARD-GAP);
+    ③ evidence_ref 可解析 + PIT 绑定(kind ∈ artifact_path|lineage_key|source_id、value 非空、as_of 为 8 位且 == 报告 as_of
+       —— 旧/缺/坏格式日期都拒,防证据日期漂移使 stale trace 看似 current,R-ASHORT-GAP42-ROUND1-EVIDENCE-REF-GUARD-GAP);
+    ④ implementation_status != implemented → 必须挂 pending_successor_slice(防只落文本变永久悬空);
+    ⑤ production_effect_enabled=False 绝不标 production_hard_veto(advisory 不冒充生产硬否决);
+    ⑥ production_hard_veto 的 new_entry hard_veto → table.操作 必须 == 否决(声称生产硬否决就必须真否决,呼应 anti-rescue:888)。
+    operation_impact 可选(缺省=无 impact)→ no-op,向后兼容。"""
+    mc = report.get("machine") or {}
+    impacts = mc.get("operation_impact")
+    if not impacts:
+        return
+    action = report["m67"]["table"]["操作"]
+    for imp in impacts:
+        sf = imp.get("source_field", "?")
+        if not imp.get("m67_landing_surface"):
+            raise ValueError(f"operation_impact {sf} 无 m67_landing_surface(悬空)")
+        if not imp.get("terminal_surface_target"):
+            raise ValueError(f"operation_impact {sf} 无 terminal_surface_target(悬空)")
+        if imp.get("visibility_shape") not in ("candidate_row_impact", "holding_row_impact"):
+            raise ValueError(f"operation_impact {sf} visibility_shape={imp.get('visibility_shape')!r} 不是逐票形态"
+                             "(batch_exclusion/summary_only/out_of_scope 走周报 exclusion_summary,不得进 row-level operation_impact)")
+        ev = imp.get("evidence_ref")
+        if (not isinstance(ev, dict) or ev.get("kind") not in ("artifact_path", "lineage_key", "source_id")
+                or not ev.get("value")):
+            raise ValueError(f"operation_impact {sf} evidence_ref 缺失/不可解析"
+                             "(须 kind∈artifact_path|lineage_key|source_id 且 value 非空)")
+        ev_as_of = ev.get("as_of")
+        if not (isinstance(ev_as_of, str) and len(ev_as_of) == 8 and ev_as_of.isascii() and ev_as_of.isdigit()):
+            raise ValueError(f"operation_impact {sf} evidence_ref.as_of 缺失或非 YYYYMMDD(PIT 不可审计)")
+        if ev_as_of != report.get("as_of"):
+            raise ValueError(f"operation_impact {sf} evidence_ref.as_of={ev_as_of!r} != 报告 as_of={report.get('as_of')!r}"
+                             "(证据日期漂移,非 PIT)")
+        if imp.get("implementation_status") != "implemented" and not imp.get("pending_successor_slice"):
+            raise ValueError(f"operation_impact {sf} 非 implemented 却无 pending_successor_slice(文本恐变永久悬空)")
+        if imp.get("production_effect_enabled") is False and imp.get("veto_class") == "production_hard_veto":
+            raise ValueError(f"operation_impact {sf} production_effect_enabled=false 却标 production_hard_veto(advisory 冒充生产)")
+        if (imp.get("veto_class") == "production_hard_veto"
+                and imp.get("new_entry_effect") == "hard_veto"
+                and action != "否决"):
+            raise ValueError(f"operation_impact {sf} 声称 production_hard_veto 硬否决却未否决(action={action})")
+
+
 def validate_m67_consistency(report: dict) -> None:
     """§4 不变量 + R-ASHORT-M67-...-WRITE-CONTRACT:消费完整性 / 热度不覆盖硬风控 / 诚实护栏 /
     每族一次 / as_of 历法 / table↔machine 一致 / 建仓正数+plan匹配 / 非建仓 null / IV缺失显式。"""
@@ -890,6 +969,8 @@ def validate_m67_consistency(report: dict) -> None:
     # table 操作必须 == machine action
     if tbl["操作"] != action:
         raise ValueError("M6.7 table 操作 与 machine action 不一致")
+    # 4.2 第1轮: operation_impact no-dangling + advisory-isolation guard(仅当 machine.operation_impact 存在时生效)
+    validate_operation_impact_no_dangling(report)
     if action == "建仓":
         # 诚实护栏
         adv = m67["精简结论区"]["操作建议"]

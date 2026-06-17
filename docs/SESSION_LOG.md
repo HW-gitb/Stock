@@ -8,6 +8,45 @@
 
 ---
 
+## 2026-06-17 — Codex re-`审查 PASS` (4.2 第1轮 evidence_ref as_of PIT binding)
+- **Verdict/Action**: PASS. 残留 `evidence_ref.as_of` 漏洞已闭合: schema 必填 `as_of`,guard 拒旧日期/缺日期/坏格式/不等于报告日期。
+- **Required**: `R-ASHORT-GAP42-ROUND1-EVIDENCE-REF-GUARD-GAP` — addressed in working tree；完整 closure evidence 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: gap 30 OK;phase5 110 OK;weekly 131 OK(with local tushare stub,no network);doc-governance+route-doc 30 OK;Codex stale/missing/bad-as_of probes rejected;JSON/py_compile/BOM/FFFD/diff-check OK。
+- **Next**: Claude `提交` reviewed 4.2 Round 1 files;继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (4.2 第1轮 evidence_ref as_of PIT binding — residual)
+- **Verdict/Action**: 判定残留 FAIL 对(evidence_ref.as_of 未绑报告日期,stale/缺/坏格式仍过)。closure:m67 schema `evidence_ref.required` 加 `as_of`;`validate_operation_impact_no_dangling` 加 as_of 须为 8 位 ASCII 数字且 == 报告 as_of(否则 raise)。选 require-date(Round 1 证据恒带报告日期,不需 no-date 通道)。holding-scope / visibility-shape 上轮已闭、本轮未动。
+- **Required**: `R-ASHORT-GAP42-ROUND1-EVIDENCE-REF-GUARD-GAP` — residual closure / 完整修复见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: gap 套件 **30 OK**(+4:guard stale/missing/bad-format as_of + schema 缺 as_of 拒);全量 **2179 OK**(零回归);doc-governance+route-doc 30 OK;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` 4.2 第1轮)。
+- **Pre-Codex self-review**: A 类×出口:as_of 在 schema(required+pattern)+ guard(format+绑报告 as_of)双面;3 失效态(stale/missing/bad-format)各配 guard 测试 + schema 缺-as_of 测试。B ripple:只动 evidence_ref(emission 恒写 as_of=报告 as_of,已对);无其它 evidence_ref 消费者。C 反向:clean 发射 as_of==报告 as_of 仍过(test_clean_impact_passes + 主测试经 validate_m67_consistency,2179 全绿)——未误拒合法证据。D N-A。E route-doc 单态:register 记 residual closure,transient next 只进 SESSION_LOG。F 日期严格性=本修核心(8 ASCII 数字);无 BOM;diff 干净。
+
+## 2026-06-17 — Codex re-`审查 FAIL` (4.2 第1轮 evidence_ref as_of guard)
+- **Verdict/Action**: FAIL. 上轮 3 项中 holding-scope / visibility-shape 已过；`evidence_ref` 仍未把 `as_of` 绑到报告日期,旧日期/缺日期仍可过。
+- **Required**: `R-ASHORT-GAP42-ROUND1-EVIDENCE-REF-GUARD-GAP` — residual detail / closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: gap 26 OK;phase5 110 OK;doc-governance+route-doc 30 OK;weekly 130 OK + 1 环境错误(`tushare` 缺失);Codex stale/missing/bad-as_of probes reproduced gap;`git diff --check` clean。
+- **Next**: Claude `修复` residual evidence_ref as_of guard;继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (4.2 第1轮 operation_impact guards — 3 findings)
+- **Verdict/Action**: 判定 Codex 3 FAIL 全对,逐修:(1) HOLDING-SCOPE-DRIFT — emission 加 `and not has_position`,Round 1 只发非持仓候选行 impact(持仓+减持仍 hard_veto→否决,不再发误标 already_structured 的持仓 impact);(2) EVIDENCE-REF — m67 schema `evidence_ref` 入 required+定形状(kind∈3值/value非空/可选as_of)+ guard 加可解析检查;(3) VISIBILITY-SHAPE — m67 schema `visibility_shape` 收成逐票 2 值 + guard 拒非逐票形态。
+- **Required**: `R-ASHORT-GAP42-ROUND1-HOLDING-SCOPE-DRIFT`; `R-ASHORT-GAP42-ROUND1-EVIDENCE-REF-GUARD-GAP`; `R-ASHORT-GAP42-ROUND1-VISIBILITY-SHAPE-GUARD-GAP` — 完整修复/closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: gap 套件 **26 OK**(+7:held→否决+无impact / evidence_ref schema删除拒 + guard删除·坏kind·空value拒 / batch_exclusion schema+guard 双面拒);全量 **2175 OK**(零回归);doc-governance+route-doc 30 OK;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex re-`审查` 4.2 第1轮)。
+- **Pre-Codex self-review**: A 类×出口:3 不变式在 schema(静态)+ guard(运行时)双面修,各配 schema+guard 对抗测试;held-scope 按 Round 1「候选行 only」收口(非补单 instance)。B ripple:visibility_shape 收窄只动 m67 operation_impact(registry batch_exclusion 字段另一面、不动);grep operation_impact 仍仅 phase5+m67 schema;全量 2175 OK 证下游零破。C 反向:held+reduce 仍正确否决、clean impact 仍过、正常报告仍无 key(未把修复做成误拒合法态)。D N-A。E route-doc 单态:register 记 closure,transient next 只进 SESSION_LOG。F 非有限值/日期 N-A;无 BOM;diff 干净。
+
+## 2026-06-17 — Codex `审查 FAIL` (4.2 第1轮 operation_impact guards)
+- **Verdict/Action**: FAIL. 方向正确,但 Round 1 的 row-level `operation_impact` 护栏还不够: held-position scope 被误标为已结构化、`evidence_ref` 可删除仍过、`batch_exclusion` 可塞进逐票 impact 仍过。
+- **Required**: `R-ASHORT-GAP42-ROUND1-HOLDING-SCOPE-DRIFT`; `R-ASHORT-GAP42-ROUND1-EVIDENCE-REF-GUARD-GAP`; `R-ASHORT-GAP42-ROUND1-VISIBILITY-SHAPE-GUARD-GAP` — 完整 Required/边界/closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: gap registry 19 OK; phase5 110 OK; doc-governance+route-doc 30 OK; Codex 3 个 mutation probes 复现上述 gaps; weekly pipeline 130 OK + 1 环境错误(`tushare` 缺失)。
+- **Next**: Claude `修复` these Required findings;继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `起草` (4.2 第1轮: 缺口数据字段清单 + reduce_deduct operation_impact + no-dangling guard)
+- **Verdict/Action**: 起草 4.2 第1轮(依据桌面 `4.2.md` §0.5 拷问拍板的 5 决策:放法一[减仓/清仓只落文本、价格留 S3b]+ 不许文本变永久悬空 + 第一刀只建核心)。**零新取数、不改既有动作派生**——reduce_deduct 早经 `event_risk.holder_reduction.active_plan`(= bool(reduce_deduct),egs_main:672)→ `derived.hard_veto` → `negative_event` → 操作=否决(anti-rescue:888),本轮只补 field-level traceability。新增:① 字段清单 schema(23 列,**no-dangling 焊进 schema**:非 out_of_scope 必有 `terminal_surface_target` / 非 implemented 必挂 `pending_successor_slice` / out_of_scope 自洽)+ 填好 example(8 字段;owner-ref 用 Explore 子 agent 核准的真实行号)+ governance schema/preset(决策4:只 merge 铁律,未接入数据[北向/融资/龙虎榜/大宗]不预写空阈值,`sizing_down_floor_pct=null→comparison_only`);② `build_m67_report` 据 holder_reduction_active 发一条 `production_hard_veto` operation_impact 进 `machine.operation_impact`(**仅命中加 key,向后兼容**),m67 schema 加可选 `machine.operation_impact`(落点/最终落点 minLength 1 焊死);③ 新 `validate_operation_impact_no_dangling`(落点/最终落点非空 / 非 implemented 挂后继 slice / `production_effect_enabled=false` 不得标 production_hard_veto / production_hard_veto hard_veto ⟹ 否决)接进 `validate_m67_consistency`;④ docs/README 加 owner 行。后续(roadmap):第2轮 exclusion_summary、第3轮 semantic 复用、第4轮 S3b(减仓价)、第5+轮真缺口(龙虎榜→大宗)。
+- **Required**: none(干净起草,无 finding;Round 2/3/S3b/Slice D 为 roadmap 非 open-risk,不入 register)。
+- **Verify**: 新 `tests.test_a_short_gap_data_registry` **19 OK**(registry schema validates example + 拒缺列/拒非-out_of_scope-无-terminal/拒文本-无后继/拒 out_of_scope-不自洽;governance validates + null 阈值 comparison_only + 不预写未接入字段;reduce_deduct=1→操作=否决 + `machine.layer.hard_veto` 非空 + 发 impact 且落点非空 + 报告过 m67 schema;正常输入不加 key;anti-rescue 强正面字段仍否决;guard 5 反例全 raise + clean pass + no-impact no-op);**全量 2168 OK**(2149+19,零回归;phase5 110 / weekly 131 / a_short discover 926 单独亦绿);registry+governance 过各自 schema;py_compile OK;无 BOM;`git diff --check` 干净(仅 CRLF warning)。
+- **Next**: 审查(Codex 独立审 4.2 第1轮)。
+- **Pre-Codex self-review**: A 类×出口:no-dangling 在 **schema(静态:registry allOf + m67 minLength)+ 运行时 guard(动态)双面**焊,guard 5 分支 × 测试全配对;emission 精确门 holder_reduction_active(Round 1 无 batch 出口——batch_exclusion 是第2轮)。B ripple:`git grep operation_impact`=仅 `phase5_engine.py`+`m67 schema`(我的改动,0 stale);`machine.operation_impact` 加性可选 key,全量 2168 OK 证下游(weekly/holdings/render)零破。C 反向:仅命中加 key→正常报告零改(`test_normal_input_no_impact_key`/`test_no_impacts_is_noop`);production_hard_veto⟹否决无误拒(holder_reduction_active⟹anti-rescue:888⟹否决,2168 全绿)。D N-A(布尔门,非关键词歧义)。E route-doc 单态:docs/README 一行=当前机制+roadmap,transient「next=审查」只进本 SESSION_LOG、不进 CURRENT。F 非有限值/日期 N-A;无 generator footgun;UTF-8 无 BOM;`git diff --check` 干净。
+
 ## 2026-06-17 — Codex re-`审查 PASS` (overlay readiness harness — 4 findings)
 - **Verdict/Action**: PASS. Claude 修复已闭合 4 个 Required: GBK-safe due banner、bucket/as_of lineage guard、`result/a_short` eval-summary 写入拦截、governance note 从 stale `pit only` 更新为 pit+live-today forward 契约；未发现新的 material finding。
 - **Required**: `R-ASHORT-OVERLAY-EVAL-BANNER-ENCODING`; `R-ASHORT-OVERLAY-EVAL-ARTIFACT-LINEAGE-GUARD`; `R-ASHORT-OVERLAY-EVAL-PRODUCTION-OUT-GUARD`; `R-ASHORT-OVERLAY-EVAL-GOVERNANCE-MODE-DRIFT` — addressed in working tree；完整 closure evidence 见 `docs/system_risk_register.md` 单一来源。

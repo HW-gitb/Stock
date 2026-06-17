@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_gap_data_field_registry",
+  "description": "4.2 第一刀: 缺口数据字段清单(field registry). 每行说明一个字段在哪里、是否已取数/已被消费、能影响什么、当前 M6.7 落点(m67_landing_surface)、最终结构化落点(terminal_surface_target)、能否进 production. registry 是内部脚手架(本身不进 6.7),用来保证每个字段都有落点、不悬空. no-dangling 规则已焊进本 schema 的 allOf/if-then(非 out_of_scope 必须有最终落点; design_only/future 文本落点必须挂 pending_successor_slice). 非生产.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "fields"],
+  "properties": {
+    "schema_name": {"const": "a_short_gap_data_field_registry"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "fields": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/field_row"}
+    }
+  },
+  "$defs": {
+    "field_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_id", "field_class", "current_status", "current_owner_file", "current_owner_ref",
+        "current_consumption", "current_m67_action_effect", "visibility_shape",
+        "m67_landing_surface", "terminal_surface_target", "pending_successor_slice",
+        "needs_new_provider_call", "cadence_scope", "pit_basis", "lookahead_risk",
+        "backtest_evidence_capable", "production_effect_enabled", "veto_class",
+        "operation_impact_target", "implementation_status", "evidence_ref_kind",
+        "privacy_class", "governance_ref"
+      ],
+      "properties": {
+        "field_id": {"type": "string", "minLength": 1},
+        "field_class": {"enum": ["structured", "semantic_advisory", "cadence_excluded"]},
+        "current_status": {"enum": ["already_fetched_and_consumed", "already_fetched_not_operation_impactized", "existing_advisory_system", "true_missing_provider_call_required", "out_of_scope_by_cadence", "deferred_by_governance"]},
+        "current_owner_file": {"type": "string"},
+        "current_owner_ref": {"type": "string", "description": "函数名 + 关键行号/字段路径锚点(行号会漂移,执行时用 rg 复核,不当永久事实)"},
+        "current_consumption": {"enum": ["l0_filter", "l2_filter", "stage3_filter", "veto", "score", "risk_flag", "display", "none"]},
+        "current_m67_action_effect": {"enum": ["already_drives_deny", "already_sizes_down", "text_only", "no_row_batch_only", "unknown_needs_probe", "none"]},
+        "visibility_shape": {"enum": ["candidate_row_impact", "holding_row_impact", "batch_exclusion", "summary_only", "out_of_scope"]},
+        "m67_landing_surface": {"type": ["string", "null"], "description": "当前落点(现有 schema 字段/周报 exclusion_summary/artifact 引用); out_of_scope 可 null"},
+        "terminal_surface_target": {"type": ["string", "null"], "description": "最终结构化落点(如 already_structured / 表格.股数 / s3b_持仓处置_列+减仓价); 非 out_of_scope 必须非空"},
+        "pending_successor_slice": {"type": ["string", "null"], "description": "若当前只落文本、最终落点未实现: 在等哪一刀(如 S3b / Slice D-龙虎榜); 已结构化为 null"},
+        "needs_new_provider_call": {"type": "boolean"},
+        "cadence_scope": {"enum": ["weekly_compatible", "daily_compatible", "live_only_advisory", "out_of_scope_by_cadence"]},
+        "pit_basis": {"enum": ["disclosure_date", "trade_date_window", "observed_date", "live_only", "manual_review_only"]},
+        "lookahead_risk": {"enum": ["low", "medium", "high"]},
+        "backtest_evidence_capable": {"type": "boolean"},
+        "production_effect_enabled": {"type": "boolean"},
+        "veto_class": {"enum": ["none", "production_hard_veto", "m67_advisory_veto"]},
+        "operation_impact_target": {"enum": ["new_entry", "existing_holding", "both", "none"]},
+        "implementation_status": {"enum": ["implemented", "design_only_current_text_landing", "future_s3b_schema_render_required", "pending_slice_not_yet_landed", "out_of_scope_no_landing"]},
+        "evidence_ref_kind": {"enum": ["artifact_path", "lineage_key", "source_id", "none"]},
+        "privacy_class": {"enum": ["public_tracked", "private_account", "secret_or_raw_provider"]},
+        "governance_ref": {"type": ["string", "null"], "description": "阈值所在 governance key; 未定时显式 null"}
+      },
+      "allOf": [
+        {
+          "comment": "no-dangling: 非 out_of_scope 的字段必须声明最终结构化落点(terminal_surface_target 非空)",
+          "if": {"properties": {"visibility_shape": {"not": {"const": "out_of_scope"}}}},
+          "then": {"properties": {"terminal_surface_target": {"type": "string", "minLength": 1}}}
+        },
+        {
+          "comment": "非 implemented 且非 out_of_scope 的字段必须挂后继 slice,防止文本变永久悬空",
+          "if": {"allOf": [
+            {"properties": {"implementation_status": {"not": {"const": "implemented"}}}},
+            {"properties": {"visibility_shape": {"not": {"const": "out_of_scope"}}}}
+          ]},
+          "then": {"properties": {"pending_successor_slice": {"type": "string", "minLength": 1}}}
+        },
+        {
+          "comment": "out_of_scope 字段必须自洽: 不接入(none target / out_of_scope_by_cadence / out_of_scope_no_landing)",
+          "if": {"properties": {"visibility_shape": {"const": "out_of_scope"}}},
+          "then": {"properties": {"operation_impact_target": {"const": "none"}, "cadence_scope": {"const": "out_of_scope_by_cadence"}, "implementation_status": {"const": "out_of_scope_no_landing"}}}
+        }
+      ]
+    }
+  }
+}

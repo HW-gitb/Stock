@@ -1,0 +1,13 @@
+{
+  "schema_name": "a_short_gap_data_operation_impact_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260617",
+  "merge_rules": {
+    "new_entry_severity_order": ["hard_veto", "observe_required", "sizing_down", "priority_down", "manual_review", "informational", "none"],
+    "holding_severity_order": ["clear_review", "reduce_review", "manual_review", "hold_watch", "hold", "none"],
+    "blocked_add_merge": "boolean_or",
+    "sizing_down_floor_pct": null,
+    "sizing_down_when_floor_unset": "comparison_only",
+    "anti_rescue_required": true
+  }
+}

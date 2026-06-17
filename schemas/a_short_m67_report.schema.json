@@ -68,7 +68,48 @@
         "layer": {"type": "object"},
         "entry_exit_size_star": {"type": "object"},
         "iv_gate": {"type": "object"},
-        "consumption": {"type": "object"}
+        "consumption": {"type": "object"},
+        "operation_impact": {
+          "type": "array",
+          "description": "4.2 第1轮: 逐字段 operation_impact 记录(仍有 M6.7 候选/持仓行的字段). schema 层焊死 m67_landing_surface/terminal_surface_target 非空; 跨字段不变式(production_hard_veto⟹操作=否决 / production_effect_enabled=false 不得升格 / 只落文本须挂后继 slice)由 validate_operation_impact_no_dangling 守. 可选(缺省=无, 向后兼容; Tier-3 持仓粗覆盖不发).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source_field", "field_class", "visibility_shape", "new_entry_effect", "holding_effect",
+                         "blocked_add_required", "veto_class", "evidence_ref", "m67_landing_surface", "terminal_surface_target",
+                         "pending_successor_slice", "production_effect_enabled", "implementation_status"],
+            "properties": {
+              "source_field": {"type": "string", "minLength": 1},
+              "field_class": {"enum": ["structured", "semantic_advisory", "cadence_excluded"]},
+              "visibility_shape": {"enum": ["candidate_row_impact", "holding_row_impact"],
+                "description": "row-level operation_impact 只允许逐票形态; 上游过滤 batch_exclusion/summary_only/out_of_scope 走周报 exclusion_summary(第2轮)"},
+              "impact_scope": {"enum": ["new_entry", "existing_holding", "both", "none"]},
+              "new_entry_effect": {"enum": ["hard_veto", "observe_required", "sizing_down", "priority_down", "manual_review", "informational", "none"]},
+              "holding_effect": {"enum": ["clear_review", "reduce_review", "manual_review", "hold_watch", "hold", "none"]},
+              "blocked_add_required": {"type": "boolean"},
+              "veto_class": {"enum": ["none", "production_hard_veto", "m67_advisory_veto"]},
+              "reason": {"type": "string"},
+              "evidence_ref": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "value", "as_of"],
+                "properties": {
+                  "kind": {"enum": ["artifact_path", "lineage_key", "source_id"]},
+                  "value": {"type": "string", "minLength": 1},
+                  "as_of": {"type": "string", "pattern": "^[0-9]{8}$", "description": "证据 PIT 日期; 运行时 guard 另绑 == 报告 as_of"}
+                }
+              },
+              "confidence": {"enum": ["high", "medium", "low"]},
+              "pit_basis": {"enum": ["disclosure_date", "trade_date_window", "observed_date", "live_only", "manual_review_only"]},
+              "production_effect_enabled": {"type": "boolean"},
+              "implementation_status": {"enum": ["implemented", "design_only_current_text_landing", "future_s3b_schema_render_required", "pending_slice_not_yet_landed", "out_of_scope_no_landing"]},
+              "m67_landing_surface": {"type": "string", "minLength": 1},
+              "terminal_surface_target": {"type": "string", "minLength": 1},
+              "pending_successor_slice": {"type": ["string", "null"]},
+              "privacy_class": {"enum": ["public_tracked", "private_account", "secret_or_raw_provider"]}
+            }
+          }
+        }
       }
     },
     "boundary": {

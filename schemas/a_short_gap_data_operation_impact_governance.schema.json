@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_gap_data_operation_impact_governance",
+  "description": "4.2 operation_impact / exclusion 合并治理的阈值真相源. 决策4: 第一刀只含已接入字段的 merge 铁律; 未接入字段(北向/融资/龙虎榜/大宗)的阈值块等各自接入那一轮(Slice D)再加, 不在此预写空阈值. 未定阈值必须显式 null + comparison_only, 不得在 runner 里静默写默认值.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "merge_rules"],
+  "properties": {
+    "schema_name": {"const": "a_short_gap_data_operation_impact_governance"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "merge_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["new_entry_severity_order", "holding_severity_order", "blocked_add_merge",
+                   "sizing_down_floor_pct", "sizing_down_when_floor_unset", "anti_rescue_required"],
+      "properties": {
+        "new_entry_severity_order": {
+          "type": "array",
+          "items": {"enum": ["hard_veto", "observe_required", "sizing_down", "priority_down", "manual_review", "informational", "none"]}
+        },
+        "holding_severity_order": {
+          "type": "array",
+          "items": {"enum": ["clear_review", "reduce_review", "manual_review", "hold_watch", "hold", "none"]}
+        },
+        "blocked_add_merge": {"const": "boolean_or"},
+        "sizing_down_floor_pct": {"type": ["number", "null"],
+          "description": "叠加降仓的最小仓位下限; null = 未定, 此时不得真实改股数(见 sizing_down_when_floor_unset)"},
+        "sizing_down_when_floor_unset": {"const": "comparison_only",
+          "description": "sizing_down_floor_pct 为 null 时只 comparison-only 记录, 不真实改股数"},
+        "anti_rescue_required": {"const": true,
+          "description": "hard_veto 一票否决, 不得被任何正面字段/tailwind/资金流入救回"}
+      }
+    }
+  }
+}
