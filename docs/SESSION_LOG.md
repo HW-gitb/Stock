@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-17 — Codex re-`审查 PASS` (R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP)
+- **Verdict/Action**: PASS. Claude 接管后的 semantic advisory guard 已把上轮 3 个洞补上:语义来源现在一律不能生产生效,official high 必须保持 `m67_advisory_veto`,web/LLM 仍只能 advisory、不能 hard_veto。大白话:这次“语义只参考”已经被护栏拦住了,再改成生产硬否决会报错。
+- **Required**: `R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源),风险项仍等用户 `提交` 后才算闭环。
+- **Verify**: Codex 独立探针确认 official->production、official hard_veto 丢 advisory class、web production-enabled、web hard_veto 全部 rejected;相关三套 305 OK(with local `tushare` stub);doc-governance+route-doc 30 OK;py_compile OK;无 BOM/FFFD;`git diff --check` 干净。Full unittest discover attempted:2187 ran / 22 environment import errors(`tushare.pro`,`requests`),不作为失败证据。
+- **Next**: Claude `提交` reviewed Round3 files;继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `修复` (R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 对:起草 guard 只按 veto_class 分支,漏 source-class 级「semantic 来源一律非生产」不变式(3 探针均绕过)。接管:采纳正确不变式 + 把散在 3 处的 semantic 检查整合为单一 semantic-isolation block(semantic 来源⟹非生产∧非 production_hard_veto;official_high⟹m67_advisory_veto;web_llm⟹none∧非hard_veto)。角色注:Codex 越界用 `修复` 写了业务代码,按分工实现归 Claude,已接管 own + 保留其 3 探针 TDD。详见 register。
+- **Required**: `R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: gap_registry **47 OK**(3 探针 + source-independent + 合法 official/web/holding 仍过);phase5 110 OK;weekly 148 OK;全量 **2213 OK**(零回归);doc-governance+route-doc 30 OK;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex 独立 re-审查 4.2 第3轮 semantic guard);继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 3 探针+source-independent+合法 official/web/holding 正测全配对。B 仅整合 phase5 guard 单 block,emit/helper/schema 不变,2213 全绿。C 合法 semantic impact 仍过,未把 isolation 改成误拒。D N-A。E register 接 Claude 接管 note、transient 只进 SESSION_LOG。F 逐不变式等价(逐探针+合法态重验)、单一 block 防未来漏。
+
+## 2026-06-17 — Codex `修复` (R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP)
+- **Verdict/Action**: 修复完成,待独立审查/提交。只改 semantic advisory 护栏和对抗测试:所有 `semantic_*` / `semantic_advisory` 必须 `production_effect_enabled=False`,不得标 `production_hard_veto`;`semantic_official_high` 必须保持 `m67_advisory_veto`;`semantic_web_llm` 必须保持 `veto_class=none` 且不能 hard_veto。大白话:把“语义只参考”这句话焊进校验里,以后改成生产硬否决会直接报错。
+- **Required**: `R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP` — addressed in working tree;closure 仍需审查 PASS + 提交。
+- **Verify**: 新增测试先 RED(4 failures),修复后 `SemanticGuardTests` 10 OK;相关三套 305 OK(with local `tushare` stub);Codex 3 个坏状态探针全部 REJECTED;full detail in register。
+- **Pre-Codex self-review**: A 对抗测试覆盖 3 个原探针 + 通用 semantic_advisory;B 只动 phase5 guard 和 gap_registry 测试;C 合法 official/web/holding 仍过;D no fetch/no S2/no S3b/no commit。
+- **Next**: 审查当前修复;继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Codex `审查 FAIL` (R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP)
+- **Verdict/Action**: FAIL. 4.2 第3轮方向对,但 semantic advisory 护栏还不够:语义风险本应只做 advisory,现在仍能被改成 production 生效或丢掉 advisory 分类后通过校验。大白话:现在代码嘴上说“语义只参考”,但护栏没拦住它被改成“生产硬否决”;以后有人改坏了,系统还会说通过。
+- **Required**: `R-ASHORT-GAP42-ROUND3-SEMANTIC-ADVISORY-PRODUCTION-GUARD-GAP` — 完整风险、边界、修复要求见 `docs/system_risk_register.md`。
+- **Verify**: Codex 探针确认 3 个坏状态仍会通过:official semantic -> `production_hard_veto` + `production_effect_enabled=True`; official semantic `hard_veto` 但 `veto_class=none`; web semantic `production_effect_enabled=True`。相关测试 301 OK(with local `tushare` stub); doc-governance+route-doc 30 OK。
+- **Next**: Claude `修复` 这个 Required;继续排除 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-17 — Claude `起草` (4.2 第3轮: semantic 复用 → advisory operation_impact + 全 guard)
+- **Verdict/Action**: 起草 4.2 第3轮(§11.3 semantic 复用 + 全 guard)。零新取数 / schema 零改(第1轮 operation_impact 形状已通用)。范围(用户拍板):候选行实做、持仓能力+guard 就位、持仓 semantic 数据接入留 S2。helper `_semantic_operation_impacts`(候选/持仓共用 DRY):official 证据齐全 high→`m67_advisory_veto`、web downgrade→`priority_down`(veto_class=none,绝不 hard_veto),全程 `production_effect_enabled=False`。`build_m67_report` 候选行(not has_position)发 + official reason 标 `ADVISORY_VETO_TAG`(非生产 advisory)。guard 扩 ⑦(advisory veto 必非生产)⑧(web_llm 绝不 veto/hard_veto)⑨(advisory veto 文本须标非生产)⑩(blocked_add 须显禁止加仓)+ ⑥合并(production/advisory veto+hard_veto⟹否决);weekly 加 visibility exclusivity(同 source_field 不双落点)。持仓 semantic emit+数据接入 = S2(涉真实持仓私密路由,单独审)。
+- **Required**: none(干净起草;持仓 semantic 数据接入 = S2 roadmap,非 open risk)。
+- **Verify**: gap_registry **43 OK**(+13:候选 official/web emit·缺URL·无semantic·schema·持仓不发·anti-rescue + guard ⑦⑧×2⑨⑩·持仓合法形态);weekly **148 OK**(+1 visibility exclusivity);phase5 110 OK(reason tag 改动零破);全量 **2209 OK**(零回归);doc-governance+route-doc 30 OK;py_compile OK;无 BOM;`git diff --check` 干净。
+- **Next**: 审查(Codex 独立审 4.2 第3轮)。
+- **Pre-Codex self-review**: A 缺陷×出口:候选/持仓 × official/web × 失效态(缺URL/非生产/web冒充veto/缺tag/blocked不可见)各配对抗测试+合法态正测。B ripple:`git grep operation_impact`=仅 phase5+weekly(我改两处),render 不消费 machine.operation_impact(2209+render 测试证),schema 零改(第1轮形状已含 semantic_advisory/m67_advisory_veto/holding_effect/blocked_add)。C 反向:合法 semantic impact 仍过(test_*_passes+2209),未把 advisory 误修成漏放。D N-A。E register 无 finding、transient next 只进 SESSION_LOG。F semantic 永 advisory(production_effect_enabled=False 焊死)、web_llm never-veto guard、持仓数据接入留 S2(注释明示不投机 emit)、无 footgun。
+
 ## 2026-06-17 — Codex re-`审查 PASS` (R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP)
 - **Verdict/Action**: PASS. Round2 `exclusion_summary` contract gap is closed in the current working tree: unknown nonzero reasons fail closed, and `evidence_ref` is bound to the reviewed lineage key.
 - **Required**: `R-ASHORT-GAP42-ROUND2-EXCLUSION-SUMMARY-CONTRACT-GAP` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源)。

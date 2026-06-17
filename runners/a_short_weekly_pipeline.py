@@ -497,6 +497,17 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
             raise ValueError(f"exclusion_summary.evidence_ref.as_of {ev.get('as_of')} != 周报 as_of {weekly['as_of']}(证据陈旧)")
         if not ((weekly.get("run_lineage") or {}).get("analysis_input")):
             raise ValueError("exclusion_summary 存在但 run_lineage.analysis_input 为空(无源 artifact lineage,无法溯源)")
+        # 4.2 第3轮 visibility exclusivity:同一 source_field 不能既是 row-level operation_impact 又是
+        # batch_exclusion(同一风险同一运行只能一种可见性形态;若未来旁路使某 source 双落点[如 has_crash_veto
+        # 旁路 score_l2 复活成候选行],此处 fail)。row-impact source_field 来自各 report 的 machine.operation_impact。
+        _row_impact_fields = {imp.get("source_field")
+                              for rep in weekly["reports"]
+                              for imp in ((rep.get("machine") or {}).get("operation_impact") or [])}
+        _excl_fields = {r.get("source_field") for r in (es.get("by_reason") or [])}
+        _overlap = _row_impact_fields & _excl_fields
+        if _overlap:
+            raise ValueError(f"visibility exclusivity 违反:{sorted(_overlap)} 同时是 row operation_impact 和 "
+                             "exclusion_summary batch_exclusion(同一风险同一运行只能一种可见性形态)")
     if sized:
         from runners.a_short_phase5_engine import MIN_SHARES
     seen, alloc_ranks, budget_sum = set(), [], 0.0       # audit-math:跨建仓累计,循环后对账 cash_allocation 摘要

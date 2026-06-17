@@ -29,6 +29,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _build_exclusion_summary,
 )
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
+from runners.a_short_phase5_engine import _semantic_operation_impacts  # noqa: E402
 from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
 from runners.a_short_theme_overlay_comparison import (  # noqa: E402
     assemble_overlay, build_summary,
@@ -1721,6 +1722,17 @@ class ExclusionSummaryTests(unittest.TestCase):
         self.assertIn("本轮上游过滤摘要", md)
         self.assertIn("10日减持 7 只", md)
         self.assertIn("holder_reduction_veto_10d", md)
+
+    def test_visibility_exclusivity_row_vs_batch(self):
+        # 4.2 第3轮:同一 source_field 既 row operation_impact 又 batch_exclusion(exclusion_summary)→ 互斥 guard raise
+        # (同一风险同一运行只能一种可见性形态;构造合法 web priority_down 候选 impact 人为撞 batch 的 source_field)
+        w = self._weekly_excl({"unlock": 2})        # exclusion by_reason source_field = "share_float_unlock"
+        imp = _semantic_operation_impacts(None, {"status": "risk", "risk_level": "high"}, True,
+                                          w["as_of"], "new_entry")[0]
+        imp["source_field"] = "share_float_unlock"  # 人为与 batch_exclusion 同 source
+        w["reports"][0].setdefault("machine", {})["operation_impact"] = [imp]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
 
 
 if __name__ == "__main__":

@@ -70,6 +70,10 @@ RISK_FAMILIES = ("overheat_crowding", "liquidity_execution", "negative_event",
 
 # 语义 web/LLM 层(Slice 2)只允许产生 downgrade 的已评估风险态(绝不 hard_veto;tailwind/clear_light/unknown 不降级)
 _WEB_DOWNGRADE_STATUSES = ("risk_candidate", "risk", "headwind")
+# 4.2 第3轮:semantic advisory 否决的用户可见标记(单一来源)。m67_advisory_veto 必须在
+# 否决审查触发/操作建议中标此串(非生产、不进 EGS/回测),与 production hard veto 物理区分;
+# guard(validate_operation_impact_no_dangling ⑨)按此串校验,缺则 fail。
+ADVISORY_VETO_TAG = "非生产 advisory"
 
 # ── #6 IV-HV advisory(市场级 50ETF 隐含 vs 已实现;纯信息,绝不改 decision)──────────
 IV_HV_REGIMES = ("iv_rich", "iv_inline", "iv_cheap", "unknown")
@@ -526,6 +530,69 @@ def _web_llm_error(web, sources):
         return f"web_llm 结构残缺:{e}"
 
 
+def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
+    """4.2 第3轮:把已校验的 semantic 信号(official 证据齐全 high / web downgrade)统一成 advisory
+    operation_impact(复用 build_m67/holding 已算标志,不重复校验,DRY 单一来源)。
+    scope='new_entry'(候选行)→ candidate_row_impact / 已结构化落点;
+    scope='existing_holding'(持仓行)→ holding_row_impact / 持仓处置文本、最终结构化列待 S3b。
+    semantic 永远 advisory:production_effect_enabled=False;official→m67_advisory_veto、web_llm→veto_class=none
+    (web/LLM 永久 advisory-only,绝不 hard_veto)。持仓 blocked_add=True(禁止加仓)、私密(private_account)。"""
+    impacts, as_of = [], str(as_of)
+    is_holding = scope == "existing_holding"
+    if high_full:
+        impacts.append({
+            "source_field": "semantic_official_high",
+            "field_class": "semantic_advisory",
+            "visibility_shape": "holding_row_impact" if is_holding else "candidate_row_impact",
+            "impact_scope": scope,
+            "new_entry_effect": "none" if is_holding else "hard_veto",
+            "holding_effect": "clear_review" if is_holding else "none",
+            "blocked_add_required": is_holding,
+            "veto_class": "m67_advisory_veto",
+            "reason": ("持仓官方结构化 high+证据齐全 → 清仓复核建议(人工,不自动卖出;减仓价待 S3b)" if is_holding
+                       else f"官方结构化 high+证据齐全(非空 url_or_pdf) → M6.7 advisory 否决({ADVISORY_VETO_TAG},不进 EGS/回测)"),
+            "evidence_ref": {"kind": "lineage_key",
+                             "value": "machine.layer.semantic_risk.official_status/events",
+                             "as_of": as_of},
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": False,
+            "implementation_status": "future_s3b_schema_render_required" if is_holding else "implemented",
+            "m67_landing_surface": ("精简结论区.操作建议+风控触发(持仓处置复核文本)" if is_holding
+                                    else "table.操作=否决 + 精简结论区.否决审查触发"),
+            "terminal_surface_target": "s3b_持仓处置_列+减仓价" if is_holding else "already_structured",
+            "pending_successor_slice": "S3b" if is_holding else None,
+            "privacy_class": "private_account" if is_holding else "public_tracked",
+        })
+    if web_downgrade and web:
+        impacts.append({
+            "source_field": "semantic_web_llm",
+            "field_class": "semantic_advisory",
+            "visibility_shape": "holding_row_impact" if is_holding else "candidate_row_impact",
+            "impact_scope": scope,
+            "new_entry_effect": "none" if is_holding else "priority_down",
+            "holding_effect": "hold_watch" if is_holding else "none",
+            "blocked_add_required": is_holding,
+            "veto_class": "none",
+            "reason": (f"web/LLM 语义 {web.get('status')}({web.get('risk_level')})+有 sources → "
+                       + ("持仓警戒(advisory,绝不 hard_veto/自动减仓)" if is_holding
+                          else "降级 priority_down(advisory,绝不 hard_veto)")),
+            "evidence_ref": {"kind": "lineage_key",
+                             "value": "machine.layer.semantic_risk.web_llm.status/sources_count",
+                             "as_of": as_of},
+            "confidence": "medium",
+            "pit_basis": "live_only",
+            "production_effect_enabled": False,
+            "implementation_status": "future_s3b_schema_render_required" if is_holding else "implemented",
+            "m67_landing_surface": ("精简结论区.风控触发(持仓警戒文本)" if is_holding
+                                    else "精简结论区.风控触发"),
+            "terminal_surface_target": "s3b_持仓处置_列+减仓价" if is_holding else "already_structured",
+            "pending_successor_slice": "S3b" if is_holding else None,
+            "privacy_class": "private_account" if is_holding else "public_tracked",
+        })
+    return impacts
+
+
 def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     ind = compute_indicators(inp.get("price_series", []))
     fam = classify_risk_families(inp, ind)
@@ -564,7 +631,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     if high_full:
         fam["semantic_official"].update(
             hit=True, action="hard_veto",
-            reasons=[f"语义官方:{e['risk_type']}(high)" for e in high_full])
+            reasons=[f"语义官方:{e['risk_type']}(high,{ADVISORY_VETO_TAG})" for e in high_full])
     sem_has_high = bool(high_full)                                # 仅证据齐全 high 计 veto
     sem_pending = bool(sem_events) and not high_full             # risk 有事件但无证据齐全 high → 待核
 
@@ -765,6 +832,11 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "pending_successor_slice": None,
             "privacy_class": "public_tracked",
         })
+    # 4.2 第3轮:候选行 semantic advisory operation_impact(复用已校验信号:official 证据齐全 high →
+    # m67_advisory_veto 否决;web downgrade → priority_down)。仅非持仓候选行(持仓 semantic 数据接入 = S2,
+    # 见 build_holding_report 注);semantic 永 advisory(production_effect_enabled=False、web_llm 绝不 hard_veto)。
+    if not has_position:
+        op_impacts.extend(_semantic_operation_impacts(high_full, web, web_downgrade, str(as_of), "new_entry"))
     result = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
@@ -834,6 +906,9 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     fam = {k: {"hit": False, "action": "none", "reasons": []} for k in
            ("market_regime", "overheat_crowding", "portfolio_concentration", "liquidity_impact",
             "event_hard_veto", "semantic_official", "stateful_risk")}
+    # 4.2 第3轮范围:持仓 semantic 的数据接入(让持仓真抓 cninfo/web)+ holding_row_impact emit = S2(独立轮,
+    # 涉真实持仓→私密路由,单独审)。本轮持仓侧只把 guard(validate_operation_impact_no_dangling 的 holding_row_impact/
+    # blocked_add/private_account 形态)+ schema 就位并用构造输入测试;build_holding_report 暂不发 semantic operation_impact。
     sr_down = ["已有持仓:按持仓管理输出,不按新开仓处理"]
     r12 = (stateful.get("rule12") or {})
     if r12.get("status") == "active_cooldown":
@@ -903,21 +978,30 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
 
 
 def validate_operation_impact_no_dangling(report: dict) -> None:
-    """4.2 第1轮 no-dangling + advisory-isolation guard。逐条 machine.operation_impact:
-    ① m67_landing_surface 非空(有可见落点)+ terminal_surface_target 非空(有最终结构化落点)——m67 schema 已焊,此处兜底;
-    ② visibility_shape ∈ {candidate_row_impact, holding_row_impact}(逐票形态;batch_exclusion/summary_only/out_of_scope
-       走周报 exclusion_summary,不得塞进 row-level operation_impact —— R-ASHORT-GAP42-ROUND1-VISIBILITY-SHAPE-GUARD-GAP);
-    ③ evidence_ref 可解析 + PIT 绑定(kind ∈ artifact_path|lineage_key|source_id、value 非空、as_of 为 8 位且 == 报告 as_of
-       —— 旧/缺/坏格式日期都拒,防证据日期漂移使 stale trace 看似 current,R-ASHORT-GAP42-ROUND1-EVIDENCE-REF-GUARD-GAP);
-    ④ implementation_status != implemented → 必须挂 pending_successor_slice(防只落文本变永久悬空);
+    """4.2 第1轮 no-dangling + 第3轮 advisory-isolation guard。逐条 machine.operation_impact:
+    ① m67_landing_surface 非空 + terminal_surface_target 非空(m67 schema 已焊,此处兜底);
+    ② visibility_shape ∈ {candidate_row_impact, holding_row_impact}(逐票形态;batch/summary/out_of_scope 走周报 exclusion_summary);
+    ③ evidence_ref 可解析 + PIT 绑定(kind ∈ artifact_path|lineage_key|source_id、value 非空、as_of 为 8 位且 == 报告 as_of);
+    ④ implementation_status != implemented → 必挂 pending_successor_slice(防只落文本变永久悬空);
     ⑤ production_effect_enabled=False 绝不标 production_hard_veto(advisory 不冒充生产硬否决);
-    ⑥ production_hard_veto 的 new_entry hard_veto → table.操作 必须 == 否决(声称生产硬否决就必须真否决,呼应 anti-rescue:888)。
+    ⑥ veto_class ∈ {production_hard_veto, m67_advisory_veto} 的 new_entry hard_veto → table.操作 必须 == 否决(声称硬否决就必须真否决,呼应 anti-rescue);
+    ⑦【第3轮】veto_class==m67_advisory_veto ⟹ production_effect_enabled==False(advisory 否决必非生产,⑤ 的反向闭合);
+    ⑧【第3轮】field_class==semantic_advisory 或 source_field 以 semantic_ 开头 ⟹ production_effect_enabled==False
+      且 veto_class!=production_hard_veto;semantic_official_high 必须保持 m67_advisory_veto;semantic_web_llm 必须保持 none
+      且 new_entry_effect!='hard_veto'(web/LLM 永久 advisory-only,绝不 hard_veto)。
+    报告级(存在该类 impact 时):
+    ⑨【第3轮】任一 m67_advisory_veto ⟹ 否决审查触发/操作建议 含 ADVISORY_VETO_TAG(advisory 否决须显式标非生产,与生产硬否决物理区分);
+    ⑩【第3轮】任一 blocked_add_required==True ⟹ 操作建议/风控触发 含「禁止加仓」(独立旗标必用户可见,不被其它处置吞掉)。
     operation_impact 可选(缺省=无 impact)→ no-op,向后兼容。"""
     mc = report.get("machine") or {}
     impacts = mc.get("operation_impact")
     if not impacts:
         return
     action = report["m67"]["table"]["操作"]
+    cut = report["m67"]["精简结论区"]
+    veto_text = str(cut.get("否决审查触发", ""))
+    advice_text = str(cut.get("操作建议", ""))
+    risk_text = str(cut.get("风控触发", ""))
     for imp in impacts:
         sf = imp.get("source_field", "?")
         if not imp.get("m67_landing_surface"):
@@ -942,10 +1026,32 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
             raise ValueError(f"operation_impact {sf} 非 implemented 却无 pending_successor_slice(文本恐变永久悬空)")
         if imp.get("production_effect_enabled") is False and imp.get("veto_class") == "production_hard_veto":
             raise ValueError(f"operation_impact {sf} production_effect_enabled=false 却标 production_hard_veto(advisory 冒充生产)")
-        if (imp.get("veto_class") == "production_hard_veto"
+        if (imp.get("veto_class") in ("production_hard_veto", "m67_advisory_veto")
                 and imp.get("new_entry_effect") == "hard_veto"
                 and action != "否决"):
-            raise ValueError(f"operation_impact {sf} 声称 production_hard_veto 硬否决却未否决(action={action})")
+            raise ValueError(f"operation_impact {sf} 声称 {imp.get('veto_class')} 硬否决却未否决(action={action})")
+        if imp.get("veto_class") == "m67_advisory_veto" and imp.get("production_effect_enabled") is not False:
+            raise ValueError(f"operation_impact {sf} m67_advisory_veto 却 production_effect_enabled!=false(advisory 否决必非生产)")
+        # ⑧ semantic 来源(field_class==semantic_advisory 或 source_field 以 semantic_ 开头)= 永久 advisory。
+        #   source-class 级绑定(不只按 veto_class 分支,防"改 veto_class/丢分类绕过";堵三类伪装:official→production_hard_veto+enabled /
+        #   official hard_veto 丢 advisory 分类 / web_llm production-enabled):一律非生产、绝不 production_hard_veto;
+        #   semantic_official_high 必保 m67_advisory_veto;semantic_web_llm 必保 veto_class=none 且非 hard_veto。单一 block = 未来加 semantic 不变式只在此处。
+        if imp.get("field_class") == "semantic_advisory" or str(imp.get("source_field", "")).startswith("semantic_"):
+            if imp.get("production_effect_enabled") is not False:
+                raise ValueError(f"operation_impact {sf} semantic 来源必须 production_effect_enabled=false(语义永久 advisory,不进生产)")
+            if imp.get("veto_class") == "production_hard_veto":
+                raise ValueError(f"operation_impact {sf} semantic 来源不得标 production_hard_veto(语义不进生产硬否决)")
+            if imp.get("source_field") == "semantic_official_high" and imp.get("veto_class") != "m67_advisory_veto":
+                raise ValueError(f"operation_impact {sf} semantic_official_high 必须 m67_advisory_veto(不得丢 advisory 分类)")
+            if imp.get("source_field") == "semantic_web_llm" and (
+                    imp.get("veto_class") != "none" or imp.get("new_entry_effect") == "hard_veto"):
+                raise ValueError(f"operation_impact {sf} semantic_web_llm 必须 veto_class=none 且非 hard_veto(web/LLM 永久 advisory-only)")
+    if any(imp.get("veto_class") == "m67_advisory_veto" for imp in impacts) and (
+            ADVISORY_VETO_TAG not in veto_text and ADVISORY_VETO_TAG not in advice_text):
+        raise ValueError(f"存在 m67_advisory_veto 但 否决审查触发/操作建议 未标「{ADVISORY_VETO_TAG}」(advisory 否决须显式标非生产)")
+    if any(imp.get("blocked_add_required") for imp in impacts) and (
+            "禁止加仓" not in (advice_text + risk_text) and "禁止自动加仓" not in (advice_text + risk_text)):
+        raise ValueError("存在 blocked_add_required=true 但 操作建议/风控触发 未显示禁止加仓(独立旗标必用户可见)")
 
 
 def validate_m67_consistency(report: dict) -> None:

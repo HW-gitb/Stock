@@ -19,7 +19,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners.a_short_phase5_engine import (  # noqa: E402
-    build_m67_report, validate_m67_consistency, validate_operation_impact_no_dangling,
+    ADVISORY_VETO_TAG, build_m67_report, validate_m67_consistency,
+    validate_operation_impact_no_dangling, _semantic_operation_impacts,
 )
 from tests.test_a_short_phase5_engine import _good_input, _held_state  # noqa: E402
 
@@ -249,6 +250,167 @@ class NoDanglingGuardTests(unittest.TestCase):
 
     def test_no_impacts_is_noop(self):
         validate_operation_impact_no_dangling(build_m67_report(_good_input(), AS_OF, "t"))
+
+
+# ── 4.2 第3轮: semantic 复用 → advisory operation_impact + 全 guard ────────────
+# 合法 semantic 输入构造(过 _validate_semantic_official / _web_llm_consistency_error)。
+_OFFICIAL_HIGH = {"status": "risk", "had_pit_announcements": True,
+                  "events": [{"source": "cninfo", "title": "立案调查", "category": "监管",
+                              "disclosure_date": "20260610", "risk_type": "litigation",
+                              "severity": "high", "url_or_pdf": "http://cninfo.example/x.pdf"}]}
+_OFFICIAL_HIGH_NOURL = {"status": "risk", "had_pit_announcements": True,
+                        "events": [{"source": "cninfo", "title": "例行公告", "category": "监管",
+                                    "disclosure_date": "20260610", "risk_type": "litigation",
+                                    "severity": "high", "url_or_pdf": ""}]}   # 缺 URL → high 降为待核
+_WEB_RISK = {"web_llm": {"status": "risk", "risk_level": "high", "action": "downgrade"},
+             "sources": [{"title": "t", "url": "http://news.example/x"}]}
+_WEB_TAILWIND = {"web_llm": {"status": "tailwind", "risk_level": "none", "action": "no_action"},
+                 "sources": [{"title": "t", "url": "http://news.example/up"}]}
+
+
+def _sem_impacts(r):
+    return [i for i in (r["machine"].get("operation_impact") or []) if i["field_class"] == "semantic_advisory"]
+
+
+def _holding_official_impact():
+    """引擎 helper 产的合法持仓 semantic advisory impact(official high, existing_holding):
+    holding_row_impact / clear_review / blocked_add / m67_advisory_veto / future_s3b + pending S3b / private_account。"""
+    return _semantic_operation_impacts([_OFFICIAL_HIGH["events"][0]], None, False, AS_OF, "existing_holding")[0]
+
+
+class SemanticAdvisoryImpactTests(unittest.TestCase):
+    """4.2 第3轮: 候选行 semantic 统一成 advisory operation_impact(official 证据齐全 high → m67_advisory_veto;
+    web downgrade → priority_down)。semantic 永 advisory / 非生产;web_llm 绝不 hard_veto。"""
+
+    def test_official_high_emits_advisory_veto(self):
+        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")               # advisory veto 仍落 操作=否决
+        off = [i for i in _sem_impacts(r) if i["source_field"] == "semantic_official_high"]
+        self.assertEqual(len(off), 1)
+        self.assertEqual(off[0]["veto_class"], "m67_advisory_veto")       # 非 production_hard_veto
+        self.assertFalse(off[0]["production_effect_enabled"])
+        self.assertEqual(off[0]["visibility_shape"], "candidate_row_impact")
+        self.assertEqual(off[0]["new_entry_effect"], "hard_veto")
+        self.assertIn(ADVISORY_VETO_TAG, r["m67"]["精简结论区"]["否决审查触发"])   # ⑨ 文本标非生产
+        validate_m67_consistency(r)                                       # 全 guard 通过
+
+    def test_web_downgrade_emits_priority_down(self):
+        r = build_m67_report(_good_input(semantic_web_llm=_WEB_RISK), AS_OF, "t")
+        web = [i for i in _sem_impacts(r) if i["source_field"] == "semantic_web_llm"]
+        self.assertEqual(len(web), 1)
+        self.assertEqual(web[0]["veto_class"], "none")                    # web 绝不 veto
+        self.assertEqual(web[0]["new_entry_effect"], "priority_down")
+        self.assertFalse(web[0]["production_effect_enabled"])
+        validate_m67_consistency(r)
+
+    def test_official_high_no_url_no_advisory_veto(self):
+        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH_NOURL), AS_OF, "t")
+        self.assertNotEqual(r["m67"]["table"]["操作"], "否决")             # 缺 URL → 待核, 不否决
+        self.assertEqual([i for i in _sem_impacts(r) if i["source_field"] == "semantic_official_high"], [])
+
+    def test_no_semantic_no_impact(self):
+        self.assertEqual(_sem_impacts(build_m67_report(_good_input(), AS_OF, "t")), [])
+
+    def test_semantic_impact_passes_schema(self):
+        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH, semantic_web_llm=_WEB_RISK), AS_OF, "t")
+        jsonschema.validate(r, _load(M67_SCHEMA))
+        self.assertEqual(len(_sem_impacts(r)), 2)                         # official + web 各一条
+
+    def test_held_position_no_candidate_semantic_impact(self):
+        # 候选 semantic impact 仅 not has_position 发;持仓 semantic 数据接入/emit = S2
+        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH, stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(_sem_impacts(r), [])
+
+    def test_anti_rescue_semantic_tailwind_does_not_rescue(self):
+        # production hard veto(reduce_deduct) + semantic 正面(tailwind) → 仍否决, 不救回
+        r = build_m67_report(_reduce_input(semantic_web_llm=_WEB_TAILWIND), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")
+        validate_m67_consistency(r)
+
+
+class SemanticGuardTests(unittest.TestCase):
+    """4.2 第3轮 guard ⑦⑧⑨⑩ + 持仓 holding_row_impact 合法形态(构造输入直接喂 guard)。"""
+
+    def _veto_report(self):
+        return build_m67_report(_good_input(semantic=_OFFICIAL_HIGH), AS_OF, "t")   # 候选 advisory-veto
+
+    def test_guard7_advisory_veto_must_be_nonproduction(self):
+        r = self._veto_report()
+        [i for i in r["machine"]["operation_impact"]
+         if i["source_field"] == "semantic_official_high"][0]["production_effect_enabled"] = True
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_semantic_official_cannot_be_promoted_to_production_hard_veto(self):
+        r = self._veto_report()
+        imp = [i for i in r["machine"]["operation_impact"]
+               if i["source_field"] == "semantic_official_high"][0]
+        imp["veto_class"] = "production_hard_veto"
+        imp["production_effect_enabled"] = True
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_semantic_official_hard_veto_must_keep_advisory_veto_class(self):
+        r = self._veto_report()
+        imp = [i for i in r["machine"]["operation_impact"]
+               if i["source_field"] == "semantic_official_high"][0]
+        imp["veto_class"] = "none"
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_semantic_web_llm_must_stay_nonproduction(self):
+        r = build_m67_report(_good_input(semantic_web_llm=_WEB_RISK), AS_OF, "t")
+        [i for i in r["machine"]["operation_impact"]
+         if i["source_field"] == "semantic_web_llm"][0]["production_effect_enabled"] = True
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_any_semantic_advisory_cannot_claim_production_effect(self):
+        r = self._veto_report()
+        imp = [i for i in r["machine"]["operation_impact"]
+               if i["source_field"] == "semantic_official_high"][0]
+        imp["source_field"] = "semantic_future_feed"
+        imp["veto_class"] = "production_hard_veto"
+        imp["production_effect_enabled"] = True
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_guard8_web_llm_never_veto(self):
+        r = build_m67_report(_good_input(semantic_web_llm=_WEB_RISK), AS_OF, "t")
+        [i for i in r["machine"]["operation_impact"]
+         if i["source_field"] == "semantic_web_llm"][0]["veto_class"] = "m67_advisory_veto"
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_guard8_web_llm_never_hard_veto(self):
+        r = build_m67_report(_good_input(semantic_web_llm=_WEB_RISK), AS_OF, "t")
+        [i for i in r["machine"]["operation_impact"]
+         if i["source_field"] == "semantic_web_llm"][0]["new_entry_effect"] = "hard_veto"
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_guard9_advisory_veto_text_tag_required(self):
+        r = self._veto_report()
+        r["m67"]["精简结论区"]["否决审查触发"] = "立案"            # 抹掉 advisory tag
+        r["m67"]["精简结论区"]["操作建议"] = "否决,禁止建仓。"      # 无 tag
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_guard10_blocked_add_must_be_visible(self):
+        r = self._veto_report()
+        r["m67"]["table"]["操作"] = "持有"
+        r["machine"]["operation_impact"] = [_holding_official_impact()]   # blocked_add=True
+        r["m67"]["精简结论区"]["操作建议"] = f"持有。复核({ADVISORY_VETO_TAG})。"   # 含 tag(过⑨)但无禁止加仓
+        r["m67"]["精简结论区"]["风控触发"] = "无"
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_holding_advisory_impact_legal_form_passes(self):
+        r = self._veto_report()
+        r["m67"]["table"]["操作"] = "持有"
+        r["machine"]["operation_impact"] = [_holding_official_impact()]
+        r["m67"]["精简结论区"]["操作建议"] = f"已有持仓,禁止加仓。清仓复核建议({ADVISORY_VETO_TAG})。"
+        validate_operation_impact_no_dangling(r)                          # holding_row_impact 合法形态 → 不 raise
 
 
 if __name__ == "__main__":
