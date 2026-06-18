@@ -8,6 +8,44 @@
 
 ---
 
+## 2026-06-18 — Claude 实测确认 weekly 取数 [OK](探针真跑 + pandas Index bug 已修)
+- **Verdict/Action**: 用户授权先跑真探针,实测发现并修自身 bug(`columns or []` 对真 pandas Index 报 bool ambiguous,fake list 掩盖→安全转 set/list+加真 pandas test)。**实测**:weekly pinned 3 接口全健康(trade_cal5/share_float339/disclosure1)→ **[OK]**,彻底确认 weekly 真取数正常(之前"broken"是探针 raw pro_api 误诊)。Codex re-审查已 **PASS**(含此 pandas 修复,note 证 real pandas passed)。
+- **Required**: `R-TUSHARE-HEALTH-PROBE-PLAINTEXT-TOKEN-AND-FALSE-OK-GAP` — Codex re-`审查 PASS`,详见 `docs/system_risk_register.md`(单一来源);用户「暂不提交」,探针+测试 working tree 保留。
+- **Verify**: 真 pandas test+既有 = 19;真探针实测 **[OK]**(3 接口健康);全量 **2297 OK**;doc+route 30;diff clean。
+- **Next**: 用户定提交时机(Codex 已 PASS);提交后可进下一环节(Round5 龙虎榜→大宗)。
+
+## 2026-06-18 — Codex re-`审查 PASS` (R-TUSHARE-HEALTH-PROBE-PLAINTEXT-TOKEN-AND-FALSE-OK-GAP)
+- **Verdict/Action**: PASS. residual 已闭合：OK 现在必须 `trade_cal`、`share_float`、`disclosure_date` 三个关键接口都健康；`share_float` 或 `disclosure_date` 缺列时会返回 `CRITICAL-API-BROKEN` / exit 1，不再打印 all-clear。
+- **Required**: addressed in working tree;风险项仍等用户 `提交` 后才算闭环，见 `docs/system_risk_register.md`。
+- **Verify**: no-network probe confirmed broken `share_float` gives `RC=1`, no `[OK]`, and has `CRITICAL-API-BROKEN`; targeted probe/doc route 48 tests passed; pandas dataframe probe passed; `py_compile` and `git diff --check` passed. Full discover with `.tools/python_libs` ran 2296 tests but local env still lacks `requests`/`tushare`, so 16 env errors are not PASS evidence.
+- **Next**: Claude `提交` reviewed health-probe tracked files;继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-TUSHARE-HEALTH-PROBE residual: _verdict 只看单接口)
+- **Verdict/Action**: 判定 Codex residual 对(_verdict 只看 trade_cal,share_float/disclosure_date 无列空表仍 rc=0)。改 _verdict:**3 关键接口 health 都 True 才 OK**(用 _PKG_CALLS keys);known-good 通但 data API 缺列→明确 label `CRITICAL-API-BROKEN`(exit1、不打印 all-clear,区别 pin/网络);main 诊断列不健康接口。
+- **Required**: `R-TUSHARE-HEALTH-PROBE-PLAINTEXT-TOKEN-AND-FALSE-OK-GAP` residual — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 新 2 反例(_verdict trade_cal 好+share_float 坏→`CRITICAL-API-BROKEN`/exit1 / main trade_cal 有行+share_float 无列→非零)+既有 16 = 18;全量 **2296 OK**(本机 jsonschema 在;Codex 环境缺故跑不了全量,本机补证)+doc+route 30+diff clean。未跑真探针(遵边界)。
+- **Next**: 审查(Codex re-审查 residual)。
+- **Pre-Codex self-review**: A OK 判定×3 接口(全健康 OK/任一坏非 OK)+ data-api 坏的 _verdict 与 main no-network 反例各配测。B _verdict 用 _PKG_CALLS keys(单一来源,加接口自动纳入);main 诊断列 unhealthy。C 任一接口坏→非 OK(不漏)、3 健康→OK(不误拒)。D N-A。E draft。F no-network/不需真 token。
+
+## 2026-06-18 — Codex re-`审查 FAIL` (R-TUSHARE-HEALTH-PROBE-PLAINTEXT-TOKEN-AND-FALSE-OK-GAP)
+- **Verdict/Action**: FAIL. HTTPS-only、0 行防误判、复用 pinned path 三个方向已有进展，但 closure 仍不成立：最终 `_verdict()` 只看 `trade_cal`，不看 `share_float` / `disclosure_date` 是否健康；解禁/财报接口坏了仍会返回 `rc=0`。
+- **Required**: same ID remains open; residual 详情见 `docs/system_risk_register.md`。
+- **Verify**: no-network probe 复现：`trade_cal` 有行但 `share_float`/`disclosure_date` 无列空表时，脚本打印 `[OK]` 并返回 `RC=0`；targeted 探针+doc route 46 tests passed；`py_compile` passed；full `unittest discover` 被当前环境缺 `jsonschema` 阻断，不能算通过证据。
+- **Next**: Claude 修 residual：OK 必须要求 3 个关键接口都健康；补 `_verdict` 和 `main` 的 no-network 反例测试。
+
+## 2026-06-18 — Claude `修复` (R-TUSHARE-HEALTH-PROBE-PLAINTEXT-TOKEN-AND-FALSE-OK-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 3 项全对,重写探针:①HTTPS-only(发请求前拦非 https,绝不明文 token)②health=列齐+known-good 非空行(防 false-OK)③复用 weekly pinned init_tushare_pro。**关键纠错**:之前「实盘 broken 要升级 tushare」错——weekly 走 init_tushare_pro 已 pin 到 https://api.tushare.pro/dataapi、本就正常;探针 raw ts.pro_api 未 pin 才假阳(Codex finding③)。详见 register。
+- **Required**: `R-TUSHARE-HEALTH-PROBE-PLAINTEXT-TOKEN-AND-FALSE-OK-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 新 test_tushare_health_probe 16(非 https 拦截不发请求/known-good 0 行非健康+非零退出/复用 pinned pro no-network/不需真 token)+全量 **2294 OK**(零回归)+doc+route 30+diff clean。**未跑真探针**(遵 Codex 边界:修复+审过前不跑)。
+- **Next**: 审查(Codex re-审查 探针修复)。
+- **Pre-Codex self-review**: A 三缺陷×出口(https 拦/false-OK 0行/复用 pinned)各配 no-network 测;数据接口列齐0行 vs known-good 0行 区分测。B 复用 init_tushare_pro(weekly 真实 pinned 路径);_require_https 发请求前拦;纯函数 _pkg_health/_verdict 可测。C known-good 0行→非健康(不误判)、数据接口真0行列齐→端点通(不误拒)。D N-A。E SESSION_LOG draft。F token 不打印/不明文;no-network 测不需真 token;纠错记 register。
+
+## 2026-06-18 — Codex `审查 FAIL` (`runners/tushare_health_probe.py`)
+- **Verdict/Action**: FAIL. 这个新探针不能直接运行或提交：HTTP 对照会用明文 `http://` 发送 token，且 0 行有列名会被误判为健康；它也没有复用 weekly 真正用的 pinned Tushare 初始化路径。
+- **Required**: `R-TUSHARE-HEALTH-PROBE-PLAINTEXT-TOKEN-AND-FALSE-OK-GAP` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: `py_compile` 通过；本机运行在导入 tushare 前停止，没有发网络；fake-module 探针确认 URL 是 `http://api.tushare.pro`，且 0 行响应仍返回 `rc=0`。
+- **Next**: 修复该 Required 后再运行真实 token 探针；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
 ## 2026-06-18 — Codex re-`审查 PASS` (R-ASHORT-GAP42-FORWARD-EVENTS-IMPACT-EVIDENCE-GUARD-GAP)
 - **Verdict/Action**: PASS. 反向 evidence guard 已补上；`forward_event_*` 逐票影响现在必须能匹配 checked 日历事件，伪造类型、空日历、错股票、错 evidence_ref 都会被拒。
 - **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-IMPACT-EVIDENCE-GUARD-GAP` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源)，风险项仍等用户 `提交` 后才算闭环。
