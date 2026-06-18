@@ -675,6 +675,37 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         for _ud in (_dl.get("unchecked_dates") or []):
             if _ud not in _wdset:
                 raise ValueError(f"dragon_list unchecked_dates {_ud} 不在 window_dates")
+        # 第二刀 席位覆盖**双向闭合**(R-ASHORT-GAP42-ROUND5-DRAGON-SEATS-COVERAGE-GUARD-GAP):seats_status ⟺ 逐 event seats/inst_net_buy。
+        # (a) 任一 event 带 seats/inst_net_buy ⟹ seats_status 必 checked(席位证据须有覆盖状态托管);
+        # (b) seats_status=checked ⟹ 非 unchecked_seat_date 的每个 event 必带 seats(array)+ inst_net_buy(key,值可 null);
+        # (c) unchecked_seat_date 上的 event 不得带 seats/inst_net_buy(席位未查成不附);
+        # (d) seats_status=unknown_or_unavailable ⟹ 无 event 带 seats/inst_net_buy(unknown 不漏席位);
+        # unchecked_seat_dates ⊆ window 且仅 checked 下有意义。
+        _ss = _dl.get("seats_status")
+        _usd = set(_dl.get("unchecked_seat_dates") or [])
+        _has_any_seats = any(("seats" in _e or "inst_net_buy" in _e) for _e in _dlevs)
+        if _has_any_seats and _ss != "checked":
+            raise ValueError("dragon_list event 带 seats/inst_net_buy 但 seats_status 非 checked(席位证据无覆盖状态托管)")
+        if _usd and _ss != "checked":
+            raise ValueError("dragon_list unchecked_seat_dates 仅在 seats_status=checked 时有意义")
+        for _ud in _usd:
+            if _ud not in _wdset:
+                raise ValueError(f"dragon_list unchecked_seat_dates {_ud} 不在 window_dates")
+        if _ss == "checked":
+            for _e in _dlevs:
+                _has = ("seats" in _e) or ("inst_net_buy" in _e)
+                if _e["trade_date"] in _usd:
+                    if _has:
+                        raise ValueError(f"dragon_list event {_e['ts_code']} 在 unchecked_seat_date {_e['trade_date']} 却带 seats/inst_net_buy(席位未查成日不应附)")
+                else:
+                    if "seats" not in _e or "inst_net_buy" not in _e:
+                        raise ValueError(f"dragon_list event {_e['ts_code']} 席位查成日缺 seats/inst_net_buy(seats_status=checked 须逐 event 覆盖)")
+                    if not isinstance(_e.get("seats"), list):
+                        raise ValueError(f"dragon_list event {_e['ts_code']} seats 非数组")
+        elif _ss == "unknown_or_unavailable":
+            for _e in _dlevs:
+                if "seats" in _e or "inst_net_buy" in _e:
+                    raise ValueError(f"dragon_list seats_status=unknown_or_unavailable 却有 event 带 seats/inst_net_buy({_e['ts_code']})")
         # forward landing(checked):每 event 的候选 report 必须有 dragon_list_appearance impact(消费者强制,不靠 main 调用顺序)。
         if _dl.get("status") == "checked":
             _dl_rep_by = {r["ts_code"]: r for r in weekly["reports"]}
@@ -1079,14 +1110,100 @@ def _fetch_dragon_list(pro, trade_date: str):
             for _, r in df.iterrows()]
 
 
-def _dragon_list_events(cand_names, as_of, dragon_provider, trade_days,
+_DRAGON_INST_SEAT_TAG = "机构专用"   # top_inst.exalter 机构席位标记(tushare 约定,**非阈值**;只做数据标注、不分类决策)
+
+
+def _fetch_dragon_inst(pro, trade_date: str):
+    """4.2 Round5 第二刀 真席位 provider: tushare `pro.top_inst(trade_date=)`(当日全市场上榜票逐席位,**同 trade_date<=as_of
+    PIT-safe**)→ [{"ts_code","exalter"(席位/营业部名),"side"(0买/1卖,原值),"net_buy"(该席位净买入,原值)}]。按 trade_date 查,
+    builder 再按 (ts_code,trade_date) join 到上榜 event。**fail-closed**: 缺 ts_code/exalter/net_buy 列→None(未查成);异常/None→None;
+    空→[](该日真无席位记录,查成了)。net_buy 不做单位换算;`exalter` 含『机构专用』= 机构席位。"""
+    try:
+        df = pro.top_inst(trade_date=str(trade_date), fields="trade_date,ts_code,exalter,side,buy,sell,net_buy")
+    except Exception:
+        return None
+    if df is None:
+        return None
+    if not {"ts_code", "exalter", "net_buy"}.issubset(set(getattr(df, "columns", []))):
+        return None
+    if getattr(df, "empty", True):
+        return []
+    def _s(v):
+        return str(v) if (v is not None and str(v).strip() not in ("", "nan", "None", "NaT")) else None
+    def _num(v):
+        if v is None or str(v).strip() in ("", "nan", "None", "NaT"):
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if (f == f and f not in (float("inf"), float("-inf"))) else None
+    return [{"ts_code": _s(r.get("ts_code")), "exalter": _s(r.get("exalter")),
+             "side": _s(r.get("side")), "net_buy": _num(r.get("net_buy"))}
+            for _, r in df.iterrows()]
+
+
+def _sum_inst_net(seats):
+    """机构席位(exalter 含『机构专用』)净买入合计。无机构席位 → None(不伪造 0);有则求和(None-safe;全 None → None)。"""
+    inst = [s for s in seats if _DRAGON_INST_SEAT_TAG in (s.get("exalter") or "")]
+    if not inst:
+        return None
+    vals = [s["net_buy"] for s in inst if s.get("net_buy") is not None]
+    return round(sum(vals), 2) if vals else None
+
+
+def _attach_seats(out, events, inst_provider):
+    """第二刀 席位分析:为有上榜的交易日抓 top_inst,按 (ts_code,trade_date) join 到 event 的 `seats` + `inst_net_buy`。
+    **仅当 inst_provider 已接线(非 None)时启用** —— 第一刀式调用(无 inst_provider)→ 不加 seats_status,输出不变。
+    **unknown-not-clear**: inst_provider 在但所有有上榜交易日都取数失败 → seats_status=`unknown_or_unavailable`(绝不当「无席位」);
+    部分失败 → seats_status=`checked` 但失败日进 `unchecked_seat_dates`(该日 events 不附 seats)。查成日 → event 附 seats(含真空 [])。"""
+    if inst_provider is None:
+        return                                            # 席位层未请求(第一刀式调用)→ 输出不变
+    event_days = sorted({e["trade_date"] for e in events})
+    if not event_days:
+        out["seats_status"] = "checked"                   # 无上榜 → 无席位可查,trivially 完整
+        return
+    by_day, unchecked, any_ok = {}, [], False
+    for day in event_days:
+        try:
+            rows = inst_provider(day)
+        except Exception:
+            rows = None
+        if rows is None:
+            unchecked.append(day)                         # 该日席位取数失败 → 未查成(不当无席位)
+            continue
+        any_ok = True
+        g = {}
+        for r in rows:
+            code = (r or {}).get("ts_code")
+            if code is None:
+                continue
+            g.setdefault(code, []).append({"exalter": (r or {}).get("exalter"),
+                                           "side": (r or {}).get("side"), "net_buy": (r or {}).get("net_buy")})
+        by_day[day] = g
+    if not any_ok:                                        # 有上榜日但席位全没查成 → unknown(绝不当无席位)
+        out["seats_status"] = "unknown_or_unavailable"
+        return
+    out["seats_status"] = "checked"
+    if unchecked:
+        out["unchecked_seat_dates"] = sorted(set(unchecked))
+    for e in events:
+        if e["trade_date"] in by_day:                     # 该日席位查成 → 附(含真空);失败日不附(render 标未核查)
+            seats = by_day[e["trade_date"]].get(e["ts_code"], [])
+            e["seats"] = seats
+            e["inst_net_buy"] = _sum_inst_net(seats)
+
+
+def _dragon_list_events(cand_names, as_of, dragon_provider, trade_days, inst_provider=None,
                         lookback=DRAGON_LIST_LOOKBACK_TRADING_DAYS):
     """4.2 Round5 龙虎榜 builder(analysis-only,**不改任何决策**;只进 M6.7 板块资金事件对照)。
     `dragon_provider(trade_date)` → list[{"ts_code","name","net_amount","reason"}]|None(失败)。`trade_days` =
     近 N 个 SSE 交易日(均 <= as_of,见 `_recent_trading_days`)。PIT: 只收 trade_date<=as_of(provider 按 trade_days 查,
     天然满足;再防御性核 as_of)。**unknown-not-clear**: provider None / trade_days 空 / 全交易日取数失败 → status
     `unknown_or_unavailable`(绝不当「无上榜」);部分交易日失败 → status `checked` 但失败日进 `unchecked_dates`。
-    只收候选(cand_names)上榜行(其它票丢弃 —— 第一刀只覆盖候选,持仓/席位留后续)。一票多日上榜 → 多条 event。"""
+    只收候选(cand_names)上榜行(其它票丢弃 —— 只覆盖候选,非候选持仓留后续)。一票多日上榜 → 多条 event。
+    第二刀 席位分析: 传 `inst_provider(trade_date)` 时,为有上榜的交易日抓 top_inst,join 到 event 的 `seats`/`inst_net_buy`
+    (见 `_attach_seats`;不传则第一刀式输出不变)。"""
     from datetime import datetime
     wd = sorted({str(d) for d in (trade_days or [])})
     base = {"as_of": str(as_of), "lookback_trading_days": lookback, "window_dates": wd}
@@ -1126,6 +1243,7 @@ def _dragon_list_events(cand_names, as_of, dragon_provider, trade_days,
     out = {**base, "status": "checked", "events": events}
     if unchecked:
         out["unchecked_dates"] = sorted(set(unchecked))
+    _attach_seats(out, events, inst_provider)             # 第二刀: 席位 join(仅 inst_provider 接线时;否则输出不变)
     return out
 
 
@@ -1150,8 +1268,14 @@ def _attach_dragon_list_impacts(weekly, as_of):
         held = ((rep.get("machine") or {}).get("stateful_risk") or {}).get("position_state") == "held"
         recent = max(evs, key=lambda e: e["trade_date"])
         net = recent.get("net_amount")
+        _rseats = recent.get("seats")                              # 第二刀: 最近一次上榜的席位(查成才有)
+        _seat_txt = ""
+        if _rseats is not None:
+            _inb = recent.get("inst_net_buy")
+            _seat_txt = f",席位{len(_rseats)}家" + (f"(机构净{_inb})" if _inb is not None else "")
         detail = (f"最近{recent['trade_date']}"
                   + (f",净额{net}" if net is not None else "")
+                  + _seat_txt
                   + (f",{recent['reason']}" if recent.get("reason") else ""))
         txt = f"{_DRAGON_LIST_MARKER}(comparison-only,不改决策):近{n}交易日{len(evs)}次上龙虎榜({detail})"
         cut = rep["m67"]["精简结论区"]
@@ -1374,7 +1498,8 @@ def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=
 def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None,
          web_llm_provider=None, dividend_provider=None,
          holding_semantic_provider=None, holding_web_llm_provider=None, unlock_provider=None,
-         earnings_provider=None, dragon_list_provider=None, dragon_list_days=None):
+         earnings_provider=None, dragon_list_provider=None, dragon_list_days=None,
+         dragon_list_inst_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -1480,6 +1605,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             dragon_list_provider = lambda d: _fetch_dragon_list(pro, d)
         if dragon_list_days is None:
             dragon_list_days = _recent_trading_days(pro, args.as_of, DRAGON_LIST_LOOKBACK_TRADING_DAYS)
+        # 4.2 Round5 第二刀 真席位 provider(同上下文;top_inst 按 trade_date 查;analysis-only comparison-only)。
+        if dragon_list_inst_provider is None:
+            dragon_list_inst_provider = lambda d: _fetch_dragon_inst(pro, d)
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -1585,7 +1713,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # 4.2 Round5 龙虎榜(comparison-only):候选近 N 交易日上榜对照 → 板块资金事件 + operation_impact(不改决策/EGS/选股/TopN/股数)。
     # unknown-not-clear: provider 不可用(无 --confirm)/trade_cal 取不到 → status=unknown_or_unavailable(绝不当「无上榜」)。
     _dragon_cand_names = [(str(c.get("ts_code")), c.get("name", "")) for c in cands]
-    weekly["dragon_list"] = _dragon_list_events(_dragon_cand_names, args.as_of, dragon_list_provider, dragon_list_days)
+    weekly["dragon_list"] = _dragon_list_events(_dragon_cand_names, args.as_of, dragon_list_provider,
+                                                dragon_list_days, inst_provider=dragon_list_inst_provider)
     _attach_dragon_list_impacts(weekly, args.as_of)
     # 4.2 Round2: 上游过滤批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts
     # (egs_main filter_l0 已记 unlock/suspended/relisted/holder_reduction_veto_10d), 不改 egs_main、不抓数。

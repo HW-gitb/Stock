@@ -30,6 +30,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     FORWARD_EVENT_WINDOW_DAYS, _FORWARD_EVENT_SOURCE_ID, _FORWARD_EVENT_CONFIDENCE,
     _dragon_list_events, _fetch_dragon_list, _attach_dragon_list_impacts, _recent_trading_days,
     DRAGON_LIST_LOOKBACK_TRADING_DAYS, _DRAGON_LIST_EVIDENCE_VALUE, _DRAGON_LIST_MARKER,
+    _fetch_dragon_inst, _sum_inst_net,
 )
 from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
@@ -2533,6 +2534,177 @@ class DragonListTests(unittest.TestCase):
     def test_render_unchecked_dates_warning(self):
         md = render_weekly_markdown(self._weekly_dl(events=[self._dl_event()], unchecked_dates=["20260603", "20260604"]))
         self.assertIn("未能核查龙虎榜", md)
+
+    # ── 第二刀 席位分析(top_inst):provider / _sum_inst_net / builder seat-join / 覆盖 / 文本 / validator / render ──
+    def _inst_rows(self, code="600000.SH"):
+        return [{"ts_code": code, "exalter": "机构专用", "side": "0", "net_buy": 5e6},
+                {"ts_code": code, "exalter": "某游资营业部", "side": "1", "net_buy": -2e6}]
+
+    def test_fetch_dragon_inst_fail_closed(self):
+        class _Pro:
+            def __init__(self, df): self._df = df
+            def top_inst(self, **kw): return self._df
+        self.assertIsNone(_fetch_dragon_inst(_Pro(pd.DataFrame({"ts_code": ["x"], "exalter": ["y"]})), "20260605"))  # 缺 net_buy
+        class _Boom:
+            def top_inst(self, **kw): raise RuntimeError("x")
+        self.assertIsNone(_fetch_dragon_inst(_Boom(), "20260605"))
+        self.assertEqual(_fetch_dragon_inst(_Pro(pd.DataFrame({"ts_code": [], "exalter": [], "net_buy": []})), "20260605"), [])
+        ok = _fetch_dragon_inst(_Pro(pd.DataFrame({"trade_date": ["20260605"], "ts_code": ["600000.SH"], "exalter": ["机构专用"],
+                                                   "side": [0], "buy": [1], "sell": [0], "net_buy": [5e6]})), "20260605")
+        self.assertEqual(ok, [{"ts_code": "600000.SH", "exalter": "机构专用", "side": "0", "net_buy": 5e6}])
+
+    def test_sum_inst_net(self):
+        self.assertEqual(_sum_inst_net([{"exalter": "机构专用", "net_buy": 3e6}, {"exalter": "游资", "net_buy": -1e6},
+                                        {"exalter": "机构专用", "net_buy": 2e6}]), 5e6)
+        self.assertIsNone(_sum_inst_net([{"exalter": "游资", "net_buy": 1e6}]))            # 无机构 → None(不伪造 0)
+        self.assertIsNone(_sum_inst_net([{"exalter": "机构专用", "net_buy": None}]))        # 机构但 net 全 None → None
+
+    def test_builder_attaches_seats(self):
+        dprov = lambda d: ([{"ts_code": "600000.SH", "name": "x", "net_amount": 1e6, "reason": "r"}] if d == "20260605" else [])
+        iprov = lambda d: (self._inst_rows() if d == "20260605" else [])
+        dl = _dragon_list_events([("600000.SH", "x")], AS_OF, dprov, _DL_WINDOW, inst_provider=iprov)
+        self.assertEqual(dl["seats_status"], "checked")
+        e = dl["events"][0]
+        self.assertEqual(len(e["seats"]), 2)
+        self.assertEqual(e["inst_net_buy"], 5e6)                          # 机构专用 net_buy 合计
+
+    def test_builder_no_inst_provider_unchanged(self):
+        # 第一刀式调用(无 inst_provider)→ 输出不变(无 seats_status、event 无 seats)
+        dprov = lambda d: ([{"ts_code": "600000.SH", "name": "x", "net_amount": 1e6, "reason": "r"}] if d == "20260605" else [])
+        dl = _dragon_list_events([("600000.SH", "x")], AS_OF, dprov, _DL_WINDOW)
+        self.assertNotIn("seats_status", dl)
+        self.assertNotIn("seats", dl["events"][0])
+
+    def test_builder_all_inst_fail_seats_unknown(self):
+        dprov = lambda d: ([{"ts_code": "600000.SH", "name": "x", "net_amount": 1e6, "reason": "r"}] if d == "20260605" else [])
+        dl = _dragon_list_events([("600000.SH", "x")], AS_OF, dprov, _DL_WINDOW, inst_provider=lambda d: None)
+        self.assertEqual(dl["seats_status"], "unknown_or_unavailable")     # 席位全没查成 → unknown(不当无席位)
+        self.assertNotIn("seats", dl["events"][0])
+
+    def test_builder_partial_inst_fail_unchecked_seat_dates(self):
+        dprov = lambda d: ([{"ts_code": "600000.SH", "name": "x", "net_amount": 1e6, "reason": "r"}] if d in ("20260605", "20260609") else [])
+        iprov = lambda d: (self._inst_rows() if d == "20260605" else None)   # 20260609 席位失败
+        dl = _dragon_list_events([("600000.SH", "x")], AS_OF, dprov, _DL_WINDOW, inst_provider=iprov)
+        self.assertEqual(dl["seats_status"], "checked")
+        self.assertEqual(dl["unchecked_seat_dates"], ["20260609"])
+        by_day = {e["trade_date"]: e for e in dl["events"]}
+        self.assertIn("seats", by_day["20260605"])
+        self.assertNotIn("seats", by_day["20260609"])                     # 席位失败日不附 seats
+
+    def test_builder_no_events_inst_checked(self):
+        dl = _dragon_list_events([("600000.SH", "x")], AS_OF, lambda d: [], _DL_WINDOW, inst_provider=lambda d: [])
+        self.assertEqual((dl["status"], dl["seats_status"]), ("checked", "checked"))   # 无上榜→无席位可查,trivially 完整
+
+    def test_attach_text_mentions_seats(self):
+        w = self._w_dl()
+        w["dragon_list"]["seats_status"] = "checked"
+        w["dragon_list"]["events"][0]["seats"] = [{"exalter": "机构专用", "side": "0", "net_buy": 5e6}]
+        w["dragon_list"]["events"][0]["inst_net_buy"] = 5e6
+        _attach_dragon_list_impacts(w, AS_OF)
+        sector = w["reports"][0]["m67"]["精简结论区"]["板块资金事件"]
+        self.assertIn("席位1家", sector)
+        self.assertIn("机构净", sector)
+
+    def test_validator_accepts_seats(self):
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="checked")
+        w["dragon_list"]["events"][0]["seats"] = [{"exalter": "机构专用", "side": "0", "net_buy": 5e6}]
+        w["dragon_list"]["events"][0]["inst_net_buy"] = 5e6
+        _attach_dragon_list_impacts(w, AS_OF)
+        jsonschema.validate(w, self._schema())
+        validate_weekly_report(w, _feed())
+
+    def test_validator_seats_unknown_with_event_seats_rejected(self):
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="unknown_or_unavailable")
+        w["dragon_list"]["events"][0]["seats"] = [{"exalter": "机构专用", "side": "0", "net_buy": 5e6}]
+        _attach_dragon_list_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):                               # unknown 却带 seats
+            validate_weekly_report(w, _feed())
+
+    def test_validator_seats_on_unchecked_seat_date_rejected(self):
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="checked", unchecked_seat_dates=["20260605"])
+        w["dragon_list"]["events"][0]["seats"] = [{"exalter": "机构专用", "side": "0", "net_buy": 5e6}]  # event 日 20260605 在 unchecked
+        _attach_dragon_list_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_unchecked_seat_dates_outside_window_rejected(self):
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="checked", unchecked_seat_dates=["20260601"])
+        _attach_dragon_list_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_checked_missing_seats_rejected(self):
+        # 反向(b): seats_status=checked + 非 unchecked 日的 event 缺 seats → 拒(席位证据逐 event 覆盖)
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="checked")   # event 无 seats、无 unchecked
+        _attach_dragon_list_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_seats_missing_inst_net_rejected(self):
+        # 反向(b): event 带 seats 却缺 inst_net_buy key → 拒
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="checked")
+        w["dragon_list"]["events"][0]["seats"] = [{"exalter": "机构专用", "side": "0", "net_buy": 5e6}]
+        _attach_dragon_list_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_seats_without_status_rejected(self):
+        # 反向(a): event 带 seats/inst_net_buy 但无 seats_status → 拒(无覆盖状态托管)
+        w = self._weekly_dl(events=[self._dl_event()])                           # 无 seats_status
+        w["dragon_list"]["events"][0]["seats"] = [{"exalter": "机构专用", "side": "0", "net_buy": 5e6}]
+        w["dragon_list"]["events"][0]["inst_net_buy"] = 5e6
+        _attach_dragon_list_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_checked_empty_seats_accepted(self):
+        # 正向: seats_status=checked + 查成日真无席位(seats=[], inst_net_buy=null)→ 接受(空 ≠ 未查)
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="checked")
+        w["dragon_list"]["events"][0]["seats"] = []
+        w["dragon_list"]["events"][0]["inst_net_buy"] = None
+        _attach_dragon_list_impacts(w, AS_OF)
+        validate_weekly_report(w, _feed())                                       # 不 raise
+
+    def test_validator_unchecked_date_without_seats_accepted(self):
+        # 正向: event 在 unchecked_seat_date 且不带 seats → 接受(未查成日不附 seats)
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="checked", unchecked_seat_dates=["20260605"])
+        _attach_dragon_list_impacts(w, AS_OF)
+        validate_weekly_report(w, _feed())                                       # 不 raise
+
+    def test_render_seats_column(self):
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="checked")
+        w["dragon_list"]["events"][0]["seats"] = [{"exalter": "机构专用", "side": "0", "net_buy": 5e6},
+                                                  {"exalter": "游资", "side": "1", "net_buy": -1e6}]
+        w["dragon_list"]["events"][0]["inst_net_buy"] = 5e6
+        md = render_weekly_markdown(w)
+        self.assertIn("2席", md)
+        self.assertIn("机构净", md)
+
+    def test_render_seats_unknown_line(self):
+        self.assertIn("席位(top_inst)未核查",
+                      render_weekly_markdown(self._weekly_dl(events=[self._dl_event()], seats_status="unknown_or_unavailable")))
+
+    def test_render_seat_cell_unchecked(self):
+        # 席位失败日的 event(无 seats)→ 席位栏「未核查」
+        w = self._weekly_dl(events=[self._dl_event()], seats_status="checked", unchecked_seat_dates=["20260605"])
+        self.assertIn("未核查", render_weekly_markdown(w))
+
+    def test_main_wires_seats(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            dprov = (lambda d: [{"ts_code": "600000.SH", "name": "测试", "net_amount": 1e6, "reason": "涨幅偏离"}] if d == "20260605" else [])
+            iprov = (lambda d: [{"ts_code": "600000.SH", "exalter": "机构专用", "side": "0", "net_buy": 5e6}] if d == "20260605" else [])
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series(), dragon_list_provider=dprov,
+                 dragon_list_days=_DL_WINDOW, dragon_list_inst_provider=iprov)
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["dragon_list"]["seats_status"], "checked")
+        e = [x for x in loaded["dragon_list"]["events"] if x["ts_code"] == "600000.SH"][0]
+        self.assertEqual((len(e["seats"]), e["inst_net_buy"]), (1, 5e6))
 
     # ── main wiring(注入 provider + trade_days → 端到端落盘 + 校验)──
     def test_main_wires_dragon_list(self):

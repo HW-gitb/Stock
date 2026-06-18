@@ -277,9 +277,15 @@ def render_weekly_markdown(weekly: dict) -> str:
             _dlevs = _dl.get("events") or []
             out += ["", f"## 🐯 龙虎榜(近{_n}交易日 · comparison-only · 不改决策/EGS/选股/股数)"]
             if _dlevs:
-                out += ["| 票 | 名称 | 上榜日 | 净额(原值) | 原因 |", "|---|---|---|---|---|"]
+                def _seatcell(e):                     # 第二刀 席位:查成→「N席/机构净X」;未附(未核查日/未接线)→「未核查」
+                    s = e.get("seats")
+                    if s is None:
+                        return "未核查"
+                    inb = e.get("inst_net_buy")
+                    return f"{len(s)}席" + (f"/机构净{inb}" if inb is not None else "")
+                out += ["| 票 | 名称 | 上榜日 | 净额(原值) | 席位 | 原因 |", "|---|---|---|---|---|---|"]
                 out += [f"| {e['ts_code']} | {e['name']} | {e['trade_date']} | "
-                        f"{e['net_amount'] if e.get('net_amount') is not None else '—'} | {e.get('reason') or '—'} |"
+                        f"{e['net_amount'] if e.get('net_amount') is not None else '—'} | {_seatcell(e)} | {e.get('reason') or '—'} |"
                         for e in _dlevs]
             else:
                 out.append(f"> 本周已查:候选近{_n}交易日无上龙虎榜记录。")
@@ -287,6 +293,12 @@ def render_weekly_markdown(weekly: dict) -> str:
             if _udl:                                  # per-交易日 unknown-not-clear:部分交易日取数失败,显式标(绝不当无上榜)
                 out.append(f"> ⚠️ 另有 {len(_udl)} 个交易日未能核查龙虎榜(取数失败),**不代表无上榜**,请人工核查:"
                            + "、".join(_udl))
+            if _dl.get("seats_status") == "unknown_or_unavailable":   # 第二刀 席位层未核查(unknown-not-clear)
+                out.append("> ⚠️ 席位(top_inst)未核查/不可得:本周未取到龙虎榜席位明细;**不代表无机构/游资参与**,请人工核查。")
+            _usd = _dl.get("unchecked_seat_dates") or []
+            if _usd:
+                out.append(f"> ⚠️ 另有 {len(_usd)} 个交易日席位(top_inst)取数失败,该日上榜「席位」栏显示「未核查」:"
+                           + "、".join(_usd))
         else:
             out += ["", f"## 🐯 龙虎榜(近{_n}交易日)",
                     "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到龙虎榜(provider 未授权/不可用);**不代表无上榜**,请人工核查。"]

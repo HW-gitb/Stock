@@ -96,7 +96,7 @@
     },
     "dragon_list": {
       "type": ["object", "null"],
-      "description": "4.2 Round5 龙虎榜第一刀(analysis-only · comparison-only):只记候选近 N 交易日上榜事实 + 净买卖,落 精简结论区.板块资金事件 + machine.operation_impact(source_field=dragon_list_appearance,new_entry_effect=informational/none、holding_effect=none、veto_class=none、production_effect_enabled=false);**绝不改 EGS/TopN/选股/股数/操作/否决**,阈值未定(comparison-only,见 4.2.md §9 决策4)。PIT:龙虎榜 T 日盘后发布 → trade_date<=as_of。席位分析(top_inst)留第二刀。status=unknown_or_unavailable(provider 不可用/取数全失败 → 绝不当「无上榜」) vs checked(已查;events 可空=候选近 N 日无上榜;部分交易日取数失败 → unchecked_dates)。可选/缺省 null。",
+      "description": "4.2 Round5 龙虎榜(analysis-only · comparison-only):候选近 N 交易日上榜事实 + 净买卖(第一刀)+ 席位分析(第二刀:top_inst 逐席位 exalter/side/net_buy,机构净买 inst_net_buy),落 精简结论区.板块资金事件 + machine.operation_impact(source_field=dragon_list_appearance,new_entry_effect=informational/none、holding_effect=none、veto_class=none、production_effect_enabled=false);**绝不改 EGS/TopN/选股/股数/操作/否决**,阈值未定(comparison-only,见 4.2.md §9 决策4)。PIT:龙虎榜 T 日盘后发布 → trade_date<=as_of。status/seats_status=unknown_or_unavailable(provider 不可用/取数全失败 → 绝不当「无上榜/无席位」) vs checked(部分交易日失败 → unchecked_dates/unchecked_seat_dates)。可选/缺省 null。",
       "additionalProperties": false,
       "required": ["as_of", "status", "lookback_trading_days", "window_dates", "events"],
       "properties": {
@@ -116,13 +116,35 @@
               "name": {"type": "string"},
               "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
               "net_amount": {"type": ["number", "null"], "description": "龙虎榜净买卖额(tushare top_list.net_amount 原值,不做单位换算;缺失→null)"},
-              "reason": {"type": ["string", "null"], "description": "上榜原因(top_list.reason;缺失→null)"}
+              "reason": {"type": ["string", "null"], "description": "上榜原因(top_list.reason;缺失→null)"},
+              "seats": {
+                "type": "array",
+                "description": "第二刀 席位分析(top_inst):该(票,上榜日)的逐席位明细(原值)。仅当该交易日 top_inst 取数查成时存在;失败日不附(render 标未核查)。comparison-only,不参与任何决策。",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["exalter", "side", "net_buy"],
+                  "properties": {
+                    "exalter": {"type": ["string", "null"], "description": "营业部/席位名(top_inst.exalter;『机构专用』=机构席位)"},
+                    "side": {"type": ["string", "null"], "description": "买卖方向(top_inst.side;0=买方席位/1=卖方席位,原值)"},
+                    "net_buy": {"type": ["number", "null"], "description": "该席位净买入额(top_inst.net_buy 原值,不做单位换算)"}
+                  }
+                }
+              },
+              "inst_net_buy": {"type": ["number", "null"], "description": "第二刀:机构席位(exalter 含『机构专用』)净买入额合计;无机构席位 → null(不伪造 0)。仅当 seats 存在时附。"}
             }
           }
         },
         "unchecked_dates": {
           "type": "array",
           "description": "per-trade-day coverage(unknown-not-clear 逐日粒度):status=checked 但部分交易日取数失败 → 列出(绝不当「无上榜」)。⊆ window_dates。可选/缺省空。",
+          "items": {"type": "string", "pattern": "^[0-9]{8}$"}
+        },
+        "seats_status": {"enum": ["checked", "unknown_or_unavailable"],
+          "description": "第二刀 席位层覆盖(top_inst):仅当席位 provider 已接线(--confirm)时存在;unknown_or_unavailable=未接线/全失败(绝不当「无席位」)。缺省=第一刀式调用,未请求席位层。"},
+        "unchecked_seat_dates": {
+          "type": "array",
+          "description": "席位 per-day coverage:seats_status=checked 但部分有上榜的交易日 top_inst 取数失败 → 列出(该日 events 无 seats,绝不当「无席位」)。⊆ window_dates。可选/缺省空。",
           "items": {"type": "string", "pattern": "^[0-9]{8}$"}
         }
       }

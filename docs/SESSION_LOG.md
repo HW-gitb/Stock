@@ -8,6 +8,32 @@
 
 ---
 
+## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 龙虎榜第二刀: top_inst 席位 guard)
+- **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-DRAGON-SEATS-COVERAGE-GUARD-GAP` 已在 working tree 修到位：席位状态与逐 event `seats/inst_net_buy` 现在双向闭合；comparison-only 边界未发现被破坏。
+- **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-SEATS-COVERAGE-GUARD-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
+- **Verify**: DragonList+registry+doc-route targeted 152 OK；无网络假 `requests/tushare` 全量 2365 OK；py_compile OK；`git diff --check` OK(仅 CRLF)；独立反例确认 3 个坏态均拒、空席位合法态接受。
+- **Next**: 用户决定是否提交；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-ROUND5-DRAGON-SEATS-COVERAGE-GUARD-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 对(席位覆盖只做正向、缺反向闭合,3 畸形态漏过)。validator 席位块改**双向闭合**(a 有 seats⟹status checked / b checked⟹非 unchecked 日每 event 必带 seats+inst_net_buy / c unchecked 日不带 / d unknown 无 seats)。builder 本就产全不变式,本修补 validator 强制。详见 register。
+- **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-SEATS-COVERAGE-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 新 5 测(Codex 3 坏态全拒 + checked-空席位/unchecked-无 seats 2 正向接受)+ 既有全过;DragonList+registry 122 OK;全量 **2365 OK**(零回归);diff clean(仅 CRLF);无 BOM。**仅 guard+测试**,未动 builder/render/schema/⑬/governance/EGS·TopN·选股·动作·股数。
+- **Next**: 审查(Codex re-审查 席位覆盖双向 guard);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 反向×3 坏态(缺 seats/缺 inst_net_buy/无 status)各配测 + 2 正向防误拒。B 仅 validator 改;builder/render/schema/⑬ 未动。C 反向防误拒:checked 真无席位(seats=[]/inst_net_buy=null)接受、unchecked 日无 seats 接受、第一刀无 seats 仍过。D N-A。E register+SESSION_LOG,未碰 CURRENT。F canonical 日期、覆盖双向不变式、builder↔validator 契约一致、无 BOM、diff clean。
+
+## 2026-06-18 — Codex `审查 FAIL` (4.2 Round5 龙虎榜第二刀: top_inst 席位)
+- **Verdict/Action**: FAIL. 席位接入方向对，且仍是 comparison-only；但 `seats_status=checked` 和 event `seats/inst_net_buy` 没有双向闭合。现在报告可声称席位已核查，同时某条上榜 event 缺 seats 或缺机构净买字段仍通过。
+- **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-SEATS-COVERAGE-GUARD-GAP` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: DragonList+registry+doc-route targeted 147 OK；无网络假 `requests/tushare` 全量 2360 OK；py_compile/diff-check OK；独立反例确认 missing seats、missing inst_net_buy、seats without seats_status 均被接受。
+- **Next**: Claude 补席位覆盖反向 guard + 对抗测试；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `起草` (4.2 Round5 龙虎榜第二刀: 席位分析 top_inst)
+- **Verdict/Action**: 第二刀=席位分析(top_inst 逐席位 exalter/side/net_buy + 机构净买 inst_net_buy)enrich 第一刀 dragon_list event;**comparison-only 不变**(席位是同一上榜信号的证据,无新 operation_impact、guard ⑬ 不动)。只覆盖候选;非候选持仓延后(Tier-3 板块资金事件 render 掩面,需另设非掩面)。
+- **Scope**: weekly schema dragon_list +seats_status/unchecked_seat_dates/event.seats/inst_net_buy(加性可选);pipeline `_fetch_dragon_inst`(top_inst,fail-closed,gated --confirm)+`_sum_inst_net`(机构专用)+`_attach_seats`(按(票,日)join,独立 unknown-not-clear)+`_dragon_list_events`(inst_provider 参)+`_attach` 带席位文本 + main 接线;validator 席位覆盖;render 席位列+未核查;registry owner_ref。边界:不改 EGS/TopN/选股/股数/操作、无 governance、主板、V14.2 frozen。
+- **Verify**: DragonList+registry 117 OK(+16 席位);全量 **2360 OK**(零回归);schema/registry JSON valid;ripple grep 席位符号仅本切片 5 文件;`git diff --check` clean(仅 CRLF);无 BOM。
+- **Next**: 审查(Codex 审第二刀 席位分析);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 席位×出口(provider/builder/coverage/validator/render/main)各配测。B grep 新席位符号仅本切片 5 文件、无 rename/stale;guard ⑬/operation_impact 不动(席位非 impact)。C 反向:无-inst-provider 第一刀输出不变测、_sum_inst 无机构→None、非有限 net_buy→None、unknown→无 seats、seats 仅查成日。D N-A(机构专用=数据标注非阈值)。E 起草 transient 仅 SESSION_LOG,未碰 CURRENT。F 非有限 guard、canonical 日期、覆盖双向不变式、doc↔behavior(docstring/schema/registry 同步)、无 BOM、diff clean。
+
 ## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 龙虎榜 registry + SESSION_LOG)
 - **Verdict/Action**: PASS. SESSION_LOG 模板修复已过门禁；registry provider-call 修复也仍成立：龙虎榜字段已标 `needs_new_provider_call=true`，新增来源 guard 覆盖 `top_list/top_inst/block_trade`，运行逻辑仍是 comparison-only。
 - **Required**: `R-ASHORT-GAP42-ROUND5-SESSION-LOG-MINIMAL-TEMPLATE-GAP` 与 `R-ASHORT-GAP42-ROUND5-DRAGON-LIST-REGISTRY-PROVIDER-FLAG-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
