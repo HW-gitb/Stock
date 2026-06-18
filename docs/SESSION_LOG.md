@@ -8,6 +8,11 @@
 
 ---
 
+## 2026-06-18 — Claude `执行` (4.2 财报质量趋势 3 财报接口 live 验证: pro.forecast/income/balancesheet)
+- **Verdict/Action**: 用户授权 bounded `执行` live 验证(决策5「先确认数据拿不拿得到/靠不靠谱」补做)。HTTPS-pinned `init_tushare_pro`、token 不打印、仅打印字段名/行数/provider 返回长度/builder 状态、不 dump 财务数值、无 --account、不写文件。5 只主板蓝筹(600519/600000/000001/601318/600036)× 3 接口:**全部 `req_cols_missing=[]`**(forecast 的 type/p_change_min/p_change_max、income 的 total_revenue/revenue/oper_cost/n_income/n_income_attr_p、balancesheet 的 total_assets/total_liab/accounts_receiv/inventories/goodwill 实际字段全在),`_fetch_*` 全返非空 list(列覆盖 fail-closed 在真数据上通过),red_fn 在真数据上有 RED 有 clean(非全或全无,逻辑生效)。end-to-end `_financial_trends`(3 类全接):status=checked、7 records(income 4 + balancesheet 3)、0 unchecked(PIT-valid 评估基础齐全)。
+- **结论**: 3 个新财报接口**真取数拉通、字段契约与代码一致、provider 无需改**;②③④「仓库未测真接口」caveat 解除。**纯验证,无代码改动**(仅本 SESSION_LOG entry + CURRENT §0 caveat 更新)。
+- **Next**: 4.2 财报质量趋势线完结;后续 S3b(持仓主动管理,需单独批准)/ 外资单票不做(hk_hold 停发)/ Slice3 阻塞中。继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
 ## 2026-06-18 — Codex re-`审查 PASS` (4.2 财报质量趋势②③④⑤ PIT-filtered coverage)
 - **Verdict/Action**: PASS. 当前 working tree 里两条 open P2 均已修到位：`financial_trends` 不再把 provider 非空但无 PIT-valid 评估基础误报成 checked empty；⑤ `industry_fundamentals` 仍是 summary-only，row-level `operation_impact` 会被拒。
 - **Required**: `R-ASHORT-GAP42-FINANCIAL-TRENDS-PIT-FILTERED-COVERAGE-UNKNOWN-GAP` + `R-ASHORT-GAP42-INDUSTRY-FUNDAMENTALS-SUMMARY-ONLY-ROW-IMPACT-GUARD-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
