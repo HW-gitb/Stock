@@ -8,6 +8,32 @@
 
 ---
 
+## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 大宗交易 coverage/privacy guard)
+- **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-TRADE-EVENT-COVERAGE-PRIVACY-GUARD-GAP` 已在 working tree 修到位：block_trade + sibling dragon_list 都有 checked 覆盖闭合，held trade-event impact 必须走 holding/private shape，comparison-only 边界未发现被破坏。
+- **Required**: addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
+- **Verify**: dragon+block+registry+doc-route targeted 145 OK；no-network stubbed full discover 2407 OK；独立 probes 确认 6 个坏态拒、4 个合法态过；py_compile OK；`git diff --check` OK(仅 CRLF)；无 BOM/FFFD；未跑 live Tushare。
+- **Next**: 用户决定是否提交；render 空结果提示仍写“候选近N日无龙虎榜/大宗交易”(非阻断文案，真实覆盖是候选+账户持仓)；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-ROUND5-TRADE-EVENT-COVERAGE-PRIVACY-GUARD-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 4 项全对(block_trade + sibling dragon_list 同类:写时 guard 漏覆盖闭合 + 持仓 privacy/shape)。① validator 加覆盖闭合(checked 须 window 非空 且 ≥1 实际查成日,否则 unknown);② engine ⑬⑭ 合并为单一 trade-event guard + held↔shape 不变式(held⟹holding/private、非 held⟹candidate/public,运行时强制非靠 registry);③ 对抗+正向测各×2;④ prose drift 改「候选+账户持仓」。运行时行为零改(builder 本就产正确;补 validator/guard 强制 + 文档对齐)。详见 register。
+- **Required**: `R-ASHORT-GAP42-ROUND5-TRADE-EVENT-COVERAGE-PRIVACY-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: dragon+block+registry 164 OK;全量 **2407 OK**(零回归);diff clean(仅 CRLF);无 BOM。运行时(EGS/TopN/选股/动作/股数/provider/governance)未动。
+- **Next**: 审查(Codex re-审查 trade-event coverage/privacy guard);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 类级(dragon+block 同修,覆盖闭合+held-shape 两面;⑬⑭ 合并单一 block 防漂移)。B trade-event marker 单一来源(_TRADE_EVENT_MARKERS);block_trade prose drift(builder/attach/2 header)+ dragon header 同步;registry 既有 holding-private 行不变。C 反向:partial-unchecked 合法不误拒、held private 合法过、非 held candidate/public 不误判;builder 产物零回归(2407)。D N-A。E register+SESSION_LOG,未碰 CURRENT。F canonical 日期、覆盖+held 双向不变式、position_state 安全取、无 BOM、diff clean。
+
+## 2026-06-18 — Codex `审查 FAIL` (4.2 Round5 大宗交易第一刀)
+- **Verdict/Action**: FAIL. block_trade 方向对且仍是 comparison-only；但 trade-event 写时 guard 漏了 checked 覆盖闭合与持仓 privacy shape，同类 dragon_list 也复现。完整 finding 只放 register。
+- **Required**: `R-ASHORT-GAP42-ROUND5-TRADE-EVENT-COVERAGE-PRIVACY-GUARD-GAP` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: targeted 68 OK；独立 probes 复现 block_trade/dragon checked 空窗口、全 unchecked、held public/candidate shape 均被接受；py_compile OK；`git diff --check` OK(仅 CRLF)；未跑 live Tushare。
+- **Next**: Claude 修 trade-event coverage/privacy guard + 同类测试；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `起草` (4.2 Round5 大宗交易第一刀: block_trade comparison-only + live 取数验证)
+- **Verdict/Action**: 用户「开始执行大宗交易」。先 live 验证(决策5 先确认可得性):联网真跑 block_trade(HTTPS-pinned、token 不打印、无 --account)——已结算日 150~184 笔/日、字段 ts_code/trade_date/price/vol/amount(float)、今日盘后未出返 []、拉通+PIT 干净、**provider 无需改**。再建第一刀:候选+账户持仓近 N 交易日大宗成交事实+成交金额(amount 合计+笔数)落 精简结论区.板块资金事件「大宗交易对照」+ machine.operation_impact(block_trade_appearance,comparison-only),镜像龙虎榜全套(含持仓/Tier-3 掩面放行/registry 候选+持仓拆行/guard ⑭——一次性应用第三刀教训)。买卖方营业部=第二刀、折价率=后续。
+- **Scope**: weekly schema +`block_trade` 全局字段;pipeline `_fetch_block_trade`/`_block_trade_events`(按(票,日)聚合 amount+笔数)/`_attach_block_trade_impacts`/`validate_weekly_report` 双向 no-dangling/main 接 `block_trade_provider`(复用 reports universe + trade_cal 窗口);phase5 guard ⑭(comparison-only isolation + 板块资金事件「大宗交易对照」marker);render 大宗交易段;`_card_field` 放行「大宗交易对照」;registry +2 行(候选 public/持仓 private)。**边界**:不改 EGS/TopN/选股/股数/操作/否决;comparison-only;无 governance;主板/V14.2 frozen。
+- **Verify**: BlockTradeTests 31 + registry 56 OK;全量 **2399 OK**(零回归);weekly+registry schema valid(13 fields,无 both-target);live 验证 block_trade 拉通;diff clean(仅 CRLF);无 BOM。
+- **Next**: 审查(Codex 审 block_trade 第一刀);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 缺陷×出口(provider/builder 聚合+unknown/attach 候选+held/validator 正反/guard ⑭/render/main)各配测。B block_trade 符号仅本切片;镜像 dragon 模式(builder/validator/guard/render/registry 全对齐);`_card_field` 泛化双 marker。C 反向:非有限 amount→None、金额全缺→None 笔数仍计、unknown 不当无大宗、候选/dragon 零回归(2399)、持仓 holding/private + registry 拆行(应用第三刀教训避免 both-target)。D N-A。E SESSION_LOG,未碰 CURRENT。F 非有限 guard、canonical 日期、双向不变式、live 验证、无 BOM、diff clean。
+
 ## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 龙虎榜第三刀 registry 隐私)
 - **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-DRAGON-HOLDING-REGISTRY-PRIVACY-GAP` 已在 working tree 修到位：龙虎榜和语义 registry 都拆成候选公开行 + 持仓私密行，已无 `operation_impact_target=both` 单行混写。
 - **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-HOLDING-REGISTRY-PRIVACY-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。

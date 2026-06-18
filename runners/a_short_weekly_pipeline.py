@@ -708,6 +708,10 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
                     raise ValueError(f"dragon_list seats_status=unknown_or_unavailable 却有 event 带 seats/inst_net_buy({_e['ts_code']})")
         # forward landing(checked):每 event 的候选 report 必须有 dragon_list_appearance impact(消费者强制,不靠 main 调用顺序)。
         if _dl.get("status") == "checked":
+            # 覆盖闭合(R-ASHORT-GAP42-ROUND5-TRADE-EVENT-COVERAGE-PRIVACY-GUARD-GAP):checked 必须有实际查成的交易日 ——
+            # window_dates 非空 且 (window_dates − unchecked_dates) 非空;无任何查成日应为 unknown(拒 checked-空窗口/全 unchecked)。
+            if not _wd or not (set(_wd) - set(_dl.get("unchecked_dates") or [])):
+                raise ValueError("dragon_list status=checked 但无任何实际查成交易日(window_dates 空 或 全在 unchecked_dates)→ 应为 unknown_or_unavailable")
             _dl_rep_by = {r["ts_code"]: r for r in weekly["reports"]}
             for _e in _dlevs:
                 _rep = _dl_rep_by.get(_e["ts_code"])
@@ -726,6 +730,59 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
                 raise ValueError(f"operation_impact dragon_list_appearance({_r['ts_code']}) 无匹配 checked dragon_list 事件(impact 无证据/悬空)")
             if (_imp.get("evidence_ref") or {}).get("value") != _DRAGON_LIST_EVIDENCE_VALUE:
                 raise ValueError(f"operation_impact dragon_list_appearance({_r['ts_code']}) evidence_ref.value 未对齐 {_DRAGON_LIST_EVIDENCE_VALUE}")
+    # 4.2 Round5 大宗交易 block_trade 一致性(analysis-only comparison-only;镜像 dragon_list,无席位):历法 + PIT + 窗口 + 张冠李戴 + 双向 no-dangling。
+    _bt = weekly.get("block_trade")
+    if _bt is not None:
+        if _bt.get("as_of") != weekly["as_of"]:
+            raise ValueError(f"block_trade.as_of {_bt.get('as_of')} != 周报 as_of {weekly['as_of']}")
+        _btwd = _bt.get("window_dates") or []
+        _btevs = _bt.get("events") or []
+        if _bt.get("status") == "unknown_or_unavailable" and _btevs:
+            raise ValueError("block_trade status=unknown_or_unavailable 却带 events(unknown 不得带大宗记录)")
+        for _d in _btwd:
+            try:
+                _dd = _dt.strptime(_d, "%Y%m%d")
+            except ValueError:
+                raise ValueError(f"block_trade window_dates {_d} 非合法日历日")
+            if (_dd - _asd).days > 0:
+                raise ValueError(f"block_trade window_dates {_d} 晚于 as_of(非 PIT)")
+        _btwdset = set(_btwd)
+        _bt_report_codes = {r["ts_code"] for r in weekly["reports"]}   # 候选+账户持仓 均 ∈ reports
+        for _e in _btevs:
+            if _e["ts_code"] not in _bt_report_codes:
+                raise ValueError(f"block_trade event ts_code {_e['ts_code']} 不在本周候选报告(张冠李戴)")
+            try:
+                _td = _dt.strptime(_e["trade_date"], "%Y%m%d")
+            except ValueError:
+                raise ValueError(f"block_trade event trade_date {_e['trade_date']} 非合法日历日({_e['ts_code']})")
+            if (_td - _asd).days > 0:
+                raise ValueError(f"block_trade event trade_date 晚于 as_of(非 PIT;{_e['ts_code']})")
+            if _e["trade_date"] not in _btwdset:
+                raise ValueError(f"block_trade event trade_date {_e['trade_date']} 不在 window_dates(窗口外;{_e['ts_code']})")
+        for _ud in (_bt.get("unchecked_dates") or []):
+            if _ud not in _btwdset:
+                raise ValueError(f"block_trade unchecked_dates {_ud} 不在 window_dates")
+        if _bt.get("status") == "checked":
+            # 覆盖闭合(同 dragon_list):checked 必须有实际查成的交易日 —— window_dates 非空 且 (window − unchecked) 非空,否则应为 unknown。
+            if not _btwd or not (set(_btwd) - set(_bt.get("unchecked_dates") or [])):
+                raise ValueError("block_trade status=checked 但无任何实际查成交易日(window_dates 空 或 全在 unchecked_dates)→ 应为 unknown_or_unavailable")
+            _bt_rep_by = {r["ts_code"]: r for r in weekly["reports"]}
+            for _e in _btevs:
+                _rep = _bt_rep_by.get(_e["ts_code"])
+                if _rep is not None and not any(
+                        i.get("source_field") == "block_trade_appearance"
+                        for i in ((_rep.get("machine") or {}).get("operation_impact") or [])):
+                    raise ValueError(f"block_trade event {_e['ts_code']} 未落到该 report 逐票 block_trade_appearance impact(悬空)")
+    # 反向 evidence guard:每个 block_trade_appearance impact 必须有匹配 checked block_trade 事件(同 ts_code)+ evidence_ref 对齐。
+    _bt_ev_codes = {_e["ts_code"] for _e in ((_bt or {}).get("events") or []) if (_bt or {}).get("status") == "checked"}
+    for _r in weekly["reports"]:
+        for _imp in ((_r.get("machine") or {}).get("operation_impact") or []):
+            if str(_imp.get("source_field", "")) != "block_trade_appearance":
+                continue
+            if _r["ts_code"] not in _bt_ev_codes:
+                raise ValueError(f"operation_impact block_trade_appearance({_r['ts_code']}) 无匹配 checked block_trade 事件(impact 无证据/悬空)")
+            if (_imp.get("evidence_ref") or {}).get("value") != _BLOCK_TRADE_EVIDENCE_VALUE:
+                raise ValueError(f"operation_impact block_trade_appearance({_r['ts_code']}) evidence_ref.value 未对齐 {_BLOCK_TRADE_EVIDENCE_VALUE}")
 
 
 def _reject_production_output_path(out_path: str) -> None:
@@ -1056,8 +1113,8 @@ def _attach_forward_event_impacts(weekly, as_of):
 
 
 # ── 4.2 Round5 龙虎榜(top_list)第一刀: analysis-only · comparison-only ───────────────────────
-# 只记候选近 N 交易日上榜事实 + 净买卖,落 板块资金事件 + operation_impact(source_field=dragon_list_appearance);
-# **绝不改 EGS/TopN/选股/股数/操作/否决**(comparison-only,阈值未定·4.2.md §9 决策4)。席位分析(top_inst)留第二刀。
+# 记**候选 + 账户持仓**近 N 交易日上榜事实+净买卖(第一刀)+ 席位分析(第二刀 top_inst)+ 持仓覆盖(第三刀),落 板块资金事件 + operation_impact(source_field=dragon_list_appearance);
+# **绝不改 EGS/TopN/选股/股数/操作/否决**(comparison-only,阈值未定·4.2.md §9 决策4)。
 # 复用 forward_events analysis-only 模式: fail-closed provider / unknown-not-clear / 双向 no-dangling / source-isolation guard。
 DRAGON_LIST_LOOKBACK_TRADING_DAYS = 5   # 近 N 交易日窗口(§4.1/§11.5 prior,未来进 governance;非生产阈值,不静默写 runner 魔数)
 _DRAGON_LIST_MARKER = "龙虎榜对照"        # 板块资金事件 落地标记:_attach 写入 + engine guard ⑬ 据此判 row no-dangling(单一来源,防文案漂移)
@@ -1301,6 +1358,145 @@ def _attach_dragon_list_impacts(weekly, as_of):
             "pending_successor_slice": None,
             "privacy_class": "private_account" if held else "public_tracked",
         })
+
+
+# ── 4.2 Round5 大宗交易(block_trade)第一刀: analysis-only · comparison-only(镜像龙虎榜第一刀)──────────
+# 记**候选 + 账户持仓**近 N 交易日大宗成交事实 + 成交金额(amount 当日合计 + trade_count 笔数);**绝不改 EGS/TopN/选股/股数/操作/否决**。
+# 买卖方(营业部)分析 = 第二刀;折价率(需对齐当日 close,单位口径风险)= 后续。复用龙虎榜 analysis-only 模式(含持仓 holding_row_impact/私密、Tier-3 掩面放行)。
+BLOCK_TRADE_LOOKBACK_TRADING_DAYS = 5   # 近 N 交易日窗口(prior,未来进 governance;非生产阈值)
+_BLOCK_TRADE_MARKER = "大宗交易对照"        # 板块资金事件 落地标记:_attach 写入 + engine guard ⑭ 据此判 row no-dangling(单一来源)
+_BLOCK_TRADE_EVIDENCE_VALUE = "block_trade.events[appearance]"   # operation_impact.evidence_ref.value(_attach + 反向 guard 共用)
+
+
+def _fetch_block_trade(pro, trade_date: str):
+    """4.2 Round5 真大宗交易 provider: tushare `pro.block_trade(trade_date=)`(当日全市场大宗成交,**收盘后发布 → trade_date<=as_of
+    PIT-safe**)→ [{"ts_code","amount"(成交金额原值)}]。按 trade_date 查,builder 按 (票,日) 聚合(笔数 + 金额合计)再过滤候选。
+    **fail-closed**: 缺 ts_code/amount 列 → None(未查成);异常/None → None;空 → [](该日真无大宗,查成了)。amount 不做单位换算;买卖方营业部 = 第二刀。"""
+    try:
+        df = pro.block_trade(trade_date=str(trade_date), fields="trade_date,ts_code,price,vol,amount")
+    except Exception:
+        return None
+    if df is None:
+        return None
+    if not {"ts_code", "amount"}.issubset(set(getattr(df, "columns", []))):
+        return None
+    if getattr(df, "empty", True):
+        return []
+    def _s(v):
+        return str(v) if (v is not None and str(v).strip() not in ("", "nan", "None", "NaT")) else None
+    def _num(v):
+        if v is None or str(v).strip() in ("", "nan", "None", "NaT"):
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if (f == f and f not in (float("inf"), float("-inf"))) else None
+    return [{"ts_code": _s(r.get("ts_code")), "amount": _num(r.get("amount"))} for _, r in df.iterrows()]
+
+
+def _block_trade_events(cand_names, as_of, block_provider, trade_days, lookback=BLOCK_TRADE_LOOKBACK_TRADING_DAYS):
+    """4.2 Round5 大宗交易 builder(analysis-only,**不改任何决策**;只进 M6.7 板块资金事件对照)。
+    `block_provider(trade_date)` → list[{"ts_code","amount"}]|None(失败)。`trade_days` = 近 N 个 SSE 交易日(均 <= as_of)。
+    PIT: 只收 trade_date<=as_of。**unknown-not-clear**: provider None / trade_days 空 / 全交易日取数失败 → status
+    `unknown_or_unavailable`(绝不当「无大宗」);部分交易日失败 → status `checked` 但失败日进 `unchecked_dates`。
+    按 (票,日) 聚合: event = {ts_code,name,trade_date,amount(当日合计,全缺→None),trade_count(笔数)};只收 `cand_names`
+    (第一刀即 = 候选 + 账户持仓,main 用 reports 行装配),其它票丢弃。买卖方营业部 = 第二刀、折价率 = 后续。"""
+    from datetime import datetime
+    wd = sorted({str(d) for d in (trade_days or [])})
+    base = {"as_of": str(as_of), "lookback_trading_days": lookback, "window_dates": wd}
+    if block_provider is None or not wd:
+        return {**base, "status": "unknown_or_unavailable", "events": []}
+    try:
+        as_of_d = datetime.strptime(str(as_of), "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"block_trade as_of {as_of!r} 非合法日历日")
+    name_by = {str(c): (n or "") for c, n in cand_names}
+    cand_codes = set(name_by)
+    events, any_ok, unchecked = [], False, []
+    for day in wd:
+        try:
+            rows = block_provider(day)
+        except Exception:
+            rows = None
+        if rows is None:
+            unchecked.append(day)                         # 该交易日取数失败 → 未查成(不当无大宗)
+            continue
+        any_ok = True                                     # 该日查成(含真无大宗的空 list)
+        try:
+            day_d = datetime.strptime(str(day), "%Y%m%d")
+        except ValueError:
+            continue
+        if (day_d - as_of_d).days > 0:
+            continue                                      # 防御: 未来交易日 → 跳过
+        agg = {}                                          # ts_code -> [amount_sum|None, count]
+        for row in rows:
+            code = (row or {}).get("ts_code")
+            if code not in cand_codes:
+                continue                                  # 非覆盖票(既非候选也非账户持仓)→ 丢弃
+            cur = agg.setdefault(code, [None, 0])
+            cur[1] += 1
+            amt = (row or {}).get("amount")
+            if amt is not None:
+                cur[0] = (cur[0] or 0.0) + amt
+        for code, (amt_sum, cnt) in agg.items():
+            events.append({"ts_code": code, "name": name_by.get(code, ""), "trade_date": str(day),
+                           "amount": (round(amt_sum, 2) if amt_sum is not None else None), "trade_count": cnt})
+    if not any_ok:                                         # 有窗口但所有交易日都没查成 → unknown(绝不当无大宗)
+        return {**base, "status": "unknown_or_unavailable", "events": []}
+    events.sort(key=lambda e: (e["trade_date"], e["ts_code"]), reverse=True)
+    out = {**base, "status": "checked", "events": events}
+    if unchecked:
+        out["unchecked_dates"] = sorted(set(unchecked))
+    return out
+
+
+def _attach_block_trade_impacts(weekly, as_of):
+    """4.2 Round5 大宗交易 row landing(镜像 _attach_dragon_list_impacts): block_trade 每条按 ts_code 落到对应 report 逐票 M6.7 ——
+    精简结论区.板块资金事件 文本(含 `_BLOCK_TRADE_MARKER`)+ machine.operation_impact(source_field=block_trade_appearance)。
+    **comparison-only**: new_entry_effect=informational(候选)/none(held-candidate)、holding_effect=none、blocked_add=False、
+    veto_class=none、production_effect_enabled=False —— 绝不改 操作/EGS/选股/TopN/股数/否决。status!=checked → 不落(不伪造)。
+    第一刀即覆盖 reports(候选 + 账户持仓);held(持仓)→ holding_row_impact 私密(private_account);买卖方营业部 = 第二刀、折价率 = 后续。"""
+    bt = weekly.get("block_trade") or {}
+    if bt.get("status") != "checked":
+        return
+    n = bt.get("lookback_trading_days")
+    by_code = {}
+    for e in (bt.get("events") or []):
+        by_code.setdefault(e["ts_code"], []).append(e)
+    for rep in weekly["reports"]:
+        evs = by_code.get(rep["ts_code"])
+        if not evs:
+            continue
+        held = ((rep.get("machine") or {}).get("stateful_risk") or {}).get("position_state") == "held"
+        recent = max(evs, key=lambda e: e["trade_date"])
+        total_cnt = sum(e["trade_count"] for e in evs)
+        amt = recent.get("amount")
+        detail = f"最近{recent['trade_date']}" + (f",成交{amt}" if amt is not None else "") + f",{recent['trade_count']}笔"
+        txt = f"{_BLOCK_TRADE_MARKER}(comparison-only,不改决策):近{n}交易日{total_cnt}笔大宗交易({detail})"
+        cut = rep["m67"]["精简结论区"]
+        prev = cut.get("板块资金事件") or ""
+        cut["板块资金事件"] = f"{prev}｜{txt}" if prev and prev != "unknown" else txt
+        rep["machine"].setdefault("operation_impact", []).append({
+            "source_field": "block_trade_appearance",
+            "field_class": "structured",
+            "visibility_shape": "holding_row_impact" if held else "candidate_row_impact",
+            "impact_scope": "existing_holding" if held else "new_entry",
+            "new_entry_effect": "none" if held else "informational",   # comparison-only: 只解释,不改动作
+            "holding_effect": "none",
+            "blocked_add_required": False,
+            "veto_class": "none",
+            "reason": f"近{n}交易日{total_cnt}笔大宗交易 → 资金面对照(comparison-only,不改决策/EGS/选股/TopN;阈值未定)",
+            "evidence_ref": {"kind": "lineage_key", "value": _BLOCK_TRADE_EVIDENCE_VALUE, "as_of": str(as_of)},
+            "confidence": "high",
+            "pit_basis": "trade_date_window",
+            "production_effect_enabled": False,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.板块资金事件(大宗交易对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": None,
+            "privacy_class": "private_account" if held else "public_tracked",
+        })
 # analysis_input.market_context.market_regime.status(EGS 英文枚举)→ 引擎中文 regime
 REGIME_MAP = {"attack": "进攻期", "shock": "震荡期", "defense": "防御期", "contraction": "收缩期"}
 
@@ -1499,7 +1695,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
          web_llm_provider=None, dividend_provider=None,
          holding_semantic_provider=None, holding_web_llm_provider=None, unlock_provider=None,
          earnings_provider=None, dragon_list_provider=None, dragon_list_days=None,
-         dragon_list_inst_provider=None):
+         dragon_list_inst_provider=None, block_trade_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -1608,6 +1804,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # 4.2 Round5 第二刀 真席位 provider(同上下文;top_inst 按 trade_date 查;analysis-only comparison-only)。
         if dragon_list_inst_provider is None:
             dragon_list_inst_provider = lambda d: _fetch_dragon_inst(pro, d)
+        # 4.2 Round5 大宗交易 provider(同上下文;block_trade 按 trade_date 查;analysis-only comparison-only)。
+        if block_trade_provider is None:
+            block_trade_provider = lambda d: _fetch_block_trade(pro, d)
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -1717,6 +1916,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     weekly["dragon_list"] = _dragon_list_events(_dragon_covered_names, args.as_of, dragon_list_provider,
                                                 dragon_list_days, inst_provider=dragon_list_inst_provider)
     _attach_dragon_list_impacts(weekly, args.as_of)
+    # 4.2 Round5 大宗交易第一刀(comparison-only):候选+账户持仓近 N 交易日大宗成交对照 → 板块资金事件 + operation_impact(不改决策/EGS/选股/TopN/股数)。复用 reports universe + trade_cal 窗口。
+    weekly["block_trade"] = _block_trade_events(_dragon_covered_names, args.as_of, block_trade_provider, dragon_list_days)
+    _attach_block_trade_impacts(weekly, args.as_of)
     # 4.2 Round2: 上游过滤批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts
     # (egs_main filter_l0 已记 unlock/suspended/relisted/holder_reduction_veto_10d), 不改 egs_main、不抓数。
     _excl = _build_exclusion_summary((ai.get("universe_summary") or {}).get("excluded_counts") or {}, args.as_of)

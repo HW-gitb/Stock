@@ -31,6 +31,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _dragon_list_events, _fetch_dragon_list, _attach_dragon_list_impacts, _recent_trading_days,
     DRAGON_LIST_LOOKBACK_TRADING_DAYS, _DRAGON_LIST_EVIDENCE_VALUE, _DRAGON_LIST_MARKER,
     _fetch_dragon_inst, _sum_inst_net,
+    _block_trade_events, _fetch_block_trade, _attach_block_trade_impacts,
 )
 from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
@@ -2479,6 +2480,35 @@ class DragonListTests(unittest.TestCase):
         _attach_dragon_list_impacts(w, AS_OF)
         return w["reports"][0]
 
+    def _landed_rep_held(self):
+        w = self._w_dl()
+        w["reports"][0]["machine"]["stateful_risk"] = {"position_state": "held", "rule12": {"status": "inactive"},
+                                                       "rule13": {"status": "none"}, "reasons": []}
+        _attach_dragon_list_impacts(w, AS_OF)
+        return w["reports"][0]
+
+    def test_validator_checked_empty_window_rejected(self):
+        # 覆盖闭合: checked 但 window_dates 空 → 拒(无任何查成日,应为 unknown)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_dl(status="checked", events=[], window=[]), _feed())
+
+    def test_validator_checked_all_unchecked_rejected(self):
+        # 覆盖闭合: checked 但全部 window 都在 unchecked_dates → 拒(无任何实际查成日)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_dl(status="checked", events=[], unchecked_dates=list(_DL_WINDOW)), _feed())
+
+    def test_validator_partial_unchecked_legal(self):
+        # 正向: 至少一日查成(部分 unchecked)+ 无 event → 合法 checked
+        validate_weekly_report(self._weekly_dl(status="checked", events=[], unchecked_dates=["20260603", "20260604"]), _feed())
+
+    def test_guard_held_public_candidate_mutation_rejected(self):
+        # held 行的 trade-event impact 被改成 candidate_row_impact/public → guard 拒(涉真实持仓须 holding/private)
+        rep = self._landed_rep_held()
+        imp = self._dlimp(rep)[0]
+        imp["visibility_shape"], imp["privacy_class"] = "candidate_row_impact", "public_tracked"
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
     def test_guard_legal_passes(self):
         _vop(self._landed_rep())                                          # 不 raise
 
@@ -2769,6 +2799,261 @@ class DragonListTests(unittest.TestCase):
         rep = [r for r in loaded["reports"] if r["ts_code"] == "600519.SH"][0]
         imp = [i for i in (rep["machine"].get("operation_impact") or []) if i["source_field"] == "dragon_list_appearance"][0]
         self.assertEqual((imp["visibility_shape"], imp["privacy_class"]), ("holding_row_impact", "private_account"))
+
+
+class BlockTradeTests(unittest.TestCase):
+    """4.2 Round5 大宗交易第一刀(block_trade, analysis-only · comparison-only,镜像龙虎榜):provider fail-closed /
+    builder PIT+unknown-not-clear+按(票,日)聚合(amount 合计+笔数)/ 候选+持仓落 板块资金事件+operation_impact /
+    双向 no-dangling / comparison-only isolation(绝不改 EGS/TopN/操作/股数)/ render。买卖方营业部=第二刀。"""
+
+    def _bt_event(self, ts="600000.SH", trade_date="20260605", amount=5e7, trade_count=3):
+        return {"ts_code": ts, "name": "测试", "trade_date": trade_date, "amount": amount, "trade_count": trade_count}
+
+    def _weekly_bt(self, status="checked", events=None, window=None, **extra):
+        w = _weekly()
+        bt = {"as_of": AS_OF, "status": status, "lookback_trading_days": 5,
+              "window_dates": (window if window is not None else _DL_WINDOW), "events": events or []}
+        bt.update(extra)
+        w["block_trade"] = bt
+        return w
+
+    def _w_bt(self, status="checked", ts=None):
+        w = _weekly()
+        ts = ts or w["reports"][0]["ts_code"]
+        w["block_trade"] = {"as_of": AS_OF, "status": status, "lookback_trading_days": 5, "window_dates": _DL_WINDOW,
+                            "events": ([{"ts_code": ts, "name": "x", "trade_date": "20260605", "amount": 5e7, "trade_count": 3}] if status == "checked" else [])}
+        return w
+
+    def _btimp(self, rep):
+        return [i for i in (rep["machine"].get("operation_impact") or []) if i["source_field"] == "block_trade_appearance"]
+
+    def _schema(self):
+        return json.load(open(SCHEMA_PATH, encoding="utf-8"))
+
+    # ── provider(fail-closed)──
+    def test_fetch_block_trade_fail_closed(self):
+        class _Pro:
+            def __init__(self, df): self._df = df
+            def block_trade(self, **kw): return self._df
+        self.assertIsNone(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": ["x"]})), "20260605"))   # 缺 amount
+        class _Boom:
+            def block_trade(self, **kw): raise RuntimeError("x")
+        self.assertIsNone(_fetch_block_trade(_Boom(), "20260605"))
+        self.assertEqual(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": [], "amount": []})), "20260605"), [])
+        ok = _fetch_block_trade(_Pro(pd.DataFrame({"trade_date": ["20260605"], "ts_code": ["600000.SH"],
+                                                   "price": [10.0], "vol": [1.0], "amount": [5e7]})), "20260605")
+        self.assertEqual(ok, [{"ts_code": "600000.SH", "amount": 5e7}])
+
+    def test_fetch_block_trade_nonfinite_amount_nulled(self):
+        class _Pro:
+            def block_trade(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH", "600001.SH"], "amount": [float("inf"), float("nan")]})
+        self.assertEqual([r["amount"] for r in _fetch_block_trade(_Pro(), "20260605")], [None, None])
+
+    # ── builder(unknown-not-clear / 聚合 / 候选过滤)──
+    def test_builder_provider_none_unknown(self):
+        bt = _block_trade_events([("600000.SH", "x")], AS_OF, None, _DL_WINDOW)
+        self.assertEqual((bt["status"], bt["events"], bt["window_dates"]), ("unknown_or_unavailable", [], _DL_WINDOW))
+
+    def test_builder_all_fail_unknown(self):
+        self.assertEqual(_block_trade_events([("600000.SH", "x")], AS_OF, lambda d: None, _DL_WINDOW)["status"], "unknown_or_unavailable")
+
+    def test_builder_partial_fail_unchecked(self):
+        prov = lambda d: [] if d == "20260609" else None
+        bt = _block_trade_events([("600000.SH", "x")], AS_OF, prov, _DL_WINDOW)
+        self.assertEqual((bt["status"], bt["events"]), ("checked", []))
+        self.assertEqual(bt["unchecked_dates"], ["20260603", "20260604", "20260605", "20260608"])
+
+    def test_builder_aggregates_per_stock_day(self):
+        # 同(票,日)多笔 → 聚合 amount 合计 + trade_count 笔数;非候选丢弃
+        prov = lambda d: ([{"ts_code": "600000.SH", "amount": 3e7}, {"ts_code": "600000.SH", "amount": 2e7},
+                           {"ts_code": "600999.SH", "amount": 1e7}] if d == "20260605" else [])
+        bt = _block_trade_events([("600000.SH", "x")], AS_OF, prov, _DL_WINDOW)
+        self.assertEqual(len(bt["events"]), 1)
+        e = bt["events"][0]
+        self.assertEqual((e["ts_code"], e["trade_date"], e["amount"], e["trade_count"]), ("600000.SH", "20260605", 5e7, 2))
+
+    def test_builder_amount_all_none_kept_null(self):
+        prov = lambda d: ([{"ts_code": "600000.SH", "amount": None}, {"ts_code": "600000.SH", "amount": None}] if d == "20260605" else [])
+        e = _block_trade_events([("600000.SH", "x")], AS_OF, prov, _DL_WINDOW)["events"][0]
+        self.assertEqual((e["amount"], e["trade_count"]), (None, 2))   # 金额全缺→None,笔数仍计
+
+    # ── attach(候选/held;comparison-only;no-EGS-change)──
+    def test_attach_candidate_landing(self):
+        w = self._w_bt()
+        rep = w["reports"][0]
+        before = (rep["m67"]["table"]["操作"], rep["m67"]["table"]["EGS分"], rep["m67"]["table"]["股数"])
+        _attach_block_trade_impacts(w, AS_OF)
+        imp = self._btimp(rep)
+        self.assertEqual(len(imp), 1)
+        self.assertEqual((imp[0]["visibility_shape"], imp[0]["new_entry_effect"], imp[0]["holding_effect"], imp[0]["veto_class"]),
+                         ("candidate_row_impact", "informational", "none", "none"))
+        self.assertFalse(imp[0]["production_effect_enabled"])
+        self.assertIn("大宗交易对照", rep["m67"]["精简结论区"]["板块资金事件"])
+        self.assertEqual((rep["m67"]["table"]["操作"], rep["m67"]["table"]["EGS分"], rep["m67"]["table"]["股数"]), before)
+        validate_weekly_report(w, _feed())
+
+    def test_attach_held_holding_impact(self):
+        w = self._w_bt()
+        rep = w["reports"][0]
+        rep["machine"]["stateful_risk"] = {"position_state": "held", "rule12": {"status": "inactive"},
+                                           "rule13": {"status": "none"}, "reasons": []}
+        _attach_block_trade_impacts(w, AS_OF)
+        imp = self._btimp(rep)[0]
+        self.assertEqual((imp["visibility_shape"], imp["privacy_class"]), ("holding_row_impact", "private_account"))
+        _vop(rep)
+
+    def test_attach_unknown_no_landing(self):
+        w = self._w_bt(status="unknown_or_unavailable")
+        _attach_block_trade_impacts(w, AS_OF)
+        self.assertEqual(self._btimp(w["reports"][0]), [])
+
+    # ── schema + validator(双向 no-dangling / PIT / 窗口 / 张冠李戴)──
+    def test_schema_and_validator_accept(self):
+        w = self._weekly_bt(events=[self._bt_event()])
+        _attach_block_trade_impacts(w, AS_OF)
+        jsonschema.validate(w, self._schema())
+        validate_weekly_report(w, _feed())
+
+    def test_absent_is_valid(self):
+        jsonschema.validate(_weekly(), self._schema())
+        validate_weekly_report(_weekly(), _feed())
+
+    def test_schema_accept_unknown(self):
+        validate_weekly_report(self._weekly_bt(status="unknown_or_unavailable"), _feed())
+
+    def test_dragon_impact_passes_m67_schema(self):
+        w = self._w_bt()
+        _attach_block_trade_impacts(w, AS_OF)
+        jsonschema.validate(w["reports"][0], json.load(open(M67_SCHEMA, encoding="utf-8")))
+
+    def test_validator_unknown_with_events_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_bt(status="unknown_or_unavailable", events=[self._bt_event()]), _feed())
+
+    def test_validator_foreign_ts_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_bt(events=[self._bt_event(ts="600999.SH")]), _feed())
+
+    def test_validator_event_after_as_of_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_bt(events=[self._bt_event(trade_date="20260610")]), _feed())
+
+    def test_validator_event_outside_window_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_bt(events=[self._bt_event(trade_date="20260601")]), _feed())
+
+    def test_validator_reverse_evidence_bad_ref_rejected(self):
+        w = self._weekly_bt(events=[self._bt_event()])
+        _attach_block_trade_impacts(w, AS_OF)
+        self._btimp(w["reports"][0])[0]["evidence_ref"]["value"] = "fake"
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_forward_landing_dangling_rejected(self):
+        with self.assertRaises(ValueError):                               # checked event 不 attach → 悬空
+            validate_weekly_report(self._weekly_bt(events=[self._bt_event()]), _feed())
+
+    # ── engine guard ⑭(comparison-only isolation)──
+    def _landed_rep(self):
+        w = self._w_bt()
+        _attach_block_trade_impacts(w, AS_OF)
+        return w["reports"][0]
+
+    def _landed_rep_held(self):
+        w = self._w_bt()
+        w["reports"][0]["machine"]["stateful_risk"] = {"position_state": "held", "rule12": {"status": "inactive"},
+                                                       "rule13": {"status": "none"}, "reasons": []}
+        _attach_block_trade_impacts(w, AS_OF)
+        return w["reports"][0]
+
+    def test_validator_checked_empty_window_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_bt(status="checked", events=[], window=[]), _feed())
+
+    def test_validator_checked_all_unchecked_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_bt(status="checked", events=[], unchecked_dates=list(_DL_WINDOW)), _feed())
+
+    def test_validator_partial_unchecked_legal(self):
+        validate_weekly_report(self._weekly_bt(status="checked", events=[], unchecked_dates=["20260603", "20260604"]), _feed())
+
+    def test_guard_held_public_candidate_mutation_rejected(self):
+        rep = self._landed_rep_held()
+        imp = self._btimp(rep)[0]
+        imp["visibility_shape"], imp["privacy_class"] = "candidate_row_impact", "public_tracked"
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_legal_passes(self):
+        _vop(self._landed_rep())
+
+    def test_guard_production_enabled_rejected(self):
+        rep = self._landed_rep(); self._btimp(rep)[0]["production_effect_enabled"] = True
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_veto_rejected(self):
+        rep = self._landed_rep(); self._btimp(rep)[0]["veto_class"] = "m67_advisory_veto"
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_new_entry_effect_rejected(self):
+        rep = self._landed_rep(); self._btimp(rep)[0]["new_entry_effect"] = "sizing_down"
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_holding_effect_rejected(self):
+        rep = self._landed_rep(); self._btimp(rep)[0]["holding_effect"] = "hold_watch"
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_marker_removed_rejected(self):
+        rep = self._landed_rep(); rep["m67"]["精简结论区"]["板块资金事件"] = "unknown"
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    # ── render ──
+    def test_render_checked_lists(self):
+        md = render_weekly_markdown(self._weekly_bt(events=[self._bt_event()]))
+        self.assertIn("大宗交易", md)
+        self.assertIn("20260605", md)
+
+    def test_render_unknown(self):
+        self.assertIn("未取到大宗交易", render_weekly_markdown(self._weekly_bt(status="unknown_or_unavailable")))
+
+    def test_render_checked_empty(self):
+        self.assertIn("无大宗交易记录", render_weekly_markdown(self._weekly_bt(status="checked", events=[])))
+
+    # ── main wiring(注入 provider + 复用 trade_cal 窗口;持仓覆盖)──
+    def test_main_wires_block_trade(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            prov = (lambda d: [{"ts_code": "600000.SH", "amount": 5e7}, {"ts_code": "600000.SH", "amount": 2e7}] if d == "20260605" else [])
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series(), block_trade_provider=prov, dragon_list_days=_DL_WINDOW)
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["block_trade"]["status"], "checked")
+        e = [x for x in loaded["block_trade"]["events"] if x["ts_code"] == "600000.SH"][0]
+        self.assertEqual((e["amount"], e["trade_count"]), (7e7, 2))
+        rep = [r for r in loaded["reports"] if r["ts_code"] == "600000.SH"][0]
+        self.assertTrue(any(i["source_field"] == "block_trade_appearance" for i in (rep["machine"].get("operation_impact") or [])))
+
+    def test_main_no_provider_block_trade_unknown(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series())
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["block_trade"]["status"], "unknown_or_unavailable")
 
 
 if __name__ == "__main__":

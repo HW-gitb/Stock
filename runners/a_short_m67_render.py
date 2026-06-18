@@ -111,8 +111,8 @@ def _card_field(report: dict, key: str) -> str:
         # S2: 已跑语义的持仓,否决审查触发 含真实语义警告 → 不 mask(否则藏住 S2 警告)。
         if key == "否决审查触发" and _has_semantic(report):
             return val
-        # 第三刀: 板块资金事件 含「龙虎榜对照」= 独立真取数(top_list/top_inst,非 EGS 维度)→ 不掩;EGS 未覆盖另有专门一行标注。
-        if key == "板块资金事件" and "龙虎榜对照" in val:
+        # 板块资金事件 含「龙虎榜对照」/「大宗交易对照」= 独立真取数(top_list/top_inst/block_trade,非 EGS 维度)→ 不掩;EGS 未覆盖另有专门一行标注。
+        if key == "板块资金事件" and any(m in val for m in ("龙虎榜对照", "大宗交易对照")):
             return val
         return "未核查(本周 EGS 粗筛未覆盖,请人工核查 ST/新闻/监管)"
     return val
@@ -305,6 +305,26 @@ def render_weekly_markdown(weekly: dict) -> str:
         else:
             out += ["", f"## 🐯 龙虎榜(近{_n}交易日)",
                     "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到龙虎榜(provider 未授权/不可用);**不代表无上榜**,请人工核查。"]
+    # 4.2 Round5 大宗交易(近N交易日 · comparison-only · 不改决策/EGS/选股):checked 列大宗 / unknown 显未核查。
+    _bt = weekly.get("block_trade")
+    if _bt:
+        _bn = _bt.get("lookback_trading_days")
+        if _bt.get("status") == "checked":
+            _btevs = _bt.get("events") or []
+            out += ["", f"## 💰 大宗交易(近{_bn}交易日 · comparison-only · 不改决策/EGS/选股/股数)"]
+            if _btevs:
+                out += ["| 票 | 名称 | 成交日 | 成交金额(原值) | 笔数 |", "|---|---|---|---|---|"]
+                out += [f"| {e['ts_code']} | {e['name']} | {e['trade_date']} | "
+                        f"{e['amount'] if e.get('amount') is not None else '—'} | {e['trade_count']} |"
+                        for e in _btevs]
+            else:
+                out.append(f"> 本周已查:候选近{_bn}交易日无大宗交易记录。")
+            _btu = _bt.get("unchecked_dates") or []
+            if _btu:
+                out.append(f"> ⚠️ 另有 {len(_btu)} 个交易日未能核查大宗交易(取数失败),**不代表无大宗**,请人工核查:" + "、".join(_btu))
+        else:
+            out += ["", f"## 💰 大宗交易(近{_bn}交易日)",
+                    "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到大宗交易(provider 未授权/不可用);**不代表无大宗**,请人工核查。"]
     # 4.2 Round2 上游过滤批次级摘要(无 M6.7 个股行,仅计数,不含个股/持仓 → public)
     _excl = weekly.get("exclusion_summary")
     if _excl:
