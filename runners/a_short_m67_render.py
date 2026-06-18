@@ -313,21 +313,33 @@ def render_weekly_markdown(weekly: dict) -> str:
             _btevs = _bt.get("events") or []
             out += ["", f"## 💰 大宗交易(近{_bn}交易日 · comparison-only · 不改决策/EGS/选股/股数)"]
             if _btevs:
-                def _btparty(e):                          # 第二刀 买卖方: 最大笔的 买→卖 营业部(+其余笔数);无 parties→「—」
+                def _bttop(e):                            # 最大笔(按金额)party,买卖方/折价率同口径展示;无 parties→None
                     ps = e.get("parties") or []
-                    if not ps:
+                    return max(ps, key=lambda p: (p.get("amount") or 0)) if ps else None
+                def _btparty(e):                          # 第二刀 买卖方: 最大笔的 买→卖 营业部(+其余笔数);无 parties→「—」
+                    top = _bttop(e)
+                    if top is None:
                         return "—"
-                    top = max(ps, key=lambda p: (p.get("amount") or 0))
+                    ps = e.get("parties") or []
                     return f"{top.get('buyer') or '?'}→{top.get('seller') or '?'}" + (f"(+{len(ps) - 1})" if len(ps) > 1 else "")
-                out += ["| 票 | 名称 | 成交日 | 成交金额(原值) | 笔数 | 买卖方(最大笔) |", "|---|---|---|---|---|---|"]
+                def _btdisc(e):                           # 第三刀 折价率: 最大笔的折价率(负=折价/抛压,正=溢价);未查成/无→「—」
+                    top = _bttop(e)
+                    d = top.get("discount") if top else None
+                    return f"{d * 100:+.2f}%" if d is not None else "—"
+                out += ["| 票 | 名称 | 成交日 | 成交金额(原值) | 笔数 | 买卖方(最大笔) | 折价率(最大笔) |", "|---|---|---|---|---|---|---|"]
                 out += [f"| {e['ts_code']} | {e['name']} | {e['trade_date']} | "
-                        f"{e['amount'] if e.get('amount') is not None else '—'} | {e['trade_count']} | {_btparty(e)} |"
+                        f"{e['amount'] if e.get('amount') is not None else '—'} | {e['trade_count']} | {_btparty(e)} | {_btdisc(e)} |"
                         for e in _btevs]
             else:
                 out.append(f"> 本周已查:候选近{_bn}交易日无大宗交易记录。")
             _btu = _bt.get("unchecked_dates") or []
             if _btu:
                 out.append(f"> ⚠️ 另有 {len(_btu)} 个交易日未能核查大宗交易(取数失败),**不代表无大宗**,请人工核查:" + "、".join(_btu))
+            _btdu = _bt.get("unchecked_discount_dates") or []
+            if _bt.get("discount_status") == "unknown_or_unavailable":
+                out.append("> ⚠️ 折价率未核查/不可得(当日收盘价取数失败),折价率列以「—」示,**不代表无折价**。")
+            elif _btdu:
+                out.append(f"> ⚠️ 另有 {len(_btdu)} 个交易日折价率未能核查(收盘价取数失败),该日折价率以「—」示,**不代表无折价**:" + "、".join(_btdu))
         else:
             out += ["", f"## 💰 大宗交易(近{_bn}交易日)",
                     "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到大宗交易(provider 未授权/不可用);**不代表无大宗**,请人工核查。"]

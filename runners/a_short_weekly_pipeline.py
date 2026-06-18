@@ -766,6 +766,36 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         for _ud in (_bt.get("unchecked_dates") or []):
             if _ud not in _btwdset:
                 raise ValueError(f"block_trade unchecked_dates {_ud} 不在 window_dates")
+        # 4.2 Round5 第三刀 折价率覆盖一致性(镜像席位 seats 覆盖;unknown-not-clear):
+        # (a) 任何 event 带 close 或 party 带 discount ⟹ discount_status=checked(折价证据须有覆盖状态托管);
+        # (b) checked ⟹ 非 unchecked_discount_date 的 event 必带 close(值可 null)且其每 party 必带 price + discount 键(值可 null,但 price 证据键必须在,否则折价层缺料却标 checked);
+        # (c) unchecked_discount_date 上的 event 不得带 close/discount;(d) unknown ⟹ 无 close/discount。unchecked_discount_dates ⊆ window 且仅 checked 有意义。
+        _ds = _bt.get("discount_status")
+        _udd = set(_bt.get("unchecked_discount_dates") or [])
+        _has_any_disc = any(("close" in _e) or any("discount" in (_p or {}) for _p in (_e.get("parties") or [])) for _e in _btevs)
+        if _has_any_disc and _ds != "checked":
+            raise ValueError("block_trade event 带 close/discount 但 discount_status 非 checked(折价证据无覆盖状态托管)")
+        if _udd and _ds != "checked":
+            raise ValueError("block_trade unchecked_discount_dates 仅在 discount_status=checked 时有意义")
+        for _ud in _udd:
+            if _ud not in _btwdset:
+                raise ValueError(f"block_trade unchecked_discount_dates {_ud} 不在 window_dates")
+        if _ds == "checked":
+            for _e in _btevs:
+                _hasc = ("close" in _e) or any("discount" in (_p or {}) for _p in (_e.get("parties") or []))
+                if _e["trade_date"] in _udd:
+                    if _hasc:
+                        raise ValueError(f"block_trade event {_e['ts_code']} 在 unchecked_discount_date {_e['trade_date']} 却带 close/discount(折价未查成日不应附)")
+                else:
+                    if "close" not in _e:
+                        raise ValueError(f"block_trade event {_e['ts_code']} 折价查成日缺 close(discount_status=checked 须逐 event 覆盖)")
+                    for _p in (_e.get("parties") or []):
+                        if "price" not in (_p or {}) or "discount" not in (_p or {}):
+                            raise ValueError(f"block_trade event {_e['ts_code']} 折价查成日 party 缺 price/discount 键(discount_status=checked 须逐笔带 price 证据 + discount;值可 null 但键必须在)")
+        elif _ds == "unknown_or_unavailable":
+            for _e in _btevs:
+                if ("close" in _e) or any("discount" in (_p or {}) for _p in (_e.get("parties") or [])):
+                    raise ValueError(f"block_trade discount_status=unknown_or_unavailable 却有 event 带 close/discount({_e['ts_code']})")
         if _bt.get("status") == "checked":
             # 覆盖闭合(同 dragon_list):checked 必须有实际查成的交易日 —— window_dates 非空 且 (window − unchecked) 非空,否则应为 unknown。
             if not _btwd or not (set(_btwd) - set(_bt.get("unchecked_dates") or [])):
@@ -1366,7 +1396,7 @@ def _attach_dragon_list_impacts(weekly, as_of):
 
 # ── 4.2 Round5 大宗交易(block_trade)第一刀: analysis-only · comparison-only(镜像龙虎榜第一刀)──────────
 # 记**候选 + 账户持仓**近 N 交易日大宗成交事实 + 成交金额(amount 当日合计 + trade_count 笔数);**绝不改 EGS/TopN/选股/股数/操作/否决**。
-# 买卖方(营业部)分析 = 第二刀;折价率(需对齐当日 close,单位口径风险)= 后续。复用龙虎榜 analysis-only 模式(含持仓 holding_row_impact/私密、Tier-3 掩面放行)。
+# 买卖方(营业部)分析 = 第二刀;折价率(对齐当日**未复权** close,单位口径已隔离)= 第三刀。复用龙虎榜 analysis-only 模式(含持仓 holding_row_impact/私密、Tier-3 掩面放行)。
 BLOCK_TRADE_LOOKBACK_TRADING_DAYS = 5   # 近 N 交易日窗口(prior,未来进 governance;非生产阈值)
 _BLOCK_TRADE_MARKER = "大宗交易对照"        # 板块资金事件 落地标记:_attach 写入 + engine guard ⑭ 据此判 row no-dangling(单一来源)
 _BLOCK_TRADE_EVIDENCE_VALUE = "block_trade.events[appearance]"   # operation_impact.evidence_ref.value(_attach + 反向 guard 共用)
@@ -1377,14 +1407,16 @@ def _fetch_block_trade(pro, trade_date: str):
     PIT-safe**)→ [{"ts_code","amount"(成交金额原值),"buyer"(买方营业部),"seller"(卖方营业部)}]。按 trade_date 查,builder 按 (票,日)
     聚合(笔数 + 金额合计 + 第二刀逐笔买卖方 parties)再过滤候选。**fail-closed**: 缺 ts_code/amount 列 → None(未查成);异常/None → None;
     空 → [](该日真无大宗,查成了)。amount 不做单位换算。**第二刀 buyer/seller 同一 fetch + fail-closed 要求该列**:缺 buyer/seller 列 → None
-    (该日 unchecked,绝不把 ?→? 当查成的买卖方;单元格本身空白→该笔 buyer/seller=None 合法,但列必须存在);折价率 = 后续。"""
+    (该日 unchecked,绝不把 ?→? 当查成的买卖方;单元格本身空白→该笔 buyer/seller=None 合法,但列必须存在)。**第三刀 price 同样 fail-closed
+    要求该列**:缺 price 列 → None(该日折价证据不可得 → unchecked,绝不标 discount checked;单元格空白→该笔 price=None 合法,但列必须存在);
+    折价率所需当日**未复权**收盘价由独立 _fetch_daily_close 取(绝不复用前复权 price_series)。"""
     try:
         df = pro.block_trade(trade_date=str(trade_date), fields="trade_date,ts_code,price,vol,amount,buyer,seller")
     except Exception:
         return None
     if df is None:
         return None
-    if not {"ts_code", "amount", "buyer", "seller"}.issubset(set(getattr(df, "columns", []))):
+    if not {"ts_code", "amount", "buyer", "seller", "price"}.issubset(set(getattr(df, "columns", []))):
         return None
     if getattr(df, "empty", True):
         return []
@@ -1398,17 +1430,93 @@ def _fetch_block_trade(pro, trade_date: str):
         except (TypeError, ValueError):
             return None
         return f if (f == f and f not in (float("inf"), float("-inf"))) else None
-    return [{"ts_code": _s(r.get("ts_code")), "amount": _num(r.get("amount")),
+    return [{"ts_code": _s(r.get("ts_code")), "amount": _num(r.get("amount")), "price": _num(r.get("price")),
              "buyer": _s(r.get("buyer")), "seller": _s(r.get("seller"))} for _, r in df.iterrows()]
 
 
-def _block_trade_events(cand_names, as_of, block_provider, trade_days, lookback=BLOCK_TRADE_LOOKBACK_TRADING_DAYS):
+def _fetch_daily_close(pro, trade_date: str):
+    """4.2 Round5 第三刀 折价率: 当日**未复权**收盘价 provider(tushare pro.daily,raw OHLC)→ {ts_code: close}。
+    **必须未复权**: block_trade.price 是原始成交价,折价率 = (price − raw_close)/raw_close,绝不能用前复权 close
+    (历史日若除权,前复权 close ≠ 当日原值,会算出假折价)。**fail-closed**: 缺 ts_code/close 列 → None(该日折价
+    不可算 → unchecked,不伪造);异常/None → None;空 df → {}(该日确无收盘,已查成)。"""
+    try:
+        df = pro.daily(trade_date=str(trade_date), fields="ts_code,trade_date,close")
+    except Exception:
+        return None
+    if df is None:
+        return None
+    if not {"ts_code", "close"}.issubset(set(getattr(df, "columns", []))):
+        return None
+    if getattr(df, "empty", True):
+        return {}
+
+    def _cnum(v):
+        if v is None or str(v).strip() in ("", "nan", "None", "NaT"):
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if (f == f and f not in (float("inf"), float("-inf"))) else None
+
+    closes = {}
+    for _, r in df.iterrows():
+        code = r.get("ts_code")
+        if code is not None and str(code).strip() not in ("", "nan", "None", "NaT"):
+            closes[str(code)] = _cnum(r.get("close"))
+    return closes
+
+
+def _attach_block_discount(out, events, close_provider):
+    """第三刀 折价率: 为有大宗的交易日抓**未复权收盘价**,按 (ts_code,trade_date) 算每笔折价率
+    discount=(price−close)/close(负=折价/抛压,正=溢价)。**仅当 close_provider 已接线(非 None)时启用**
+    (否则不加 discount_status,输出与第二刀一致)。**unknown-not-clear**: close_provider 在但所有有大宗交易日
+    都取数失败 → discount_status=`unknown_or_unavailable`(绝不当「无折价」);部分失败 → checked 但失败日进
+    `unchecked_discount_dates`(该日 event 不附 close/discount)。查成日 → event 附 raw `close`(审计)+ 每 party
+    附 `discount`(该股当日无 close 或 close=0 → 该 party discount=None,不伪造)。"""
+    if close_provider is None:
+        return                                            # 折价层未请求(第二刀式调用)→ 输出不变
+    event_days = sorted({e["trade_date"] for e in events})
+    if not event_days:
+        out["discount_status"] = "checked"                # 无大宗 → 无折价可算,trivially 完整
+        return
+    by_day, unchecked, any_ok = {}, [], False
+    for day in event_days:
+        try:
+            closes = close_provider(day)
+        except Exception:
+            closes = None
+        if closes is None:
+            unchecked.append(day)                         # 该日收盘取数失败 → 未查成(不当无折价)
+            continue
+        any_ok = True
+        by_day[day] = closes
+    if not any_ok:                                        # 有大宗日但收盘全没查成 → unknown(绝不当无折价)
+        out["discount_status"] = "unknown_or_unavailable"
+        return
+    out["discount_status"] = "checked"
+    if unchecked:
+        out["unchecked_discount_dates"] = sorted(set(unchecked))
+    for e in events:
+        if e["trade_date"] in by_day:                     # 该日收盘查成 → 附 raw close + 逐笔 discount;失败日不附
+            close = by_day[e["trade_date"]].get(e["ts_code"])
+            e["close"] = close
+            for p in (e.get("parties") or []):
+                price = p.get("price")
+                p["discount"] = (round((price - close) / close, 6)
+                                 if (price is not None and close is not None and close != 0) else None)
+
+
+def _block_trade_events(cand_names, as_of, block_provider, trade_days, close_provider=None,
+                        lookback=BLOCK_TRADE_LOOKBACK_TRADING_DAYS):
     """4.2 Round5 大宗交易 builder(analysis-only,**不改任何决策**;只进 M6.7 板块资金事件对照)。
     `block_provider(trade_date)` → list[{"ts_code","amount"}]|None(失败)。`trade_days` = 近 N 个 SSE 交易日(均 <= as_of)。
     PIT: 只收 trade_date<=as_of。**unknown-not-clear**: provider None / trade_days 空 / 全交易日取数失败 → status
     `unknown_or_unavailable`(绝不当「无大宗」);部分交易日失败 → status `checked` 但失败日进 `unchecked_dates`。
-    按 (票,日) 聚合: event = {ts_code,name,trade_date,amount(当日合计,全缺→None),trade_count(笔数),parties(第二刀 逐笔买卖方
-    {buyer,seller,amount})};只收 `cand_names`(= 候选 + 账户持仓,main 用 reports 行装配),其它票丢弃。买卖方第二刀已含、折价率 = 后续。"""
+    按 (票,日) 聚合: event = {ts_code,name,trade_date,amount(当日合计,全缺→None),trade_count(笔数),parties(逐笔
+    {buyer,seller,amount,price})};**price 溯源**:仅当源行带 `price` 键(值可 None=空白 cell)才落该键,缺键=无 price 证据不补
+    (折价层下 validator 据此拒,绝不伪造 checked)。close_provider 接线时(第三刀)再 _attach_block_discount 附 raw `close` + 逐笔 `discount`。
+    只收 `cand_names`(= 候选 + 账户持仓,main 用 reports 行装配),其它票丢弃。买卖方=第二刀、折价率=第三刀,均已含。"""
     from datetime import datetime
     wd = sorted({str(d) for d in (trade_days or [])})
     base = {"as_of": str(as_of), "lookback_trading_days": lookback, "window_dates": wd}
@@ -1446,7 +1554,10 @@ def _block_trade_events(cand_names, as_of, block_provider, trade_days, lookback=
             amt = (row or {}).get("amount")
             if amt is not None:
                 cur[0] = (cur[0] or 0.0) + amt
-            cur[2].append({"buyer": (row or {}).get("buyer"), "seller": (row or {}).get("seller"), "amount": amt})   # 第二刀 逐笔买卖方
+            _party = {"buyer": (row or {}).get("buyer"), "seller": (row or {}).get("seller"), "amount": amt}   # 第二刀 买卖方
+            if "price" in (row or {}):                     # 第三刀 price 溯源:行**带 price 键**(值可 None=空白 cell)才落;缺键=无 price 证据,绝不补 None 伪造 checked
+                _party["price"] = (row or {}).get("price")
+            cur[2].append(_party)
         for code, (amt_sum, cnt, parties) in agg.items():
             events.append({"ts_code": code, "name": name_by.get(code, ""), "trade_date": str(day),
                            "amount": (round(amt_sum, 2) if amt_sum is not None else None),
@@ -1457,6 +1568,7 @@ def _block_trade_events(cand_names, as_of, block_provider, trade_days, lookback=
     out = {**base, "status": "checked", "events": events}
     if unchecked:
         out["unchecked_dates"] = sorted(set(unchecked))
+    _attach_block_discount(out, events, close_provider)   # 第三刀: close_provider 接线才附折价(否则输出不变)
     return out
 
 
@@ -1465,7 +1577,7 @@ def _attach_block_trade_impacts(weekly, as_of):
     精简结论区.板块资金事件 文本(含 `_BLOCK_TRADE_MARKER`)+ machine.operation_impact(source_field=block_trade_appearance)。
     **comparison-only**: new_entry_effect=informational(候选)/none(held-candidate)、holding_effect=none、blocked_add=False、
     veto_class=none、production_effect_enabled=False —— 绝不改 操作/EGS/选股/TopN/股数/否决。status!=checked → 不落(不伪造)。
-    第一刀即覆盖 reports(候选 + 账户持仓);held(持仓)→ holding_row_impact 私密(private_account);买卖方营业部 = 第二刀、折价率 = 后续。"""
+    第一刀即覆盖 reports(候选 + 账户持仓);held(持仓)→ holding_row_impact 私密(private_account);买卖方营业部 = 第二刀、折价率(最大笔)= 第三刀,均已落 板块资金事件文本。"""
     bt = weekly.get("block_trade") or {}
     if bt.get("status") != "checked":
         return
@@ -1481,11 +1593,14 @@ def _attach_block_trade_impacts(weekly, as_of):
         recent = max(evs, key=lambda e: e["trade_date"])
         total_cnt = sum(e["trade_count"] for e in evs)
         amt = recent.get("amount")
-        _bp = recent.get("parties") or []                         # 第二刀: 最近一次大宗的最大笔买卖方
+        _bp = recent.get("parties") or []                         # 第二刀 最大笔买卖方 + 第三刀折价率
         _ptxt = ""
         if _bp:
             _top = max(_bp, key=lambda p: (p.get("amount") or 0))
             _ptxt = f",买卖方{_top.get('buyer') or '?'}→{_top.get('seller') or '?'}"
+            _td = _top.get("discount")
+            if _td is not None:
+                _ptxt += f",折价率{_td * 100:+.2f}%"               # 第三刀: 最大笔折价率(负=折价/抛压,正=溢价)
         detail = f"最近{recent['trade_date']}" + (f",成交{amt}" if amt is not None else "") + f",{recent['trade_count']}笔" + _ptxt
         txt = f"{_BLOCK_TRADE_MARKER}(comparison-only,不改决策):近{n}交易日{total_cnt}笔大宗交易({detail})"
         cut = rep["m67"]["精简结论区"]
@@ -1709,7 +1824,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
          web_llm_provider=None, dividend_provider=None,
          holding_semantic_provider=None, holding_web_llm_provider=None, unlock_provider=None,
          earnings_provider=None, dragon_list_provider=None, dragon_list_days=None,
-         dragon_list_inst_provider=None, block_trade_provider=None):
+         dragon_list_inst_provider=None, block_trade_provider=None, daily_close_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -1821,6 +1936,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # 4.2 Round5 大宗交易 provider(同上下文;block_trade 按 trade_date 查;analysis-only comparison-only)。
         if block_trade_provider is None:
             block_trade_provider = lambda d: _fetch_block_trade(pro, d)
+        # 4.2 Round5 第三刀 折价率: 当日**未复权**收盘价 provider(同上下文;pro.daily raw close 按 trade_date 查;绝不复用前复权)。
+        if daily_close_provider is None:
+            daily_close_provider = lambda d: _fetch_daily_close(pro, d)
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -1930,8 +2048,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     weekly["dragon_list"] = _dragon_list_events(_dragon_covered_names, args.as_of, dragon_list_provider,
                                                 dragon_list_days, inst_provider=dragon_list_inst_provider)
     _attach_dragon_list_impacts(weekly, args.as_of)
-    # 4.2 Round5 大宗交易第一刀(comparison-only):候选+账户持仓近 N 交易日大宗成交对照 → 板块资金事件 + operation_impact(不改决策/EGS/选股/TopN/股数)。复用 reports universe + trade_cal 窗口。
-    weekly["block_trade"] = _block_trade_events(_dragon_covered_names, args.as_of, block_trade_provider, dragon_list_days)
+    # 4.2 Round5 大宗交易(comparison-only,一/二/三刀):候选+账户持仓近 N 交易日大宗成交 + 买卖方 + 折价率(未复权)对照 → 板块资金事件 + operation_impact(不改决策/EGS/选股/TopN/股数)。复用 reports universe + trade_cal 窗口。
+    weekly["block_trade"] = _block_trade_events(_dragon_covered_names, args.as_of, block_trade_provider,
+                                                dragon_list_days, close_provider=daily_close_provider)
     _attach_block_trade_impacts(weekly, args.as_of)
     # 4.2 Round2: 上游过滤批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts
     # (egs_main filter_l0 已记 unlock/suspended/relisted/holder_reduction_veto_10d), 不改 egs_main、不抓数。

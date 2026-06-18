@@ -32,6 +32,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     DRAGON_LIST_LOOKBACK_TRADING_DAYS, _DRAGON_LIST_EVIDENCE_VALUE, _DRAGON_LIST_MARKER,
     _fetch_dragon_inst, _sum_inst_net,
     _block_trade_events, _fetch_block_trade, _attach_block_trade_impacts,
+    _fetch_daily_close, _attach_block_discount,
 )
 from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
@@ -2840,14 +2841,15 @@ class BlockTradeTests(unittest.TestCase):
             def block_trade(self, **kw): return self._df
         self.assertIsNone(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": ["x"]})), "20260605"))   # 缺 amount
         self.assertIsNone(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": ["x"], "amount": [1.0]})), "20260605"))   # 第二刀 fail-closed:缺 buyer/seller 列
+        self.assertIsNone(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": ["x"], "amount": [1.0], "buyer": ["a"], "seller": ["b"]})), "20260605"))   # 第三刀 fail-closed:缺 price 列
         class _Boom:
             def block_trade(self, **kw): raise RuntimeError("x")
         self.assertIsNone(_fetch_block_trade(_Boom(), "20260605"))
-        self.assertEqual(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": [], "amount": [], "buyer": [], "seller": []})), "20260605"), [])
+        self.assertEqual(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": [], "amount": [], "buyer": [], "seller": [], "price": []})), "20260605"), [])
         ok = _fetch_block_trade(_Pro(pd.DataFrame({"trade_date": ["20260605"], "ts_code": ["600000.SH"],
                                                    "price": [10.0], "vol": [1.0], "amount": [5e7],
                                                    "buyer": ["机构专用"], "seller": ["某游资"]})), "20260605")
-        self.assertEqual(ok, [{"ts_code": "600000.SH", "amount": 5e7, "buyer": "机构专用", "seller": "某游资"}])
+        self.assertEqual(ok, [{"ts_code": "600000.SH", "amount": 5e7, "price": 10.0, "buyer": "机构专用", "seller": "某游资"}])
 
     # ── 第二刀: 买卖方营业部(parties)──
     def test_builder_collects_parties(self):
@@ -2910,7 +2912,7 @@ class BlockTradeTests(unittest.TestCase):
         class _Pro:
             def block_trade(self, **kw):
                 return pd.DataFrame({"ts_code": ["600000.SH", "600001.SH"], "amount": [float("inf"), float("nan")],
-                                     "buyer": ["a", "b"], "seller": ["c", "d"]})
+                                     "buyer": ["a", "b"], "seller": ["c", "d"], "price": [9.5, 9.6]})
         self.assertEqual([r["amount"] for r in _fetch_block_trade(_Pro(), "20260605")], [None, None])
 
     # ── builder(unknown-not-clear / 聚合 / 候选过滤)──
@@ -3117,6 +3119,211 @@ class BlockTradeTests(unittest.TestCase):
                  price_provider=lambda code: _series())
             loaded = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(loaded["block_trade"]["status"], "unknown_or_unavailable")
+
+    # ── 第三刀: 折价率(raw-close provider / discount compute / coverage / validator / render / attach / main)──
+    def _w_disc(self, close=10.0, price=9.5, close_prov=None, block_prov=None):
+        # 经真 builder + close_provider 构造带折价的 checked block_trade(落 report[0]),再 attach。
+        w = _weekly()
+        ts = w["reports"][0]["ts_code"]
+        bp = block_prov or (lambda d: ([{"ts_code": ts, "amount": 5e7, "price": price, "buyer": "机构专用", "seller": "游资"}] if d == "20260605" else []))
+        cp = close_prov or (lambda d: ({ts: close} if d == "20260605" else {}))
+        w["block_trade"] = _block_trade_events([(ts, "x")], AS_OF, bp, _DL_WINDOW, close_provider=cp)
+        _attach_block_trade_impacts(w, AS_OF)
+        return w
+
+    def test_fetch_daily_close_fail_closed(self):
+        class _Pro:
+            def __init__(self, df): self._df = df
+            def daily(self, **kw): return self._df
+        self.assertIsNone(_fetch_daily_close(_Pro(pd.DataFrame({"ts_code": ["x"]})), "20260605"))   # 缺 close 列
+        self.assertIsNone(_fetch_daily_close(_Pro(pd.DataFrame({"close": [1.0]})), "20260605"))      # 缺 ts_code 列
+        class _Boom:
+            def daily(self, **kw): raise RuntimeError("x")
+        self.assertIsNone(_fetch_daily_close(_Boom(), "20260605"))
+        self.assertEqual(_fetch_daily_close(_Pro(pd.DataFrame({"ts_code": [], "close": []})), "20260605"), {})
+        ok = _fetch_daily_close(_Pro(pd.DataFrame({"ts_code": ["600000.SH"], "trade_date": ["20260605"], "close": [10.0]})), "20260605")
+        self.assertEqual(ok, {"600000.SH": 10.0})
+
+    def test_fetch_daily_close_nonfinite_nulled(self):
+        class _Pro:
+            def daily(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH", "600001.SH"], "close": [float("inf"), float("nan")]})
+        self.assertEqual(_fetch_daily_close(_Pro(), "20260605"), {"600000.SH": None, "600001.SH": None})
+
+    def test_fetch_block_trade_returns_price(self):
+        class _Pro:
+            def block_trade(self, **kw):
+                return pd.DataFrame({"trade_date": ["20260605"], "ts_code": ["600000.SH"], "price": [9.5],
+                                     "vol": [1.0], "amount": [5e7], "buyer": ["a"], "seller": ["b"]})
+        self.assertEqual(_fetch_block_trade(_Pro(), "20260605")[0]["price"], 9.5)
+
+    def test_builder_discount_unwired_unchanged(self):
+        # close_provider 未接线(第二刀式)→ 无 discount_status,event 无 close,party 无 discount(输出与第二刀一致)
+        prov = lambda d: ([{"ts_code": "600000.SH", "amount": 5e7, "price": 9.5, "buyer": "a", "seller": "b"}] if d == "20260605" else [])
+        bt = _block_trade_events([("600000.SH", "x")], AS_OF, prov, _DL_WINDOW)
+        self.assertNotIn("discount_status", bt)
+        self.assertNotIn("close", bt["events"][0])
+        self.assertNotIn("discount", bt["events"][0]["parties"][0])
+
+    def test_builder_computes_discount_raw_close(self):
+        # 折价: price 9.5 < raw close 10.0 → discount = -0.05;基准=未复权 close(独立 provider,非前复权)
+        w = self._w_disc(close=10.0, price=9.5)
+        e = w["block_trade"]["events"][0]
+        self.assertEqual(e["close"], 10.0)
+        self.assertAlmostEqual(e["parties"][0]["discount"], -0.05)
+        self.assertEqual(w["block_trade"]["discount_status"], "checked")
+        validate_weekly_report(w, _feed())
+        jsonschema.validate(w, self._schema())
+
+    def test_builder_premium_positive(self):
+        # 溢价: price 10.5 > close 10.0 → discount = +0.05
+        e = self._w_disc(close=10.0, price=10.5)["block_trade"]["events"][0]
+        self.assertAlmostEqual(e["parties"][0]["discount"], 0.05)
+
+    def test_builder_discount_all_fail_unknown(self):
+        # close_provider 全失败 → discount_status=unknown(绝不当无折价),event 无 close/discount
+        w = self._w_disc(close_prov=lambda d: None)
+        self.assertEqual(w["block_trade"]["discount_status"], "unknown_or_unavailable")
+        e = w["block_trade"]["events"][0]
+        self.assertNotIn("close", e)
+        self.assertNotIn("discount", e["parties"][0])
+        validate_weekly_report(w, _feed())
+
+    def test_builder_discount_close_zero_nulled(self):
+        # raw close=0 → discount=None(不除零),但 close 键存在(查成)
+        w = self._w_disc(close=0.0)
+        e = w["block_trade"]["events"][0]
+        self.assertEqual(e["close"], 0.0)
+        self.assertIsNone(e["parties"][0]["discount"])
+        validate_weekly_report(w, _feed())
+
+    def test_builder_discount_stock_no_close_nulled(self):
+        # 该日收盘查成但该股无 close(停牌)→ event.close=None,party.discount=None(键在值 null,不伪造)
+        w = self._w_disc(close_prov=lambda d: {})
+        e = w["block_trade"]["events"][0]
+        self.assertIsNone(e["close"])
+        self.assertIsNone(e["parties"][0]["discount"])
+        self.assertEqual(w["block_trade"]["discount_status"], "checked")
+        validate_weekly_report(w, _feed())
+
+    def test_builder_discount_partial_unchecked(self):
+        # 多事件日: 一日 close 查成、一日失败 → checked + unchecked_discount_dates,失败日 event 无 close
+        ts = "600000.SH"
+        bp = lambda d: ([{"ts_code": ts, "amount": 5e7, "price": 9.5, "buyer": "a", "seller": "b"}] if d in ("20260605", "20260608") else [])
+        cp = lambda d: ({ts: 10.0} if d == "20260605" else None)   # 20260608 收盘取数失败
+        bt = _block_trade_events([(ts, "x")], AS_OF, bp, _DL_WINDOW, close_provider=cp)
+        self.assertEqual(bt["discount_status"], "checked")
+        self.assertEqual(bt["unchecked_discount_dates"], ["20260608"])
+        by_day = {e["trade_date"]: e for e in bt["events"]}
+        self.assertEqual(by_day["20260605"]["close"], 10.0)
+        self.assertNotIn("close", by_day["20260608"])
+        self.assertNotIn("discount", by_day["20260608"]["parties"][0])
+
+    def test_validator_close_without_status_rejected(self):
+        w = self._w_disc(); del w["block_trade"]["discount_status"]   # event 带 close 但无覆盖状态托管
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_checked_event_missing_close_rejected(self):
+        w = self._w_disc(); del w["block_trade"]["events"][0]["close"]   # checked 查成日 event 缺 close
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_checked_party_missing_discount_rejected(self):
+        w = self._w_disc(); del w["block_trade"]["events"][0]["parties"][0]["discount"]   # checked 查成日 party 缺 discount
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_checked_party_missing_price_rejected(self):
+        # checked 查成日 party 缺 price 证据键 → 拒(折价层缺料却标 checked = 假覆盖)
+        w = self._w_disc(); del w["block_trade"]["events"][0]["parties"][0]["price"]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_builder_discount_blank_price_legal(self):
+        # price 单元格空白(列在,值 None)→ party.price=None 键在、discount=None,checked 合法接受(不误拒)
+        w = self._w_disc(price=None)
+        e = w["block_trade"]["events"][0]
+        self.assertIsNone(e["parties"][0]["price"])
+        self.assertIsNone(e["parties"][0]["discount"])
+        self.assertEqual(w["block_trade"]["discount_status"], "checked")
+        validate_weekly_report(w, _feed())
+        jsonschema.validate(w, self._schema())
+
+    def test_builder_discount_row_missing_price_provenance_rejected(self):
+        # 注入/未来 block_provider 行**缺 price 键**(契约违反)+ close 接线 → builder 不补 price=None(不伪造),
+        # party 无 price 键 → validator 拒(checked 折价层缺 price 溯源)。区别于空白 cell(行带 price=None 键,合法)。
+        w = _weekly()
+        ts = w["reports"][0]["ts_code"]
+        bp = lambda d: ([{"ts_code": ts, "amount": 5e7, "buyer": "a", "seller": "b"}] if d == "20260605" else [])  # 行无 price 键
+        cp = lambda d: ({ts: 10.0} if d == "20260605" else {})
+        w["block_trade"] = _block_trade_events([(ts, "x")], AS_OF, bp, _DL_WINDOW, close_provider=cp)
+        _attach_block_trade_impacts(w, AS_OF)
+        self.assertNotIn("price", w["block_trade"]["events"][0]["parties"][0])   # builder 不补 price 键(溯源保真)
+        self.assertEqual(w["block_trade"]["discount_status"], "checked")          # close 查成
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_unchecked_discount_date_with_close_rejected(self):
+        w = self._w_disc(); w["block_trade"]["unchecked_discount_dates"] = ["20260605"]   # 该 event 日标 unchecked 却带 close
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_unknown_discount_with_close_rejected(self):
+        w = self._w_disc(); w["block_trade"]["discount_status"] = "unknown_or_unavailable"   # unknown 却 event 带 close/discount
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_unchecked_discount_date_outside_window_rejected(self):
+        w = self._w_disc(); w["block_trade"]["unchecked_discount_dates"] = ["20260601"]   # 不在 window
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_unchecked_discount_without_checked_rejected(self):
+        # unchecked_discount_dates 存在但 discount_status 非 checked → 拒(先去 close/discount 以隔离该 guard)
+        w = self._w_disc()
+        del w["block_trade"]["discount_status"]
+        w["block_trade"]["events"][0].pop("close", None)
+        for p in w["block_trade"]["events"][0]["parties"]:
+            p.pop("discount", None)
+        w["block_trade"]["unchecked_discount_dates"] = ["20260605"]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_guard_discount_isolation_passes(self):
+        # 折价率 attach 后仍是 comparison-only:engine no-dangling guard 通过(不引入决策字段)
+        _vop(self._w_disc()["reports"][0])
+
+    def test_render_shows_discount(self):
+        md = render_weekly_markdown(self._w_disc(close=10.0, price=9.5))
+        self.assertIn("折价率", md)
+        self.assertIn("-5.00%", md)
+
+    def test_render_discount_unknown_caveat(self):
+        md = render_weekly_markdown(self._w_disc(close_prov=lambda d: None))
+        self.assertIn("折价率未核查", md)
+
+    def test_attach_text_mentions_discount(self):
+        w = self._w_disc(close=10.0, price=9.5)
+        self.assertIn("折价率-5.00%", w["reports"][0]["m67"]["精简结论区"]["板块资金事件"])
+
+    def test_main_wires_daily_close_discount(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            bprov = lambda d: ([{"ts_code": "600000.SH", "amount": 5e7, "price": 9.5, "buyer": "机构专用", "seller": "游资"}] if d == "20260605" else [])
+            cprov = lambda d: ({"600000.SH": 10.0} if d == "20260605" else {})
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series(), block_trade_provider=bprov,
+                 daily_close_provider=cprov, dragon_list_days=_DL_WINDOW)
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["block_trade"]["discount_status"], "checked")
+        e = [x for x in loaded["block_trade"]["events"] if x["ts_code"] == "600000.SH"][0]
+        self.assertEqual(e["close"], 10.0)
+        self.assertAlmostEqual(e["parties"][0]["discount"], -0.05)
 
 
 if __name__ == "__main__":

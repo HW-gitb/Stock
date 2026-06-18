@@ -151,7 +151,7 @@
     },
     "block_trade": {
       "type": ["object", "null"],
-      "description": "4.2 Round5 大宗交易(block_trade, analysis-only · comparison-only):候选+账户持仓近 N 交易日大宗成交事实 + 成交金额(第一刀:amount 当日合计 + trade_count 笔数)+ 买卖方营业部(第二刀:逐笔 parties[buyer/seller/amount]);折价率=后续。落 精简结论区.板块资金事件 + machine.operation_impact(source_field=block_trade_appearance,new_entry_effect=informational/none、holding_effect=none、veto_class=none、production_effect_enabled=false);**绝不改 EGS/TopN/选股/股数/操作/否决**,阈值未定(comparison-only)。PIT:大宗交易 T 日盘后发布 → trade_date<=as_of。status=unknown_or_unavailable(provider 不可用/全失败 → 绝不当「无大宗」) vs checked(部分交易日失败 → unchecked_dates)。可选/缺省 null。",
+      "description": "4.2 Round5 大宗交易(block_trade, analysis-only · comparison-only):候选+账户持仓近 N 交易日大宗成交事实 + 成交金额(第一刀:amount 当日合计 + trade_count 笔数)+ 买卖方营业部(第二刀:逐笔 parties[buyer/seller/amount]);折价率(第三刀:逐笔 parties[price/discount=(price−当日未复权close)/close]、event.close、顶层 discount_status 覆盖;单位口径=未复权,绝不用前复权 price_series)。落 精简结论区.板块资金事件 + machine.operation_impact(source_field=block_trade_appearance,new_entry_effect=informational/none、holding_effect=none、veto_class=none、production_effect_enabled=false);**绝不改 EGS/TopN/选股/股数/操作/否决**,阈值未定(comparison-only)。PIT:大宗交易 T 日盘后发布 → trade_date<=as_of。status=unknown_or_unavailable(provider 不可用/全失败 → 绝不当「无大宗」) vs checked(部分交易日失败 → unchecked_dates)。可选/缺省 null。",
       "additionalProperties": false,
       "required": ["as_of", "status", "lookback_trading_days", "window_dates", "events"],
       "properties": {
@@ -182,16 +182,28 @@
                   "properties": {
                     "buyer": {"type": ["string", "null"], "description": "买方营业部(block_trade.buyer)"},
                     "seller": {"type": ["string", "null"], "description": "卖方营业部(block_trade.seller)"},
-                    "amount": {"type": ["number", "null"], "description": "该笔成交金额(原值,不换算)"}
+                    "amount": {"type": ["number", "null"], "description": "该笔成交金额(原值,不换算)"},
+                    "price": {"type": ["number", "null"], "description": "第三刀 该笔大宗成交价(block_trade.price 原值/未复权;折价率算子)"},
+                    "discount": {"type": ["number", "null"], "description": "第三刀 折价率=(price−当日未复权close)/close(负=折价/抛压,正=溢价;close 缺/0 或折价层未查成→null)。comparison-only,不参与任何决策。"}
                   }
                 }
-              }
+              },
+              "close": {"type": ["number", "null"], "description": "第三刀 该(票,日)当日**未复权**收盘价(pro.daily raw close;折价率基准,审计用;该日折价未查成或该股当日无 close→缺省/null)"}
             }
           }
         },
         "unchecked_dates": {
           "type": "array",
           "description": "per-trade-day coverage(unknown-not-clear):status=checked 但部分交易日取数失败 → 列出(绝不当「无大宗」)。⊆ window_dates。可选/缺省空。",
+          "items": {"type": "string", "pattern": "^[0-9]{8}$"}
+        },
+        "discount_status": {
+          "enum": ["checked", "unknown_or_unavailable"],
+          "description": "第三刀 折价率层覆盖(unknown-not-clear):close_provider 接线且≥1 有大宗交易日 pro.daily 查成→checked;全失败→unknown_or_unavailable(绝不当「无折价」);未接线(第二刀式调用)→缺省。"
+        },
+        "unchecked_discount_dates": {
+          "type": "array",
+          "description": "第三刀 折价率 per-day coverage:discount_status=checked 但部分有大宗交易日 pro.daily 收盘取数失败 → 列出(该日 events 无 close/discount,绝不当「无折价」)。⊆ window_dates。可选/缺省空。",
           "items": {"type": "string", "pattern": "^[0-9]{8}$"}
         }
       }

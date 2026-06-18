@@ -8,6 +8,45 @@
 
 ---
 
+## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 大宗交易第三刀 price provenance)
+- **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-DISCOUNT-PRICE-COVERAGE-GUARD-GAP` 已在 working tree 修到位：缺 price 列 fail-closed；缺 price key 不再被 builder 伪造成空白 cell；合法 `price=None` 仍可表达 provider 空白单元格。
+- **Required**: addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
+- **Verify**: BlockTrade+doc-route targeted 97 OK；独立 probes 确认缺列/缺 key 拒、空白 key 合法；py_compile OK；stubbed no-network full discover 2439 OK；`git diff --check` OK(仅 CRLF)；无 BOM/FFFD；未跑 live Tushare。
+- **Next**: 用户决定是否提交；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-DISCOUNT-PRICE-COVERAGE-GUARD-GAP — re2: builder price 溯源)
+- **Verdict/Action**: 判定 Codex re-审查 FAIL 对(上轮只修 fetch 缺列 + validator 查 key;但 builder 对**注入/未来 block_provider 缺 price 键的行**仍补 `price=None`,party 拿到 price 键 → validator 看不出与真空白 cell 的区别 → 仍标 checked)。修:`_block_trade_events` 按 **price 溯源**建 party —— 仅当源行 `"price" in row`(值可 None=空白 cell)才落 price 键,缺键不补;于是缺 price 键的行 → party 无 price 键 → 既有 validator(checked 折价日每 party 必带 price 键)直接拒。区分:行带 `price=None`(空白 cell)合法 vs 行无 price 键(无溯源)拒。运行时零回归(真 `_fetch_block_trade` 恒带 price 键)。
+- **Required**: `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-DISCOUNT-PRICE-COVERAGE-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: BlockTradeTests **67 OK**(+1 溯源拒测);全量 **2439 OK**(零回归);weekly schema valid;diff clean(仅 CRLF);无 BOM。运行时(EGS/TopN/选股/动作/股数/provider 行为/governance)未动。
+- **Next**: 审查(Codex re-审查 builder price 溯源 guard);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 出口:行带 price 键(None/num)→party 有键(合法)、行无 price 键→party 无键→validator 拒,各配正/反测。B builder party 建法改→全量 2439 无回归;docstring「price 溯源」同步;真 `_fetch_block_trade` 恒含 price 键(iterrows 显式落)→真路径不受影响;非折价(无 close_provider)party 无 price 键合法(schema 可选)。C 反向:空白 cell(price=None 键在)不误拒、第二刀注入无 price 行不触门、`"price" in row` 正确区分缺键 vs None 值。D N-A。E 未碰 CURRENT。F 溯源用 `in` 非 `.get`、schema↔validator 互补、doc↔behavior 同步、无 BOM、diff clean。
+
+## 2026-06-18 — Codex re-`审查 FAIL` (4.2 Round5 大宗交易第三刀 price coverage)
+- **Verdict/Action**: FAIL. `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-DISCOUNT-PRICE-COVERAGE-GUARD-GAP` 只修到 `_fetch_block_trade` 缺 price 列；但注入式/未来 `block_provider` 行缺 `price` key 时，builder 仍补成 `price=None` 并把折价层标 checked。
+- **Required**: same Required still open；详情见 `docs/system_risk_register.md` 顶部。
+- **Verify**: BlockTrade+doc-route targeted 96 OK；独立 probes 确认缺 price 列已拒、手工缺 party.price 已拒，但 builder 输入行缺 price key 仍被 checked 接受；未跑 live Tushare。
+- **Next**: Claude 继续修 builder/discount 层的 raw row `price` key provenance guard；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-DISCOUNT-PRICE-COVERAGE-GUARD-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 对(折价率方向/未复权口径/comparison-only 都对,但 **price 侧漏 fail-closed**:缺 price 列仍标 discount checked、折价落 null 无 unknown 托管——同 大宗二刀 buyer/seller 教训,漏在 price)。① `_fetch_block_trade` fail-closed 加要求 price 列(缺→None 该日 unchecked,绝不标 discount checked;单元格空白→price=None 合法但列须在);② validator checked 折价日每 party **必带 price + discount 键**(非只 discount);③ 对抗测(缺 price 列 fetch / checked party 缺 price)+ 正向(price 空白 cell 键在合法);④ fetch shape 变 → empty/nonfinite 测加 price 列。运行时零回归。详见 register。
+- **Required**: `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-DISCOUNT-PRICE-COVERAGE-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: BlockTradeTests **66 OK**;全量 **2438 OK**(零回归);weekly schema valid;diff clean(仅 CRLF);无 BOM。运行时(EGS/TopN/选股/动作/股数/provider 行为/governance)未动。
+- **Next**: 审查(Codex re-审查 block_trade discount price coverage guard);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 出口:price 缺列(fetch→None)/checked party 缺 price 键(validator 拒)/空白 cell 键在(合法)各配测。B fetch +price required → empty/nonfinite 测同步加 price 列;validator 注释/docstring/报错文案同步;`_has_any_disc` 不纳 price(price 恒在,只 close/discount 标折价层,免误判第二刀);schema price 仍可选(条件必需走 validator,非全局 required→否则撞 `_bt_event`)。C 反向:空白 price cell 合法不误拒、第二刀无 discount_status 不触 price 门(零回归 2438)。D N-A。E 未碰 CURRENT。F fetch fail-closed、schema↔validator 互补、doc↔behavior re-grep、无 BOM、diff clean。
+
+## 2026-06-18 — Codex `审查 FAIL` (4.2 Round5 大宗交易第三刀: 折价率 discount)
+- **Verdict/Action**: FAIL. 折价率方向和未复权 close 口径对，仍是 comparison-only；但 block_trade.price 缺列/缺 key 时仍能把 `discount_status` 标成 checked，折价率落成 `—`/null，price 证据没有 unknown/unchecked 托管。
+- **Required**: `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-DISCOUNT-PRICE-COVERAGE-GUARD-GAP` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: BlockTrade+doc-route targeted 94 OK；独立 probes 复现 missing price column/key 被接受；py_compile OK；`git diff --check` OK(仅 CRLF)；未跑 live Tushare。
+- **Next**: Claude 修 price/discount coverage guard；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `起草` (4.2 Round5 大宗交易第三刀: 折价率 discount)
+- **Verdict/Action**: 用户选「折价率(大宗第三刀)」。折价率 discount=(price−当日**未复权**close)/close(负=折价/抛压,正=溢价)。**单位口径关键**:block price 是原值/未复权,绝不用前复权 price_series → 独立 `_fetch_daily_close`(pro.daily raw close)取当日未复权收盘价。镜像龙虎榜席位的「独立 provider + 覆盖层」(discount_status/unchecked_discount_dates,unknown-not-clear)。**comparison-only 不变**(无阈值、不改 EGS/TopN/选股/股数/操作/否决)。
+- **Scope**: `_fetch_block_trade` 返回 +price;新 `_fetch_daily_close`(fail-closed raw close:缺列/非有限→None、空→{});新 `_attach_block_discount`(逐交易日取 close,按(票,日)join,逐 party.discount + event.close + 顶层 discount_status/unchecked_discount_dates;close_provider=None→输出与第二刀全等);`_block_trade_events` +close_provider 参 + 调用;main 接 `daily_close_provider`(gated --confirm);schema(party price/discount、event close、顶层 discount_status/unchecked_discount_dates,加性可选);validator 折价覆盖一致性(镜像席位,7 拒点);render「折价率(最大笔)」列 + unknown/partial caveat;attach 文本加最大笔折价率。**边界**:主板/V14.2 frozen/comparison-only/无 governance;真取数 gated --confirm。
+- **Verify**: BlockTradeTests **64 OK**(+18 新折价);全量 **2436 OK**(零回归);weekly schema valid(加性可选);diff clean(仅 CRLF);无 BOM;未跑 live Tushare(provider gated --confirm)。
+- **Next**: 审查(Codex 审 block_trade 第三刀 折价率);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 缺陷×出口:close 不可得 5 出口(未接线→无折价层/全失败→unknown/部分→unchecked/查成但该股无close→None/close=0→None)各配测;provider fail-closed + compute(折价/溢价符号)+ validator 7 拒点 + render + attach + main 各配测。B `_fetch_block_trade` +price→ fail-closed 测期望同步;「折价率=后续」全 re-grep 改第三刀(含 `_attach` docstring 1576 漏点 + section/main comment);registry block_trade_appearance 不变(同 source_field 富化非新 impact);overlay/v14.2「大宗折价」=异 scope governance/overlay 目标(v14.2 frozen)非本切片 drift。C 反向:close=0/缺不除零(None 非伪造)、unknown 绝不当无折价、未接线=第二刀(零回归 2436)、折价/溢价符号不反(9.5/10→−0.05)。D N-A。E SESSION_LOG,未碰 CURRENT。F **单位口径=未复权**(独立 `_fetch_daily_close`,绝不前复权,docstring×3 焊死)、非有限 close guard(_cnum)、schema↔validator 互补(键 present + 状态托管)、doc↔behavior re-grep、无 BOM、diff clean。
+
 ## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 大宗交易第二刀 parties coverage)
 - **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-PARTIES-COVERAGE-GUARD-GAP` 已在 working tree 修到位：缺 buyer/seller 列会 fail-closed；checked event 必须有 parties，且 parties 数量必须等于 trade_count。
 - **Required**: addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
